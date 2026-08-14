@@ -126,6 +126,9 @@ fun main(args: Array<String>) {
     val sequencesOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSequences.kt"
     )
+    val groupingOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapGrouping.kt"
+    )
     val mapsActualsOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/src/generated/_DotNetBootstrapMapsActuals.kt"
     )
@@ -137,6 +140,9 @@ fun main(args: Array<String>) {
     )
     val sequencesActualsOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSequencesActuals.kt"
+    )
+    val groupingActualsOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/src/generated/_DotNetBootstrapGroupingActuals.kt"
     )
     val stableSortSupportOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/src/generated/_DotNetBootstrapStableSortSupport.kt"
@@ -153,6 +159,10 @@ fun main(args: Array<String>) {
         baseDir.resolve("libraries/stdlib/src/kotlin/collections/Sequences.kt")
     val wasmSequencesFile =
         baseDir.resolve("libraries/stdlib/wasm/src/kotlin/Sequences.kt")
+    val commonGroupingFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/collections/Grouping.kt")
+    val nativeWasmCollectionsFile =
+        baseDir.resolve("libraries/stdlib/native-wasm/src/kotlin/collections/Collections.kt")
     val commonMutableCollectionsFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/collections/MutableCollections.kt")
     val commonMapsFile =
@@ -653,6 +663,7 @@ fun main(args: Array<String>) {
         Mapping.f_groupBy_key_value selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Mapping.f_groupByTo_key selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Mapping.f_groupByTo_key_value selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        Mapping.f_groupingBy selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Mapping.f_map selectedFor setOf(Family.Iterables),
         Mapping.f_mapIndexed selectedFor setOf(Family.Iterables),
         Mapping.f_mapIndexedNotNull selectedFor setOf(Family.Iterables),
@@ -1134,7 +1145,6 @@ fun main(args: Array<String>) {
     }
     val excludedSequenceMemberNames = mapOf(
         "chunked" to 2,
-        "groupingBy" to 1,
         "runningFold" to 1,
         "runningFoldIndexed" to 1,
         "runningReduce" to 1,
@@ -1193,6 +1203,32 @@ fun main(args: Array<String>) {
         projectWholeCommonFile(wasmSequencesFile),
         Charsets.UTF_8,
     )
+    groupingOutputFile.writeText(
+        projectWholeCommonFile(commonGroupingFile).trimEnd() + "\n\n" +
+                extractCommonDeclarationPrefix(
+                    commonCollectionsHeaderFile,
+                    "public expect fun <T, K> Grouping<T, K>.eachCount(): Map<K, Int>",
+                    "// public expect inline fun <T, K> Grouping<T, K>.eachSumOf",
+                ) + "\n",
+        Charsets.UTF_8,
+    )
+    groupingActualsOutputFile.writeText(
+        buildProjectedSource(
+            packageName = "kotlin.collections",
+            fileAnnotations = listOf(
+                "kotlin.jvm.JvmMultifileClass",
+                "kotlin.jvm.JvmName(\"GroupingKt\")",
+            ),
+            declarations = listOf(
+                extractCommonDeclarationPrefix(
+                    nativeWasmCollectionsFile,
+                    "public actual fun <T, K> Grouping<T, K>.eachCount(): Map<K, Int>",
+                    "// Copied from JS.",
+                ),
+            ),
+        ),
+        Charsets.UTF_8,
+    )
 
     appendableOutputFile.writeText(
         projectWholeCommonFile(commonAppendableFile),
@@ -1202,6 +1238,12 @@ fun main(args: Array<String>) {
         projectWholeCommonFile(commonStringBuilderFile),
         Charsets.UTF_8,
     )
+    val charSequenceGroupingBySource = StringWriter().apply {
+        Mapping.f_groupingBy
+            .instantiate(listOf(KotlinTarget.Common))
+            .single { member -> member.family == Family.CharSequences }
+            .build(this)
+    }.toString().trimEnd()
     stringsOutputFile.writeText(
         buildProjectedSource(
             packageName = "kotlin.text",
@@ -1214,6 +1256,11 @@ fun main(args: Array<String>) {
                     commonStringsFile,
                     "public inline fun CharSequence.isEmpty(): Boolean",
                 ),
+                extractCommonDeclaration(
+                    commonStringsFile,
+                    "public operator fun CharSequence.iterator(): CharIterator",
+                ),
+                charSequenceGroupingBySource,
             ),
         ),
         Charsets.UTF_8,

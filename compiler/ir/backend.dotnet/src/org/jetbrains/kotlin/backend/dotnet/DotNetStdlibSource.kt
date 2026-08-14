@@ -74,6 +74,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/generated/_DotNetBootstrapSequencesActuals.kt",
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapGroupingActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapGroupingActuals.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetStringBuilder.kt",
         "dotnet/src/kotlin/text/DotNetStringBuilder.kt",
     ),
@@ -229,6 +233,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapSequences.kt",
         "dotnet/common/src/generated/_DotNetBootstrapSequences.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapGrouping.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapGrouping.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

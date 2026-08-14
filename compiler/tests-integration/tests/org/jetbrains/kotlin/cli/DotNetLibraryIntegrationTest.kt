@@ -26647,6 +26647,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             frameworkHost = checkNotNull(frameworkHost),
         )
         executeSequenceFoundation(stdlibDirectory, "net10.0", dotnetHost, frameworkHost = null)
+        executeGroupingFoundation(
+            stdlibDirectory,
+            "net48",
+            dotnetHost = null,
+            frameworkHost = checkNotNull(frameworkHost),
+        )
+        executeGroupingFoundation(stdlibDirectory, "net10.0", dotnetHost, frameworkHost = null)
     }
 
     @Test
@@ -34548,6 +34555,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val sequenceIteratorMethod = stdlibMetadata.methodDefinitions.single { method ->
             method.declaringType == sequenceType.handle
         }.name
+        val groupingType = stdlibMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin.Collections" && type.metadataName == "Grouping"
+        }
+        val groupingMethods = stdlibMetadata.methodDefinitions.filter { method ->
+            method.declaringType == groupingType.handle
+        }
+        val groupingSourceIteratorMethod = groupingMethods.single { method ->
+            method.signature.parameterTypes.isEmpty()
+        }.name
+        val groupingKeyOfMethod = groupingMethods.single { method ->
+            method.signature.parameterTypes.size == 1
+        }.name
         val directory = File(tmpdir, "net10-csharp-appendable").apply { mkdirs() }
         val source = directory.resolve("AppendableProbe.cs").apply {
             writeText(
@@ -34594,6 +34613,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public Kotlin.Collections.Iterator $sequenceIteratorMethod()
                     {
                         return new ForeignSequenceIterator();
+                    }
+                }
+
+                public sealed class ForeignGrouping : Kotlin.Collections.Grouping
+                {
+                    public Kotlin.Collections.Iterator $groupingSourceIteratorMethod()
+                    {
+                        return new ForeignSequenceIterator();
+                    }
+
+                    public object $groupingKeyOfMethod(object element)
+                    {
+                        return ((int)element % 2) == 0 ? "even" : "odd";
                     }
                 }
 
@@ -34709,6 +34741,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         return 0;
                     }
 
+                    private static int VerifyErasedKotlinGrouping()
+                    {
+                        Type groupingType = typeof(Kotlin.Collections.Grouping);
+                        if (groupingType.IsGenericType || groupingType.GetGenericArguments().Length != 0)
+                            return 40;
+                        foreach (Type contract in groupingType.GetInterfaces())
+                        {
+                            if (contract.Namespace == "System.Collections.Generic")
+                                return 41;
+                        }
+
+                        var counts = Kotlin.Collections.GroupingKt.eachCount<object, object>(new ForeignGrouping());
+                        var get = counts.GetType().GetMethod("get", new Type[] { typeof(object) });
+                        if (get == null || (int)get.Invoke(counts, new object[] { "odd" }) != 1)
+                            return 42;
+                        if ((int)get.Invoke(counts, new object[] { "even" }) != 1)
+                            return 43;
+                        return 0;
+                    }
+
                     public static int Main()
                     {
                         var foreign = new ForeignAppendable();
@@ -34723,7 +34775,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (collectionResult != 0)
                             return collectionResult;
                         int rangeResult = VerifySignedRanges();
-                        return rangeResult == 0 ? VerifyErasedKotlinSequence() : rangeResult;
+                        if (rangeResult != 0)
+                            return rangeResult;
+                        int sequenceResult = VerifyErasedKotlinSequence();
+                        return sequenceResult == 0 ? VerifyErasedKotlinGrouping() : sequenceResult;
                     }
                 }
                 """.trimIndent()
@@ -34790,6 +34845,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
         val sequenceType = implementationType("Kotlin.Sequences", "Sequence")
         val sequencesFacadeType = implementationType("Kotlin.Sequences", "SequencesKt")
+        val groupingType = implementationType("Kotlin.Collections", "Grouping")
+        val groupingFacadeType = implementationType("Kotlin.Collections", "GroupingKt")
         assertTrue(implementationMetadata.typeDefinitions.none { type ->
             type.namespaceName == "Kotlin" && type.metadataName == "Enum"
         }) {
@@ -34854,6 +34911,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ).all(sequenceMethodNames::contains)
         ) {
             "Sequence erased overload projection is incomplete: $sequenceMethodNames"
+        }
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, groupingType.visibility)
+        assertTrue(groupingType.isInterface && '`' !in groupingType.metadataName)
+        assertTrue(groupingFacadeType.isAbstract && groupingFacadeType.isSealed)
+        assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner == groupingType.handle
+        }) {
+            "Kotlin Grouping must have one non-generic CLR identity"
+        }
+        assertTrue(implementationMetadata.interfaceImplementations.none { implementation ->
+            implementation.implementingType == groupingType.handle
+        }) {
+            "Kotlin Grouping must not acquire an implicit BCL grouping or enumeration identity"
+        }
+        assertEquals(
+            setOf(0, 1),
+            implementationMetadata.methodDefinitions
+                .filter { method -> method.declaringType == groupingType.handle }
+                .mapTo(linkedSetOf()) { method -> method.signature.parameterTypes.size },
+        ) {
+            "Kotlin Grouping must expose only sourceIterator() and keyOf(element)"
+        }
+        val groupingMethodNames = implementationMetadata.methodDefinitions
+            .filter { method -> method.declaringType == groupingFacadeType.handle }
+            .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
+        assertTrue(
+            setOf(
+                "aggregate",
+                "aggregateTo",
+                "fold",
+                "foldTo",
+                "reduce",
+                "reduceTo",
+                "eachCount",
+                "eachCountTo",
+            ).all(groupingMethodNames::contains)
+        ) {
+            "Grouping operation surface is incomplete: $groupingMethodNames"
         }
         assertTrue(intRangeType.isSealed && intRangeType.baseType == intProgressionType.handle)
         assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
@@ -40016,6 +40111,137 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             listOf(checkNotNull(dotnetHost).path, "exec", output.path)
         }
         runAssemblerPairing(command, directory, "$target Sequence foundation")
+    }
+
+    private fun executeGroupingFoundation(
+        stdlibDirectory: File,
+        target: String,
+        dotnetHost: File?,
+        frameworkHost: File?,
+    ) {
+        val directory = File(tmpdir, "grouping-foundation-$target").apply { mkdirs() }
+        stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+            .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
+        stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
+        val source = directory.resolve("GroupingFoundation.kt").apply {
+            writeText(
+                """
+                fun main() {
+                    var selectorCalls = 0
+                    val iterableGrouping = listOf("a", "bb", "c").groupingBy {
+                        selectorCalls++
+                        it.length
+                    }
+                    check(selectorCalls == 0)
+                    check(iterableGrouping.eachCount().toString() == "{1=2, 2=1}")
+                    check(selectorCalls == 3)
+                    check(iterableGrouping.eachCount().toString() == "{1=2, 2=1}")
+                    check(selectorCalls == 6)
+                    check(emptyList<Int>().groupingBy { it }.eachCount().isEmpty())
+                    check(listOf<String?>(null).groupingBy { it }.eachCount().toString() == "{null=1}")
+
+                    val mutableSource = arrayListOf(1)
+                    val liveGrouping = mutableSource.groupingBy { it % 2 }
+                    mutableSource.add(3)
+                    check(liveGrouping.eachCount().toString() == "{1=2}")
+
+                    check(sequenceOf(1, 2, 3).groupingBy { it % 2 }.eachCount().toString() == "{1=2, 0=1}")
+                    check(arrayOf("a", "bb", "cc").groupingBy { it.length }.eachCount().toString() == "{1=1, 2=2}")
+                    check("abca".groupingBy { it }.eachCount().toString() == "{a=2, b=1, c=1}")
+
+                    val trace = arrayListOf<String>()
+                    val nullable = listOf<String?>(null, null, "x")
+                        .groupingBy { if (it == null) 0 else 1 }
+                        .aggregate { key, accumulator: String?, element, first ->
+                            trace.add("${'$'}key:${'$'}first:${'$'}{accumulator == null}")
+                            if (element == null) accumulator else (accumulator ?: "") + element
+                        }
+                    check(nullable.toString() == "{0=null, 1=x}")
+                    check(trace.toString() == "[0:true:true, 0:false:true, 1:true:true]")
+
+                    val folded = listOf("a", "bb", "c")
+                        .groupingBy { it.length }
+                        .fold("") { accumulator, element -> accumulator + element }
+                    check(folded.toString() == "{1=ac, 2=bb}")
+                    val selected = listOf("a", "bb", "c").groupingBy { it.length }.fold(
+                        { key, _ -> "${'$'}key:" },
+                        { _, accumulator, element -> accumulator + element },
+                    )
+                    check(selected.toString() == "{1=1:ac, 2=2:bb}")
+
+                    val reduced = listOf("a", "bb", "c")
+                        .groupingBy { it.length }
+                        .reduce { _, accumulator, element -> accumulator + element }
+                    check(reduced.toString() == "{1=ac, 2=bb}")
+
+                    val destination = mutableMapOf(1 to 10)
+                    val counted = listOf("a", "b", "cc").groupingBy { it.length }.eachCountTo(destination)
+                    check(counted === destination)
+                    check(destination.toString() == "{1=12, 2=1}")
+
+                    val covariant: Grouping<Int, Any?> = listOf(1, 2).groupingBy { "key" }
+                    check(covariant.eachCount().toString() == "{key=2}")
+
+                    var failedCalls = 0
+                    val failure = IllegalStateException("grouping failure")
+                    try {
+                        listOf(1, 2, 3).groupingBy {
+                            failedCalls++
+                            if (it == 2) throw failure
+                            it
+                        }.eachCount()
+                        error("missing grouping failure")
+                    } catch (caught: IllegalStateException) {
+                        check(caught === failure)
+                        check(failedCalls == 2)
+                    }
+
+                    var iteratorKeyCalls = 0
+                    val iteratorFailure = IllegalStateException("iterator failure")
+                    val hostile = object : Grouping<Int, Int> {
+                        override fun sourceIterator(): Iterator<Int> = object : Iterator<Int> {
+                            private var index = 0
+                            override fun hasNext(): Boolean = index < 2
+                            override fun next(): Int {
+                                if (index++ == 1) throw iteratorFailure
+                                return 7
+                            }
+                        }
+
+                        override fun keyOf(element: Int): Int {
+                            iteratorKeyCalls++
+                            return element
+                        }
+                    }
+                    try {
+                        hostile.eachCount()
+                        error("missing iterator failure")
+                    } catch (caught: IllegalStateException) {
+                        check(caught === iteratorFailure)
+                        check(iteratorKeyCalls == 1)
+                    }
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        val output = directory.resolve(if (target == "net48") "GroupingFoundation.exe" else "GroupingFoundation.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, directory.resolve("Kotlin.Stdlib.dll").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "GroupingFoundation",
+            K2DotNetCompilerArguments::destination.cliArgument, output.path,
+        )
+        val command = if (target == "net48") {
+            frameworkExecutionCommand(checkNotNull(frameworkHost), output)
+        } else {
+            listOf(checkNotNull(dotnetHost).path, "exec", output.path)
+        }
+        runAssemblerPairing(command, directory, "$target Grouping foundation")
     }
 
     private fun assertCollectionToArrayImplementationIl(stdlibDirectory: File) {

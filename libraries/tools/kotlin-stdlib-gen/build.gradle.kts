@@ -63,6 +63,7 @@ tasks {
                 "_DotNetBootstrapSequencesH.kt",
                 "_DotNetBootstrapSequenceCore.kt",
                 "_DotNetBootstrapSequences.kt",
+                "_DotNetBootstrapGrouping.kt",
                 "_DotNetBootstrapComparisons.kt",
                 "_DotNetBootstrapSorting.kt",
             ).map { fileName ->
@@ -73,6 +74,7 @@ tasks {
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSortingActuals.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapStableSortSupport.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSequencesActuals.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapGroupingActuals.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapComparisonsActuals.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapFloatingPointActuals.kt"),
             )
@@ -112,6 +114,8 @@ tasks {
             rootProject.file("libraries/stdlib/common/src/kotlin/SequencesH.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/collections/Sequences.kt"),
             rootProject.file("libraries/stdlib/wasm/src/kotlin/Sequences.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/collections/Grouping.kt"),
+            rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/Collections.kt"),
             rootProject.file("libraries/stdlib/wasm/src/generated/_ComparisonsWasm.kt"),
             rootProject.file("libraries/stdlib/common/src/kotlin/KotlinH.kt"),
             rootProject.file("libraries/stdlib/wasm/src/kotlin/Numbers.kt"),
