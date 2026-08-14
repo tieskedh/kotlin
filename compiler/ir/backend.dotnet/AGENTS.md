@@ -653,8 +653,28 @@ See the
   typed cache. An incompatible capability write must leave the prior state
   unchanged. Any semantic, unresolved, source-free, or externally writable
   producer continues to require semantic object state. This rule is
-  architecture-test-only and does not admit production `C<T>`. Version 5 adds
-  the reflection join without duplicating Kotlin
+  architecture-test-only and does not admit production `C<T>`. Derive
+  representative call mixes from a production-inert Kotlin IR census, never
+  from handwritten benchmark weights. An exact typed-entry candidate requires
+  every traced receiver producer to retain the same closed physical
+  construction required at that use. Definitions, assignments, returns,
+  callable arguments, private fields, and branches may propagate proof; a cast
+  preserves provenance and never manufactures it. Semantic views, incompatible
+  merges, unsupported/source-free producers, and open assembly boundaries
+  whose invariant signature does not uniquely fix the physical construction
+  require the capability. An invariant closed public signature may retain its
+  exact construction proof; a star, projected, or variant signature may not.
+  Record a missing capability or external producer-family join as a proof
+  obligation instead of guessing a typed route. Resolve an external route only
+  when the exact logical member key occurs in that decoded producer's complete
+  classification catalog; unrelated artifacts leave it pending and a
+  classified absent family remains producer-erased. Join lowered default calls
+  through the recorded dispatcher and moved receiver, never a helper-name
+  heuristic. Static
+  call-site counts are not execution frequencies, this census must not affect
+  emission, and any later VTA/devirtualization must remain removable without
+  changing behavior or DLL signatures. Version 5 adds the reflection join
+  without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
   to its existing KLIB logical classifier key, while logical type arguments,
   variance, projections, nullability, names, and bounds remain KLIB-only.

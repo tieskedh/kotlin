@@ -26,6 +26,9 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetBackendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateClassificationRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberPolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
@@ -79,6 +82,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
+import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilyRoute
 import org.jetbrains.kotlin.backend.dotnet.requirePhysicalFamily
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierForExactOpenTypeDefinitionOrNull
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierMatchesAncestry
@@ -375,9 +379,13 @@ private class BackendCliDotNetFacade(
                 .orEmpty()
             "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
         }
-        validateGenericOwnerHardestModelPrototype(completedOutput.genericOwnerPrototypes)
+        validateGenericOwnerHardestModelPrototype(
+            completedOutput.genericOwnerPrototypes,
+            completedOutput.genericOwnerCallRoutes,
+        )
         physicalizeGenericOwnerHardestModelPrototype(
             completedOutput.genericOwnerPrototypes,
+            completedOutput.genericOwnerCallRoutes,
             loweredInput.configuration.dotNetTarget,
             completedOutput.output,
             testServices.moduleStructure.originalTestDataFiles.single(),
@@ -389,9 +397,98 @@ private class BackendCliDotNetFacade(
 
 private fun validateGenericOwnerHardestModelPrototype(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
 ) {
     fun DotNetGenericOwnerPrototypeSnapshot.hasSimpleName(name: String): Boolean =
         ownerName == name || ownerName.endsWith(".$name")
+
+    check(callRoutes.map { route -> route.callSiteIndex }.sorted() == callRoutes.indices.toList()) {
+        "Generic-owner call-site indices must be unique and dense within one compilation: $callRoutes"
+    }
+
+    fun requireCallRoute(
+        callerName: String,
+        calleeOwnerName: String,
+        calleeName: String,
+        receiverProvenances: Set<DotNetGenericOwnerCallReceiverProvenance>,
+        routeRequirement: DotNetGenericOwnerCallRouteRequirement,
+    ) {
+        val matching = callRoutes.filter { route ->
+            (route.callerName == callerName || route.callerName.endsWith(".$callerName")) &&
+                    (route.calleeOwnerName == calleeOwnerName || route.calleeOwnerName.endsWith(".$calleeOwnerName")) &&
+                    route.calleeName == calleeName
+        }
+        check(matching.singleOrNull()?.let { route ->
+            route.receiverProvenance in receiverProvenances && route.routeRequirement == routeRequirement
+        } == true) {
+            "Expected $callerName -> $calleeOwnerName.$calleeName to be " +
+                    "$receiverProvenances/$routeRequirement, found $matching"
+        }
+    }
+
+    if (prototypes.any { prototype -> prototype.hasSimpleName("HostileTypedStore") }) {
+        requireCallRoute(
+            "readInvariantTypedStore",
+            "HostileTypedStore",
+            "read",
+            setOf(DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION),
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+        )
+        requireCallRoute(
+            "readStarTypedStore",
+            "HostileTypedStore",
+            "read",
+            setOf(
+                DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW,
+                DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED,
+            ),
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+        )
+        requireCallRoute(
+            "readMergedTypedStore",
+            "HostileTypedStore",
+            "read",
+            setOf(
+                DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW,
+                DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED,
+            ),
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+        )
+        requireCallRoute(
+            "readExactTypedStoreField",
+            "HostileTypedStore",
+            "read",
+            setOf(DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION),
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+        )
+        requireCallRoute(
+            "readStarTypedStoreField",
+            "HostileTypedStore",
+            "read",
+            setOf(
+                DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW,
+                DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED,
+            ),
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+        )
+        requireCallRoute(
+            "readReturnedTypedStore",
+            "HostileTypedStore",
+            "read",
+            setOf(DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION),
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+        )
+        requireCallRoute(
+            "labelStarUnsafeStore",
+            "HostileUnsafeStore",
+            "label",
+            setOf(
+                DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW,
+                DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED,
+            ),
+            DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY,
+        )
+    }
 
     prototypes.singleOrNull { prototype -> prototype.hasSimpleName("WidenedProbe") }?.let { probe ->
         check(probe.states.singleOrNull()?.let { state ->
@@ -1640,6 +1737,7 @@ private fun copyGenericOwnerErasedArtifact(source: File, destination: File) {
 
 private fun physicalizeGenericOwnerHardestModelPrototype(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
     target: DotNetTarget,
     erasedOutput: File,
     applicationSource: File,
@@ -1654,7 +1752,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
             erasedOutput,
             directory.resolve(genericOwnerErasedConsumerFile(target)),
         )
-        consumeGenericOwnerPhysicalFamilyArtifact(consumer, target, directory)
+        consumeGenericOwnerPhysicalFamilyArtifact(consumer, callRoutes, target, directory)
         return
     }
     if (prototypes.none { prototype -> prototype.hasSimpleName("HostileUnsafeProducer") }) return
@@ -2181,6 +2279,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
 
 private fun consumeGenericOwnerPhysicalFamilyArtifact(
     consumer: DotNetGenericOwnerPrototypeSnapshot,
+    callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
     target: DotNetTarget,
     directory: File,
 ) {
@@ -2200,6 +2299,72 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         fingerprint,
         expectedProfile,
     )
+    val externalCallRoutes = callRoutes.filter { route ->
+        route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED
+    }
+    check(externalCallRoutes.isNotEmpty()) {
+        "The separate generic-owner consumer recorded no external call-route obligations"
+    }
+    val producerMemberKeys = artifact.classifications.flatMapTo(hashSetOf()) { classification ->
+        classification.logicalMemberKeys
+    }
+    val producerCallRoutes = externalCallRoutes.filter { route ->
+        route.calleeLogicalBindingKey in producerMemberKeys
+    }
+    val unrelatedCallRoutes = externalCallRoutes - producerCallRoutes.toSet()
+    check(producerCallRoutes.isNotEmpty() && unrelatedCallRoutes.isNotEmpty()) {
+        "The separate census must distinguish producer-owned calls from unrelated external generic owners"
+    }
+    check(unrelatedCallRoutes.all { route ->
+        route.resolveExternalPhysicalFamilyRoute(artifact) == route
+    }) {
+        "A producer artifact claimed an unrelated external generic-owner route"
+    }
+    val resolvedCallRoutes = producerCallRoutes.map { route ->
+        route.resolveExternalPhysicalFamilyRoute(artifact)
+    }
+    val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
+    check(resolvedRouteCounts == mapOf(
+        DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 11,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 4,
+        DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY to 1,
+    )) {
+        "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
+    }
+    check(resolvedCallRoutes.none { route ->
+        route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED
+    }) {
+        "Decoded producer evidence left external generic-owner call routes unresolved: $resolvedCallRoutes"
+    }
+    check(resolvedCallRoutes.map { route -> route.routeRequirement }.toSet().containsAll(setOf(
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+        DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY,
+        DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER,
+    ))) {
+        "The separate hostile corpus did not exercise every external call route: $resolvedCallRoutes"
+    }
+    check(resolvedCallRoutes.singleOrNull { route ->
+        route.callerName.endsWith("consumerLabelStarUnsafeStore") && route.calleeName == "label"
+    }?.let { route ->
+        route.receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW &&
+                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY
+    } == true) {
+        "The external star/default-helper call did not preserve its missing-capability obligation: $resolvedCallRoutes"
+    }
+    check(producerCallRoutes.map { route ->
+        route.copy(callerName = "diagnostic-caller", calleeOwnerName = "diagnostic-owner", calleeName = "diagnostic-member")
+            .resolveExternalPhysicalFamilyRoute(artifact).routeRequirement
+    } == resolvedCallRoutes.map { route -> route.routeRequirement }) {
+        "External generic-owner call resolution depended on diagnostic source names"
+    }
+    check(producerCallRoutes.first().copy(
+        calleeLogicalBindingKey = "${checkNotNull(producerCallRoutes.first().calleeLogicalBindingKey)}#unknown",
+    ).resolveExternalPhysicalFamilyRoute(artifact).routeRequirement ==
+            DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED) {
+        "External generic-owner call resolution inferred an unknown logical member from source names"
+    }
     val unresolvedKeys = consumer.members.flatMap { member -> member.overrideBindings }
         .filter { binding ->
             binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED

@@ -123,6 +123,32 @@ private open class HostileTypedStore<T>(initial: T) {
     open fun read(): T = stored
 }
 
+private fun readInvariantTypedStore(store: HostileTypedStore<String>): String = store.read()
+
+private fun readStarTypedStore(store: HostileTypedStore<*>): Any? = store.read()
+
+private fun labelStarUnsafeStore(store: HostileUnsafeStore<*>): String = store.label()
+
+private class TypedStoreRouteHolder(
+    val exact: HostileTypedStore<String>,
+    val star: HostileTypedStore<*>,
+)
+
+private fun readMergedTypedStore(
+    useStar: Boolean,
+    exact: HostileTypedStore<String>,
+    star: HostileTypedStore<*>,
+): Any? = (if (useStar) star else exact).read()
+
+private fun readExactTypedStoreField(holder: TypedStoreRouteHolder): String = holder.exact.read()
+
+private fun readStarTypedStoreField(holder: TypedStoreRouteHolder): Any? = holder.star.read()
+
+private fun returnInvariantTypedStore(store: HostileTypedStore<String>): HostileTypedStore<String> = store
+
+private fun readReturnedTypedStore(store: HostileTypedStore<String>): String =
+    returnInvariantTypedStore(store).read()
+
 private open class HostileUnsafeDerived<T>(initial: T) : HostileUnsafeStore<T>(initial) {
     override fun writeUnsafe(next: T) {
         super.writeUnsafe(next)
@@ -239,7 +265,17 @@ fun box(): String {
 
     val typedStore = HostileTypedStore("before")
     typedStore.write("after")
-    if (typedStore.read() != "after") {
+    val typedStoreRoutes = TypedStoreRouteHolder(typedStore, typedStore)
+    if (typedStore.read() != "after" ||
+        readInvariantTypedStore(typedStore) != "after" ||
+        readStarTypedStore(typedStore) != "after" ||
+        readMergedTypedStore(false, typedStore, typedStore) != "after" ||
+        readMergedTypedStore(true, typedStore, typedStore) != "after" ||
+        readExactTypedStoreField(typedStoreRoutes) != "after" ||
+        readStarTypedStoreField(typedStoreRoutes) != "after" ||
+        readReturnedTypedStore(typedStore) != "after" ||
+        labelStarUnsafeStore(exactUnsafeStore) != "default"
+    ) {
         return fail("typed write provenance through boxed helper")
     }
     val unsafeDerived = HostileUnsafeDerived("derived")

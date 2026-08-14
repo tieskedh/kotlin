@@ -112,6 +112,32 @@ public open class HostileTypedStore<T>(initial: T) {
     public open fun read(): T = stored
 }
 
+public fun readInvariantTypedStore(store: HostileTypedStore<String>): String = store.read()
+
+public fun readStarTypedStore(store: HostileTypedStore<*>): Any? = store.read()
+
+public fun labelStarUnsafeStore(store: HostileUnsafeStore<*>): String = store.label()
+
+public class TypedStoreRouteHolder(
+    public val exact: HostileTypedStore<String>,
+    public val star: HostileTypedStore<*>,
+)
+
+public fun readMergedTypedStore(
+    useStar: Boolean,
+    exact: HostileTypedStore<String>,
+    star: HostileTypedStore<*>,
+): Any? = (if (useStar) star else exact).read()
+
+public fun readExactTypedStoreField(holder: TypedStoreRouteHolder): String = holder.exact.read()
+
+public fun readStarTypedStoreField(holder: TypedStoreRouteHolder): Any? = holder.star.read()
+
+public fun returnInvariantTypedStore(store: HostileTypedStore<String>): HostileTypedStore<String> = store
+
+public fun readReturnedTypedStore(store: HostileTypedStore<String>): String =
+    returnInvariantTypedStore(store).read()
+
 public open class HostileUnsafeMid<T>(initial: T) : HostileUnsafeStore<T>(initial) {
     override fun writeUnsafe(next: T) {
         super.writeUnsafe(next)
@@ -156,6 +182,8 @@ private class ConsumerNullableStringLeaf(initial: String?) : HostileNullableDeri
 }
 
 private fun fail(message: String): String = "fail: $message"
+
+private fun consumerLabelStarUnsafeStore(store: HostileUnsafeStore<*>): String = store.label()
 
 fun box(): String {
     val ints = HostileCell(1)
@@ -250,7 +278,18 @@ fun box(): String {
 
     val typedStore = HostileTypedStore("before")
     typedStore.write("after")
-    if (typedStore.read() != "after") {
+    val typedStoreRoutes = TypedStoreRouteHolder(typedStore, typedStore)
+    if (typedStore.read() != "after" ||
+        readInvariantTypedStore(typedStore) != "after" ||
+        readStarTypedStore(typedStore) != "after" ||
+        readMergedTypedStore(false, typedStore, typedStore) != "after" ||
+        readMergedTypedStore(true, typedStore, typedStore) != "after" ||
+        readExactTypedStoreField(typedStoreRoutes) != "after" ||
+        readStarTypedStoreField(typedStoreRoutes) != "after" ||
+        readReturnedTypedStore(typedStore) != "after" ||
+        labelStarUnsafeStore(exactUnsafeStore) != "default" ||
+        consumerLabelStarUnsafeStore(exactUnsafeStore) != "default"
+    ) {
         return fail("cross-library typed write provenance through boxed helper")
     }
     val consumerUnsafeLeaf = ConsumerUnsafeLeaf("derived")

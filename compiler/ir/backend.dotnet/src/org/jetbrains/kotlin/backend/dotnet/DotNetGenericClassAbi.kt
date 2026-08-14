@@ -937,6 +937,49 @@ data class DotNetGenericOwnerPrototypeStateWriteSnapshot(
     val provenance: DotNetGenericOwnerWriteValueProvenance,
 )
 
+/** Compiler-proven physical provenance of one Kotlin generic-owner call receiver. */
+enum class DotNetGenericOwnerCallReceiverProvenance {
+    EXACT_CONSTRUCTION,
+    SEMANTIC_VIEW,
+    UNRESOLVED,
+}
+
+/** Production-inert route requirement; this is evidence and never an emitter selection. */
+enum class DotNetGenericOwnerCallRouteRequirement {
+    EXACT_TYPED_ENTRY,
+    SEMANTIC_CAPABILITY,
+    MISSING_CAPABILITY,
+    PRODUCER_ERASED_OWNER,
+    EXTERNAL_FAMILY_RECORD_REQUIRED,
+}
+
+/** Immutable, IR-free static call-site evidence for representative route censuses. */
+data class DotNetGenericOwnerCallRouteSnapshot(
+    val callerName: String,
+    val callerLogicalBindingKey: String?,
+    val callSiteIndex: Int,
+    val calleeOwnerName: String,
+    val calleeName: String,
+    val calleeLogicalBindingKey: String?,
+    val receiverProvenance: DotNetGenericOwnerCallReceiverProvenance,
+    val routeRequirement: DotNetGenericOwnerCallRouteRequirement,
+) {
+    init {
+        require(callSiteIndex >= 0) { "a generic-owner call-site index cannot be negative" }
+        require(callerName.isNotEmpty() && calleeOwnerName.isNotEmpty() && calleeName.isNotEmpty()) {
+            "a generic-owner call route requires non-empty caller and callee identities"
+        }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY ||
+                    receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "an exact generic-owner call requires exact receiver-construction provenance" }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
+                    receiverProvenance != DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "a semantic generic-owner capability cannot replace a proven exact typed entry" }
+    }
+}
+
 /**
  * In-memory evidence returned by the backend pipeline for tests and architecture tooling. It is
  * not serialized into the DLL/KLIB, consumed by codegen, or selected by a compiler option.
@@ -1746,6 +1789,48 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.requirePhysicalFamily(
             "generic-owner candidate '$logicalOwnerKey' has no physical family " +
                     "(${classification.disposition})"
         )
+}
+
+/**
+ * Resolves one consumer call-site obligation exclusively through a decoded producer catalog.
+ * Diagnostic source names are deliberately ignored: the logical member key selects either one
+ * published physical family or one producer-authoritative erased-owner classification.
+ */
+fun DotNetGenericOwnerCallRouteSnapshot.resolveExternalPhysicalFamilyRoute(
+    artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
+): DotNetGenericOwnerCallRouteSnapshot {
+    if (routeRequirement != DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED) return this
+    val logicalMemberKey = requireNotNull(calleeLogicalBindingKey) {
+        "an external generic-owner call route lacks its logical member binding"
+    }
+    val classifications = artifact.classifications.filter { classification ->
+        logicalMemberKey in classification.logicalMemberKeys
+    }
+    if (classifications.isEmpty()) return this
+    require(classifications.size == 1) {
+        "generic-owner producer artifact has duplicate classifications for '$logicalMemberKey'"
+    }
+    val physicalFamilies = artifact.owners.mapNotNull { owner ->
+        owner.members.singleOrNull { member -> member.logicalMemberKey == logicalMemberKey }
+    }
+    require(physicalFamilies.size <= 1) {
+        "generic-owner producer artifact has duplicate physical families for '$logicalMemberKey'"
+    }
+    val resolvedRequirement = physicalFamilies.singleOrNull()?.let { family ->
+        when {
+            receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION ->
+                DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in family.roles ->
+                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
+            else -> DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY
+        }
+    } ?: run {
+        check(artifact.owners.none { owner -> owner.logicalOwnerKey == classifications.single().logicalOwnerKey }) {
+            "generic-owner producer family omitted classified member '$logicalMemberKey'"
+        }
+        DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER
+    }
+    return copy(routeRequirement = resolvedRequirement)
 }
 
 /**
@@ -2967,6 +3052,17 @@ internal data class DotNetGenericOwnerStateWriteProvenancePlan(
     val provenance: DotNetGenericOwnerWriteValueProvenance,
 )
 
+internal data class DotNetGenericOwnerCallRoutePlan(
+    val callerName: String,
+    val callerLogicalBindingKey: String?,
+    val callSiteIndex: Int,
+    val callee: IrSimpleFunction,
+    val calleeOwner: IrClass,
+    val calleeLogicalBindingKey: String?,
+    val receiverProvenance: DotNetGenericOwnerCallReceiverProvenance,
+    val routeRequirement: DotNetGenericOwnerCallRouteRequirement,
+)
+
 internal data class DotNetGenericOwnerOverrideBindingPlan(
     val source: IrSimpleFunction,
     val role: DotNetGenericOwnerMemberFamilyRole,
@@ -3391,6 +3487,18 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
         metadataFixedConditionalSupertypeCount = metadataFixedConditionalSupertypes.size,
     )
 }
+
+internal fun DotNetGenericOwnerCallRoutePlan.toCallRouteSnapshot(): DotNetGenericOwnerCallRouteSnapshot =
+    DotNetGenericOwnerCallRouteSnapshot(
+        callerName = callerName,
+        callerLogicalBindingKey = callerLogicalBindingKey,
+        callSiteIndex = callSiteIndex,
+        calleeOwnerName = calleeOwner.fqNameWhenAvailable?.asString() ?: calleeOwner.name.asString(),
+        calleeName = callee.name.asString(),
+        calleeLogicalBindingKey = calleeLogicalBindingKey,
+        receiverProvenance = receiverProvenance,
+        routeRequirement = routeRequirement,
+    )
 
 /** Ordinary Kotlin-owned classes whose declaration parameters use the erased class ABI. */
 internal val IrClass.isDotNetGenericClassDeclaration: Boolean

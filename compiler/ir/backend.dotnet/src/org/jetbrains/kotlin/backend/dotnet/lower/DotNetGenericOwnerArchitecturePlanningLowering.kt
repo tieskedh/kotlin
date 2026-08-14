@@ -6,12 +6,16 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.defaultArgumentsOriginalFunction
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorArgumentMapping
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRoutePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSuperCallPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
@@ -49,6 +53,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrSetField
@@ -101,6 +106,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         check(context.genericOwnerArchitecturePlans.isEmpty()) {
             "Internal .NET backend error: generic-owner architecture planning ran more than once"
         }
+        check(context.genericOwnerCallRoutes.isEmpty()) {
+            "Internal .NET backend error: generic-owner call-route planning ran more than once"
+        }
 
         val owners = mutableListOf<IrClass>()
         val producerFunctions = linkedSetOf<IrFunction>()
@@ -111,6 +119,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
 
             override fun visitClass(declaration: IrClass) {
+                if (declaration.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB) return
                 if (!declaration.isDotNetResolutionOnlyStdlibDeclaration &&
                     declaration.isDotNetGenericClassDeclaration
                 ) {
@@ -120,6 +129,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
 
             override fun visitFunction(declaration: IrFunction) {
+                if (declaration.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB) return
                 producerFunctions += declaration
                 declaration.acceptChildrenVoid(this)
             }
@@ -154,6 +164,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             context.genericOwnerArchitecturePlans[owner] = plan(owner, producerAccesses, initializerAccesses)
         }
         linkDetachedOverrideFamilies()
+        context.genericOwnerCallRoutes += GenericOwnerCallRouteAnalyzer(
+            producerFunctions = producerFunctions,
+            producerInitializers = producerInitializers,
+            producerAccesses = producerAccesses,
+            initializerAccesses = initializerAccesses,
+        ).analyze()
     }
 
     private fun plan(
@@ -750,6 +766,386 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
 
     /**
+     * Computes static receiver evidence for every Kotlin-owned generic-class call in this module.
+     * The result is deliberately more conservative than call lowering: it cannot alter IR and an
+     * unsupported producer always becomes a capability or external-family proof obligation.
+     */
+    private enum class ReceiverOriginKind {
+        EXACT,
+        UNRESOLVED,
+    }
+
+    private data class ReceiverOrigin(
+        val kind: ReceiverOriginKind,
+        val exactType: IrType? = null,
+    ) {
+        init {
+            require((kind == ReceiverOriginKind.EXACT) == (exactType != null)) {
+                "an exact generic-owner receiver origin requires exactly one physical type"
+            }
+        }
+    }
+
+    private data class CallScope(
+        val callerName: String,
+        val callerLogicalBindingKey: String?,
+        val accesses: DirectMemberAccesses,
+    )
+
+    private data class GenericOwnerCallTarget(
+        val callee: IrSimpleFunction,
+        val owner: IrClass,
+        val logicalBindingKey: String?,
+        val localFamily: DotNetGenericOwnerMemberFamilyPlan?,
+        val receiver: IrExpression,
+    )
+
+    private inner class GenericOwnerCallRouteAnalyzer(
+        private val producerFunctions: Set<IrFunction>,
+        private val producerInitializers: List<ProducerInitializer>,
+        private val producerAccesses: Map<IrFunction, DirectMemberAccesses>,
+        private val initializerAccesses: Map<ProducerInitializer, DirectMemberAccesses>,
+    ) {
+
+        private val origins = linkedMapOf<Any, MutableSet<ReceiverOrigin>>()
+        private val localDefaultSourcesByDispatcher = context.defaultArgumentDispatchers.entries.associate { entry ->
+            entry.value to entry.key
+        }
+
+        fun analyze(): List<DotNetGenericOwnerCallRoutePlan> {
+            seedBoundaries()
+            val accesses = producerAccesses.values + initializerAccesses.values
+            accesses.forEach { access ->
+                access.valueDefinitions.keys.forEach(::node)
+                access.reads.forEach(::node)
+                access.writes.forEach(::node)
+            }
+            producerFunctions.forEach(::node)
+
+            var changed: Boolean
+            do {
+                changed = false
+                accesses.forEach { access ->
+                    access.valueDefinitions.forEach { entry ->
+                        changed = addOrigins(
+                            entry.key,
+                            entry.value.flatMapTo(linkedSetOf(), ::originsOf),
+                        ) || changed
+                    }
+                    access.writeValues.forEach { entry ->
+                        changed = addOrigins(
+                            entry.key,
+                            entry.value.flatMapTo(linkedSetOf()) { value -> originsOf(value) },
+                        ) || changed
+                    }
+                }
+                producerFunctions.forEach { function ->
+                    changed = addOrigins(
+                        function,
+                        producerAccesses.getValue(function).returns.flatMapTo(linkedSetOf(), ::originsOf),
+                    ) || changed
+                }
+                accesses.forEach { access ->
+                    access.callSites.forEach { call ->
+                        val target = call.symbol.owner
+                        if (target !in producerFunctions || !target.hasClosedCallBoundary()) return@forEach
+                        target.parameters.forEach { parameter ->
+                            if (parameter.kind == IrParameterKind.DispatchReceiver) return@forEach
+                            val argument = call.arguments.getOrNull(parameter.indexInParameters)
+                            changed = addOrigins(
+                                parameter,
+                                if (argument == null) unresolved() else originsOf(argument),
+                            ) || changed
+                        }
+                    }
+                }
+            } while (changed)
+
+            val scopes = producerFunctions.map { function ->
+                CallScope(
+                    callerName = function.fqNameWhenAvailable?.asString() ?: function.name.asString(),
+                    callerLogicalBindingKey = context.preLoweringDeclarationKeys[function],
+                    accesses = producerAccesses.getValue(function),
+                )
+            } + producerInitializers.map { initializer ->
+                CallScope(
+                    callerName = initializer.label,
+                    callerLogicalBindingKey = null,
+                    accesses = initializerAccesses.getValue(initializer),
+                )
+            }
+            return buildList {
+                var relevantCallIndex = 0
+                scopes.forEach { scope ->
+                    scope.accesses.genericOwnerCallSites.forEach { call ->
+                        val target = call.genericOwnerCallTargetOrNull() ?: return@forEach
+                        val provenance = if (call.superQualifierSymbol != null) {
+                            DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+                        } else {
+                            receiverProvenance(target.receiver)
+                        }
+                        val requirement = when {
+                            target.localFamily == null ->
+                                DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED
+                            provenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION -> {
+                                check(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in target.localFamily.roles) {
+                                    "Internal .NET backend error: an exact generic-owner call lacks a typed entry"
+                                }
+                                DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY
+                            }
+                            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in target.localFamily.roles ->
+                                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
+                            else -> DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY
+                        }
+                        add(DotNetGenericOwnerCallRoutePlan(
+                            callerName = scope.callerName,
+                            callerLogicalBindingKey = scope.callerLogicalBindingKey,
+                            callSiteIndex = relevantCallIndex++,
+                            callee = target.callee,
+                            calleeOwner = target.owner,
+                            calleeLogicalBindingKey = target.logicalBindingKey,
+                            receiverProvenance = provenance,
+                            routeRequirement = requirement,
+                        ))
+                    }
+                }
+            }
+        }
+
+        private fun seedBoundaries() {
+            producerFunctions.forEach { function ->
+                function.parameters.forEach { parameter ->
+                    when {
+                        parameter.kind == IrParameterKind.DispatchReceiver ->
+                            addOrigin(parameter, exact(parameter.type))
+                        !function.hasClosedCallBoundary() -> if (parameter.type.isStaticallyExactGenericOwnerView()) {
+                            addOrigin(parameter, exact(parameter.type))
+                        } else {
+                            addOrigins(parameter, unresolved())
+                        }
+                    }
+                }
+                if (function.body == null) {
+                    if (function.returnType.isStaticallyExactGenericOwnerView()) {
+                        addOrigin(function, exact(function.returnType))
+                    } else {
+                        addOrigins(function, unresolved())
+                    }
+                }
+            }
+            val fields = buildSet {
+                producerAccesses.values.forEach { access ->
+                    addAll(access.reads)
+                    addAll(access.writes)
+                }
+                initializerAccesses.values.forEach { access ->
+                    addAll(access.reads)
+                    addAll(access.writes)
+                }
+            }
+            fields.filterNotTo(linkedSetOf()) { field -> DescriptorVisibilities.isPrivate(field.visibility) }
+                .forEach { field ->
+                    if (field.type.isStaticallyExactGenericOwnerView()) {
+                        addOrigin(field, exact(field.type))
+                    } else {
+                        addOrigins(field, unresolved())
+                    }
+                }
+        }
+
+        private fun IrFunction.hasClosedCallBoundary(): Boolean =
+            DescriptorVisibilities.isPrivate(visibility) || visibility == DescriptorVisibilities.LOCAL
+
+        private fun IrCall.genericOwnerCallTargetOrNull(): GenericOwnerCallTarget? {
+            val raw = symbol.owner
+            localDefaultSourcesByDispatcher[raw]?.let { source ->
+                val owner = source.parent as? IrClass ?: return null
+                val family = context.genericOwnerArchitecturePlans[owner]?.memberFamilies?.get(source) ?: return null
+                return GenericOwnerCallTarget(
+                    callee = source,
+                    owner = owner,
+                    logicalBindingKey = context.preLoweringDeclarationKeys[source]
+                        ?: source.dotNetLibraryAbiKeyOrNull("F"),
+                    localFamily = family,
+                    receiver = movedDispatchReceiverArgumentOrNull() ?: return null,
+                )
+            }
+            context.externalDefaultArgumentDispatchers[raw]?.let { bound ->
+                val receiver = movedDispatchReceiverArgumentOrNull() ?: return null
+                val owner = ((receiver.type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+                if (!owner.isDotNetGenericClassDeclaration) return null
+                val logicalBindingKey = bound.library.declarations.entries.singleOrNull { entry ->
+                    entry.value === bound.function
+                }?.key ?: return null
+                return GenericOwnerCallTarget(
+                    callee = raw.defaultArgumentsOriginalFunction as? IrSimpleFunction ?: raw,
+                    owner = owner,
+                    logicalBindingKey = logicalBindingKey,
+                    localFamily = null,
+                    receiver = receiver,
+                )
+            }
+            val receiver = dispatchReceiver ?: return null
+            val localRawOwner = raw.parent as? IrClass
+            val localRawFamily = localRawOwner
+                ?.let { owner -> context.genericOwnerArchitecturePlans[owner]?.memberFamilies?.get(raw) }
+            if (localRawOwner != null && localRawFamily != null) {
+                return GenericOwnerCallTarget(
+                    callee = raw,
+                    owner = localRawOwner,
+                    logicalBindingKey = context.preLoweringDeclarationKeys[raw]
+                        ?: raw.dotNetLibraryAbiKeyOrNull("F"),
+                    localFamily = localRawFamily,
+                    receiver = receiver,
+                )
+            }
+            val callee = if (raw.isFakeOverride) {
+                raw.resolveFakeOverride() ?: raw.resolveFakeOverrideMaybeAbstract() ?: return null
+            } else {
+                raw
+            }
+            val owner = callee.parent as? IrClass ?: return null
+            if (!owner.isDotNetGenericClassDeclaration) return null
+            val localFamily = context.genericOwnerArchitecturePlans[owner]?.memberFamilies?.get(callee)
+            val logicalBindingKey = context.preLoweringDeclarationKeys[callee]
+                ?: callee.dotNetLibraryAbiKeyOrNull("F")
+            if (localFamily == null && logicalBindingKey == null) return null
+            return GenericOwnerCallTarget(callee, owner, logicalBindingKey, localFamily, receiver)
+        }
+
+        private fun IrCall.movedDispatchReceiverArgumentOrNull(): IrExpression? {
+            val receiverParameter = symbol.owner.parameters.singleOrNull { parameter ->
+                parameter.origin == IrDeclarationOrigin.MOVED_DISPATCH_RECEIVER
+            } ?: return null
+            return arguments.getOrNull(receiverParameter.indexInParameters)
+        }
+
+        private fun receiverProvenance(receiver: IrExpression): DotNetGenericOwnerCallReceiverProvenance {
+            val candidates = originsOf(receiver)
+            if (candidates.isEmpty() || candidates.any { origin -> origin.kind == ReceiverOriginKind.UNRESOLVED }) {
+                return DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED
+            }
+            val exact = candidates.filter { origin -> origin.kind == ReceiverOriginKind.EXACT }
+            if (exact.isEmpty() || exact.any { origin -> !checkNotNull(origin.exactType).hasPhysicalView(receiver.type) }) {
+                return DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW
+            }
+            return DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        }
+
+        private fun originsOf(expression: IrExpression?): Set<ReceiverOrigin> {
+            if (expression == null) return unresolved()
+            return when (expression) {
+                is IrConstructorCall -> {
+                    val owner = expression.symbol.owner.parent as? IrClass
+                    if (owner?.hasRelevantGenericOwnerInAncestry() == true) {
+                        setOf(exact(expression.type))
+                    } else {
+                        emptySet()
+                    }
+                }
+                is IrGetValue -> origins[expression.symbol.owner].orEmpty()
+                is IrGetField -> origins[expression.symbol.owner].orEmpty().ifEmpty { unresolved() }
+                is IrTypeOperatorCall -> originsOf(expression.argument)
+                is IrReturn -> originsOf(expression.value)
+                is IrWhen -> expression.branches.flatMapTo(linkedSetOf()) { branch ->
+                    originsOf(branch.result)
+                }
+                is IrContainerExpression -> originsOf(expression.statements.lastOrNull() as? IrExpression)
+                is IrFunctionAccessExpression -> {
+                    val target = expression.symbol.owner
+                    if (target in producerFunctions) {
+                        origins[target].orEmpty()
+                    } else if (expression.type.hasRelevantGenericOwnerInAncestry()) {
+                        unresolved()
+                    } else {
+                        emptySet()
+                    }
+                }
+                else -> if (expression.type.hasRelevantGenericOwnerInAncestry()) unresolved() else emptySet()
+            }
+        }
+
+        private fun IrType.hasRelevantGenericOwnerInAncestry(): Boolean {
+            val owner = ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return false
+            return owner.hasRelevantGenericOwnerInAncestry()
+        }
+
+        private fun IrType.isStaticallyExactGenericOwnerView(): Boolean {
+            val simple = this as? IrSimpleType ?: return false
+            val owner = (simple.classifier as? IrClassSymbol)?.owner ?: return false
+            if (!owner.hasRelevantGenericOwnerInAncestry()) return false
+            if (simple.arguments.size != owner.typeParameters.size) return false
+            if (owner.typeParameters.any { parameter -> parameter.variance != Variance.INVARIANT }) return false
+            return simple.arguments.all { argument ->
+                val projection = argument as? IrTypeProjection ?: return@all false
+                projection.variance == Variance.INVARIANT
+            }
+        }
+
+        private fun IrClass.hasRelevantGenericOwnerInAncestry(visited: MutableSet<IrClass> = hashSetOf()): Boolean {
+            if (!visited.add(this)) return false
+            if (this in context.genericOwnerArchitecturePlans ||
+                (isDotNetGenericClassDeclaration && dotNetLibraryAbiKeyOrNull("C") != null)
+            ) {
+                return true
+            }
+            return superTypes.any { superType ->
+                val superClass = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                superClass?.hasRelevantGenericOwnerInAncestry(visited) == true
+            }
+        }
+
+        private fun IrType.hasPhysicalView(expected: IrType): Boolean {
+            val pending = ArrayDeque<IrType>()
+            val visited = hashSetOf<IrType>()
+            pending += this
+            while (pending.isNotEmpty()) {
+                val candidate = pending.removeFirst()
+                if (!visited.add(candidate)) continue
+                if (candidate.sameInvariantTypeAs(expected)) return true
+                val simple = candidate as? IrSimpleType ?: continue
+                val classifier = (simple.classifier as? IrClassSymbol)?.owner ?: continue
+                if (simple.arguments.size != classifier.typeParameters.size) continue
+                val substitutions = classifier.typeParameters.zip(simple.arguments).mapNotNull { pair ->
+                    val projection = pair.second as? IrTypeProjection ?: return@mapNotNull null
+                    pair.first.symbol to projection.type
+                }
+                if (substitutions.size != classifier.typeParameters.size) continue
+                val substitutor = IrTypeSubstitutor(substitutions.toMap(), allowEmptySubstitution = true)
+                classifier.superTypes.mapTo(pending, substitutor::substitute)
+            }
+            return false
+        }
+
+        private fun IrType.sameInvariantTypeAs(other: IrType): Boolean {
+            val left = this as? IrSimpleType ?: return false
+            val right = other as? IrSimpleType ?: return false
+            if (left.classifier != right.classifier || left.nullability != right.nullability ||
+                left.arguments.size != right.arguments.size
+            ) {
+                return false
+            }
+            return left.arguments.indices.all { index ->
+                val leftProjection = left.arguments[index] as? IrTypeProjection ?: return@all false
+                val rightProjection = right.arguments[index] as? IrTypeProjection ?: return@all false
+                leftProjection.variance == Variance.INVARIANT &&
+                        rightProjection.variance == Variance.INVARIANT &&
+                        leftProjection.type.sameInvariantTypeAs(rightProjection.type)
+            }
+        }
+
+        private fun exact(type: IrType): ReceiverOrigin = ReceiverOrigin(ReceiverOriginKind.EXACT, type)
+
+        private fun unresolved(): Set<ReceiverOrigin> = setOf(ReceiverOrigin(ReceiverOriginKind.UNRESOLVED))
+
+        private fun node(key: Any): MutableSet<ReceiverOrigin> = origins.getOrPut(key) { linkedSetOf() }
+
+        private fun addOrigin(key: Any, origin: ReceiverOrigin): Boolean = node(key).add(origin)
+
+        private fun addOrigins(key: Any, additions: Set<ReceiverOrigin>): Boolean = node(key).addAll(additions)
+    }
+
+    /**
      * Traces the physical domain of field-write values through parameters, calls, local aliases,
      * assignments, returns, and casts. This is deliberately context-insensitive and fail-closed:
      * merging any object-domain producer keeps the write semantic, while an unsupported or
@@ -982,6 +1378,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
     private data class DirectMemberAccesses(
         val calls: Set<IrFunction>,
         val callSites: List<IrFunctionAccessExpression>,
+        val genericOwnerCallSites: List<IrCall>,
         val reads: Set<IrField>,
         val writes: Set<IrField>,
         val writeValues: Map<IrField, List<IrExpression?>>,
@@ -1016,6 +1413,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
     ): DirectMemberAccesses {
         val calls = linkedSetOf<IrFunction>()
         val callSites = mutableListOf<IrFunctionAccessExpression>()
+        val genericOwnerCallSites = mutableListOf<IrCall>()
         val reads = linkedSetOf<IrField>()
         val writes = linkedSetOf<IrField>()
         val writeValues = linkedMapOf<IrField, MutableList<IrExpression?>>()
@@ -1036,6 +1434,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
 
             override fun visitFunctionAccess(expression: IrFunctionAccessExpression) {
+                if (expression is IrCall) genericOwnerCallSites += expression
                 val target = expression.symbol.owner
                 if (target in producerFunctions) {
                     calls += target
@@ -1077,6 +1476,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         return DirectMemberAccesses(
             calls = calls,
             callSites = callSites,
+            genericOwnerCallSites = genericOwnerCallSites,
             reads = reads,
             writes = writes,
             writeValues = writeValues,
@@ -1093,6 +1493,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
     } ?: DirectMemberAccesses(
             calls = emptySet(),
             callSites = emptyList(),
+            genericOwnerCallSites = emptyList(),
             reads = emptySet(),
             writes = emptySet(),
             writeValues = emptyMap(),
