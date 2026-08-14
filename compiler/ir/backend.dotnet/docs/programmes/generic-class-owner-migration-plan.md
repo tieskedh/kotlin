@@ -149,11 +149,20 @@ for the current candidate. The call mix is intentionally semantic-heavy, so
 this rejects migration on the present evidence without rejecting CLR generics
 as a representation. It also found and repaired the direct InterfaceImpl edge
 required when a descendant rebuilds canonical MethodImpl bridges from an old
-external physical index. Conditions 8 and 9 remain open: first attribute and
-reduce only removable bridge overhead without weakening Kotlin semantic calls,
-then validate representative complete Kotlin products on both runtime
-families. See
+external physical index. See
 [`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
+The bounded route-attribution follow-up closes the first part of that gate.
+The candidate's true generic owner still has semantic object state: direct
+typed value access retains the erased box, compatible capability value access
+adds one re-box, and allocation-free reference/array capability routes expose
+dispatch and compatibility-check overhead. Equal-layout fallback structs rule
+out payload-size bias. Method generics stay near parity and selected NativeAOT
+typed routes are competitive, so this does not reject CLR generics. Conditions
+8 and 9 still require representative complete products on both runtime
+families and allow only semantically safe removal of the attributed overhead.
+See
+[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
