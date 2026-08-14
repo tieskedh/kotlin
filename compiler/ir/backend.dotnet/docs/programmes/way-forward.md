@@ -695,12 +695,25 @@ whose records retain the original compilation site index and KLIB logical
 member identity but omit diagnostic/physical names. PSI, LightTree, Framework
 4.8, and net10 produce byte-identical route bytes. The hostile artifact has 40
 records over indices 0 through 48; the nine gaps are unrelated external owners,
-not renumbered producer sites. This creates the exact join for later dynamic
-counters, but supplies no execution weights and does not make the hostile
-application representative. Next instrument complete application compilations
-by those indices and measure their weighted route/state distribution separately
-on Framework 4.8 and every .NET 10 deployment lane. See
+not renumbered producer sites. This creates the exact instrumentation join but
+does not make the hostile application representative. See
 [`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
+
+The first compiler-indexed execution profile now closes that join for the
+bounded hostile application. An explicit test-only recorder wraps the exact
+analyzed call after single ordered receiver/argument evaluation and immediately
+before invocation. Its closed trace bundle fingerprints the static route file,
+all 40 producer-site counters, and instrumented assembly. PSI/LightTree and
+Framework 4.8/net10 agree byte-for-byte on 40 producer events—24 erased, 11
+exact, four capability, one missing capability—plus nine unrelated events.
+One typed site is unexecuted and another executes twice, so the per-site oracle
+cannot be replaced by aggregate totals. Normal products remain byte-identical
+when the hook is absent. This console-event tracer is correctness evidence, not
+performance measurement. Next replace per-call output with a bounded in-process
+counter/final-flush product suitable for complete representative applications,
+then collect route/state distributions independently from timing on Framework
+4.8 and every .NET 10 deployment lane. See
+[`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

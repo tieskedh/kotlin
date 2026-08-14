@@ -342,6 +342,22 @@ owner remains object-backed, production remains erased, and representative
 complete applications remain the next gate. See
 [`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
 
+The static census now has a compiler-indexed execution join. An explicit
+architecture-test product retains each analyzed call, evaluates its receiver
+and arguments once in original order, records the original index immediately
+before invocation, and then performs the unchanged dispatch. The closed
+hostile trace contains every sparse producer counter and fingerprints both its
+static route manifest and instrumented assembly. PSI/LightTree and Framework
+4.8/net10 agree on 40 producer events (24 erased, 11 exact, four capability,
+one missing capability) plus nine unrelated events. One exact site has no hit
+and another has two, so exact site identity—not aggregate coincidence—is
+tested. A non-instrumented corpus remains byte-identical to the prior baseline.
+The recorder has no CLI/Runtime/KLIB/production ABI and its console traffic
+makes it correctness evidence only. Representative application work next needs
+a final-flush counter implementation whose collection overhead is excluded
+from timing. See
+[`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?

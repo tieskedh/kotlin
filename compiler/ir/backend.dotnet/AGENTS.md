@@ -681,7 +681,19 @@ See the
   filtering, reject unresolved external routes, and require byte identity
   across frontends and target profiles. The surrounding closed bundle owns the
   content fingerprint. Such a manifest is a later instrumentation join, not an
-  execution weight or emitter input. Version 5 adds the reflection join
+  execution weight or emitter input. Runtime route tracing is an explicit
+  architecture-test product only. Retain the exact analyzed `IrCall` and enable
+  rewriting only when the harness supplies a private module-local `(Int) ->
+  Unit` IR declaration; never expose a CLI option, Runtime helper, KLIB field,
+  or production emitter switch. Evaluate every receiver/argument exactly once
+  into temporaries in original order, record the compiler index only after
+  those evaluations and immediately before the call, then execute the original
+  dispatch. Instrument the complete census before producer filtering so
+  unrelated events remain auditable, but export producer counts only by the
+  sparse manifest indices. Require canonical closed bundles, exact per-site
+  counts, frontend/profile byte identity, and byte-identical normal products
+  when the hook is absent. Console-event tracing proves correctness and route
+  frequency only; it is never performance evidence. Version 5 adds the reflection join
   without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
   to its existing KLIB logical classifier key, while logical type arguments,

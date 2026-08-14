@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceRecorder
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
@@ -118,6 +119,8 @@ import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.diagnostics.impl.DiagnosticsCollectorImpl
 import org.jetbrains.kotlin.fir.moduleData
 import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import org.jetbrains.kotlin.platform.dotnet.isDotNet
 import org.jetbrains.kotlin.test.Constructor
@@ -171,6 +174,7 @@ import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.opentest4j.TestAbortedException
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 // Framework ILAsm and the Windows PowerShell CLR 4 host are external, process-wide resources.
@@ -352,7 +356,7 @@ private class BackendCliDotNetFacade(
     BackendKinds.IrBackend,
     ArtifactKinds.DotNet,
 ) {
-    @OptIn(MessageCollectorAccess::class)
+    @OptIn(MessageCollectorAccess::class, UnsafeDuringIrConstructionAPI::class)
     override fun transform(module: TestModule, inputArtifact: IrBackendInput): BinaryArtifacts.DotNet {
         require(inputArtifact is Fir2IrCliBasedOutputArtifact<*>) {
             "BackendCliDotNetFacade expects Fir2IrCliBasedOutputArtifact as input, but ${inputArtifact::class} was found"
@@ -363,6 +367,19 @@ private class BackendCliDotNetFacade(
         }
         val input = cliArtifact.withNewDiagnosticCollector(DiagnosticsCollectorImpl())
         val loweredInput = DotNetKlibInliningPipelinePhase.executePhase(input)
+        val callRouteTraceExportPath = System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY)
+        if (callRouteTraceExportPath != null && !loweredInput.configuration.dotNetProducesLibrary) {
+            check(callRouteTraceExportPath.isNotBlank()) {
+                "Generic-owner call-route trace export path must not be blank"
+            }
+            val recorder = loweredInput.result.irModuleFragment.files
+                .flatMap { file -> file.declarations }
+                .filterIsInstance<IrSimpleFunction>()
+                .singleOrNull { function ->
+                    function.name.asString() == GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME
+                } ?: error("The instrumented generic-owner application lacks its explicit IR trace recorder")
+            loweredInput.configuration.dotNetGenericOwnerCallRouteTraceRecorder = recorder
+        }
         val metadataInput = if (loweredInput.configuration.dotNetProducesLibrary) {
             DotNetLibraryMetadataSerializationPipelinePhase.executePhase(loweredInput)
         } else {
@@ -773,6 +790,19 @@ private const val GENERIC_OWNER_ERASED_CSHARP_SOURCE_FILE = "ErasedCSharpConsume
 private const val GENERIC_OWNER_APPLICATION_SOURCE_FILE = "genericOwnerHardestModelOracle.kt"
 private const val GENERIC_OWNER_APPLICATION_MANIFEST_FILE = "generic-owner-application.properties"
 private const val GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE = "generic-owner-call-routes.tsv"
+private const val GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY =
+    "kotlin.dotnet.genericOwnerCallRouteTraceDir"
+private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
+    "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
+private const val GENERIC_OWNER_CALL_ROUTE_COUNTS_FILE = "generic-owner-call-route-counts.tsv"
+private const val GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE =
+    "generic-owner-call-route-trace.properties"
+private const val GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX =
+    "KOTLIN_DOTNET_GENERIC_OWNER_CALL_ROUTE|site="
+private val genericOwnerCallRouteTraceManifests = ConcurrentHashMap<String, String>()
+
+private fun genericOwnerCallRouteTraceKey(directory: File): String =
+    directory.absoluteFile.normalize().path
 
 private fun genericOwnerErasedConsumerFile(target: DotNetTarget): String =
     if (target == DotNetTarget.NET48) "ErasedConsumer.exe" else "ErasedConsumer.dll"
@@ -4262,6 +4292,30 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     }
     check(compilation.exitCode == 0) { compilation.output }
     executeSnapshotConsumer(target, output, directory)
+    System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY)?.let { traceExportPath ->
+        check(traceExportPath.isNotBlank()) { "Generic-owner call-route trace export path must not be blank" }
+        val traceExportDirectory = File(traceExportPath)
+        check(!traceExportDirectory.exists() || traceExportDirectory.isDirectory) {
+            "Generic-owner call-route trace export path is not a directory: $traceExportDirectory"
+        }
+        check(traceExportDirectory.mkdirs() || traceExportDirectory.isDirectory) {
+            "Cannot create generic-owner call-route trace export directory: $traceExportDirectory"
+        }
+        check(traceExportDirectory.list()?.isEmpty() == true) {
+            "Generic-owner call-route trace export directory must be empty: $traceExportDirectory"
+        }
+        val traceRouteManifest = traceExportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE)
+        callRouteManifestFile.copyTo(
+            traceRouteManifest,
+            overwrite = false,
+        )
+        check(genericOwnerCallRouteTraceManifests.put(
+            genericOwnerCallRouteTraceKey(traceExportDirectory),
+            encodedCallRouteManifest,
+        ) == null) {
+            "The generic-owner call-route trace export directory was registered more than once"
+        }
+    }
     val measurementExportPath = System.getProperty(GENERIC_OWNER_MEASUREMENT_EXPORT_PROPERTY)
     if (target == DotNetTarget.NET10_0 && measurementExportPath != null) {
         check(measurementExportPath.isNotBlank()) {
@@ -5780,6 +5834,8 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
         val fileWithBox = module.files.firstOrNull {
             MainFunctionForBlackBoxTestsSourceProvider.containsBoxMethod(it.originalContent)
         } ?: return emptyList()
+        val tracesGenericOwnerCallRoutes =
+            System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY) != null
 
         val code = buildString {
             MainFunctionForBlackBoxTestsSourceProvider.detectPackage(fileWithBox)?.let {
@@ -5799,6 +5855,19 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
 
         return buildList {
             add(file.toTestFile())
+            if (tracesGenericOwnerCallRoutes) {
+                val recorder = sourceDirectory.resolve("DotNetGenericOwnerCallRouteTraceRecorder.kt")
+                recorder.writeText(
+                    """
+                    import kotlin.io.println
+
+                    private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME(callSiteIndex: Int) {
+                        println("$GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX" + callSiteIndex)
+                    }
+                    """.trimIndent()
+                )
+                add(recorder.toTestFile())
+            }
             if (module.files.any { source -> "kotlin.test" in source.originalContent }) {
                 val assertions = sourceDirectory.resolve("DotNetTestAssertions.kt")
                 assertions.writeText(
@@ -5897,13 +5966,115 @@ private abstract class AbstractDotNetBoxRunner(
         boxMethodFound = true
         stageRuntimeDependencies(module, info.outputFile)
         val producesStdlibFromSource = DotNetCodegenDirectives.DOTNET_STDLIB_FROM_SOURCE in module.directives
-        val result = runExecutable(info.outputFile, producesStdlibFromSource).trim()
+        val executionOutput = runExecutable(info.outputFile, producesStdlibFromSource)
+        val result = System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY)?.let { exportPath ->
+            captureGenericOwnerCallRouteTrace(executionOutput, info.outputFile, File(exportPath))
+        } ?: executionOutput.trim()
         val outputFile = testServices.moduleStructure.originalTestDataFiles.first().withExtension(OUTPUT_EXTENSION)
         if (outputFile.exists()) {
             assertions.assertEqualsToFile(outputFile, result)
         } else {
             assertions.assertEquals(DEFAULT_EXPECTED_RESULT, result)
         }
+    }
+
+    private fun captureGenericOwnerCallRouteTrace(
+        executionOutput: String,
+        instrumentedAssembly: File,
+        exportDirectory: File,
+    ): String {
+        check(exportDirectory.isDirectory) {
+            "The generic-owner trace export directory was not prepared: $exportDirectory"
+        }
+        val routeManifest = exportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE)
+        check(exportDirectory.listFiles()?.map(File::getName) == listOf(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE) &&
+                routeManifest.isFile) {
+            "The generic-owner trace must join one compiler-exported route manifest before execution"
+        }
+        val encodedRouteManifest = checkNotNull(
+            genericOwnerCallRouteTraceManifests.remove(genericOwnerCallRouteTraceKey(exportDirectory)),
+        ) {
+            "The generic-owner trace lacks its process-local canonical route manifest"
+        }
+        val routeLines = encodedRouteManifest.trimEnd('\r', '\n').lines()
+        check(routeLines.firstOrNull() ==
+                "kotlin-dotnet-generic-owner-call-routes\t${DotNetGenericOwnerCallRouteManifestCodec.SCHEMA_VERSION}") {
+            "The generic-owner trace received a stale call-route manifest"
+        }
+        val routeCount = routeLines.getOrNull(1)?.split('\t')?.let { fields ->
+            fields.takeIf { it.size == 2 && it[0] == "N" }?.get(1)?.toIntOrNull()
+        }
+        check(routeCount != null && routeCount > 0 && routeLines.size == routeCount + 2) {
+            "The generic-owner trace received an invalid call-route count"
+        }
+        val producerSiteIndices = routeLines.drop(2).map { line ->
+            val fields = line.split('\t')
+            check(fields.size == 7 && fields[0] == "R") {
+                "The generic-owner trace received a malformed route record"
+            }
+            checkNotNull(fields[1].toIntOrNull()?.takeIf { index -> index >= 0 }) {
+                "The generic-owner trace received an invalid compiler call-site index"
+            }
+        }
+        check(producerSiteIndices == producerSiteIndices.sorted() &&
+                producerSiteIndices.toSet().size == producerSiteIndices.size) {
+            "The generic-owner trace received duplicate or unordered call-site indices"
+        }
+
+        val eventCounts = linkedMapOf<Int, Long>()
+        val applicationOutput = mutableListOf<String>()
+        executionOutput.trim().lines().forEach { line ->
+            if (line.startsWith(GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX)) {
+                val callSiteIndex = checkNotNull(
+                    line.removePrefix(GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX).toIntOrNull()?.takeIf { index ->
+                        index >= 0
+                    },
+                ) { "The instrumented application emitted an invalid generic-owner route event: '$line'" }
+                eventCounts[callSiteIndex] = Math.addExact(eventCounts[callSiteIndex] ?: 0L, 1L)
+            } else {
+                applicationOutput += line
+            }
+        }
+        check(eventCounts.isNotEmpty()) { "The instrumented application emitted no generic-owner route events" }
+
+        val routeFingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(
+            encodedRouteManifest.toByteArray(),
+        )
+        val encodedCounts = buildString {
+            appendLine("kotlin-dotnet-generic-owner-call-route-counts\t1")
+            appendLine("R\t$routeFingerprint")
+            appendLine("N\t${producerSiteIndices.size}")
+            producerSiteIndices.forEach { callSiteIndex ->
+                appendLine("C\t$callSiteIndex\t${eventCounts[callSiteIndex] ?: 0L}")
+            }
+        }
+        exportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_COUNTS_FILE).writeText(encodedCounts)
+        val producerEventCount = producerSiteIndices.sumOf { callSiteIndex ->
+            eventCounts[callSiteIndex] ?: 0L
+        }
+        val allEventCount = eventCounts.values.sum()
+        val traceManifest = exportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE).apply {
+            writeText(
+                """
+                schema=1
+                targetProfile=${target.name}
+                routeManifestSha256=$routeFingerprint
+                countsSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(encodedCounts.toByteArray())}
+                instrumentedAssemblySha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(instrumentedAssembly.readBytes())}
+                allEventCount=$allEventCount
+                producerEventCount=$producerEventCount
+                unrelatedEventCount=${allEventCount - producerEventCount}
+                """.trimIndent()
+            )
+        }
+        check(exportDirectory.listFiles()?.map(File::getName)?.sorted() == listOf(
+            GENERIC_OWNER_CALL_ROUTE_COUNTS_FILE,
+            GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE,
+            GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE,
+        ).sorted() && traceManifest.isFile) {
+            "The generic-owner call-route trace did not produce its exact closed file set"
+        }
+        return applicationOutput.joinToString("\n").trim()
     }
 
     override fun processAfterAllModules(someAssertionWasFailed: Boolean) {

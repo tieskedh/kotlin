@@ -529,6 +529,26 @@ fingerprints it and requires byte identity across PSI, LightTree, Framework
 compilation, not a source-stable identity after program/compiler changes. See
 [`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
 
+The same-compilation join is now executable without changing the candidate or
+production ABI. The architecture harness supplies a private module-local
+recorder declaration; the planner retains the exact analyzed call and wraps it
+only in that explicit product. Receiver and arguments are evaluated once into
+temporaries in their original order, the stable compilation index is recorded,
+and the original virtual/static dispatch follows. Thus argument failure emits
+no event while a callee failure is a counted attempt. No source/physical name,
+CLI flag, Runtime helper, KLIB payload, or normal-emission branch participates.
+
+The hostile profile records 49 complete-census events: 40 join the producer
+manifest and nine belong to unrelated generic owners. Producer events retain
+the static route distribution (24 erased, 11 exact, four capability, one
+missing capability), but this is verified through the exact 40-entry count
+vector: one exact site is zero and another is two. Both frontends and both CLR
+profiles produce identical route/count bytes, while normal pre/post products
+remain byte-identical. This proves the index/frequency mechanism only. Console
+events perturb execution and the hostile application is non-representative;
+neither result can select owner admission or quantify production cost. See
+[`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

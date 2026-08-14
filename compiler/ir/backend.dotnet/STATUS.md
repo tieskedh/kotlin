@@ -27,7 +27,29 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the compiler-derived generic-owner census now
+- Last completed foundation: explicit architecture-test instrumentation now
+  attaches runtime events to the compiler's original generic-owner call-site
+  indices. The planner retains the exact analyzed `IrCall`; only a test-owned,
+  private module-local `(Int) -> Unit` recorder enables rewriting. Every
+  receiver and argument is first evaluated once into a temporary in original
+  order, then the event is recorded immediately before invocation, so callee
+  failures count as attempts without moving the event before argument failure.
+  No CLI option, Runtime ABI, KLIB field, physical name, or emitter policy was
+  added. A closed schema-1 trace bundle joins the static route fingerprint to
+  all 40 sparse producer counters and the instrumented assembly fingerprint.
+  PSI/LightTree on Framework CLR 4 and .NET 10 produce byte-identical route and
+  count artifacts: 49 total events comprise 40 producer and nine unrelated
+  events; the dynamic producer distribution is 24 producer-erased, 11 exact,
+  four capability, and one missing-capability call. The exact per-site oracle
+  includes one zero-hit and one two-hit typed site, preventing aggregate-only
+  false agreement. A fresh non-instrumented application corpus is byte-for-
+  byte identical to the pre-feature baseline across all 17 files per frontend,
+  including compiler DLLs and manifests. Console tracing is correctness
+  evidence only, not timing or representative-application evidence. The strict
+  aggregate completed in 3,063.2 seconds; direct audit covers 190 XML files and
+  2,216 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-call-route-trace-2026-08-14.md`](docs/archive/generic-owner-call-route-trace-2026-08-14.md).
+- The preceding foundation: the compiler-derived generic-owner census now
   crosses into the closed paired application bundle as a canonical schema-1
   route artifact. Its 40 producer-owned records retain original compilation
   indices 0 through 48 (nine unrelated-owner gaps), optional caller KLIB keys,
@@ -2265,9 +2287,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    capability routes for Int, non-trivial struct, and nullable values. The
    compiler-derived static route census now enters closed application bundle
    schema 2 through original call-site indices and KLIB member keys, with exact
-   frontend/profile byte equality. Next, instrument those indices in
-   representative complete erased/candidate Kotlin applications and C#
-   consumers/subclasses, including actual call mixes,
+   frontend/profile byte equality. Explicit test-only exact-`IrCall` tracing
+   now proves the same-compilation join and exact hostile per-site vector on
+   Framework 4.8/net10 and both frontends while leaving normal products byte-
+   identical. Next, replace per-call console events with bounded counters and
+   one final flush, then apply that collection product to representative
+   complete erased/candidate Kotlin applications and C# consumers/subclasses,
+   including actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
    insufficient.
