@@ -130,6 +130,8 @@ internal class DotNetIlEmitter(
             List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
     private val cSharpImplementationManifestTarget: DotNetTarget? = null,
     private val hasKotlinMetadataResource: Boolean = false,
+    private val genericOwnerCallRouteTraceHooks: DotNetGenericOwnerCallRouteTraceHooks? = null,
+    private val genericOwnerCallRouteTraceSiteCount: Int? = null,
 ) {
     private val covariantReturnImplementations: Set<IrSimpleFunction> =
         covariantReturnBridges.asSequence()
@@ -157,6 +159,13 @@ internal class DotNetIlEmitter(
      * executable was requested without a main function).
      */
     fun emit(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
+        check((genericOwnerCallRouteTraceHooks == null) == (genericOwnerCallRouteTraceSiteCount == null)) {
+            "Generic-owner call-route trace hooks and their site count must be configured together"
+        }
+        check(genericOwnerCallRouteTraceHooks == null ||
+                (emissionScope == DotNetIlEmissionScope.USER && producesExecutable)) {
+            "Generic-owner call-route trace support is test-only executable USER emission"
+        }
         val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns, emissionScope)
         val allFiles = moduleFragment.files.toList()
         val files = when (emissionScope) {
@@ -1112,6 +1121,11 @@ internal class DotNetIlEmitter(
                         intrinsicMethods = intrinsicMethods,
                         typeMapper = typeMapper,
                         facadeClassInfoByFile = facadeClassInfoByFile,
+                        genericOwnerCallRouteTraceHook = when (function) {
+                            genericOwnerCallRouteTraceHooks?.recorder -> DotNetGenericOwnerCallRouteTraceHook.RECORD
+                            genericOwnerCallRouteTraceHooks?.flusher -> DotNetGenericOwnerCallRouteTraceHook.FLUSH
+                            else -> null
+                        },
                     ).render()
                 } catch (e: DotNetIlUnsupportedException) {
                     availableFunctions.remove(function)
@@ -1453,6 +1467,10 @@ internal class DotNetIlEmitter(
         }
 
         val moduleBody = buildString {
+            genericOwnerCallRouteTraceSiteCount?.let { siteCount ->
+                append(DotNetGenericOwnerCallRouteTraceSupport.helperTypeIl(coreLibrary.reference, siteCount))
+                appendLine()
+            }
             val renderedFacadeIlNames = hashSetOf<String>()
             for (file in files) {
                 // Per file: user classes first, then the file facade (the deterministic order

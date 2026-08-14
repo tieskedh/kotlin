@@ -549,6 +549,18 @@ events perturb execution and the hostile application is non-representative;
 neither result can select owner admission or quantify production cost. See
 [`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
 
+Representative-frequency collection uses the same insertion point but not the
+per-call console transport. Only the explicitly instrumented executable gains
+one private `Int64[]` sized to the complete route census and private physical
+recorder/flusher bodies. Recording is one linearizable
+`Interlocked.Increment`; after `box()` returns, atomic reads emit one line per
+visited site under trace schema 2's `FINAL_FLUSH` protocol. The application is
+responsible for joining its workers before returning. This removes output
+growth with dynamic call count and preserves the exact cross-frontend/profile
+hostile vector without adding CLI, Runtime, KLIB, or published ABI, but its
+overhead still excludes the instrumented run from timing evidence. See
+[`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

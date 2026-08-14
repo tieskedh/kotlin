@@ -692,8 +692,13 @@ See the
   unrelated events remain auditable, but export producer counts only by the
   sparse manifest indices. Require canonical closed bundles, exact per-site
   counts, frontend/profile byte identity, and byte-identical normal products
-  when the hook is absent. Console-event tracing proves correctness and route
-  frequency only; it is never performance evidence. Version 5 adds the reflection join
+  when the hook is absent. Scalable tracing must use one exact-sized primitive
+  counter table, linearizable CLR increments, atomic final reads, and one flush
+  after the workload has joined its own workers. It must not use a generic
+  collection (which can recursively enter the census), emit per-call console
+  events, or add a CLI/Runtime/KLIB/published ABI. Counter tracing proves
+  correctness and route frequency only; it is never performance evidence.
+  Version 5 adds the reflection join
   without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
   to its existing KLIB logical classifier key, while logical type arguments,

@@ -345,18 +345,23 @@ complete applications remain the next gate. See
 The static census now has a compiler-indexed execution join. An explicit
 architecture-test product retains each analyzed call, evaluates its receiver
 and arguments once in original order, records the original index immediately
-before invocation, and then performs the unchanged dispatch. The closed
-hostile trace contains every sparse producer counter and fingerprints both its
-static route manifest and instrumented assembly. PSI/LightTree and Framework
-4.8/net10 agree on 40 producer events (24 erased, 11 exact, four capability,
-one missing capability) plus nine unrelated events. One exact site has no hit
-and another has two, so exact site identity—not aggregate coincidence—is
-tested. A non-instrumented corpus remains byte-identical to the prior baseline.
-The recorder has no CLI/Runtime/KLIB/production ABI and its console traffic
-makes it correctness evidence only. Representative application work next needs
-a final-flush counter implementation whose collection overhead is excluded
-from timing. See
+before invocation, and then performs the unchanged dispatch. The exact hostile
+vector includes one zero-hit and one two-hit site, so exact site identity—not
+aggregate coincidence—is tested. See
 [`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
+
+The scalable collection transport is now closed. The explicitly instrumented
+executable alone receives one private exact-sized primitive counter table and
+private physical recorder/flusher bodies. `Interlocked.Increment` records each
+attempt; an atomic final snapshot prints one line per visited site after
+`box()` returns. Both frontends and both CLR profiles retain the same 49 total,
+40 producer, and nine unrelated hostile events; normal products remain byte-
+identical in all 34 control comparisons. There is no CLI/Runtime/KLIB/
+published ABI. Representative applications must join workers before returning
+and use this only to collect route/state distributions; throughput, allocation,
+startup, and scheduling must be measured in separate uninstrumented products.
+See
+[`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
 
 ## Engineering gates
 

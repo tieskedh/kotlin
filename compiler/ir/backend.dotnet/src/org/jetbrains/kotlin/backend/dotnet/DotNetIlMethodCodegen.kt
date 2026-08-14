@@ -96,6 +96,7 @@ internal class DotNetIlMethodCodegen(
     private val typeMapper: DotNetIlTypeMapper,
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
     private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
+    private val genericOwnerCallRouteTraceHook: DotNetGenericOwnerCallRouteTraceHook? = null,
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -172,7 +173,11 @@ internal class DotNetIlMethodCodegen(
         val isAbstractMember = function is IrSimpleFunction && function.modality == Modality.ABSTRACT
         if (!isAbstractMember) {
             try {
-                emitBody()
+                if (genericOwnerCallRouteTraceHook == null) {
+                    emitBody()
+                } else {
+                    emitGenericOwnerCallRouteTraceHook(genericOwnerCallRouteTraceHook)
+                }
             } catch (failure: IllegalStateException) {
                 throw IllegalStateException(
                     "${failure.message} while rendering ${function.render()}",
@@ -714,6 +719,31 @@ internal class DotNetIlMethodCodegen(
             else -> dotNetUnsupported("unsupported function body shape ${body.javaClass.simpleName}")
         }
         emitReturnJoinEpilogue()
+    }
+
+    private fun emitGenericOwnerCallRouteTraceHook(hook: DotNetGenericOwnerCallRouteTraceHook) {
+        check(function is IrSimpleFunction && !signature.hasThis && signature.returnType == DotNetIlReturnType.Void) {
+            "Generic-owner call-route trace hooks must be static Unit functions"
+        }
+        when (hook) {
+            DotNetGenericOwnerCallRouteTraceHook.RECORD -> {
+                check(signature.parameterTypes == listOf(DotNetIlValueType.Int32)) {
+                    "The generic-owner call-route recorder must have the physical signature (Int) -> Unit"
+                }
+                methodContext.emit("ldarg.0", pushes = 1)
+                methodContext.emit(
+                    DotNetGenericOwnerCallRouteTraceSupport.callInstruction(hook),
+                    pops = 1,
+                )
+            }
+            DotNetGenericOwnerCallRouteTraceHook.FLUSH -> {
+                check(signature.parameterTypes.isEmpty()) {
+                    "The generic-owner call-route flusher must have the physical signature () -> Unit"
+                }
+                methodContext.emit(DotNetGenericOwnerCallRouteTraceSupport.callInstruction(hook))
+            }
+        }
+        methodContext.emitReturn()
     }
 
     /**
