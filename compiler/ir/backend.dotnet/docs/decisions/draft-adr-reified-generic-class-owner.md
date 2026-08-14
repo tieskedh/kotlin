@@ -433,6 +433,19 @@ checks make this a stable comparison input; no production `C<T>` is emitted
 and representative cost review remains open. See
 [`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
 
+The exact pair now has a bounded Framework CLR 4 plus .NET 10 JIT,
+ReadyToRun, trimming, and NativeAOT measurement. The candidate retains the
+correct checksum but takes 1.62–2.96× the erased workload time and allocates
+6.89–7.52% more in the deliberately semantic-heavy call mix. This does not
+reverse the desired direct `C<T>` interop direction and does not establish an
+intrinsic CLR-generics cost. It prevents this draft from advancing on typed
+identity alone: route-specific bridge cost and representative complete Kotlin
+products remain required. Full trimming also established a metadata invariant:
+a class-owned canonical MethodImpl rebuilt over an external base requires a
+direct canonical InterfaceImpl reimplementation. The backend and verifier now
+enforce that shape without wrappers or duplicate state. See
+[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

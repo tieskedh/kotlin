@@ -148,7 +148,7 @@ internal class DotNetBackendContext(
     /** Producer-visible records for helper-only defaults promoted into DIMs by this net10 variant. */
     val interfaceDefaultPromotions:
         MutableList<DotNetLoweredInterfaceDefaultPromotion> = mutableListOf()
-    /** Final interface MethodImpl adapters which later compilations inherit as a complete view bundle. */
+    /** Final interface-slot MethodImpl adapters which later compilations inherit as a complete view bundle. */
     val genericInterfaceViewBridges:
         MutableList<DotNetLoweredGenericInterfaceViewBridge> = mutableListOf()
     /** Final MethodImpl adapters for ordinary slots whose Kotlin override refines the return. */

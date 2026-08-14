@@ -58,6 +58,10 @@ Archived snapshots:
   records the closed paired production-erased/candidate application products,
   direct C# erased-owner surface, two-profile execution, and strict
   cross-frontend reproducibility boundary.
+- [`generic-owner-paired-application-measurement-2026-08-14.md`](generic-owner-paired-application-measurement-2026-08-14.md)
+  records the independent Framework CLR 4 and .NET 10 erased-versus-candidate
+  measurements, the current semantic-routing cost, and the direct-interface
+  reimplementation repair required by full trimming.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots
