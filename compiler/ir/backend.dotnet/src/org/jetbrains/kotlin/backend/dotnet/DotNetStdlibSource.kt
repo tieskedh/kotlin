@@ -62,6 +62,18 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/generated/_DotNetBootstrapStableSortSupport.kt",
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapComparisonsActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapComparisonsActuals.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapFloatingPointActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapFloatingPointActuals.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSequencesActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapSequencesActuals.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetStringBuilder.kt",
         "dotnet/src/kotlin/text/DotNetStringBuilder.kt",
     ),
@@ -197,6 +209,26 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapSets.kt",
         "dotnet/common/src/generated/_DotNetBootstrapSets.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSequence.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSequence.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSequencesH.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSequencesH.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSequenceCore.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSequenceCore.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSequences.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSequences.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
@@ -480,6 +512,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "AbstractCollection.kt",
         "src/kotlin/collections/AbstractCollection.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractIterator.kt",
+        "src/kotlin/collections/AbstractIterator.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

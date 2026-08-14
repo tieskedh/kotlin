@@ -369,10 +369,23 @@ explicit BCL adapters are a separate interop programme. Common I/O owns EOF
 and rendering semantics; `.NET` supplies only narrow actuals and the
 `Console.ReadLine` host operation.
 
+`Sequence<out T>` follows the same Kotlin-owned rule: one non-generic erased
+CLR interface owns the iterator capability, while Common source owns lazy
+objects and algorithms. Do not map it to `IEnumerable<T>`, LINQ, or a CLR
+delegate pipeline. CLR-erased overload collisions use the deterministic,
+logical-type-derived stdlib names recorded by the Sequence ADR. A substituted
+generic result recovered from its physical upper-bound view may use
+frontend-proven `IMPLICIT_CAST` plus `unbox.any`; do not generalize that
+recovery to explicit or safe casts. Execute the same portable Sequence
+consumer on the real Framework CLR 4 host and .NET 10; modern `System.Object`,
+boxing, interface-dispatch, or generic optimizations are not Framework proof.
+
 See
 [runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)
 and
 [`docs/programmes/common-collections.md`](docs/programmes/common-collections.md).
+See also the
+[`Sequence` foundation ADR](docs/decisions/sequence-foundation.md).
 
 ## Nullability model
 

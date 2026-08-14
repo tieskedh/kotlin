@@ -27,7 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the paired hostile generic-owner application now
+- Last completed foundation: Kotlin-owned `Sequence<out T>` now publishes one
+  non-generic erased CLR interface plus the authoritative Common non-builder
+  implementation objects, adapters, and complete generated inventory outside
+  its exact builder/random/`Grouping`/unsigned exclusion partition. KLIB keeps
+  the covariant logical type and original overloads; deterministic logical-
+  type-derived physical names resolve CLR-erased collisions. A portable
+  consumer exposed the generic-return boundary where `Sequence<T>.min/max`
+  instantiated with `Int` arrives through its physical `IComparable` upper-
+  bound view; frontend-proven implicit substitution recovery now emits
+  `unbox.any` without widening explicit or safe cast policy. The same
+  `netstandard2.0` Stdlib DLL executes laziness, one-shot behavior, covariance,
+  adapters, both flatten/flatMap routes, reified filtering, sorting, numeric
+  selection, NaN, and primitive recovery on the registered Framework 4.8
+  runtime (`4.8.09221`, CLR `4.0.30319.42000`) and separately on .NET 10.
+  PSI/LightTree direct products add all four runtime lanes; Roslyn implements
+  the erased Sequence interface and calls its Common facade without observing
+  `IEnumerable<T>`. The strict aggregate completed in 2,106.9 seconds and its
+  direct audit covers 190 XML files, 2,208 tests, and zero failures, errors, or
+  skips. See
+  [`docs/decisions/sequence-foundation.md`](docs/decisions/sequence-foundation.md).
+- The preceding foundation: the paired hostile generic-owner application now
   has fail-closed route attribution on the registered Framework 4.8 family
   runtime (`4.8.09221`, release `533509`, CLR `4.0.30319.42000`) and separately
   on .NET 10 JIT, ReadyToRun, full trim, and NativeAOT. The candidate's real
@@ -637,35 +657,36 @@ stdlib. The target is not close to 98% feature-complete: remaining
 mapped/Stdlib and foreign member reflection, constructors and declared-member
 APIs, the remaining
 coroutine programme beyond its executable continuation/state-machine
-foundation, multi-field value classes, Sequence and Grouping families,
-random/remaining sorting families, and Gradle/KMP product integration remain substantial open
-programmes.
+foundation, multi-field value classes, the Grouping family and sequence-
+builder closure, random/remaining sorting families, and Gradle/KMP product
+integration remain substantial open programmes.
 
 ## Current green gate
 
-The generic-owner route-attribution head passed every constituent of the
+The Kotlin-owned Sequence foundation head passed every constituent of the
 strict target gate. Production generic-owner emission remains erased; this
-checkpoint adds fail-closed carrier/dispatch/construction/override cost
-evidence without changing production representation. The normal aggregate
-command remains:
+checkpoint adds Common-owned lazy Sequence behavior, its deterministic erased
+physical overload projection, and one narrowly proven generic upper-bound
+return recovery without changing that production owner representation. The
+normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-14 in 793.3 seconds. The changed
-FIR2IR root was freshly written; the unchanged backend model and integration
-roots were Gradle-up-to-date. Direct audit of all three result roots covers
-190 XML files and 2,204 tests:
+The latest aggregate completed on 2026-08-14 in 2,106.9 seconds. Backend,
+FIR2IR, stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
+executed for the final semantic head. Direct audit of all three result roots
+covers 190 XML files and 2,208 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,073 FIR, IL-text, and box tests
+- 2,077 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 104 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate and explicit model constituent exited successfully. Relative to
-schema version 4, the same 2,204-test inventory now also executes exact
+schema version 4, the 2,208-test inventory also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
 KLIB-only logical type-argument authority, complete physical-callable-family
@@ -971,7 +992,7 @@ direct `super`, default dispatch, and delayed typed-read failure. Backend/
 fixture compilation and all eight hostile PSI/LightTree, Framework/CoreCLR,
 same/separate-compilation lanes pass in four fresh XML suites with eight tests
 and zero failures, errors, or skips. Production emission remains erased. The
-current fresh 2,204-test aggregate above includes this tranche.
+then-current 2,204-test aggregate included this tranche.
 
 Focused work after the schema-6 subclass physicalizer adds a separate finite
 open-nullable construction plan without changing the producer artifact. The
@@ -994,7 +1015,7 @@ MSVC toolchain run links and executes that bounded factory; representative
 applications remain required, so this tranche has not changed production
 admission. Backend/fixture compilation, the
 explicit six-test model refresh, all eight focused hostile lanes, and the
-fresh 190-suite/2,204-test aggregate above are green with zero failures,
+then-current 190-suite/2,204-test aggregate was green with zero failures,
 errors, or skips.
 
 Focused evidence additionally produced and consumed the self-describing net10
@@ -1035,8 +1056,8 @@ ReadyToRun and full-trimming execution. NativeAOT analysis reported IL3050 for
 runtime `MakeGenericType`; at that checkpoint native linking was unavailable.
 That unbounded dynamic route remains invalid for NativeAOT even though the
 later statically rooted finite factory now links and runs natively.
-The three CLR integration methods are included in the 2,204-test aggregate count
-above; the external publish analysis is evidence rather than another test.
+The three CLR integration methods were included in that 2,204-test aggregate;
+the external publish analysis is evidence rather than another test.
 
 The dispatch probe now also exercises the metadata-fixed
 `D<T> : C<T?>` fallback directly. A single `C<object>` base preserves one
@@ -1659,6 +1680,19 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
 
 ## Active state
 
+The Kotlin-owned non-builder Sequence foundation is published from exact
+Common/generated sources. One erased non-generic CLR interface preserves the
+canonical Kotlin object identity and covariant KLIB contract; it neither maps
+to `IEnumerable<T>` nor uses LINQ. Generator-inventoried exclusions retain
+sequence builders, random, `Grouping`, and unsigned selector sums behind their
+independent substrates. The physical facade derives every erased collision
+name from the logical receiver/selector domain. Portable Framework CLR 4 and
+.NET 10 execution, all four PSI/LightTree profile lanes, deterministic product
+metadata, and direct Roslyn implementation/calls are green. A substituted
+generic value result may be recovered from its physical upper-bound reference
+view only at a frontend-proven implicit-cast boundary; explicit and safe cast
+semantics remain unchanged.
+
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
@@ -2055,7 +2089,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the hardest-model-first generic-owner architecture spike while
+1. Close the complete `Grouping<T, out K>` dependency graph over the now-
+   admitted map, iterator, lambda, inline, Sequence, array, and CharSequence
+   substrates. Inventory all Common aggregate/fold/reduce/count declarations
+   and every generated factory over an admitted carrier; exclude only an exact
+   independently blocked family. Preserve one erased Kotlin-owned interface,
+   Common first-element/null/map semantics, source-aligned physical ownership,
+   portable Framework CLR 4 plus .NET 10 execution, and a truthful negative BCL
+   boundary.
+2. Continue the hardest-model-first generic-owner architecture spike while
    keeping production emission erased. The erased hostile oracle, historical
    failure audit, deterministic carrier/slot admission matrix, one-owner
    dispatch probe, direct C# surface, and atomic migration/rollback boundary
@@ -2099,7 +2141,7 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll
    out an easy owner before the hostile prototype and real-app measurement
    checkpoint select the one atomic cutover.
-2. Continue the generated catalog only by complete classifier families, not by
+3. Continue the generated catalog only by complete classifier families, not by
    handwritten members. The concrete Common scalars, classified `Number`,
    built-in collection interfaces, and Kotlin-owned collection implementations
    are complete. Select later mapped/Stdlib families from Kotlin declaration
@@ -2107,10 +2149,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    enhancement. Reuse the established callable/property objects and never
    expose a partial CLR MethodDef/Property scan. Constructors and declared-
    member convenience APIs remain separate selections.
-3. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
+4. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
-4. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
+5. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
    debugger metadata, and coroutine-aware reflection outside this completed
    continuation/state-machine foundation until selected independently.
 

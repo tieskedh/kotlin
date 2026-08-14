@@ -1295,6 +1295,23 @@ internal class DotNetIlExpressionCodegen(
                             if (methodContext.isTerminated) return
                             methodContext.emit(narrowing, pops = 1, pushes = 1)
                         }
+                        operandType.isDotNetReferenceShaped() &&
+                                castType.isSupportedPrimitiveArrayElement() -> {
+                            val narrowing = castType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                                ?: dotNetUnsupported(
+                                    "implicit cast from ${operandType.nameInSignature} to " +
+                                            "${castType.nameInSignature} is not supported"
+                                )
+                            // A substituted generic return can arrive through its physical
+                            // reference-shaped upper bound. `Sequence<T>.min/max` with `T = Int`
+                            // is the canonical case: the imported logical call is Int, while the
+                            // erased owner exposes the value transiently as IComparable. FIR's
+                            // IMPLICIT_CAST proves the substitution; the CLR still needs an
+                            // explicit unbox.any to recover the value-type instantiation.
+                            emitExpression(expression.argument, operandType)
+                            if (methodContext.isTerminated) return
+                            methodContext.emit(narrowing, pops = 1, pushes = 1)
+                        }
                         castType is DotNetIlValueType.TypeParameter &&
                                 castType.isConstrainedTo(operandType) -> {
                             // Shared inline bodies such as `C.onEach { ... }: C`, where

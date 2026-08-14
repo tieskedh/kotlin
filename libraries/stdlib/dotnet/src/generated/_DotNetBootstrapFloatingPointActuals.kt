@@ -10,19 +10,13 @@ package kotlin
 // See: https://github.com/JetBrains/kotlin/tree/master/libraries/stdlib
 //
 /**
- * Returns the smaller of two values.
+ * Returns `true` if the specified number is a
+ * Not-a-Number (NaN) value, `false` otherwise.
  */
-@SinceKotlin("1.1")
-public expect inline fun minOf(a: Int, b: Int): Int
+public actual fun Double.isNaN(): Boolean = this != this
 
 /**
  * Returns `true` if the specified number is a
  * Not-a-Number (NaN) value, `false` otherwise.
  */
-public expect fun Double.isNaN(): Boolean
-
-/**
- * Returns `true` if the specified number is a
- * Not-a-Number (NaN) value, `false` otherwise.
- */
-public expect fun Float.isNaN(): Boolean
+public actual fun Float.isNaN(): Boolean = this != this
