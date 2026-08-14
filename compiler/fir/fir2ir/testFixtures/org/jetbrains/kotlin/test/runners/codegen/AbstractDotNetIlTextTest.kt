@@ -2602,6 +2602,9 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     }
     val writeReflection = reflectedCallable(write)
     val readReflection = reflectedCallable(read)
+    val relayInvocationMethodName = stateReflection.callables.single { callable ->
+        callable.physicalMethods.any { method -> method.signature.genericArity == 1 }
+    }.invocationMethod.physicalMethodName
     check(writeReflection.invocationRole == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
             readReflection.invocationRole == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
             writeReflection.invocationMethod.physicalMethodName.endsWith(".$writeCapability") &&
@@ -2755,6 +2758,12 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                 public int Value;
             }
 
+            public enum RecordedApplicationEnum
+            {
+                First = 1,
+                Second = 2,
+            }
+
             public sealed class RecordedUnknownReference
             {
                 public string Value;
@@ -2762,7 +2771,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             $constructionFactory
 
-            #if !GENERIC_OWNER_MEASUREMENT
+            #if !GENERIC_OWNER_MEASUREMENT && !GENERIC_OWNER_APPLICATION_MEASUREMENT
             public static class RecordedReflectionRegistry
             {
                 public static string NormalizeExact(Type runtimeType)
@@ -2874,7 +2883,183 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             public static class RecordedFamilyEntry
             {
-                #if GENERIC_OWNER_MEASUREMENT
+                #if GENERIC_OWNER_APPLICATION_MEASUREMENT
+                private static int ExecuteApplicationMeasurementWorkload(int iterations)
+                {
+                    int checksum = 17;
+                    int[] typedArray = new int[] { 1, 2, 3 };
+                    string[] semanticArray = new string[] { "semantic", "array" };
+                    RecordedKnownStruct[] knownArray =
+                        new RecordedKnownStruct[] { new RecordedKnownStruct { Value = 3 } };
+                    Guid guid = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    DateTime date = new DateTime(638900000000000000L, DateTimeKind.Utc);
+                    decimal amount = 1234567.8901m;
+                    ValueTuple<int, string> tuple = new ValueTuple<int, string>(7, "tuple");
+                    $physicalizedClosedTypeName typedOwner = new $physicalizedClosedTypeName(0);
+                    $capabilityTypeName typedCapability = typedOwner;
+                    RecordedFamilyGrandchild<int> hostileOwner = new RecordedFamilyGrandchild<int>(0);
+                    $capabilityTypeName hostileCapability = hostileOwner;
+
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        $capabilityTypeName exactValue =
+                            RecordedOpenNullableFactory.Create(typeof(int), null);
+                        exactValue.$writeCapability(next);
+                        int exactRead = (int)exactValue.$readCapability();
+                        if (exactRead != next) throw new InvalidOperationException("exact value route");
+
+                        $capabilityTypeName exactNullable =
+                            RecordedOpenNullableFactory.Create(typeof(int?), null);
+                        exactNullable.$writeCapability(next);
+                        if ((int)exactNullable.$readCapability() != next)
+                            throw new InvalidOperationException("already-nullable route");
+
+                        $capabilityTypeName exactReference =
+                            RecordedOpenNullableFactory.Create(typeof(string), null);
+                        exactReference.$writeCapability("reference");
+                        if (!object.Equals(exactReference.$readCapability(), "reference"))
+                            throw new InvalidOperationException("exact reference route");
+
+                        RecordedKnownStruct known = new RecordedKnownStruct { Value = next };
+                        $capabilityTypeName exactKnown =
+                            RecordedOpenNullableFactory.Create(typeof(RecordedKnownStruct), null);
+                        exactKnown.$writeCapability(known);
+                        if (((RecordedKnownStruct)exactKnown.$readCapability()).Value != next)
+                            throw new InvalidOperationException("exact known struct route");
+
+                        $capabilityTypeName fallbackGuid =
+                            RecordedOpenNullableFactory.Create(typeof(Guid), guid);
+                        fallbackGuid.$writeCapability(guid);
+                        if (!object.Equals(fallbackGuid.$readCapability(), guid))
+                            throw new InvalidOperationException("Guid fallback route");
+
+                        $capabilityTypeName fallbackDate =
+                            RecordedOpenNullableFactory.Create(typeof(DateTime), date);
+                        fallbackDate.$writeCapability(date);
+                        if (!object.Equals(fallbackDate.$readCapability(), date))
+                            throw new InvalidOperationException("DateTime fallback route");
+
+                        $capabilityTypeName fallbackDecimal =
+                            RecordedOpenNullableFactory.Create(typeof(decimal), amount);
+                        fallbackDecimal.$writeCapability(amount);
+                        if (!object.Equals(fallbackDecimal.$readCapability(), amount))
+                            throw new InvalidOperationException("decimal fallback route");
+
+                        $capabilityTypeName fallbackEnum =
+                            RecordedOpenNullableFactory.Create(
+                                typeof(RecordedApplicationEnum), RecordedApplicationEnum.Second);
+                        fallbackEnum.$writeCapability(RecordedApplicationEnum.Second);
+                        if (!object.Equals(
+                                fallbackEnum.$readCapability(), RecordedApplicationEnum.Second))
+                            throw new InvalidOperationException("enum fallback route");
+
+                        $capabilityTypeName fallbackTuple =
+                            RecordedOpenNullableFactory.Create(
+                                typeof(ValueTuple<int, string>), tuple);
+                        fallbackTuple.$writeCapability(tuple);
+                        if (!object.Equals(fallbackTuple.$readCapability(), tuple))
+                            throw new InvalidOperationException("tuple fallback route");
+
+                        RecordedUnknownStruct user = new RecordedUnknownStruct { Value = next + 1 };
+                        $capabilityTypeName fallbackUser =
+                            RecordedOpenNullableFactory.Create(typeof(RecordedUnknownStruct), user);
+                        fallbackUser.$writeCapability(user);
+                        if (((RecordedUnknownStruct)fallbackUser.$readCapability()).Value != next + 1)
+                            throw new InvalidOperationException("user struct fallback route");
+
+                        RecordedUnknownReference unknownReference =
+                            new RecordedUnknownReference { Value = "fallback" };
+                        $capabilityTypeName fallbackReference =
+                            RecordedOpenNullableFactory.Create(
+                                typeof(RecordedUnknownReference), unknownReference);
+                        fallbackReference.$writeCapability(unknownReference);
+                        if (!object.ReferenceEquals(
+                                fallbackReference.$readCapability(), unknownReference))
+                            throw new InvalidOperationException("reference fallback route");
+
+                        typedCapability.$writeCapability(next);
+                        int typedRead = typedOwner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                        if (typedRead != next) throw new InvalidOperationException("typed dispatch");
+                        if (!object.ReferenceEquals(
+                                typedOwner.${physicalizedEchoTyped.physicalMethod.physicalMethodName}(typedArray),
+                                typedArray) || !object.ReferenceEquals(
+                                typedCapability.$echoCapability(semanticArray), semanticArray) ||
+                                !object.ReferenceEquals(
+                                typedOwner.$relayInvocationMethodName<RecordedKnownStruct>(knownArray),
+                                knownArray))
+                            throw new InvalidOperationException("array dispatch");
+
+                        if ((index & 63) == 0)
+                        {
+                            hostileCapability.$writeCapability("wrong");
+                            if (!object.Equals(
+                                    hostileCapability.$readCapability(), "grandchild:wrong"))
+                                throw new InvalidOperationException("semantic hostile dispatch");
+                            try
+                            {
+                                hostileOwner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                                throw new InvalidOperationException("delayed typed read did not fail");
+                            }
+                            catch (InvalidCastException)
+                            {
+                                checksum = unchecked(checksum * 31 + 7);
+                            }
+                        }
+                        checksum = unchecked(
+                            checksum * 31 + exactRead + typedRead + known.Value + user.Value +
+                            (int)RecordedApplicationEnum.Second + tuple.Item1);
+                    }
+                    return checksum;
+                }
+
+                public static int Main(string[] arguments)
+                {
+                    bool holdForPeakWorkingSet = arguments.Length == 3 &&
+                        arguments[2] == "--hold-for-peak-working-set";
+                    if ((arguments.Length != 2 && !holdForPeakWorkingSet) ||
+                            arguments[0] != "--measurement" ||
+                            !int.TryParse(arguments[1], out int iterations) || iterations < 0)
+                    {
+                        Console.Error.WriteLine(
+                            "usage: --measurement <non-negative iterations> " +
+                            "[--hold-for-peak-working-set]");
+                        return 64;
+                    }
+                    if (iterations > 0)
+                        ExecuteApplicationMeasurementWorkload(Math.Min(iterations, 256));
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                    long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                    int checksum = ExecuteApplicationMeasurementWorkload(iterations);
+                    long elapsedTicks = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+                    long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                    long periodicRoutes = (iterations + 63L) / 64L;
+                    Console.WriteLine(
+                        "GENERIC_OWNER_APPLICATION_MEASUREMENT|workloadVersion=1" +
+                        "|representation=candidate" +
+                        "|iterations=" + iterations +
+                        "|checksum=" + checksum +
+                        "|elapsedTicks=" + elapsedTicks +
+                        "|frequency=" + System.Diagnostics.Stopwatch.Frequency +
+                        "|allocatedBytes=" + allocatedBytes +
+                        "|typedEntryCalls=" + (iterations * 3L + periodicRoutes) +
+                        "|semanticCapabilityCalls=" + (iterations * 24L + periodicRoutes * 2L) +
+                        "|erasedVirtualCalls=0");
+                    if (holdForPeakWorkingSet)
+                    {
+                        Console.Out.Flush();
+                        if (Console.In.ReadLine() != "release")
+                        {
+                            Console.Error.WriteLine("peak-working-set hold was not released");
+                            return 65;
+                        }
+                    }
+                    return 0;
+                }
+                #elif GENERIC_OWNER_MEASUREMENT
                 private static int ExecuteMeasurementWorkload(int iterations)
                 {
                     int checksum = 17;
@@ -3371,6 +3556,16 @@ private fun prepareGenericOwnerApplicationBundle(
                 public Guid Id;
             }
 
+            public struct ApplicationKnownStruct
+            {
+                public int Value;
+            }
+
+            public sealed class ApplicationUnknownReference
+            {
+                public string Value;
+            }
+
             public class ErasedCSharpLeaf : ErasedMid
             {
                 public ErasedCSharpLeaf(object initial) : base(initial) {}
@@ -3403,6 +3598,163 @@ private fun prepareGenericOwnerApplicationBundle(
 
             public static class ErasedApplicationEntry
             {
+                #if GENERIC_OWNER_APPLICATION_MEASUREMENT
+                private static int ExecuteApplicationMeasurementWorkload(int iterations)
+                {
+                    int checksum = 17;
+                    int[] typedArray = new int[] { 1, 2, 3 };
+                    string[] semanticArray = new string[] { "semantic", "array" };
+                    ApplicationKnownStruct[] knownArray =
+                        new ApplicationKnownStruct[] { new ApplicationKnownStruct { Value = 3 } };
+                    Guid guid = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    DateTime date = new DateTime(638900000000000000L, DateTimeKind.Utc);
+                    decimal amount = 1234567.8901m;
+                    ValueTuple<int, string> tuple = new ValueTuple<int, string>(7, "tuple");
+                    ErasedStore mixed = new ErasedStore(0);
+                    ErasedCSharpGrandchild hostile = new ErasedCSharpGrandchild(0);
+
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        ErasedStore exactValue = new ErasedStore(null);
+                        exactValue.writeUnsafe(next);
+                        int exactRead = (int)exactValue.read();
+                        if (exactRead != next) throw new InvalidOperationException("exact value route");
+
+                        ErasedStore exactNullable = new ErasedStore(null);
+                        exactNullable.writeUnsafe(next);
+                        if ((int)exactNullable.read() != next)
+                            throw new InvalidOperationException("already-nullable route");
+
+                        ErasedStore exactReference = new ErasedStore(null);
+                        exactReference.writeUnsafe("reference");
+                        if (!object.Equals(exactReference.read(), "reference"))
+                            throw new InvalidOperationException("exact reference route");
+
+                        ApplicationKnownStruct known =
+                            new ApplicationKnownStruct { Value = next };
+                        ErasedStore exactKnown = new ErasedStore(null);
+                        exactKnown.writeUnsafe(known);
+                        if (((ApplicationKnownStruct)exactKnown.read()).Value != next)
+                            throw new InvalidOperationException("exact known struct route");
+
+                        ErasedStore fallbackGuid = new ErasedStore(guid);
+                        fallbackGuid.writeUnsafe(guid);
+                        if (!object.Equals(fallbackGuid.read(), guid))
+                            throw new InvalidOperationException("Guid fallback route");
+
+                        ErasedStore fallbackDate = new ErasedStore(date);
+                        fallbackDate.writeUnsafe(date);
+                        if (!object.Equals(fallbackDate.read(), date))
+                            throw new InvalidOperationException("DateTime fallback route");
+
+                        ErasedStore fallbackDecimal = new ErasedStore(amount);
+                        fallbackDecimal.writeUnsafe(amount);
+                        if (!object.Equals(fallbackDecimal.read(), amount))
+                            throw new InvalidOperationException("decimal fallback route");
+
+                        ErasedStore fallbackEnum = new ErasedStore(ApplicationEnum.Second);
+                        fallbackEnum.writeUnsafe(ApplicationEnum.Second);
+                        if (!object.Equals(fallbackEnum.read(), ApplicationEnum.Second))
+                            throw new InvalidOperationException("enum fallback route");
+
+                        ErasedStore fallbackTuple = new ErasedStore(tuple);
+                        fallbackTuple.writeUnsafe(tuple);
+                        if (!object.Equals(fallbackTuple.read(), tuple))
+                            throw new InvalidOperationException("tuple fallback route");
+
+                        ApplicationStruct user = new ApplicationStruct { Count = next + 1, Id = guid };
+                        ErasedStore fallbackUser = new ErasedStore(user);
+                        fallbackUser.writeUnsafe(user);
+                        if (((ApplicationStruct)fallbackUser.read()).Count != next + 1)
+                            throw new InvalidOperationException("user struct fallback route");
+
+                        ApplicationUnknownReference unknownReference =
+                            new ApplicationUnknownReference { Value = "fallback" };
+                        ErasedStore fallbackReference = new ErasedStore(unknownReference);
+                        fallbackReference.writeUnsafe(unknownReference);
+                        if (!object.ReferenceEquals(fallbackReference.read(), unknownReference))
+                            throw new InvalidOperationException("reference fallback route");
+
+                        mixed.writeUnsafe(next);
+                        int typedRead = (int)mixed.read();
+                        if (typedRead != next) throw new InvalidOperationException("typed dispatch");
+                        if (!object.ReferenceEquals(mixed.echo(typedArray), typedArray) ||
+                                !object.ReferenceEquals(mixed.echo(semanticArray), semanticArray) ||
+                                !object.ReferenceEquals(
+                                    mixed.relay<ApplicationKnownStruct>(knownArray), knownArray))
+                            throw new InvalidOperationException("array dispatch");
+
+                        if ((index & 63) == 0)
+                        {
+                            hostile.writeUnsafe("wrong");
+                            if (!object.Equals(hostile.read(), "csharp:grandchild:wrong"))
+                                throw new InvalidOperationException("semantic hostile dispatch");
+                            try
+                            {
+                                int invalid = (int)hostile.read();
+                                throw new InvalidOperationException(
+                                    "delayed typed read did not fail: " + invalid);
+                            }
+                            catch (InvalidCastException)
+                            {
+                                checksum = unchecked(checksum * 31 + 7);
+                            }
+                        }
+                        checksum = unchecked(
+                            checksum * 31 + exactRead + typedRead + known.Value + user.Count +
+                            (int)ApplicationEnum.Second + tuple.Item1);
+                    }
+                    return checksum;
+                }
+
+                public static int Main(string[] arguments)
+                {
+                    bool holdForPeakWorkingSet = arguments.Length == 3 &&
+                        arguments[2] == "--hold-for-peak-working-set";
+                    if ((arguments.Length != 2 && !holdForPeakWorkingSet) ||
+                            arguments[0] != "--measurement" ||
+                            !int.TryParse(arguments[1], out int iterations) || iterations < 0)
+                    {
+                        Console.Error.WriteLine(
+                            "usage: --measurement <non-negative iterations> " +
+                            "[--hold-for-peak-working-set]");
+                        return 64;
+                    }
+                    if (iterations > 0)
+                        ExecuteApplicationMeasurementWorkload(Math.Min(iterations, 256));
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                    long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                    int checksum = ExecuteApplicationMeasurementWorkload(iterations);
+                    long elapsedTicks = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+                    long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                    long periodicRoutes = (iterations + 63L) / 64L;
+                    Console.WriteLine(
+                        "GENERIC_OWNER_APPLICATION_MEASUREMENT|workloadVersion=1" +
+                        "|representation=erased" +
+                        "|iterations=" + iterations +
+                        "|checksum=" + checksum +
+                        "|elapsedTicks=" + elapsedTicks +
+                        "|frequency=" + System.Diagnostics.Stopwatch.Frequency +
+                        "|allocatedBytes=" + allocatedBytes +
+                        "|typedEntryCalls=0" +
+                        "|semanticCapabilityCalls=0" +
+                        "|erasedVirtualCalls=" + (iterations * 27L + periodicRoutes * 2L));
+                    if (holdForPeakWorkingSet)
+                    {
+                        Console.Out.Flush();
+                        if (Console.In.ReadLine() != "release")
+                        {
+                            Console.Error.WriteLine("peak-working-set hold was not released");
+                            return 65;
+                        }
+                    }
+                    return 0;
+                }
+                #else
                 private static bool RoundTrips(object value)
                 {
                     ErasedStore owner = new ErasedStore(value);
@@ -3457,6 +3809,7 @@ private fun prepareGenericOwnerApplicationBundle(
                             relay.GetGenericArguments().Length != 1) return 9;
                     return 0;
                 }
+                #endif
             }
             """.trimIndent()
         )

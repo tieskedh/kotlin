@@ -27,30 +27,41 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the generic-owner reopening now has one closed
-  paired application corpus containing the exact hostile Kotlin source, actual
+- Last completed foundation: the closed hostile generic-owner application
+  corpus now drives one paired production-erased versus test-owned `C<T>`
+  measurement on the real Framework CLR 4 and independently on .NET 10 JIT,
+  ReadyToRun, full trimming, and NativeAOT. All modes produce checksum
+  `-365770154`. The candidate takes 1.622–2.958 times the erased workload time
+  and allocates 6.891–7.523% more in this semantic-route-heavy workload. This
+  does not show that CLR generics are intrinsically slower: only three regular
+  candidate routes per iteration are typed while 24 deliberately exercise the
+  complete semantic capability. It shows that true owner identity alone does
+  not pay for the current bridge architecture. Framework evidence records the
+  actual Windows PowerShell CLR `4.0.30319.42000` host and explicit .NET
+  Framework 4.8 assemblies; .NET 10 evidence remains separate, so CoreCLR
+  `object`, boxing, or interface-dispatch optimizations cannot be generalized
+  to Framework. The candidate is not a complete Kotlin product, therefore
+  published bytes and end-to-end compile costs are not comparable. The first
+  full-trim run also found that a class-owned canonical collection MethodImpl
+  bundle rebuilt over an external base lacked direct CLR InterfaceImpl edges.
+  New physical indexes now retain producer-visible class-owned bridge records
+  while excluding lowering-created synthetic owners; emission adds
+  intentional direct interface reimplementation for old/bootstrap indexes,
+  and the application verifier pins the four collection edges. CoreCLR, CLR 4,
+  ILLink, and all five measurement lanes pass with one object and one state.
+  Production generic owners remain erased; representative applications and
+  semantic-route cost attribution remain open. See
+  [`docs/archive/generic-owner-paired-application-measurement-2026-08-14.md`](docs/archive/generic-owner-paired-application-measurement-2026-08-14.md).
+- The preceding foundation: the generic-owner reopening has one closed paired
+  application corpus containing the exact hostile Kotlin source, actual
   production-erased producer and separately compiled Kotlin consumer, a direct
-  C# consumer/two-level subclass of that erased producer, and the
-  compiler-record-driven candidate producer/consumer. `Guid`, `DateTime`,
-  `decimal`, enum, tuple, user struct, nullable, mixed-state, array-identity,
-  method-generic, and override paths execute on PSI/LightTree × Framework
-  CLR/CoreCLR. Reflection pins the honest current C# cost: the erased owner is
-  arity zero with `object` state/member positions and `System.Array`, while
-  independent `relay<R>` remains a real CLR method generic. Every profile
-  bundle is closed and fully fingerprinted. Relative KLIB path bases remove
-  random test-directory leakage; repeated same-frontend products are byte
-  stable. The frontend comparison requires exact CLR metadata/method bodies,
-  non-KLIB resources, every KLIB item outside parser-owned IR body locations,
-  and all downstream products; raw manifests retain the distinct body hash,
-  and the verifier does not claim cross-parser body-blob identity. Framework
-  C# artifacts use deterministic modern Roslyn against explicit CLR 4
-  references and run on the real CLR 4.
-  The four-test matrix and all final candidate/erased Kotlin/erased C#
-  executions pass. The following full target aggregate completed in 791.8
-  seconds; its strict three-directory audit covers 190 XML files, 2,204 tests,
-  and zero failures, errors, or skips. This closes paired correctness/product
-  preparation, not representative performance evidence or production `C<T>`
-  admission. See
+  C# consumer/two-level subclass, and the compiler-record-driven candidate.
+  Framework/user structs, nullable and mixed state, arrays, method generics,
+  reflection, and override paths execute on PSI/LightTree × Framework CLR/
+  CoreCLR. Every profile bundle is closed and fingerprinted; executable CLR,
+  non-body KLIB, binding, and downstream frontend equivalence fail closed.
+  Framework C# products use modern Roslyn against explicit CLR 4 references
+  and run on the real CLR 4. See
   [`docs/archive/generic-owner-application-corpus-2026-08-13.md`](docs/archive/generic-owner-application-corpus-2026-08-13.md).
 - The preceding foundation: the exact schema-7 generic-owner measurement
   bundle now links and runs as a real Windows x64 NativeAOT executable. A
@@ -612,19 +623,21 @@ programmes.
 
 ## Current green gate
 
-The producer-classification-catalog head passed every constituent of the
-strict target gate. Production generic-owner emission remains erased; this
-checkpoint strengthens only the architecture artifact and fail-closed
-producer/consumer authority. The normal aggregate command remains:
+The paired generic-owner application-measurement head passed every constituent
+of the strict target gate. Production generic-owner emission remains erased;
+this checkpoint adds bounded comparison evidence and makes class-owned
+canonical bridge metadata truthful for ILLink without widening the physical
+library index to lowering-created synthetic owners. The normal aggregate
+command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-13 in 1,673.6 seconds. Its FIR/IL/
+The latest aggregate completed on 2026-08-14 in 1,751.2 seconds. Its FIR/IL/
 box and integration roots were freshly written; the six policy-free physical
 CLI model/serializer tests were Gradle-up-to-date and then explicitly refreshed
-on the same final worktree with `--rerun-tasks` in 36.3 seconds. These durations
+on the same final worktree with `--rerun-tasks` in 327.1 seconds. These durations
 identify the coherent checkpoint; they are not performance comparisons.
 Direct audit of all three result roots covers 190 XML files and 2,204 tests:
 

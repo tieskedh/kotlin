@@ -298,6 +298,17 @@ input for the following ergonomic and performance comparison; it does not yet
 satisfy all acceptance cases below. See
 [`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
 
+The first such bounded comparison now records Framework CLR 4 and all .NET 10
+deployment modes separately. The candidate is easier and more truthful for C#
+owner construction and subclassing, but its present semantic-capability-heavy
+workload is 1.62–2.96× the erased time and allocates 6.89–7.52% more. Because it
+is a test-owned C# physicalization rather than a complete Kotlin product, its
+published bytes and compile cost cannot select the surface. The result keeps
+direct `C<T>` as the destination where the full contract works, but blocks
+acceptance until route cost is attributed and representative Kotlin/C#
+applications confirm the interop benefit. See
+[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,
