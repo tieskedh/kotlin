@@ -25,6 +25,12 @@ param(
     [ValidateRange(1, 10)]
     [int]$CompileRuns = 1,
     [ValidateSet(
+        'typed-entry-typed-state',
+        'capability-value-typed-state',
+        'typed-entry-struct-typed-state',
+        'capability-struct-typed-state',
+        'typed-entry-nullable-typed-state',
+        'capability-nullable-typed-state',
         'typed-entry-object-state',
         'capability-value-state',
         'capability-reference-state',
@@ -496,6 +502,20 @@ function Get-ExpectedRouteProtocol(
     }
     if ($Representation -eq 'candidate') {
         switch ($Route) {
+            { $_ -in @(
+                    'typed-entry-typed-state', 'typed-entry-struct-typed-state',
+                    'typed-entry-nullable-typed-state'
+                ) } {
+                $result.typedEntryCalls = $ExpectedIterations * 2L
+            }
+            { $_ -in @(
+                    'capability-value-typed-state', 'capability-struct-typed-state',
+                    'capability-nullable-typed-state'
+                ) } {
+                $result.semanticCapabilityCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+            }
             'typed-entry-object-state' {
                 $result.typedEntryCalls = $ExpectedIterations * 2L
                 $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
@@ -545,8 +565,12 @@ function Get-ExpectedRouteProtocol(
     } elseif ($Representation -eq 'erased') {
         switch ($Route) {
             { $_ -in @(
-                    'typed-entry-object-state', 'capability-value-state', 'fallback-struct-state',
-                    'exact-value-construction', 'compatible-override-object-state'
+                    'typed-entry-typed-state', 'capability-value-typed-state',
+                    'typed-entry-struct-typed-state', 'capability-struct-typed-state',
+                    'typed-entry-nullable-typed-state', 'capability-nullable-typed-state',
+                    'typed-entry-object-state', 'capability-value-state',
+                    'fallback-struct-state', 'exact-value-construction',
+                    'compatible-override-object-state'
                 ) } {
                 $result.erasedVirtualCalls = $ExpectedIterations * 2L
                 $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
@@ -693,7 +717,15 @@ function Invoke-MeasuredApplication(
     }
     if ($isRouteAttribution) {
         $expectedStateCarrier = if ($Representation -eq 'candidate') {
-            'SEMANTIC_OBJECT_REQUIRED'
+            if ($Route -in @(
+                    'typed-entry-typed-state', 'capability-value-typed-state',
+                    'typed-entry-struct-typed-state', 'capability-struct-typed-state',
+                    'typed-entry-nullable-typed-state', 'capability-nullable-typed-state'
+                )) {
+                'TYPED_STORAGE_PRODUCER_GRAPH_PROVEN'
+            } else {
+                'SEMANTIC_OBJECT_REQUIRED'
+            }
         } else {
             'ERASED_OBJECT'
         }

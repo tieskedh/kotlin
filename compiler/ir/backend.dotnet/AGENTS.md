@@ -644,7 +644,17 @@ See the
   cast/unbox conversion at that one state boundary. A profile mismatch,
   incomplete constructor set, malformed local delegation, unpaired state
   path, or state access outside the recorded member family rejects the whole
-  artifact. Version 5 adds the reflection join without duplicating Kotlin
+  artifact. A test-owned owner with
+  `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN` may use the recorded owner GenericParam
+  as its one physical field only when every exact read/write path is identity.
+  Exact entries must access that field without crossing the capability. The
+  same owner's strict capability must check/narrow input before mutation and
+  widen/box output after reading; it may not add object fallback state or a
+  typed cache. An incompatible capability write must leave the prior state
+  unchanged. Any semantic, unresolved, source-free, or externally writable
+  producer continues to require semantic object state. This rule is
+  architecture-test-only and does not admit production `C<T>`. Version 5 adds
+  the reflection join without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
   to its existing KLIB logical classifier key, while logical type arguments,
   variance, projections, nullability, names, and bounds remain KLIB-only.

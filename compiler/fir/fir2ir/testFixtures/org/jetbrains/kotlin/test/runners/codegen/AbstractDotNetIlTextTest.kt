@@ -772,11 +772,21 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
         }
     }
 
-    val owners = listOf("HostileUnsafeStore", "HostileUnsafeMid").map { simpleName ->
+    val owners = listOf("HostileUnsafeStore", "HostileUnsafeMid", "HostileTypedStore").map { simpleName ->
         val prototype = prototypes.single { candidate -> candidate.hasSimpleName(simpleName) }
         val ownerPath = listOf("KotlinSnapshotPrototype", simpleName)
-        val baseOwnerPath = listOf("KotlinSnapshotPrototype", "HostileUnsafeStore")
-        val capabilityOwnerPath = listOf("KotlinSnapshotPrototype", "IHostileUnsafeStoreSemantic")
+        val baseOwnerPath = listOf(
+            "KotlinSnapshotPrototype",
+            if (simpleName == "HostileUnsafeMid") "HostileUnsafeStore" else simpleName,
+        )
+        val capabilityOwnerPath = listOf(
+            "KotlinSnapshotPrototype",
+            if (simpleName == "HostileTypedStore") {
+                "IHostileTypedStoreSemantic"
+            } else {
+                "IHostileUnsafeStoreSemantic"
+            },
+        )
         val constructors = prototype.constructors.map { constructor ->
             val logicalConstructorKey = checkNotNull(constructor.logicalBindingKey) {
                 "The hostile physical family requires a logical constructor binding"
@@ -987,7 +997,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         ),
                     )
                 }
-                fun semanticStateFamily(
+                fun stateFamily(
                     operation: DotNetGenericOwnerPhysicalStateAccessOperation,
                 ): DotNetGenericOwnerPrototypeMemberSnapshot = prototype.members.single { member ->
                     val reachesState = when (operation) {
@@ -997,8 +1007,17 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                             state.fieldName in member.transitiveStateWriteNames
                     }
                     reachesState &&
-                            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles &&
-                            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles
+                            member.logicalBindingKey != null &&
+                            members.any { family -> family.logicalMemberKey == member.logicalBindingKey } &&
+                            when (state.requirement) {
+                                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
+                                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles
+                                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
+                                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles
+                                DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+                                DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+                                -> false
+                            }
                 }
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = state.fieldName,
@@ -1016,8 +1035,8 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     },
                     accessPaths = when (state.requirement) {
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
-                            val writer = semanticStateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
-                            val reader = semanticStateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
+                            val writer = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
+                            val reader = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
                             listOf(
                                 access(
                                     writer,
@@ -1045,7 +1064,24 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                                 ),
                             )
                         }
-                        DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> emptyList()
+                        DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> {
+                            val writer = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
+                            val reader = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
+                            listOf(
+                                access(
+                                    writer,
+                                    DotNetGenericOwnerPhysicalStateAccessDomain.TYPED,
+                                    DotNetGenericOwnerPhysicalStateAccessOperation.WRITE,
+                                    DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
+                                ),
+                                access(
+                                    reader,
+                                    DotNetGenericOwnerPhysicalStateAccessDomain.TYPED,
+                                    DotNetGenericOwnerPhysicalStateAccessOperation.READ,
+                                    DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
+                                ),
+                            )
+                        }
                         DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                         -> error("The hostile physical family cannot publish unresolved state access")
@@ -1376,13 +1412,14 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     val exactReflection = artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
         constructionOwner.reflection.physicalOpenTypeDefinition,
     )
-    check(artifact.owners.mapNotNull { owner -> owner.physicalCapabilityOwnerPath }.distinct().size == 1 &&
+    val capabilityPaths = artifact.owners.mapNotNull { owner -> owner.physicalCapabilityOwnerPath }.distinct()
+    check(capabilityPaths.size == 2 &&
             exactReflection == constructionOwner.reflection &&
-            artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+            capabilityPaths.all { capabilityPath -> artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
                 constructionOwner.reflection.physicalOpenTypeDefinition.copy(
-                    physicalTypePath = checkNotNull(constructionOwner.physicalCapabilityOwnerPath),
+                    physicalTypePath = capabilityPath,
                 )
-            ) == null) {
+            ) == null }) {
         "Generic-owner reflection normalization confused the implementation and capability TypeDefs"
     }
     val reflectionAncestry = artifact.owners.map { owner -> owner.reflection.physicalOpenTypeDefinition }
@@ -1531,6 +1568,26 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             }
         )
     }
+    val typedStateOwner = artifact.owners.single { owner ->
+        owner.states.singleOrNull()?.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+    }
+    val typedState = typedStateOwner.states.single()
+    check(typedStateOwner.physicalOwnerPath.last() == "HostileTypedStore" &&
+            typedStateOwner.physicalCapabilityOwnerPath?.last() == "IHostileTypedStoreSemantic" &&
+            typedState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
+            typedState.accessPaths.map { access -> access.domain }.toSet() ==
+            setOf(DotNetGenericOwnerPhysicalStateAccessDomain.TYPED) &&
+            typedState.accessPaths.map { access -> access.operation }.toSet() ==
+            DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
+            typedState.accessPaths.all { access ->
+                access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+            }) {
+        "The generic-owner artifact did not retain its compiler-proven !T state family: $typedStateOwner"
+    }
+    expectRejected("object storage for compiler-proven typed state") {
+        typedState.copy(physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType())
+    }
     val echo = artifact.owners.first().members.single { candidate ->
         candidate.slots.any { slot ->
             slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
@@ -1616,6 +1673,10 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val relay = owner.members.single { member -> member.sourceName == "relay" }
     val label = owner.members.single { member -> member.sourceName == "label" }
     val state = owner.states.single()
+    val typedStorageOwner = prototypes.single { prototype -> prototype.hasSimpleName("HostileTypedStore") }
+    val typedStorageState = typedStorageOwner.states.single()
+    val typedStorageWrite = typedStorageOwner.members.single { member -> member.sourceName == "write" }
+    val typedStorageRead = typedStorageOwner.members.single { member -> member.sourceName == "read" }
     fun hasRole(
         member: DotNetGenericOwnerPrototypeMemberSnapshot,
         role: DotNetGenericOwnerMemberFamilyRole,
@@ -1636,6 +1697,35 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val relayTypedName = physicalName(relay, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val labelTypedName = physicalName(label, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val labelDefaultName = "${labelTypedName}Default"
+    val typedStorageWriteTypedName = physicalName(
+        typedStorageWrite,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val typedStorageWriteCapabilityName = physicalName(
+        typedStorageWrite,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+    val typedStorageReadTypedName = physicalName(
+        typedStorageRead,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val typedStorageReadCapabilityName = physicalName(
+        typedStorageRead,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+
+    check(typedStorageState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+            typedStorageWrite.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && typedStorageRead.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            )) {
+        "The typed-state physicalizer requires exact typed entries plus strict capability dispatch: " +
+                "$typedStorageOwner"
+    }
 
     val stateType = when (state.requirement) {
         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> "object"
@@ -1740,6 +1830,42 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     object $readCapabilityName();
                     void $writeCapabilityName(object next);
                     Array $echoCapabilityName(Array values);
+                }
+
+                public interface IHostileTypedStoreSemantic
+                {
+                    object $typedStorageReadCapabilityName();
+                    void $typedStorageWriteCapabilityName(object next);
+                }
+
+                public class HostileTypedStore<T> : IHostileTypedStoreSemantic
+                {
+                    private T ${typedStorageState.fieldName};
+
+                    public HostileTypedStore(T initial)
+                    {
+                        ${typedStorageState.fieldName} = initial;
+                    }
+
+                    public virtual void $typedStorageWriteTypedName(T next)
+                    {
+                        ${typedStorageState.fieldName} = next;
+                    }
+
+                    public virtual T $typedStorageReadTypedName()
+                    {
+                        return ${typedStorageState.fieldName};
+                    }
+
+                    void IHostileTypedStoreSemantic.$typedStorageWriteCapabilityName(object next)
+                    {
+                        $typedStorageWriteTypedName((T)next);
+                    }
+
+                    object IHostileTypedStoreSemantic.$typedStorageReadCapabilityName()
+                    {
+                        return $typedStorageReadTypedName();
+                    }
                 }
 
                 public class HostileUnsafeStore<T> : IHostileUnsafeStoreSemantic
@@ -1959,6 +2085,47 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         }
                     }
                     if (!foundExactEchoDispatcher) return 15;
+
+                    HostileTypedStore<int> typedState = new HostileTypedStore<int>(1);
+                    typedState.$typedStorageWriteTypedName(2);
+                    if (typedState.$typedStorageReadTypedName() != 2) return 20;
+                    IHostileTypedStoreSemantic typedStateCapability = typedState;
+                    typedStateCapability.$typedStorageWriteCapabilityName(3);
+                    if (!object.Equals(typedStateCapability.$typedStorageReadCapabilityName(), 3)) return 21;
+                    try
+                    {
+                        typedStateCapability.$typedStorageWriteCapabilityName("wrong");
+                        return 22;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    if (typedState.$typedStorageReadTypedName() != 3) return 23;
+
+                    Type typedDefinition = typeof(HostileTypedStore<>);
+                    Type typedOwnerParameter = typedDefinition.GetGenericArguments()[0];
+                    System.Reflection.FieldInfo[] typedFields = typedDefinition.GetFields(
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.DeclaredOnly
+                    );
+                    if (typedFields.Length != 1 || typedFields[0].FieldType != typedOwnerParameter) return 24;
+                    System.Reflection.MethodInfo typedStateWrite =
+                        typedDefinition.GetMethod("$typedStorageWriteTypedName");
+                    System.Reflection.MethodInfo typedStateRead =
+                        typedDefinition.GetMethod("$typedStorageReadTypedName");
+                    if (typedStateWrite == null || typedStateRead == null ||
+                        typedStateWrite.GetParameters().Length != 1 ||
+                        typedStateWrite.GetParameters()[0].ParameterType != typedOwnerParameter ||
+                        typedStateRead.ReturnType != typedOwnerParameter) return 25;
+                    System.Reflection.InterfaceMapping typedStateMap =
+                        typeof(HostileTypedStore<int>).GetInterfaceMap(typeof(IHostileTypedStoreSemantic));
+                    if (typedStateMap.TargetMethods.Length != 2) return 26;
+                    for (int index = 0; index < typedStateMap.TargetMethods.Length; index++)
+                    {
+                        System.Reflection.MethodInfo method = typedStateMap.TargetMethods[index];
+                        if (!method.IsPrivate || !method.IsVirtual || !method.IsFinal) return 27;
+                    }
                     return 0;
                 }
             }
@@ -1993,7 +2160,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         val artifact = createGenericOwnerPhysicalFamilyArtifact(prototypes, fingerprint, target)
         val sourceRelabeledPrototypes = prototypes.map { prototype ->
             if (!prototype.hasSimpleName("HostileUnsafeStore") &&
-                    !prototype.hasSimpleName("HostileUnsafeMid")) {
+                    !prototype.hasSimpleName("HostileUnsafeMid") &&
+                    !prototype.hasSimpleName("HostileTypedStore")) {
                 prototype
             } else {
                 prototype.copy(members = prototype.members.mapIndexed { index, member ->
@@ -2350,7 +2518,13 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val ownerRecord = artifact.owners.single { owner ->
         owner.physicalOwnerPath == physicalized.constructor.constructedBaseOwner.typePath
     }
-    val stateOwnerRecord = artifact.owners.single { owner -> owner.states.isNotEmpty() }
+    val stateOwnerRecord = artifact.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileUnsafeStore"
+    }
+    val typedStateOwnerRecord = artifact.owners.single { owner ->
+        owner.states.singleOrNull()?.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+    }
     val physicalizedLabel = physicalized.members.single { member -> member.sourceName == "label" }
         .slots.single()
     check(ownerRecord.physicalOwnerPath.last() == "HostileUnsafeMid" &&
@@ -2562,7 +2736,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             "The external producer family lacks exact root/direct-super identities: $member"
         }
     }
-    val capabilitySlots = artifact.owners.flatMap { owner -> owner.members }
+    val capabilitySlots = stateOwnerRecord.members
         .flatMap { member -> member.slots }
         .mapNotNull { slot -> slot.capabilitySlot }
     val capabilityPath = capabilitySlots.map { slot -> slot.physicalOwnerPath }.distinct().single()
@@ -2570,6 +2744,39 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         "The family capability owner differs from its exact recorded interface slots"
     }
     val capabilityTypeName = capabilityPath.joinToString(".")
+    val typedStateRecord = typedStateOwnerRecord.states.single()
+    val typedStateWriteAccess = typedStateRecord.accessPaths.single { access ->
+        access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
+    }
+    val typedStateReadAccess = typedStateRecord.accessPaths.single { access ->
+        access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ
+    }
+    val typedStateConstructor = typedStateOwnerRecord.constructors.single()
+    val typedStateClosedTypeName = typedStateConstructor.constructedOwnerType
+        .renderSnapshotCSharpType(listOf("int"))
+    val typedStructStateClosedTypeName = typedStateConstructor.constructedOwnerType
+        .renderSnapshotCSharpType(listOf("RecordedRouteStruct"))
+    val typedNullableStateClosedTypeName = typedStateConstructor.constructedOwnerType
+        .renderSnapshotCSharpType(listOf("int?"))
+    val typedStateCapabilityTypeName = checkNotNull(typedStateOwnerRecord.physicalCapabilityOwnerPath)
+        .joinToString(".")
+    val typedStateWriteCapability = typedStateOwnerRecord.members.single { member ->
+        member.logicalMemberKey == typedStateWriteAccess.logicalMemberKey
+    }.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }.let { slot -> checkNotNull(slot.capabilitySlot).physicalMethodName }
+    val typedStateReadCapability = typedStateOwnerRecord.members.single { member ->
+        member.logicalMemberKey == typedStateReadAccess.logicalMemberKey
+    }.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }.let { slot -> checkNotNull(slot.capabilitySlot).physicalMethodName }
+    check(typedStateRecord.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
+            typedStateWriteAccess.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+            typedStateReadAccess.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+            typedStateWriteAccess.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY &&
+            typedStateReadAccess.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
+        "The paired application cannot measure an unproven typed-state family: $typedStateOwnerRecord"
+    }
     val defaultEntry = artifact.owners.flatMap { owner ->
         owner.members.mapNotNull { member -> member.defaultDispatcher?.let { owner to member } }
     }.single()
@@ -2899,6 +3106,123 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
                 [System.Runtime.CompilerServices.MethodImpl(
                     System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    $typedStateClosedTypeName owner = new $typedStateClosedTypeName(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.${typedStateWriteAccess.physicalMethod.physicalMethodName}(next);
+                        int observed = owner.${typedStateReadAccess.physicalMethod.physicalMethodName}();
+                        if (observed != next)
+                            throw new InvalidOperationException("typed entry typed state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityValueTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    $typedStateCapabilityTypeName owner = new $typedStateClosedTypeName(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.$typedStateWriteCapability(next);
+                        int observed = (int)owner.$typedStateReadCapability();
+                        if (observed != next)
+                            throw new InvalidOperationException("capability value typed state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryStructTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    Guid id = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    RecordedRouteStruct initial = new RecordedRouteStruct { Count = 0, Id = id };
+                    $typedStructStateClosedTypeName owner = new $typedStructStateClosedTypeName(initial);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        RecordedRouteStruct next =
+                            new RecordedRouteStruct { Count = index & 1023, Id = id };
+                        owner.${typedStateWriteAccess.physicalMethod.physicalMethodName}(next);
+                        RecordedRouteStruct observed =
+                            owner.${typedStateReadAccess.physicalMethod.physicalMethodName}();
+                        if (observed.Count != next.Count || observed.Id != next.Id)
+                            throw new InvalidOperationException("typed entry struct typed state");
+                        checksum = MixRouteChecksum(checksum, observed.Count);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityStructTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    Guid id = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    RecordedRouteStruct initial = new RecordedRouteStruct { Count = 0, Id = id };
+                    $typedStateCapabilityTypeName owner =
+                        new $typedStructStateClosedTypeName(initial);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        RecordedRouteStruct next =
+                            new RecordedRouteStruct { Count = index & 1023, Id = id };
+                        owner.$typedStateWriteCapability(next);
+                        RecordedRouteStruct observed =
+                            (RecordedRouteStruct)owner.$typedStateReadCapability();
+                        if (observed.Count != next.Count || observed.Id != next.Id)
+                            throw new InvalidOperationException("capability struct typed state");
+                        checksum = MixRouteChecksum(checksum, observed.Count);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryNullableTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    $typedNullableStateClosedTypeName owner = new $typedNullableStateClosedTypeName(null);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int? next = (index & 7) == 0 ? (int?)null : index & 1023;
+                        owner.${typedStateWriteAccess.physicalMethod.physicalMethodName}(next);
+                        int? observed = owner.${typedStateReadAccess.physicalMethod.physicalMethodName}();
+                        if (observed != next)
+                            throw new InvalidOperationException("typed entry nullable typed state");
+                        checksum = MixRouteChecksum(checksum, observed.HasValue ? observed.Value : -1);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityNullableTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    $typedStateCapabilityTypeName owner = new $typedNullableStateClosedTypeName(null);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int? next = (index & 7) == 0 ? (int?)null : index & 1023;
+                        owner.$typedStateWriteCapability(next);
+                        int? observed = (int?)owner.$typedStateReadCapability();
+                        if (observed != next)
+                            throw new InvalidOperationException("capability nullable typed state");
+                        checksum = MixRouteChecksum(checksum, observed.HasValue ? observed.Value : -1);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
                 private static int ExecuteTypedEntryObjectState(int iterations)
                 {
                     int checksum = 17;
@@ -3098,6 +3422,16 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                 {
                     switch (route)
                     {
+                        case "typed-entry-typed-state": return ExecuteTypedEntryTypedState(iterations);
+                        case "capability-value-typed-state": return ExecuteCapabilityValueTypedState(iterations);
+                        case "typed-entry-struct-typed-state":
+                            return ExecuteTypedEntryStructTypedState(iterations);
+                        case "capability-struct-typed-state":
+                            return ExecuteCapabilityStructTypedState(iterations);
+                        case "typed-entry-nullable-typed-state":
+                            return ExecuteTypedEntryNullableTypedState(iterations);
+                        case "capability-nullable-typed-state":
+                            return ExecuteCapabilityNullableTypedState(iterations);
                         case "typed-entry-object-state": return ExecuteTypedEntryObjectState(iterations);
                         case "capability-value-state": return ExecuteCapabilityValueState(iterations);
                         case "capability-reference-state": return ExecuteCapabilityReferenceState(iterations);
@@ -3148,6 +3482,18 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                         long expectedFailures = 0;
                         switch (route)
                         {
+                            case "typed-entry-typed-state":
+                            case "typed-entry-struct-typed-state":
+                            case "typed-entry-nullable-typed-state":
+                                typedEntryCalls = iterations * 2L;
+                                break;
+                            case "capability-value-typed-state":
+                            case "capability-struct-typed-state":
+                            case "capability-nullable-typed-state":
+                                semanticCapabilityCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 2L;
+                                runtimeCompatibilityChecks = iterations;
+                                break;
                             case "typed-entry-object-state":
                                 typedEntryCalls = iterations * 2L;
                                 loopValueBoxOrUnboxOperations = iterations * 2L;
@@ -3202,7 +3548,15 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                             "|typedEntryCalls=" + typedEntryCalls +
                             "|semanticCapabilityCalls=" + semanticCapabilityCalls +
                             "|erasedVirtualCalls=0" +
-                            "|ownerStateCarrierRequirement=${stateRecord.requirement}" +
+                            "|ownerStateCarrierRequirement=" +
+                            (route == "typed-entry-typed-state" ||
+                                    route == "capability-value-typed-state" ||
+                                    route == "typed-entry-struct-typed-state" ||
+                                    route == "capability-struct-typed-state" ||
+                                    route == "typed-entry-nullable-typed-state" ||
+                                    route == "capability-nullable-typed-state"
+                                ? "${typedStateRecord.requirement}"
+                                : "${stateRecord.requirement}") +
                             "|ownerConstructions=" + ownerConstructions +
                             "|loopValueBoxOrUnboxOperations=" + loopValueBoxOrUnboxOperations +
                             "|runtimeCompatibilityChecks=" + runtimeCompatibilityChecks +
@@ -3884,6 +4238,7 @@ private fun prepareGenericOwnerApplicationBundle(
             using System;
             using ErasedStore = global::generic.owner.oracle.HostileUnsafeStore;
             using ErasedMid = global::generic.owner.oracle.HostileUnsafeMid;
+            using ErasedTypedStore = global::generic.owner.oracle.HostileTypedStore;
 
             public enum ApplicationEnum
             {
@@ -3965,6 +4320,120 @@ private fun prepareGenericOwnerApplicationBundle(
                 private static int MixRouteChecksum(int checksum, int value)
                 {
                     return unchecked(checksum * 31 + value);
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedTypedStore owner = new ErasedTypedStore(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.write(next);
+                        int observed = (int)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("typed entry typed state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityValueTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedTypedStore owner = new ErasedTypedStore(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.write(next);
+                        int observed = (int)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("capability value typed state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryStructTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    Guid id = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    ApplicationStruct initial = new ApplicationStruct { Count = 0, Id = id };
+                    ErasedTypedStore owner = new ErasedTypedStore(initial);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        ApplicationStruct next =
+                            new ApplicationStruct { Count = index & 1023, Id = id };
+                        owner.write(next);
+                        ApplicationStruct observed = (ApplicationStruct)owner.read();
+                        if (observed.Count != next.Count || observed.Id != next.Id)
+                            throw new InvalidOperationException("typed entry struct typed state");
+                        checksum = MixRouteChecksum(checksum, observed.Count);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityStructTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    Guid id = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    ApplicationStruct initial = new ApplicationStruct { Count = 0, Id = id };
+                    ErasedTypedStore owner = new ErasedTypedStore(initial);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        ApplicationStruct next =
+                            new ApplicationStruct { Count = index & 1023, Id = id };
+                        owner.write(next);
+                        ApplicationStruct observed = (ApplicationStruct)owner.read();
+                        if (observed.Count != next.Count || observed.Id != next.Id)
+                            throw new InvalidOperationException("capability struct typed state");
+                        checksum = MixRouteChecksum(checksum, observed.Count);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryNullableTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedTypedStore owner = new ErasedTypedStore(null);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int? next = (index & 7) == 0 ? (int?)null : index & 1023;
+                        owner.write(next);
+                        int? observed = (int?)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("typed entry nullable typed state");
+                        checksum = MixRouteChecksum(checksum, observed.HasValue ? observed.Value : -1);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityNullableTypedState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedTypedStore owner = new ErasedTypedStore(null);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int? next = (index & 7) == 0 ? (int?)null : index & 1023;
+                        owner.write(next);
+                        int? observed = (int?)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("capability nullable typed state");
+                        checksum = MixRouteChecksum(checksum, observed.HasValue ? observed.Value : -1);
+                    }
+                    return checksum;
                 }
 
                 [System.Runtime.CompilerServices.MethodImpl(
@@ -4164,6 +4633,16 @@ private fun prepareGenericOwnerApplicationBundle(
                 {
                     switch (route)
                     {
+                        case "typed-entry-typed-state": return ExecuteTypedEntryTypedState(iterations);
+                        case "capability-value-typed-state": return ExecuteCapabilityValueTypedState(iterations);
+                        case "typed-entry-struct-typed-state":
+                            return ExecuteTypedEntryStructTypedState(iterations);
+                        case "capability-struct-typed-state":
+                            return ExecuteCapabilityStructTypedState(iterations);
+                        case "typed-entry-nullable-typed-state":
+                            return ExecuteTypedEntryNullableTypedState(iterations);
+                        case "capability-nullable-typed-state":
+                            return ExecuteCapabilityNullableTypedState(iterations);
                         case "typed-entry-object-state": return ExecuteTypedEntryObjectState(iterations);
                         case "capability-value-state": return ExecuteCapabilityValueState(iterations);
                         case "capability-reference-state": return ExecuteCapabilityReferenceState(iterations);
@@ -4212,6 +4691,12 @@ private fun prepareGenericOwnerApplicationBundle(
                         long expectedFailures = 0;
                         switch (route)
                         {
+                            case "typed-entry-typed-state":
+                            case "capability-value-typed-state":
+                            case "typed-entry-struct-typed-state":
+                            case "capability-struct-typed-state":
+                            case "typed-entry-nullable-typed-state":
+                            case "capability-nullable-typed-state":
                             case "typed-entry-object-state":
                             case "capability-value-state":
                             case "fallback-struct-state":

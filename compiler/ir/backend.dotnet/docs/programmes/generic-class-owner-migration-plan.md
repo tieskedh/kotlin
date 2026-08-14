@@ -164,6 +164,18 @@ families and allow only semantically safe removal of the attributed overhead.
 See
 [`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
+The bounded typed-storage follow-up now proves the other compiler-derived
+state outcome. One test-owned `HostileTypedStore<T>` physically stores `!T` and
+keeps exact typed reads/writes outside its strict non-generic capability. Int,
+non-trivial struct, and nullable exact routes have no per-iteration allocation
+on Framework CLR 4 or any .NET 10 deployment lane. Capability routes preserve
+the one-state semantic boundary but still pay one check and two object-domain
+conversions; the non-trivial struct also proves that removing allocation does
+not guarantee a time win in every deployment mode. This satisfies a bounded
+typed-storage feasibility obligation, not conditions 8 or 9 and not the atomic
+cutover. See
+[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
 admits only compiler-derived constraints in its exact supported grammar and

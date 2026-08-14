@@ -324,6 +324,24 @@ stays erased; representative complete applications are now the next cost gate.
 See
 [`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
+The compiler's opposite state decision is now physicalized in the same bounded
+family. `HostileTypedStore<T>` has one actual `!T` field because its initializer
+and every transitive write are already proven physically typed by the complete
+producer graph. Exact calls use identity field access and do not cross the
+capability. The strict widened/star capability checks before write, boxes or
+widens after read, and an incompatible input cannot mutate state. Metadata and
+direct C# reflection pin that one-owner/one-field shape on both CLR families.
+
+Paired `Int32`, `Int32 + Guid`, and `Nullable<Int32>` routes eliminate all
+per-iteration allocation on exact access. Capability access retains two value-
+domain conversions and one check, allocating twice the erased value-route
+baseline. Exact scalar and nullable timing improves in all modes; large-struct
+timing remains deployment-sensitive despite the allocation win. This closes
+typed-storage causal feasibility, not owner admission. The semantically hostile
+owner remains object-backed, production remains erased, and representative
+complete applications remain the next gate. See
+[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?

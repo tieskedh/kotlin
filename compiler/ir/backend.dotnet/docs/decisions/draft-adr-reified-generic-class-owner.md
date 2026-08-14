@@ -460,6 +460,27 @@ typed-storage/deoptimization feasibility, and the atomic migration remain
 open. See
 [`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
+The other state decision produced by the same compiler graph is now
+physicalized in the bounded hostile family. An invariant mutable owner whose
+initializer and every transitive write retain physically typed provenance may
+publish `!T` state. Its exact typed read/write entries access that field by
+identity and never cross the non-generic capability. The capability remains
+mandatory for widened and star operations: strict input dispatch checks and
+narrows to `!T`, strict output dispatch widens or boxes from `!T`, and no
+incompatible input may mutate typed state. This remains one owner and one field,
+not a typed cache beside canonical object state.
+
+The paired `Int32`, non-trivial struct, and nullable routes prove the field and
+exact signatures use the owner GenericParam on Framework CLR 4 and every .NET
+10 deployment lane. Exact access eliminates per-iteration allocation. The
+capability still pays two object-domain conversions and one check per iteration
+and remains materially slower; large-struct exact timing is deployment-
+sensitive even without allocation. This physicalizes the hostile fixture's
+existing compiler-proven state case. It does not admit an easy production
+owner, weaken the complete hostile semantic owner, or authorize atomic
+migration. See
+[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

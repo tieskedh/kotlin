@@ -66,6 +66,10 @@ Archived snapshots:
   isolates typed entry, semantic capability, object-state, construction,
   array, method-generic, compatible override, and hostile failure costs across
   Framework 4.8 and all four .NET 10 deployment modes.
+- [`generic-owner-typed-storage-attribution-2026-08-14.md`](generic-owner-typed-storage-attribution-2026-08-14.md)
+  proves one compiler-derived `!T` field and exact identity access, retains the
+  strict one-state capability boundary, and attributes scalar, struct, and
+  nullable costs across Framework 4.8 and all four .NET 10 deployment modes.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots

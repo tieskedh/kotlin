@@ -662,6 +662,17 @@ deployment lane are now the next reopening gate before selecting the atomic
 migration. See
 [`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
+The same graph's `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN` outcome now drives a
+bounded one-field physicalization. Exact `HostileTypedStore<T>` access uses a
+real `!T` field and bypasses the non-generic capability; strict widened/star
+entry checks before mutation and widens or boxes after read. Int, non-trivial
+struct, and nullable routes remove every per-iteration exact-path allocation on
+Framework CLR 4 and all .NET 10 deployment modes. The capability still pays two
+object-domain conversions plus a compatibility check, and large-struct exact
+timing remains runtime-sensitive. This closes typed-storage causal feasibility,
+not representative-product breadth or production owner admission. See
+[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
