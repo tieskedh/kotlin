@@ -12640,6 +12640,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(csharpToolchain != null, "Modern C# compiler is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkCSharpToolchain = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharpToolchain != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
         val modernCSharp = checkNotNull(csharpToolchain)
         val dotnetHost = modernDotNetHostOrSkip()
         val platformDirectory = File(tmpdir, "stable-sorting-platform")
@@ -12670,8 +12679,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.MutableList' '<this>', " +
                     "class 'Kotlin.Comparator' 'comparator')" in stdlibIl
         )
+        for (wrapperName in listOf(
+            "ByteArray",
+            "ShortArray",
+            "IntArray",
+            "LongArray",
+            "FloatArray",
+            "DoubleArray",
+            "CharArray",
+        )) {
+            val wrapper = "class [Kotlin.Runtime]'Kotlin.$wrapperName'"
+            assertTrue("'sort'($wrapper '<this>')" in stdlibIl) {
+                "The portable stdlib lacks whole-array sorting for $wrapperName:\n$stdlibIl"
+            }
+            assertTrue("'sort'($wrapper '<this>', int32 'fromIndex', int32 'toIndex')" in stdlibIl) {
+                "The portable stdlib lacks range sorting for $wrapperName:\n$stdlibIl"
+            }
+            assertTrue("'quickSort'($wrapper 'array', int32 'left', int32 'right')" in stdlibIl) {
+                "The portable stdlib did not retain the authoritative primitive quicksort for $wrapperName:\n$stdlibIl"
+            }
+        }
         assertFalse("dotNetErasedArrayOfNulls" in stdlibIl)
         assertFalse("dotNetErasedArraySet" in stdlibIl)
+        assertFalse("System.Array::Sort" in stdlibIl)
         val stableSortStart = Regex(
             """\.method public hidebysig static void 'mergeSortErased'\(class \[[^]]+]System\.Array"""
         ).find(stdlibIl)?.range?.first ?: -1
@@ -12684,6 +12714,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("System.Array::SetValue" in stableSortIl)
         assertFalse("!!0[]" in stableSortIl)
         assertFalse("System.Array::Sort" in stableSortIl)
+
+        val genericSortedArrayStart = Regex(
+            """\.method public hidebysig static !!0\[] 'sortedArray'<"""
+        ).find(stdlibIl)?.range?.first ?: -1
+        assertTrue(genericSortedArrayStart >= 0, "The open generic sortedArray implementation is absent")
+        val genericSortedArrayEnd = stdlibIl.indexOf("\n  .method", genericSortedArrayStart + 1)
+            .takeIf { index -> index >= 0 } ?: stdlibIl.length
+        val genericSortedArrayIl = stdlibIl.substring(genericSortedArrayStart, genericSortedArrayEnd)
+        assertTrue("System.Object::GetType" in genericSortedArrayIl)
+        assertTrue("System.Type::GetElementType" in genericSortedArrayIl)
+        assertTrue("System.Array::CreateInstance" in genericSortedArrayIl)
+        assertTrue("System.Array::Copy" in genericSortedArrayIl)
+        assertTrue("castclass !!0[]" in genericSortedArrayIl)
+        assertFalse("newarr !!0" in genericSortedArrayIl)
 
         val csharpSource = platformDirectory.resolve("stable-sorting-consumer.cs").apply {
             writeText(
@@ -12704,20 +12748,81 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public sealed class CSharpIntComparator : Kotlin.Comparator
                 {
-                    public int $comparatorSlot(object left, object right) =>
-                        ((int)left).CompareTo((int)right);
+                    public int $comparatorSlot(object left, object right)
+                    {
+                        return ((int)left).CompareTo((int)right);
+                    }
                 }
 
                 public sealed class CSharpSortItemComparator : Kotlin.Comparator
                 {
-                    public int $comparatorSlot(object left, object right) =>
-                        ((SortItem)left).Key.CompareTo(((SortItem)right).Key);
+                    public int $comparatorSlot(object left, object right)
+                    {
+                        return ((SortItem)left).Key.CompareTo(((SortItem)right).Key);
+                    }
                 }
 
                 public static class Program
                 {
+                    private static void Require(bool condition, string message)
+                    {
+                        if (!condition) throw new Exception(message);
+                    }
+
+                    private static void CheckPrimitiveSorts()
+                    {
+                        var bytes = new Kotlin.ByteArray(new sbyte[] { 3, -1, 2 });
+                        Kotlin.Collections.CollectionsKt.sort(bytes);
+                        Require(bytes.Get(0) == -1 && bytes.Get(1) == 2 && bytes.Get(2) == 3,
+                            "C# ByteArray sort failed");
+
+                        var shorts = new Kotlin.ShortArray(new short[] { 3, -1, 2 });
+                        Kotlin.Collections.CollectionsKt.sort(shorts);
+                        Require(shorts.Get(0) == -1 && shorts.Get(1) == 2 && shorts.Get(2) == 3,
+                            "C# ShortArray sort failed");
+
+                        int[] intStorage = { 9, 4, 1, 3, 8 };
+                        var ints = new Kotlin.IntArray(intStorage);
+                        Kotlin.Collections.CollectionsKt.sort(ints, 1, 4);
+                        Require(Object.ReferenceEquals(intStorage, ints.GetStorage()),
+                            "C# IntArray range sort replaced wrapper storage");
+                        Require(ints.Get(0) == 9 && ints.Get(1) == 1 && ints.Get(2) == 3 &&
+                                ints.Get(3) == 4 && ints.Get(4) == 8,
+                            "C# IntArray range sort failed");
+                        Kotlin.IntArray intSnapshot = Kotlin.Collections.CollectionsKt.sortedArray(ints);
+                        Require(!Object.ReferenceEquals(ints, intSnapshot) &&
+                                !Object.ReferenceEquals(intStorage, intSnapshot.GetStorage()),
+                            "C# IntArray sorted snapshot aliases its source");
+                        Require(intSnapshot.Get(0) == 1 && intSnapshot.Get(1) == 3 &&
+                                intSnapshot.Get(2) == 4 && intSnapshot.Get(3) == 8 &&
+                                intSnapshot.Get(4) == 9,
+                            "C# IntArray sorted snapshot failed");
+
+                        var longs = new Kotlin.LongArray(new long[] { 3L, -1L, 2L });
+                        Kotlin.Collections.CollectionsKt.sort(longs);
+                        Require(longs.Get(0) == -1L && longs.Get(1) == 2L && longs.Get(2) == 3L,
+                            "C# LongArray sort failed");
+
+                        var floats = new Kotlin.FloatArray(new float[] { 3.5f, -1.25f, 2.0f });
+                        Kotlin.Collections.CollectionsKt.sort(floats);
+                        Require(floats.Get(0) == -1.25f && floats.Get(1) == 2.0f && floats.Get(2) == 3.5f,
+                            "C# FloatArray sort failed");
+
+                        var doubles = new Kotlin.DoubleArray(new double[] { 3.5, -1.25, 2.0 });
+                        Kotlin.Collections.CollectionsKt.sort(doubles);
+                        Require(doubles.Get(0) == -1.25 && doubles.Get(1) == 2.0 && doubles.Get(2) == 3.5,
+                            "C# DoubleArray sort failed");
+
+                        var chars = new Kotlin.CharArray(new char[] { 'z', 'a', 'm' });
+                        Kotlin.Collections.CollectionsKt.sort(chars);
+                        Require(chars.Get(0) == 'a' && chars.Get(1) == 'm' && chars.Get(2) == 'z',
+                            "C# CharArray sort failed");
+                    }
+
                     public static int Main()
                     {
+                        CheckPrimitiveSorts();
+
                         int[] values = { 4, 1, 3, 2 };
                         Kotlin.Collections.CollectionsKt.sortWith<int>(values, new CSharpIntComparator());
                         if (values[0] != 1 || values[1] != 2 || values[2] != 3 || values[3] != 4)
@@ -12733,6 +12838,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (items[0].Name != "b" || items[1].Name != "d" ||
                             items[2].Name != "a" || items[3].Name != "c")
                             throw new Exception("C# reference-array sort was not stable");
+
+                        SortItem[] rangeItems = {
+                            new SortItem(9, "outside-left"),
+                            new SortItem(2, "a"),
+                            new SortItem(1, "b"),
+                            new SortItem(2, "c"),
+                            new SortItem(1, "d"),
+                            new SortItem(8, "outside-right"),
+                        };
+                        Kotlin.Collections.CollectionsKt.sortWith<SortItem>(
+                            rangeItems, new CSharpSortItemComparator(), 1, 5);
+                        if (rangeItems[0].Name != "outside-left" || rangeItems[1].Name != "b" ||
+                            rangeItems[2].Name != "d" || rangeItems[3].Name != "a" ||
+                            rangeItems[4].Name != "c" || rangeItems[5].Name != "outside-right")
+                            throw new Exception("C# reference-array range sort was not stable");
 
                         var list = new Kotlin.Collections.ArrayList();
                         list.add(3);
@@ -12762,7 +12882,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             dotnetHost,
             csharpAssembly,
             platformDirectory,
-            "C# stable-sorting consumer failed",
+            "C# stable-sorting consumer failed on .NET 10",
+        )
+
+        val frameworkAssembly = platformDirectory.resolve("StableSortingFrameworkConsumer.exe")
+        val frameworkCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharpToolchain),
+            csharpSource,
+            frameworkAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, frameworkCompile.exitCode, frameworkCompile.output)
+        val frameworkProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkAssembly)
+        )
+            .directory(platformDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkOutput = frameworkProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(
+            0,
+            frameworkProcess.waitFor(),
+            "The same portable C# stable-sorting consumer failed on Framework CLR4:\n$frameworkOutput",
         )
     }
 
@@ -35420,8 +35564,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "removeLast" to 1,
             "removeLastOrNull" to 1,
             "retainAll" to 5,
-            "reverse" to 1,
-            "reversed" to 1,
+            "reverse" to 19,
+            "reversed" to 10,
             "runningFold" to 1,
             "runningFoldIndexed" to 1,
             "runningReduce" to 1,
@@ -35441,7 +35585,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "toIntArray" to 1,
             "toList" to 1,
             "toLongArray" to 1,
-            "toMutableList" to 2,
+            "toMutableList" to 11,
             "toShortArray" to 1,
             "withIndex" to 2,
             "zip" to 4,

@@ -268,6 +268,17 @@ fun main(args: Array<String>) {
         commonCollectionsFile,
         "internal fun <T> collectionToArrayCommonImpl(collection: Collection<*>, array: Array<T>): Array<T>",
     )
+    val copyToArrayOfAnyDeclaration = extractCommonSingleLineDeclaration(
+        commonCollectionsHeaderFile,
+        "internal expect fun <T> Array<out T>.copyToArrayOfAny(isVarargs: Boolean): Array<out Any?>",
+    )
+    val arrayAsCollectionDeclarations = extractCommonSourceRange(
+        commonCollectionsFile,
+        "internal fun <T> Array<out T>.asCollection(isVarargs: Boolean = false): Collection<T>",
+        "/**\n * Returns an empty read-only list.  The returned list is serializable (JVM).\n" +
+                " * @sample samples.collections.Collections.Lists.emptyReadOnlyList\n */\n" +
+                "public fun <T> emptyList(): List<T> = EmptyList",
+    )
     val terminateCollectionToArrayDeclaration = extractCommonSingleLineDeclaration(
         commonCollectionsFile,
         "internal expect fun <T> terminateCollectionToArray(collectionSize: Int, array: Array<T>): Array<T>",
@@ -550,6 +561,49 @@ fun main(args: Array<String>) {
         family = Family.Iterables,
         signature = "flatMapIndexedTo(destination: C, transform: (index: Int, T) -> Iterable<R>)",
     )
+    val signedArrayOrderingSelections = listOf(
+        Ordering.f_reverse selectedFor
+                setOf(Family.InvariantArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_reverse_range selectedFor
+                setOf(Family.InvariantArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_reversed selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_reversedArray selectedFor
+                setOf(Family.InvariantArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sorted selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortedArray selectedFor
+                setOf(Family.InvariantArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortDescending selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortedDescending selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortedArrayDescending selectedFor
+                setOf(Family.InvariantArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortedWith selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortedArrayWith selectedFor setOf(Family.ArraysOfObjects),
+        Ordering.f_sortBy selectedFor setOf(Family.ArraysOfObjects),
+        Ordering.f_sortedBy selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_sortByDescending selectedFor setOf(Family.ArraysOfObjects),
+        Ordering.f_sortedByDescending selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_isSortedWith selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_isSorted selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_isSortedDescending selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_isSortedBy selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Ordering.f_isSortedByDescending selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        ArrayOps.f_sortDescending_range selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        Snapshots.f_toMutableList selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+    )
     val selectedTemplates = sequenceOf(
         Aggregates.f_all selectedFor setOf(Family.Iterables),
         Aggregates.f_any selectedFor setOf(Family.Iterables),
@@ -726,6 +780,19 @@ fun main(args: Array<String>) {
     } + Aggregates.f_minMaxOfWith().map { member ->
         member selectedFor setOf(Family.Iterables)
     }
+    val signedArrayOrderingMembers = signedArrayOrderingSelections
+        .asSequence()
+        .flatMap { selection ->
+            selection.template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
+                member.family in selection.families &&
+                        (selection.primitives == null || member.primitive in selection.primitives)
+            }
+        }
+        .sortedBy { it.sortingSignature }
+        .toList()
+    check(signedArrayOrderingMembers.size == 168) {
+        "Expected 168 signed/object-array ordering members, found ${signedArrayOrderingMembers.size}"
+    }
     val members = selectedTemplates
         .flatMap { selection ->
             selection.template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
@@ -733,6 +800,7 @@ fun main(args: Array<String>) {
                         (selection.primitives == null || member.primitive in selection.primitives)
             }
         }
+        .plus(signedArrayOrderingMembers.asSequence())
         .sortedBy { it.sortingSignature }
         .toList()
 
@@ -772,6 +840,10 @@ fun main(args: Array<String>) {
     generatedSource.appendLine(typedCollectionToArrayImplementation)
     generatedSource.appendLine()
     generatedSource.appendLine(terminateCollectionToArrayDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(copyToArrayOfAnyDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(arrayAsCollectionDeclarations)
     generatedSource.appendLine()
     val arraySequenceReceivers = listOf(
         "<T> Array<out T>" to "Sequence<T>",
@@ -875,14 +947,37 @@ fun main(args: Array<String>) {
         Charsets.UTF_8,
     )
 
-    val sortingTemplates = listOf(ArrayOps.f_sort, ArrayOps.f_sortWith)
-    val commonSortingMembers = sortingTemplates
-        .flatMap { template ->
-            template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
-                member.family == Family.ArraysOfObjects
+    val sortingSelections = listOf(
+        ArrayOps.f_sort selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        ArrayOps.f_sortWith selectedFor setOf(Family.ArraysOfObjects),
+        ArrayOps.f_sort_range selectedFor
+                setOf(Family.ArraysOfObjects, Family.ArraysOfPrimitives),
+        ArrayOps.f_sortWith_range selectedFor setOf(Family.ArraysOfObjects),
+        ArrayOps.f_toTypedArray selectedFor setOf(Family.ArraysOfPrimitives),
+    )
+    val commonSortingMembers = sortingSelections
+        .flatMap { selection ->
+            selection.template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
+                member.family in selection.families
             }
         }
         .sortedBy { it.sortingSignature }
+    check(commonSortingMembers.size == 26) {
+        "Expected 26 signed/object-array Common sorting members, found ${commonSortingMembers.size}"
+    }
+    val commonCopyOfDeclarations = listOf(
+        "public expect fun <T> Array<T>.copyOf(): Array<T>",
+        "public expect fun BooleanArray.copyOf(): BooleanArray",
+        "public expect fun ByteArray.copyOf(): ByteArray",
+        "public expect fun ShortArray.copyOf(): ShortArray",
+        "public expect fun IntArray.copyOf(): IntArray",
+        "public expect fun LongArray.copyOf(): LongArray",
+        "public expect fun FloatArray.copyOf(): FloatArray",
+        "public expect fun DoubleArray.copyOf(): DoubleArray",
+        "public expect fun CharArray.copyOf(): CharArray",
+    ).map { declaration -> extractCommonDeclaration(commonArraysFile, declaration) }
+    check(commonCopyOfDeclarations.size == 9)
     val sortingSource = StringWriter().apply {
         appendLine(COPYRIGHT_NOTICE)
         appendLine("package kotlin.collections")
@@ -903,6 +998,10 @@ fun main(args: Array<String>) {
             )
         )
         appendLine()
+        for (declaration in commonCopyOfDeclarations) {
+            appendLine(declaration)
+            appendLine()
+        }
         for (member in commonSortingMembers) {
             member.build(this)
         }
@@ -913,13 +1012,16 @@ fun main(args: Array<String>) {
         .trimEnd() + "\n"
     sortingOutputFile.writeText(sortingSource, Charsets.UTF_8)
 
-    val platformSortingMembers = sortingTemplates
-        .flatMap { template ->
-            template.instantiate(listOf(KotlinTarget.Native)).filter { member ->
-                member.family == Family.ArraysOfObjects
+    val platformSortingMembers = sortingSelections
+        .flatMap { selection ->
+            selection.template.instantiate(listOf(KotlinTarget.Native)).filter { member ->
+                member.family in selection.families
             }
         }
         .sortedBy { it.sortingSignature }
+    check(platformSortingMembers.size == 26) {
+        "Expected 26 signed/object-array Native sorting members, found ${platformSortingMembers.size}"
+    }
     val sortingActualsSource = StringWriter().apply {
         appendLine(COPYRIGHT_NOTICE)
         appendLine("package kotlin.collections")
@@ -940,7 +1042,7 @@ fun main(args: Array<String>) {
             packageName = "kotlin.collections",
             declarations = listOf(
                 projectDotNetMutableListSorting(nativeWasmMutableCollectionsFile),
-                projectDotNetStableArraySorting(nativeWasmArraySortingFile),
+                projectDotNetArraySorting(nativeWasmArraySortingFile),
             ),
         ),
         Charsets.UTF_8,
@@ -1734,7 +1836,7 @@ private fun projectDotNetEagerSortingSnapshots(source: String): String {
     )
 }
 
-private fun projectDotNetStableArraySorting(sourceFile: File): String {
+private fun projectDotNetArraySorting(sourceFile: File): String {
     val comparatorMergeSort = listOf(
         extractCommonFunction(
             sourceFile,
@@ -1833,12 +1935,29 @@ private fun projectDotNetStableArraySorting(sourceFile: File): String {
         sourceDescription = sourceFile.path,
     )
 
+    val primitiveQuickSort = extractCommonSourceRange(
+        sourceFile,
+        "// ByteArray    =============================================================================",
+        "// BooleanArray =============================================================================",
+    )
+    val primitiveSortEntries = listOf(
+        "internal fun sortArray(array: ByteArray, fromIndex: Int, toIndex: Int)    = quickSort(array, fromIndex, toIndex - 1)",
+        "internal fun sortArray(array: ShortArray, fromIndex: Int, toIndex: Int)   = quickSort(array, fromIndex, toIndex - 1)",
+        "internal fun sortArray(array: IntArray, fromIndex: Int, toIndex: Int)     = quickSort(array, fromIndex, toIndex - 1)",
+        "internal fun sortArray(array: LongArray, fromIndex: Int, toIndex: Int)    = quickSort(array, fromIndex, toIndex - 1)",
+        "internal fun sortArray(array: CharArray, fromIndex: Int, toIndex: Int)    = quickSort(array, fromIndex, toIndex - 1)",
+        "internal fun sortArray(array: FloatArray, fromIndex: Int, toIndex: Int)   = quickSort(array, fromIndex, toIndex - 1)",
+        "internal fun sortArray(array: DoubleArray, fromIndex: Int, toIndex: Int)  = quickSort(array, fromIndex, toIndex - 1)",
+    ).map { declaration -> extractCommonSingleLineDeclaration(sourceFile, declaration) }
+
     return listOf(
         "private external fun dotNetErasedArrayOfNulls(reference: Array<*>, size: Int): Array<*>",
         "private external fun dotNetErasedArraySet(array: Array<*>, index: Int, value: Any?)",
         erasedMergeSort,
         dotNetComparatorEntry,
         dotNetNaturalEntry,
+        primitiveQuickSort,
+        primitiveSortEntries.joinToString("\n"),
     ).joinToString("\n\n")
 }
 
