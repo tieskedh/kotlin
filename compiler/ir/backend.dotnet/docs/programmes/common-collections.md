@@ -124,8 +124,8 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 `HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
 generic interface as Kotlin identity.
 
-The Kotlin-owned Sequence closure is completed separately below.
-Primitive/unsigned/range sorting, `Grouping` and its aggregate product,
+The Kotlin-owned Sequence and Grouping closures are completed separately below.
+Primitive/unsigned/range sorting,
 dependency-blocked reified variants, concurrency, and BCL adapters remain
 separate closures. The formerly parked open-nullable boundary
 is complete under
@@ -156,9 +156,11 @@ iterator capability; KLIB retains element variance and every logical generic
 signature. The implementation classes and lazy pipelines are the Common
 objects and algorithms, not `IEnumerable<T>`, LINQ, or target-authored loops.
 
-The exact excluded partition remains fail-closed: sequence-builder-dependent
+The original exact excluded partition was fail-closed: sequence-builder-dependent
 `ifEmpty`, `flatMapIndexed`, running/scan, `zipWithNext`, window/chunk members;
-`shuffled` and random; `groupingBy` and `Grouping`; and unsigned selector sums.
+`shuffled` and random; `groupingBy`/`Grouping`; and unsigned selector sums.
+The later Grouping foundation has now admitted `groupingBy`; the builder,
+random, and unsigned partitions remain excluded.
 The generator fingerprints the complete Common inventory and rejects any new
 or changed member that is neither admitted nor explicitly excluded. Its
 supporting dependency closure includes Common array/Iterable adapters,
@@ -184,6 +186,34 @@ host and .NET 10; both PSI and LightTree also execute direct profile products.
 Roslyn implements the erased Sequence interface and calls a public Common
 facade method, without implying an idiomatic typed C# export. See the
 [`Sequence` foundation ADR](../decisions/sequence-foundation.md).
+
+### Completed Kotlin-owned Grouping foundation
+
+The completed Grouping tranche publishes the authoritative Common
+`Grouping<T, out K>` interface, every executable aggregate/fold/reduce/count
+declaration from `Grouping.kt`, the Common `eachCount` expect with its
+Native/Wasm actual, and the exact four generated factories over Iterable,
+Sequence, object arrays, and CharSequence. The generator does not define a
+primitive-array factory, so none is invented for .NET.
+
+KLIB retains both type parameters and key covariance. The physical product
+uses one non-generic erased `Kotlin.Collections.Grouping` interface with only
+source-iterator and key-selection capabilities; it does not acquire LINQ,
+`IGrouping<TKey, TElement>`, or `IEnumerable<T>` identity. Common map state is
+authoritative for absent versus present-null accumulators, first flags,
+pre-seeded destinations, encounter order, and exception timing. Factories keep
+their source-aligned CollectionsKt, SequencesKt, and StringsKt ownership;
+aggregate operations use GroupingKt.
+
+The gate proves laziness and repeated traversal, all four factories, nullable
+accumulator semantics, both fold families, reduction, destination identity,
+key covariance, exception identity/timing, deterministic metadata, and the
+negative BCL boundary. Roslyn directly implements the erased interface and
+calls `eachCount`. One portable `netstandard2.0` stdlib and identical consumer
+execute independently on the real Framework CLR 4 host and .NET 10, including
+object-carried primitive and Char values; both PSI and LightTree execute direct
+products on both profiles. See the
+[`Grouping` foundation ADR](../decisions/grouping-foundation.md).
 
 ### Completed mutable collection/list foundation
 
@@ -1141,9 +1171,11 @@ second loop or collection-specific type-token path was added.
 7. **Completed:** publish the dependency-closed reified collection/array operations whose ordinary
    carriers are already selected, including `filterIsInstance`, `orEmpty`, and `toTypedArray`.
 8. **Completed:** publish the Kotlin-owned non-builder Sequence foundation and every generated
-   Sequence member outside its exact builder/random/Grouping/unsigned exclusion partition.
-9. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-10. Remove the bootstrap allowlist when the complete generated product is supportable.
+   Sequence member outside its original exact builder/random/Grouping/unsigned exclusion partition.
+9. **Completed:** publish the complete Common Grouping aggregate source and all four generated
+   factories over admitted carriers without adding BCL grouping/enumeration identity.
+10. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+11. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 
