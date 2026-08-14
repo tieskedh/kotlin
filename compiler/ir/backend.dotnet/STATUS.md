@@ -27,7 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the complete signed primitive-array and remaining
+- Last completed foundation: the schema-7 hostile generic-owner family now
+  physicalizes the compiler's existing `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN`
+  outcome. `HostileTypedStore<T>` has one actual owner-GenericParam `!T` field;
+  exact typed reads/writes use identity access and never cross its non-generic
+  capability. The same object's strict widened/star capability checks before
+  mutation and widens or boxes after read; an incompatible string write to
+  `HostileTypedStore<int>` fails without changing state. Artifact validation
+  and direct C# reflection pin the field/signatures and private virtual final
+  dispatchers on Framework CLR 4 and CoreCLR. Paired `Int32`, `Int32 + Guid`,
+  and `Nullable<Int32>` routes execute against the actual production-erased
+  owner on Framework 4.8, .NET 10 JIT, ReadyToRun, full trim, and NativeAOT.
+  Exact routes remove every per-iteration allocation; capability routes retain
+  two internal object-domain conversions and one check and take 1.943–4.215
+  times erased. Exact scalar/nullable routes win in every lane, while the
+  allocation-free larger-struct result remains deployment-sensitive. The
+  strict aggregate completed in 849.5 seconds and its direct audit covers 190
+  XML files, 2,216 tests, and zero failures, errors, or skips. Production
+  generic owners remain erased; this closes bounded typed-storage feasibility,
+  not representative applications or atomic migration. See
+  [`docs/archive/generic-owner-typed-storage-attribution-2026-08-14.md`](docs/archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+- The preceding foundation: the complete signed primitive-array and remaining
   object-array sorting graph now publishes the exact Common whole/range
   `sort`/`sortWith` expects plus the complete generated reverse, descending,
   snapshot, selector, and sortedness closure. All seven naturally ordered
@@ -705,18 +725,17 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The complete signed primitive/object-array sorting head passed every
-constituent of the strict target gate. Production generic-owner emission
-remains erased; this checkpoint adds generated Common ordering declarations,
-Native/Wasm-derived primitive quicksort actuals, and exact CLR array-copy/
-buffer adaptations without changing Kotlin collection or owner identity. The
+The compiler-proven generic-owner typed-state head passed every constituent of
+the strict target gate. Production generic-owner emission remains erased; this
+checkpoint extends only the schema-7 test-owned physical family with one actual
+`!T` field, exact identity access, and a strict same-object capability. The
 normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-14 in 2,662.9 seconds. Backend,
+The latest aggregate completed on 2026-08-14 in 849.5 seconds. Backend,
 FIR2IR, stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
 executed for the final semantic head. Direct audit of all three result roots
 covers 190 XML files and 2,216 tests:
@@ -760,6 +779,16 @@ owner round-trips as a known erased-only exclusion without a physical family;
 known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
+
+The current schema-7 family also contains the compiler-proven typed-state
+control. Codec and reflection oracles require the private field plus exact read
+and write signatures to use the owner GenericParam, and require both exact
+state paths to be identity operations. Direct C# execution proves the explicit
+capability dispatchers remain private/virtual/final and reject an incompatible
+write before mutation. Int, non-trivial struct, and nullable exact/capability
+routes execute with identical paired checksums on Framework 4.8 and .NET 10
+JIT, ReadyToRun, full trim, and NativeAOT. The production emitter still ignores
+the artifact and emits the accepted erased owner.
 
 Before that aggregate, the final ordinary hostile matrix was explicitly
 rerun without the measurement property: PSI/LightTree × Framework/CoreCLR ×
@@ -2192,10 +2221,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    without consumer name, signature, or arity-based constraint inference. A separate
    finite construction-site record now selects statically rooted exact open-
    nullable routes plus one mandatory semantic fallback without unbounded
-   reflection. Its fingerprinted measurement corpus is now green under JIT,
-   ReadyToRun, full trimming, and real NativeAOT link/run with one checksum.
-   Next, broaden the comparison to representative erased/candidate Kotlin
-   applications and C# consumers/subclasses, including arbitrary structs,
+   reflection. Its fingerprinted measurement corpus is green under Framework
+   CLR 4, JIT, ReadyToRun, full trimming, and real NativeAOT link/run. The same
+   corpus now physicalizes compiler-proven `!T` state and attributes exact and
+   capability routes for Int, non-trivial struct, and nullable values. Next,
+   broaden the comparison to representative complete erased/candidate Kotlin
+   applications and C# consumers/subclasses, including actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
    insufficient.
