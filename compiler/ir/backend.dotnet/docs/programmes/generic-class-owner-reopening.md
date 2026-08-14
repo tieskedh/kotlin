@@ -289,6 +289,24 @@ pair suitable as the next measurement input. This closes paired correctness
 preparation, not the representative performance gate. See
 [`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
 
+That exact pair now also drives a five-mode bounded comparison. Framework CLR
+4 and .NET 10 JIT, ReadyToRun, full trimming, and NativeAOT agree on one
+checksum. In the hostile call mix the candidate takes 1.62–2.96 times the
+erased workload time and allocates 6.89–7.52% more. This is a measurement of
+the current test-owned typed/semantic/capability architecture, not an inherent
+CLR-generics verdict: 24 regular routes per iteration deliberately use the
+semantic capability and only three use a typed entry. The first trimmed run
+also exposed an invalid-for-ILLink inherited canonical MethodImpl map. The
+backend now records producer-visible class-owned bridge families, excludes
+lowering-created synthetic owners from that index, and directly reimplements a
+canonical interface when rebuilding its bridge on a descendant of an old or
+bootstrap external class. Both CLR loaders and ILLink accept the resulting one-
+object/one-state product. Published sizes remain non-comparable because the
+candidate is not a complete Kotlin product. Production emission stays erased;
+route-specific attribution and representative real applications remain gates.
+See
+[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?

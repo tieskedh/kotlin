@@ -165,7 +165,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'Picker'
        extends [mscorlib]System.Object
-       implements 'ChildPicker'
+       implements 'ChildPicker', 'GenericPicker'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {

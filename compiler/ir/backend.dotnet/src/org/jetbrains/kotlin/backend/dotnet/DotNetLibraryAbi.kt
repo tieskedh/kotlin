@@ -203,7 +203,7 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
-    /** A final interface MethodImpl adapting one inherited split-generic physical view. */
+    /** A final interface-slot MethodImpl adapting one inherited split-generic physical view. */
     data class GenericInterfaceViewBridge(
         override val ownerPath: List<String>,
         val ownerLogicalKey: String,
@@ -212,9 +212,9 @@ sealed interface DotNetPhysicalDeclaration {
         val implementationMethodName: String,
     ) : DotNetPhysicalDeclaration {
         init {
-            require(ownerPath.isNotEmpty()) { "a generic-interface view bridge requires an owning CLR interface" }
+            require(ownerPath.isNotEmpty()) { "a generic-interface view bridge requires an owning CLR type" }
             require(ownerLogicalKey.isNotEmpty()) {
-                "a generic-interface view bridge requires an owning logical interface"
+                "a generic-interface view bridge requires an owning logical declaration"
             }
             require(inheritedLogicalMemberKey.isNotEmpty()) {
                 "a generic-interface view bridge requires an inherited logical member"

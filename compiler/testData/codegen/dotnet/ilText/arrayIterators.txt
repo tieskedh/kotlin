@@ -188,6 +188,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'CustomIntIterator'
        extends [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private int32 'value'
   .field private bool 'available'
@@ -379,6 +380,7 @@ IL_whenNext_1:
 }
 .class public auto ansi sealed beforefieldinit 'DeferredStringValueIterator'
        extends 'DeferredValueIterator'
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
@@ -441,7 +443,7 @@ IL_whenNext_1:
 }
 .class public auto ansi sealed beforefieldinit 'ViewedStringIterator'
        extends [mscorlib]System.Object
-       implements 'IteratorView'
+       implements 'IteratorView', [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
