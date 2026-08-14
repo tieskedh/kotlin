@@ -2758,6 +2758,14 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                 public int Value;
             }
 
+            #if GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
+            public struct RecordedRouteStruct
+            {
+                public int Count;
+                public Guid Id;
+            }
+            #endif
+
             public enum RecordedApplicationEnum
             {
                 First = 1,
@@ -2771,7 +2779,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             $constructionFactory
 
-            #if !GENERIC_OWNER_MEASUREMENT && !GENERIC_OWNER_APPLICATION_MEASUREMENT
+            #if !GENERIC_OWNER_MEASUREMENT && !GENERIC_OWNER_APPLICATION_MEASUREMENT && !GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
             public static class RecordedReflectionRegistry
             {
                 public static string NormalizeExact(Type runtimeType)
@@ -2883,7 +2891,340 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             public static class RecordedFamilyEntry
             {
-                #if GENERIC_OWNER_APPLICATION_MEASUREMENT
+                #if GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
+                private static int MixRouteChecksum(int checksum, int value)
+                {
+                    return unchecked(checksum * 31 + value);
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryObjectState(int iterations)
+                {
+                    int checksum = 17;
+                    $physicalizedClosedTypeName owner = new $physicalizedClosedTypeName(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.${physicalizedWriteTyped.physicalMethod.physicalMethodName}(next);
+                        int observed = owner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                        if (observed != next)
+                            throw new InvalidOperationException("typed entry object state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityValueState(int iterations)
+                {
+                    int checksum = 17;
+                    $capabilityTypeName owner = new $physicalizedClosedTypeName(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.$writeCapability(next);
+                        int observed = (int)owner.$readCapability();
+                        if (observed != next) throw new InvalidOperationException("capability value state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityReferenceState(int iterations)
+                {
+                    int checksum = 17;
+                    $capabilityTypeName owner = new $physicalizedTypeName<string>("a");
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        string next = (index & 1) == 0 ? "a" : "bb";
+                        owner.$writeCapability(next);
+                        string observed = (string)owner.$readCapability();
+                        if (!object.ReferenceEquals(observed, next))
+                            throw new InvalidOperationException("capability reference state");
+                        checksum = MixRouteChecksum(checksum, observed.Length);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteFallbackStructState(int iterations)
+                {
+                    int checksum = 17;
+                    Guid id = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    RecordedRouteStruct initial = new RecordedRouteStruct { Count = 0, Id = id };
+                    $capabilityTypeName owner =
+                        RecordedOpenNullableFactory.Create(typeof(RecordedRouteStruct), initial);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        RecordedRouteStruct next =
+                            new RecordedRouteStruct { Count = index & 1023, Id = id };
+                        owner.$writeCapability(next);
+                        RecordedRouteStruct observed =
+                            (RecordedRouteStruct)owner.$readCapability();
+                        if (observed.Count != next.Count || observed.Id != next.Id)
+                            throw new InvalidOperationException("fallback struct state");
+                        checksum = MixRouteChecksum(checksum, observed.Count);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteExactValueConstruction(int iterations)
+                {
+                    int checksum = 17;
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        $capabilityTypeName owner =
+                            RecordedOpenNullableFactory.Create(typeof(int), null);
+                        owner.$writeCapability(next);
+                        int observed = (int)owner.$readCapability();
+                        if (observed != next)
+                            throw new InvalidOperationException("exact value construction");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedArray(int iterations)
+                {
+                    int checksum = 17;
+                    $physicalizedClosedTypeName owner = new $physicalizedClosedTypeName(0);
+                    int[] values = new int[] { 0, 2, 3 };
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        values[0] = index & 1023;
+                        int[] observed =
+                            owner.${physicalizedEchoTyped.physicalMethod.physicalMethodName}(values);
+                        if (!object.ReferenceEquals(observed, values))
+                            throw new InvalidOperationException("typed array identity");
+                        checksum = MixRouteChecksum(checksum, observed[0]);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteSemanticArray(int iterations)
+                {
+                    int checksum = 17;
+                    $capabilityTypeName owner = new $physicalizedClosedTypeName(0);
+                    string[] values = new string[] { "a", "array" };
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        values[0] = (index & 1) == 0 ? "a" : "bb";
+                        Array observed = owner.$echoCapability(values);
+                        if (!object.ReferenceEquals(observed, values))
+                            throw new InvalidOperationException("semantic array identity");
+                        checksum = MixRouteChecksum(checksum, ((string[])observed)[0].Length);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteMethodGenericArray(int iterations)
+                {
+                    int checksum = 17;
+                    $physicalizedClosedTypeName owner = new $physicalizedClosedTypeName(0);
+                    RecordedKnownStruct[] values =
+                        new RecordedKnownStruct[] { new RecordedKnownStruct { Value = 0 } };
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        values[0].Value = index & 1023;
+                        RecordedKnownStruct[] observed =
+                            owner.$relayInvocationMethodName<RecordedKnownStruct>(values);
+                        if (!object.ReferenceEquals(observed, values))
+                            throw new InvalidOperationException("method generic array identity");
+                        checksum = MixRouteChecksum(checksum, observed[0].Value);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCompatibleOverrideObjectState(int iterations)
+                {
+                    int checksum = 17;
+                    RecordedFamilyGrandchild<int> owner = new RecordedFamilyGrandchild<int>(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.${physicalizedWriteTyped.physicalMethod.physicalMethodName}(next);
+                        int observed = owner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                        if (observed != next)
+                            throw new InvalidOperationException("compatible override object state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteHostileOverrideState(int iterations)
+                {
+                    int checksum = 17;
+                    RecordedFamilyGrandchild<int> typedOwner = new RecordedFamilyGrandchild<int>(0);
+                    $capabilityTypeName owner = typedOwner;
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        string next = (index & 1) == 0 ? "wrong" : "other";
+                        owner.$writeCapability(next);
+                        string observed = (string)owner.$readCapability();
+                        if (observed != "grandchild:" + next)
+                            throw new InvalidOperationException("hostile semantic override state");
+                        try
+                        {
+                            typedOwner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                            throw new InvalidOperationException("hostile typed read did not fail");
+                        }
+                        catch (InvalidCastException)
+                        {
+                            checksum = MixRouteChecksum(checksum, observed.Length + 7);
+                        }
+                    }
+                    return checksum;
+                }
+
+                private static int ExecuteRouteMeasurementWorkload(string route, int iterations)
+                {
+                    switch (route)
+                    {
+                        case "typed-entry-object-state": return ExecuteTypedEntryObjectState(iterations);
+                        case "capability-value-state": return ExecuteCapabilityValueState(iterations);
+                        case "capability-reference-state": return ExecuteCapabilityReferenceState(iterations);
+                        case "fallback-struct-state": return ExecuteFallbackStructState(iterations);
+                        case "exact-value-construction": return ExecuteExactValueConstruction(iterations);
+                        case "typed-array": return ExecuteTypedArray(iterations);
+                        case "semantic-array": return ExecuteSemanticArray(iterations);
+                        case "method-generic-array": return ExecuteMethodGenericArray(iterations);
+                        case "compatible-override-object-state":
+                            return ExecuteCompatibleOverrideObjectState(iterations);
+                        case "hostile-override-state": return ExecuteHostileOverrideState(iterations);
+                        default: throw new ArgumentOutOfRangeException("route", route, "unknown route");
+                    }
+                }
+
+                public static int Main(string[] arguments)
+                {
+                    bool holdForPeakWorkingSet = arguments.Length == 4 &&
+                        arguments[3] == "--hold-for-peak-working-set";
+                    if ((arguments.Length != 3 && !holdForPeakWorkingSet) ||
+                            arguments[0] != "--route-measurement" ||
+                            !int.TryParse(arguments[2], out int iterations) || iterations < 0)
+                    {
+                        Console.Error.WriteLine(
+                            "usage: --route-measurement <route> <non-negative iterations> " +
+                            "[--hold-for-peak-working-set]");
+                        return 64;
+                    }
+                    string route = arguments[1];
+                    try
+                    {
+                        if (iterations > 0)
+                            ExecuteRouteMeasurementWorkload(route, Math.Min(iterations, 256));
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect();
+                        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                        int checksum = ExecuteRouteMeasurementWorkload(route, iterations);
+                        long elapsedTicks = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+                        long allocatedBytes =
+                            GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                        long typedEntryCalls = 0;
+                        long semanticCapabilityCalls = 0;
+                        long ownerConstructions = route == "exact-value-construction" ? iterations : 1L;
+                        long loopValueBoxOrUnboxOperations = 0;
+                        long runtimeCompatibilityChecks = 0;
+                        long expectedFailures = 0;
+                        switch (route)
+                        {
+                            case "typed-entry-object-state":
+                                typedEntryCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 2L;
+                                break;
+                            case "capability-value-state":
+                                semanticCapabilityCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 4L;
+                                runtimeCompatibilityChecks = iterations;
+                                break;
+                            case "capability-reference-state":
+                                semanticCapabilityCalls = iterations * 2L;
+                                runtimeCompatibilityChecks = iterations;
+                                break;
+                            case "fallback-struct-state":
+                                semanticCapabilityCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 2L;
+                                runtimeCompatibilityChecks = iterations;
+                                break;
+                            case "exact-value-construction":
+                                semanticCapabilityCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 4L;
+                                runtimeCompatibilityChecks = iterations;
+                                break;
+                            case "typed-array":
+                            case "method-generic-array": typedEntryCalls = iterations; break;
+                            case "semantic-array":
+                                semanticCapabilityCalls = iterations;
+                                runtimeCompatibilityChecks = iterations;
+                                break;
+                            case "compatible-override-object-state":
+                                typedEntryCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 2L;
+                                break;
+                            case "hostile-override-state":
+                                typedEntryCalls = iterations;
+                                semanticCapabilityCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations;
+                                runtimeCompatibilityChecks = iterations;
+                                expectedFailures = iterations;
+                                break;
+                            default: throw new ArgumentOutOfRangeException("route", route, "unknown route");
+                        }
+                        Console.WriteLine(
+                            "GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT|workloadVersion=1" +
+                            "|representation=candidate" +
+                            "|route=" + route +
+                            "|iterations=" + iterations +
+                            "|checksum=" + checksum +
+                            "|elapsedTicks=" + elapsedTicks +
+                            "|frequency=" + System.Diagnostics.Stopwatch.Frequency +
+                            "|allocatedBytes=" + allocatedBytes +
+                            "|typedEntryCalls=" + typedEntryCalls +
+                            "|semanticCapabilityCalls=" + semanticCapabilityCalls +
+                            "|erasedVirtualCalls=0" +
+                            "|ownerStateCarrierRequirement=${stateRecord.requirement}" +
+                            "|ownerConstructions=" + ownerConstructions +
+                            "|loopValueBoxOrUnboxOperations=" + loopValueBoxOrUnboxOperations +
+                            "|runtimeCompatibilityChecks=" + runtimeCompatibilityChecks +
+                            "|expectedFailures=" + expectedFailures);
+                    }
+                    catch (ArgumentOutOfRangeException exception)
+                    {
+                        Console.Error.WriteLine(exception.Message);
+                        return 64;
+                    }
+                    if (holdForPeakWorkingSet)
+                    {
+                        Console.Out.Flush();
+                        if (Console.In.ReadLine() != "release")
+                        {
+                            Console.Error.WriteLine("peak-working-set hold was not released");
+                            return 65;
+                        }
+                    }
+                    return 0;
+                }
+                #elif GENERIC_OWNER_APPLICATION_MEASUREMENT
                 private static int ExecuteApplicationMeasurementWorkload(int iterations)
                 {
                     int checksum = 17;
@@ -3596,9 +3937,339 @@ private fun prepareGenericOwnerApplicationBundle(
                 }
             }
 
+            #if GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
+            public class ErasedRouteLeaf : ErasedStore
+            {
+                public ErasedRouteLeaf(object initial) : base(initial) {}
+
+                public override void writeUnsafe(object next)
+                {
+                    base.writeUnsafe(next);
+                }
+            }
+
+            public sealed class ErasedRouteGrandchild : ErasedRouteLeaf
+            {
+                public ErasedRouteGrandchild(object initial) : base(initial) {}
+
+                public override void writeUnsafe(object next)
+                {
+                    base.writeUnsafe(next is string ? "grandchild:" + next : next);
+                }
+            }
+            #endif
+
             public static class ErasedApplicationEntry
             {
-                #if GENERIC_OWNER_APPLICATION_MEASUREMENT
+                #if GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
+                private static int MixRouteChecksum(int checksum, int value)
+                {
+                    return unchecked(checksum * 31 + value);
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedEntryObjectState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedStore owner = new ErasedStore(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.writeUnsafe(next);
+                        int observed = (int)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("typed entry object state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityValueState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedStore owner = new ErasedStore(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.writeUnsafe(next);
+                        int observed = (int)owner.read();
+                        if (observed != next) throw new InvalidOperationException("capability value state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityReferenceState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedStore owner = new ErasedStore("a");
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        string next = (index & 1) == 0 ? "a" : "bb";
+                        owner.writeUnsafe(next);
+                        string observed = (string)owner.read();
+                        if (!object.ReferenceEquals(observed, next))
+                            throw new InvalidOperationException("capability reference state");
+                        checksum = MixRouteChecksum(checksum, observed.Length);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteFallbackStructState(int iterations)
+                {
+                    int checksum = 17;
+                    Guid id = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    ApplicationStruct initial = new ApplicationStruct { Count = 0, Id = id };
+                    ErasedStore owner = new ErasedStore(initial);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        ApplicationStruct next =
+                            new ApplicationStruct { Count = index & 1023, Id = id };
+                        owner.writeUnsafe(next);
+                        ApplicationStruct observed = (ApplicationStruct)owner.read();
+                        if (observed.Count != next.Count)
+                            throw new InvalidOperationException("fallback struct state");
+                        checksum = MixRouteChecksum(checksum, observed.Count);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteExactValueConstruction(int iterations)
+                {
+                    int checksum = 17;
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        ErasedStore owner = new ErasedStore(null);
+                        owner.writeUnsafe(next);
+                        int observed = (int)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("exact value construction");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedArray(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedStore owner = new ErasedStore(0);
+                    int[] values = new int[] { 0, 2, 3 };
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        values[0] = index & 1023;
+                        int[] observed = (int[])owner.echo(values);
+                        if (!object.ReferenceEquals(observed, values))
+                            throw new InvalidOperationException("typed array identity");
+                        checksum = MixRouteChecksum(checksum, observed[0]);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteSemanticArray(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedStore owner = new ErasedStore(0);
+                    string[] values = new string[] { "a", "array" };
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        values[0] = (index & 1) == 0 ? "a" : "bb";
+                        Array observed = owner.echo(values);
+                        if (!object.ReferenceEquals(observed, values))
+                            throw new InvalidOperationException("semantic array identity");
+                        checksum = MixRouteChecksum(checksum, ((string[])observed)[0].Length);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteMethodGenericArray(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedStore owner = new ErasedStore(0);
+                    ApplicationKnownStruct[] values =
+                        new ApplicationKnownStruct[] { new ApplicationKnownStruct { Value = 0 } };
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        values[0].Value = index & 1023;
+                        ApplicationKnownStruct[] observed =
+                            owner.relay<ApplicationKnownStruct>(values);
+                        if (!object.ReferenceEquals(observed, values))
+                            throw new InvalidOperationException("method generic array identity");
+                        checksum = MixRouteChecksum(checksum, observed[0].Value);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteCompatibleOverrideObjectState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedRouteGrandchild owner = new ErasedRouteGrandchild(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        owner.writeUnsafe(next);
+                        int observed = (int)owner.read();
+                        if (observed != next)
+                            throw new InvalidOperationException("compatible override object state");
+                        checksum = MixRouteChecksum(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [System.Runtime.CompilerServices.MethodImpl(
+                    System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                private static int ExecuteHostileOverrideState(int iterations)
+                {
+                    int checksum = 17;
+                    ErasedRouteGrandchild owner = new ErasedRouteGrandchild(0);
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        string next = (index & 1) == 0 ? "wrong" : "other";
+                        owner.writeUnsafe(next);
+                        string observed = (string)owner.read();
+                        if (observed != "grandchild:" + next)
+                            throw new InvalidOperationException("hostile semantic override state");
+                        try
+                        {
+                            int invalid = (int)owner.read();
+                            throw new InvalidOperationException(
+                                "hostile typed read did not fail: " + invalid);
+                        }
+                        catch (InvalidCastException)
+                        {
+                            checksum = MixRouteChecksum(checksum, observed.Length + 7);
+                        }
+                    }
+                    return checksum;
+                }
+
+                private static int ExecuteRouteMeasurementWorkload(string route, int iterations)
+                {
+                    switch (route)
+                    {
+                        case "typed-entry-object-state": return ExecuteTypedEntryObjectState(iterations);
+                        case "capability-value-state": return ExecuteCapabilityValueState(iterations);
+                        case "capability-reference-state": return ExecuteCapabilityReferenceState(iterations);
+                        case "fallback-struct-state": return ExecuteFallbackStructState(iterations);
+                        case "exact-value-construction": return ExecuteExactValueConstruction(iterations);
+                        case "typed-array": return ExecuteTypedArray(iterations);
+                        case "semantic-array": return ExecuteSemanticArray(iterations);
+                        case "method-generic-array": return ExecuteMethodGenericArray(iterations);
+                        case "compatible-override-object-state":
+                            return ExecuteCompatibleOverrideObjectState(iterations);
+                        case "hostile-override-state": return ExecuteHostileOverrideState(iterations);
+                        default: throw new ArgumentOutOfRangeException("route", route, "unknown route");
+                    }
+                }
+
+                public static int Main(string[] arguments)
+                {
+                    bool holdForPeakWorkingSet = arguments.Length == 4 &&
+                        arguments[3] == "--hold-for-peak-working-set";
+                    if ((arguments.Length != 3 && !holdForPeakWorkingSet) ||
+                            arguments[0] != "--route-measurement" ||
+                            !int.TryParse(arguments[2], out int iterations) || iterations < 0)
+                    {
+                        Console.Error.WriteLine(
+                            "usage: --route-measurement <route> <non-negative iterations> " +
+                            "[--hold-for-peak-working-set]");
+                        return 64;
+                    }
+                    string route = arguments[1];
+                    try
+                    {
+                        if (iterations > 0)
+                            ExecuteRouteMeasurementWorkload(route, Math.Min(iterations, 256));
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect();
+                        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                        int checksum = ExecuteRouteMeasurementWorkload(route, iterations);
+                        long elapsedTicks = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+                        long allocatedBytes =
+                            GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                        long erasedVirtualCalls = 0;
+                        long ownerConstructions = route == "exact-value-construction" ? iterations : 1L;
+                        long loopValueBoxOrUnboxOperations = 0;
+                        long expectedFailures = 0;
+                        switch (route)
+                        {
+                            case "typed-entry-object-state":
+                            case "capability-value-state":
+                            case "fallback-struct-state":
+                            case "exact-value-construction":
+                            case "compatible-override-object-state":
+                                erasedVirtualCalls = iterations * 2L;
+                                loopValueBoxOrUnboxOperations = iterations * 2L;
+                                break;
+                            case "capability-reference-state":
+                                erasedVirtualCalls = iterations * 2L;
+                                break;
+                            case "typed-array":
+                            case "semantic-array":
+                            case "method-generic-array":
+                                erasedVirtualCalls = iterations;
+                                break;
+                            case "hostile-override-state":
+                                erasedVirtualCalls = iterations * 3L;
+                                loopValueBoxOrUnboxOperations = iterations;
+                                expectedFailures = iterations;
+                                break;
+                            default: throw new ArgumentOutOfRangeException("route", route, "unknown route");
+                        }
+                        Console.WriteLine(
+                            "GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT|workloadVersion=1" +
+                            "|representation=erased" +
+                            "|route=" + route +
+                            "|iterations=" + iterations +
+                            "|checksum=" + checksum +
+                            "|elapsedTicks=" + elapsedTicks +
+                            "|frequency=" + System.Diagnostics.Stopwatch.Frequency +
+                            "|allocatedBytes=" + allocatedBytes +
+                            "|typedEntryCalls=0" +
+                            "|semanticCapabilityCalls=0" +
+                            "|erasedVirtualCalls=" + erasedVirtualCalls +
+                            "|ownerStateCarrierRequirement=ERASED_OBJECT" +
+                            "|ownerConstructions=" + ownerConstructions +
+                            "|loopValueBoxOrUnboxOperations=" + loopValueBoxOrUnboxOperations +
+                            "|runtimeCompatibilityChecks=0" +
+                            "|expectedFailures=" + expectedFailures);
+                    }
+                    catch (ArgumentOutOfRangeException exception)
+                    {
+                        Console.Error.WriteLine(exception.Message);
+                        return 64;
+                    }
+                    if (holdForPeakWorkingSet)
+                    {
+                        Console.Out.Flush();
+                        if (Console.In.ReadLine() != "release")
+                        {
+                            Console.Error.WriteLine("peak-working-set hold was not released");
+                            return 65;
+                        }
+                    }
+                    return 0;
+                }
+                #elif GENERIC_OWNER_APPLICATION_MEASUREMENT
                 private static int ExecuteApplicationMeasurementWorkload(int iterations)
                 {
                     int checksum = 17;
