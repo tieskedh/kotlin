@@ -440,11 +440,25 @@ correct checksum but takes 1.62–2.96× the erased workload time and allocates
 reverse the desired direct `C<T>` interop direction and does not establish an
 intrinsic CLR-generics cost. It prevents this draft from advancing on typed
 identity alone: route-specific bridge cost and representative complete Kotlin
-products remain required. Full trimming also established a metadata invariant:
+products are separate gates. Full trimming also established a metadata invariant:
 a class-owned canonical MethodImpl rebuilt over an external base requires a
 direct canonical InterfaceImpl reimplementation. The backend and verifier now
 enforce that shape without wrappers or duplicate state. See
 [`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
+The bounded route-specific gate is now closed. The current candidate's
+compiler-derived owner state is `SEMANTIC_OBJECT_REQUIRED`: typed value entry
+still boxes into object state, compatible capability value entry adds a
+runtime check plus a re-box, and allocation-free reference/array capability
+routes retain material dispatch cost. Equal-layout fallback structs eliminate
+payload-size bias. Owner-independent method generics stay near parity, and
+some NativeAOT typed/override routes are competitive, so CLR generics are not
+rejected; the present capability/object-state architecture is the cost center.
+Framework 4.8 and .NET 10 failure behavior also differ enough to remain
+independent evidence lanes. Representative complete Kotlin applications,
+typed-storage/deoptimization feasibility, and the atomic migration remain
+open. See
+[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

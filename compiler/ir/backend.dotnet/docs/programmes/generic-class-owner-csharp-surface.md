@@ -304,10 +304,19 @@ owner construction and subclassing, but its present semantic-capability-heavy
 workload is 1.62–2.96× the erased time and allocates 6.89–7.52% more. Because it
 is a test-owned C# physicalization rather than a complete Kotlin product, its
 published bytes and compile cost cannot select the surface. The result keeps
-direct `C<T>` as the destination where the full contract works, but blocks
-acceptance until route cost is attributed and representative Kotlin/C#
-applications confirm the interop benefit. See
+direct `C<T>` as the destination where the full contract works, but keeps
+route attribution and representative Kotlin/C# applications as separate gates. See
 [`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
+The bounded route gate is now closed. It shows that the present direct C#
+owner surface does not by itself eliminate object-state boxing, and that the
+non-generic semantic capability plus compatibility check is the main cost even
+for reference/array routes with no allocation. Method generics remain near
+parity and NativeAOT can make typed arrays/compatible overrides competitive,
+so the destination remains plausible. Acceptance now depends on
+representative application call mixes and on preserving every valid Kotlin
+widened operation, not on narrowing the semantic surface for speed. See
+[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
 Before this surface is accepted, Roslyn must compile and execute:
 

@@ -303,9 +303,26 @@ canonical interface when rebuilding its bridge on a descendant of an old or
 bootstrap external class. Both CLR loaders and ILLink accept the resulting one-
 object/one-state product. Published sizes remain non-comparable because the
 candidate is not a complete Kotlin product. Production emission stays erased;
-route-specific attribution and representative real applications remain gates.
+the route attribution recorded below and representative real applications are
+separate gates.
 See
 [`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
+The route-specific gate is now closed for this bounded hostile model. The
+candidate reports a compiler-required semantic object state even though its
+owner and entries are CLR-generic. Direct typed value entry retains the same
+boxing as erased. Compatible value capability entry adds one re-box per
+iteration, while allocation-free reference and semantic-array capability
+routes isolate substantial dispatch/compatibility-check cost. Equal-layout
+fallback structs prevent payload size from becoming a false allocation win.
+Owner-independent method generics remain near parity, and NativeAOT can make
+typed arrays and compatible overrides competitive, so this is evidence
+against typed identity over the current object-state/capability mix—not
+against CLR generics. Framework 4.8 and .NET 10 have materially different
+hostile-failure allocation and remain independent gates. Production emission
+stays erased; representative complete applications are now the next cost gate.
+See
+[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
 ## Engineering gates
 

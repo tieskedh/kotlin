@@ -623,10 +623,25 @@ The full-trim lane additionally forced canonical interface reimplementation on
 a class which rebuilds inherited external MethodImpl bridges; the verifier now
 pins those direct edges for CoreCLR, CLR 4, and ILLink. Because the candidate
 is not a complete Kotlin product, no published-byte or end-to-end compile win
-is claimed. Keep production owners erased. Attribute the semantic-route cost
-and then use representative applications on Framework 4.8 and every .NET 10
-deployment lane before selecting the atomic migration. See
+is claimed. See
 [`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
+The bounded semantic-route attribution is now complete. It proves that the
+candidate's true generic owner still has compiler-required semantic object
+state: direct typed value entry retains erased-equivalent boxing, while
+compatible capability value entry adds one re-box per iteration. Allocation-
+free reference and semantic-array capability paths remain materially slower,
+isolating dispatch and runtime compatibility testing as well as boxing.
+Owner-independent method generics remain near parity, and NativeAOT makes
+typed arrays/compatible overrides competitive, so the evidence is against the
+current capability/object-state mix rather than against CLR generics. The
+equal-layout fallback struct prevents payload size from being misreported as a
+representation win. Framework 4.8 and .NET 10 also differ materially on the
+hostile failure route and remain independent gates. Keep production owners
+erased. Representative applications on Framework 4.8 and every .NET 10
+deployment lane are now the next reopening gate before selecting the atomic
+migration. See
+[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

@@ -27,7 +27,26 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the closed hostile generic-owner application
+- Last completed foundation: the paired hostile generic-owner application now
+  has fail-closed route attribution on the registered Framework 4.8 family
+  runtime (`4.8.09221`, release `533509`, CLR `4.0.30319.42000`) and separately
+  on .NET 10 JIT, ReadyToRun, full trim, and NativeAOT. The candidate's real
+  generic TypeDef and typed entries still use the compiler-required semantic
+  object state. Direct typed value state therefore retains the same boxing as
+  erased and takes 1.623–2.315 times the erased workload in the higher-
+  resolution regular-route run. Capability/reference and semantic-array paths
+  remain 2.260–14.634 times erased without per-iteration allocation, isolating
+  dispatch and compatibility checks rather than boxing. Compatible value
+  capability and exact construction each add one 24-byte box per iteration;
+  an equal-layout `Int32 + Guid` fallback proves its remaining cost with equal
+  allocation. Owner-independent method generics remain 0.909–1.180 times the
+  erased baseline, while NativeAOT typed arrays and compatible overrides reach
+  parity or a small win. The hostile failure route differs materially by
+  runtime: Framework adds 336 candidate bytes per failure, JIT/ReadyToRun/
+  NativeAOT add none, and full trim adds about 23. Production owners stay
+  erased; representative applications are the next reopening gate. See
+  [`docs/archive/generic-owner-route-attribution-2026-08-14.md`](docs/archive/generic-owner-route-attribution-2026-08-14.md).
+- The preceding foundation: the closed hostile generic-owner application
   corpus now drives one paired production-erased versus test-owned `C<T>`
   measurement on the real Framework CLR 4 and independently on .NET 10 JIT,
   ReadyToRun, full trimming, and NativeAOT. All modes produce checksum
@@ -49,8 +68,9 @@ verification, and work state.
   intentional direct interface reimplementation for old/bootstrap indexes,
   and the application verifier pins the four collection edges. CoreCLR, CLR 4,
   ILLink, and all five measurement lanes pass with one object and one state.
-  Production generic owners remain erased; representative applications and
-  semantic-route cost attribution remain open. See
+  Production generic owners remain erased; the then-open semantic-route cost
+  attribution is closed by the foundation above, while representative
+  applications remain open. See
   [`docs/archive/generic-owner-paired-application-measurement-2026-08-14.md`](docs/archive/generic-owner-paired-application-measurement-2026-08-14.md).
 - The preceding foundation: the generic-owner reopening has one closed paired
   application corpus containing the exact hostile Kotlin source, actual
@@ -623,23 +643,20 @@ programmes.
 
 ## Current green gate
 
-The paired generic-owner application-measurement head passed every constituent
-of the strict target gate. Production generic-owner emission remains erased;
-this checkpoint adds bounded comparison evidence and makes class-owned
-canonical bridge metadata truthful for ILLink without widening the physical
-library index to lowering-created synthetic owners. The normal aggregate
+The generic-owner route-attribution head passed every constituent of the
+strict target gate. Production generic-owner emission remains erased; this
+checkpoint adds fail-closed carrier/dispatch/construction/override cost
+evidence without changing production representation. The normal aggregate
 command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-14 in 1,751.2 seconds. Its FIR/IL/
-box and integration roots were freshly written; the six policy-free physical
-CLI model/serializer tests were Gradle-up-to-date and then explicitly refreshed
-on the same final worktree with `--rerun-tasks` in 327.1 seconds. These durations
-identify the coherent checkpoint; they are not performance comparisons.
-Direct audit of all three result roots covers 190 XML files and 2,204 tests:
+The latest aggregate completed on 2026-08-14 in 793.3 seconds. The changed
+FIR2IR root was freshly written; the unchanged backend model and integration
+roots were Gradle-up-to-date. Direct audit of all three result roots covers
+190 XML files and 2,204 tests:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests

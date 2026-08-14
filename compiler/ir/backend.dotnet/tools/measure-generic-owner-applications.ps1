@@ -1,14 +1,16 @@
 <#
 .SYNOPSIS
-    Measures the paired erased/candidate generic-owner application corpus.
+    Measures aggregate or route-attributed erased/candidate generic-owner applications.
 
 .DESCRIPTION
     Verifies or regenerates the paired corpus, compiles one checksum-identical
     workload for the production-erased and test-owned candidate owners, and
     records build, metadata, deployment, startup, throughput, allocation,
-    working-set, and dispatch-route evidence. Published product bytes are kept
-    explicitly non-comparable because the candidate is not a Kotlin product
-    and therefore does not yet carry Runtime, Stdlib, or KLIB costs.
+    working-set, and dispatch-route evidence. Supplying AttributionRoutes
+    compiles a separate fail-closed protocol that isolates selected entry,
+    state, construction, array, and override routes. Published product bytes
+    are kept explicitly non-comparable because the candidate is not a Kotlin
+    product and therefore does not yet carry Runtime, Stdlib, or KLIB costs.
 #>
 [CmdletBinding()]
 param(
@@ -22,6 +24,19 @@ param(
     [int]$ThroughputRuns = 3,
     [ValidateRange(1, 10)]
     [int]$CompileRuns = 1,
+    [ValidateSet(
+        'typed-entry-object-state',
+        'capability-value-state',
+        'capability-reference-state',
+        'fallback-struct-state',
+        'exact-value-construction',
+        'typed-array',
+        'semantic-array',
+        'method-generic-array',
+        'compatible-override-object-state',
+        'hostile-override-state'
+    )]
+    [string[]]$AttributionRoutes = @(),
     [string]$OutputDirectory,
     [string]$ExistingCorpus,
     [string]$NativeLinker,
@@ -32,6 +47,15 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 if ($Modes.Count -eq 0 -or @($Modes | Select-Object -Unique).Count -ne $Modes.Count) {
     throw 'Measurement modes must contain one to five unique values'
+}
+if (@($AttributionRoutes | Select-Object -Unique).Count -ne $AttributionRoutes.Count) {
+    throw 'Attribution routes must be unique'
+}
+$isRouteAttribution = $AttributionRoutes.Count -gt 0
+$measurementDefine = if ($isRouteAttribution) {
+    'GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT'
+} else {
+    'GENERIC_OWNER_APPLICATION_MEASUREMENT'
 }
 if ([string]::IsNullOrWhiteSpace($NativeLinker) -ne ($null -eq $NativeLibraryDirectories)) {
     throw 'NativeLinker and NativeLibraryDirectories must be supplied together'
@@ -133,6 +157,14 @@ $frameworkClrVersion = (& $frameworkPowerShell -NoProfile -NonInteractive -Comma
     '[Environment]::Version.ToString()').Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($frameworkClrVersion)) {
     throw 'The Framework CLR host did not report its runtime version'
+}
+$frameworkRegistryPath = 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full'
+if (-not (Test-Path -LiteralPath $frameworkRegistryPath)) {
+    throw 'The paired measurement requires a registered .NET Framework 4.8 installation'
+}
+$frameworkInstallation = Get-ItemProperty -LiteralPath $frameworkRegistryPath
+if ([int]$frameworkInstallation.Install -ne 1 -or [int]$frameworkInstallation.Release -lt 528040) {
+    throw "The paired measurement requires .NET Framework 4.8 or newer; found release $($frameworkInstallation.Release)"
 }
 
 $nativeEnvironment = @{}
@@ -306,7 +338,7 @@ function Write-MeasurementProject([string]$Representation, [string]$Bundle, [str
     <AssemblyName>$assemblyName</AssemblyName>
     <RootNamespace>$assemblyName</RootNamespace>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <DefineConstants>GENERIC_OWNER_APPLICATION_MEASUREMENT</DefineConstants>
+    <DefineConstants>$measurementDefine</DefineConstants>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <Optimize>true</Optimize>
@@ -366,7 +398,7 @@ function Invoke-FrameworkCompile(
     $assembly = Join-Path $outputDirectory "$($Project.assemblyName).exe"
     $arguments = @(
         $csc, '/nologo', '/noconfig', '/nostdlib+', '/deterministic+', '/optimize+',
-        '/debug-', '/define:GENERIC_OWNER_APPLICATION_MEASUREMENT', '/target:exe',
+        '/debug-', "/define:$measurementDefine", '/target:exe',
         "/out:$assembly"
     )
     $arguments += $frameworkReferences | ForEach-Object { "/reference:$_" }
@@ -444,14 +476,124 @@ function Invoke-SdkPublish(
     }
 }
 
+function Get-ExpectedRouteProtocol(
+    [string]$Representation,
+    [string]$Route,
+    [int]$ExpectedIterations
+) {
+    $result = [ordered]@{
+        typedEntryCalls = 0L
+        semanticCapabilityCalls = 0L
+        erasedVirtualCalls = 0L
+        ownerConstructions = if ($Route -eq 'exact-value-construction') {
+            [long]$ExpectedIterations
+        } else {
+            1L
+        }
+        loopValueBoxOrUnboxOperations = 0L
+        runtimeCompatibilityChecks = 0L
+        expectedFailures = 0L
+    }
+    if ($Representation -eq 'candidate') {
+        switch ($Route) {
+            'typed-entry-object-state' {
+                $result.typedEntryCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+            }
+            'capability-value-state' {
+                $result.semanticCapabilityCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 4L
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+            }
+            'capability-reference-state' {
+                $result.semanticCapabilityCalls = $ExpectedIterations * 2L
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+            }
+            'fallback-struct-state' {
+                $result.semanticCapabilityCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+            }
+            'exact-value-construction' {
+                $result.semanticCapabilityCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 4L
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+            }
+            'typed-array' {
+                $result.typedEntryCalls = [long]$ExpectedIterations
+            }
+            'semantic-array' {
+                $result.semanticCapabilityCalls = [long]$ExpectedIterations
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+            }
+            'method-generic-array' {
+                $result.typedEntryCalls = [long]$ExpectedIterations
+            }
+            'compatible-override-object-state' {
+                $result.typedEntryCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+            }
+            'hostile-override-state' {
+                $result.typedEntryCalls = [long]$ExpectedIterations
+                $result.semanticCapabilityCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = [long]$ExpectedIterations
+                $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+                $result.expectedFailures = [long]$ExpectedIterations
+            }
+            default { throw "Unknown candidate attribution route: $Route" }
+        }
+    } elseif ($Representation -eq 'erased') {
+        switch ($Route) {
+            { $_ -in @(
+                    'typed-entry-object-state', 'capability-value-state', 'fallback-struct-state',
+                    'exact-value-construction', 'compatible-override-object-state'
+                ) } {
+                $result.erasedVirtualCalls = $ExpectedIterations * 2L
+                $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+            }
+            'capability-reference-state' {
+                $result.erasedVirtualCalls = $ExpectedIterations * 2L
+            }
+            { $_ -in @('typed-array', 'semantic-array', 'method-generic-array') } {
+                $result.erasedVirtualCalls = [long]$ExpectedIterations
+            }
+            'hostile-override-state' {
+                $result.erasedVirtualCalls = $ExpectedIterations * 3L
+                $result.loopValueBoxOrUnboxOperations = [long]$ExpectedIterations
+                $result.expectedFailures = [long]$ExpectedIterations
+            }
+            default { throw "Unknown erased attribution route: $Route" }
+        }
+    } else {
+        throw "Unknown generic-owner representation: $Representation"
+    }
+    return $result
+}
+
 function Invoke-MeasuredApplication(
     [System.Collections.IDictionary]$Build,
     [string]$Representation,
-    [int]$ExpectedIterations
+    [int]$ExpectedIterations,
+    [string]$Route
 ) {
-    $measurementArguments = @(
-        '--measurement', $ExpectedIterations.ToString(), '--hold-for-peak-working-set'
-    )
+    if ($isRouteAttribution) {
+        if ([string]::IsNullOrWhiteSpace($Route)) {
+            throw 'Route attribution requires an explicit route'
+        }
+        $measurementArguments = @(
+            '--route-measurement', $Route, $ExpectedIterations.ToString(),
+            '--hold-for-peak-working-set'
+        )
+        $measurementPrefix = 'GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT|'
+    } else {
+        if (-not [string]::IsNullOrWhiteSpace($Route)) {
+            throw 'Aggregate measurement does not accept a route'
+        }
+        $measurementArguments = @(
+            '--measurement', $ExpectedIterations.ToString(), '--hold-for-peak-working-set'
+        )
+        $measurementPrefix = 'GENERIC_OWNER_APPLICATION_MEASUREMENT|'
+    }
     if ($Build.framework) {
         $escapedAssembly = $Build.assembly.Replace("'", "''")
         $escapedArguments = $measurementArguments | ForEach-Object { "'$($_.Replace("'", "''"))'" }
@@ -491,7 +633,7 @@ function Invoke-MeasuredApplication(
             $line = $process.StandardOutput.ReadLine()
             if ($null -eq $line) { break }
             $stdoutLines.Add($line)
-            if ($line.StartsWith('GENERIC_OWNER_APPLICATION_MEASUREMENT|')) {
+            if ($line.StartsWith($measurementPrefix)) {
                 $measurementLine = $line
                 break
             }
@@ -536,27 +678,53 @@ function Invoke-MeasuredApplication(
         'frequency', 'allocatedBytes', 'typedEntryCalls', 'semanticCapabilityCalls',
         'erasedVirtualCalls'
     )
+    if ($isRouteAttribution) {
+        $required += @(
+            'route', 'ownerStateCarrierRequirement', 'ownerConstructions',
+            'loopValueBoxOrUnboxOperations', 'runtimeCompatibilityChecks',
+            'expectedFailures'
+        )
+    }
     if (@(Compare-Object @($fields.Keys) $required).Count -ne 0 -or
             $fields.workloadVersion -ne '1' -or $fields.representation -ne $Representation -or
-            [int]$fields.iterations -ne $ExpectedIterations) {
+            [int]$fields.iterations -ne $ExpectedIterations -or
+            ($isRouteAttribution -and $fields.route -ne $Route)) {
         throw "Unexpected application measurement protocol: $measurementLine"
     }
-    $periodicRoutes = [long]([Math]::Floor(($ExpectedIterations + 63L) / 64L))
-    if ($Representation -eq 'candidate') {
-        $expectedTyped = $ExpectedIterations * 3L + $periodicRoutes
-        $expectedSemantic = $ExpectedIterations * 24L + $periodicRoutes * 2L
-        $expectedErased = 0L
+    if ($isRouteAttribution) {
+        $expectedStateCarrier = if ($Representation -eq 'candidate') {
+            'SEMANTIC_OBJECT_REQUIRED'
+        } else {
+            'ERASED_OBJECT'
+        }
+        if ($fields.ownerStateCarrierRequirement -ne $expectedStateCarrier) {
+            throw "$Representation reported an inconsistent owner state carrier: $measurementLine"
+        }
+        $expectedProtocol = Get-ExpectedRouteProtocol `
+            $Representation $Route $ExpectedIterations
+        foreach ($name in $expectedProtocol.Keys) {
+            if ([long]$fields[$name] -ne [long]$expectedProtocol[$name]) {
+                throw "$Representation reported inconsistent $Route ${name}: $measurementLine"
+            }
+        }
     } else {
-        $expectedTyped = 0L
-        $expectedSemantic = 0L
-        $expectedErased = $ExpectedIterations * 27L + $periodicRoutes * 2L
+        $periodicRoutes = [long]([Math]::Floor(($ExpectedIterations + 63L) / 64L))
+        if ($Representation -eq 'candidate') {
+            $expectedTyped = $ExpectedIterations * 3L + $periodicRoutes
+            $expectedSemantic = $ExpectedIterations * 24L + $periodicRoutes * 2L
+            $expectedErased = 0L
+        } else {
+            $expectedTyped = 0L
+            $expectedSemantic = 0L
+            $expectedErased = $ExpectedIterations * 27L + $periodicRoutes * 2L
+        }
+        if ([long]$fields.typedEntryCalls -ne $expectedTyped -or
+                [long]$fields.semanticCapabilityCalls -ne $expectedSemantic -or
+                [long]$fields.erasedVirtualCalls -ne $expectedErased) {
+            throw "$Representation reported inconsistent route counts: $measurementLine"
+        }
     }
-    if ([long]$fields.typedEntryCalls -ne $expectedTyped -or
-            [long]$fields.semanticCapabilityCalls -ne $expectedSemantic -or
-            [long]$fields.erasedVirtualCalls -ne $expectedErased) {
-        throw "$Representation reported inconsistent route counts: $measurementLine"
-    }
-    return [ordered]@{
+    $measurement = [ordered]@{
         wallMilliseconds = $stopwatch.Elapsed.TotalMilliseconds
         peakWorkingSetBytes = $peakWorkingSet
         iterations = [int]$fields.iterations
@@ -569,6 +737,15 @@ function Invoke-MeasuredApplication(
         stdout = $stdout
         stderr = $stderr
     }
+    if ($isRouteAttribution) {
+        $measurement.route = $fields.route
+        $measurement.ownerStateCarrierRequirement = $fields.ownerStateCarrierRequirement
+        $measurement.ownerConstructions = [long]$fields.ownerConstructions
+        $measurement.loopValueBoxOrUnboxOperations = [long]$fields.loopValueBoxOrUnboxOperations
+        $measurement.runtimeCompatibilityChecks = [long]$fields.runtimeCompatibilityChecks
+        $measurement.expectedFailures = [long]$fields.expectedFailures
+    }
+    return $measurement
 }
 
 $inputInventory = [ordered]@{
@@ -583,6 +760,7 @@ $inputInventory = [ordered]@{
 
 $measurements = @()
 $expectedChecksum = $null
+$expectedChecksumByRoute = [ordered]@{}
 foreach ($mode in $Modes) {
     $compileByRepresentation = [ordered]@{ candidate = @(); erased = @() }
     $selectedBuild = [ordered]@{}
@@ -597,6 +775,110 @@ foreach ($mode in $Modes) {
             $compileByRepresentation[$representation] += $build.compile
             $selectedBuild[$representation] = $build
         }
+    }
+
+    if ($isRouteAttribution) {
+        $compilationResults = [ordered]@{}
+        foreach ($representation in @('candidate', 'erased')) {
+            $outputFiles = @(Get-ChildItem -LiteralPath $selectedBuild[$representation].outputDirectory `
+                -File -Recurse | Where-Object { $_.Name -ne 'publish.log' })
+            $compilationResults[$representation] = [ordered]@{
+                compileMedianMilliseconds = Get-Median @(
+                    $compileByRepresentation[$representation] |
+                    ForEach-Object { $_.elapsedMilliseconds })
+                compileDriverPeakWorkingSetMedianBytes = Get-Median @(
+                    $compileByRepresentation[$representation] |
+                    ForEach-Object { [double]$_.driverPeakWorkingSetBytes })
+                compileRuns = $compileByRepresentation[$representation]
+                publishedFileCount = $outputFiles.Count
+                publishedBytes = [long](($outputFiles | Measure-Object Length -Sum).Sum)
+            }
+        }
+        $routeMeasurements = @()
+        foreach ($route in $AttributionRoutes) {
+            $startup = [ordered]@{ candidate = @(); erased = @() }
+            for ($runIndex = 0; $runIndex -lt $StartupRuns; $runIndex++) {
+                $order = if (($runIndex % 2) -eq 0) {
+                    @('candidate', 'erased')
+                } else {
+                    @('erased', 'candidate')
+                }
+                foreach ($representation in $order) {
+                    $startup[$representation] += Invoke-MeasuredApplication `
+                        $selectedBuild[$representation] $representation 0 $route
+                }
+            }
+            $throughput = [ordered]@{ candidate = @(); erased = @() }
+            for ($runIndex = 0; $runIndex -lt $ThroughputRuns; $runIndex++) {
+                $order = if (($runIndex % 2) -eq 0) {
+                    @('erased', 'candidate')
+                } else {
+                    @('candidate', 'erased')
+                }
+                foreach ($representation in $order) {
+                    $throughput[$representation] += Invoke-MeasuredApplication `
+                        $selectedBuild[$representation] $representation $Iterations $route
+                }
+            }
+            $checksums = @($throughput.Values | ForEach-Object { $_ } |
+                ForEach-Object { $_.checksum } | Select-Object -Unique)
+            if ($checksums.Count -ne 1) {
+                throw "$mode/$route produced unstable or cross-representation checksums"
+            }
+            if (-not $expectedChecksumByRoute.Contains($route)) {
+                $expectedChecksumByRoute[$route] = $checksums[0]
+            } elseif ($checksums[0] -ne $expectedChecksumByRoute[$route]) {
+                throw "$mode/$route disagrees with the cross-mode checksum"
+            }
+
+            $runtimeResults = [ordered]@{}
+            foreach ($representation in @('candidate', 'erased')) {
+                $runtimeResults[$representation] = [ordered]@{
+                    startupMedianMilliseconds = Get-Median @(
+                        $startup[$representation] | ForEach-Object { $_.wallMilliseconds })
+                    startupRuns = $startup[$representation]
+                    throughputMedianMilliseconds = Get-Median @(
+                        $throughput[$representation] | ForEach-Object { $_.workloadMilliseconds })
+                    allocationMedianBytes = Get-Median @(
+                        $throughput[$representation] | ForEach-Object { [double]$_.allocatedBytes })
+                    peakWorkingSetMedianBytes = Get-Median @(
+                        $throughput[$representation] |
+                        ForEach-Object { [double]$_.peakWorkingSetBytes })
+                    throughputRuns = $throughput[$representation]
+                }
+            }
+            $candidateRuntime = $runtimeResults.candidate
+            $erasedRuntime = $runtimeResults.erased
+            $allocationPercent = if ($erasedRuntime.allocationMedianBytes -eq 0) {
+                $null
+            } else {
+                100.0 * ($candidateRuntime.allocationMedianBytes -
+                    $erasedRuntime.allocationMedianBytes) / $erasedRuntime.allocationMedianBytes
+            }
+            $routeMeasurements += [ordered]@{
+                route = $route
+                checksum = $checksums[0]
+                runtimeResults = $runtimeResults
+                boundedComparison = [ordered]@{
+                    candidateToErasedWorkloadTimeRatio =
+                        $candidateRuntime.throughputMedianMilliseconds /
+                        $erasedRuntime.throughputMedianMilliseconds
+                    candidateMinusErasedAllocationBytes =
+                        $candidateRuntime.allocationMedianBytes -
+                        $erasedRuntime.allocationMedianBytes
+                    candidateMinusErasedAllocationPercent = $allocationPercent
+                    candidateMinusErasedStartupMilliseconds =
+                        $candidateRuntime.startupMedianMilliseconds -
+                        $erasedRuntime.startupMedianMilliseconds
+                }
+            }
+        }
+        $measurements += [ordered]@{
+            mode = $mode
+            compilationResults = $compilationResults
+            routeMeasurements = $routeMeasurements
+        }
+        continue
     }
 
     $startup = [ordered]@{ candidate = @(); erased = @() }
@@ -670,8 +952,9 @@ $net48Manifest = Read-Manifest $net48Bundle
 $repositoryHead = (& git -C $repositoryRoot rev-parse HEAD).Trim()
 $repositoryStatus = @(& git -C $repositoryRoot status --porcelain --untracked-files=no)
 $result = [ordered]@{
-    schema = 1
+    schema = if ($isRouteAttribution) { 2 } else { 1 }
     workloadVersion = 1
+    measurementKind = if ($isRouteAttribution) { 'route-attribution' } else { 'aggregate' }
     measuredAtUtc = [DateTime]::UtcNow.ToString('O')
     scope = [ordered]@{
         candidateIsTestOwnedPhysicalization = $true
@@ -679,6 +962,10 @@ $result = [ordered]@{
         publishedBytesAreEndToEndComparable = $false
         compileDriverPeakWorkingSetIncludesChildren = $false
         representativeApplicationGateClosed = $false
+        routeAttributionIsBoundedMicroWorkload = $isRouteAttribution
+        frameworkAndNet10AreIndependentEvidenceLanes = $true
+        routeCallCountersCountWorkloadEntriesNotInternalOverrideFrames = $isRouteAttribution
+        valueConversionCountersExcludeSetupAndIncludeFailedLoopUnboxAttempts = $isRouteAttribution
     }
     environment = [ordered]@{
         os = [Environment]::OSVersion.VersionString
@@ -693,6 +980,8 @@ $result = [ordered]@{
         frameworkRuntime = [ordered]@{
             powershellHost = $frameworkPowerShell
             clrVersion = $frameworkClrVersion
+            productVersion = [string]$frameworkInstallation.Version
+            release = [int]$frameworkInstallation.Release
             clrDirectory = $frameworkDirectory
             references = @($frameworkReferences | ForEach-Object {
                 [ordered]@{
@@ -721,10 +1010,11 @@ $result = [ordered]@{
     compileRuns = $CompileRuns
     startupRuns = $StartupRuns
     throughputRuns = $ThroughputRuns
-    checksum = $expectedChecksum
+    attributionRoutes = @($AttributionRoutes)
+    checksum = if ($isRouteAttribution) { $expectedChecksumByRoute } else { $expectedChecksum }
     measurements = $measurements
 }
 $resultPath = Join-Path $runDirectory 'results.json'
 $result | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath $resultPath -Encoding utf8NoBOM
-Write-Host "Paired generic-owner application measurements completed: $($Modes -join ', ')"
+Write-Host "Paired generic-owner $($result.measurementKind) measurements completed: $($Modes -join ', ')"
 Write-Host "Result: $resultPath"

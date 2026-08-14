@@ -161,6 +161,17 @@ InterfaceImpl ancestry under ILLink: a class that rebuilds a canonical bridge
 over an external base must directly reimplement that canonical interface. See
 [`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
 
+Route attribution now shows why. The generic candidate still uses
+`SEMANTIC_OBJECT_REQUIRED` state for the hostile owner. Typed value entry
+therefore retains erased-equivalent boxing; compatible capability entry adds
+a check and one re-box per iteration. Allocation-free reference and semantic-
+array capability routes remain materially slower, while method generics stay
+near parity and some NativeAOT typed/override routes are competitive. An
+equal-layout `Int32 + Guid` fallback removes payload size as a false carrier
+win. This closes bounded carrier-cost attribution, not representative product
+comparison. See
+[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
+
 The competing fallback is a construction such as `C<object>` used only
 through `S(C)`. It is simpler for AOT but is not the exact physical meaning of
 logical `C<Int?>` or `C<String?>`. If admitted, all boundaries must accept that
