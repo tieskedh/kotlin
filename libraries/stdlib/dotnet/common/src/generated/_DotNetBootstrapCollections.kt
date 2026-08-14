@@ -101,6 +101,96 @@ internal fun <T> collectionToArrayCommonImpl(collection: Collection<*>, array: A
 internal expect fun <T> terminateCollectionToArray(collectionSize: Int, array: Array<T>): Array<T>
 
 /**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun <T> Array<out T>.asSequence(): Sequence<T> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun ByteArray.asSequence(): Sequence<Byte> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun ShortArray.asSequence(): Sequence<Short> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun IntArray.asSequence(): Sequence<Int> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun LongArray.asSequence(): Sequence<Long> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun FloatArray.asSequence(): Sequence<Float> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun DoubleArray.asSequence(): Sequence<Double> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun BooleanArray.asSequence(): Sequence<Boolean> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original array returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromArray
+ */
+public fun CharArray.asSequence(): Sequence<Char> {
+    if (isEmpty()) return emptySequence()
+    return Sequence { this.iterator() }
+}
+
+/**
  * Returns `true` if all elements match the given [predicate].
  *
  * Note that if the collection contains no elements, the function returns `true`
@@ -142,6 +232,15 @@ public inline fun <T> Iterable<T>.any(predicate: (T) -> Boolean): Boolean {
 @kotlin.internal.InlineOnly
 public inline fun <T> Iterable<T>.asIterable(): Iterable<T> {
     return this
+}
+
+/**
+ * Creates a [Sequence] instance that wraps the original collection returning its elements when being iterated.
+ *
+ * @sample samples.collections.Sequences.Building.sequenceFromCollection
+ */
+public fun <T> Iterable<T>.asSequence(): Sequence<T> {
+    return Sequence { this.iterator() }
 }
 
 /**
@@ -1602,6 +1701,70 @@ public infix fun <T> Array<out T>.intersect(other: Iterable<T>): Set<T> {
  */
 @kotlin.internal.InlineOnly
 public inline fun <T> Array<out T>.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun ByteArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun ShortArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun IntArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun LongArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun FloatArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun DoubleArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun BooleanArray.isEmpty(): Boolean {
+    return size == 0
+}
+
+/**
+ * Returns `true` if the array is empty.
+ */
+@kotlin.internal.InlineOnly
+public inline fun CharArray.isEmpty(): Boolean {
     return size == 0
 }
 

@@ -124,9 +124,10 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 `HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
 generic interface as Kotlin identity.
 
-Sequence overloads, primitive/unsigned/range sorting, `Grouping` and its
-aggregate product, dependency-blocked reified variants, concurrency, and BCL
-adapters remain separate closures. The formerly parked open-nullable boundary
+The Kotlin-owned Sequence closure is completed separately below.
+Primitive/unsigned/range sorting, `Grouping` and its aggregate product,
+dependency-blocked reified variants, concurrency, and BCL adapters remain
+separate closures. The formerly parked open-nullable boundary
 is complete under
 [`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
 ordinary `Array<out T?>` reads retain the original vector through
@@ -144,6 +145,45 @@ ordering, builder sealing, Framework CLR/CoreCLR execution, public metadata, C# 
 and the absence of implicit `Dictionary<K,V>`/`HashSet<T>` identity. Changed-key behavior and a
 broader foreign-implementation equality matrix remain useful additions to the shared-test product;
 they are tests of the same accepted representation, not missing architectural decisions.
+
+### Completed Kotlin-owned Sequence foundation
+
+The completed Sequence tranche publishes the authoritative Common
+`Sequence<out T>` identity, non-builder implementation objects and adapters,
+and the complete generated Sequence inventory except for explicitly
+dependency-blocked members. One non-generic erased CLR interface owns the
+iterator capability; KLIB retains element variance and every logical generic
+signature. The implementation classes and lazy pipelines are the Common
+objects and algorithms, not `IEnumerable<T>`, LINQ, or target-authored loops.
+
+The exact excluded partition remains fail-closed: sequence-builder-dependent
+`ifEmpty`, `flatMapIndexed`, running/scan, `zipWithNext`, window/chunk members;
+`shuffled` and random; `groupingBy` and `Grouping`; and unsigned selector sums.
+The generator fingerprints the complete Common inventory and rejects any new
+or changed member that is neither admitted nor explicitly excluded. Its
+supporting dependency closure includes Common array/Iterable adapters,
+`MutableCollection.addAll(Sequence)`, `AbstractIterator`, and the exact
+floating-point expects/actuals reached by sorting and selection.
+
+All top-level operations use the one source-aligned
+`Kotlin.Sequences.SequencesKt` facade. Where the erased receiver and CLR's lack
+of return-type overloading collapse Common families, physical names are
+derived deterministically from the logical element or selector-result type.
+An instantiated generic min/max result may temporarily arrive through its
+physical `Comparable` upper-bound view; only the frontend-proven implicit
+substitution recovery uses `unbox.any` to restore a primitive result. This is
+not permission to broaden explicit or safe cast behavior.
+
+The gate proves lazy iterator/callback counts, constrained-once failure,
+covariance, array and Iterable adapters, both flatten/flatMap routes, reified
+filtering, stable lazy sorting and sortedness including NaN/signed zero,
+generation, eager snapshots, numeric and selector overloads, deterministic
+metadata, and the absence of BCL enumeration identity. The same portable
+`netstandard2.0` stdlib and consumer execute through the real Framework CLR 4
+host and .NET 10; both PSI and LightTree also execute direct profile products.
+Roslyn implements the erased Sequence interface and calls a public Common
+facade method, without implying an idiomatic typed C# export. See the
+[`Sequence` foundation ADR](../decisions/sequence-foundation.md).
 
 ### Completed mutable collection/list foundation
 
@@ -829,14 +869,15 @@ The audit deliberately excludes the rest of the nearby generator frontier:
   Native/Wasm stable list/generic-array implementation lineage and admits only its eager
   dependency-closed ordering consumers, as recorded in
   [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md),
-  while primitive/unsigned arrays, ranges, and Sequences remain separate;
+  while primitive/unsigned arrays and ranges remain separate; Sequence sorting
+  subsequently landed in the completed foundation above;
   the Comparator foundation itself is recorded in
   [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md);
 - `allEqual` publishes the now-admitted parameterless `ExperimentalStdlibApi` marker and can be
   audited independently, while `allDistinct` additionally constructs `HashSet`;
 - `onEach` reaches `apply` and the public contracts DSL; and
-- random, Sequence, unsigned, array, Set, and Map variants retain their separate dependency and
-  representation closures.
+- random, unsigned, array, Set, and Map variants retain their separate dependency and
+  representation closures; Sequence variants subsequently landed in the completed foundation above.
 
 The completed gate proves empty and overflowing selector sums, Double rounding and NaN, nullable and
 widened elements, capture/non-local return, callback failure identity and timing, same-object null
@@ -1099,8 +1140,10 @@ second loop or collection-specific type-token path was added.
    [the range/progression decision](../decisions/ordinary-ranges-and-progressions.md).
 7. **Completed:** publish the dependency-closed reified collection/array operations whose ordinary
    carriers are already selected, including `filterIsInstance`, `orEmpty`, and `toTypedArray`.
-8. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-9. Remove the bootstrap allowlist when the complete generated product is supportable.
+8. **Completed:** publish the Kotlin-owned non-builder Sequence foundation and every generated
+   Sequence member outside its exact builder/random/Grouping/unsigned exclusion partition.
+9. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+10. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

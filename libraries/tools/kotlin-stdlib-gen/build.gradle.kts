@@ -59,6 +59,10 @@ tasks {
                 "_DotNetBootstrapMaps.kt",
                 "_DotNetBootstrapSets.kt",
                 "_DotNetBootstrapRanges.kt",
+                "_DotNetBootstrapSequence.kt",
+                "_DotNetBootstrapSequencesH.kt",
+                "_DotNetBootstrapSequenceCore.kt",
+                "_DotNetBootstrapSequences.kt",
                 "_DotNetBootstrapComparisons.kt",
                 "_DotNetBootstrapSorting.kt",
             ).map { fileName ->
@@ -68,6 +72,9 @@ tasks {
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSetsActuals.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSortingActuals.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapStableSortSupport.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSequencesActuals.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapComparisonsActuals.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapFloatingPointActuals.kt"),
             )
         )
         inputs.file(
@@ -101,6 +108,13 @@ tasks {
             rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/ArraySorting.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/util/Preconditions.kt"),
             rootProject.file("libraries/stdlib/native-wasm/src/kotlin/Exceptions.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/collections/Sequence.kt"),
+            rootProject.file("libraries/stdlib/common/src/kotlin/SequencesH.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/collections/Sequences.kt"),
+            rootProject.file("libraries/stdlib/wasm/src/kotlin/Sequences.kt"),
+            rootProject.file("libraries/stdlib/wasm/src/generated/_ComparisonsWasm.kt"),
+            rootProject.file("libraries/stdlib/common/src/kotlin/KotlinH.kt"),
+            rootProject.file("libraries/stdlib/wasm/src/kotlin/Numbers.kt"),
         )
     }
 

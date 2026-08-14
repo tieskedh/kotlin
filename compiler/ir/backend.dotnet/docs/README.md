@@ -99,6 +99,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Kotlin fun interfaces use Common SAM wrappers](decisions/fun-interfaces.md)
 - [Common Comparator and order-selection foundation](decisions/comparator-and-selection-foundation.md)
 - [Stable list and object-array sorting](decisions/stable-list-and-array-sorting.md)
+- [Kotlin-owned Sequence foundation](decisions/sequence-foundation.md)
 - [Dedicated .NET class-member reflection](decisions/class-member-reflection.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Draft one-owner CLR-generic class model with semantic capabilities](decisions/draft-adr-reified-generic-class-owner.md)

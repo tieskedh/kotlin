@@ -360,11 +360,12 @@ claiming a stable platform sort. The semantic/physical/C# boundary and the
 separate stable-sort prerequisite are owned by
 [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md).
 
-The completed next consumer is the stable MutableList and generic-array
+The completed next consumer was the stable MutableList and generic-array
 sorting closure. It reuses the exact Native/Wasm snapshot and stable merge-sort
 lineage, then admits only the dependency-closed eager Iterable/MutableList
-`sorted*`/`sort*` consumers. Primitive and unsigned arrays, ranges, Sequences,
-binary search, and random ordering remain separate. The stable algorithm,
+`sorted*`/`sort*` consumers. Primitive and unsigned arrays, ranges, binary
+search, and random ordering remain separate. Sequence sorting subsequently
+landed inside the complete non-builder Sequence foundation. The stable algorithm,
 failure timing, arbitrary-list, physical, and C# boundaries are owned by
 [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md).
 
@@ -385,16 +386,26 @@ architectural unit. Preserve its owner-erased class/interface identity, method-g
 relative-constraint ABI, projected-array boundary, foreign physical-signature authority, local
 stdlib-helper binding, and unchanged upstream test path.
 
-Further work remains foundation-first rather than allowlist-count-first. Recompute the remaining
-Common generator/source dependency graph around the actual missing substrates: Sequence,
-Grouping aggregates, primitive/unsigned/range sorting and random operations, and
-dependency-blocked reified variants. The narrow open-nullable-array foundation is now complete:
+Further work remains foundation-first rather than allowlist-count-first. The
+largest coherent dependency release selected by the last graph audit is now
+complete: the Kotlin-owned non-builder Sequence identity, implementation
+objects, adapters, and all generated members outside the exact builder/random/
+Grouping/unsigned partition are published under the
+[`Sequence` foundation ADR](../decisions/sequence-foundation.md). Recompute the
+remaining Common generator/source graph around `Grouping` aggregates,
+primitive/unsigned/range sorting and random operations, and dependency-blocked
+reified variants. The narrow open-nullable-array foundation is now complete:
 `Array<out T?>` uses an identity-preserving `System.Array` read view, Kotlin-owned
 `vararg T?` uses a fresh declaration-stable `object[]`, and the bounded release restores
 authoritative `setOfNotNull(vararg T?)` plus object-array nullable filtering. Invariant/input
-method-owned open nullable arrays remain excluded. Select and document one remaining substrate
-with the largest coherent release before admitting its generated family. Loose one-function
-growth and implicit BCL collection identity remain excluded.
+method-owned open nullable arrays remain excluded. The next bounded candidate
+is the complete `Grouping<T, out K>` source and every factory over an already
+admitted carrier: its map, iterator, lambda, inline, and erased-interface
+prerequisites are now present. Audit Iterable, Sequence, object/signed-
+primitive arrays, and CharSequence factories together; exclude a member only
+for an exact independent blocker, then admit the result as one documented
+complete closure.
+Loose one-function growth and implicit BCL collection identity remain excluded.
 
 The semantically erased generic-class route is selected in
 [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).

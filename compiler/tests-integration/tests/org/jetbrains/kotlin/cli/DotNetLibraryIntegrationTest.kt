@@ -26623,6 +26623,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            "Windows PowerShell CLR 4 host is not available",
+        )
         val stdlibDirectory = produceSelfDescribingStdlib("netstandard2.0", "shared")
         consumeSelfDescribingStdlib(stdlibDirectory, "net48")
         consumeSelfDescribingStdlib(stdlibDirectory, "net10.0")
@@ -26635,6 +26640,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertCollectionToArrayImplementationIl(stdlibDirectory)
         executeCollectionToArrayImplementation(stdlibDirectory, "net48", dotnetHost = null)
         executeCollectionToArrayImplementation(stdlibDirectory, "net10.0", dotnetHost)
+        executeSequenceFoundation(
+            stdlibDirectory,
+            "net48",
+            dotnetHost = null,
+            frameworkHost = checkNotNull(frameworkHost),
+        )
+        executeSequenceFoundation(stdlibDirectory, "net10.0", dotnetHost, frameworkHost = null)
     }
 
     @Test
@@ -34529,6 +34541,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     private fun verifyNet10CSharpStdlibBoundary(stdlibDirectory: File) {
         val toolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(toolchain != null, "Modern Roslyn and the net10 reference pack are not available")
+        val stdlibMetadata = DotNetClrMetadataReader.read(stdlibDirectory.resolve("Kotlin.Stdlib.dll"))
+        val sequenceType = stdlibMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin.Sequences" && type.metadataName == "Sequence"
+        }
+        val sequenceIteratorMethod = stdlibMetadata.methodDefinitions.single { method ->
+            method.declaringType == sequenceType.handle
+        }.name
         val directory = File(tmpdir, "net10-csharp-appendable").apply { mkdirs() }
         val source = directory.resolve("AppendableProbe.cs").apply {
             writeText(
@@ -34559,6 +34578,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
 
                     public override string ToString() => storage.ToString();
+                }
+
+                public sealed class ForeignSequenceIterator : Kotlin.Collections.Iterator
+                {
+                    private int next = 1;
+
+                    public bool HasNext() { return next <= 2; }
+
+                    public object Next() { return next++; }
+                }
+
+                public sealed class ForeignSequence : Kotlin.Sequences.Sequence
+                {
+                    public Kotlin.Collections.Iterator $sequenceIteratorMethod()
+                    {
+                        return new ForeignSequenceIterator();
+                    }
                 }
 
                 public static class AppendableProbe
@@ -34654,6 +34690,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         return 0;
                     }
 
+                    private static int VerifyErasedKotlinSequence()
+                    {
+                        Type sequenceType = typeof(Kotlin.Sequences.Sequence);
+                        if (sequenceType.IsGenericType || sequenceType.GetGenericArguments().Length != 0)
+                            return 30;
+                        foreach (Type contract in sequenceType.GetInterfaces())
+                        {
+                            if (contract.Namespace == "System.Collections.Generic")
+                                return 31;
+                        }
+
+                        var sequence = new ForeignSequence();
+                        if (Kotlin.Sequences.SequencesKt.sumOfInt(sequence) != 3)
+                            return 32;
+                        if (Kotlin.Sequences.SequencesKt.sumOfInt(sequence) != 3)
+                            return 33;
+                        return 0;
+                    }
+
                     public static int Main()
                     {
                         var foreign = new ForeignAppendable();
@@ -34665,7 +34720,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (builder.ToString() != "42!")
                             return 2;
                         int collectionResult = VerifyErasedKotlinCollections();
-                        return collectionResult == 0 ? VerifySignedRanges() : collectionResult;
+                        if (collectionResult != 0)
+                            return collectionResult;
+                        int rangeResult = VerifySignedRanges();
+                        return rangeResult == 0 ? VerifyErasedKotlinSequence() : rangeResult;
                     }
                 }
                 """.trimIndent()
@@ -34730,6 +34788,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intProgressionType = implementationType("Kotlin.Ranges", "IntProgression")
         val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
+        val sequenceType = implementationType("Kotlin.Sequences", "Sequence")
+        val sequencesFacadeType = implementationType("Kotlin.Sequences", "SequencesKt")
         assertTrue(implementationMetadata.typeDefinitions.none { type ->
             type.namespaceName == "Kotlin" && type.metadataName == "Enum"
         }) {
@@ -34744,6 +34804,57 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(closedRangeType.isInterface && openEndRangeType.isInterface)
         assertTrue(intIteratorType.isAbstract && !intIteratorType.isInterface)
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, sequenceType.visibility)
+        assertTrue(sequenceType.isInterface && '`' !in sequenceType.metadataName)
+        assertTrue(sequencesFacadeType.isAbstract && sequencesFacadeType.isSealed)
+        assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner == sequenceType.handle
+        }) {
+            "Kotlin Sequence must have one non-generic CLR identity"
+        }
+        assertTrue(implementationMetadata.interfaceImplementations.none { implementation ->
+            implementation.implementingType == sequenceType.handle
+        }) {
+            "Kotlin Sequence must not acquire an implicit BCL enumeration identity"
+        }
+        val sequenceMethodNames = implementationMetadata.methodDefinitions
+            .filter { method -> method.declaringType == sequencesFacadeType.handle }
+            .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
+        assertTrue(
+            setOf(
+                "flatten",
+                "flattenSequenceOfIterable",
+                "flatMap",
+                "flatMapIterable",
+                "flatMapIndexedIterableTo",
+                "flatMapIndexedSequenceTo",
+                "averageOfInt",
+                "averageOfDouble",
+                "sumOfInt",
+                "sumOfDouble",
+                "maxOrThrow",
+                "maxOrThrowOfFloat",
+                "maxOrThrowOfDouble",
+                "maxOrNull",
+                "maxOrNullOfFloat",
+                "maxOrNullOfDouble",
+                "minOrThrow",
+                "minOrThrowOfFloat",
+                "minOrThrowOfDouble",
+                "minOrNull",
+                "minOrNullOfFloat",
+                "minOrNullOfDouble",
+                "maxOf",
+                "maxOfFloat",
+                "maxOfDouble",
+                "minOf",
+                "minOfFloat",
+                "minOfDouble",
+                "sumOfLong",
+            ).all(sequenceMethodNames::contains)
+        ) {
+            "Sequence erased overload projection is incomplete: $sequenceMethodNames"
+        }
         assertTrue(intRangeType.isSealed && intRangeType.baseType == intProgressionType.handle)
         assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
             parameter.owner in physicalRangeTypes
@@ -35172,7 +35283,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     declaration.isInstance
         })
         val bulkCollectionFunctionCounts = mapOf(
-            "addAll" to 2,
+            "addAll" to 3,
             "convertToListIfNotCollection" to 1,
             "drop" to 1,
             "dropLast" to 1,
@@ -35982,6 +36093,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/CoroutinesIntrinsicsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/intrinsics/Intrinsics.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractIterator.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractMap.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractSet.kt").absoluteFile
@@ -39777,6 +39889,133 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), "Collection compiler-ABI probe failed for $target:\n$output")
+    }
+
+    private fun executeSequenceFoundation(
+        stdlibDirectory: File,
+        target: String,
+        dotnetHost: File?,
+        frameworkHost: File?,
+    ) {
+        val directory = File(tmpdir, "sequence-foundation-$target").apply { mkdirs() }
+        stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+            .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
+        stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
+        val source = directory.resolve("SequenceFoundation.kt").apply {
+            writeText(
+                """
+                private class CountingSequence<T>(private val values: Array<T>) : Sequence<T> {
+                    var iteratorCalls: Int = 0
+                    var nextCalls: Int = 0
+
+                    override fun iterator(): Iterator<T> {
+                        iteratorCalls++
+                        return CountingIterator(this, values)
+                    }
+
+                    private class CountingIterator<T>(
+                        private val owner: CountingSequence<T>,
+                        private val values: Array<T>,
+                    ) : Iterator<T> {
+                        private var index: Int = 0
+
+                        override fun hasNext(): Boolean = index < values.size
+
+                        override fun next(): T {
+                            owner.nextCalls++
+                            return values[index++]
+                        }
+                    }
+                }
+
+                fun main() {
+                    val counted = CountingSequence(arrayOf(1, 2, 3, 4))
+                    val pipeline = counted.map { it * 2 }.filter { it > 3 }.take(2)
+                    check(counted.iteratorCalls == 0 && counted.nextCalls == 0)
+                    check(pipeline.toList() == listOf(4, 6))
+                    check(counted.iteratorCalls == 1 && counted.nextCalls == 3)
+
+                    val oneShot = arrayOf("a", "bb").iterator().asSequence()
+                    check(oneShot.joinToString(":") == "a:bb")
+                    var failedTwice = false
+                    try {
+                        oneShot.iterator()
+                    } catch (_: IllegalStateException) {
+                        failedTwice = true
+                    }
+                    check(failedTwice)
+
+                    val covariant: Sequence<Any?> = sequenceOf(1, 2)
+                    check(covariant.toList() == listOf<Any?>(1, 2))
+                    check(listOf(5, 6).asSequence().toList() == listOf(5, 6))
+                    check(intArrayOf(7, 8).asSequence().sum() == 15)
+
+                    check(
+                        sequenceOf(1, 2).flatMap { value -> sequenceOf(value, -value) }.toList() ==
+                            listOf(1, -1, 2, -2)
+                    )
+                    check(
+                        sequenceOf(1, 2).flatMap { value -> listOf(value, value + 10) }.toList() ==
+                            listOf(1, 11, 2, 12)
+                    )
+                    check(
+                        sequenceOf(sequenceOf(1, 2), sequenceOf(3)).flatten().toList() ==
+                            listOf(1, 2, 3)
+                    )
+                    check(
+                        sequenceOf(listOf(1, 2), listOf(3)).flatten().toList() ==
+                            listOf(1, 2, 3)
+                    )
+
+                    check(sequenceOf(3, 1, 2, 1).distinct().sorted().toList() == listOf(1, 2, 3))
+                    check(
+                        sequenceOf<Any?>(1, "two", 3L, 4).filterIsInstance<Int>().toList() ==
+                            listOf(1, 4)
+                    )
+                    check(sequenceOf(1, 2, 3).isSorted())
+                    check(!sequenceOf(2, 1, 3).isSorted())
+                    check(sequenceOf(3, 2, 1).isSortedDescending())
+                    check(sequenceOf(-0.0, 0.0).isSorted())
+                    check(sequenceOf(1.0, 2.0, Double.NaN).isSorted())
+                    check(sequenceOf(-0.0f, 0.0f).isSorted())
+                    check(sequenceOf(1.0f, 2.0f, Float.NaN).isSorted())
+                    check(generateSequence(1) { value -> if (value < 4) value + 1 else null }.toList() == listOf(1, 2, 3, 4))
+                    check(sequenceOf(Pair("a", 1), Pair("b", 2)).unzip() == Pair(listOf("a", "b"), listOf(1, 2)))
+
+                    val ints = sequenceOf(1, 4, 2)
+                    check(ints.sum() == 7)
+                    check(ints.average() == 7.0 / 3.0)
+                    check(ints.min() == 1 && ints.max() == 4)
+                    check(ints.sumOf { it * 2 } == 14)
+                    check(ints.sumOf { it.toDouble() } == 7.0)
+                    check(sequenceOf("a", "bbb").minOf { it.length } == 1)
+                    check(sequenceOf("a", "bbb").maxOf { it.length.toDouble() } == 3.0)
+
+                    val doubles = sequenceOf(0.0, Double.NaN)
+                    check(doubles.min().isNaN() && doubles.max().isNaN())
+                    check(doubles.minOrNull()!!.isNaN() && doubles.maxOrNull()!!.isNaN())
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        val output = directory.resolve(if (target == "net48") "SequenceFoundation.exe" else "SequenceFoundation.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, directory.resolve("Kotlin.Stdlib.dll").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "SequenceFoundation",
+            K2DotNetCompilerArguments::destination.cliArgument, output.path,
+        )
+        val command = if (target == "net48") {
+            frameworkExecutionCommand(checkNotNull(frameworkHost), output)
+        } else {
+            listOf(checkNotNull(dotnetHost).path, "exec", output.path)
+        }
+        runAssemblerPairing(command, directory, "$target Sequence foundation")
     }
 
     private fun assertCollectionToArrayImplementationIl(stdlibDirectory: File) {

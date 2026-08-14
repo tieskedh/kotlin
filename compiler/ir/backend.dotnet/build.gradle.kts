@@ -109,6 +109,7 @@ tasks.named<ProcessResources>("processResources") {
     }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractIterator.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractList.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractMap.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractSet.kt"),
