@@ -5,8 +5,11 @@
 
 package org.jetbrains.kotlin.backend.dotnet.lower
 
+import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.defaultArgumentsOriginalFunction
+import org.jetbrains.kotlin.backend.common.lower.at
+import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
@@ -32,6 +35,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequire
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceRecorder
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
@@ -39,6 +43,11 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.builders.irBlock
+import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irInt
+import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
@@ -74,6 +83,8 @@ import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.isInt
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
@@ -83,8 +94,11 @@ import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
+import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.name.Name
+import java.util.Collections
+import java.util.IdentityHashMap
 
 private val DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER")
@@ -93,9 +107,12 @@ private val DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER: IrDeclarationOrigin =
  * Records conservative proof obligations for the eventual CLR-generic Kotlin class-owner ABI.
  *
  * This pass is intentionally adjacent to, but independent from, erased generic-interface bridge
- * construction. It changes no IR and grants no class permission to use a reified physical owner.
- * Keeping it in the production pipeline makes the analysis run over every supported semantic
- * corpus without allowing a partial ABI switch.
+ * construction. It normally changes no IR and grants no class permission to use a reified
+ * physical owner. An architecture test may explicitly supply one module-local trace recorder;
+ * that separate instrumented product preserves evaluation order and records the already-derived
+ * call-site index, but is never a production or performance artifact. Keeping the analysis in the
+ * production pipeline makes it run over every supported semantic corpus without allowing a
+ * partial ABI switch.
  */
 internal class DotNetGenericOwnerArchitecturePlanningLowering(
     private val context: DotNetBackendContext,
@@ -164,12 +181,64 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             context.genericOwnerArchitecturePlans[owner] = plan(owner, producerAccesses, initializerAccesses)
         }
         linkDetachedOverrideFamilies()
-        context.genericOwnerCallRoutes += GenericOwnerCallRouteAnalyzer(
+        val callRoutes = GenericOwnerCallRouteAnalyzer(
             producerFunctions = producerFunctions,
             producerInitializers = producerInitializers,
             producerAccesses = producerAccesses,
             initializerAccesses = initializerAccesses,
         ).analyze()
+        context.genericOwnerCallRoutes += callRoutes
+        context.configuration.dotNetGenericOwnerCallRouteTraceRecorder?.let { recorder ->
+            instrumentCallRoutes(irModule, callRoutes, recorder)
+        }
+    }
+
+    private fun instrumentCallRoutes(
+        irModule: IrModuleFragment,
+        callRoutes: List<DotNetGenericOwnerCallRoutePlan>,
+        recorder: IrSimpleFunction,
+    ) {
+        check(recorder.parent in irModule.files &&
+                DescriptorVisibilities.isPrivate(recorder.visibility) &&
+                recorder.typeParameters.isEmpty() && !recorder.isSuspend && recorder.body != null &&
+                recorder.parameters.singleOrNull()?.let { parameter ->
+                    parameter.kind == IrParameterKind.Regular && parameter.type.isInt()
+                } == true && recorder.returnType.isUnit()) {
+            "Generic-owner route tracing requires one private module-local (Int) -> Unit recorder"
+        }
+        val indexByCall = IdentityHashMap<IrCall, Int>()
+        callRoutes.forEach { route ->
+            check(indexByCall.put(route.call, route.callSiteIndex) == null) {
+                "Generic-owner route tracing encountered one call under multiple site indices"
+            }
+        }
+        val remainingCalls = Collections.newSetFromMap(IdentityHashMap<IrCall, Boolean>()).apply {
+            addAll(indexByCall.keys)
+        }
+        irModule.transformChildrenVoid(object : IrElementTransformerVoidWithContext() {
+            override fun visitCall(expression: IrCall): IrExpression {
+                expression.transformChildrenVoid(this)
+                val callSiteIndex = indexByCall[expression] ?: return expression
+                check(remainingCalls.remove(expression)) {
+                    "Generic-owner route tracing visited one call site more than once"
+                }
+                val builder = context.createIrBuilder(currentScope!!.scope.scopeOwnerSymbol).at(expression)
+                return builder.irBlock(resultType = expression.type) {
+                    expression.arguments.indices.forEach { argumentIndex ->
+                        val argument = expression.arguments[argumentIndex] ?: return@forEach
+                        val temporary = irTemporary(argument, nameHint = "<genericOwnerRouteArgument>")
+                        expression.arguments[argumentIndex] = irGet(temporary)
+                    }
+                    +irCall(recorder).apply {
+                        arguments[0] = irInt(callSiteIndex)
+                    }
+                    +expression
+                }
+            }
+        })
+        check(remainingCalls.isEmpty()) {
+            "Generic-owner route tracing did not instrument ${remainingCalls.size} analyzed call sites"
+        }
     }
 
     private fun plan(
@@ -901,6 +970,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             callerName = scope.callerName,
                             callerLogicalBindingKey = scope.callerLogicalBindingKey,
                             callSiteIndex = relevantCallIndex++,
+                            call = call,
                             callee = target.callee,
                             calleeOwner = target.owner,
                             calleeLogicalBindingKey = target.logicalBindingKey,

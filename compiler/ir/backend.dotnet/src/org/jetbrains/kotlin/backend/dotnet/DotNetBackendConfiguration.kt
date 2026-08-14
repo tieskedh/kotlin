@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.config.dotNetAssemblyName
 import org.jetbrains.kotlin.config.dotNetProducesLibrary
 import org.jetbrains.kotlin.config.dotNetProducesStdlib
 import org.jetbrains.kotlin.config.dotNetTarget
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import java.io.File
 
@@ -29,6 +30,9 @@ object DotNetBackendConfigurationKeys {
         CompilerConfigurationKey.create("Kotlin/.NET friend assembly paths")
     val FRIEND_ASSEMBLIES: CompilerConfigurationKey<List<DotNetFriendAssemblyIdentity>> =
         CompilerConfigurationKey.create("producer-authorized CLR friend assembly identities")
+    /** Test-owned IR declaration invoked by explicit generic-owner route tracing. No CLI option exposes this hook. */
+    val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER: CompilerConfigurationKey<IrSimpleFunction> =
+        CompilerConfigurationKey.create("test-only generic-owner call-route trace recorder")
 }
 
 /** Canonical names of compiler-owned CLR assemblies; CLR assembly-name matching is case-insensitive. */
@@ -271,4 +275,14 @@ var CompilerConfiguration.dotNetFriendAssemblies: List<DotNetFriendAssemblyIdent
     get() = get(DotNetBackendConfigurationKeys.FRIEND_ASSEMBLIES, emptyList())
     set(value) {
         put(DotNetBackendConfigurationKeys.FRIEND_ASSEMBLIES, value)
+    }
+
+/**
+ * Explicit architecture-test hook. Ordinary CLI/Gradle compilations never set it, and the
+ * recorder declaration belongs to this exact IR module rather than to Runtime or a published ABI.
+ */
+var CompilerConfiguration.dotNetGenericOwnerCallRouteTraceRecorder: IrSimpleFunction?
+    get() = get(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER)
+    set(value) {
+        if (value != null) put(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER, value)
     }
