@@ -28,6 +28,118 @@ public expect fun <T : Comparable<T>> MutableList<T>.sort(): Unit
 public expect fun <T> MutableList<T>.sortWith(comparator: Comparator<in T>): Unit
 
 /**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun <T> Array<T>.copyOf(): Array<T>
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun BooleanArray.copyOf(): BooleanArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun ByteArray.copyOf(): ByteArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun ShortArray.copyOf(): ShortArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun IntArray.copyOf(): IntArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun LongArray.copyOf(): LongArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun FloatArray.copyOf(): FloatArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun DoubleArray.copyOf(): DoubleArray
+
+/**
+ * Returns new array which is a copy of the original array.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.copyOf
+ */
+public expect fun CharArray.copyOf(): CharArray
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun IntArray.sort(): Unit
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun LongArray.sort(): Unit
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun ByteArray.sort(): Unit
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun ShortArray.sort(): Unit
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun DoubleArray.sort(): Unit
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun FloatArray.sort(): Unit
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public expect fun CharArray.sort(): Unit
+
+/**
  * Sorts the array in-place according to the natural order of its elements.
  *
  * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
@@ -37,8 +149,175 @@ public expect fun <T> MutableList<T>.sortWith(comparator: Comparator<in T>): Uni
 public expect fun <T : Comparable<T>> Array<out T>.sort(): Unit
 
 /**
+ * Sorts a range in the array in-place.
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArrayOfComparable
+ */
+@SinceKotlin("1.4")
+public expect fun <T : Comparable<T>> Array<out T>.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun ByteArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun ShortArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun IntArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun LongArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun FloatArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun DoubleArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+public expect fun CharArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
  * Sorts the array in-place according to the order specified by the given [comparator].
  *
  * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
  */
 public expect fun <T> Array<out T>.sortWith(comparator: Comparator<in T>): Unit
+
+/**
+ * Sorts a range in the array in-place with the given [comparator].
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ */
+public expect fun <T> Array<out T>.sortWith(comparator: Comparator<in T>, fromIndex: Int = 0, toIndex: Int = size): Unit
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun ByteArray.toTypedArray(): Array<Byte>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun ShortArray.toTypedArray(): Array<Short>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun IntArray.toTypedArray(): Array<Int>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun LongArray.toTypedArray(): Array<Long>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun FloatArray.toTypedArray(): Array<Float>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun DoubleArray.toTypedArray(): Array<Double>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun BooleanArray.toTypedArray(): Array<Boolean>
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public expect fun CharArray.toTypedArray(): Array<Char>

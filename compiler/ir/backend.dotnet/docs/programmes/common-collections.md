@@ -124,10 +124,10 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 `HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
 generic interface as Kotlin identity.
 
-The Kotlin-owned Sequence and Grouping closures are completed separately below.
-Primitive/unsigned/range sorting,
-dependency-blocked reified variants, concurrency, and BCL adapters remain
-separate closures. The formerly parked open-nullable boundary
+The Kotlin-owned Sequence, Grouping, and signed primitive/object-array sorting
+closures are completed separately below. Unsigned arrays/ranges, random,
+sequence-builder-dependent operations, dependency-blocked reified variants,
+concurrency, and BCL adapters remain separate closures. The formerly parked open-nullable boundary
 is complete under
 [`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
 ordinary `Array<out T?>` reads retain the original vector through
@@ -305,10 +305,11 @@ The bootstrap generator now admits every Common collection-template
 variant whose dependency closure consists only of the already published read-only foundation,
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
-closure above. Ranges as public values, sequences, random and the remaining
-primitive/range sorting families, dependency-blocked reified variants, reflection,
-and unsigned families remain excluded when they introduce an independent dependency rather than
-being approximated or copied.
+closure above. Ordinary signed ranges, Sequence, Grouping, and signed-array
+sorting have since landed as complete independent foundations. Random,
+sequence builders, dependency-blocked reified variants, reflection, and
+unsigned families remain excluded when they introduce an independent
+dependency rather than being approximated or copied.
 
 The first bulk admission is intentionally collection-facing and homogeneous. It includes the
 complete dependency-closed Iterable/List variants of:
@@ -359,10 +360,11 @@ method-owned CLR generics, relative constraints, projected arrays, nullable type
 recovery, inline non-local control flow, data classes, anonymous generic classes, and
 cross-library inlining. That first batch did not silently bundle array-receiver overloads. The
 later Set/Map tranche admits only the object-array association, grouping, snapshot, and Set-op
-variants whose array carriers are already exact. Sequence, random, remaining
-primitive/range sorting, range-signature,
-reflection, unsigned, and still dependency-blocked reified variants fail closed outside the
-admitted batches.
+variants whose array carriers are already exact. At that boundary Sequence,
+random, primitive/range sorting, range signatures, reflection, unsigned, and
+still dependency-blocked reified variants failed closed outside the admitted
+batches; Sequence, ordinary signed ranges, and signed-array sorting have since
+landed only through their own complete foundations.
 
 The first shared semantic-test product is deliberately built from repository-owned sources rather
 than a .NET transcription. Its generator projects the exact Common `Test` expectation,
@@ -896,11 +898,12 @@ The audit deliberately excludes the rest of the nearby generator frontier:
 - the completed Comparator/selection foundation owns Common comparison
   combinators, comparator `minOf`/`maxOf`, Iterable comparator selection, and
   non-mutating `isSorted*`; the completed stable sorting closure reuses the
-  Native/Wasm stable list/generic-array implementation lineage and admits only its eager
-  dependency-closed ordering consumers, as recorded in
+  Native/Wasm stable list/generic-array and signed-wrapper quicksort lineages
+  and admits the complete dependency-closed eager/range/reverse/snapshot
+  ordering consumers, as recorded in
   [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md),
-  while primitive/unsigned arrays and ranges remain separate; Sequence sorting
-  subsequently landed in the completed foundation above;
+  while unsigned arrays/ranges remain separate; Sequence sorting subsequently
+  landed in the completed foundation above;
   the Comparator foundation itself is recorded in
   [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md);
 - `allEqual` publishes the now-admitted parameterless `ExperimentalStdlibApi` marker and can be

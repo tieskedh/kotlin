@@ -2012,7 +2012,13 @@ private class DotNetIlArrayCopyIntoIntrinsic(
     }
 }
 
-/** `copyOf()` and concrete `copyOf(newSize)` with an exact typed-vector result. */
+/**
+ * `copyOf()` and `copyOf(newSize)` with an exact typed-vector result.
+ *
+ * Generic arrays allocate from the source vector's runtime element type. This preserves CLR
+ * reference covariance and exact value vectors for open/output-projected Kotlin array views;
+ * a statically spelled `newarr !T` or `object[]` would lose that contract.
+ */
 private class DotNetIlArrayCopyOfIntrinsic(
     private val fixedArrayType: DotNetIlValueType?,
     private val resized: Boolean,
@@ -2028,13 +2034,101 @@ private class DotNetIlArrayCopyOfIntrinsic(
         if (call.arguments.size != expectedArgumentCount) return false
         val source = call.arguments[0]
             ?: dotNetUnsupported("missing array receiver for 'copyOf'")
-        val arrayType = fixedArrayType ?: (
-                codegen.toDotNetIlValueType(source.type) as? DotNetIlValueType.GenericArray
-                ?: dotNetUnsupported("'copyOf' has unsupported source type ${source.type.render()}")
-        )
-        if (arrayType is DotNetIlValueType.GenericArray && arrayType.elementType is DotNetIlValueType.TypeParameter) {
-            dotNetUnsupported("copyOf on an open generic Array<T> is not supported in the concrete array-copying slice")
+        val arrayType = fixedArrayType ?: codegen.toDotNetIlValueType(source.type)?.takeIf {
+            it is DotNetIlValueType.GenericArray || it is DotNetIlValueType.ErasedGenericArray
+        } ?: dotNetUnsupported("'copyOf' has unsupported source type ${source.type.render()}")
+
+        if (fixedArrayType == null) {
+            if (expectedType !is DotNetIlValueType.GenericArray &&
+                expectedType !is DotNetIlValueType.ErasedGenericArray
+            ) return false
+
+            codegen.emitExpression(source, arrayType)
+            val sourceSlot = codegen.spillToSyntheticLocal(arrayType, "<copySource>")
+            val sizeSlot = if (resized) {
+                val newSize = call.arguments[1]
+                    ?: dotNetUnsupported("missing new size for 'copyOf'")
+                codegen.emitExpression(newSize, DotNetIlValueType.Int32)
+                codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copySize>")
+            } else {
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit(
+                    "callvirt instance int32 ${codegen.coreLibraryReference}System.Array::get_Length()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copySize>")
+            }
+
+            if (resized) {
+                val nonNegativeLabel = codegen.nextLabel("copySizeNonNegative")
+                codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+                codegen.emit("ldc.i4.0", pushes = 1)
+                codegen.emit("clt", pops = 2, pushes = 1)
+                codegen.emitBranch("brfalse", nonNegativeLabel, pops = 1)
+                codegen.emitParameterlessExceptionThrow(
+                    exceptionTypeRef = DotNetRuntimeLibrary.negativeArraySizeExceptionTypeRef,
+                    valuePosition = false,
+                )
+                codegen.emitLabel(nonNegativeLabel)
+            }
+
+            val coreLibraryReference = codegen.coreLibraryReference
+            codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+            codegen.emit(
+                "call instance class ${coreLibraryReference}System.Type " +
+                        "${coreLibraryReference}System.Object::GetType()",
+                pops = 1,
+                pushes = 1,
+            )
+            codegen.emit(
+                "callvirt instance class ${coreLibraryReference}System.Type " +
+                        "${coreLibraryReference}System.Type::GetElementType()",
+                pops = 1,
+                pushes = 1,
+            )
+            codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+            codegen.emit(
+                "call class ${coreLibraryReference}System.Array ${coreLibraryReference}" +
+                        "System.Array::CreateInstance(class ${coreLibraryReference}System.Type, int32)",
+                pops = 2,
+                pushes = 1,
+            )
+            if (expectedType is DotNetIlValueType.GenericArray) {
+                codegen.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
+            }
+            val destinationSlot = codegen.spillToSyntheticLocal(expectedType, "<copyDestination>")
+
+            codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+            codegen.emit("ldc.i4.0", pushes = 1)
+            codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+            codegen.emit("ldc.i4.0", pushes = 1)
+            if (resized) {
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit(
+                    "callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+                codegen.emit(
+                    "call int32 ${coreLibraryReference}System.Math::Min(int32, int32)",
+                    pops = 2,
+                    pushes = 1,
+                )
+            } else {
+                codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+            }
+            codegen.emit(
+                "call void ${coreLibraryReference}System.Array::Copy(" +
+                        "class ${coreLibraryReference}System.Array, int32, " +
+                        "class ${coreLibraryReference}System.Array, int32, int32)",
+                pops = 5,
+            )
+            codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+            return true
         }
+
         if (expectedType != arrayType) return false
         val newArrayInstruction = when (arrayType) {
             is DotNetIlValueType.PrimitiveArray -> arrayType.newStorageInstruction

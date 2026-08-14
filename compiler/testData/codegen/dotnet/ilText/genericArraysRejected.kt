@@ -1,8 +1,10 @@
 package test.genericarrays.rejected
 
-// Every declaration below except valueProjection remains outside the supported array model. A
-// covariant view of an already allocated exact vector is now represented by System.Array; it does
-// not allocate a fallback array or weaken the invariant carrier used by the original value.
+// Most declarations below remain outside the supported array model. A covariant view of an
+// already allocated exact vector is represented by System.Array; it does not allocate a fallback
+// array or weaken the invariant carrier used by the original value. Open copyOf is also supported:
+// it allocates from the source vector's exact runtime component type and returns the same open
+// Array<T> carrier. Open nullable element positions and writable projected arrays remain rejected.
 
 open class Base
 

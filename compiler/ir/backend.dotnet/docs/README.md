@@ -98,7 +98,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Common delegated-property semantics over ordinary CLR state](decisions/delegated-properties.md)
 - [Kotlin fun interfaces use Common SAM wrappers](decisions/fun-interfaces.md)
 - [Common Comparator and order-selection foundation](decisions/comparator-and-selection-foundation.md)
-- [Stable list and object-array sorting](decisions/stable-list-and-array-sorting.md)
+- [Stable list and signed-array sorting](decisions/stable-list-and-array-sorting.md)
 - [Kotlin-owned Sequence foundation](decisions/sequence-foundation.md)
 - [Kotlin-owned Grouping foundation](decisions/grouping-foundation.md)
 - [Dedicated .NET class-member reflection](decisions/class-member-reflection.md)

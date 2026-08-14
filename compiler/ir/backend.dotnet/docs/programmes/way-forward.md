@@ -360,13 +360,15 @@ claiming a stable platform sort. The semantic/physical/C# boundary and the
 separate stable-sort prerequisite are owned by
 [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md).
 
-The completed next consumer was the stable MutableList and generic-array
-sorting closure. It reuses the exact Native/Wasm snapshot and stable merge-sort
-lineage, then admits only the dependency-closed eager Iterable/MutableList
-`sorted*`/`sort*` consumers. Primitive and unsigned arrays, ranges, binary
-search, and random ordering remain separate. Sequence sorting subsequently
-landed inside the complete non-builder Sequence foundation. The stable algorithm,
-failure timing, arbitrary-list, physical, and C# boundaries are owned by
+The completed next consumer is the stable MutableList plus generic/signed-array
+sorting closure. It reuses the exact Native/Wasm snapshot, stable merge-sort,
+and seven per-wrapper quicksort lineages, then admits the complete
+dependency-closed eager Iterable/MutableList/object-array/signed-primitive-array
+`sorted*`/`sort*`/range/reverse inventory. Unsigned arrays, binary search, and
+random ordering remain separate. Sequence sorting subsequently landed inside
+the complete non-builder Sequence foundation. The stable algorithm, range and
+failure timing, arbitrary-list, open generic snapshot, physical, and C#
+boundaries are owned by
 [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md).
 
 ### 4. Expand Common collections by exact dependency closure
@@ -398,17 +400,19 @@ reified variants. The narrow open-nullable-array foundation is now complete:
 `Array<out T?>` uses an identity-preserving `System.Array` read view, Kotlin-owned
 `vararg T?` uses a fresh declaration-stable `object[]`, and the bounded release restores
 authoritative `setOfNotNull(vararg T?)` plus object-array nullable filtering. Invariant/input
-method-owned open nullable arrays remain excluded. The next bounded candidate
-is the complete signed primitive-array and remaining object-array range-sorting
-closure. Audit every Common `sort` expect/actual and generated reverse,
-sorted-array, descending, and range variant over the seven naturally ordered
-signed primitive wrappers plus object arrays. Reuse the exact Native/Wasm
-sorting algorithm lineage and existing wrapper storage; do not substitute
-`System.Array.Sort`, conflate stable object sorting with primitive sorting, or
-pull unsigned arrays into the tranche before their value-class/range closure.
-Random-dependent operations and sequence-builder-dependent running/windowing
-members remain separate because each still requires an independent platform
-or language/runtime decision.
+method-owned open nullable arrays remain excluded. The complete signed
+primitive-array and remaining object-array range-sorting closure is now
+published from the exact Common generator families and Native/Wasm algorithm
+lineage. It includes all seven naturally ordered signed wrappers, stable object
+ranges, snapshots, descending/reverse/selector consumers, and Boolean's
+explicit-comparator/reversal subset without `System.Array.Sort` or unsigned
+spillover. Open producer-generic snapshots preserve the source vector's exact
+runtime component type rather than allocating `object[]`. Random-dependent
+operations, the unsigned value-class/range product, sequence-builder-dependent
+running/windowing members, and dependency-blocked reified variants remain
+separate. Recompute that remaining graph before selecting the next Common
+closure; completion of signed sorting is not authority to choose one of those
+independent representations implicitly.
 Loose one-function growth and implicit BCL collection identity remain excluded.
 
 The semantically erased generic-class route is selected in

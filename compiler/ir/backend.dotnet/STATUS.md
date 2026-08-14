@@ -27,7 +27,30 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: Kotlin-owned `Grouping<T, out K>` now publishes
+- Last completed foundation: the complete signed primitive-array and remaining
+  object-array sorting graph now publishes the exact Common whole/range
+  `sort`/`sortWith` expects plus the complete generated reverse, descending,
+  snapshot, selector, and sortedness closure. All seven naturally ordered
+  signed primitive wrappers execute the Native/Wasm per-wrapper quicksort over
+  their existing exact private vectors; generic object arrays retain the
+  stable merge lineage and runtime-component-typed buffer. Open producer-
+  generic `copyOf`/`sortedArray` snapshots allocate from the source vector's
+  exact runtime component type through `System.Array.CreateInstance` and copy
+  through `System.Array.Copy`, while primitive snapshots allocate independent
+  wrapper/vector storage. Boolean receives only its authoritative reversal and
+  explicit comparator/selector variants. PSI/LightTree direct and separate-
+  compilation consumers execute on Framework CLR 4 and .NET 10, including
+  NaN/signed-zero order, range failure timing, mutation, stability, aliasing,
+  and open value/reference substitutions. The same portable
+  `netstandard2.0` Stdlib and C# sorting workload execute on both hosts; C#
+  directly calls generic CLR-vector and specialized Kotlin-wrapper facades.
+  Two owning-generator runs retained four identical hashes. The strict
+  aggregate completed in 2,662.9 seconds and its direct audit covers 190 XML
+  files, 2,216 tests, and zero failures, errors, or skips. No
+  `System.Array.Sort`, unsigned sorting, Random, sequence-builder dependency,
+  Runtime surface change, or library-codec change was introduced. See
+  [`docs/decisions/stable-list-and-array-sorting.md`](docs/decisions/stable-list-and-array-sorting.md).
+- The preceding foundation: Kotlin-owned `Grouping<T, out K>` now publishes
   the complete Common aggregate/fold/reduce/count source, the Native/Wasm
   `eachCount` actual, and all four generated factories over Iterable,
   Sequence, object arrays, and CharSequence. KLIB retains both type parameters
@@ -306,11 +329,13 @@ verification, and work state.
   invariant/input open nullable arrays remain rejected, while closed exact and
   declaration-erased owner-array rules are unchanged. See
   [`docs/decisions/open-nullable-array-views-and-varargs.md`](docs/decisions/open-nullable-array-views-and-varargs.md).
-  The preceding foundation: stable whole-list and generic-array sorting now
-  actualize the exact Common `MutableList.sort`/`sortWith` and generated
-  object-array `sort`/`sortWith` contracts, then release the dependency-closed
-  eager `sort*`/`sorted*` consumers. The generator retains the authoritative
-  Native/Wasm stable merge lineage but applies three exact CLR carrier
+  The completed sorting foundation actualizes the exact Common
+  `MutableList.sort`/`sortWith`, generic object-array whole/range contracts,
+  and all seven naturally ordered signed primitive-wrapper whole/range
+  contracts, then releases the dependency-closed eager/reverse/descending/
+  selector/snapshot/sortedness consumers. The generator retains the
+  authoritative Native/Wasm stable merge and primitive quicksort lineages but
+  applies exact CLR carrier
   corrections: list and eager Iterable snapshots remain private
   `Array<Any?>` storage; array merge buffers retain the input vector's runtime
   element type; and array traversal uses the classified `System.Array`
@@ -320,9 +345,12 @@ verification, and work state.
   casts exposed by the first exact source transplant. Sorting is stable,
   arbitrary MutableLists write back through their iterator, a comparator
   failure occurs before list mutation, Kotlin String/Float/Double ordering is
-  retained, and direct/separate consumers agree. C# directly sorts `int[]`, a
-  C# reference array stably, and Kotlin `ArrayList` through the current public
-  facade and Comparator ABI. No BCL unstable sort, `IComparer<T>` identity,
+  retained, and direct/separate consumers agree. Open `copyOf` snapshots use
+  the source vector's runtime component type rather than `object[]` or open
+  `newarr !T`. C# directly sorts raw generic CLR vectors, exact Kotlin
+  primitive wrappers, a C# reference-array range stably, and Kotlin
+  `ArrayList` through the current public facade and Comparator ABI on both
+  Framework CLR 4 and .NET 10. No BCL unstable sort, `IComparer<T>` identity,
   emitted placeholder intrinsic, open `T[]` merge carrier, runtime-surface
   change, or library-codec change was introduced. The direct-native interop
   direction is now explicit: compatible user actuals should retain imported
@@ -347,8 +375,8 @@ verification, and work state.
   functions, while also proving why its hashed erased slot is compiler ABI
   rather than an ergonomic export. A future explicit C# projection should use
   `IComparer<T>` adapters without replacing Kotlin identity. Runtime surface
-  36 and library codec 35 remain unchanged. Stable mutation/sorted snapshots
-  remain a separate platform-actual tranche.
+  36 and library codec 35 remain unchanged. Stable mutation/signed-array
+  snapshots subsequently landed through the completed sorting foundation.
   The preceding foundation: Kotlin `fun interface` declarations now use the
   repository's Common `SingleAbstractMethodLowering`, after callable-reference
   materialization and before local-class, interface, generic, and continuation
@@ -677,29 +705,30 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Kotlin-owned Grouping foundation head passed every constituent of the
-strict target gate. Production generic-owner emission remains erased; this
-checkpoint adds the complete Common Grouping aggregate/factory closure and its
-single Kotlin-owned erased CLR interface without changing that production
-owner representation. The normal aggregate command remains:
+The complete signed primitive/object-array sorting head passed every
+constituent of the strict target gate. Production generic-owner emission
+remains erased; this checkpoint adds generated Common ordering declarations,
+Native/Wasm-derived primitive quicksort actuals, and exact CLR array-copy/
+buffer adaptations without changing Kotlin collection or owner identity. The
+normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-14 in 1,961.0 seconds. Backend,
+The latest aggregate completed on 2026-08-14 in 2,662.9 seconds. Backend,
 FIR2IR, stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
 executed for the final semantic head. Direct audit of all three result roots
-covers 190 XML files and 2,212 tests:
+covers 190 XML files and 2,216 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,081 FIR, IL-text, and box tests
+- 2,085 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 104 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate and explicit model constituent exited successfully. Relative to
-schema version 4, the 2,212-test inventory also executes exact
+schema version 4, the 2,216-test inventory also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
 KLIB-only logical type-argument authority, complete physical-callable-family
@@ -1693,6 +1722,21 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
 
 ## Active state
 
+The complete signed primitive/object-array sorting closure is published from
+exact Common generator and Native/Wasm-derived sources. Whole/range natural
+sorts cover Byte, Short, Int, Long, Float, Double, and Char wrappers; the full
+reverse, descending, snapshot, selector, and `isSorted*` consumer graph is
+present, with Boolean limited to reversal and explicit comparator/selector
+operations. Primitive in-place operations retain wrapper/backing-vector
+identity, object sorting remains stable, invalid ranges fail before mutation,
+and snapshots follow Common aliasing rules. Generic copy snapshots allocate
+from the source CLR vector's runtime component type and therefore work while
+the producer's `T` is still open; no `object[]`, `newarr !T`, or
+`System.Array.Sort` shortcut is used. Direct and separate PSI/LightTree
+consumers are green on Framework CLR 4 and .NET 10, and one portable
+netstandard Stdlib plus direct C# workload executes on both hosts over raw CLR
+generic vectors and Kotlin specialized-array wrappers.
+
 The complete Kotlin-owned Grouping foundation is published from exact Common,
 generated, and Native/Wasm-derived sources. One non-generic erased CLR
 interface preserves the logical `Grouping<T, out K>` contract and owns only
@@ -1724,8 +1768,9 @@ interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
 Iterable sortedness traversals are published from their authoritative sources.
 They reuse the existing erased generic-interface/SAM/Comparable boundaries and
-add no Runtime capability or library schema. Stable mutation and sorted
-snapshots remain outside this completed non-mutating foundation.
+add no Runtime capability or library schema. Stable mutation and signed-array
+snapshots now compose with that foundation through the completed sorting
+closure above.
 
 The complete Common signed-selector
 `sumOf` family is published under its generated logical declarations and the
@@ -2115,17 +2160,7 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Close the complete signed primitive-array and remaining object-array
-   range-sorting graph. Inventory every Common `sort` expect/actual and the
-   generated reverse, sorted-array, descending, and range variants over the
-   seven naturally ordered signed primitive wrappers plus object arrays. Reuse
-   the exact Native/Wasm sorting algorithm lineage and the existing wrapper
-   storage; preserve floating-point, range-check, mutation, aliasing, and
-   object-sort stability semantics independently on Framework CLR 4 and .NET
-   10. Do not substitute `System.Array.Sort`, merge unsigned value-class/range
-   work into this tranche, or pull in Random/sequence-builder-dependent
-   operations before their independent platform/language decisions.
-2. Continue the hardest-model-first generic-owner architecture spike while
+1. Continue the hardest-model-first generic-owner architecture spike while
    keeping production emission erased. The erased hostile oracle, historical
    failure audit, deterministic carrier/slot admission matrix, one-owner
    dispatch probe, direct C# surface, and atomic migration/rollback boundary
@@ -2169,6 +2204,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll
    out an easy owner before the hostile prototype and real-app measurement
    checkpoint select the one atomic cutover.
+2. Recompute the remaining Common generator/source dependency graph after the
+   completed Sequence, Grouping, open-nullable-array, and signed-sorting
+   closures. Choose one complete next family only after separating Random and
+   entropy, unsigned value-class/range representation, sequence-builder
+   coroutines/windowing, and still dependency-blocked reified variants. Do not
+   infer that signed sorting authorizes unsigned overloads, binary search,
+   shuffle, or a target-authored one-function approximation.
 3. Continue the generated catalog only by complete classifier families, not by
    handwritten members. The concrete Common scalars, classified `Number`,
    built-in collection interfaces, and Kotlin-owned collection implementations

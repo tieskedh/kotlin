@@ -72,6 +72,35 @@
     newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
     throw
   }
+  .method public hidebysig static !!0[] 'openCopy'<'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] !!0[] '<copySource>',
+      [1] int32 '<copySize>',
+      [2] !!0[] '<copyDestination>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    callvirt instance int32 [mscorlib]System.Array::get_Length()
+    stloc.1
+    ldloc.0
+    call instance class [mscorlib]System.Type [mscorlib]System.Object::GetType()
+    callvirt instance class [mscorlib]System.Type [mscorlib]System.Type::GetElementType()
+    ldloc.1
+    call class [mscorlib]System.Array [mscorlib]System.Array::CreateInstance(class [mscorlib]System.Type, int32)
+    castclass !!0[]
+    stloc.2
+    ldloc.0
+    ldc.i4.0
+    ldloc.2
+    ldc.i4.0
+    ldloc.1
+    call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+    ldloc.2
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
