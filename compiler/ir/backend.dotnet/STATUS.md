@@ -27,7 +27,28 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: explicit architecture-test instrumentation now
+- Last completed foundation: generic-owner execution tracing now records into
+  a fixed primitive counter table and emits one final line per visited compiler
+  site instead of one console line per call. The table is sized from the exact
+  complete-census route count; each call performs one CLR
+  `Interlocked.Increment(Int64&)`, and the final snapshot uses
+  `Interlocked.Read(Int64&)`. The physical helper and its private recorder/
+  flusher method bodies exist only in an explicitly instrumented executable:
+  there is still no CLI option, Runtime/KLIB ABI, published type, or normal
+  emitter policy. Trace-manifest schema 2 records `counterProtocol=FINAL_FLUSH`.
+  Its independently verified PSI/LightTree × Framework 4.8/net10 corpus
+  retains byte-identical route/count artifacts and the exact prior 49/40/9
+  event vector: 24 producer-erased, 11 exact, four capability, and one missing-
+  capability producer event, including the zero-hit and two-hit sites. Normal
+  net10 PSI and LightTree bundles remain SHA-256-identical to the pre-feature
+  baseline across all 17 files per lane (34 comparisons). Collection output is
+  now O(visited sites), not O(executed calls), but instrumentation remains
+  correctness/frequency evidence rather than timing evidence; a workload must
+  join its own workers before `box()` returns and triggers the snapshot. The
+  strict aggregate completed in 2,465.4 seconds; direct audit covers 190 XML
+  files and 2,216 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-call-route-counter-flush-2026-08-15.md`](docs/archive/generic-owner-call-route-counter-flush-2026-08-15.md).
+- The preceding foundation: explicit architecture-test instrumentation now
   attaches runtime events to the compiler's original generic-owner call-site
   indices. The planner retains the exact analyzed `IrCall`; only a test-owned,
   private module-local `(Int) -> Unit` recorder enables rewriting. Every
@@ -2290,9 +2311,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    frontend/profile byte equality. Explicit test-only exact-`IrCall` tracing
    now proves the same-compilation join and exact hostile per-site vector on
    Framework 4.8/net10 and both frontends while leaving normal products byte-
-   identical. Next, replace per-call console events with bounded counters and
-   one final flush, then apply that collection product to representative
-   complete erased/candidate Kotlin applications and C# consumers/subclasses,
+   identical. The per-call console transport has now been replaced by an
+   exact-sized thread-safe primitive counter table and one final flush. Next,
+   apply that collection product to representative complete erased/candidate
+   Kotlin applications and C# consumers/subclasses,
    including actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is

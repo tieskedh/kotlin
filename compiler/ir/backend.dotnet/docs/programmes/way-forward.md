@@ -699,21 +699,27 @@ not renumbered producer sites. This creates the exact instrumentation join but
 does not make the hostile application representative. See
 [`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
 
-The first compiler-indexed execution profile now closes that join for the
-bounded hostile application. An explicit test-only recorder wraps the exact
-analyzed call after single ordered receiver/argument evaluation and immediately
-before invocation. Its closed trace bundle fingerprints the static route file,
-all 40 producer-site counters, and instrumented assembly. PSI/LightTree and
-Framework 4.8/net10 agree byte-for-byte on 40 producer events—24 erased, 11
-exact, four capability, one missing capability—plus nine unrelated events.
-One typed site is unexecuted and another executes twice, so the per-site oracle
-cannot be replaced by aggregate totals. Normal products remain byte-identical
-when the hook is absent. This console-event tracer is correctness evidence, not
-performance measurement. Next replace per-call output with a bounded in-process
-counter/final-flush product suitable for complete representative applications,
-then collect route/state distributions independently from timing on Framework
-4.8 and every .NET 10 deployment lane. See
+The first compiler-indexed execution profile closed that join for the bounded
+hostile application. An explicit test-only recorder wraps the exact analyzed
+call after single ordered receiver/argument evaluation and immediately before
+invocation. Its exact per-site oracle includes one unexecuted typed site and
+one site executed twice; aggregate totals cannot substitute for that identity.
+See
 [`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
+
+That collection path is now suitable for large call counts. The instrumented
+executable owns one private exact-sized `Int64[]`; every event performs one
+linearizable `Interlocked.Increment`, and a post-`box()` flush atomically reads
+the table and prints only visited sites. Trace schema 2 names the
+`FINAL_FLUSH` protocol. PSI/LightTree and Framework 4.8/net10 retain identical
+route/count bytes and the same 49-event hostile vector, while all 34 normal
+bundle-file comparisons remain byte-identical to the pre-feature baseline.
+The workload must join its own workers before returning. Collection output is
+O(visited sites), but the counter run still measures no performance: collect
+representative route/state distributions independently, then time clean
+erased/candidate products on Framework 4.8 and every .NET 10 deployment lane.
+See
+[`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

@@ -80,6 +80,10 @@ Archived snapshots:
   records exact-IR-call instrumentation, the closed compiler-indexed dynamic
   route profile across Framework CLR 4/net10 and both frontends, and unchanged
   normal-product byte evidence.
+- [`generic-owner-call-route-counter-flush-2026-08-15.md`](generic-owner-call-route-counter-flush-2026-08-15.md)
+  replaces per-call console transport with exact-sized thread-safe primitive
+  counters and one final flush, retaining the exact four-lane route oracle and
+  unchanged normal-product bytes.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots

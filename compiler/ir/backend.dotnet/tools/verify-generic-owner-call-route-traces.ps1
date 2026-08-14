@@ -40,6 +40,7 @@ function Read-CanonicalProperties([string]$Path) {
     $expectedKeys = @(
         'schema',
         'targetProfile',
+        'counterProtocol',
         'routeManifestSha256',
         'countsSha256',
         'instrumentedAssemblySha256',
@@ -64,8 +65,11 @@ function Read-CanonicalProperties([string]$Path) {
         }
         $properties[$key] = $value
     }
-    if ($properties.schema -ne '1') {
+    if ($properties.schema -ne '2') {
         throw "Unsupported trace schema '$($properties.schema)': $Path"
+    }
+    if ($properties.counterProtocol -ne 'FINAL_FLUSH') {
+        throw "Unsupported trace counter protocol '$($properties.counterProtocol)': $Path"
     }
     foreach ($hashKey in @('routeManifestSha256', 'countsSha256', 'instrumentedAssemblySha256')) {
         if ($properties[$hashKey] -notmatch '^[0-9a-f]{64}$') {
@@ -221,6 +225,7 @@ function Assert-TraceBundle([string]$Directory, [string]$ExpectedTarget) {
     $counts = Read-RouteCounts $countsPath $routeManifest
     $trace = Read-CanonicalProperties $tracePath
     if ($trace.targetProfile -ne $ExpectedTarget -or
+            $trace.counterProtocol -ne 'FINAL_FLUSH' -or
             $trace.routeManifestSha256 -ne $routeManifest.Sha256 -or
             $trace.countsSha256 -ne $counts.Sha256 -or
             [long]$trace.producerEventCount -ne $counts.ProducerEventCount -or

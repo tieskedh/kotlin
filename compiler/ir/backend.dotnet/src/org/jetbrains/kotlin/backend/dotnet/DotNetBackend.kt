@@ -318,6 +318,10 @@ object DotNetBackend {
                 interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
                 cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
                 hasKotlinMetadataResource = producesLibrary && kotlinMetadataResourceFactory != null,
+                genericOwnerCallRouteTraceHooks = configuration.dotNetGenericOwnerCallRouteTraceHooks,
+                genericOwnerCallRouteTraceSiteCount = context.genericOwnerCallRoutes.size.takeIf {
+                    configuration.dotNetGenericOwnerCallRouteTraceHooks != null
+                },
             )
             val emission = emitter.emit(irModuleFragment)
             if (emission == null) {

@@ -5,17 +5,20 @@
 
 package org.jetbrains.kotlin.test.runners.codegen
 
-import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_GENERIC_OWNER_CALL_ROUTE_TRACE_COUNT_SEPARATOR
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
-import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceRecorder
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
@@ -372,13 +375,19 @@ private class BackendCliDotNetFacade(
             check(callRouteTraceExportPath.isNotBlank()) {
                 "Generic-owner call-route trace export path must not be blank"
             }
-            val recorder = loweredInput.result.irModuleFragment.files
+            val traceFunctions = loweredInput.result.irModuleFragment.files
                 .flatMap { file -> file.declarations }
                 .filterIsInstance<IrSimpleFunction>()
-                .singleOrNull { function ->
-                    function.name.asString() == GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME
-                } ?: error("The instrumented generic-owner application lacks its explicit IR trace recorder")
-            loweredInput.configuration.dotNetGenericOwnerCallRouteTraceRecorder = recorder
+            val recorder = traceFunctions.singleOrNull { function ->
+                function.name.asString() == GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME
+            }
+                ?: error("The instrumented generic-owner application lacks its explicit IR trace recorder")
+            val flusher = traceFunctions.singleOrNull { function ->
+                function.name.asString() == GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME
+            }
+                ?: error("The instrumented generic-owner application lacks its explicit IR trace flusher")
+            loweredInput.configuration.dotNetGenericOwnerCallRouteTraceHooks =
+                DotNetGenericOwnerCallRouteTraceHooks(recorder, flusher)
         }
         val metadataInput = if (loweredInput.configuration.dotNetProducesLibrary) {
             DotNetLibraryMetadataSerializationPipelinePhase.executePhase(loweredInput)
@@ -794,11 +803,12 @@ private const val GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerCallRouteTraceDir"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
+private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
+    "kotlinDotNetFlushGenericOwnerCallRoutesForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_COUNTS_FILE = "generic-owner-call-route-counts.tsv"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE =
     "generic-owner-call-route-trace.properties"
-private const val GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX =
-    "KOTLIN_DOTNET_GENERIC_OWNER_CALL_ROUTE|site="
+private const val GENERIC_OWNER_CALL_ROUTE_TRACE_COUNTER_PROTOCOL = "FINAL_FLUSH"
 private val genericOwnerCallRouteTraceManifests = ConcurrentHashMap<String, String>()
 
 private fun genericOwnerCallRouteTraceKey(directory: File): String =
@@ -5844,8 +5854,24 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
             }
             appendLine("import kotlin.io.println")
             appendLine()
+            if (tracesGenericOwnerCallRoutes) {
+                appendLine("private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME(callSiteIndex: Int) {")
+                appendLine("    // Replaced by the test-only backend counter hook.")
+                appendLine("}")
+                appendLine()
+                appendLine("private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME() {")
+                appendLine("    // Replaced by the test-only backend counter hook.")
+                appendLine("}")
+                appendLine()
+            }
             appendLine("fun main() {")
-            appendLine("    println(box())")
+            if (tracesGenericOwnerCallRoutes) {
+                appendLine("    val result = box()")
+                appendLine("    $GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME()")
+                appendLine("    println(result)")
+            } else {
+                appendLine("    println(box())")
+            }
             appendLine("}")
         }
         val sourceDirectory = testServices.temporaryDirectoryManager.getOrCreateTempDirectory("src")
@@ -5855,19 +5881,6 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
 
         return buildList {
             add(file.toTestFile())
-            if (tracesGenericOwnerCallRoutes) {
-                val recorder = sourceDirectory.resolve("DotNetGenericOwnerCallRouteTraceRecorder.kt")
-                recorder.writeText(
-                    """
-                    import kotlin.io.println
-
-                    private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME(callSiteIndex: Int) {
-                        println("$GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX" + callSiteIndex)
-                    }
-                    """.trimIndent()
-                )
-                add(recorder.toTestFile())
-            }
             if (module.files.any { source -> "kotlin.test" in source.originalContent }) {
                 val assertions = sourceDirectory.resolve("DotNetTestAssertions.kt")
                 assertions.writeText(
@@ -6024,13 +6037,15 @@ private abstract class AbstractDotNetBoxRunner(
         val eventCounts = linkedMapOf<Int, Long>()
         val applicationOutput = mutableListOf<String>()
         executionOutput.trim().lines().forEach { line ->
-            if (line.startsWith(GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX)) {
-                val callSiteIndex = checkNotNull(
-                    line.removePrefix(GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX).toIntOrNull()?.takeIf { index ->
-                        index >= 0
-                    },
-                ) { "The instrumented application emitted an invalid generic-owner route event: '$line'" }
-                eventCounts[callSiteIndex] = Math.addExact(eventCounts[callSiteIndex] ?: 0L, 1L)
+            if (line.startsWith(DOTNET_GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX)) {
+                val fields = line.removePrefix(DOTNET_GENERIC_OWNER_CALL_ROUTE_TRACE_PREFIX)
+                    .split(DOTNET_GENERIC_OWNER_CALL_ROUTE_TRACE_COUNT_SEPARATOR)
+                val callSiteIndex = fields.getOrNull(0)?.toIntOrNull()
+                val count = fields.getOrNull(1)?.toLongOrNull()
+                check(fields.size == 2 && callSiteIndex != null && callSiteIndex >= 0 && count != null && count > 0L &&
+                        eventCounts.put(callSiteIndex, count) == null) {
+                    "The instrumented application emitted an invalid generic-owner final counter: '$line'"
+                }
             } else {
                 applicationOutput += line
             }
@@ -6049,15 +6064,16 @@ private abstract class AbstractDotNetBoxRunner(
             }
         }
         exportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_COUNTS_FILE).writeText(encodedCounts)
-        val producerEventCount = producerSiteIndices.sumOf { callSiteIndex ->
-            eventCounts[callSiteIndex] ?: 0L
+        val producerEventCount = producerSiteIndices.fold(0L) { total, callSiteIndex ->
+            Math.addExact(total, eventCounts[callSiteIndex] ?: 0L)
         }
-        val allEventCount = eventCounts.values.sum()
+        val allEventCount = eventCounts.values.fold(0L, Math::addExact)
         val traceManifest = exportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE).apply {
             writeText(
                 """
-                schema=1
+                schema=2
                 targetProfile=${target.name}
+                counterProtocol=$GENERIC_OWNER_CALL_ROUTE_TRACE_COUNTER_PROTOCOL
                 routeManifestSha256=$routeFingerprint
                 countsSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(encodedCounts.toByteArray())}
                 instrumentedAssemblySha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(instrumentedAssembly.readBytes())}
