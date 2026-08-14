@@ -173,6 +173,8 @@ internal class DotNetBackendContext(
      * these plans; every planned class continues to enter [erasedGenericClasses].
      */
     val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
+    /** Static call-site evidence only; codegen must never consume these route requirements. */
+    val genericOwnerCallRoutes: MutableList<DotNetGenericOwnerCallRoutePlan> = mutableListOf()
     /** Logical classifier to its stable, producer-recorded static-initialization entry. */
     val staticInitializations:
         MutableMap<IrClass, DotNetLoweredStaticInitialization> = linkedMapOf()

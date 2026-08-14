@@ -673,6 +673,22 @@ timing remains runtime-sensitive. This closes typed-storage causal feasibility,
 not representative-product breadth or production owner admission. See
 [`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
 
+The next foundation removes handwritten route weights from the reopening
+decision. A production-inert fixed-point census now follows generic-owner
+receivers through constructors, aliases, branches, closed-call arguments,
+returns, fields, casts, and lowered default helpers. Exact invariant public
+signatures retain construction proof; star/projected/variant or unresolved
+views require a capability. Separate consumers resolve only exact logical
+member keys claimed by the decoded producer catalog and distinguish physical,
+producer-erased, unrelated, and missing-capability outcomes. The hostile
+separate corpus has 40 producer-owned static sites: 24 producer-erased, 11
+exact typed candidates, four capability routes, and one missing capability.
+These are structural sites, not dynamic frequency. The next reopening work is
+to run this compiler-derived census over complete representative applications
+and collect execution weights on Framework 4.8 and all .NET 10 deployment
+lanes. See
+[`../archive/generic-owner-call-route-census-2026-08-14.md`](../archive/generic-owner-call-route-census-2026-08-14.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

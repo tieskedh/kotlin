@@ -481,6 +481,43 @@ owner, weaken the complete hostile semantic owner, or authorize atomic
 migration. See
 [`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
 
+Representative call mixes must be derived from Kotlin IR rather than assigned
+by a benchmark author. The production-inert planner therefore records every
+call whose receiver is a Kotlin-owned generic class and traces the receiver's
+physical-construction provenance through local definitions, assignments,
+returns, callable arguments, fields, branches, and casts. A cast preserves its
+input provenance and cannot manufacture an exact construction. A route is an
+exact typed-entry candidate only when all reachable receiver producers prove
+the same closed physical construction required at that use. Any semantic view,
+merge with an incompatible construction, unsupported/source-free producer, or
+open assembly boundary whose invariant signature does not uniquely fix the
+physical construction requires the capability. A closed invariant public
+signature may retain exact provenance; a star, projected, or variant signature
+may not. If that member has no complete capability slot, the census records a
+missing proof obligation rather than guessing an exact call.
+
+This census counts static call sites, not executions, and never drives today's
+emitter. Dynamic weights come only from executing complete applications. An
+external owner also remains unresolved until its decoded producer family joins
+the exact logical member key; consumer source names, static types, and today's
+erased MethodDefs are not sufficient. Swift-style devirtualization or VTA may
+later prove more exact routes, but disabling it must leave the capability route
+and every DLL signature unchanged.
+
+The join is producer-scoped. A decoded artifact resolves only member keys in
+its complete classification catalog; unrelated external owners remain pending
+for their own producer. A classified owner with no physical family is recorded
+as producer-erased rather than mistaken for an incomplete record. Default-
+argument calls participate through the existing dispatcher binding and moved
+receiver parameter, never through a `$default` spelling heuristic.
+
+The first separate hostile census contains 40 producer-owned static call
+sites: 24 producer-erased, 11 exact typed-entry candidates, four semantic-
+capability requirements, and one missing capability. Those figures are not
+dynamic weights and do not validate the earlier handwritten three-typed/
+24-semantic benchmark mix. See
+[`../archive/generic-owner-call-route-census-2026-08-14.md`](../archive/generic-owner-call-route-census-2026-08-14.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override
