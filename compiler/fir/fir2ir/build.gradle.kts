@@ -191,6 +191,9 @@ projectTests {
             providers.gradleProperty("kotlin.dotnet.genericOwnerApplicationDir").orNull?.let { exportDirectory ->
                 systemProperty("kotlin.dotnet.genericOwnerApplicationDir", exportDirectory)
             }
+            providers.gradleProperty("kotlin.dotnet.genericOwnerCallRouteTraceDir").orNull?.let { exportDirectory ->
+                systemProperty("kotlin.dotnet.genericOwnerCallRouteTraceDir", exportDirectory)
+            }
         }
     }
 

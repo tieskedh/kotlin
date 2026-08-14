@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrInstanceInitializerCall
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -3225,6 +3226,8 @@ internal data class DotNetGenericOwnerCallRoutePlan(
     val callerName: String,
     val callerLogicalBindingKey: String?,
     val callSiteIndex: Int,
+    /** Exact lowered call retained only for optional architecture-test tracing. */
+    val call: IrCall,
     val callee: IrSimpleFunction,
     val calleeOwner: IrClass,
     val calleeLogicalBindingKey: String?,
