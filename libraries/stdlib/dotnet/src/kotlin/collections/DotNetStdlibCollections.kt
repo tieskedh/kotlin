@@ -57,6 +57,11 @@ internal actual fun <T> terminateCollectionToArray(
     array: Array<T>,
 ): Array<T> = array
 
+internal actual fun <T> Array<out T>.copyToArrayOfAny(isVarargs: Boolean): Array<out Any?> {
+    if (isVarargs) return this
+    return Array<Any?>(size) { index -> this[index] }
+}
+
 // CLR vectors retain their runtime element type. This target-private external operation allocates
 // from that physical type, including across covariant foreign boundaries; the backend emits the
 // BCL operation directly and does not publish this declaration.
@@ -191,15 +196,15 @@ public external fun CharArray.copyInto(
     endIndex: Int = size,
 ): CharArray
 
-public external fun <T> Array<T>.copyOf(): Array<T>
-public external fun BooleanArray.copyOf(): BooleanArray
-public external fun ByteArray.copyOf(): ByteArray
-public external fun ShortArray.copyOf(): ShortArray
-public external fun IntArray.copyOf(): IntArray
-public external fun LongArray.copyOf(): LongArray
-public external fun FloatArray.copyOf(): FloatArray
-public external fun DoubleArray.copyOf(): DoubleArray
-public external fun CharArray.copyOf(): CharArray
+public actual external fun <T> Array<T>.copyOf(): Array<T>
+public actual external fun BooleanArray.copyOf(): BooleanArray
+public actual external fun ByteArray.copyOf(): ByteArray
+public actual external fun ShortArray.copyOf(): ShortArray
+public actual external fun IntArray.copyOf(): IntArray
+public actual external fun LongArray.copyOf(): LongArray
+public actual external fun FloatArray.copyOf(): FloatArray
+public actual external fun DoubleArray.copyOf(): DoubleArray
+public actual external fun CharArray.copyOf(): CharArray
 
 public external fun BooleanArray.copyOf(newSize: Int): BooleanArray
 public external fun ByteArray.copyOf(newSize: Int): ByteArray

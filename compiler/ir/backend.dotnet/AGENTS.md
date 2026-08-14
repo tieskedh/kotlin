@@ -391,6 +391,22 @@ including primitive/Char boxing, nullable accumulator state, map equality,
 covariance, and exception timing; a .NET 10 `System.Object` optimization is
 not evidence for Framework behavior.
 
+Signed primitive-array and generic object-array sorting follows the complete
+Common generator family and exact Native/Wasm algorithm lineage. The seven
+naturally ordered wrappers use their existing private CLR vectors and the
+upstream per-wrapper quicksort; object-array sorting remains stable and uses a
+runtime-component-typed merge buffer. Range checks, mutation, aliasing,
+Float/Double total order, and Boolean's absence from natural sorting are
+Kotlin semantics. Never substitute `System.Array.Sort`, publish unsigned
+variants before their value-class/range closure, or fabricate a natural
+Boolean sort. An open producer-generic `copyOf`/`sortedArray` snapshot obtains
+the source runtime component type, allocates through
+`System.Array.CreateInstance`, and copies through `System.Array.Copy`; it does
+not allocate `object[]` or emit open `newarr !T`. Execute direct and separate
+sorting consumers through both FIR parsers on the real Framework CLR 4 host
+and .NET 10. The same portable stdlib and C# workload must run on both hosts;
+modern object, generic, or array optimizations are not Framework evidence.
+
 See
 [runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)
 and

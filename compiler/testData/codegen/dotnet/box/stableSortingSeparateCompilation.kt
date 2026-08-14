@@ -20,6 +20,14 @@ public fun sortedArray(entries: Array<Entry>): Array<Entry> {
     return entries
 }
 
+public fun sortIntRange(values: IntArray, fromIndex: Int, toIndex: Int) {
+    values.sort(fromIndex, toIndex)
+}
+
+public fun sortedInts(values: IntArray): IntArray = values.sortedArray()
+
+public fun <T : Comparable<T>> sortedGeneric(values: Array<T>): Array<T> = values.sortedArray()
+
 public inline fun sortedNames(entries: Iterable<Entry>): List<String> =
     entries.sortedBy { it.priority }.map { it.name }
 
@@ -51,6 +59,30 @@ fun box(): String {
     val anyComparator = Comparator<Any> { left, right -> left.toString().compareTo(right.toString()) }
     val widened: Comparator<in Entry> = anyComparator
     sortEntries(mutable, widened)
+
+    val range = intArrayOf(9, 4, 1, 3, 8)
+    sortIntRange(range, 1, 4)
+    if (!range.contentEquals(intArrayOf(9, 1, 3, 4, 8))) return "fail 5: primitive range"
+
+    val primitiveSource = intArrayOf(3, 1, 2)
+    val primitiveSnapshot = sortedInts(primitiveSource)
+    if (primitiveSnapshot === primitiveSource ||
+        !primitiveSnapshot.contentEquals(intArrayOf(1, 2, 3))
+    ) return "fail 6: primitive snapshot"
+    primitiveSource[0] = 99
+    if (!primitiveSnapshot.contentEquals(intArrayOf(1, 2, 3))) return "fail 7: primitive snapshot alias"
+
+    val genericIntSource = arrayOf(3, 1, 2)
+    val genericIntSnapshot = sortedGeneric(genericIntSource)
+    if (genericIntSnapshot === genericIntSource ||
+        !genericIntSnapshot.contentEquals(arrayOf(1, 2, 3))
+    ) return "fail 8: open generic value-array snapshot"
+
+    val genericStringSource = arrayOf("c", "a", "b")
+    val genericStringSnapshot = sortedGeneric(genericStringSource)
+    if (genericStringSnapshot === genericStringSource ||
+        !genericStringSnapshot.contentEquals(arrayOf("a", "b", "c"))
+    ) return "fail 9: open generic reference-array snapshot"
 
     return "OK"
 }
