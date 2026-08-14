@@ -172,6 +172,16 @@ win. This closes bounded carrier-cost attribution, not representative product
 comparison. See
 [`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
+The complementary compiler-proven carrier is now executable evidence too. A
+test-owned `HostileTypedStore<T>` stores its one private state field as `!T` and
+uses identity exact access; its strict capability checks before mutation and
+widens or boxes only at that boundary. Exact Int, non-trivial struct, and
+nullable routes eliminate all per-iteration allocation on both runtime
+families. Capability routes retain the expected object-domain allocation and
+check cost. This validates the matrix's producer-graph distinction without
+admitting production owners or weakening any semantic-object carrier. See
+[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+
 The competing fallback is a construction such as `C<object>` used only
 through `S(C)`. It is simpler for AOT but is not the exact physical meaning of
 logical `C<Int?>` or `C<String?>`. If admitted, all boundaries must accept that

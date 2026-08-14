@@ -318,6 +318,18 @@ representative application call mixes and on preserving every valid Kotlin
 widened operation, not on narrowing the semantic surface for speed. See
 [`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
 
+The direct surface now also has a true typed-state control. C# observes
+`HostileTypedStore<T>` with a private `T` field and exact `T` read/write
+signatures; direct calls never cross the capability. Its explicit non-generic
+capability remains private in ordinary member discovery, rejects an
+incompatible value before mutation, and provides the same-object widened
+boundary. Exact Int, struct, and nullable routes remove per-iteration boxing,
+while capability routes retain the measured object-domain cost. This proves
+that truthful field generics are possible for compiler-proven owners, not that
+the remaining acceptance matrix or representative product gate is complete.
+See
+[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,
