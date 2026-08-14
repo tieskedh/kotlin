@@ -5,8 +5,10 @@
 - Scope: the ordinary `Sequence<out T>` identity, non-builder Common sequence
   implementation classes, and the dependency-closed Common generated
   sequence/collection conversion families
-- Does not enable: sequence/iterator builders, random/shuffle, window/chunk,
-  `Grouping`, unsigned aggregates, BCL enumeration identity, or typed C# export
+- Original tranche did not enable: sequence/iterator builders, random/shuffle,
+  window/chunk, `Grouping`, unsigned aggregates, BCL enumeration identity, or
+  typed C# export. The later Grouping foundation now admits `groupingBy` without
+  changing this Sequence representation.
 
 ## Decision
 
@@ -32,8 +34,9 @@ an independent unavailable substrate:
   `zipWithNext` reach the sequence-builder coroutine API;
 - `windowed`/`chunked` reach the iterator-builder and sliding-window closure;
 - `shuffled` reaches `kotlin.random.Random` and a sequence builder;
-- `groupingBy` reaches the independently selected `Grouping` identity and
-  aggregate source;
+- `groupingBy` originally reached the independently selected `Grouping`
+  identity and aggregate source; that closure is now admitted by the
+  [`Grouping` foundation](grouping-foundation.md);
 - `UInt`/`ULong` selector sums reach the unsigned value-class product.
 
 Every other generated Sequence member is admitted as one generator-owned

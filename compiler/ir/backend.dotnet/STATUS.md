@@ -27,10 +27,26 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: Kotlin-owned `Sequence<out T>` now publishes one
+- Last completed foundation: Kotlin-owned `Grouping<T, out K>` now publishes
+  the complete Common aggregate/fold/reduce/count source, the Native/Wasm
+  `eachCount` actual, and all four generated factories over Iterable,
+  Sequence, object arrays, and CharSequence. KLIB retains both type parameters
+  and key covariance; one non-generic erased CLR interface owns only source
+  iteration and key selection, with no LINQ, `IGrouping<TKey,TElement>`, or
+  `IEnumerable<T>` identity. Common absent-versus-present-null accumulator,
+  first-element, seeded-destination, encounter-order, and exception semantics
+  execute through both FIR parsers on Framework CLR 4 and .NET 10. The same
+  portable `netstandard2.0` Stdlib DLL and hostile consumer execute separately
+  on both runtimes, including object-carried primitive/Char paths; Roslyn
+  directly implements the erased interface and calls `GroupingKt.eachCount`.
+  The strict aggregate completed in 1,961.0 seconds and its direct audit covers
+  190 XML files, 2,212 tests, and zero failures, errors, or skips. See
+  [`docs/decisions/grouping-foundation.md`](docs/decisions/grouping-foundation.md).
+- The preceding foundation: Kotlin-owned `Sequence<out T>` publishes one
   non-generic erased CLR interface plus the authoritative Common non-builder
   implementation objects, adapters, and complete generated inventory outside
-  its exact builder/random/`Grouping`/unsigned exclusion partition. KLIB keeps
+  its original builder/random/`Grouping`/unsigned exclusion partition;
+  `groupingBy` is now admitted by the later Grouping foundation. KLIB keeps
   the covariant logical type and original overloads; deterministic logical-
   type-derived physical names resolve CLR-erased collisions. A portable
   consumer exposed the generic-return boundary where `Sequence<T>.min/max`
@@ -43,9 +59,7 @@ verification, and work state.
   runtime (`4.8.09221`, CLR `4.0.30319.42000`) and separately on .NET 10.
   PSI/LightTree direct products add all four runtime lanes; Roslyn implements
   the erased Sequence interface and calls its Common facade without observing
-  `IEnumerable<T>`. The strict aggregate completed in 2,106.9 seconds and its
-  direct audit covers 190 XML files, 2,208 tests, and zero failures, errors, or
-  skips. See
+  `IEnumerable<T>`. See
   [`docs/decisions/sequence-foundation.md`](docs/decisions/sequence-foundation.md).
 - The preceding foundation: the paired hostile generic-owner application now
   has fail-closed route attribution on the registered Framework 4.8 family
@@ -657,36 +671,35 @@ stdlib. The target is not close to 98% feature-complete: remaining
 mapped/Stdlib and foreign member reflection, constructors and declared-member
 APIs, the remaining
 coroutine programme beyond its executable continuation/state-machine
-foundation, multi-field value classes, the Grouping family and sequence-
-builder closure, random/remaining sorting families, and Gradle/KMP product
+foundation, multi-field value classes, the sequence-builder closure,
+random/remaining sorting families, and Gradle/KMP product
 integration remain substantial open programmes.
 
 ## Current green gate
 
-The Kotlin-owned Sequence foundation head passed every constituent of the
+The Kotlin-owned Grouping foundation head passed every constituent of the
 strict target gate. Production generic-owner emission remains erased; this
-checkpoint adds Common-owned lazy Sequence behavior, its deterministic erased
-physical overload projection, and one narrowly proven generic upper-bound
-return recovery without changing that production owner representation. The
-normal aggregate command remains:
+checkpoint adds the complete Common Grouping aggregate/factory closure and its
+single Kotlin-owned erased CLR interface without changing that production
+owner representation. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-14 in 2,106.9 seconds. Backend,
+The latest aggregate completed on 2026-08-14 in 1,961.0 seconds. Backend,
 FIR2IR, stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
 executed for the final semantic head. Direct audit of all three result roots
-covers 190 XML files and 2,208 tests:
+covers 190 XML files and 2,212 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,077 FIR, IL-text, and box tests
+- 2,081 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 104 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate and explicit model constituent exited successfully. Relative to
-schema version 4, the 2,208-test inventory also executes exact
+schema version 4, the 2,212-test inventory also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
 KLIB-only logical type-argument authority, complete physical-callable-family
@@ -1680,12 +1693,25 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
 
 ## Active state
 
+The complete Kotlin-owned Grouping foundation is published from exact Common,
+generated, and Native/Wasm-derived sources. One non-generic erased CLR
+interface preserves the logical `Grouping<T, out K>` contract and owns only
+source iteration plus key selection; it neither maps to LINQ/BCL grouping nor
+duplicates state. Iterable, Sequence, object-array, and CharSequence factories
+are admitted together under their source-aligned facades, and GroupingKt owns
+the complete aggregate/fold/reduce/count family. Portable Framework CLR 4 and
+.NET 10 execution, all four PSI/LightTree profile lanes, deterministic product
+metadata, nullable/seeded map semantics, and direct Roslyn implementation and
+calls are green. Modern `System.Object`, boxing, interface-dispatch, or generic
+optimizations are not treated as Framework proof.
+
 The Kotlin-owned non-builder Sequence foundation is published from exact
 Common/generated sources. One erased non-generic CLR interface preserves the
 canonical Kotlin object identity and covariant KLIB contract; it neither maps
 to `IEnumerable<T>` nor uses LINQ. Generator-inventoried exclusions retain
-sequence builders, random, `Grouping`, and unsigned selector sums behind their
-independent substrates. The physical facade derives every erased collision
+sequence builders, random, and unsigned selector sums behind their independent
+substrates; `groupingBy` is now admitted by the Grouping foundation. The
+physical facade derives every erased collision
 name from the logical receiver/selector domain. Portable Framework CLR 4 and
 .NET 10 execution, all four PSI/LightTree profile lanes, deterministic product
 metadata, and direct Roslyn implementation/calls are green. A substituted
@@ -2089,14 +2115,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Close the complete `Grouping<T, out K>` dependency graph over the now-
-   admitted map, iterator, lambda, inline, Sequence, array, and CharSequence
-   substrates. Inventory all Common aggregate/fold/reduce/count declarations
-   and every generated factory over an admitted carrier; exclude only an exact
-   independently blocked family. Preserve one erased Kotlin-owned interface,
-   Common first-element/null/map semantics, source-aligned physical ownership,
-   portable Framework CLR 4 plus .NET 10 execution, and a truthful negative BCL
-   boundary.
+1. Close the complete signed primitive-array and remaining object-array
+   range-sorting graph. Inventory every Common `sort` expect/actual and the
+   generated reverse, sorted-array, descending, and range variants over the
+   seven naturally ordered signed primitive wrappers plus object arrays. Reuse
+   the exact Native/Wasm sorting algorithm lineage and the existing wrapper
+   storage; preserve floating-point, range-check, mutation, aliasing, and
+   object-sort stability semantics independently on Framework CLR 4 and .NET
+   10. Do not substitute `System.Array.Sort`, merge unsigned value-class/range
+   work into this tranche, or pull in Random/sequence-builder-dependent
+   operations before their independent platform/language decisions.
 2. Continue the hardest-model-first generic-owner architecture spike while
    keeping production emission erased. The erased hostile oracle, historical
    failure audit, deterministic carrier/slot admission matrix, one-owner

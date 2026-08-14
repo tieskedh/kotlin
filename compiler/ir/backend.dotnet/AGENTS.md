@@ -380,12 +380,25 @@ recovery to explicit or safe casts. Execute the same portable Sequence
 consumer on the real Framework CLR 4 host and .NET 10; modern `System.Object`,
 boxing, interface-dispatch, or generic optimizations are not Framework proof.
 
+`Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
+interface owns only `sourceIterator` and `keyOf`, while the complete Common
+aggregate/fold/reduce/count source remains authoritative. Admit the Iterable,
+Sequence, object-array, and CharSequence factories together; the Common
+template defines no primitive-array Grouping variants. Do not map Grouping to
+LINQ, `IGrouping<TKey, TElement>`, or `IEnumerable<T>`. Execute the same
+portable Grouping consumer on the real Framework CLR 4 host and .NET 10,
+including primitive/Char boxing, nullable accumulator state, map equality,
+covariance, and exception timing; a .NET 10 `System.Object` optimization is
+not evidence for Framework behavior.
+
 See
 [runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)
 and
 [`docs/programmes/common-collections.md`](docs/programmes/common-collections.md).
 See also the
 [`Sequence` foundation ADR](docs/decisions/sequence-foundation.md).
+See also the
+[`Grouping` foundation ADR](docs/decisions/grouping-foundation.md).
 
 ## Nullability model
 
