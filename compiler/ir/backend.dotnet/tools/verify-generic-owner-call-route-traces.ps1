@@ -2,7 +2,7 @@
 param(
     [string]$OutputDirectory,
     [string]$ExistingCorpus,
-    [ValidateSet('hostile', 'array-copy')]
+    [ValidateSet('hostile', 'array-copy', 'octo-tree')]
     [string]$Corpus = 'hostile',
     [ValidateSet('net10', 'net48')]
     [string[]]$Profiles = @('net10', 'net48')
@@ -44,7 +44,7 @@ $corpusDefinition = if ($Corpus -eq 'hostile') {
         ProducerEventCount = 40L
         UnrelatedEventCount = 9L
     }
-} else {
+} elseif ($Corpus -eq 'array-copy') {
     [pscustomobject]@{
         TestMethod = 'testGenericOwnerRepresentativeArrayCopy'
         SiteIndices = @(0..11) + @(13..16)
@@ -71,6 +71,61 @@ $corpusDefinition = if ($Corpus -eq 'hostile') {
         AllEventCount = 6176L
         ProducerEventCount = 5664L
         UnrelatedEventCount = 512L
+    }
+} else {
+    [pscustomobject]@{
+        TestMethod = 'testGenericOwnerRepresentativeOctoTree'
+        SiteIndices = @(
+            0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+            19, 21, 22, 24, 26, 27, 29, 30, 31, 32, 34, 35, 36, 38, 40, 41, 42
+        )
+        SiteCounts = @{
+            0 = 1L
+            1 = 512L
+            2 = 512L
+            3 = 1L
+            4 = 512L
+            5 = 512L
+            6 = 512L
+            8 = 1024L
+            9 = 512L
+            10 = 1L
+            11 = 512L
+            12 = 512L
+            13 = 512L
+            14 = 0L
+            15 = 512L
+            16 = 1L
+            17 = 64L
+            19 = 0L
+            21 = 96L
+            22 = 88L
+            24 = 1024L
+            26 = 64L
+            27 = 64L
+            29 = 8L
+            30 = 448L
+            31 = 0L
+            32 = 0L
+            34 = 0L
+            35 = 0L
+            36 = 512L
+            38 = 512L
+            40 = 0L
+            41 = 0L
+            42 = 9L
+        }
+        StaticRequirementCounts = @{
+            EXACT_TYPED_ENTRY = 25
+            SEMANTIC_CAPABILITY = 9
+        }
+        DynamicRequirementCounts = @{
+            EXACT_TYPED_ENTRY = 5941L
+            SEMANTIC_CAPABILITY = 3096L
+        }
+        AllEventCount = 11765L
+        ProducerEventCount = 9037L
+        UnrelatedEventCount = 2728L
     }
 }
 $expectedSiteIndices = $corpusDefinition.SiteIndices

@@ -338,6 +338,16 @@ owner/call surface without licensing a fictitious `T?[]` field. A paired C#
 consumer remains part of the open representative-product gate. See
 [`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
 
+Recursive OctoTree now adds a second exact input and shows that useful CLR
+typing need not wait for public owner reification. Its `Array<Node<T>?>` state
+is already an honest `Node[]` because the production erased `Node<T>` has one
+CLR classifier; direct `T` arrays and `T` value fields remain erased. The
+application executes 5,941 exact and 3,096 semantic-capability local events.
+That narrows where canonical adapters may be needed, but only a paired direct
+C# product can establish whether the eventual `C<T>` surface and those
+capabilities are idiomatic enough. See
+[`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,

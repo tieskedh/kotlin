@@ -375,6 +375,17 @@ distribution only; it does not close representative breadth, C# products, or
 clean erased/candidate measurement. See
 [`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
 
+The second exact input, recursive OctoTree, exercises a mixed distribution:
+5,941 exact and 3,096 semantic-capability producer events over 25 and nine
+local static sites respectively. It also proves a useful boundary below owner
+reification. `Array<Node<T>?>` can be the truthful `Node[]` of the current
+erased Kotlin classifier, while direct `Array<T>` remains `System.Array` and
+`Leaf.value` remains physically `object`. The initializer supplies typed
+candidate provenance, but `root` retains semantic state. All route/count bytes
+agree across PSI/LightTree and Framework 4.8/net10. This is broader correctness
+evidence, not representative completion or performance evidence. See
+[`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?
