@@ -27,7 +27,28 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the second exact repository application stages
+- Last completed optimization: Common-faithful `Array<out T>.joinTo` retains
+  its public `System.Array` receiver for every Kotlin-valid projected view, but
+  no longer forces every compatible exact vector through per-element
+  `GetValue`/box/unbox. One non-throwing `isinst T[]` selects an inline
+  `ldelem T` copy of the same Common algorithm; widened value vectors and
+  incompatible erased-owner state retain the original semantic fallback.
+  Exact/widened value, nullable-value, transform, limit, identity, live-read,
+  and failure behavior executes through PSI/LightTree on Framework 4.8 and
+  .NET 10. Both stdlib products physically prove the unchanged receiver, typed
+  arm, fallback arm, and absence of a helper MethodDef. A source-controlled
+  checksum-identical causal tool holds `T = Int` and rendering constant: over
+  800,000 loads it removes exactly 19,200,000 bytes on each runtime, one
+  24-byte box per element. Median local load speedup was 1.457x on Framework
+  and 1.245x on .NET 10; this is route evidence, not representative
+  application performance. No cast result, KLIB, Runtime surface, public ABI,
+  array identity, or erased generic-owner state changed. The final strict
+  aggregate completed in 5,500.1 seconds; direct audit covers 190 XML files
+  and 2,234 tests with zero failures, errors, or skips. See
+  [`docs/decisions/projected-generic-array-join-fast-path.md`](docs/decisions/projected-generic-array-join-fast-path.md)
+  and
+  [`docs/archive/projected-generic-array-join-fast-path-2026-08-15.md`](docs/archive/projected-generic-array-join-fast-path-2026-08-15.md).
+- The preceding foundation: the second exact repository application stages
   Kotlin/Native's unchanged recursive OctoTree source as a declared Gradle
   input. A bounded driver performs 512 writes, 512 checked reads, and real
   recursive rendering. Its 25 local exact sites receive 5,941 events and nine

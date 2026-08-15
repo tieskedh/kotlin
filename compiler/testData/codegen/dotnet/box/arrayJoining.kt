@@ -49,6 +49,9 @@ private class NullableArrayRenderer<T>(private val values: Array<T?>) {
 private fun <T> renderOpen(values: Array<out T>): String =
     values.joinToString(separator = "|", prefix = "<", postfix = ">")
 
+private fun renderWidenedAny(values: Array<out Any?>): String =
+    values.joinToString(separator = "|", prefix = "<", postfix = ">")
+
 fun box(): String {
     val mixed = arrayOf<Any?>(null, HostileSequence("chars"), 'Q', NamedValue("object"))
     if (mixed.joinToString(separator = "|") != "null|chars|Q|object") return "fail 1: rendering"
@@ -90,6 +93,20 @@ fun box(): String {
         return "fail 10: transform did not fail"
     } catch (caught: IllegalStateException) {
         if (caught !== callbackFailure) return "fail 11: transform failure identity"
+    }
+
+    if (renderWidenedAny(arrayOf(1, 2)) != "<1|2>") return "fail 12: widened value fallback"
+    if (NullableArrayRenderer(arrayOf<Int?>(1, null, 2)).render() != "[1, null, 2]") {
+        return "fail 13: erased owner nullable value fallback"
+    }
+    var widenedVisits = 0
+    val widenedValues: Array<out Any?> = arrayOf(3, 4)
+    if (widenedValues.joinToString { value ->
+            widenedVisits++
+            "w$value"
+        } != "w3, w4" || widenedVisits != 2
+    ) {
+        return "fail 14: widened transform"
     }
 
     return "OK"
