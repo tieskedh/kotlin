@@ -37,6 +37,7 @@ import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isInt
+import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.builtins.StandardNames
@@ -119,6 +120,15 @@ internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {
     if (!isDotNetGenericArray()) return null
     val argument = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return null
     return argument.type.takeIf { argument.variance == Variance.INVARIANT }
+}
+
+/** The logical readable element of an invariant or output-projected generic array. */
+internal fun IrType.dotNetReadableArrayElementTypeOrNull(): IrType? {
+    if (!isDotNetGenericArray()) return null
+    val argument = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return null
+    return argument.type.takeIf {
+        argument.variance == Variance.INVARIANT || argument.variance == Variance.OUT_VARIANCE
+    }
 }
 
 /** Whether this is the unresolved invariant `Array<T?>` shape over an open type parameter. */
@@ -1258,8 +1268,9 @@ internal class DotNetIlTypeMapper private constructor(
      * the classified [DotNetIlValueType.ErasedGenericArray] `System.Array` view because CLR
      * vector covariance cannot represent value-element or arbitrary method-generic widenings;
      * KLIB retains its stronger bounded read type. A star projection uses the same physical view
-     * with the fixed logical `Any?` read result. `in` retains a typed write contract and remains
-     * rejected.
+     * with the fixed logical `Any?` read result. The singular bottom input
+     * `Array<in Nothing?>` shares that read capability while writes remain rejected; every other
+     * `in` projection retains a typed write contract and remains unsupported.
      */
     private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType? {
         val simpleType = type as? IrSimpleType
@@ -1269,6 +1280,12 @@ internal class DotNetIlTypeMapper private constructor(
         val projection = argument as? IrTypeProjection
             ?: return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
         if (projection.variance == Variance.IN_VARIANCE) {
+            if (projection.type.isNullableNothing()) {
+                // FIR uses this bottom capture for read-only results such as
+                // `Array<out Any?>.copyOf(...)`. System.Array truthfully supplies its Any? read
+                // capability; generic-array set still rejects the unresolved null-write shape.
+                return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
+            }
             dotNetUnsupported(
                 "generic array type ${type.render()} has an input projection; " +
                         "a CLR vector cannot represent its read-as-Any/write-as-element contract"

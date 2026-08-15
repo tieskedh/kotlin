@@ -27,7 +27,29 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the complete Common Sequence builder/window
+- Last completed correction: Common generic resized array copies now preserve
+  Kotlin's nullable-result contract on CLR value vectors. A closed
+  `Array<V>.copyOf(newSize): Array<V?>` allocates `Nullable<V>[]`, copies its
+  prefix with typed `ldelem`/`newobj`/`stelem`, and leaves genuine null padding;
+  it neither boxes nor casts the source `V[]` to an incompatible nullable
+  vector. Output-projected copies retain exact reference/already-nullable
+  vectors and every non-growing vector. A growing non-null value vector behind
+  open `Array<out T?>` uses a new output-only `object[]`, because retaining
+  `V[]` would expose default `V`; the physical ABI remains `System.Array` and
+  KLIB remains authoritative. FIR's singular `Array<in Nothing?>` bottom
+  capture receives only that read capability, while an explicit null write is
+  still rejected unchanged. Direct execution covers all eight scalar families,
+  concrete/projected/open/reference/nullable/widened substitutions and
+  truncation through PSI/LightTree on Framework 4.8 and .NET 10. IL goldens
+  prove the boxing-free closed loop and bounded runtime branch. The final
+  strict aggregate exited successfully; direct audit covers 190 XML files and
+  2,216 tests with zero failures, errors, or skips. No runtime-surface, library-
+  codec, or public physical-signature change was introduced. See
+  [`docs/decisions/primitive-arrays.md`](docs/decisions/primitive-arrays.md),
+  [`docs/decisions/open-nullable-array-views-and-varargs.md`](docs/decisions/open-nullable-array-views-and-varargs.md),
+  and
+  [`docs/archive/generic-resized-array-copy-2026-08-15.md`](docs/archive/generic-resized-array-copy-2026-08-15.md).
+- The preceding foundation: the complete Common Sequence builder/window
   closure is now published from exact `SequenceBuilder.kt`, `SlidingWindow.kt`,
   `Sequences.kt`, and generated source. `SequenceScope` remains one erased
   Kotlin class over the established continuation/sentinel ABI; `sequence`,
@@ -831,29 +853,30 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The complete Common Sequence builder/window head passed every constituent of
-the strict target gate. The normal aggregate command remains:
+The truthful generic resized-array-copy head passed every constituent of the
+strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-15 in 2,653.0 seconds. Backend,
-FIR2IR, stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
-executed for the final semantic head. Direct audit of all three result roots
-covers 190 XML files and 2,216 tests:
+The latest aggregate completed successfully on 2026-08-15. Backend, FIR2IR,
+stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
+for the final semantic head. Direct audit of all three result roots covers 190
+XML files and 2,216 tests:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,085 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 125 library-integration tests
+- 104 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate and explicit model constituent exited successfully. The final
-head additionally proves builder laziness/suspension, every `yieldAll` route,
-running and windowing algorithms, generic fill failures, source-shard property
-ownership, and unchanged open-nullable rejection goldens. Relative to schema
-version 4, the 2,216-test inventory also executes exact
+head additionally proves all eight closed nullable value-vector copies,
+projected/open value/reference/nullable copy routes, null padding, exact
+non-growing component retention, bottom-capture reads, rejected bottom-capture
+writes, and unchanged Sequence/RingBuffer and declaration-eviction goldens.
+Relative to schema version 4, the 2,216-test inventory also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
 KLIB-only logical type-argument authority, complete physical-callable-family

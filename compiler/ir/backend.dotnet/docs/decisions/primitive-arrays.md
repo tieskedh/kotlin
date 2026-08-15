@@ -124,6 +124,16 @@ closed `System.Nullable<T>` value, not `object[]`:
 | `Array<Double?>` | `Nullable<Double>[]` | `double?[]` |
 | `Array<Char?>` | `Nullable<Char>[]` | `char?[]` |
 
+The same carrier rule applies when a non-null value vector becomes nullable
+as the result of Common `Array<V>.copyOf(newSize): Array<V?>`. Retaining the
+source `V[]` is incorrect: its padded suffix contains default `V`, not Kotlin
+null, and the vector cannot be cast to `Nullable<V>[]`. The backend allocates
+the truthful nullable vector, loads each copied prefix element from `V[]`,
+constructs `Nullable<V>` directly, and stores it with typed array opcodes.
+There is no boxing, reflective `SetValue`, or whole-vector `object[]`
+conversion. Reference-element arrays keep their runtime-component-preserving
+copy path because reference nullability does not change their CLR vector type.
+
 This is a concrete closed-carrier rule. It does not map nested open `Array<T?>`
 to `object[]`: the accepted hybrid-nullability ADR keeps that shape rejected
 because one invariant vector signature cannot become `Nullable<V>[]` for a
