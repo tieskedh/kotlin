@@ -772,6 +772,22 @@ lowering problem. See
 and
 [`../archive/projected-generic-array-join-fast-path-2026-08-15.md`](../archive/projected-generic-array-join-fast-path-2026-08-15.md).
 
+The candidate planner now retains the exact state carrier needed to cross the
+next product boundary. A bounded path-unbound tree composes owner parameters,
+invariant Kotlin-owned generic classifiers, and arrays; classifier leaves use
+pre-lowering logical producer keys and cannot bind until the artifact selects
+their TypeDef paths. Missing paths, projections, unsupported classifiers, and
+open nullable `T?` fail closed. In a real separate OctoTree producer this
+records `Node<T>[]` for `Branch.nodes`, `T` for `Leaf.value`, and the structural
+`Node<T>` candidate for semantic `root`. The producer census has 21 exact,
+nine capability, and nine external static routes; four additional exact sites
+belong only to the consumer. This remains an in-memory, production-inert
+snapshot: it changes no emitted field, KLIB/DLL schema, or public owner. The
+next gate is to serialize and bind the complete recursive physical family,
+then build paired candidate and direct C# consumer/subclass products rather
+than infer field types inside a fixture. See
+[`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
