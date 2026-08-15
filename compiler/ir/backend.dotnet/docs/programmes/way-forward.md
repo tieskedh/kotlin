@@ -744,6 +744,19 @@ breadth; broaden the source set and add paired candidate/C# products before
 the reopening decision. See
 [`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
 
+The second exact repository input is Kotlin/Native's recursive OctoTree. Its
+25 local exact sites receive 5,941 events and nine semantic-capability sites
+receive 3,096 events; PSI/LightTree and Framework 4.8/net10 retain identical
+route/count evidence. The state result also makes the physical boundary more
+precise. Direct `Array<T>` remains `System.Array` in an erased owner, while
+`Array<Node<T>?>` truthfully uses `Node[]` because erased Kotlin `Node<T>` has
+one declaration-stable CLR classifier. The exact initializer proves typed
+candidate provenance without reifying `T`; `root` remains semantic and the
+production `Leaf.value` remains object-backed. This removes avoidable array
+capability traffic without changing owner identity. It still does not close
+representative breadth, candidate/C# products, or timing. See
+[`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

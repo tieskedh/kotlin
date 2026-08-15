@@ -1401,7 +1401,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 is IrFunctionAccessExpression -> {
                     val target = expression.symbol.owner
-                    if (target in producerAccesses) {
+                    if (expression.isPhysicallyTypedOwnerClassifierArrayAllocation()) {
+                        setOf(DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED)
+                    } else if (target in producerAccesses) {
                         provenances[target].orEmpty()
                     } else {
                         setOf(defaultProvenance(expression.type))
@@ -1410,6 +1412,29 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 is IrGetField -> setOf(defaultProvenance(expression.type))
                 else -> setOf(defaultProvenance(expression.type))
             }
+        }
+
+        /**
+         * `arrayOfNulls<Node<T>>()` is a typed producer when Node is a local Kotlin generic
+         * classifier. The current erased owner emits Node[] and a future admitted CLR-generic
+         * owner emits Node<T>[]; neither route passes through object-domain element storage.
+         * Direct `arrayOfNulls<T>()`/`arrayOfNulls<T?>()` deliberately fails this test.
+         */
+        private fun IrFunctionAccessExpression.isPhysicallyTypedOwnerClassifierArrayAllocation(): Boolean {
+            if (symbol != context.irBuiltIns.arrayOfNulls) return false
+            val arrayType = type as? IrSimpleType ?: return false
+            if (arrayType.classifier != context.irBuiltIns.arrayClass) return false
+            val elementProjection = arrayType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+            if (elementProjection.variance != Variance.INVARIANT ||
+                !elementProjection.type.referencesTypeParameterOf(owner)
+            ) {
+                return false
+            }
+            val elementClass = ((elementProjection.type as? IrSimpleType)?.classifier as? IrClassSymbol)
+                ?.owner
+                ?: return false
+            return elementClass.origin != IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
+                    elementClass.isDotNetGenericClassDeclaration
         }
 
         private fun defaultProvenance(type: IrType): DotNetGenericOwnerWriteValueProvenance =
