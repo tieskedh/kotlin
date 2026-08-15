@@ -337,10 +337,11 @@ threading, metadata, assembly, or physical CIL facts. Shared tests whose
 assertions use `String.trimIndent` remain behind the authoritative Common
 Strings/Indent dependency closure rather than receiving target-specific copies.
 
-Coroutine scheduling, `kotlinx.coroutines`, sequence builders, debugger
-metadata, suspend callable reflection/export, and explicit C# async adapters
-remain consumers of this foundation. None may change its continuation/sentinel
-ABI or introduce a second state-machine representation.
+The complete Common Sequence builder state machine is now a consumer of this
+foundation and retains the same continuation/sentinel ABI. Coroutine
+scheduling, `kotlinx.coroutines`, debugger metadata, suspend callable
+reflection/export, and explicit C# async adapters remain future consumers.
+None may introduce a second state-machine representation.
 
 The completed language foundation selected after delegated properties is Kotlin
 fun-interface/SAM conversion. Common `SingleAbstractMethodLowering` owns the
@@ -366,7 +367,8 @@ and seven per-wrapper quicksort lineages, then admits the complete
 dependency-closed eager Iterable/MutableList/object-array/signed-primitive-array
 `sorted*`/`sort*`/range/reverse inventory. Unsigned arrays, binary search, and
 random ordering remain separate. Sequence sorting subsequently landed inside
-the complete non-builder Sequence foundation. The stable algorithm, range and
+the complete Sequence foundation, whose Common builder/window closure is now
+also published. The stable algorithm, range and
 failure timing, arbitrary-list, open generic snapshot, physical, and C#
 boundaries are owned by
 [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md).
@@ -390,27 +392,31 @@ stdlib-helper binding, and unchanged upstream test path.
 
 Further work remains foundation-first rather than allowlist-count-first. The
 largest coherent dependency releases selected by the last graph audits are
-now complete: the Kotlin-owned non-builder Sequence identity and the complete
-Common Grouping aggregate/factory closure are published under their
+now complete: the Kotlin-owned Sequence identity and builder/window closure,
+plus the complete Common Grouping aggregate/factory closure, are published
+under their
 [`Sequence`](../decisions/sequence-foundation.md) and
 [`Grouping`](../decisions/grouping-foundation.md) ADRs. Recompute the remaining
 Common generator/source graph around primitive/unsigned/range sorting, random
-operations, sequence-builder-dependent operators, and dependency-blocked
-reified variants. The narrow open-nullable-array foundation is now complete:
+operations, and dependency-blocked reified variants. The narrow open-nullable-
+array foundation is now complete:
 `Array<out T?>` uses an identity-preserving `System.Array` read view, Kotlin-owned
 `vararg T?` uses a fresh declaration-stable `object[]`, and the bounded release restores
-authoritative `setOfNotNull(vararg T?)` plus object-array nullable filtering. Invariant/input
-method-owned open nullable arrays remain excluded. The complete signed
+authoritative `setOfNotNull(vararg T?)` plus object-array nullable filtering.
+Invariant/input method-owned open nullable arrays remain excluded except for
+Common `RingBuffer.toArray`'s one immutable conditionally initialized local
+view over its resized-or-supplied exact vector. The complete signed
 primitive-array and remaining object-array range-sorting closure is now
 published from the exact Common generator families and Native/Wasm algorithm
 lineage. It includes all seven naturally ordered signed wrappers, stable object
 ranges, snapshots, descending/reverse/selector consumers, and Boolean's
 explicit-comparator/reversal subset without `System.Array.Sort` or unsigned
 spillover. Open producer-generic snapshots preserve the source vector's exact
-runtime component type rather than allocating `object[]`. Random-dependent
-operations, the unsigned value-class/range product, sequence-builder-dependent
-running/windowing members, and dependency-blocked reified variants remain
-separate. Recompute that remaining graph before selecting the next Common
+runtime component type rather than allocating `object[]`. The complete Common
+Sequence builder, running, and windowing closure is now published without a
+target-authored algorithm. Random-dependent operations, the unsigned value-
+class/range product, and dependency-blocked reified variants remain separate.
+Recompute that remaining graph before selecting the next Common
 closure; completion of signed sorting is not authority to choose one of those
 independent representations implicitly.
 Loose one-function growth and implicit BCL collection identity remain excluded.
@@ -1019,8 +1025,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   underlying fields;
 - reflection-dependent inline operations beyond the completed reified
   type/class/array/enum/`typeOf` closure;
-- coroutine scheduling, `kotlinx.coroutines`, sequence builders, debugger
-  metadata, broad suspend-callable reflection, and `Task`/`ValueTask` exports;
+- coroutine scheduling, `kotlinx.coroutines`, debugger metadata, broad suspend-
+  callable reflection, and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.

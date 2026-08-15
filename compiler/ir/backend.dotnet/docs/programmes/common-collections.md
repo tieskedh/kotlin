@@ -126,17 +126,20 @@ generic interface as Kotlin identity.
 
 The Kotlin-owned Sequence, Grouping, and signed primitive/object-array sorting
 closures are completed separately below. Unsigned arrays/ranges, random,
-sequence-builder-dependent operations, dependency-blocked reified variants,
-concurrency, and BCL adapters remain separate closures. The formerly parked open-nullable boundary
-is complete under
+dependency-blocked reified variants, concurrency, and BCL adapters remain
+separate closures. The formerly parked open-nullable boundary is complete under
 [`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
 ordinary `Array<out T?>` reads retain the original vector through
 `System.Array`, Kotlin-owned `vararg T?` expansions use a fresh declaration-
 stable `object[]`, and the authoritative object-array `filterNotNull`/
 `filterNotNullTo` plus both `setOfNotNull` overloads are admitted. Invariant or
-input-projected method-owned `Array<T?>` remains excluded. A source member that
-reaches any excluded boundary must fail closed rather than receive a .NET-
-specific body.
+input-projected method-owned `Array<T?>` remains excluded except for the one
+immutable conditionally initialized local view required by Common
+`RingBuffer.toArray`; that local retains either the resized or supplied exact
+vector, accepts only writes of the original logical `T`, and creates no
+declaration ABI.
+A source member that reaches any other excluded boundary must fail closed
+rather than receive a .NET-specific body.
 
 The gate proves null keys and values, primitive/reference/widened keys, hash collisions,
 replacement without reordering, resize and upstream compaction, entry `setValue`, live
@@ -149,18 +152,20 @@ they are tests of the same accepted representation, not missing architectural de
 ### Completed Kotlin-owned Sequence foundation
 
 The completed Sequence tranche publishes the authoritative Common
-`Sequence<out T>` identity, non-builder implementation objects and adapters,
-and the complete generated Sequence inventory except for explicitly
-dependency-blocked members. One non-generic erased CLR interface owns the
-iterator capability; KLIB retains element variance and every logical generic
-signature. The implementation classes and lazy pipelines are the Common
-objects and algorithms, not `IEnumerable<T>`, LINQ, or target-authored loops.
+`Sequence<out T>` identity, builder and non-builder implementation objects and
+adapters, sliding windows, and the complete generated Sequence inventory
+except for explicitly dependency-blocked members. One non-generic erased CLR
+interface owns the iterator capability; KLIB retains element variance and
+every logical generic signature. The implementation classes, coroutine-backed
+builders, and lazy pipelines are the Common objects and algorithms, not
+`IEnumerable<T>`, LINQ, or target-authored loops.
 
-The original exact excluded partition was fail-closed: sequence-builder-dependent
-`ifEmpty`, `flatMapIndexed`, running/scan, `zipWithNext`, window/chunk members;
-`shuffled` and random; `groupingBy`/`Grouping`; and unsigned selector sums.
-The later Grouping foundation has now admitted `groupingBy`; the builder,
-random, and unsigned partitions remain excluded.
+The original exact excluded partition was fail-closed: sequence-builder-
+dependent `ifEmpty`, `flatMapIndexed`, running/scan, `zipWithNext`, window/
+chunk members; `shuffled` and random; `groupingBy`/`Grouping`; and unsigned
+selector sums. The later Grouping and coroutine-builder closures have admitted
+`groupingBy` plus every builder/window member. Random-backed `shuffled` and the
+unsigned selector sums remain excluded.
 The generator fingerprints the complete Common inventory and rejects any new
 or changed member that is neither admitted nor explicitly excluded. Its
 supporting dependency closure includes Common array/Iterable adapters,
@@ -177,10 +182,12 @@ substitution recovery uses `unbox.any` to restore a primitive result. This is
 not permission to broaden explicit or safe cast behavior.
 
 The gate proves lazy iterator/callback counts, constrained-once failure,
-covariance, array and Iterable adapters, both flatten/flatMap routes, reified
+covariance, array and Iterable adapters, all flatten/flatMap routes, reified
 filtering, stable lazy sorting and sortedness including NaN/signed zero,
-generation, eager snapshots, numeric and selector overloads, deterministic
-metadata, and the absence of BCL enumeration identity. The same portable
+builders and all `yieldAll` routes, running operations, overlapping/gapped/
+partial/transformed/expanded windows, eager snapshots, numeric and selector
+overloads, deterministic metadata, and the absence of BCL enumeration
+identity. The same portable
 `netstandard2.0` stdlib and consumer execute through the real Framework CLR 4
 host and .NET 10; both PSI and LightTree also execute direct profile products.
 Roslyn implements the erased Sequence interface and calls a public Common
@@ -305,9 +312,9 @@ The bootstrap generator now admits every Common collection-template
 variant whose dependency closure consists only of the already published read-only foundation,
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
-closure above. Ordinary signed ranges, Sequence, Grouping, and signed-array
-sorting have since landed as complete independent foundations. Random,
-sequence builders, dependency-blocked reified variants, reflection, and
+closure above. Ordinary signed ranges, complete Sequence builders, Grouping,
+and signed-array sorting have since landed as complete independent
+foundations. Random, dependency-blocked reified variants, reflection, and
 unsigned families remain excluded when they introduce an independent
 dependency rather than being approximated or copied.
 
@@ -1173,8 +1180,8 @@ second loop or collection-specific type-token path was added.
    [the range/progression decision](../decisions/ordinary-ranges-and-progressions.md).
 7. **Completed:** publish the dependency-closed reified collection/array operations whose ordinary
    carriers are already selected, including `filterIsInstance`, `orEmpty`, and `toTypedArray`.
-8. **Completed:** publish the Kotlin-owned non-builder Sequence foundation and every generated
-   Sequence member outside its original exact builder/random/Grouping/unsigned exclusion partition.
+8. **Completed:** publish the Kotlin-owned Sequence foundation, exact Common builders and sliding
+   windows, and every generated Sequence member outside the remaining Random/unsigned partition.
 9. **Completed:** publish the complete Common Grouping aggregate source and all four generated
    factories over admitted carriers without adding BCL grouping/enumeration identity.
 10. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.

@@ -4,8 +4,10 @@
 - Scope: Kotlin-owned suspend declarations and calls, continuation passing,
   suspension/resumption, exception delivery, coroutine context and intrinsics,
   suspend lambdas, separate compilation, and their interaction with value classes
-- Does not enable: `Task`/`ValueTask` export, `async`/`await` source projection,
-  coroutine scheduling, `kotlinx.coroutines`, sequence builders, or debugger metadata
+- Original tranche did not enable: `Task`/`ValueTask` export, `async`/`await`
+  source projection, coroutine scheduling, `kotlinx.coroutines`, sequence
+  builders, or debugger metadata. The later Sequence foundation now consumes
+  this ABI for the exact Common builder state machine.
 
 ## Common contract
 

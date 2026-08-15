@@ -775,7 +775,18 @@ internal class DotNetIlMethodCodegen(
     private fun emitVariable(variable: IrVariable) {
         val initializer = variable.initializer
         val exactArrayStorage = if (initializer == null) null else variable.exactCompilerTemporaryArrayStorageOrNull()
-        val slot = methodContext.declareLocal(variable, exactArrayStorage)
+        val localOpenNullableArrayStorage = if (
+            exactArrayStorage == null && initializer != null && !variable.isVar &&
+            initializer is IrWhen && variable.type.isDotNetInvariantOpenNullableGenericArray()
+        ) {
+            // Common RingBuffer conditionally selects either a resized copy or the supplied
+            // exact vector. This local view retains that result through System.Array and its
+            // component checks; a bare cast/local remains outside the selected representation.
+            DotNetIlValueType.ErasedGenericArray(expressionCodegen.coreLibraryReference)
+        } else {
+            null
+        }
+        val slot = methodContext.declareLocal(variable, exactArrayStorage ?: localOpenNullableArrayStorage)
         if (initializer == null) return
         // Shared lowerings may place statement-bearing expressions in compiler-temporary
         // initializers (including a Nothing-typed break/continue on a dead value path). Route

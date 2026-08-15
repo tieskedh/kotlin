@@ -137,8 +137,31 @@ internal class DotNetIlExpressionCodegen(
     fun toDotNetIlGenericArgumentType(type: IrType): DotNetIlValueType? =
         typeMapper.toDotNetIlGenericArgumentType(type)
 
-    fun permitsErasedGenericArrayElementWrite(type: IrType): Boolean =
-        typeMapper.permitsErasedGenericArrayElementWrite(type)
+    fun permitsErasedGenericArrayElementWrite(receiver: IrExpression, value: IrExpression): Boolean {
+        if (typeMapper.permitsErasedGenericArrayElementWrite(receiver.type)) return true
+        val nullableElementType = receiver.type.dotNetInvariantArrayElementTypeOrNull()
+                as? IrSimpleType ?: return false
+        val elementParameter = nullableElementType.classifier as? IrTypeParameterSymbol ?: return false
+        val variable = (receiver as? IrGetValue)?.symbol?.owner as? IrVariable ?: return false
+        if (variable.isVar || variable.initializer == null) return false
+        val valueType = value.type as? IrSimpleType ?: return false
+        return methodContext.reference(variable.symbol).type is DotNetIlValueType.ErasedGenericArray &&
+                valueType.classifier == elementParameter && !valueType.isMarkedNullable()
+    }
+
+    /** The physical vector view of an expression, including a proven local carrier override. */
+    fun genericArrayPhysicalType(expression: IrExpression): DotNetIlValueType? {
+        if (!expression.type.isDotNetGenericArray()) return null
+        if (expression is IrGetValue) {
+            val slotType = methodContext.reference(expression.symbol).type
+            if (slotType is DotNetIlValueType.GenericArray ||
+                slotType is DotNetIlValueType.ErasedGenericArray
+            ) {
+                return slotType
+            }
+        }
+        return typeMapper.toDotNetIlValueType(expression.type)
+    }
 
     /**
      * The CLR type actually produced by [expression]. Most IR expression types map directly, but
@@ -153,7 +176,9 @@ internal class DotNetIlExpressionCodegen(
     private fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
         if (expression is IrGetValue && expression.type.isDotNetGenericArray()) {
             val slotType = methodContext.reference(expression.symbol).type
-            if (slotType is DotNetIlValueType.GenericArray) return slotType
+            if (slotType is DotNetIlValueType.GenericArray ||
+                slotType is DotNetIlValueType.ErasedGenericArray
+            ) return slotType
         }
         if (expression is IrCall) {
             val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
@@ -289,15 +314,18 @@ internal class DotNetIlExpressionCodegen(
         // bare IrGetValue while its physical local retains the declared wider type; emitGetValue
         // materializes that checked CLR view change.
         if (expression != null) {
-            val naturalType = mappedNaturalType(expression)
             // FIR may infer a bounded out-projected array as the transient common type of exact
             // value/reference vectors. CLR value vectors cannot materialize that covariance.
             // When the consumer already asks for the selected Array<*>/System.Array view, emit
             // the child expression directly at that erased boundary so every branch retains its
-            // exact vector. This does not admit the bounded projection in a signature or local.
+            // exact vector. The same physical rule covers a compiler-selected local Array<T?>
+            // carrier over an already-created exact vector; writes remain restricted to values
+            // with the original logical T type. Neither shape is admitted in ABI.
             val eraseTransientArrayProjection =
                 expectedType is DotNetIlValueType.ErasedGenericArray &&
-                        expression.type.isDotNetOutProjectedGenericArray()
+                        (expression.type.isDotNetOutProjectedGenericArray() ||
+                                expression.type.isDotNetInvariantOpenNullableGenericArray())
+            val naturalType = if (eraseTransientArrayProjection) expectedType else mappedNaturalType(expression)
             if (naturalType != null && naturalType != expectedType && !eraseTransientArrayProjection) {
                 val kFunctionArity = expression.type.dotNetKFunctionExecutionArityOrNull()
                 if (kFunctionArity != null &&
@@ -912,6 +940,17 @@ internal class DotNetIlExpressionCodegen(
         }
         val operandType = mappedNaturalType(expression.argument)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
+        if ((expression.operator == IrTypeOperator.CAST ||
+                    expression.operator == IrTypeOperator.IMPLICIT_CAST) &&
+            expression.typeOperand.isDotNetInvariantOpenNullableGenericArray() &&
+            expectedType is DotNetIlValueType.ErasedGenericArray
+        ) {
+            // Common collection code uses an unchecked local Array<T> -> Array<T?> view only
+            // while filling an existing exact vector. Retain that vector through System.Array;
+            // no public/open-nullable signature or new nullable vector is created here.
+            emitExpression(expression.argument, operandType)
+            return
+        }
         val boxedValueClassCastType = expression.typeOperand.dotNetValueClassOrNull()?.let {
             typeMapper.toDotNetIlBoxedValueClassType(expression.typeOperand)
         }

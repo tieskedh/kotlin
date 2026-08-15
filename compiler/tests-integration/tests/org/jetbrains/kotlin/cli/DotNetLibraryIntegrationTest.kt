@@ -31610,6 +31610,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertFalse("System.Enum" in libraryIl) { libraryIl }
         assertFalse("value__" in libraryIl) { libraryIl }
         assertFalse(" static literal " in libraryIl) { libraryIl }
+        assertFalse("_DotNetBootstrapSequenceBuilderKt" in libraryIl) {
+            "A user producer must not emit a private facade from an admitted Stdlib source:\n$libraryIl"
+        }
+        assertFalse("State_NotReady" in libraryIl) {
+            "A user producer must not emit private Stdlib implementation state:\n$libraryIl"
+        }
 
         val physicalDeclarations = DotNetLibraryAbiCodec.decode(library.readKlibManifest()).values
         val entryDeclarations = physicalDeclarations.filterIsInstance<DotNetPhysicalDeclaration.EnumEntry>()
@@ -34988,6 +34994,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
         val sequenceType = implementationType("Kotlin.Sequences", "Sequence")
+        val sequenceScopeType = implementationType("Kotlin.Sequences", "SequenceScope")
         val sequencesFacadeType = implementationType("Kotlin.Sequences", "SequencesKt")
         val groupingType = implementationType("Kotlin.Collections", "Grouping")
         val groupingFacadeType = implementationType("Kotlin.Collections", "GroupingKt")
@@ -35018,6 +35025,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }) {
             "Kotlin Sequence must not acquire an implicit BCL enumeration identity"
         }
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, sequenceScopeType.visibility)
+        assertTrue(sequenceScopeType.isAbstract && !sequenceScopeType.isInterface)
+        assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner == sequenceScopeType.handle
+        }) {
+            "Kotlin SequenceScope must retain one non-generic erased CLR identity"
+        }
         val sequenceMethodNames = implementationMetadata.methodDefinitions
             .filter { method -> method.declaringType == sequencesFacadeType.handle }
             .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
@@ -35027,8 +35041,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "flattenSequenceOfIterable",
                 "flatMap",
                 "flatMapIterable",
+                "flatMapIndexedIterable",
+                "flatMapIndexedSequence",
                 "flatMapIndexedIterableTo",
                 "flatMapIndexedSequenceTo",
+                "sequence__KotlinErased__688900e8c1903c9374d8486f2eed1f68",
+                "iterator__KotlinErased__192b86c745ca1609df62b410174e1d58",
+                "ifEmpty",
+                "runningFold",
+                "runningFoldIndexed",
+                "runningReduce",
+                "runningReduceIndexed",
+                "scan",
+                "scanIndexed",
+                "windowed",
+                "chunked",
+                "zipWithNext",
                 "averageOfInt",
                 "averageOfDouble",
                 "sumOfInt",
@@ -40234,6 +40262,107 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val doubles = sequenceOf(0.0, Double.NaN)
                     check(doubles.min().isNaN() && doubles.max().isNaN())
                     check(doubles.minOrNull()!!.isNaN() && doubles.maxOrNull()!!.isNaN())
+
+                    val builderTrace = arrayListOf<String>()
+                    val built: Sequence<Any?> = sequence {
+                        builderTrace.add("start")
+                        yield(1)
+                        builderTrace.add("after-one")
+                        yieldAll(listOf("two", null))
+                        yieldAll(sequenceOf(4L))
+                        builderTrace.add("done")
+                    }
+                    check(builderTrace.isEmpty())
+                    check(built.toList() == listOf<Any?>(1, "two", null, 4L))
+                    check(builderTrace == listOf("start", "after-one", "done"))
+
+                    val directIterator = iterator<Int> {
+                        yieldAll(emptyList())
+                        yield(2)
+                        yieldAll(listOf(3).iterator())
+                    }
+                    check(directIterator.asSequence().toList() == listOf(2, 3))
+
+                    val failure = IllegalStateException("builder failure")
+                    val failing = sequence<Int> {
+                        yield(7)
+                        throw failure
+                    }.iterator()
+                    check(failing.next() == 7)
+                    try {
+                        failing.hasNext()
+                        error("missing builder failure")
+                    } catch (caught: IllegalStateException) {
+                        check(caught === failure)
+                    }
+
+                    var defaultCalls = 0
+                    check(sequenceOf(1).ifEmpty {
+                        defaultCalls++
+                        sequenceOf(9)
+                    }.toList() == listOf(1))
+                    check(defaultCalls == 0)
+                    check(emptySequence<Int>().ifEmpty {
+                        defaultCalls++
+                        sequenceOf(9, 10)
+                    }.toList() == listOf(9, 10))
+                    check(defaultCalls == 1)
+
+                    check(
+                        sequenceOf(2, 3).flatMapIndexed { index, value -> listOf(index, value) }
+                            .toList() == listOf(0, 2, 1, 3)
+                    )
+                    check(
+                        sequenceOf(2, 3).flatMapIndexed { index, value -> sequenceOf(value + index) }
+                            .toList() == listOf(2, 4)
+                    )
+                    check(
+                        sequenceOf(1, 2, 3).runningFold(10) { acc, value -> acc + value }.toList() ==
+                            listOf(10, 11, 13, 16)
+                    )
+                    check(
+                        sequenceOf(1, 2).runningFoldIndexed(10) { index, acc, value -> acc + index + value }
+                            .toList() == listOf(10, 11, 14)
+                    )
+                    check(
+                        sequenceOf(2, 3, 4).runningReduce { acc, value -> acc * value }.toList() ==
+                            listOf(2, 6, 24)
+                    )
+                    check(
+                        sequenceOf(2, 3, 4).runningReduceIndexed { index, acc, value -> acc + index + value }
+                            .toList() == listOf(2, 6, 12)
+                    )
+                    check(sequenceOf(1, 2).scan(4) { acc, value -> acc + value }.toList() == listOf(4, 5, 7))
+                    check(
+                        sequenceOf(1, 2).scanIndexed(4) { index, acc, value -> acc + index + value }
+                            .toList() == listOf(4, 5, 8)
+                    )
+
+                    check(
+                        sequenceOf(1, 2, 3, 4, 5).windowed(3, step = 2, partialWindows = true)
+                            .toList() == listOf(listOf(1, 2, 3), listOf(3, 4, 5), listOf(5))
+                    )
+                    check(
+                        sequenceOf(1, 2, 3, 4, 5).windowed(2, step = 3, partialWindows = true)
+                            .toList() == listOf(listOf(1, 2), listOf(4, 5))
+                    )
+                    check(sequenceOf(1, 2, 3, 4, 5).chunked(2).toList() ==
+                        listOf(listOf(1, 2), listOf(3, 4), listOf(5)))
+                    check(sequenceOf(1, 2, 3).windowed(2) { window -> window[0] + window[1] }.toList() ==
+                        listOf(3, 5))
+                    check(
+                        generateSequence(0) { value -> if (value < 1024) value + 1 else null }
+                            .windowed(1025).single().size == 1025
+                    )
+                    var invalidWindow = false
+                    try {
+                        sequenceOf(1).windowed(0)
+                    } catch (_: IllegalArgumentException) {
+                        invalidWindow = true
+                    }
+                    check(invalidWindow)
+                    check(sequenceOf(2, 4, 8).zipWithNext().toList() == listOf(Pair(2, 4), Pair(4, 8)))
+                    check(sequenceOf(2, 4, 8).zipWithNext { left, right -> right - left }.toList() == listOf(2, 4))
                     println("OK")
                 }
                 """.trimIndent()

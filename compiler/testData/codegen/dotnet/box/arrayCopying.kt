@@ -161,5 +161,27 @@ fun box(): String {
     val endEmpty = intArrayOf(1, 2).copyInto(IntArray(2), destinationOffset = 2, startIndex = 2, endIndex = 2)
     if (endEmpty[0] != 0 || endEmpty[1] != 0) return "fail 34: empty end copy"
     if (negativeCopySizeCategory() != "exception") return "fail 35: negative ${negativeCopySizeCategory()}"
+
+    val genericInts = arrayOf(1, 2, 3, 4)
+    genericInts.fill(9, fromIndex = 1, toIndex = 3)
+    if (genericInts.contentToString() != "[1, 9, 9, 4]") return "fail 36: generic value fill"
+    val nullableStrings = arrayOf<String?>("a", "b", "c")
+    nullableStrings.fill(null, fromIndex = 1)
+    if (nullableStrings.contentToString() != "[a, null, null]") return "fail 37: nullable fill"
+    try {
+        genericInts.fill(0, fromIndex = 3, toIndex = 2)
+        return "fail 38: missing fill bounds failure"
+    } catch (_: IllegalArgumentException) {
+    }
+    try {
+        genericInts.fill(0, fromIndex = -1, toIndex = 2)
+        return "fail 39: missing fill lower-bound failure"
+    } catch (_: IndexOutOfBoundsException) {
+    }
+    try {
+        genericInts.fill(0, fromIndex = 0, toIndex = 5)
+        return "fail 40: missing fill upper-bound failure"
+    } catch (_: IndexOutOfBoundsException) {
+    }
     return "OK"
 }

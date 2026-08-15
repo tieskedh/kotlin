@@ -121,6 +121,12 @@ internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {
     return argument.type.takeIf { argument.variance == Variance.INVARIANT }
 }
 
+/** Whether this is the unresolved invariant `Array<T?>` shape over an open type parameter. */
+internal fun IrType.isDotNetInvariantOpenNullableGenericArray(): Boolean {
+    val elementType = dotNetInvariantArrayElementTypeOrNull() as? IrSimpleType ?: return false
+    return elementType.isMarkedNullable() && elementType.classifier is IrTypeParameterSymbol
+}
+
 /** Whether this is a bounded output projection such as `Array<out Comparable<*>>`. */
 internal fun IrType.isDotNetOutProjectedGenericArray(): Boolean {
     if (!isDotNetGenericArray()) return false

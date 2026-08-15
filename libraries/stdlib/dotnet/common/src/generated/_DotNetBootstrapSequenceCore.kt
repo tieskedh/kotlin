@@ -92,6 +92,22 @@ private object EmptySequence : Sequence<Nothing>, DropTakeSequence<Nothing> {
 public inline fun <T> Sequence<T>?.orEmpty(): Sequence<T> = this ?: emptySequence()
 
 /**
+ * Returns a sequence that iterates through the elements either of this sequence
+ * or, if this sequence turns out to be empty, of the sequence returned by [defaultValue] function.
+ *
+ * @sample samples.collections.Sequences.Usage.sequenceIfEmpty
+ */
+@SinceKotlin("1.3")
+public fun <T> Sequence<T>.ifEmpty(defaultValue: () -> Sequence<T>): Sequence<T> = sequence {
+    val iterator = this@ifEmpty.iterator()
+    if (iterator.hasNext()) {
+        yieldAll(iterator)
+    } else {
+        yieldAll(defaultValue())
+    }
+}
+
+/**
  * Returns a sequence of all elements from all sequences in this sequence.
  *
  * The operation is _intermediate_ and _stateless_.
@@ -330,6 +346,15 @@ constructor(
         }
     }
 }
+
+internal fun <T, C, R> flatMapIndexed(source: Sequence<T>, transform: (Int, T) -> C, iterator: (C) -> Iterator<R>): Sequence<R> =
+    sequence {
+        var index = 0
+        for (element in source) {
+            val result = transform(checkIndexOverflow(index++), element)
+            yieldAll(iterator(result))
+        }
+    }
 
 /**
  * A sequence that supports drop(n) and take(n) operations

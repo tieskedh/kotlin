@@ -5011,6 +5011,49 @@ $propertyAccessorSupportTypesIl
             |      throw
             |    }
             |
+            |    .method public hidebysig static void 'ArrayFill'(
+            |        class ${coreLibraryReference}System.Array 'array',
+            |        object 'element',
+            |        int32 'fromIndex',
+            |        int32 'toIndex') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init ([0] int32 'index')
+            |      ldarg.2
+            |      ldc.i4.0
+            |      blt.s IL_arrayFillOutOfBounds
+            |      ldarg.3
+            |      ldarg.0
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
+            |      bgt.s IL_arrayFillOutOfBounds
+            |      ldarg.2
+            |      ldarg.3
+            |      bgt.s IL_arrayFillReversed
+            |      ldarg.2
+            |      stloc.0
+            |IL_arrayFillLoop:
+            |      ldloc.0
+            |      ldarg.3
+            |      bge.s IL_arrayFillDone
+            |      ldarg.0
+            |      ldarg.1
+            |      ldloc.0
+            |      callvirt instance void ${coreLibraryReference}System.Array::SetValue(object, int32)
+            |      ldloc.0
+            |      ldc.i4.1
+            |      add
+            |      stloc.0
+            |      br.s IL_arrayFillLoop
+            |IL_arrayFillDone:
+            |      ret
+            |IL_arrayFillOutOfBounds:
+            |      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+            |      throw
+            |IL_arrayFillReversed:
+            |      newobj instance void ${coreLibraryReference}System.ArgumentException::.ctor()
+            |      throw
+            |    }
+            |
             |    .method assembly hidebysig static int32 'FloatToIntBits'(float32 'value') cil managed
             |    {
             |      .maxstack 2
@@ -6348,5 +6391,12 @@ $factoryCases
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayCopyInto".toIlIdentifier()}(" +
                 "class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array, int32, int32, int32)"
+
+    /** Kotlin range validation plus portable element writes for Common `Array.fill`. */
+    fun arrayFillCallInstruction(coreLibraryReference: String): String =
+        "call void [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayFill".toIlIdentifier()}(" +
+                "class ${coreLibraryReference}System.Array, object, int32, int32)"
 
 }

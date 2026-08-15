@@ -84,6 +84,10 @@ Archived snapshots:
   replaces per-call console transport with exact-sized thread-safe primitive
   counters and one final flush, retaining the exact four-lane route oracle and
   unchanged normal-product bytes.
+- [`common-sequence-builder-closure-2026-08-15.md`](common-sequence-builder-closure-2026-08-15.md)
+  records the exact Common builder/window closure, its bounded local-array and
+  runtime-fill dependencies, two strict-gate regressions found and repaired,
+  and the final 2,216-test Framework/CoreCLR proof.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots
