@@ -100,6 +100,8 @@ internal class DotNetIlExpressionCodegen(
     private val currentOwner: DotNetIlClassInfo,
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
+    internal val coreLibraryProfile: DotNetCoreLibraryProfile
+        get() = typeMapper.coreLibrary
     internal val coreLibraryReference = typeMapper.coreLibrary.reference
     internal val stdlibAssemblyName: String?
         get() = typeMapper.stdlibAssemblyName

@@ -27,7 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed correction: Common generic resized array copies now preserve
+- Last completed optimization: exact Common generic `Array.fill` no longer
+  erases its CLR vector or element into `System.Array`/`object` and no longer
+  calls virtual `SetValue` per slot. Evaluation and Common range-check
+  precedence remain unchanged. Framework 4.8 and netstandard use a typed
+  `stelem E` loop; every statically known reference vector uses that same loop;
+  .NET 10 value, nullable-value, and open `T` vectors call generic
+  `System.Array.Fill<E>`. Only an already-erased capability, explicitly proved
+  by a canonical generic-owner sentinel, retains Runtime surface 37. All eight
+  scalar carriers, nullable/null/reference/open substitutions, empty/partial/
+  full ranges, evaluation order, and failure categories execute through both
+  frontends on Framework 4.8 and .NET 10. Framework IL proves typed stores and
+  the erased boundary; CoreCLR executes the closed/open generic BCL MemberRefs.
+  A committed checksum-identical measurement tool records the route tradeoffs
+  rather than treating .NET 10's optimized `object` path as Framework evidence.
+  The final strict aggregate exited successfully; direct audit covers 190 XML
+  files and 2,216 tests with zero failures, errors, or skips. No public ABI,
+  KLIB, Runtime surface, or generic-owner representation changed. See
+  [`docs/decisions/generic-array-fill.md`](docs/decisions/generic-array-fill.md)
+  and
+  [`docs/archive/generic-array-fill-specialization-2026-08-15.md`](docs/archive/generic-array-fill-specialization-2026-08-15.md).
+- The preceding correction: Common generic resized array copies now preserve
   Kotlin's nullable-result contract on CLR value vectors. A closed
   `Array<V>.copyOf(newSize): Array<V?>` allocates `Nullable<V>[]`, copies its
   prefix with typed `ldelem`/`newobj`/`stelem`, and leaves genuine null padding;
@@ -60,17 +80,17 @@ verification, and work state.
   immutable conditional `Array<T?>` selection retains its resized-or-supplied
   exact vector through `System.Array`, and writes require the original logical
   `T`; ordinary casts, nullable writes, and declaration-stable invariant/input
-  open-nullable arrays remain rejected. Generic `Array.fill` preserves Common
-  range exception categories through runtime surface 37. The full gate found
-  and repaired a second foundational bug: source-aligned Stdlib shards now own
-  private top-level properties as well as helper functions, preventing the six
-  Sequence state constants from leaking into every user producer DLL. Five
-  generated outputs remained SHA-256-identical across the owning-generator
-  rerun. PSI/LightTree and Framework 4.8/.NET 10 direct lanes, the portable
-  netstandard Stdlib plus separate consumer, physical metadata, and rejection
-  sentinels are green. The final strict aggregate completed in 2,653.0 seconds;
-  direct audit covers 190 XML files and 2,216 tests with zero failures, errors,
-  or skips. See
+  open-nullable arrays remain rejected. Erased generic `Array.fill` preserves
+  Common range exception categories through runtime surface 37. The full gate
+  found and repaired a second foundational bug: source-aligned Stdlib shards
+  now own private top-level properties as well as helper functions, preventing
+  the six Sequence state constants from leaking into every user producer DLL.
+  Five generated outputs remained SHA-256-identical across the owning-
+  generator rerun. PSI/LightTree and Framework 4.8/.NET 10 direct lanes, the
+  portable netstandard Stdlib plus separate consumer, physical metadata, and
+  rejection sentinels are green. The final strict aggregate completed in
+  2,653.0 seconds; direct audit covers 190 XML files and 2,216 tests with zero
+  failures, errors, or skips. See
   [`docs/decisions/sequence-foundation.md`](docs/decisions/sequence-foundation.md)
   and
   [`docs/archive/common-sequence-builder-closure-2026-08-15.md`](docs/archive/common-sequence-builder-closure-2026-08-15.md).
@@ -853,8 +873,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The truthful generic resized-array-copy head passed every constituent of the
-strict target gate. The normal aggregate command remains:
+The profile-specialized generic-array-fill head passed every constituent of
+the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -872,10 +892,11 @@ XML files and 2,216 tests:
 - zero failures, errors, or skips
 
 The aggregate and explicit model constituent exited successfully. The final
-head additionally proves all eight closed nullable value-vector copies,
-projected/open value/reference/nullable copy routes, null padding, exact
-non-growing component retention, bottom-capture reads, rejected bottom-capture
-writes, and unchanged Sequence/RingBuffer and declaration-eviction goldens.
+head additionally proves all eight exact scalar fill carriers, nullable/null/
+reference/open substitutions, empty/partial/full ranges, ordered evaluation,
+both range-failure categories, Framework typed stores, CoreCLR generic BCL
+execution, retained erased-owner fallback, and unchanged generic-copy,
+Sequence/RingBuffer, and declaration-eviction evidence.
 Relative to schema version 4, the 2,216-test inventory also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
