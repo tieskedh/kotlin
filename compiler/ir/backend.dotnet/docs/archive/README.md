@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`projected-generic-array-join-fast-path-2026-08-15.md`](projected-generic-array-join-fast-path-2026-08-15.md)
+  records the retained projected `System.Array` ABI, compatible `T[]` read
+  path, Framework/.NET 10 causal boxing evidence, and strict widened-value
+  fallback boundary.
 - [`generic-owner-octo-tree-application-census-2026-08-15.md`](generic-owner-octo-tree-application-census-2026-08-15.md)
   records the second exact repository-application census, full array joining,
   declaration-stable erased-owner classifier vectors, mixed exact/capability

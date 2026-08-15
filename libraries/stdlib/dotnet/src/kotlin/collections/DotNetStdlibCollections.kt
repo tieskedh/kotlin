@@ -67,6 +67,11 @@ internal actual fun <T> Array<out T>.copyToArrayOfAny(isVarargs: Boolean): Array
 // BCL operation directly and does not publish this declaration.
 private external fun <T> dotNetArrayOfNulls(reference: Array<T>, size: Int): Array<T>
 
+// A projected array needs System.Array as its public physical capability, but most calls still
+// carry a vector compatible with the method's exact T. The backend emits one non-throwing CLR
+// `isinst T[]`; a widened value vector simply returns null and keeps the semantic fallback.
+private external fun <T> dotNetExactArrayOrNull(array: Array<out T>): Array<T>?
+
 /**
  * Returns a [List] that wraps the original array.
  *
@@ -93,6 +98,20 @@ public fun <T, A : Appendable> Array<out T>.joinTo(
     truncated: CharSequence = "...",
     transform: ((T) -> CharSequence)? = null,
 ): A {
+    val exactArray = dotNetExactArrayOrNull(this)
+    if (exactArray != null) {
+        buffer.append(prefix)
+        var exactCount = 0
+        for (element in exactArray) {
+            if (++exactCount > 1) buffer.append(separator)
+            if (limit < 0 || exactCount <= limit) {
+                buffer.appendElement(element, transform)
+            } else break
+        }
+        if (limit >= 0 && exactCount > limit) buffer.append(truncated)
+        buffer.append(postfix)
+        return buffer
+    }
     buffer.append(prefix)
     var count = 0
     for (element in this) {
