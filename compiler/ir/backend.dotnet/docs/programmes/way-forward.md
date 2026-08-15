@@ -788,6 +788,21 @@ then build paired candidate and direct C# consumer/subclass products rather
 than infer field types inside a fixture. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
+The existing physical member-signature grammar has also been corrected at its
+non-exact carrier boundary. An unconstrained open nullable `T?` position uses
+`object`, which represents both reference nullability and CLR's boxed nullable-
+value form. An open-nullable or projected array position uses `System.Array`;
+`!T[]` and `object[]` each reject Kotlin-valid vectors. Direct non-null `T`,
+invariant `Array<T>`, and independent method-generic `Array<R>` retain their
+native GenericParam forms. OctoTree `get(): T?`, a nullable-array constructor/
+result pair, and the hostile C# producer/subclass projected-echo family prove
+the boundary on Framework 4.8 and .NET 10. This changes only production-inert
+records and their test physicalizer. The next recursive-product step must add
+late-bound constructed member types such as `Node<T>[]`; it may not regress to
+a display-name path or overstate an open vector merely to complete the C#
+surface. See
+[`../archive/generic-owner-nonexact-call-carriers-2026-08-15.md`](../archive/generic-owner-nonexact-call-carriers-2026-08-15.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

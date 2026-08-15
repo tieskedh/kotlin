@@ -401,6 +401,29 @@ and bind the whole recursive owner family before a paired candidate or direct
 C# consumer/subclass can claim evidence. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
+The physical callable grammar now observes the same no-guessing rule. Open
+nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable
+value while reference substitutions do not. Its universal call carrier is
+therefore `object`. Likewise, `Array<T?>` and projected `Array<out/in E>` use
+`System.Array`; an open `!T[]` or `object[]` would reject legal vectors. Exact
+non-null/invariant and independent method-generic arrays remain typed. The
+hostile projected `echo` typed and semantic MethodDefs now both record
+`System.Array`, but the capability dispatcher retains its compatibility probe
+and hence the correct override route. OctoTree `get(): T?` and an invariant
+`Array<T?>` constructor/result independently pin the nullable cases. Constructed
+classifier member types such as `Node<T>[]` remain the next late-binding
+grammar extension; field evidence alone must not be reused by name. See
+[`../archive/generic-owner-nonexact-call-carriers-2026-08-15.md`](../archive/generic-owner-nonexact-call-carriers-2026-08-15.md).
+
+External-family binding consequently keeps logical and physical authority
+separate. It merges inherited producer slot domains, then compares exact
+compiler-derived physical signatures. It does not infer owner dependence from
+whether a carrier happens to contain `!T`. When the producer introduces a
+semantic hook that was unavailable during consumer planning, the consumer's
+already-required capability signature supplies the exact local owner-erased
+shape. This preserves fail-closed separate compilation without requiring the
+consumer to reconstruct a producer role by name.
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?
