@@ -407,10 +407,22 @@ variants before their value-class/range closure, or fabricate a natural
 Boolean sort. An open producer-generic `copyOf`/`sortedArray` snapshot obtains
 the source runtime component type, allocates through
 `System.Array.CreateInstance`, and copies through `System.Array.Copy`; it does
-not allocate `object[]` or emit open `newarr !T`. Execute direct and separate
-sorting consumers through both FIR parsers on the real Framework CLR 4 host
-and .NET 10. The same portable stdlib and C# workload must run on both hosts;
-modern object, generic, or array optimizations are not Framework evidence.
+not allocate `object[]` or emit open `newarr !T`. This does not apply to the
+closed nullable result of `Array<V>.copyOf(newSize)` for a non-null value `V`:
+that operation must allocate `Nullable<V>[]`, typed-wrap only the copied
+prefix, and leave the padded suffix empty/null. Retaining `V[]` would expose
+default `V` values and fail its truthful CLR result cast. A resized open
+`Array<out T?>` copy retains its exact component for references, already-
+nullable values, and non-growing copies; only a growing non-null value-vector
+uses a new `object[]` read carrier so its suffix is genuinely null. This does
+not authorize an invariant/input open-nullable array. The singular bottom
+input `Array<in Nothing?>`, which FIR uses for projected-copy captures, may
+retain only the same `System.Array` read capability in any slot; every element
+write through it, including null, remains rejected. All other input
+projections remain rejected. Execute direct and separate sorting consumers
+through both FIR parsers on the real Framework CLR 4 host and .NET 10. The
+same portable stdlib and C# workload must run on both hosts; modern object,
+generic, or array optimizations are not Framework evidence.
 
 See
 [runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)

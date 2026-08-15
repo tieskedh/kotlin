@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-resized-array-copy-2026-08-15.md`](generic-resized-array-copy-2026-08-15.md)
+  records the closed nullable-vector correction, bounded open projected copy
+  carrier, FIR bottom-capture read boundary, and final strict gate.
 - [`review-2026-07-17.md`](review-2026-07-17.md) is the consolidated review of
   branch commit `8dd89907d`.
 - [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) and

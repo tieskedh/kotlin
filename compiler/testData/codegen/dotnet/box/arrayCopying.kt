@@ -19,6 +19,37 @@ private fun recordedInt(label: String, value: Int): Int {
     return value
 }
 
+private fun <T> resizeProjected(values: Array<out T?>, size: Int): Array<out T?> =
+    values.copyOf(size)
+
+private fun <T> padProjected(values: Array<out T?>): Array<out T?> =
+    resizeProjected(values, values.size + 1)
+
+private fun projectedAnyCopyIsCorrect(): Boolean {
+    val values: Array<out Any?> = arrayOf(9)
+    val padded = values.copyOf(2)
+    return padded[0] == 9 && padded[1] == null
+}
+
+private fun openProjectedCopyIsCorrect(): Boolean {
+    val paddedValue = padProjected<Int>(arrayOf(10))
+    val paddedAny = padProjected<Any?>(arrayOf(11))
+    val paddedReference = padProjected<String>(arrayOf("value"))
+    val paddedNullableValue = padProjected<Int?>(arrayOf<Int?>(12))
+    val truncatedValue = resizeProjected<Int>(arrayOf(13, 14), 1)
+    @Suppress("UNCHECKED_CAST")
+    val exactReference = paddedReference as Array<String?>
+    @Suppress("UNCHECKED_CAST")
+    val exactNullableValue = paddedNullableValue as Array<Int?>
+    @Suppress("UNCHECKED_CAST")
+    val exactTruncatedValue = truncatedValue as Array<Int>
+    return paddedValue[0] == 10 && paddedValue[1] == null &&
+            paddedAny[0] == 11 && paddedAny[1] == null &&
+            exactReference[0] == "value" && exactReference[1] == null &&
+            exactNullableValue[0] == 12 && exactNullableValue[1] == null &&
+            exactTruncatedValue.size == 1 && exactTruncatedValue[0] == 13
+}
+
 private fun copyIntoFailureCategory(
     destinationSize: Int,
     destinationOffset: Int,
@@ -183,5 +214,31 @@ fun box(): String {
         return "fail 40: missing fill upper-bound failure"
     } catch (_: IndexOutOfBoundsException) {
     }
+    val paddedGenericInts: Array<Int?> = arrayOf(7).copyOf(3)
+    if (paddedGenericInts.size != 3 || paddedGenericInts[0] != 7 ||
+        paddedGenericInts[1] != null || paddedGenericInts[2] != null
+    ) return "fail 41: nullable value padding"
+    val paddedBytes: Array<Byte?> = arrayOf(1.toByte()).copyOf(2)
+    val paddedShorts: Array<Short?> = arrayOf(2.toShort()).copyOf(2)
+    val paddedLongs: Array<Long?> = arrayOf(3L).copyOf(2)
+    val paddedFloats: Array<Float?> = arrayOf(4.5f).copyOf(2)
+    val paddedDoubles: Array<Double?> = arrayOf(5.5).copyOf(2)
+    val paddedBooleans: Array<Boolean?> = arrayOf(true).copyOf(2)
+    val paddedChars: Array<Char?> = arrayOf('K').copyOf(2)
+    if (paddedBytes[0] != 1.toByte() || paddedBytes[1] != null ||
+        paddedShorts[0] != 2.toShort() || paddedShorts[1] != null ||
+        paddedLongs[0] != 3L || paddedLongs[1] != null ||
+        paddedFloats[0] != 4.5f || paddedFloats[1] != null ||
+        paddedDoubles[0] != 5.5 || paddedDoubles[1] != null ||
+        paddedBooleans[0] != true || paddedBooleans[1] != null ||
+        paddedChars[0] != 'K' || paddedChars[1] != null
+    ) return "fail 42: nullable scalar padding"
+    val projectedInts: Array<out Int> = arrayOf(8)
+    val paddedProjectedInts = projectedInts.copyOf(2)
+    if (paddedProjectedInts[0] != 8 || paddedProjectedInts[1] != null) {
+        return "fail 43: projected nullable value padding"
+    }
+    if (!projectedAnyCopyIsCorrect()) return "fail 44: captured projected value padding"
+    if (!openProjectedCopyIsCorrect()) return "fail 45: open projected nullable value padding"
     return "OK"
 }
