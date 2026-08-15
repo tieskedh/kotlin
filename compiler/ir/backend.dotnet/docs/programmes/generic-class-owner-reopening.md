@@ -363,6 +363,18 @@ startup, and scheduling must be measured in separate uninstrumented products.
 See
 [`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
 
+That collection product now has its first repository-owned application input.
+The exact Kotlin/Native ArrayCopy source yields 16 local static sites and
+5,664 local dynamic events, all exact typed-entry candidates, with identical
+route/count bytes across both frontends and both CLRs. Its state result is the
+important counterexample to naive field reification: unchecked construction
+from `Array<Any?>` makes `values: Array<T?>` semantic array state even when the
+closed owner is `CustomArray<Int>`. The member family can still expose a
+strict typed `add` entry and a capability dispatcher. This is one bounded real
+distribution only; it does not close representative breadth, C# products, or
+clean erased/candidate measurement. See
+[`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?

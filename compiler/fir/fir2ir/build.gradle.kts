@@ -177,6 +177,12 @@ projectTests {
     ) {
         configure {
             dependsOn(dotNetTestPlatformTasks)
+            inputs.files(
+                rootProject.file(
+                    "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/" +
+                            "ArrayCopyBenchmark.kt",
+                ),
+            ).withPropertyName("dotNetRepresentativeApplicationSources")
             filter {
                 includeTestsMatching("*DotNet*")
             }

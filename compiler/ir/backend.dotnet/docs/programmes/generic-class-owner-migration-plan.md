@@ -176,6 +176,14 @@ typed-storage feasibility obligation, not conditions 8 or 9 and not the atomic
 cutover. See
 [`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
 
+The first repository application route/state distribution is now recorded.
+Exact Kotlin/Native ArrayCopy source produces 5,664 local dynamic calls, all
+exact-entry candidates, on both frontends and both CLR profiles. Its unchecked
+`Any[] as Array<T?>` initialization nevertheless proves semantic array state,
+so exact call provenance and typed field provenance remain independent gates.
+No candidate or C# product is paired yet; conditions 8 and 9 remain open. See
+[`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
+
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
 admits only compiler-derived constraints in its exact supported grammar and

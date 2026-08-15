@@ -27,7 +27,30 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed optimization: exact Common generic `Array.fill` no longer
+- Last completed foundation: the compiler-indexed generic-owner counter now
+  exports any same-compilation application census instead of depending on the
+  hostile separate-compilation physicalizer. The first repository-owned input
+  stages the exact Kotlin/Native ArrayCopy benchmark source as a declared
+  Gradle input and executes its real `CustomArray<T>.add` implementation 512
+  times. Its 16 local static routes and 5,664 dynamic local events are all
+  exact typed-entry candidates on PSI/LightTree and Framework 4.8/.NET 10;
+  the route and count artifacts are byte-identical across all four lanes.
+  Eleven external static sites remain outside the local manifest; only one is
+  visited and contributes the remaining 512 dynamic events. This
+  does not imply typed state: the benchmark's unchecked `Any[] as Array<T?>`
+  initialization correctly forces one semantic `System.Array` state and
+  `add` retains a strict typed entry plus a non-narrowing capability
+  dispatcher. Common `copyInto` now accepts both open `!!T[]` and that erased
+  array capability while retaining evaluation order, destination identity,
+  overlap safety, and Kotlin range failures. The verifier also now validates
+  the codec's actual canonical Base64URL alphabet rather than accidentally
+  accepting only the hostile subset. This is route/state distribution
+  evidence, not timing, complete representative breadth, candidate-product,
+  or production-`C<T>` authority. The final strict aggregate exited
+  successfully; direct audit covers 190 XML files and 2,220 tests with zero
+  failures, errors, or skips. See
+  [`docs/archive/generic-owner-array-copy-application-census-2026-08-15.md`](docs/archive/generic-owner-array-copy-application-census-2026-08-15.md).
+- The preceding optimization: exact Common generic `Array.fill` no longer
   erases its CLR vector or element into `System.Array`/`object` and no longer
   calls virtual `SetValue` per slot. Evaluation and Common range-check
   precedence remain unchanged. Framework 4.8 and netstandard use a typed
@@ -2384,10 +2407,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    now proves the same-compilation join and exact hostile per-site vector on
    Framework 4.8/net10 and both frontends while leaving normal products byte-
    identical. The per-call console transport has now been replaced by an
-   exact-sized thread-safe primitive counter table and one final flush. Next,
-   apply that collection product to representative complete erased/candidate
-   Kotlin applications and C# consumers/subclasses,
-   including actual call mixes,
+   exact-sized thread-safe primitive counter table and one final flush. The
+   first exact repository application source now supplies an independent
+   ArrayCopy census: all 5,664 local dynamic events are exact-entry candidates
+   even though its unchecked object-vector initialization correctly keeps
+   semantic array state. Next, broaden the source corpus beyond this single
+   bounded workload, then build its record-driven candidate and direct C#
+   consumer/subclass products. Include actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
    insufficient.
