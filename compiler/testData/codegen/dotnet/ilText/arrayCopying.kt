@@ -8,6 +8,15 @@ fun copyStrings(values: Array<String>): Array<String> = values.copyOf()
 
 fun resizeStrings(values: Array<String>, size: Int): Array<String?> = values.copyOf(size)
 
+fun resizeGenericInts(values: Array<Int>, size: Int): Array<Int?> = values.copyOf(size)
+
+fun <T> resizeProjected(values: Array<out T?>, size: Int): Array<out T?> = values.copyOf(size)
+
+fun firstAfterResizeProjectedAny(values: Array<out Any?>, size: Int): Any? {
+    val copied = values.copyOf(size)
+    return copied[0]
+}
+
 fun copyItems(values: Array<Item>): Array<Item> = values.copyOf()
 
 fun copyIntsInto(
