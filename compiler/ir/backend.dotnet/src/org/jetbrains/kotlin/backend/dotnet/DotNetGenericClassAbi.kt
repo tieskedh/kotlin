@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
@@ -28,6 +29,7 @@ import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isInt
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
@@ -36,6 +38,7 @@ import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
+import org.jetbrains.kotlin.types.Variance
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -919,9 +922,120 @@ data class DotNetGenericOwnerPrototypeConstructorSnapshot(
     val delegatesToThis: Boolean,
 )
 
+/**
+ * Path-unbound CLR carrier grammar for producer-owned typed state.
+ *
+ * A referenced Kotlin generic owner is retained by its logical declaration key until the
+ * artifact builder selects one physical TypeDef path for the complete producer family. This
+ * prevents an IR/source display name from silently becoming physical ABI.
+ */
+enum class DotNetGenericOwnerPrototypeStateTypeKind {
+    BOOLEAN,
+    INT32,
+    STRING,
+    OBJECT,
+    OWNER_TYPE_PARAMETER,
+    LOGICAL_GENERIC_CLASSIFIER,
+    SZ_ARRAY,
+}
+
+data class DotNetGenericOwnerPrototypeStateTypeSnapshot(
+    val kind: DotNetGenericOwnerPrototypeStateTypeKind,
+    val parameterIndex: Int? = null,
+    val logicalClassifierKey: String? = null,
+    val arguments: List<DotNetGenericOwnerPrototypeStateTypeSnapshot> = emptyList(),
+) {
+    init {
+        when (kind) {
+            DotNetGenericOwnerPrototypeStateTypeKind.BOOLEAN,
+            DotNetGenericOwnerPrototypeStateTypeKind.INT32,
+            DotNetGenericOwnerPrototypeStateTypeKind.STRING,
+            DotNetGenericOwnerPrototypeStateTypeKind.OBJECT,
+            -> require(parameterIndex == null && logicalClassifierKey == null && arguments.isEmpty()) {
+                "a scalar generic-owner state carrier cannot contain a parameter, classifier, or arguments"
+            }
+            DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER -> require(
+                parameterIndex != null && parameterIndex >= 0 && logicalClassifierKey == null && arguments.isEmpty()
+            ) { "an owner-parameter state carrier requires only a non-negative parameter index" }
+            DotNetGenericOwnerPrototypeStateTypeKind.LOGICAL_GENERIC_CLASSIFIER -> require(
+                parameterIndex == null && !logicalClassifierKey.isNullOrEmpty() && arguments.isNotEmpty()
+            ) { "a logical generic state classifier requires only a declaration key and type arguments" }
+            DotNetGenericOwnerPrototypeStateTypeKind.SZ_ARRAY -> require(
+                parameterIndex == null && logicalClassifierKey == null && arguments.size == 1
+            ) { "a generic-owner SZ-array state carrier requires exactly one element type" }
+        }
+    }
+
+    fun referencesOwnerParameter(): Boolean =
+        kind == DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER ||
+                arguments.any(DotNetGenericOwnerPrototypeStateTypeSnapshot::referencesOwnerParameter)
+
+    /** Binds every logical producer classifier only after the artifact owns its physical path. */
+    fun bindProducerTypes(
+        physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+    ): DotNetGenericOwnerPhysicalTypeExpressionRecord = when (kind) {
+        DotNetGenericOwnerPrototypeStateTypeKind.BOOLEAN ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType()
+        DotNetGenericOwnerPrototypeStateTypeKind.INT32 ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type()
+        DotNetGenericOwnerPrototypeStateTypeKind.STRING ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
+        DotNetGenericOwnerPrototypeStateTypeKind.OBJECT ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+        DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(checkNotNull(parameterIndex))
+        DotNetGenericOwnerPrototypeStateTypeKind.LOGICAL_GENERIC_CLASSIFIER -> {
+            val logicalKey = checkNotNull(logicalClassifierKey)
+            val physicalPath = requireNotNull(physicalOwnerPathsByLogicalKey[logicalKey]) {
+                "generic-owner state classifier '$logicalKey' has no selected producer TypeDef path"
+            }
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+                typePath = physicalPath,
+                category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                arguments = arguments.map { argument ->
+                    argument.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                },
+            )
+        }
+        DotNetGenericOwnerPrototypeStateTypeKind.SZ_ARRAY ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
+                arguments.single().bindProducerTypes(physicalOwnerPathsByLogicalKey),
+            )
+    }
+
+    companion object {
+        fun booleanType() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.BOOLEAN)
+        fun int32Type() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.INT32)
+        fun stringType() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.STRING)
+        fun objectType() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.OBJECT)
+        fun ownerParameter(index: Int) = DotNetGenericOwnerPrototypeStateTypeSnapshot(
+            kind = DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER,
+            parameterIndex = index,
+        )
+        fun logicalGenericClassifier(
+            logicalClassifierKey: String,
+            arguments: List<DotNetGenericOwnerPrototypeStateTypeSnapshot>,
+        ) = DotNetGenericOwnerPrototypeStateTypeSnapshot(
+            kind = DotNetGenericOwnerPrototypeStateTypeKind.LOGICAL_GENERIC_CLASSIFIER,
+            logicalClassifierKey = logicalClassifierKey,
+            arguments = arguments,
+        )
+        fun szArray(elementType: DotNetGenericOwnerPrototypeStateTypeSnapshot) =
+            DotNetGenericOwnerPrototypeStateTypeSnapshot(
+                kind = DotNetGenericOwnerPrototypeStateTypeKind.SZ_ARRAY,
+                arguments = listOf(elementType),
+            )
+
+        private fun scalar(kind: DotNetGenericOwnerPrototypeStateTypeKind) =
+            DotNetGenericOwnerPrototypeStateTypeSnapshot(kind)
+    }
+}
+
 data class DotNetGenericOwnerPrototypeStateSnapshot(
     val fieldName: String,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    /** Null means the field type is outside the bounded path-unbound carrier grammar. */
+    val exactTypedCarrierType: DotNetGenericOwnerPrototypeStateTypeSnapshot?,
     val writes: List<DotNetGenericOwnerPrototypeStateWriteSnapshot>,
     val directReaderNames: List<String>,
     val directWriterNames: List<String>,
@@ -3353,6 +3467,47 @@ private fun IrType.genericOwnerPrototypePhysicalType(
     return DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(elementType)
 }
 
+/**
+ * Captures an exact owner-dependent field type without selecting a producer TypeDef path.
+ * Unsupported projections/classifiers stay unavailable instead of becoming object.
+ */
+private fun IrType.genericOwnerPrototypeStateType(
+    owner: IrClass,
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+): DotNetGenericOwnerPrototypeStateTypeSnapshot? {
+    if (isBoolean()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.booleanType()
+    if (isInt()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.int32Type()
+    if (isString() || isNullableString()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.stringType()
+    if (isAny() || isNullableAny()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.objectType()
+
+    val simpleType = this as? IrSimpleType ?: return null
+    val typeParameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+    if (typeParameter != null) {
+        // An unconstrained Kotlin T? is not represented by CLR !T: value-type substitutions need
+        // Nullable<T>. Keep the carrier unavailable until that distinction has an exact grammar.
+        if (simpleType.isMarkedNullable()) return null
+        return owner.typeParameters.indexOf(typeParameter)
+            .takeIf { index -> index >= 0 }
+            ?.let(DotNetGenericOwnerPrototypeStateTypeSnapshot::ownerParameter)
+    }
+
+    val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
+    val arguments = simpleType.arguments.map { argument ->
+        val projection = argument as? IrTypeProjection ?: return null
+        if (projection.variance != Variance.INVARIANT) return null
+        projection.type.genericOwnerPrototypeStateType(owner, preLoweringDeclarationKeys) ?: return null
+    }
+    if (classifier.fqNameWhenAvailable?.asString() == "kotlin.Array") {
+        return arguments.singleOrNull()?.let(DotNetGenericOwnerPrototypeStateTypeSnapshot::szArray)
+    }
+    if (!classifier.isDotNetGenericClassDeclaration || arguments.size != classifier.typeParameters.size) return null
+    val logicalClassifierKey = preLoweringDeclarationKeys[classifier] ?: return null
+    return DotNetGenericOwnerPrototypeStateTypeSnapshot.logicalGenericClassifier(
+        logicalClassifierKey = logicalClassifierKey,
+        arguments = arguments,
+    )
+}
+
 private fun DotNetGenericOwnerConstructorPlan.exactPrototypePhysicalSignature(
     owner: IrClass,
 ): DotNetGenericOwnerPhysicalMethodSignatureRecord? {
@@ -3503,7 +3658,9 @@ private fun IrClass.genericOwnerPrototypePhysicalGenericParameters():
     )
 }
 
-internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGenericOwnerPrototypeSnapshot {
+internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+): DotNetGenericOwnerPrototypeSnapshot {
     fun prototypeFor(
         source: IrSimpleFunction,
         role: DotNetGenericOwnerMemberFamilyRole,
@@ -3641,6 +3798,11 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
             DotNetGenericOwnerPrototypeStateSnapshot(
                 fieldName = state.field.name.asString(),
                 requirement = state.requirement,
+                exactTypedCarrierType = state.field.type.genericOwnerPrototypeStateType(
+                    owner,
+                    preLoweringDeclarationKeys,
+                )
+                    ?.takeIf(DotNetGenericOwnerPrototypeStateTypeSnapshot::referencesOwnerParameter),
                 writes = state.writes.map { write ->
                     DotNetGenericOwnerPrototypeStateWriteSnapshot(
                         producerName = write.producerName,

@@ -27,7 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed optimization: Common-faithful `Array<out T>.joinTo` retains
+- Last completed foundation: generic-owner state evidence now retains its
+  exact owner-dependent CLR carrier as a bounded, path-unbound type tree.
+  Scalars, owner parameters, invariant Kotlin-owned generic classifiers, and
+  SZ arrays compose structurally; nested classifiers use their pre-lowering
+  logical producer keys and bind only after the complete artifact selects
+  TypeDef paths. Missing paths, projections, unsupported classifiers, and open
+  nullable `T?` fail closed. The hostile artifact now consumes this record
+  instead of assuming every typed field is `T`. A real library/consumer split
+  stages the unchanged recursive OctoTree producer independently: published
+  `Branch.nodes` records `Node<T>[]`, `Leaf.value` records `T`, and semantic
+  `root` retains its structural `Node<T>` candidate without changing its
+  requirement. The producer owns 21 exact, nine semantic-capability, and nine
+  external-family static routes; the four remaining exact sites belong to the
+  separately compiled consumer. The focused PSI/LightTree x Framework
+  4.8/.NET 10 matrix covers 16 tests with zero failures, errors, or skips.
+  Production generic owners, physical fields, DLL/KLIB schema, Runtime, and
+  C# surface remain unchanged; no OctoTree candidate product exists yet. The
+  final strict aggregate completed in 2,676.6 seconds; direct audit covers 190
+  XML files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-structural-state-carrier-2026-08-15.md`](docs/archive/generic-owner-structural-state-carrier-2026-08-15.md).
+- The preceding optimization: Common-faithful `Array<out T>.joinTo` retains
   its public `System.Array` receiver for every Kotlin-valid projected view, but
   no longer forces every compatible exact vector through per-element
   `GetValue`/box/unbox. One non-throwing `isinst T[]` selects an inline
@@ -2453,12 +2473,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    Framework 4.8/net10 and both frontends while leaving normal products byte-
    identical. The per-call console transport has now been replaced by an
    exact-sized thread-safe primitive counter table and one final flush. The
-   first exact repository application source now supplies an independent
-   ArrayCopy census: all 5,664 local dynamic events are exact-entry candidates
-   even though its unchecked object-vector initialization correctly keeps
-   semantic array state. Next, broaden the source corpus beyond this single
-   bounded workload, then build its record-driven candidate and direct C#
-   consumer/subclass products. Include actual call mixes,
+   first two exact repository application sources now supply complementary
+   ArrayCopy and recursive OctoTree censuses. ArrayCopy's 5,664 local dynamic
+   events are exact-entry candidates even though its unchecked object-vector
+   initialization correctly keeps semantic array state; OctoTree mixes 5,941
+   exact and 3,096 semantic-capability events. A published OctoTree producer
+   now also retains exact path-unbound `Node<T>[]` and `T` state carriers by
+   logical producer key, while rejecting `Array<T?>` as an exact CLR `T[]`.
+   Next, serialize/bind the complete OctoTree physical family and build its
+   record-driven candidate plus direct C# consumer/subclass products. Include
+   actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
    insufficient.
