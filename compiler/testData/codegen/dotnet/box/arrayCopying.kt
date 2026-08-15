@@ -4,6 +4,12 @@ private class Item(val value: Int)
 
 private class GenericItem<T>(val value: T)
 
+private class GenericArrayFiller<T>(private val values: Array<T>) {
+    fun fill(element: T) {
+        values.fill(element)
+    }
+}
+
 private fun sourceExpression(): IntArray {
     trace = trace + "source;"
     return intArrayOf(4, 5, 6)
@@ -17,6 +23,38 @@ private fun destinationExpression(): IntArray {
 private fun recordedInt(label: String, value: Int): Int {
     trace = trace + label + ";"
     return value
+}
+
+private fun recordedGenericInts(): Array<Int> {
+    trace = trace + "fillArray;"
+    return arrayOf(1, 2, 3, 4)
+}
+
+private fun <T> fillOpen(values: Array<T>, element: T) {
+    values.fill(element)
+}
+
+private fun scalarFillsAreCorrect(): Boolean {
+    val bytes = arrayOf(0.toByte(), 0.toByte())
+    val shorts = arrayOf(0.toShort(), 0.toShort())
+    val longs = arrayOf(0L, 0L)
+    val floats = arrayOf(0.0f, 0.0f)
+    val doubles = arrayOf(0.0, 0.0)
+    val booleans = arrayOf(false, false)
+    val chars = arrayOf('a', 'a')
+    bytes.fill(1.toByte())
+    shorts.fill(2.toShort())
+    longs.fill(3L)
+    floats.fill(4.5f)
+    doubles.fill(5.5)
+    booleans.fill(true)
+    chars.fill('K')
+    return bytes[0] == 1.toByte() && bytes[1] == 1.toByte() &&
+            shorts[0] == 2.toShort() && shorts[1] == 2.toShort() &&
+            longs[0] == 3L && longs[1] == 3L &&
+            floats[0] == 4.5f && floats[1] == 4.5f &&
+            doubles[0] == 5.5 && doubles[1] == 5.5 &&
+            booleans[0] && booleans[1] && chars[0] == 'K' && chars[1] == 'K'
 }
 
 private fun <T> resizeProjected(values: Array<out T?>, size: Int): Array<out T?> =
@@ -196,6 +234,35 @@ fun box(): String {
     val genericInts = arrayOf(1, 2, 3, 4)
     genericInts.fill(9, fromIndex = 1, toIndex = 3)
     if (genericInts.contentToString() != "[1, 9, 9, 4]") return "fail 36: generic value fill"
+    genericInts.fill(0, fromIndex = 2, toIndex = 2)
+    if (genericInts.contentToString() != "[1, 9, 9, 4]") return "fail 36a: empty generic fill"
+    trace = ""
+    val evaluatedFill = recordedGenericInts()
+    evaluatedFill.fill(
+        recordedInt("fillElement", 8),
+        fromIndex = recordedInt("fillFrom", 1),
+        toIndex = recordedInt("fillTo", 3),
+    )
+    if (trace != "fillArray;fillElement;fillFrom;fillTo;" ||
+        evaluatedFill.contentToString() != "[1, 8, 8, 4]"
+    ) return "fail 36b: generic fill evaluation $trace"
+    fillOpen(genericInts, 6)
+    if (genericInts.contentToString() != "[6, 6, 6, 6]") return "fail 36c: open value fill"
+    val openStrings = arrayOf("a", "b")
+    fillOpen(openStrings, "open")
+    if (openStrings.contentToString() != "[open, open]") return "fail 36d: open reference fill"
+    val openNullableInts = arrayOf<Int?>(1, null)
+    fillOpen(openNullableInts, null)
+    if (openNullableInts.contentToString() != "[null, null]") return "fail 36e: open nullable fill"
+    val erasedOwnerInts = arrayOf(1, 2, 3)
+    GenericArrayFiller(erasedOwnerInts).fill(7)
+    if (erasedOwnerInts.contentToString() != "[7, 7, 7]") return "fail 36f: erased owner fill"
+    val nullableInts = arrayOf<Int?>(1, null, 3)
+    nullableInts.fill(5, fromIndex = 1)
+    if (nullableInts.contentToString() != "[1, 5, 5]") return "fail 36g: nullable value fill"
+    nullableInts.fill(null, fromIndex = 2)
+    if (nullableInts.contentToString() != "[1, 5, null]") return "fail 36h: nullable null fill"
+    if (!scalarFillsAreCorrect()) return "fail 36i: scalar fill family"
     val nullableStrings = arrayOf<String?>("a", "b", "c")
     nullableStrings.fill(null, fromIndex = 1)
     if (nullableStrings.contentToString() != "[a, null, null]") return "fail 37: nullable fill"

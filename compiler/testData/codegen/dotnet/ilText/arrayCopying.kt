@@ -1,5 +1,11 @@
 class Item(val value: Int)
 
+class GenericArrayFiller<T>(private val values: Array<T>) {
+    fun fill(value: T) {
+        values.fill(value)
+    }
+}
+
 fun copyInts(values: IntArray): IntArray = values.copyOf()
 
 fun resizeInts(values: IntArray, size: Int): IntArray = values.copyOf(size)
@@ -15,6 +21,18 @@ fun <T> resizeProjected(values: Array<out T?>, size: Int): Array<out T?> = value
 fun firstAfterResizeProjectedAny(values: Array<out Any?>, size: Int): Any? {
     val copied = values.copyOf(size)
     return copied[0]
+}
+
+fun fillGenericInts(values: Array<Int>, value: Int, fromIndex: Int, toIndex: Int) {
+    values.fill(value, fromIndex, toIndex)
+}
+
+fun fillNullableInts(values: Array<Int?>, value: Int?) {
+    values.fill(value)
+}
+
+fun <T> fillOpen(values: Array<T>, value: T) {
+    values.fill(value)
 }
 
 fun copyItems(values: Array<Item>): Array<Item> = values.copyOf()

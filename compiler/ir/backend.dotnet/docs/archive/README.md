@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-array-fill-specialization-2026-08-15.md`](generic-array-fill-specialization-2026-08-15.md)
+  records the exact-vector fill correction, cross-profile route measurement,
+  retained erased-owner boundary, and final strict gate.
 - [`generic-resized-array-copy-2026-08-15.md`](generic-resized-array-copy-2026-08-15.md)
   records the closed nullable-vector correction, bounded open projected copy
   carrier, FIR bottom-capture read boundary, and final strict gate.
