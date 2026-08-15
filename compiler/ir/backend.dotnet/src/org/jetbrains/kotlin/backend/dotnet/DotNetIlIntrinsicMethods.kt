@@ -379,6 +379,8 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinFqn, null, "arrayOfNulls", listOf(intFqn)) to DotNetIlGenericArrayOfNullsIntrinsic,
             Key(kotlinCollectionsFqn, null, "dotNetArrayOfNulls", listOf(arrayFqn, intFqn)) to
                     DotNetIlArrayOfNullsLikeIntrinsic,
+            Key(kotlinCollectionsFqn, null, "dotNetExactArrayOrNull", listOf(arrayFqn)) to
+                    DotNetIlExactGenericArrayOrNullIntrinsic,
             Key(kotlinCollectionsFqn, null, "dotNetErasedArrayOfNulls", listOf(arrayFqn, intFqn)) to
                     DotNetIlArrayOfNullsLikeIntrinsic,
             Key(kotlinCollectionsFqn, null, "dotNetErasedArraySet", listOf(arrayFqn, intFqn, anyFqn)) to
@@ -1390,6 +1392,35 @@ private object DotNetIlGenericArrayOfNullsIntrinsic : DotNetIlIntrinsicMethod() 
         if (call.arguments.size != 1) return false
         val size = call.arguments.single() ?: dotNetUnsupported("missing generic-array size")
         emitGuardedArrayAllocation(size, arrayType.newArrayInstruction, codegen)
+        return true
+    }
+}
+
+/**
+ * Returns the original projected vector when it is physically compatible with the method's exact
+ * `T[]`, or null otherwise. The latter case is required for Kotlin-valid widened value-array views
+ * such as `Array<Int>` observed as `Array<out Any?>`; it must retain the System.Array fallback.
+ */
+private object DotNetIlExactGenericArrayOrNullIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val exactArrayType = expectedType as? DotNetIlValueType.GenericArray ?: return false
+        if (call.arguments.size != 1) return false
+        val array = call.arguments.single()
+            ?: dotNetUnsupported("missing projected array for 'dotNetExactArrayOrNull'")
+        val arrayType = codegen.toDotNetIlValueType(array.type)
+        if (arrayType !is DotNetIlValueType.GenericArray &&
+            arrayType !is DotNetIlValueType.ErasedGenericArray
+        ) {
+            dotNetUnsupported("exact-array probe has unsupported type ${array.type.render()}")
+        }
+        codegen.emitExpression(array, arrayType)
+        codegen.emit("isinst ${exactArrayType.nameInSignature}", pops = 1, pushes = 1)
         return true
     }
 }

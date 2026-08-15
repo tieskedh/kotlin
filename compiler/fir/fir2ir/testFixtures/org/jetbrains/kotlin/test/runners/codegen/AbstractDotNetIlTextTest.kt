@@ -110,6 +110,7 @@ import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.config.MessageCollectorAccess
+import org.jetbrains.kotlin.config.coreLibraryAssemblyName
 import org.jetbrains.kotlin.config.dotNetAssemblyName
 import org.jetbrains.kotlin.config.dotNetMemberReflection
 import org.jetbrains.kotlin.config.dotNetOutput
@@ -6382,6 +6383,28 @@ private abstract class AbstractDotNetBoxRunner(
             }
             if ("[netstandard]" in stdlibIlText) {
                 assertions.fail { "The box stdlib must use the selected $target API profile: ${stdlibIlFile.path}" }
+            }
+            val arrayJoinToSignature =
+                ".method public hidebysig static !!1 'joinTo'<'T', " +
+                        "(class 'Kotlin.Text.Appendable') 'A'>(class [${target.coreLibraryAssemblyName}]" +
+                        "System.Array '<this>'"
+            val arrayJoinToDefaultSignature =
+                ".method public hidebysig static !!1 'joinTo\$default'<'T', "
+            val arrayJoinToStart = stdlibIlText.indexOf(arrayJoinToSignature)
+            val arrayJoinToEnd = stdlibIlText.indexOf(arrayJoinToDefaultSignature, arrayJoinToStart + 1)
+            if (arrayJoinToStart < 0 || arrayJoinToEnd <= arrayJoinToStart) {
+                assertions.fail { "Cannot isolate the generic array joinTo body: ${stdlibIlFile.path}" }
+            }
+            val arrayJoinToBody = stdlibIlText.substring(arrayJoinToStart, arrayJoinToEnd)
+            listOf(
+                "isinst !!0[]",
+                "ldelem !!0",
+                "callvirt instance object [${target.coreLibraryAssemblyName}]System.Array::GetValue(int32)",
+            ).firstOrNull { required -> required !in arrayJoinToBody }?.let { missing ->
+                assertions.fail { "Generic array joinTo lacks '$missing': ${stdlibIlFile.path}" }
+            }
+            if ("dotNetExactArrayOrNull" in stdlibIlText || "dotNetJoinToExact" in stdlibIlText) {
+                assertions.fail { "A generic-array join optimization helper leaked into CLR metadata: ${stdlibIlFile.path}" }
             }
         }
         val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")

@@ -78,6 +78,7 @@ The following decisions constrain new work; their ADRs own the detail:
 - [classified CLR exceptions](../decisions/classified-clr-exceptions.md);
 - [primitive scalar carriers](../decisions/primitive-scalars.md);
 - [Kotlin-owned primitive arrays](../decisions/primitive-arrays.md);
+- [exact-vector projected array joining](../decisions/projected-generic-array-join-fast-path.md);
 - [single-field value classes](../decisions/value-classes.md);
 - [Common continuation ABI and explicit CIL coroutine state machines](../decisions/kotlin-coroutines.md);
 - [runtime and stdlib ownership](../decisions/runtime-and-stdlib-ownership.md);
@@ -756,6 +757,20 @@ production `Leaf.value` remains object-backed. This removes avoidable array
 capability traffic without changing owner identity. It still does not close
 representative breadth, candidate/C# products, or timing. See
 [`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+
+The projected generic-array join path now demonstrates the same incremental
+rule at a public Common boundary. `Array<out T>.joinTo` retains `System.Array`
+as its physical receiver so widened value views remain valid, then performs
+one non-throwing `isinst T[]` to select an equivalent typed read loop when the
+actual vector permits it. Exact `Int` loads remove one 24-byte box per element
+on both Framework CLR 4 and .NET 10; the widened fallback remains unchanged.
+This is private method-generic physicalization, not a stronger Kotlin cast,
+reified owner, representative application result, or production `C<T>`
+admission. Arbitrary projected-array user loops remain a separate shared-
+lowering problem. See
+[`../decisions/projected-generic-array-join-fast-path.md`](../decisions/projected-generic-array-join-fast-path.md)
+and
+[`../archive/projected-generic-array-join-fast-path-2026-08-15.md`](../archive/projected-generic-array-join-fast-path-2026-08-15.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
