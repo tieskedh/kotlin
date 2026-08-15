@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-array-copy-application-census-2026-08-15.md`](generic-owner-array-copy-application-census-2026-08-15.md)
+  records the first exact repository-application route/state distribution,
+  open/erased generic-array copying correction, four-lane equality, and the
+  still-open candidate/C# and representative-breadth gates.
 - [`generic-array-fill-specialization-2026-08-15.md`](generic-array-fill-specialization-2026-08-15.md)
   records the exact-vector fill correction, cross-profile route measurement,
   retained erased-owner boundary, and final strict gate.

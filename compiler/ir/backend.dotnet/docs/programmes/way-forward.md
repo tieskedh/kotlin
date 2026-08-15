@@ -727,6 +727,23 @@ erased/candidate products on Framework 4.8 and every .NET 10 deployment lane.
 See
 [`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
 
+The first repository-owned application census now uses that path without the
+hostile physicalizer. The test fixture stages the exact Kotlin/Native
+`ArrayCopyBenchmark.kt` source as a declared build input and a bounded driver
+executes `CustomArray<Int>.add` 512 times. Sixteen local static routes receive
+5,664 events; every one is an exact typed-entry candidate on PSI, LightTree,
+Framework CLR 4, and .NET 10. One unrelated external site contributes another
+512 events. Route and count bytes agree across all four lanes. This does not
+prove typed state: the source deliberately initializes `Array<T?>` by an
+unchecked cast from `Array<Any?>`, so the compiler correctly selects semantic
+array state while retaining typed-entry plus capability member roles.
+`copyInto` now crosses either open `T[]` or that existing `System.Array`
+capability without changing identity or Common range semantics. The result is
+the first real call/state distribution, not candidate timing or representative
+breadth; broaden the source set and add paired candidate/C# products before
+the reopening decision. See
+[`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
