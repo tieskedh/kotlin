@@ -217,7 +217,9 @@ public external fun CharArray.copyOf(newSize: Int): CharArray
 
 // Concrete reference substitutions map Array<T?> to the same exact CLR reference vector and are
 // supported. An open T? still reaches the owning generic-array gate and fails explicitly.
-public external fun <T> Array<T>.copyOf(newSize: Int): Array<T?>
+public actual external fun <T> Array<T>.copyOf(newSize: Int): Array<T?>
+
+public actual external fun <T> Array<T>.fill(element: T, fromIndex: Int, toIndex: Int): Unit
 
 // Shallow content equality follows the common stdlib contract: nullable arrays compare equal when
 // both are null, elements use Kotlin equality, and nested arrays keep their identity-based equals.

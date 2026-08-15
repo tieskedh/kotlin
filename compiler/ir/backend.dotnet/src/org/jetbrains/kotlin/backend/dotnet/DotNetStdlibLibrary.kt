@@ -163,6 +163,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.BooleanIterator" to "Kotlin.Collections.BooleanIterator",
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
         "kotlin.sequences.Sequence" to "Kotlin.Sequences.Sequence",
+        "kotlin.sequences.SequenceScope" to "Kotlin.Sequences.SequenceScope",
         "kotlin.ranges.ClosedRange" to "Kotlin.Ranges.ClosedRange",
         "kotlin.ranges.OpenEndRange" to "Kotlin.Ranges.OpenEndRange",
         "kotlin.ranges.ClosedFloatingPointRange" to "Kotlin.Ranges.ClosedFloatingPointRange",
@@ -562,7 +563,12 @@ internal object DotNetStdlibLibrary {
     }
 
     fun implementationPropertyFacadeIlName(property: IrProperty): String? {
-        if ((property.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
+        val file = property.parent as? IrFile ?: return null
+        if (!file.isDotNetStdlibImplementationSource) return null
+        // Source-aligned shards own their complete top-level property closure just as they own
+        // private/internal helper functions. Otherwise a private const from an admitted Common
+        // file is misclassified as USER state and leaks into every separately compiled producer.
+        implementationFileFacadeIlName(file)?.let { return it }
         return property.fqNameWhenAvailable?.asString()?.let(implementationPropertyFacadeIlNames::get)
     }
 
@@ -649,8 +655,12 @@ internal object DotNetStdlibLibrary {
         if (!functionFqName.startsWith("kotlin.sequences.")) return null
         val logicalName = functionFqName.substringAfterLast('.')
         if (logicalName !in sequencePlatformNamedFunctions) return null
-        val receiverType = function.parameters
-            .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+        val extensionReceivers = function.parameters
+            .filter { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+        // The Common source helper which implements both public flatMapIndexed overloads is a
+        // plain top-level function and already has a distinct three-parameter CLR signature.
+        if (logicalName == "flatMapIndexed" && extensionReceivers.isEmpty()) return null
+        val receiverType = extensionReceivers.singleOrNull()
             ?.type as? IrSimpleType
             ?: dotNetUnsupported(
                 "Common Sequence.$logicalName has no single simple extension receiver: " +
@@ -990,6 +1000,10 @@ internal object DotNetStdlibLibrary {
             "kotlin.collections.Iterable" to "flatMapIterable",
             "kotlin.sequences.Sequence" to "flatMap",
         ),
+        "flatMapIndexed" to mapOf(
+            "kotlin.collections.Iterable" to "flatMapIndexedIterable",
+            "kotlin.sequences.Sequence" to "flatMapIndexedSequence",
+        ),
         "flatMapIndexedTo" to mapOf(
             "kotlin.collections.Iterable" to "flatMapIndexedIterableTo",
             "kotlin.sequences.Sequence" to "flatMapIndexedSequenceTo",
@@ -1148,9 +1162,17 @@ internal object DotNetStdlibLibrary {
         ),
         "_DotNetBootstrapSequence.kt" to ImplementationSource(packageFqName = "kotlin.sequences"),
         "_DotNetBootstrapSequencesH.kt" to ImplementationSource(packageFqName = "kotlin.sequences"),
+        "_DotNetBootstrapSequenceBuilder.kt" to ImplementationSource(
+            packageFqName = "kotlin.sequences",
+            facadeIlName = SEQUENCES_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapSequenceCore.kt" to ImplementationSource(
             packageFqName = "kotlin.sequences",
             facadeIlName = SEQUENCES_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapSlidingWindow.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
         "_DotNetBootstrapSequences.kt" to ImplementationSource(
             packageFqName = "kotlin.sequences",
@@ -1405,7 +1427,7 @@ internal val IrClass.isDotNetStdlibImplementation: Boolean
 internal val IrSimpleFunction.isDotNetStdlibImplementation: Boolean
     get() = DotNetStdlibLibrary.implementationFunctionFacadeIlName(this) != null
 
-/** Marker for executable top-level stdlib properties, kept explicit as the bootstrap grows. */
+/** Marker for executable top-level stdlib properties, including source-shard-private state. */
 internal val IrProperty.isDotNetStdlibImplementation: Boolean
     get() = DotNetStdlibLibrary.implementationPropertyFacadeIlName(this) != null
 

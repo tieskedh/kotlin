@@ -5,8 +5,9 @@
 - Scope: `Grouping<T, out K>`, its complete Common aggregation source, the
   Common `eachCount` expect with Native/Wasm actual, and all four generated
   factories over admitted carriers
-- Does not enable: primitive-array Grouping factories, random operations,
-  sequence builders, concurrency, BCL grouping identity, or typed C# export
+- Does not itself enable: primitive-array Grouping factories, random
+  operations, concurrency, BCL grouping identity, or typed C# export. The
+  later Sequence foundation independently enables Common sequence builders.
 
 ## Decision
 

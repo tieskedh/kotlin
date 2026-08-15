@@ -376,9 +376,14 @@ delegate pipeline. CLR-erased overload collisions use the deterministic,
 logical-type-derived stdlib names recorded by the Sequence ADR. A substituted
 generic result recovered from its physical upper-bound view may use
 frontend-proven `IMPLICIT_CAST` plus `unbox.any`; do not generalize that
-recovery to explicit or safe casts. Execute the same portable Sequence
-consumer on the real Framework CLR 4 host and .NET 10; modern `System.Object`,
-boxing, interface-dispatch, or generic optimizations are not Framework proof.
+recovery to explicit or safe casts. Sequence builders compile the exact Common
+`SequenceBuilder.kt` state machine over the one coroutine representation;
+`SequenceScope` remains one erased Kotlin class and must not become a CLR
+iterator, delegate, or second continuation ABI. Admit sliding windows and
+builder-dependent generated operations only with that complete Common closure,
+not target loops. Execute the same portable Sequence consumer on the real
+Framework CLR 4 host and .NET 10; modern `System.Object`, boxing, interface-
+dispatch, or generic optimizations are not Framework proof.
 
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common
@@ -532,7 +537,14 @@ See the
   `object[]` independent of the call-site substitution; KLIB retains the
   logical nullable projection. Imported CLR varargs keep their exact selected
   vector, and closed invariant arrays keep their existing exact carrier. Do
-  not infer support for invariant/input open `Array<T?>`. See
+  not infer support for invariant/input open `Array<T?>`. The sole local
+  exception is the immutable conditionally initialized `Array<T?>` view inside
+  Common `RingBuffer.toArray`: it retains either the resized or supplied exact
+  vector through `System.Array` and may write only a value whose IR type is the
+  original logical `T`, under that local-slot proof. Nullable/widened writes
+  remain rejected. It creates no declaration-stable carrier and does not
+  authorize a field, parameter, return, mutable local, or unrelated
+  invariant/input shape. See
   [the open-nullable array/vararg ADR](docs/decisions/open-nullable-array-views-and-varargs.md).
 - Every Kotlin-owned ordinary generic class has one canonical non-generic CLR
   owner, one authoritative declaration-erased runtime classifier/virtual ABI,
