@@ -27,7 +27,31 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the compiler-indexed generic-owner counter now
+- Last completed foundation: the second exact repository application stages
+  Kotlin/Native's unchanged recursive OctoTree source as a declared Gradle
+  input. A bounded driver performs 512 writes, 512 checked reads, and real
+  recursive rendering. Its 25 local exact sites receive 5,941 events and nine
+  semantic-capability sites receive 3,096; nine external family records and
+  2,728 unrelated/external events remain distinct. The exact sparse count
+  vector, route bytes, and instrumented assembly agree across PSI/LightTree
+  and Framework 4.8/.NET 10. The source also closed two generic-array
+  foundations. Common-faithful `Array.joinTo`/`joinToString` now preserve all
+  `appendElement`, transform, limit, live-view, identity, and failure
+  semantics without copying the receiver to `object[]`. An erased owner still
+  uses `System.Array` for direct `Array<T>`, but
+  `Array<Node<T>?>` truthfully uses `Node[]` because erased Kotlin `Node<T>`
+  has one declaration-stable CLR classifier. The proof requires a concrete
+  classifier and rejects object, open GenericParams, constructed CLR generics,
+  and unstable nested arrays; Framework's `EnumEntriesList<T>` guards the
+  bounded-direct-`T` exclusion. OctoTree `root` remains semantic,
+  `Branch.nodes` has an exact typed initializer, and production `Leaf.value`
+  remains object-backed. This removes avoidable `System.Array` indirection but
+  is correctness/state evidence, not performance, representative completion,
+  a paired C# product, or production-`C<T>` authority. The final strict
+  aggregate completed in 5,208.0 seconds; direct audit covers 190 XML files
+  and 2,234 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-application-census-2026-08-15.md`](docs/archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+- The preceding foundation: the compiler-indexed generic-owner counter now
   exports any same-compilation application census instead of depending on the
   hostile separate-compilation physicalizer. The first repository-owned input
   stages the exact Kotlin/Native ArrayCopy benchmark source as a declared

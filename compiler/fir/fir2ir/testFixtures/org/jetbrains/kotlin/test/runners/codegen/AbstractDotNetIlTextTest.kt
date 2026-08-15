@@ -415,6 +415,10 @@ private class BackendCliDotNetFacade(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
         )
+        validateGenericOwnerRepresentativeOctoTreePrototype(
+            completedOutput.genericOwnerPrototypes,
+            completedOutput.genericOwnerCallRoutes,
+        )
         physicalizeGenericOwnerHardestModelPrototype(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -443,6 +447,40 @@ private class BackendCliDotNetFacade(
             }
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+private fun validateGenericOwnerRepresentativeOctoTreePrototype(
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+) {
+    val tree = prototypes.singleOrNull { prototype -> prototype.ownerName == "OctoTree" } ?: return
+    val branch = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Branch" }
+    val leaf = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Leaf" }
+    check(tree.states.single { state -> state.fieldName == "root" }.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED) {
+        "OctoTree.root must retain semantic nullable subtype state: ${tree.states}"
+    }
+    check(branch.states.single { state -> state.fieldName == "nodes" }.let { nodes ->
+        nodes.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                nodes.writes.singleOrNull()?.let { write ->
+                    write.producerName == "<field-initializer:nodes>" &&
+                            write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                } == true
+    }) {
+        "OctoTree.Branch.nodes must retain its exact owner-classifier array producer: ${branch.states}"
+    }
+    check(leaf.states.single { state -> state.fieldName == "value" }.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN) {
+        "OctoTree.Leaf.value must retain typed owner state: ${leaf.states}"
+    }
+    val routeCounts = callRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
+    check(routeCounts == mapOf(
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 25,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 9,
+        DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED to 9,
+    )) {
+        "The representative OctoTree static call-route census changed: $routeCounts"
     }
 }
 
@@ -5907,6 +5945,13 @@ private val dotNetRepresentativeSources = listOf(
             "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/ArrayCopyBenchmark.kt",
         outputFileName = "ArrayCopyBenchmark.kt",
         requiresBenchmarkStubs = true,
+    ),
+    DotNetRepresentativeSource(
+        id = "octo-tree",
+        repositoryPath =
+            "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/OctoTest/ocTree.kt",
+        outputFileName = "ocTree.kt",
+        requiresBenchmarkStubs = false,
     ),
 ).associateBy(DotNetRepresentativeSource::id)
 

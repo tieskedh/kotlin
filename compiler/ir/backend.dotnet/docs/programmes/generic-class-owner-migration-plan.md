@@ -184,6 +184,16 @@ so exact call provenance and typed field provenance remain independent gates.
 No candidate or C# product is paired yet; conditions 8 and 9 remain open. See
 [`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
 
+The exact recursive OctoTree input adds a mixed call distribution and a
+declaration-stable classifier-array proof. Its local producer routes execute
+5,941 exact-entry and 3,096 semantic-capability events with identical evidence
+across both frontends and both CLR profiles. `Array<Node<T>?>` is physically
+`Node[]`, but direct owner-parameter arrays stay `System.Array`, `root` stays
+semantic, and the production `T` value field stays object-backed. This is a
+safe intermediate physical win, not permission for per-owner public ABI
+selection; conditions 8 and 9 remain open. See
+[`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
 admits only compiler-derived constraints in its exact supported grammar and

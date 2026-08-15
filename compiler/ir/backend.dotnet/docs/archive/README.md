@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-application-census-2026-08-15.md`](generic-owner-octo-tree-application-census-2026-08-15.md)
+  records the second exact repository-application census, full array joining,
+  declaration-stable erased-owner classifier vectors, mixed exact/capability
+  routes, and the still-open production-owner and paired-product gates.
 - [`generic-owner-array-copy-application-census-2026-08-15.md`](generic-owner-array-copy-application-census-2026-08-15.md)
   records the first exact repository-application route/state distribution,
   open/erased generic-array copying correction, four-lane equality, and the

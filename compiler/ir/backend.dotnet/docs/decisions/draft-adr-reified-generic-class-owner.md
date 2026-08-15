@@ -570,6 +570,16 @@ mix without conflating exact receiver provenance with typed field provenance.
 It is not yet a paired candidate/C# product or representative breadth. See
 [`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
 
+The second exact input is recursive OctoTree. Twenty-five local exact sites
+receive 5,941 events; nine semantic-capability sites receive 3,096. Its
+`Array<Node<T>?>` field can truthfully use the current erased classifier's
+`Node[]`, while direct `Array<T>` remains `System.Array` and production
+`Leaf.value: T` remains `object`. The candidate provenance proof recognizes
+the exact local owner-classifier allocation without treating a bounded direct
+`T` as physically stable. This is an independently useful optimization and
+broader distribution evidence, not production `C<T>` admission. See
+[`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

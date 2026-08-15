@@ -180,6 +180,10 @@ projectTests {
                     "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/" +
                             "ArrayCopyBenchmark.kt",
                 ),
+                rootProject.file(
+                    "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/" +
+                            "OctoTest/ocTree.kt",
+                ),
             ).withPropertyName("dotNetRepresentativeApplicationSources")
             filter {
                 includeTestsMatching("*DotNet*")

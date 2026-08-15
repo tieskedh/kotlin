@@ -1184,9 +1184,16 @@ internal class DotNetIlTypeMapper private constructor(
         DotNetRuntimeTypes.mapCompilerRuntimeType(type, topClassifierInfo)?.let { return it }
         if (type.referencesErasedOwnerParameterForCurrentView()) {
             if (type.isDotNetGenericArray()) {
-                // An erased class owner cannot choose one CLR vector element type for Array<T>.
-                // Preserve the actual vector object through the classified System.Array carrier;
-                // indexed operations already recover Kotlin reads/writes through its runtime path.
+                // A direct Array<T> on an erased class owner cannot choose one CLR vector element
+                // type. A structured element may still have one substitution-independent physical
+                // classifier: Node<T> is the same erased CLR Node for every T, so
+                // Array<Node<T>?> truthfully remains Node[]. Never infer object[] for direct T/T?
+                // or retain an open constructed-generic carrier merely because it is a reference.
+                type.declarationStableErasedOwnerArrayElementTypeOrNull()?.let { elementType ->
+                    return DotNetIlValueType.GenericArray(elementType)
+                }
+                // Otherwise preserve the actual vector object through the classified System.Array
+                // carrier; indexed operations recover Kotlin reads/writes through its runtime path.
                 return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
             }
             val simpleType = type as? IrSimpleType
@@ -1304,6 +1311,32 @@ internal class DotNetIlTypeMapper private constructor(
         }
         val elementType = toDotNetIlGenericArgumentType(elementIrType) ?: return null
         return DotNetIlValueType.GenericArray(elementType)
+    }
+
+    /**
+     * A physically stable array element whose source type still mentions an erased owner slot.
+     *
+     * Production Kotlin generic owners are one non-generic CLR classifier. Consequently
+     * `Node<T>` can be the exact element of `Node[]` even though its logical arguments mention T.
+     * This proof deliberately rejects universal object, an open GenericParam, and a constructed
+     * CLR generic: those carriers can hide a substitution-dependent runtime component type.
+     */
+    private fun IrType.declarationStableErasedOwnerArrayElementTypeOrNull(): DotNetIlValueType? {
+        val simpleType = this as? IrSimpleType ?: return null
+        val projection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return null
+        if (projection.variance != Variance.INVARIANT) return null
+        if ((projection.type as? IrSimpleType)?.classifier !is IrClassSymbol) return null
+        val elementType = toDotNetIlGenericArgumentType(projection.type) ?: return null
+        return elementType.takeIf { candidate -> candidate.isDeclarationStableErasedOwnerArrayElement() }
+    }
+
+    private fun DotNetIlValueType.isDeclarationStableErasedOwnerArrayElement(): Boolean = when (this) {
+        DotNetIlValueType.Object,
+        is DotNetIlValueType.TypeParameter,
+        is DotNetIlValueType.GenericInstance,
+            -> false
+        is DotNetIlValueType.GenericArray -> elementType.isDeclarationStableErasedOwnerArrayElement()
+        else -> true
     }
 
     /**
