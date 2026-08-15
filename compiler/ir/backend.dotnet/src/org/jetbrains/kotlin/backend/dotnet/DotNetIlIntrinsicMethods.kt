@@ -2163,6 +2163,151 @@ private class DotNetIlArrayCopyOfIntrinsic(
                 codegen.emitLabel(nonNegativeLabel)
             }
 
+            val sourceElementType = source.type.dotNetReadableArrayElementTypeOrNull()
+                ?.let(codegen::toDotNetIlGenericArgumentType)
+            val nullableDestinationElement = call.type.dotNetReadableArrayElementTypeOrNull()
+                ?.let(codegen::toDotNetIlGenericArgumentType) as? DotNetIlValueType.NullableValue
+            val sourceArrayType = sourceElementType?.let(DotNetIlValueType::GenericArray)
+            val destinationArrayType = nullableDestinationElement?.let(DotNetIlValueType::GenericArray)
+            val nullableValueCopy = resized && sourceArrayType != null && destinationArrayType != null &&
+                    nullableDestinationElement.elementType == sourceElementType &&
+                    (destinationArrayType == expectedType ||
+                            destinationArrayType.isDotNetAssignableTo(expectedType))
+            if (nullableValueCopy) {
+                // `Array<V>.copyOf(newSize)` returns `Array<V?>`. A CLR `V[]` cannot be cast to
+                // `Nullable<V>[]`, and zero-padding a retained value vector would expose V's
+                // default instead of Kotlin null. Copy element-by-element into the truthful
+                // nullable vector without boxing or System.Array reflection.
+                val typedSourceSlot = when (arrayType) {
+                    sourceArrayType -> sourceSlot
+                    is DotNetIlValueType.ErasedGenericArray -> {
+                        // An `Array<out V>` local is a System.Array capability over the same exact
+                        // vector. Recover its statically bounded V[] view once for typed reads;
+                        // this is not an invariant open-array declaration or a replacement copy.
+                        codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                        codegen.emit(
+                            "castclass ${sourceArrayType.nameInSignature}",
+                            pops = 1,
+                            pushes = 1,
+                        )
+                        codegen.spillToSyntheticLocal(sourceArrayType, "<typedCopySource>")
+                    }
+                    else -> dotNetUnsupported(
+                        "nullable value-array copy has unsupported source ${arrayType.nameInSignature}"
+                    )
+                }
+                emitNullableValueResizedCopy(
+                    typedSourceSlot,
+                    sizeSlot,
+                    sourceArrayType,
+                    destinationArrayType,
+                    nullableDestinationElement,
+                    codegen,
+                )
+                return true
+            }
+
+            val openNullableValueDoneLabel = if (
+                resized && arrayType is DotNetIlValueType.ErasedGenericArray &&
+                expectedType is DotNetIlValueType.ErasedGenericArray &&
+                source.type.isDotNetOutProjectedGenericArray()
+            ) {
+                val preserveExactLabel = codegen.nextLabel("copyOpenNullablePreserveExact")
+                val doneLabel = codegen.nextLabel("copyOpenNullableDone")
+                val coreLibraryReference = codegen.coreLibraryReference
+
+                // Reference vectors and vectors which already store Nullable<V> can preserve
+                // their exact runtime component: their new suffix is null. A non-null V[]
+                // instead needs a uniform output-only object[] so padding is null for every
+                // runtime substitution. System.Array.Copy boxes its copied value prefix.
+                // A truncating/equal-sized copy has no new suffix and keeps the exact value
+                // vector as well.
+                codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit(
+                    "callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emitBranch("ble", preserveExactLabel, pops = 2)
+
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit(
+                    "call instance class ${coreLibraryReference}System.Type " +
+                            "${coreLibraryReference}System.Object::GetType()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emit(
+                    "callvirt instance class ${coreLibraryReference}System.Type " +
+                            "${coreLibraryReference}System.Type::GetElementType()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emit(
+                    "callvirt instance bool ${coreLibraryReference}System.Type::get_IsValueType()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emitBranch("brfalse", preserveExactLabel, pops = 1)
+
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit(
+                    "call instance class ${coreLibraryReference}System.Type " +
+                            "${coreLibraryReference}System.Object::GetType()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emit(
+                    "callvirt instance class ${coreLibraryReference}System.Type " +
+                            "${coreLibraryReference}System.Type::GetElementType()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emit(
+                    "call class ${coreLibraryReference}System.Type " +
+                            "${coreLibraryReference}System.Nullable::GetUnderlyingType(" +
+                            "class ${coreLibraryReference}System.Type)",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emitBranch("brtrue", preserveExactLabel, pops = 1)
+
+                val objectArrayType = DotNetIlValueType.GenericArray(DotNetIlValueType.Object)
+                codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+                codegen.emit(objectArrayType.newArrayInstruction, pops = 1, pushes = 1)
+                val destinationSlot =
+                    codegen.spillToSyntheticLocal(objectArrayType, "<openNullableCopyDestination>")
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit("ldc.i4.0", pushes = 1)
+                codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+                codegen.emit("ldc.i4.0", pushes = 1)
+                codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                codegen.emit(
+                    "callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()",
+                    pops = 1,
+                    pushes = 1,
+                )
+                codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+                codegen.emit(
+                    "call int32 ${coreLibraryReference}System.Math::Min(int32, int32)",
+                    pops = 2,
+                    pushes = 1,
+                )
+                codegen.emit(
+                    "call void ${coreLibraryReference}System.Array::Copy(" +
+                            "class ${coreLibraryReference}System.Array, int32, " +
+                            "class ${coreLibraryReference}System.Array, int32, int32)",
+                    pops = 5,
+                )
+                codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+                codegen.emitGoto(doneLabel)
+                codegen.emitLabel(preserveExactLabel)
+                doneLabel
+            } else {
+                null
+            }
+
             val coreLibraryReference = codegen.coreLibraryReference
             codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
             codegen.emit(
@@ -2216,6 +2361,7 @@ private class DotNetIlArrayCopyOfIntrinsic(
                 pops = 5,
             )
             codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+            openNullableValueDoneLabel?.let(codegen::emitLabel)
             return true
         }
 
@@ -2290,6 +2436,55 @@ private class DotNetIlArrayCopyOfIntrinsic(
         )
         codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
         return true
+    }
+
+    private fun emitNullableValueResizedCopy(
+        sourceSlot: DotNetIlSlot.Local,
+        sizeSlot: DotNetIlSlot.Local,
+        sourceType: DotNetIlValueType.GenericArray,
+        destinationType: DotNetIlValueType.GenericArray,
+        destinationElementType: DotNetIlValueType.NullableValue,
+        codegen: DotNetIlExpressionCodegen,
+    ) {
+        codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+        codegen.emit(destinationType.newArrayInstruction, pops = 1, pushes = 1)
+        val destinationSlot = codegen.spillToSyntheticLocal(destinationType, "<copyDestination>")
+
+        codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+        codegen.emit("ldlen", pops = 1, pushes = 1)
+        codegen.emit("conv.i4", pops = 1, pushes = 1)
+        codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+        codegen.emit(
+            "call int32 ${codegen.coreLibraryReference}System.Math::Min(int32, int32)",
+            pops = 2,
+            pushes = 1,
+        )
+        val copyCountSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copyCount>")
+        codegen.emit("ldc.i4.0", pushes = 1)
+        val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copyIndex>")
+
+        val loopLabel = codegen.nextLabel("copyNullableValueLoop")
+        val doneLabel = codegen.nextLabel("copyNullableValueDone")
+        codegen.emitLabel(loopLabel)
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(copyCountSlot.index), pushes = 1)
+        codegen.emitBranch("bge", doneLabel, pops = 2)
+
+        codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit(sourceType.loadElementInstruction, pops = 2, pushes = 1)
+        codegen.emit(destinationElementType.ctorInstruction, pops = 1, pushes = 1)
+        codegen.emit(destinationType.storeElementInstruction, pops = 3)
+
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit("ldc.i4.1", pushes = 1)
+        codegen.emit("add", pops = 2, pushes = 1)
+        codegen.emit(storeLocalInstruction(indexSlot.index), pops = 1)
+        codegen.emitGoto(loopLabel)
+        codegen.emitLabel(doneLabel)
+        codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
     }
 }
 

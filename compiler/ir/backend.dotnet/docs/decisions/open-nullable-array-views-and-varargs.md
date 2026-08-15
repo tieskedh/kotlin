@@ -2,7 +2,7 @@
 
 - Status: **Accepted pre-ABI**
 - Date: 2026-08-12
-- Scope: Kotlin `Array<out T?>` read views and Kotlin-owned
+- Scope: Kotlin `Array<out T?>` read views and resized copies, plus Kotlin-owned
   method-generic `vararg T?`
 - Does not enable: invariant or input-projected open `Array<T?>`, foreign CLR
   signature rewriting, or another Kotlin array identity
@@ -15,6 +15,25 @@ projection remain authoritative in KLIB. `size`, indexed reads, and iteration
 use the already classified `System.Array` operations; each `GetValue` result is
 the accepted boxed-value, reference, or null `object` carrier for logical
 `T?`. The frontend projection prohibits writes.
+
+A resized `Array<out T?>.copyOf(newSize)` creates a new read-only result and
+must also preserve null padding when the runtime substitution is a non-null
+value type. Equal-sized and truncating copies preserve the exact source
+component because they create no suffix. Growing reference vectors and vectors
+which already store `Nullable<V>` also preserve that component, whose default
+suffix is null. Only a growing non-null `V[]` selects a new `object[]`; the CLR
+`System.Array.Copy` operation boxes the copied prefix and the fresh suffix
+remains null. The physical return stays `System.Array`, while KLIB retains
+`Array<out T?>`. This is a new output-only array, not a carrier for an
+invariant declaration or an identity-changing view of an existing array.
+
+FIR may type a local holding `Array<out Any?>.copyOf(...)` as the bottom input
+`Array<in Nothing?>`. The target maps this singular bottom shape to the same
+`System.Array` read capability in any slot, so `size`, iteration, and `Any?`
+reads remain available. It does not thereby support general input projection:
+an indexed write through the capture, including a null write, still makes the
+containing declaration unsupported, and every `Array<in E>` for non-bottom
+`E` remains rejected.
 
 A Kotlin-owned declaration `fun <T> f(vararg values: T?)` has a different
 physical rule. The compiler materializes one fresh `object[]` for every
@@ -54,6 +73,13 @@ An output projection is an identity-preserving capability view over an array
 that already exists. CLR supplies exactly one base identity shared by every SZ
 vector: `System.Array`. Copying it would change aliasing, runtime component
 type, mutation visibility, and failure behavior.
+
+The resized-copy case is deliberately different because Common `copyOf`
+already requires a distinct array. Preserving a non-null value component while
+growing would expose default `V` rather than null. A boxed output-only vector
+is therefore the bounded fallback only when runtime inspection proves that
+the exact component cannot provide the required suffix; it is not used for
+views, non-growing copies, references, or already-nullable value vectors.
 
 A vararg expansion creates a new private argument vector. Kotlin `T?` must
 admit null even when `T` is substituted with a non-null value type, while also
@@ -105,10 +131,11 @@ unsigned, random, or unrelated generated family follows from this decision.
 
 Completion must prove direct and spread calls with reference, value, nullable,
 null, widened, empty, and multiple elements; fresh-array and evaluation-order
-behavior; exact filtering and destination identity; same-module and separate
-Kotlin producer/consumer binding; unchanged exact closed-array carriers;
-continued rejection of invariant/input open nullable arrays; Framework CLR
-and CoreCLR execution; physical `System.Array`/`object[]` signatures visible
-from C#; absence of placeholder helpers and unsafe `T[]` casts; stale physical
-schema rejection where the signature change requires it; and the complete
-strict target aggregate.
+behavior; exact filtering and destination identity; growing/non-growing open
+projected copies over reference, non-null value, nullable value, and widened
+substitutions; same-module and separate Kotlin producer/consumer binding;
+unchanged exact closed-array carriers; continued rejection of invariant/input
+open nullable arrays; Framework CLR and CoreCLR execution; physical
+`System.Array`/`object[]` signatures visible from C#; absence of placeholder
+helpers and unsafe `T[]` casts; stale physical schema rejection where the
+signature change requires it; and the complete strict target aggregate.
