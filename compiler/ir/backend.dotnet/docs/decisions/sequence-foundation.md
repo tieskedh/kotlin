@@ -63,10 +63,12 @@ The resulting source closure also contains the exact Common array and
 `AbstractIterator`, generic resized `Array.copyOf`, generic `Array.fill`, and
 only the floating-point expects/actuals reached by the admitted min/max and
 sortedness algorithms. Those supporting declarations are dependencies of the
-Common bodies, not target substitutes for them. Runtime surface 37 owns the
-profile-portable `System.Array` fill operation used by that exact target
-actual; its range categories remain Kotlin's `IndexOutOfBoundsException` and
-`IllegalArgumentException` rather than leaking CLR argument policy.
+Common bodies, not target substitutes for them. Generic fill follows the
+profile-specialized exact-vector decision: typed storage avoids the Runtime
+fallback, while an erased `System.Array` capability keeps Runtime surface 37.
+Both routes retain Kotlin's `IndexOutOfBoundsException` and
+`IllegalArgumentException` categories rather than leaking CLR argument
+policy. See [the generic-array-fill ADR](generic-array-fill.md).
 
 Common `RingBuffer.toArray` needs one local `Array<T?>` view while its public
 method remains `<T> toArray(Array<T>): Array<T>`. The CLR carrier is admitted

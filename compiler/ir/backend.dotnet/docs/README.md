@@ -78,6 +78,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Bounded `Array<out E>` read-only CLR view](decisions/bounded-output-projected-arrays.md)
 - [Open-nullable projected arrays and Kotlin varargs use distinct CLR carriers](decisions/open-nullable-array-views-and-varargs.md)
 - [Reified array operations reuse ordinary substituted carriers](decisions/reified-array-operations.md)
+- [Profile-specialized Common generic array fill](decisions/generic-array-fill.md)
 - [Reified inline functions use complete call-site substitution](decisions/reified-inline-functions.md)
 - [`KType` and `typeOf` retain the logical Kotlin type graph](decisions/ktype-and-typeof.md)
 - [Nominal `KClass` and class literals over classified CLR evidence](decisions/kclass-and-class-literals.md)

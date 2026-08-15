@@ -419,10 +419,18 @@ not authorize an invariant/input open-nullable array. The singular bottom
 input `Array<in Nothing?>`, which FIR uses for projected-copy captures, may
 retain only the same `System.Array` read capability in any slot; every element
 write through it, including null, remains rejected. All other input
-projections remain rejected. Execute direct and separate sorting consumers
-through both FIR parsers on the real Framework CLR 4 host and .NET 10. The
-same portable stdlib and C# workload must run on both hosts; modern object,
-generic, or array optimizations are not Framework evidence.
+projections remain rejected. Common generic `Array.fill` evaluates receiver,
+element, and bounds once in Kotlin order and applies Common's range-check
+precedence before mutation. An exact CLR vector never boxes its element or
+uses `System.Array.SetValue`: Framework/netstandard and every statically known
+reference vector use a typed `stelem E` loop; .NET 10 value, nullable-value,
+and open `T` vectors use `System.Array.Fill<E>`. Only an already-erased
+`System.Array` capability, including canonical generic-owner state, retains
+the Runtime `ArrayFill(System.Array, object, ...)` fallback. Do not reify that
+owner or copy its state to optimize fill. Execute direct and separate sorting
+consumers through both FIR parsers on the real Framework CLR 4 host and .NET
+10. The same portable stdlib and C# workload must run on both hosts; modern
+object, generic, or array optimizations are not Framework evidence.
 
 See
 [runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)
@@ -430,6 +438,8 @@ and
 [`docs/programmes/common-collections.md`](docs/programmes/common-collections.md).
 See also the
 [`Sequence` foundation ADR](docs/decisions/sequence-foundation.md).
+See also the
+[`generic array fill` ADR](docs/decisions/generic-array-fill.md).
 See also the
 [`Grouping` foundation ADR](docs/decisions/grouping-foundation.md).
 
