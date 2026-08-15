@@ -2,13 +2,14 @@
 
 - Status: **Accepted — pre-ABI**
 - Date: 2026-08-14
-- Scope: the ordinary `Sequence<out T>` identity, non-builder Common sequence
-  implementation classes, and the dependency-closed Common generated
-  sequence/collection conversion families
+- Scope: the ordinary `Sequence<out T>` identity, Common sequence and builder
+  implementation classes, sliding windows, and the dependency-closed Common
+  generated sequence/collection conversion families
 - Original tranche did not enable: sequence/iterator builders, random/shuffle,
   window/chunk, `Grouping`, unsigned aggregates, BCL enumeration identity, or
-  typed C# export. The later Grouping foundation now admits `groupingBy` without
-  changing this Sequence representation.
+  typed C# export. The later Grouping and builder closures now admit
+  `groupingBy`, builders, and window/chunk operations without changing this
+  Sequence representation.
 
 ## Decision
 
@@ -27,7 +28,7 @@ generic-class ABI. Intermediate operations therefore return ordinary
 Kotlin-owned objects whose iterator acquisition, callback order, laziness,
 exception identity, and one-shot behavior come from Common source.
 
-The initial closure deliberately excludes every declaration whose body reaches
+The initial closure deliberately excluded every declaration whose body reached
 an independent unavailable substrate:
 
 - `ifEmpty`, lazy `flatMapIndexed`, running/scan operations, and
@@ -39,6 +40,16 @@ an independent unavailable substrate:
   [`Grouping` foundation](grouping-foundation.md);
 - `UInt`/`ULong` selector sums reach the unsigned value-class product.
 
+The completed coroutine language/runtime foundation now removes the first two
+blocks. The projection includes all of Common `SequenceBuilder.kt` and
+`SlidingWindow.kt`, the exact Common `Sequences.kt` `ifEmpty` and internal
+`flatMapIndexed` dependencies, and every generated builder-dependent Sequence
+member. This admits both `sequence`/`iterator` builders, all three `yieldAll`
+routes, running fold/reduce and scan, both lazy `flatMapIndexed` overloads,
+`zipWithNext`, `windowed`, and `chunked`. `shuffled` remains excluded because
+`Random` is still an independent substrate; only the `UInt`/`ULong` selector
+sums remain excluded from the generated Sequence inventory.
+
 Every other generated Sequence member is admitted as one generator-owned
 dependency partition, including terminal traversal, filtering, mapping,
 flattening, eager snapshots and associations, distinctness, predicate and
@@ -49,9 +60,24 @@ neither admitted nor named in the exact excluded partition.
 
 The resulting source closure also contains the exact Common array and
 `Iterable` `asSequence` adapters, `MutableCollection.addAll(Sequence)`, Common
-`AbstractIterator`, and only the floating-point expects/actuals reached by the
-admitted min/max and sortedness algorithms. Those supporting declarations are
-dependencies of the Common bodies, not target substitutes for them.
+`AbstractIterator`, generic resized `Array.copyOf`, generic `Array.fill`, and
+only the floating-point expects/actuals reached by the admitted min/max and
+sortedness algorithms. Those supporting declarations are dependencies of the
+Common bodies, not target substitutes for them. Runtime surface 37 owns the
+profile-portable `System.Array` fill operation used by that exact target
+actual; its range categories remain Kotlin's `IndexOutOfBoundsException` and
+`IllegalArgumentException` rather than leaking CLR argument policy.
+
+Common `RingBuffer.toArray` needs one local `Array<T?>` view while its public
+method remains `<T> toArray(Array<T>): Array<T>`. The CLR carrier is admitted
+only for its immutable conditionally initialized local, which selects either a
+resized copy or the supplied vector. It retains that exact result as
+`System.Array`, reads and writes the same object,
+permits only writes whose IR value has the original logical `T` type, and lets
+the vector's runtime component check reject an incompatible substitution.
+It does not admit invariant/input open-nullable arrays in a field, parameter,
+return, mutable local, or any declaration-stable ABI; the general mapper keeps
+rejecting those shapes.
 
 ## Authority and mature-target evidence
 
@@ -98,6 +124,13 @@ adapter may project a typed enumerable view without changing Kotlin identity,
 iterator timing, or same-object behavior. Kotlin-owned objects do not acquire
 an implicit BCL interface in this tranche.
 
+`SequenceScope<in T>` is likewise one public non-generic erased CLR class; its
+suspend operations use the established erased continuation boundary. The
+builder entrypoints have deterministic `__KotlinErased__` physical names
+because their suspend receiver-function shape has no one truthful ordinary CLR
+signature. Kotlin source and KLIB retain the original `sequence` and `iterator`
+names. This low-level spelling is not an idiomatic C# builder export.
+
 ## Cross-profile invariant
 
 .NET Framework 4.8 execution is independent evidence. A successful .NET 10
@@ -121,11 +154,12 @@ also change identity and iterator acquisition.
 Rejected. It forks Common algorithms and can change allocation, callback,
 exception, comparison, and enumeration behavior.
 
-### Admit builder-dependent members with target helpers
+### Admit builder-dependent members before coroutine support
 
-Rejected. Sequence builders are a coroutine-language/runtime closure. Their
-absence must remain visible instead of being hidden behind copied iterators or
-backend intrinsics.
+Rejected. Sequence builders are a coroutine-language/runtime closure. They are
+now admitted only because the completed Common coroutine machinery executes
+the exact upstream state machine. Copied iterators, target-authored builder
+algorithms, or a second continuation representation remain rejected.
 
 ### Start with only eager terminal functions
 
@@ -141,7 +175,10 @@ compiled Kotlin consumers, and Roslyn metadata/call evidence. Tests must cover
 empty/singleton/multiple, primitive/reference/nullable/widened values; repeated
 and constrained-once iteration; laziness and exact iterator/callback counts;
 short-circuiting; exception identity and timing; reified filtering; stable
-sorting; numeric overloads; and absence of BCL enumerable identity.
+sorting; numeric overloads; builder suspension/resumption; every `yieldAll`
+route; partial, gapped, overlapping, transformed, and expanded windows;
+running operations; exact `SequenceScope` metadata; generic fill range
+categories; and absence of BCL enumerable identity.
 
 Before ABI freeze, correct the Sequence TypeDef, facade, collision names, and
 erased iterator slot atomically across stdlib production, physical ABI records,

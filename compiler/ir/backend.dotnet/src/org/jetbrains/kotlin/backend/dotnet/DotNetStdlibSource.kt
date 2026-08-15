@@ -226,8 +226,18 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapSequenceBuilder.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSequenceBuilder.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "_DotNetBootstrapSequenceCore.kt",
         "dotnet/common/src/generated/_DotNetBootstrapSequenceCore.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSlidingWindow.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSlidingWindow.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

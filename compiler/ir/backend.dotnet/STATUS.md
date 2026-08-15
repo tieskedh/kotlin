@@ -27,7 +27,32 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner execution tracing now records into
+- Last completed foundation: the complete Common Sequence builder/window
+  closure is now published from exact `SequenceBuilder.kt`, `SlidingWindow.kt`,
+  `Sequences.kt`, and generated source. `SequenceScope` remains one erased
+  Kotlin class over the established continuation/sentinel ABI; `sequence`,
+  `iterator`, every `yieldAll` route, `ifEmpty`, both lazy `flatMapIndexed`
+  overloads, running fold/reduce/scan, `zipWithNext`, `windowed`, and `chunked`
+  execute without a target-authored iterator or BCL enumeration identity.
+  Common `RingBuffer.toArray` receives one structural local-only carrier: an
+  immutable conditional `Array<T?>` selection retains its resized-or-supplied
+  exact vector through `System.Array`, and writes require the original logical
+  `T`; ordinary casts, nullable writes, and declaration-stable invariant/input
+  open-nullable arrays remain rejected. Generic `Array.fill` preserves Common
+  range exception categories through runtime surface 37. The full gate found
+  and repaired a second foundational bug: source-aligned Stdlib shards now own
+  private top-level properties as well as helper functions, preventing the six
+  Sequence state constants from leaking into every user producer DLL. Five
+  generated outputs remained SHA-256-identical across the owning-generator
+  rerun. PSI/LightTree and Framework 4.8/.NET 10 direct lanes, the portable
+  netstandard Stdlib plus separate consumer, physical metadata, and rejection
+  sentinels are green. The final strict aggregate completed in 2,653.0 seconds;
+  direct audit covers 190 XML files and 2,216 tests with zero failures, errors,
+  or skips. See
+  [`docs/decisions/sequence-foundation.md`](docs/decisions/sequence-foundation.md)
+  and
+  [`docs/archive/common-sequence-builder-closure-2026-08-15.md`](docs/archive/common-sequence-builder-closure-2026-08-15.md).
+- The preceding foundation: generic-owner execution tracing now records into
   a fixed primitive counter table and emits one final line per visited compiler
   site instead of one console line per call. The table is sized from the exact
   complete-census route count; each call performs one CLR
@@ -800,23 +825,20 @@ stdlib. The target is not close to 98% feature-complete: remaining
 mapped/Stdlib and foreign member reflection, constructors and declared-member
 APIs, the remaining
 coroutine programme beyond its executable continuation/state-machine
-foundation, multi-field value classes, the sequence-builder closure,
-random/remaining sorting families, and Gradle/KMP product
+foundation, multi-field value classes, random/remaining sorting families, and
+Gradle/KMP product
 integration remain substantial open programmes.
 
 ## Current green gate
 
-The compiler-proven generic-owner typed-state head passed every constituent of
-the strict target gate. Production generic-owner emission remains erased; this
-checkpoint extends only the schema-7 test-owned physical family with one actual
-`!T` field, exact identity access, and a strict same-object capability. The
-normal aggregate command remains:
+The complete Common Sequence builder/window head passed every constituent of
+the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-14 in 849.5 seconds. Backend,
+The latest aggregate completed on 2026-08-15 in 2,653.0 seconds. Backend,
 FIR2IR, stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
 executed for the final semantic head. Direct audit of all three result roots
 covers 190 XML files and 2,216 tests:
@@ -824,11 +846,14 @@ covers 190 XML files and 2,216 tests:
 - 6 policy-free physical CLI model/serializer tests
 - 2,085 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 104 library-integration tests
+- 125 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate and explicit model constituent exited successfully. Relative to
-schema version 4, the 2,216-test inventory also executes exact
+The aggregate and explicit model constituent exited successfully. The final
+head additionally proves builder laziness/suspension, every `yieldAll` route,
+running and windowing algorithms, generic fill failures, source-shard property
+ownership, and unchanged open-nullable rejection goldens. Relative to schema
+version 4, the 2,216-test inventory also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
 KLIB-only logical type-argument authority, complete physical-callable-family
@@ -1859,12 +1884,15 @@ metadata, nullable/seeded map semantics, and direct Roslyn implementation and
 calls are green. Modern `System.Object`, boxing, interface-dispatch, or generic
 optimizations are not treated as Framework proof.
 
-The Kotlin-owned non-builder Sequence foundation is published from exact
-Common/generated sources. One erased non-generic CLR interface preserves the
+The complete Kotlin-owned Sequence foundation is published from exact Common/
+generated sources. One erased non-generic CLR interface preserves the
 canonical Kotlin object identity and covariant KLIB contract; it neither maps
-to `IEnumerable<T>` nor uses LINQ. Generator-inventoried exclusions retain
-sequence builders, random, and unsigned selector sums behind their independent
-substrates; `groupingBy` is now admitted by the Grouping foundation. The
+to `IEnumerable<T>` nor uses LINQ. Exact Common coroutine builders,
+`SequenceScope`, `SlidingWindow`, running/window/chunk operations, and
+`flatMapIndexed` now compose with the completed coroutine foundation without a
+target-authored iterator. Generator-inventoried exclusions retain only Random-
+backed `shuffled` and unsigned selector sums behind their independent
+substrates; `groupingBy` is admitted by the Grouping foundation. The
 physical facade derives every erased collision
 name from the logical receiver/selector domain. Portable Framework CLR 4 and
 .NET 10 execution, all four PSI/LightTree profile lanes, deterministic product
@@ -2325,10 +2353,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    out an easy owner before the hostile prototype and real-app measurement
    checkpoint select the one atomic cutover.
 2. Recompute the remaining Common generator/source dependency graph after the
-   completed Sequence, Grouping, open-nullable-array, and signed-sorting
-   closures. Choose one complete next family only after separating Random and
-   entropy, unsigned value-class/range representation, sequence-builder
-   coroutines/windowing, and still dependency-blocked reified variants. Do not
+   completed Sequence builder/window, Grouping, open-nullable-array, and signed-
+   sorting closures. Choose one complete next family only after separating
+   Random and entropy, unsigned value-class/range representation, and still
+   dependency-blocked reified variants. Do not
    infer that signed sorting authorizes unsigned overloads, binary search,
    shuffle, or a target-authored one-function approximation.
 3. Continue the generated catalog only by complete classifier families, not by
@@ -2342,9 +2370,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 4. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
-5. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
-   debugger metadata, and coroutine-aware reflection outside this completed
-   continuation/state-machine foundation until selected independently.
+5. Keep coroutine scheduling, `kotlinx.coroutines`, debugger metadata, and
+   coroutine-aware reflection outside this completed continuation/state-
+   machine foundation until selected independently. Common Sequence builders
+   are now a completed consumer of that one foundation.
 
 The post-rebase callable-reference probe found that common IR's new
 `addBoundValueAtOverride` helper cannot directly replace the .NET lowering:

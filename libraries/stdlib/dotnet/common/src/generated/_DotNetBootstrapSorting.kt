@@ -35,6 +35,17 @@ public expect fun <T> MutableList<T>.sortWith(comparator: Comparator<in T>): Uni
 public expect fun <T> Array<T>.copyOf(): Array<T>
 
 /**
+ * Returns new array which is a copy of the original array, resized to the given [newSize].
+ * The copy is either truncated or padded at the end with `null` values if necessary.
+ *
+ * - If [newSize] is less than the size of the original array, the copy array is truncated to the [newSize].
+ * - If [newSize] is greater than the size of the original array, the extra elements in the copy array are filled with `null` values.
+ *
+ * @sample samples.collections.Arrays.CopyOfOperations.resizingCopyOf
+ */
+public expect fun <T> Array<T>.copyOf(newSize: Int): Array<T?>
+
+/**
  * Returns new array which is a copy of the original array.
  *
  * @sample samples.collections.Arrays.CopyOfOperations.copyOf
@@ -89,6 +100,18 @@ public expect fun DoubleArray.copyOf(): DoubleArray
  * @sample samples.collections.Arrays.CopyOfOperations.copyOf
  */
 public expect fun CharArray.copyOf(): CharArray
+
+/**
+ * Fills this array or its subrange with the specified [element] value.
+ *
+ * @param fromIndex the start of the range (inclusive) to fill, 0 by default.
+ * @param toIndex the end of the range (exclusive) to fill, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ */
+@SinceKotlin("1.3")
+public expect fun <T> Array<T>.fill(element: T, fromIndex: Int = 0, toIndex: Int = size): Unit
 
 /**
  * Sorts the array in-place.

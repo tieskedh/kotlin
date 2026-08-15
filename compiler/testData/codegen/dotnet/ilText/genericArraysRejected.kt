@@ -34,6 +34,12 @@ fun <T> openCopy(values: Array<T>): Array<T> = values.copyOf()
 
 fun <T> openResize(values: Array<T>, size: Int): Array<T?> = values.copyOf(size)
 
+@Suppress("UNCHECKED_CAST")
+fun <T> nullableLocalWrite(values: Array<T>) {
+    val nullableValues = if (values.isEmpty()) values as Array<T?> else values as Array<T?>
+    nullableValues[0] = null
+}
+
 fun <T> openCopyInto(source: Array<T>, destination: Array<T>): Array<T> =
     source.copyInto(destination)
 
