@@ -2020,7 +2020,7 @@ private class DotNetIlArrayCopyIntoIntrinsic(
     }
 }
 
-/** Exact Common `Array<T>.fill` over the runtime vector, including Kotlin range validation. */
+/** Common `Array<T>.fill` with typed exact-vector stores and Kotlin range validation. */
 private object DotNetIlGenericArrayFillIntrinsic : DotNetIlIntrinsicMethod() {
     override val excludesDeclarationFromCodegen: Boolean = true
 
@@ -2034,10 +2034,13 @@ private object DotNetIlGenericArrayFillIntrinsic : DotNetIlIntrinsicMethod() {
         val element = call.arguments[1]
             ?: dotNetUnsupported("missing element for 'fill'")
 
+        val exactArrayType = arrayType as? DotNetIlValueType.GenericArray
+        val elementType = exactArrayType?.elementType ?: DotNetIlValueType.Object
+
         codegen.emitExpression(array, arrayType)
         val arraySlot = codegen.spillToSyntheticLocal(arrayType, "<fillArray>")
-        codegen.emitExpression(element, DotNetIlValueType.Object)
-        val elementSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Object, "<fillElement>")
+        codegen.emitExpression(element, elementType)
+        val elementSlot = codegen.spillToSyntheticLocal(elementType, "<fillElement>")
 
         val fromIndex = call.arguments[2]
         if (fromIndex == null) {
@@ -2050,15 +2053,32 @@ private object DotNetIlGenericArrayFillIntrinsic : DotNetIlIntrinsicMethod() {
         val toIndex = call.arguments[3]
         if (toIndex == null) {
             codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
-            codegen.emit(
-                "callvirt instance int32 ${codegen.coreLibraryReference}System.Array::get_Length()",
-                pops = 1,
-                pushes = 1,
-            )
+            if (exactArrayType != null) {
+                codegen.emit("ldlen", pops = 1, pushes = 1)
+                codegen.emit("conv.i4", pops = 1, pushes = 1)
+            } else {
+                codegen.emit(
+                    "callvirt instance int32 ${codegen.coreLibraryReference}System.Array::get_Length()",
+                    pops = 1,
+                    pushes = 1,
+                )
+            }
         } else {
             codegen.emitExpression(toIndex, DotNetIlValueType.Int32)
         }
         val toIndexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<fillToIndex>")
+
+        if (exactArrayType != null) {
+            emitTypedFill(
+                arraySlot,
+                elementSlot,
+                fromIndexSlot,
+                toIndexSlot,
+                exactArrayType,
+                codegen,
+            )
+            return true
+        }
 
         codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(elementSlot.index), pushes = 1)
@@ -2069,6 +2089,83 @@ private object DotNetIlGenericArrayFillIntrinsic : DotNetIlIntrinsicMethod() {
             pops = 4,
         )
         return true
+    }
+
+    private fun emitTypedFill(
+        arraySlot: DotNetIlSlot.Local,
+        elementSlot: DotNetIlSlot.Local,
+        fromIndexSlot: DotNetIlSlot.Local,
+        toIndexSlot: DotNetIlSlot.Local,
+        arrayType: DotNetIlValueType.GenericArray,
+        codegen: DotNetIlExpressionCodegen,
+    ) {
+        val outOfBoundsLabel = codegen.nextLabel("fillOutOfBounds")
+        val reversedLabel = codegen.nextLabel("fillReversed")
+        val doneLabel = codegen.nextLabel("fillDone")
+
+        // Match Common's checkRangeIndexes precedence exactly. Arguments have already been
+        // evaluated and spilled in source order before any validation or write occurs.
+        codegen.emit(loadLocalInstruction(fromIndexSlot.index), pushes = 1)
+        codegen.emit("ldc.i4.0", pushes = 1)
+        codegen.emitBranch("blt", outOfBoundsLabel, pops = 2)
+        codegen.emit(loadLocalInstruction(toIndexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+        codegen.emit("ldlen", pops = 1, pushes = 1)
+        codegen.emit("conv.i4", pops = 1, pushes = 1)
+        codegen.emitBranch("bgt", outOfBoundsLabel, pops = 2)
+        codegen.emit(loadLocalInstruction(fromIndexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(toIndexSlot.index), pushes = 1)
+        codegen.emitBranch("bgt", reversedLabel, pops = 2)
+
+        if (codegen.coreLibraryProfile == DotNetCoreLibraryProfile.NET10_0 &&
+            !arrayType.elementType.isDotNetReferenceShaped()
+        ) {
+            // CoreCLR's generic BCL fill is materially faster for value vectors and open T. A
+            // statically known reference vector instead keeps the direct loop: paired lengths
+            // show it beating both BCL Fill and SetValue. The MemberRef is unavailable on the
+            // Framework/netstandard API floor, which always uses the portable typed loop.
+            codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(elementSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(fromIndexSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(toIndexSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(fromIndexSlot.index), pushes = 1)
+            codegen.emit("sub", pops = 2, pushes = 1)
+            codegen.emit(
+                "call void ${codegen.coreLibraryReference}System.Array::Fill<" +
+                        "${arrayType.elementType.nameInSignature}>(!!0[], !!0, int32, int32)",
+                pops = 4,
+            )
+            codegen.emitGoto(doneLabel)
+        } else {
+            val loopLabel = codegen.nextLabel("fillLoop")
+            codegen.emit(loadLocalInstruction(fromIndexSlot.index), pushes = 1)
+            val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<fillIndex>")
+            codegen.emitLabel(loopLabel)
+            codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(toIndexSlot.index), pushes = 1)
+            codegen.emitBranch("bge", doneLabel, pops = 2)
+            codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(elementSlot.index), pushes = 1)
+            codegen.emit(arrayType.storeElementInstruction, pops = 3)
+            codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+            codegen.emit("ldc.i4.1", pushes = 1)
+            codegen.emit("add", pops = 2, pushes = 1)
+            codegen.emit(storeLocalInstruction(indexSlot.index), pops = 1)
+            codegen.emitGoto(loopLabel)
+        }
+
+        codegen.emitLabel(outOfBoundsLabel)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = "${codegen.coreLibraryReference}System.IndexOutOfRangeException",
+            valuePosition = false,
+        )
+        codegen.emitLabel(reversedLabel)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = "${codegen.coreLibraryReference}System.ArgumentException",
+            valuePosition = false,
+        )
+        codegen.emitLabel(doneLabel)
     }
 }
 

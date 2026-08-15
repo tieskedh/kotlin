@@ -39,6 +39,58 @@
     .get instance int32 'Item'::'get_value'()
   }
 }
+.class public auto ansi sealed beforefieldinit 'GenericArrayFiller'
+       extends [mscorlib]System.Object
+{
+  .field private class [mscorlib]System.Array 'values'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Array 'values') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class [mscorlib]System.Array 'GenericArrayFiller'::'values'
+    ret
+  }
+  .method private hidebysig specialname instance class [mscorlib]System.Array 'get_values'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [mscorlib]System.Array 'GenericArrayFiller'::'values'
+    ret
+  }
+  .method public hidebysig instance void 'fill'(object 'value') cil managed
+  {
+    .maxstack 4
+    .locals init (
+      [0] class [mscorlib]System.Array '<fillArray>',
+      [1] object '<fillElement>',
+      [2] int32 '<fillFromIndex>',
+      [3] int32 '<fillToIndex>'
+    )
+    ldarg.0
+    call instance class [mscorlib]System.Array 'GenericArrayFiller'::'get_values'()
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldc.i4.0
+    stloc.2
+    ldloc.0
+    callvirt instance int32 [mscorlib]System.Array::get_Length()
+    stloc.3
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    ldloc.3
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayFill'(class [mscorlib]System.Array, object, int32, int32)
+    ret
+  }
+  .property instance class [mscorlib]System.Array 'values'()
+  {
+    .get instance class [mscorlib]System.Array 'GenericArrayFiller'::'get_values'()
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'arrayCopyingKt'
        extends [mscorlib]System.Object
 {
@@ -372,6 +424,169 @@ IL_copyOpenNullableDone_2:
     ldloc 5
     ldloc 6
     callvirt instance object [mscorlib]System.Array::GetValue(int32)
+    ret
+  }
+  .method public hidebysig static void 'fillGenericInts'(int32[] 'values', int32 'value', int32 'fromIndex', int32 'toIndex') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<fillArray>',
+      [1] int32 '<fillElement>',
+      [2] int32 '<fillFromIndex>',
+      [3] int32 '<fillToIndex>',
+      [4] int32 '<fillIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldarg.3
+    stloc.3
+    ldloc.2
+    ldc.i4.0
+    blt IL_fillOutOfBounds_0
+    ldloc.3
+    ldloc.0
+    ldlen
+    conv.i4
+    bgt IL_fillOutOfBounds_0
+    ldloc.2
+    ldloc.3
+    bgt IL_fillReversed_1
+    ldloc.2
+    stloc 4
+IL_fillLoop_3:
+    ldloc 4
+    ldloc.3
+    bge IL_fillDone_2
+    ldloc.0
+    ldloc 4
+    ldloc.1
+    stelem int32
+    ldloc 4
+    ldc.i4.1
+    add
+    stloc 4
+    br IL_fillLoop_3
+IL_fillOutOfBounds_0:
+    newobj instance void [mscorlib]System.IndexOutOfRangeException::.ctor()
+    throw
+IL_fillReversed_1:
+    newobj instance void [mscorlib]System.ArgumentException::.ctor()
+    throw
+IL_fillDone_2:
+    ret
+  }
+  .method public hidebysig static void 'fillNullableInts'(valuetype [mscorlib]System.Nullable`1<int32>[] 'values', valuetype [mscorlib]System.Nullable`1<int32> 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32>[] '<fillArray>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<fillElement>',
+      [2] int32 '<fillFromIndex>',
+      [3] int32 '<fillToIndex>',
+      [4] int32 '<fillIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldc.i4.0
+    stloc.2
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc.3
+    ldloc.2
+    ldc.i4.0
+    blt IL_fillOutOfBounds_0
+    ldloc.3
+    ldloc.0
+    ldlen
+    conv.i4
+    bgt IL_fillOutOfBounds_0
+    ldloc.2
+    ldloc.3
+    bgt IL_fillReversed_1
+    ldloc.2
+    stloc 4
+IL_fillLoop_3:
+    ldloc 4
+    ldloc.3
+    bge IL_fillDone_2
+    ldloc.0
+    ldloc 4
+    ldloc.1
+    stelem valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc 4
+    ldc.i4.1
+    add
+    stloc 4
+    br IL_fillLoop_3
+IL_fillOutOfBounds_0:
+    newobj instance void [mscorlib]System.IndexOutOfRangeException::.ctor()
+    throw
+IL_fillReversed_1:
+    newobj instance void [mscorlib]System.ArgumentException::.ctor()
+    throw
+IL_fillDone_2:
+    ret
+  }
+  .method public hidebysig static void 'fillOpen'<'T'>(!!0[] 'values', !!0 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !!0[] '<fillArray>',
+      [1] !!0 '<fillElement>',
+      [2] int32 '<fillFromIndex>',
+      [3] int32 '<fillToIndex>',
+      [4] int32 '<fillIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldc.i4.0
+    stloc.2
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc.3
+    ldloc.2
+    ldc.i4.0
+    blt IL_fillOutOfBounds_0
+    ldloc.3
+    ldloc.0
+    ldlen
+    conv.i4
+    bgt IL_fillOutOfBounds_0
+    ldloc.2
+    ldloc.3
+    bgt IL_fillReversed_1
+    ldloc.2
+    stloc 4
+IL_fillLoop_3:
+    ldloc 4
+    ldloc.3
+    bge IL_fillDone_2
+    ldloc.0
+    ldloc 4
+    ldloc.1
+    stelem !!0
+    ldloc 4
+    ldc.i4.1
+    add
+    stloc 4
+    br IL_fillLoop_3
+IL_fillOutOfBounds_0:
+    newobj instance void [mscorlib]System.IndexOutOfRangeException::.ctor()
+    throw
+IL_fillReversed_1:
+    newobj instance void [mscorlib]System.ArgumentException::.ctor()
+    throw
+IL_fillDone_2:
     ret
   }
   .method public hidebysig static class 'Item'[] 'copyItems'(class 'Item'[] 'values') cil managed
