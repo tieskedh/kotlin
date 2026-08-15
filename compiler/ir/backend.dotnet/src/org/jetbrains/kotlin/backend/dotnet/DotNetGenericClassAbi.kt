@@ -3022,22 +3022,21 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             }) {
                 "consumer override '${member.sourceName}' disagrees with the producer return-slot domain"
             }
-            require(typedSlot.signature.isInstance &&
-                    typedSlot.signature.parameterSlots.any { parameter ->
-                        parameter.type.referencesOwnerParameter()
-                    } == member.typedRetainsOwnerDependentInput &&
-                    typedSlot.signature.returnSlot.type.referencesOwnerParameter() ==
-                    member.typedRetainsOwnerDependentOutput) {
-                "consumer override '${member.sourceName}' disagrees with the producer typed slot-domain signature"
+            fun consumerSignature(role: DotNetGenericOwnerMemberFamilyRole):
+                    DotNetGenericOwnerPhysicalMethodSignatureRecord? =
+                member.exactPhysicalSignatures?.get(role)?.let { signature ->
+                    signature.copy(parameterSlots = signature.parameterSlots.mapIndexed { index, parameter ->
+                        parameter.copy(domain = mergedParameterSlotDomains[index])
+                    })
+                }
+            require(typedSlot.signature == consumerSignature(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)) {
+                "consumer override '${member.sourceName}' disagrees with the producer typed physical signature"
             }
             if (semanticSlot != null) {
-                require(semanticSlot.signature.isInstance &&
-                        semanticSlot.signature.parameterSlots.none { parameter ->
-                            parameter.type.referencesOwnerParameter()
-                        } == member.semanticErasesOwnerDependentInput &&
-                        !semanticSlot.signature.returnSlot.type.referencesOwnerParameter() ==
-                        member.semanticErasesOwnerDependentOutput) {
-                    "consumer override '${member.sourceName}' disagrees with the producer semantic slot-domain signature"
+                require(semanticSlot.signature ==
+                        (consumerSignature(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                            ?: consumerSignature(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER))) {
+                    "consumer override '${member.sourceName}' disagrees with the producer semantic physical signature"
                 }
             }
             producerMember.slots.singleOrNull { slot ->
@@ -3417,8 +3416,9 @@ private fun IrConstructor.genericOwnerPhysicalVisibility(): DotNetGenericOwnerPh
 
 /**
  * Maps only the deliberately bounded carrier grammar proven by the generic-owner prototype.
- * Unknown classifiers, projections, nested carriers, and nullable value types remain unavailable;
- * physicalization must never invent an object fallback which changes Kotlin semantics.
+ * Unknown classifiers, projections, and nested carriers remain unavailable. An unconstrained
+ * open nullable parameter uses the semantic object carrier because no single CLR GenericParam
+ * type can represent both nullable value and nullable reference substitutions.
  */
 private fun IrType.genericOwnerPrototypePhysicalType(
     owner: IrClass,
@@ -3436,6 +3436,9 @@ private fun IrType.genericOwnerPrototypePhysicalType(
     if (typeParameter != null) {
         val ownerParameterIndex = owner.typeParameters.indexOf(typeParameter)
         if (ownerParameterIndex >= 0) {
+            if (simpleType.isMarkedNullable()) {
+                return DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+            }
             return if (eraseOwnerDependentCarrier) {
                 DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
             } else {
@@ -3443,15 +3446,36 @@ private fun IrType.genericOwnerPrototypePhysicalType(
             }
         }
         val methodParameterIndex = method?.typeParameters?.indexOf(typeParameter) ?: -1
-        return methodParameterIndex.takeIf { index -> index >= 0 }
-            ?.let(DotNetGenericOwnerPhysicalTypeExpressionRecord::methodParameter)
+        if (methodParameterIndex >= 0) {
+            return if (simpleType.isMarkedNullable()) {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+            } else {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.methodParameter(methodParameterIndex)
+            }
+        }
+        return null
     }
 
     val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
     if (classifier.fqNameWhenAvailable?.asString() != "kotlin.Array") return null
     val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return null
+    if (elementProjection.variance != Variance.INVARIANT) {
+        return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+            typePath = listOf("System", "Array"),
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+    }
+    val elementSimpleType = elementProjection.type as? IrSimpleType
+    val elementParameter = (elementSimpleType?.classifier as? IrTypeParameterSymbol)?.owner
+    if (elementSimpleType?.isMarkedNullable() == true &&
+            (elementParameter in owner.typeParameters || elementParameter in method?.typeParameters.orEmpty())
+    ) {
+        return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+            typePath = listOf("System", "Array"),
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+    }
     if (eraseOwnerDependentCarrier && referencesTypeParameterOf(owner)) {
-        val elementParameter = ((elementProjection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
         if (elementParameter !in owner.typeParameters) return null
         return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
             typePath = listOf("System", "Array"),

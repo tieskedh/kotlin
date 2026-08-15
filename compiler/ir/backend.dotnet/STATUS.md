@@ -27,7 +27,29 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner state evidence now retains its
+- Last completed foundation: future CLR-generic owner MethodDef evidence no
+  longer claims one exact vector/GenericParam carrier where Kotlin permits
+  several physical substitutions. An unconstrained open nullable `T?` input
+  or output uses `object`: it can carry both a nullable reference and CLR's
+  boxed `Nullable<V>` value/null form, whereas `!T` cannot. `Array<T?>` and any
+  projected `Array<out/in E>` use `System.Array`; neither `!T[]` nor
+  `object[]` accepts every Kotlin-valid value/reference vector. Direct non-null
+  `T`, invariant `Array<T>`, and independent method-generic `Array<R>` remain
+  true GenericParam carriers. OctoTree `get(): T?`, nullable-array constructor/
+  result signatures, and the hostile projected `echo` family pin the boundary.
+  The record-driven C# producer and derived subclass now expose `System.Array`
+  on both echo MethodDefs, while the capability dispatcher still selects typed
+  versus semantic override authority from one `is T[]` compatibility probe.
+  Separate-compilation binding no longer treats the presence of `!T` in a
+  physical type as proof of logical owner dependence: it merges the producer's
+  Kotlin slot domains, then requires exact typed and semantic/capability
+  physical-signature equality before recording external override MethodDefs.
+  Production owners/emission, DLL/KLIB and schema format, Runtime, and Common
+  semantics remain unchanged. The final cold-cache strict aggregate completed
+  in 3,123.2 seconds; direct audit covers 190 XML files and 2,238 tests with
+  zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-nonexact-call-carriers-2026-08-15.md`](docs/archive/generic-owner-nonexact-call-carriers-2026-08-15.md).
+- The preceding foundation: generic-owner state evidence now retains its
   exact owner-dependent CLR carrier as a bounded, path-unbound type tree.
   Scalars, owner parameters, invariant Kotlin-owned generic classifiers, and
   SZ arrays compose structurally; nested classifiers use their pre-lowering
@@ -2480,7 +2502,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    exact and 3,096 semantic-capability events. A published OctoTree producer
    now also retains exact path-unbound `Node<T>[]` and `T` state carriers by
    logical producer key, while rejecting `Array<T?>` as an exact CLR `T[]`.
-   Next, serialize/bind the complete OctoTree physical family and build its
+   Open-nullable MethodDef positions now use `object`, and open-nullable or
+   projected array positions use `System.Array`; the hostile projected echo
+   artifact no longer claims `!T[]`. Next, extend the path-unbound grammar to
+   constructed member signatures, serialize/bind the complete OctoTree
+   physical family, and build its
    record-driven candidate plus direct C# consumer/subclass products. Include
    actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
