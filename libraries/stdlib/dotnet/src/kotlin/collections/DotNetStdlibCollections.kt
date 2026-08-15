@@ -76,6 +76,45 @@ private external fun <T> dotNetArrayOfNulls(reference: Array<T>, size: Int): Arr
  */
 public actual fun <T> Array<out T>.asList(): List<T> = ArrayAsList(this)
 
+/**
+ * Common array joining over the declaration-erased CLR vector capability.
+ *
+ * Keep this body aligned with the generated Common implementation: unlike a BCL join helper,
+ * [appendElement] preserves Kotlin's null, [CharSequence], [Char], transform, and `toString`
+ * branches. The array receiver remains the original CLR vector and is never copied to `object[]`.
+ */
+@IgnorableReturnValue
+public fun <T, A : Appendable> Array<out T>.joinTo(
+    buffer: A,
+    separator: CharSequence = ", ",
+    prefix: CharSequence = "",
+    postfix: CharSequence = "",
+    limit: Int = -1,
+    truncated: CharSequence = "...",
+    transform: ((T) -> CharSequence)? = null,
+): A {
+    buffer.append(prefix)
+    var count = 0
+    for (element in this) {
+        if (++count > 1) buffer.append(separator)
+        if (limit < 0 || count <= limit) {
+            buffer.appendElement(element, transform)
+        } else break
+    }
+    if (limit >= 0 && count > limit) buffer.append(truncated)
+    buffer.append(postfix)
+    return buffer
+}
+
+public fun <T> Array<out T>.joinToString(
+    separator: CharSequence = ", ",
+    prefix: CharSequence = "",
+    postfix: CharSequence = "",
+    limit: Int = -1,
+    truncated: CharSequence = "...",
+    transform: ((T) -> CharSequence)? = null,
+): String = joinTo(StringBuilder(), separator, prefix, postfix, limit, truncated, transform).toString()
+
 @kotlin.internal.InlineOnly
 internal actual inline fun <T> Array<out T>.asArrayList(): ArrayList<T> {
     val result = ArrayList<T>(size)
