@@ -120,8 +120,14 @@ fun main(args: Array<String>) {
     val sequenceHeaderOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSequencesH.kt"
     )
+    val sequenceBuilderOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSequenceBuilder.kt"
+    )
     val sequenceCoreOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSequenceCore.kt"
+    )
+    val slidingWindowOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSlidingWindow.kt"
     )
     val sequencesOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSequences.kt"
@@ -157,6 +163,10 @@ fun main(args: Array<String>) {
         baseDir.resolve("libraries/stdlib/common/src/kotlin/SequencesH.kt")
     val commonSequencesFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/collections/Sequences.kt")
+    val commonSequenceBuilderFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/collections/SequenceBuilder.kt")
+    val commonSlidingWindowFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/collections/SlidingWindow.kt")
     val wasmSequencesFile =
         baseDir.resolve("libraries/stdlib/wasm/src/kotlin/Sequences.kt")
     val commonGroupingFile =
@@ -968,6 +978,7 @@ fun main(args: Array<String>) {
     }
     val commonCopyOfDeclarations = listOf(
         "public expect fun <T> Array<T>.copyOf(): Array<T>",
+        "public expect fun <T> Array<T>.copyOf(newSize: Int): Array<T?>",
         "public expect fun BooleanArray.copyOf(): BooleanArray",
         "public expect fun ByteArray.copyOf(): ByteArray",
         "public expect fun ShortArray.copyOf(): ShortArray",
@@ -976,8 +987,9 @@ fun main(args: Array<String>) {
         "public expect fun FloatArray.copyOf(): FloatArray",
         "public expect fun DoubleArray.copyOf(): DoubleArray",
         "public expect fun CharArray.copyOf(): CharArray",
+        "public expect fun <T> Array<T>.fill(element: T, fromIndex: Int = 0, toIndex: Int = size): Unit",
     ).map { declaration -> extractCommonDeclaration(commonArraysFile, declaration) }
-    check(commonCopyOfDeclarations.size == 9)
+    check(commonCopyOfDeclarations.size == 11)
     val sortingSource = StringWriter().apply {
         appendLine(COPYRIGHT_NOTICE)
         appendLine("package kotlin.collections")
@@ -1133,6 +1145,14 @@ fun main(args: Array<String>) {
         projectWholeCommonFile(commonSequencesHeaderFile),
         Charsets.UTF_8,
     )
+    sequenceBuilderOutputFile.writeText(
+        projectWholeCommonFile(commonSequenceBuilderFile),
+        Charsets.UTF_8,
+    )
+    slidingWindowOutputFile.writeText(
+        projectWholeCommonFile(commonSlidingWindowFile),
+        Charsets.UTF_8,
+    )
     sequenceCoreOutputFile.writeText(
         buildProjectedSource(
             packageName = "kotlin.sequences",
@@ -1172,6 +1192,10 @@ fun main(args: Array<String>) {
                 ),
                 extractCommonDeclaration(
                     commonSequencesFile,
+                    "public fun <T> Sequence<T>.ifEmpty(defaultValue: () -> Sequence<T>): Sequence<T>",
+                ),
+                extractCommonDeclaration(
+                    commonSequencesFile,
                     "public fun <T> Sequence<Sequence<T>>.flatten(): Sequence<T>",
                 ),
                 extractCommonDeclaration(
@@ -1186,6 +1210,10 @@ fun main(args: Array<String>) {
                     commonSequencesFile,
                     startMarker = "/**\n * A sequence that returns the values from the underlying [sequence] that either match or do not match",
                     endMarker = "internal fun <T, C, R> flatMapIndexed(",
+                ),
+                extractCommonUndocumentedDeclaration(
+                    commonSequencesFile,
+                    "internal fun <T, C, R> flatMapIndexed(",
                 ),
                 extractCommonSourceRange(
                     commonSequencesFile,
@@ -1245,33 +1273,10 @@ fun main(args: Array<String>) {
         "Common generated Sequence inventory changed: expected " +
                 "$DOTNET_SEQUENCE_COMMON_INVENTORY_SHA256, found $sequenceInventorySha256:\n$sequenceInventory"
     }
-    val excludedSequenceMemberNames = mapOf(
-        "chunked" to 2,
-        "runningFold" to 1,
-        "runningFoldIndexed" to 1,
-        "runningReduce" to 1,
-        "runningReduceIndexed" to 1,
-        "scan" to 1,
-        "scanIndexed" to 1,
-        "windowed" to 2,
-        "zipWithNext" to 2,
-    )
     val excludedSequenceSignatures = setOf(
-        "flatMapIndexed(transform: (index: Int, T) -> Iterable<R>)",
-        "flatMapIndexed(transform: (index: Int, T) -> Sequence<R>)",
         "sumOf(selector: (T) -> UInt)",
         "sumOf(selector: (T) -> ULong)",
     )
-    val sequenceMembersByName = allCommonSequenceMembers.groupingBy { member ->
-        member.signature.substringBefore('(')
-    }.eachCount()
-    for (entry in excludedSequenceMemberNames.entries) {
-        val name = entry.key
-        val expectedCount = entry.value
-        check(sequenceMembersByName[name] == expectedCount) {
-            "Expected $expectedCount Common generated Sequence '$name' members, found ${sequenceMembersByName[name]}"
-        }
-    }
     val excludedExactSignatures = allCommonSequenceMembers
         .map { member -> member.signature }
         .filter { signature -> signature in excludedSequenceSignatures }
@@ -1280,8 +1285,7 @@ fun main(args: Array<String>) {
         "Common generated Sequence exact exclusions changed: $excludedExactSignatures"
     }
     val admittedSequenceMembers = allCommonSequenceMembers.filterNot { member ->
-        member.signature.substringBefore('(') in excludedSequenceMemberNames ||
-                member.signature in excludedSequenceSignatures
+        member.signature in excludedSequenceSignatures
     }
     val sequencesSource = StringWriter().apply {
         appendLine(COPYRIGHT_NOTICE)

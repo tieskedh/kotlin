@@ -433,6 +433,14 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinCollectionsFqn, arrayFqn, "copyOf", listOf(intFqn))
                     to DotNetIlArrayCopyOfIntrinsic(fixedArrayType = null, resized = true)
         )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "fill", listOf(FqName("T"), intFqn, intFqn))
+                    to DotNetIlGenericArrayFillIntrinsic
+        )
+        add(
+            Key(kotlinCollectionsFqn, null, "terminateCollectionToArray", listOf(intFqn, arrayFqn))
+                    to DotNetIlTerminateCollectionToArrayIntrinsic
+        )
     }
 
     /** Array-backed Iterable views are ordinary target-stdlib objects, not BCL adapters. */
@@ -1507,7 +1515,7 @@ private fun IrCall.genericArrayReceiver(
 ): Pair<IrExpression, DotNetIlValueType> {
     val receiver = arguments.firstOrNull()
         ?: dotNetUnsupported("missing generic-array receiver for '$memberName'")
-    val arrayType = codegen.toDotNetIlValueType(receiver.type)
+    val arrayType = codegen.genericArrayPhysicalType(receiver)
     if (arrayType !is DotNetIlValueType.GenericArray &&
         arrayType !is DotNetIlValueType.ErasedGenericArray
     ) {
@@ -1669,8 +1677,8 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
         val elementType = when (arrayType) {
             is DotNetIlValueType.GenericArray -> arrayType.elementType
             is DotNetIlValueType.ErasedGenericArray -> {
-                if (!codegen.permitsErasedGenericArrayElementWrite(receiver.type)) {
-                    dotNetUnsupported("star-projected generic-array set must remain projected out by the frontend")
+                if (!codegen.permitsErasedGenericArrayElementWrite(receiver, value)) {
+                    dotNetUnsupported("erased generic-array set has no source-legal write contract")
                 }
                 DotNetIlValueType.Object
             }
@@ -2008,6 +2016,88 @@ private class DotNetIlArrayCopyIntoIntrinsic(
             pops = 5,
         )
         codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+        return true
+    }
+}
+
+/** Exact Common `Array<T>.fill` over the runtime vector, including Kotlin range validation. */
+private object DotNetIlGenericArrayFillIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        if (call.arguments.size != 4) return false
+        val array = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'fill'")
+        val arrayType = codegen.toDotNetIlValueType(array.type)?.takeIf {
+            it is DotNetIlValueType.GenericArray || it is DotNetIlValueType.ErasedGenericArray
+        } ?: dotNetUnsupported("'fill' has unsupported array type ${array.type.render()}")
+        val element = call.arguments[1]
+            ?: dotNetUnsupported("missing element for 'fill'")
+
+        codegen.emitExpression(array, arrayType)
+        val arraySlot = codegen.spillToSyntheticLocal(arrayType, "<fillArray>")
+        codegen.emitExpression(element, DotNetIlValueType.Object)
+        val elementSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Object, "<fillElement>")
+
+        val fromIndex = call.arguments[2]
+        if (fromIndex == null) {
+            codegen.emit("ldc.i4.0", pushes = 1)
+        } else {
+            codegen.emitExpression(fromIndex, DotNetIlValueType.Int32)
+        }
+        val fromIndexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<fillFromIndex>")
+
+        val toIndex = call.arguments[3]
+        if (toIndex == null) {
+            codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+            codegen.emit(
+                "callvirt instance int32 ${codegen.coreLibraryReference}System.Array::get_Length()",
+                pops = 1,
+                pushes = 1,
+            )
+        } else {
+            codegen.emitExpression(toIndex, DotNetIlValueType.Int32)
+        }
+        val toIndexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<fillToIndex>")
+
+        codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(elementSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(fromIndexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(toIndexSlot.index), pushes = 1)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayFillCallInstruction(codegen.coreLibraryReference),
+            pops = 4,
+        )
+        return true
+    }
+}
+
+/** The .NET actual is an identity operation; retain argument evaluation and the exact vector. */
+private object DotNetIlTerminateCollectionToArrayIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun naturalReturnType(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): DotNetIlValueType? = call.arguments.getOrNull(1)?.let(codegen::genericArrayPhysicalType)
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.size != 2) return false
+        val collectionSize = call.arguments[0]
+            ?: dotNetUnsupported("missing collection size for 'terminateCollectionToArray'")
+        val array = call.arguments[1]
+            ?: dotNetUnsupported("missing array for 'terminateCollectionToArray'")
+        val arrayType = codegen.genericArrayPhysicalType(array)
+            ?: dotNetUnsupported(
+                "'terminateCollectionToArray' has unsupported array type ${array.type.render()}"
+            )
+        if (arrayType != expectedType && !arrayType.isDotNetAssignableTo(expectedType)) return false
+
+        codegen.emitExpression(collectionSize, DotNetIlValueType.Int32)
+        codegen.emit("pop", pops = 1)
+        codegen.emitExpression(array, arrayType)
         return true
     }
 }
