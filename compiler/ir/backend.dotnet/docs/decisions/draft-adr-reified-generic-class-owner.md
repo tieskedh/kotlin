@@ -209,6 +209,25 @@ Therefore `fun <T> make(value: T?): C<T?>` cannot be implemented by pretending
 that either `C<T>`, `C<Nullable<T>>`, or `C<object>` is the exact static
 construction for every substitution.
 
+The same distinction applies to a member of an already selected `C<T>`.
+`fun read(): T?` cannot have one truthful CLR `!T` result: `C<int>` must still
+represent null. The bounded prototype therefore records `object` for an open
+nullable parameter/result position. CLR boxing represents a nullable value as
+either its boxed underlying value or null, while nullable references already
+fit that carrier. An invariant/projected array whose component is not one
+statically exact CLR type uses `System.Array`; neither `!T[]` nor `object[]` is
+a universal value/reference vector. These are physical carriers under an
+owner-dependent logical slot domain, not erasure of the Kotlin `T?` contract.
+Direct non-null `T`, invariant `Array<T>`, and independent method-generic
+`Array<R>` remain native GenericParam signatures where proved.
+
+Cross-assembly override binding must therefore never use the presence of a
+GenericParam reference in the physical signature as a proxy for logical owner
+dependence. The producer's logical slot-domain vector is merged first; exact
+typed and semantic/capability physical signatures are then compared. A
+semantic role first discovered from the producer may use the consumer's
+already-planned capability signature as its local owner-erased witness.
+
 A direct CLR probe now establishes that guarding a statically emitted
 `Nullable<!!T>` construction with `typeof(T).IsValueType` still fails at
 execution on CLR 4 and CoreCLR. The runtimes validate the invalid constructed

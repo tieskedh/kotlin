@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-nonexact-call-carriers-2026-08-15.md`](generic-owner-nonexact-call-carriers-2026-08-15.md)
+  records truthful object/System.Array MethodDef carriers for open-nullable and
+  projected generic positions, retained exact GenericParam cases, hostile C#
+  override evidence, and the remaining constructed-member binding gate.
 - [`generic-owner-structural-state-carrier-2026-08-15.md`](generic-owner-structural-state-carrier-2026-08-15.md)
   records the path-unbound exact state-carrier grammar, logical producer-key
   binding, open-nullable rejection, separate OctoTree producer/consumer

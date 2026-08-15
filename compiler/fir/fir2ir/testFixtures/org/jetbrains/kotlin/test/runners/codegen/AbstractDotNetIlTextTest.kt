@@ -421,6 +421,7 @@ private class BackendCliDotNetFacade(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
         )
+        validateGenericOwnerOpenNullableArraySignaturePrototype(completedOutput.genericOwnerPrototypes)
         physicalizeGenericOwnerHardestModelPrototype(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -449,6 +450,31 @@ private class BackendCliDotNetFacade(
             }
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+private fun validateGenericOwnerOpenNullableArraySignaturePrototype(
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+) {
+    val owner = prototypes.singleOrNull { prototype ->
+        prototype.ownerName.endsWith("GenericNullableArrayCopier")
+    } ?: return
+    val systemArray = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+        typePath = listOf("System", "Array"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+    )
+    check(owner.constructors.single().let { constructor ->
+        constructor.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT) &&
+                constructor.exactPhysicalSignature?.parameterSlots?.singleOrNull()?.type == systemArray
+    }) {
+        "GenericNullableArrayCopier(Array<T?>) must not publish an open CLR T[] constructor: $owner"
+    }
+    val shiftRight = owner.members.single { member -> member.sourceName == "shiftRight" }
+    check(shiftRight.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            checkNotNull(shiftRight.exactPhysicalSignatures).values.all { signature ->
+                signature.returnSlot.type == systemArray
+            }) {
+        "GenericNullableArrayCopier.shiftRight(): Array<T?> must retain System.Array: $shiftRight"
     }
 }
 
@@ -489,6 +515,14 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
                 value.exactTypedCarrierType == DotNetGenericOwnerPrototypeStateTypeSnapshot.ownerParameter(0)
     }) {
         "OctoTree.Leaf.value must retain typed owner state: ${leaf.states}"
+    }
+    val get = tree.members.single { member -> member.sourceName == "get" }
+    check(get.typedRetainsOwnerDependentOutput && get.semanticErasesOwnerDependentOutput &&
+            get.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            checkNotNull(get.exactPhysicalSignatures).values.all { signature ->
+                signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+            }) {
+        "OctoTree.get(): T? must use one truthful object carrier for nullable value/reference results: $get"
     }
     node.logicalBindingKey?.let { nodeKey ->
         val nodesType = checkNotNull(branch.states.single { state -> state.fieldName == "nodes" }.exactTypedCarrierType)
@@ -887,6 +921,16 @@ private fun validateGenericOwnerHardestModelPrototype(
     check(echo.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
             echo.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)) {
         "HostileUnsafeStore.echo must retain its nested broad-input/strict-output domain vector: $echo"
+    }
+    val systemArray = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+        typePath = listOf("System", "Array"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+    )
+    check(checkNotNull(echo.exactPhysicalSignatures).values.all { signature ->
+        signature.returnSlot.type == systemArray &&
+                signature.parameterSlots.single().type == systemArray
+    }) {
+        "HostileUnsafeStore.echo(Array<out T>) must retain its truthful projected System.Array carrier: $echo"
     }
     val relay = unsafeStore.members.single { member -> member.sourceName == "relay" }
     check(relay.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
@@ -1891,22 +1935,24 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         typedState.copy(physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType())
     }
     val echo = artifact.owners.first().members.single { candidate ->
-        candidate.slots.any { slot ->
-            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
-                    slot.signature.genericArity == 0 &&
-                    slot.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY &&
-                    slot.signature.returnSlot.type.arguments.singleOrNull()?.kind ==
-                    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER
+        candidate.roles == setOf(
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+        ) && candidate.slots.all { slot ->
+            slot.signature.returnSlot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                    slot.signature.parameterSlots.singleOrNull()?.domain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
         }
     }
-    val typedEcho = echo.slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY }
-    val semanticEcho = echo.slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK }
-    check(typedEcho.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY &&
-            typedEcho.signature.returnSlot.type.arguments.single().kind ==
-            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
-            semanticEcho.signature.returnSlot.type.scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
-            semanticEcho.signature.returnSlot.type.typePath == listOf("System", "Array")) {
-        "The generic-owner artifact did not retain its nested typed/semantic array carriers"
+    check(echo.slots.all { slot ->
+        slot.signature.returnSlot.type.scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+                slot.signature.returnSlot.type.typePath == listOf("System", "Array") &&
+                slot.signature.parameterSlots.single().type.scope ==
+                DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+                slot.signature.parameterSlots.single().type.typePath == listOf("System", "Array")
+    }) {
+        "The generic-owner artifact did not retain its projected System.Array carriers"
     }
     val relay = artifact.owners.first().members.single { candidate ->
         candidate.slots.any { slot -> slot.signature.genericArity == 1 }
@@ -2089,7 +2135,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     } else ""
     val typedEcho = if (hasRole(echo, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)) {
         """
-        public virtual T[] $echoTypedName(T[] values)
+        public virtual Array $echoTypedName(Array values)
         {
             return values;
         }
@@ -2244,7 +2290,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         return base.$readSemanticName();
                     }
 
-                    public override T[] $echoTypedName(T[] values)
+                    public override Array $echoTypedName(Array values)
                     {
                         return base.$echoTypedName(values);
                     }
@@ -2347,9 +2393,9 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         midBase.GetGenericArguments()[0] != midDefinition.GetGenericArguments()[0]) return 19;
                     System.Reflection.MethodInfo typedEchoMethod = definition.GetMethod("$echoTypedName");
                     if (typedEchoMethod == null ||
-                        typedEchoMethod.ReturnType != ownerParameter.MakeArrayType() ||
+                        typedEchoMethod.ReturnType != typeof(Array) ||
                         typedEchoMethod.GetParameters().Length != 1 ||
-                        typedEchoMethod.GetParameters()[0].ParameterType != ownerParameter.MakeArrayType()) return 13;
+                        typedEchoMethod.GetParameters()[0].ParameterType != typeof(Array)) return 13;
                     System.Reflection.MethodInfo capabilityEchoMethod =
                         typeof(IHostileUnsafeStoreSemantic).GetMethod("$echoCapabilityName");
                     if (capabilityEchoMethod == null ||
