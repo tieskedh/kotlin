@@ -1926,7 +1926,7 @@ private object DotNetIlIteratorNextIntrinsic : DotNetIlIntrinsicMethod() {
 }
 
 /**
- * `copyInto` for the five primitive vectors and supported concrete reference arrays.
+ * `copyInto` for primitive vectors and every admitted exact or erased generic-array carrier.
  *
  * Arguments are evaluated and spilled in Kotlin order before the helper call. Omitted external
  * defaults remain null in IR: the two zero defaults are materialized directly, while the default
@@ -1949,20 +1949,13 @@ private class DotNetIlArrayCopyIntoIntrinsic(
             ?: dotNetUnsupported("missing array receiver for 'copyInto'")
         val destination = call.arguments[1]
             ?: dotNetUnsupported("missing destination array for 'copyInto'")
-        val sourceType = fixedArrayType ?: (
-                codegen.toDotNetIlValueType(source.type) as? DotNetIlValueType.GenericArray
-                ?: dotNetUnsupported("'copyInto' has unsupported source type ${source.type.render()}")
-        )
-        val destinationType = fixedArrayType ?: (
-                codegen.toDotNetIlValueType(destination.type) as? DotNetIlValueType.GenericArray
-                ?: dotNetUnsupported("'copyInto' has unsupported destination type ${destination.type.render()}")
-        )
-        if (sourceType is DotNetIlValueType.GenericArray &&
-            (sourceType.elementType is DotNetIlValueType.TypeParameter ||
-                    (destinationType as DotNetIlValueType.GenericArray).elementType is DotNetIlValueType.TypeParameter)
-        ) {
-            dotNetUnsupported("copyInto on an open generic Array<T> is not supported in the concrete array-copying slice")
-        }
+        fun mappedGenericArrayType(expression: IrExpression, role: String): DotNetIlValueType =
+            codegen.toDotNetIlValueType(expression.type)?.takeIf { type ->
+                type is DotNetIlValueType.GenericArray || type is DotNetIlValueType.ErasedGenericArray
+            } ?: dotNetUnsupported("'copyInto' has unsupported $role type ${expression.type.render()}")
+
+        val sourceType = fixedArrayType ?: mappedGenericArrayType(source, "source")
+        val destinationType = fixedArrayType ?: mappedGenericArrayType(destination, "destination")
         if (expectedType != destinationType) return false
 
         codegen.emitExpression(source, sourceType)

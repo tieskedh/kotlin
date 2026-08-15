@@ -330,6 +330,14 @@ the remaining acceptance matrix or representative product gate is complete.
 See
 [`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
 
+The first repository application census sharpens that distinction. ArrayCopy
+executes 5,664 local owner calls and every one has exact-entry provenance, but
+its source-authored unchecked object-array initialization still requires
+semantic array state. Direct `C<T>` construction would therefore improve the
+owner/call surface without licensing a fictitious `T?[]` field. A paired C#
+consumer remains part of the open representative-product gate. See
+[`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,
