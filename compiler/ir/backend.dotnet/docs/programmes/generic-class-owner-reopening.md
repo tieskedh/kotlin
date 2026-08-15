@@ -386,6 +386,21 @@ agree across PSI/LightTree and Framework 4.8/net10. This is broader correctness
 evidence, not representative completion or performance evidence. See
 [`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
 
+The state snapshot now closes the field-type ambiguity exposed by that input.
+`TYPED_STORAGE_PRODUCER_GRAPH_PROVEN` alone did not identify whether a future
+field was `T`, `Node<T>[]`, or another constructed carrier, so a physicalizer
+could only guess. The compiler now retains a bounded path-unbound type tree.
+Nested Kotlin generic classifiers are identified by pre-lowering logical
+producer key and bind only after a complete artifact selects TypeDef paths;
+missing paths, projections, unsupported classifiers, and open nullable `T?`
+remain unavailable. A separate OctoTree library proves structural `Node<T>[]`
+and `T` state, while the semantic `root` requirement remains unchanged. The
+hostile candidate fixture consumes the same record instead of hardcoding `T`.
+This is still production-inert and in-memory: the next product must serialize
+and bind the whole recursive owner family before a paired candidate or direct
+C# consumer/subclass can claim evidence. See
+[`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?

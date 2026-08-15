@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-structural-state-carrier-2026-08-15.md`](generic-owner-structural-state-carrier-2026-08-15.md)
+  records the path-unbound exact state-carrier grammar, logical producer-key
+  binding, open-nullable rejection, separate OctoTree producer/consumer
+  evidence, and the still-open serialized candidate/C# product gate.
 - [`projected-generic-array-join-fast-path-2026-08-15.md`](projected-generic-array-join-fast-path-2026-08-15.md)
   records the retained projected `System.Array` ABI, compatible `T[]` read
   path, Framework/.NET 10 causal boxing evidence, and strict widened-value
