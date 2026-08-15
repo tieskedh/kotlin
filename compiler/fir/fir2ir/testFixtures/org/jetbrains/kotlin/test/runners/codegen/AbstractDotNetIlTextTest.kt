@@ -411,6 +411,10 @@ private class BackendCliDotNetFacade(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
         )
+        validateGenericOwnerRepresentativeArrayCopyPrototype(
+            completedOutput.genericOwnerPrototypes,
+            completedOutput.genericOwnerCallRoutes,
+        )
         physicalizeGenericOwnerHardestModelPrototype(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -419,7 +423,57 @@ private class BackendCliDotNetFacade(
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-snapshot-physicalizer"),
         )
+        if (callRouteTraceExportPath != null && !loweredInput.configuration.dotNetProducesLibrary) {
+            val traceExportDirectory = File(callRouteTraceExportPath)
+            val traceKey = genericOwnerCallRouteTraceKey(traceExportDirectory)
+            if (!genericOwnerCallRouteTraceManifests.containsKey(traceKey)) {
+                val resolvedRoutes = completedOutput.genericOwnerCallRoutes.filter { route ->
+                    route.routeRequirement !=
+                            DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED
+                }
+                check(resolvedRoutes.isNotEmpty()) {
+                    "The instrumented application has no locally resolved generic-owner call routes"
+                }
+                prepareGenericOwnerCallRouteTraceExport(
+                    traceExportDirectory,
+                    DotNetGenericOwnerCallRouteManifestCodec.encode(
+                        DotNetGenericOwnerCallRouteManifest.fromResolvedCallRoutes(resolvedRoutes),
+                    ),
+                )
+            }
+        }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+private fun validateGenericOwnerRepresentativeArrayCopyPrototype(
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+) {
+    val owner = prototypes.singleOrNull { prototype ->
+        prototype.ownerName.endsWith(".ArrayCopyBenchmark.CustomArray")
+    } ?: return
+    val values = owner.states.singleOrNull { state -> state.fieldName == "values" }
+    check(values?.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED) {
+        "ArrayCopy's unchecked object-vector initialization must keep one semantic values state: $owner"
+    }
+    val add = owner.members.single { member -> member.sourceName == "add" }
+    check(add.roles == setOf(
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    ) &&
+            add.parameterSlotDomains == listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            )) {
+        "ArrayCopy.add must remain a strict exact entry over its semantic array state: $add"
+    }
+    val routeCounts = callRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
+    check(routeCounts == mapOf(
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 16,
+        DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED to 11,
+    )) {
+        "The representative ArrayCopy static call-route census changed: $routeCounts"
     }
 }
 
@@ -813,6 +867,28 @@ private val genericOwnerCallRouteTraceManifests = ConcurrentHashMap<String, Stri
 
 private fun genericOwnerCallRouteTraceKey(directory: File): String =
     directory.absoluteFile.normalize().path
+
+private fun prepareGenericOwnerCallRouteTraceExport(
+    exportDirectory: File,
+    encodedCallRouteManifest: String,
+) {
+    check(!exportDirectory.exists() || exportDirectory.isDirectory) {
+        "Generic-owner call-route trace export path is not a directory: $exportDirectory"
+    }
+    check(exportDirectory.mkdirs() || exportDirectory.isDirectory) {
+        "Cannot create generic-owner call-route trace export directory: $exportDirectory"
+    }
+    check(exportDirectory.list()?.isEmpty() == true) {
+        "Generic-owner call-route trace export directory must be empty: $exportDirectory"
+    }
+    exportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE).writeText(encodedCallRouteManifest)
+    check(genericOwnerCallRouteTraceManifests.put(
+        genericOwnerCallRouteTraceKey(exportDirectory),
+        encodedCallRouteManifest,
+    ) == null) {
+        "The generic-owner call-route trace export directory was registered more than once"
+    }
+}
 
 private fun genericOwnerErasedConsumerFile(target: DotNetTarget): String =
     if (target == DotNetTarget.NET48) "ErasedConsumer.exe" else "ErasedConsumer.dll"
@@ -4304,27 +4380,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     executeSnapshotConsumer(target, output, directory)
     System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY)?.let { traceExportPath ->
         check(traceExportPath.isNotBlank()) { "Generic-owner call-route trace export path must not be blank" }
-        val traceExportDirectory = File(traceExportPath)
-        check(!traceExportDirectory.exists() || traceExportDirectory.isDirectory) {
-            "Generic-owner call-route trace export path is not a directory: $traceExportDirectory"
-        }
-        check(traceExportDirectory.mkdirs() || traceExportDirectory.isDirectory) {
-            "Cannot create generic-owner call-route trace export directory: $traceExportDirectory"
-        }
-        check(traceExportDirectory.list()?.isEmpty() == true) {
-            "Generic-owner call-route trace export directory must be empty: $traceExportDirectory"
-        }
-        val traceRouteManifest = traceExportDirectory.resolve(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE)
-        callRouteManifestFile.copyTo(
-            traceRouteManifest,
-            overwrite = false,
-        )
-        check(genericOwnerCallRouteTraceManifests.put(
-            genericOwnerCallRouteTraceKey(traceExportDirectory),
-            encodedCallRouteManifest,
-        ) == null) {
-            "The generic-owner call-route trace export directory was registered more than once"
-        }
+        prepareGenericOwnerCallRouteTraceExport(File(traceExportPath), encodedCallRouteManifest)
     }
     val measurementExportPath = System.getProperty(GENERIC_OWNER_MEASUREMENT_EXPORT_PROPERTY)
     if (target == DotNetTarget.NET10_0 && measurementExportPath != null) {
@@ -5835,6 +5891,25 @@ private class DotNetIlasmMessageCollector : MessageCollector {
     fun render(): String = messages.joinToString("\n").ifEmpty { "ILAsm reported no diagnostic text." }
 }
 
+private const val DOT_NET_REPRESENTATIVE_SOURCE_MARKER = "// DOTNET_REPRESENTATIVE_SOURCE:"
+
+private data class DotNetRepresentativeSource(
+    val id: String,
+    val repositoryPath: String,
+    val outputFileName: String,
+    val requiresBenchmarkStubs: Boolean,
+)
+
+private val dotNetRepresentativeSources = listOf(
+    DotNetRepresentativeSource(
+        id = "array-copy",
+        repositoryPath =
+            "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/ArrayCopyBenchmark.kt",
+        outputFileName = "ArrayCopyBenchmark.kt",
+        requiresBenchmarkStubs = true,
+    ),
+).associateBy(DotNetRepresentativeSource::id)
+
 private class DotNetBoxMainSourceProvider(testServices: TestServices) : AdditionalSourceProvider(testServices) {
     override fun produceAdditionalFiles(
         globalDirectives: RegisteredDirectives,
@@ -5846,6 +5921,21 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
         } ?: return emptyList()
         val tracesGenericOwnerCallRoutes =
             System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY) != null
+        val representativeSourceIds = module.files.flatMap { file ->
+            file.originalContent.lineSequence().mapNotNull { line ->
+                line.removePrefix(DOT_NET_REPRESENTATIVE_SOURCE_MARKER)
+                    .takeIf { remainder -> remainder != line }
+                    ?.trim()
+            }.toList()
+        }
+        check(representativeSourceIds.toSet().size == representativeSourceIds.size) {
+            "A .NET representative source was requested more than once: $representativeSourceIds"
+        }
+        val representativeSources = representativeSourceIds.map { id ->
+            checkNotNull(dotNetRepresentativeSources[id]) {
+                "Unknown closed .NET representative source '$id'"
+            }
+        }
 
         val code = buildString {
             MainFunctionForBlackBoxTestsSourceProvider.detectPackage(fileWithBox)?.let {
@@ -5881,6 +5971,63 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
 
         return buildList {
             add(file.toTestFile())
+            if (representativeSources.isNotEmpty()) {
+                val originalTestData = testModuleStructure.originalTestDataFiles.single()
+                val repositoryRoot = generateSequence(originalTestData.canonicalFile.parentFile, File::getParentFile)
+                    .firstOrNull { candidate ->
+                        candidate.resolve("kotlin-native").isDirectory && candidate.resolve("compiler").isDirectory
+                    }
+                    ?: error("Cannot locate the repository root from ${originalTestData.path}")
+                representativeSources.forEach { representativeSource ->
+                    val source = repositoryRoot.resolve(representativeSource.repositoryPath).canonicalFile
+                    check(source.isFile && source.path.startsWith(repositoryRoot.canonicalPath + File.separator)) {
+                        "The closed .NET representative source is missing or escaped the repository: $source"
+                    }
+                    val stagedSource = sourceDirectory.resolve(representativeSource.outputFileName)
+                    check(!stagedSource.exists()) {
+                        "Two .NET representative sources selected the same staged file: $stagedSource"
+                    }
+                    source.copyTo(stagedSource)
+                    add(stagedSource.toTestFile())
+                }
+                if (representativeSources.any(DotNetRepresentativeSource::requiresBenchmarkStubs)) {
+                    val benchmarkStubs = sourceDirectory.resolve("DotNetRepresentativeBenchmarkStubs.kt")
+                    benchmarkStubs.writeText(
+                        """
+                        package kotlinx.benchmark
+
+                        public enum class Scope { Benchmark }
+
+                        public enum class BenchmarkTimeUnit { SECONDS, MILLISECONDS }
+
+                        public annotation class State(val scope: Scope)
+
+                        public annotation class Measurement(
+                            val time: Int,
+                            val timeUnit: BenchmarkTimeUnit,
+                        )
+
+                        public annotation class Benchmark
+
+                        public class Blackhole {
+                            public fun consume(value: Any?) {
+                                if (value === this) throw AssertionError("recursive blackhole value")
+                            }
+                        }
+                        """.trimIndent()
+                    )
+                    add(benchmarkStubs.toTestFile())
+                    val launcherStubs = sourceDirectory.resolve("DotNetRepresentativeLauncherStubs.kt")
+                    launcherStubs.writeText(
+                        """
+                        package org.jetbrains.benchmarksLauncher
+
+                        public annotation class SkipWhenBaseOnly
+                        """.trimIndent()
+                    )
+                    add(launcherStubs.toTestFile())
+                }
+            }
             if (module.files.any { source -> "kotlin.test" in source.originalContent }) {
                 val assertions = sourceDirectory.resolve("DotNetTestAssertions.kt")
                 assertions.writeText(

@@ -10,6 +10,11 @@ private class GenericArrayFiller<T>(private val values: Array<T>) {
     }
 }
 
+private class GenericNullableArrayCopier<T>(private val values: Array<T?>) {
+    fun shiftRight(): Array<T?> =
+        values.copyInto(values, destinationOffset = 1, startIndex = 0, endIndex = values.size - 1)
+}
+
 private fun sourceExpression(): IntArray {
     trace = trace + "source;"
     return intArrayOf(4, 5, 6)
@@ -33,6 +38,9 @@ private fun recordedGenericInts(): Array<Int> {
 private fun <T> fillOpen(values: Array<T>, element: T) {
     values.fill(element)
 }
+
+private fun <T> copyOpen(source: Array<T>, destination: Array<T>): Array<T> =
+    source.copyInto(destination)
 
 private fun scalarFillsAreCorrect(): Boolean {
     val bytes = arrayOf(0.toByte(), 0.toByte())
@@ -230,6 +238,19 @@ fun box(): String {
     val endEmpty = intArrayOf(1, 2).copyInto(IntArray(2), destinationOffset = 2, startIndex = 2, endIndex = 2)
     if (endEmpty[0] != 0 || endEmpty[1] != 0) return "fail 34: empty end copy"
     if (negativeCopySizeCategory() != "exception") return "fail 35: negative ${negativeCopySizeCategory()}"
+
+    val openIntDestination = arrayOf(0, 0, 0)
+    if (copyOpen(arrayOf(1, 2, 3), openIntDestination) !== openIntDestination ||
+        openIntDestination.contentToString() != "[1, 2, 3]"
+    ) return "fail 35a: open value copyInto"
+    val openStringDestination = arrayOf("", "")
+    if (copyOpen(arrayOf("left", "right"), openStringDestination) !== openStringDestination ||
+        openStringDestination.contentToString() != "[left, right]"
+    ) return "fail 35b: open reference copyInto"
+    val ownerValues = arrayOf<Int?>(1, null, 3, 4)
+    if (GenericNullableArrayCopier(ownerValues).shiftRight() !== ownerValues ||
+        ownerValues.contentToString() != "[1, 1, null, 3]"
+    ) return "fail 35c: erased owner nullable copyInto"
 
     val genericInts = arrayOf(1, 2, 3, 4)
     genericInts.fill(9, fromIndex = 1, toIndex = 3)

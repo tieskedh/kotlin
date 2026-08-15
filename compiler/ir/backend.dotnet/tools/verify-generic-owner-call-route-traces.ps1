@@ -2,6 +2,8 @@
 param(
     [string]$OutputDirectory,
     [string]$ExistingCorpus,
+    [ValidateSet('hostile', 'array-copy')]
+    [string]$Corpus = 'hostile',
     [ValidateSet('net10', 'net48')]
     [string[]]$Profiles = @('net10', 'net48')
 )
@@ -15,17 +17,66 @@ $routeFileName = 'generic-owner-call-routes.tsv'
 $countsFileName = 'generic-owner-call-route-counts.tsv'
 $traceFileName = 'generic-owner-call-route-trace.properties'
 $expectedFiles = @($countsFileName, $routeFileName, $traceFileName) | Sort-Object
-$expectedSiteIndices = @(0, 1, 2, 3, 4, 5, 6, 7) + @(14..41) + @(44, 46, 47, 48)
-$expectedSiteCounts = @{}
-foreach ($siteIndex in $expectedSiteIndices) {
-    $expectedSiteCounts[$siteIndex] = if ($siteIndex -eq 2) { 0L } elseif ($siteIndex -eq 3) { 2L } else { 1L }
+$corpusDefinition = if ($Corpus -eq 'hostile') {
+    $siteIndices = @(0, 1, 2, 3, 4, 5, 6, 7) + @(14..41) + @(44, 46, 47, 48)
+    $siteCounts = @{}
+    foreach ($siteIndex in $siteIndices) {
+        $siteCounts[$siteIndex] =
+            if ($siteIndex -eq 2) { 0L } elseif ($siteIndex -eq 3) { 2L } else { 1L }
+    }
+    [pscustomobject]@{
+        TestMethod = 'testGenericOwnerHardestModelOracleSeparateCompilation'
+        SiteIndices = $siteIndices
+        SiteCounts = $siteCounts
+        StaticRequirementCounts = @{
+            PRODUCER_ERASED_OWNER = 24
+            EXACT_TYPED_ENTRY = 11
+            SEMANTIC_CAPABILITY = 4
+            MISSING_CAPABILITY = 1
+        }
+        DynamicRequirementCounts = @{
+            PRODUCER_ERASED_OWNER = 24L
+            EXACT_TYPED_ENTRY = 11L
+            SEMANTIC_CAPABILITY = 4L
+            MISSING_CAPABILITY = 1L
+        }
+        AllEventCount = 49L
+        ProducerEventCount = 40L
+        UnrelatedEventCount = 9L
+    }
+} else {
+    [pscustomobject]@{
+        TestMethod = 'testGenericOwnerRepresentativeArrayCopy'
+        SiteIndices = @(0..11) + @(13..16)
+        SiteCounts = @{
+            0 = 512L
+            1 = 512L
+            2 = 512L
+            3 = 9L
+            4 = 9L
+            5 = 9L
+            6 = 9L
+            7 = 511L
+            8 = 511L
+            9 = 511L
+            10 = 511L
+            11 = 512L
+            13 = 512L
+            14 = 512L
+            15 = 512L
+            16 = 0L
+        }
+        StaticRequirementCounts = @{ EXACT_TYPED_ENTRY = 16 }
+        DynamicRequirementCounts = @{ EXACT_TYPED_ENTRY = 5664L }
+        AllEventCount = 6176L
+        ProducerEventCount = 5664L
+        UnrelatedEventCount = 512L
+    }
 }
-$expectedRequirementCounts = @{
-    PRODUCER_ERASED_OWNER = 24
-    EXACT_TYPED_ENTRY = 11
-    SEMANTIC_CAPABILITY = 4
-    MISSING_CAPABILITY = 1
-}
+$expectedSiteIndices = $corpusDefinition.SiteIndices
+$expectedSiteCounts = $corpusDefinition.SiteCounts
+$expectedRequirementCounts = $corpusDefinition.StaticRequirementCounts
+$expectedDynamicRequirementCounts = $corpusDefinition.DynamicRequirementCounts
 
 if (-not [string]::IsNullOrWhiteSpace($OutputDirectory) -and
         -not [string]::IsNullOrWhiteSpace($ExistingCorpus)) {
@@ -108,17 +159,19 @@ function Read-RouteManifest([string]$Path) {
         }
         $encodedBinding = $fields[4]
         $remainder = $encodedBinding.Length % 4
-        if ($encodedBinding -notmatch '^[A-Za-z0-9+/]+$' -or $remainder -eq 1) {
+        if ($encodedBinding -notmatch '^[A-Za-z0-9_-]+$' -or $remainder -eq 1) {
             throw "Invalid route logical-binding encoding for site $siteIndex`: $Path"
         }
         try {
+            $standardBase64 = $encodedBinding.Replace('-', '+').Replace('_', '/')
             $bindingBytes = [Convert]::FromBase64String(
-                $encodedBinding + ('=' * ((4 - $remainder) % 4))
+                $standardBase64 + ('=' * ((4 - $remainder) % 4))
             )
         } catch {
             throw "Invalid route logical-binding encoding for site $siteIndex`: $Path"
         }
-        if ([Convert]::ToBase64String($bindingBytes).TrimEnd('=') -ne $encodedBinding) {
+        $canonicalBinding = [Convert]::ToBase64String($bindingBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+        if ($canonicalBinding -ne $encodedBinding) {
             throw "Non-canonical route logical-binding encoding for site $siteIndex`: $Path"
         }
         $routes[$siteIndex] = [pscustomobject]@{
@@ -129,7 +182,7 @@ function Read-RouteManifest([string]$Path) {
     }
     $actualIndices = @($routes.Keys | ForEach-Object { [int]$_ } | Sort-Object)
     if (Compare-Object $expectedSiteIndices $actualIndices) {
-        throw "The hostile compiler route-site set changed: $Path"
+        throw "The $Corpus compiler route-site set changed: $Path"
     }
     $staticCounts = @{}
     foreach ($route in $routes.Values) {
@@ -140,7 +193,7 @@ function Read-RouteManifest([string]$Path) {
     }
     foreach ($requirement in $expectedRequirementCounts.Keys) {
         if ($staticCounts[$requirement] -ne $expectedRequirementCounts[$requirement]) {
-            throw "The hostile static $requirement route count changed: $Path"
+            throw "The $Corpus static $requirement route count changed: $Path"
         }
     }
     return [pscustomobject]@{
@@ -186,7 +239,7 @@ function Read-RouteCounts([string]$Path, $RouteManifest) {
     }
     foreach ($siteIndex in $expectedSiteIndices) {
         if ($counts[$siteIndex] -ne $expectedSiteCounts[$siteIndex]) {
-            throw "The hostile route count at compiler site $siteIndex changed: $Path"
+            throw "The $Corpus route count at compiler site $siteIndex changed: $Path"
         }
     }
     $dynamicByRequirement = @{}
@@ -197,9 +250,9 @@ function Read-RouteCounts([string]$Path, $RouteManifest) {
         }
         $dynamicByRequirement[$requirement] += $counts[$siteIndex]
     }
-    foreach ($requirement in $expectedRequirementCounts.Keys) {
-        if ($dynamicByRequirement[$requirement] -ne $expectedRequirementCounts[$requirement]) {
-            throw "The hostile dynamic $requirement route count changed: $Path"
+    foreach ($requirement in $expectedDynamicRequirementCounts.Keys) {
+        if ($dynamicByRequirement[$requirement] -ne $expectedDynamicRequirementCounts[$requirement]) {
+            throw "The $Corpus dynamic $requirement route count changed: $Path"
         }
     }
     return [pscustomobject]@{
@@ -229,9 +282,9 @@ function Assert-TraceBundle([string]$Directory, [string]$ExpectedTarget) {
             $trace.routeManifestSha256 -ne $routeManifest.Sha256 -or
             $trace.countsSha256 -ne $counts.Sha256 -or
             [long]$trace.producerEventCount -ne $counts.ProducerEventCount -or
-            [long]$trace.allEventCount -ne 49L -or
-            [long]$trace.producerEventCount -ne 40L -or
-            [long]$trace.unrelatedEventCount -ne 9L -or
+            [long]$trace.allEventCount -ne $corpusDefinition.AllEventCount -or
+            [long]$trace.producerEventCount -ne $corpusDefinition.ProducerEventCount -or
+            [long]$trace.unrelatedEventCount -ne $corpusDefinition.UnrelatedEventCount -or
             [long]$trace.allEventCount -ne [long]$trace.producerEventCount + [long]$trace.unrelatedEventCount) {
         throw "The generic-owner route-trace manifest does not match its evidence: $Directory"
     }
@@ -248,7 +301,7 @@ function Invoke-TraceTest([string]$BundleDirectory, [string]$TestClass) {
     New-Item -ItemType Directory -Path $BundleDirectory | Out-Null
     $gradle = Join-Path $repositoryRoot 'gradlew.bat'
     $testFilter = "org.jetbrains.kotlin.test.runners.codegen.${TestClass}`$Box." +
-        'testGenericOwnerHardestModelOracleSeparateCompilation'
+        $corpusDefinition.TestMethod
     $traceProperty = "-Pkotlin.dotnet.genericOwnerCallRouteTraceDir=$BundleDirectory"
     & $gradle --no-daemon $traceProperty -q `
         :compiler:fir:fir2ir:dotNetTest --rerun --tests $testFilter
@@ -275,7 +328,7 @@ $profileDefinitions = @(
 if ([string]::IsNullOrWhiteSpace($ExistingCorpus)) {
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
         $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-        $OutputDirectory = Join-Path $backendDirectory "build\generic-owner-call-route-traces\$timestamp"
+        $OutputDirectory = Join-Path $backendDirectory "build\generic-owner-call-route-traces\$Corpus-$timestamp"
     }
     $runDirectory = [IO.Path]::GetFullPath($OutputDirectory)
     if (Test-Path -LiteralPath $runDirectory) {
@@ -320,5 +373,13 @@ if ($routeHashes.Count -ne 1 -or $countHashes.Count -ne 1) {
 }
 
 Write-Output "Verified compiler-indexed generic-owner route traces: $runDirectory"
-Write-Output 'Dynamic producer routes: PRODUCER_ERASED_OWNER=24, EXACT_TYPED_ENTRY=11, SEMANTIC_CAPABILITY=4, MISSING_CAPABILITY=1'
-Write-Output 'Events: producer=40, unrelated=9, all=49 (correctness tracing only; not performance evidence)'
+$dynamicSummary = @($expectedDynamicRequirementCounts.GetEnumerator() | Sort-Object Key | ForEach-Object {
+    "$($_.Key)=$($_.Value)"
+}) -join ', '
+Write-Output "Corpus: $Corpus"
+Write-Output "Dynamic producer routes: $dynamicSummary"
+Write-Output (
+    "Events: producer=$($corpusDefinition.ProducerEventCount), " +
+    "unrelated=$($corpusDefinition.UnrelatedEventCount), all=$($corpusDefinition.AllEventCount) " +
+    '(correctness tracing only; not performance evidence)'
+)

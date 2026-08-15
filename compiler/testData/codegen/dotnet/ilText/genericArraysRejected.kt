@@ -4,7 +4,10 @@ package test.genericarrays.rejected
 // already allocated exact vector is represented by System.Array; it does not allocate a fallback
 // array or weaken the invariant carrier used by the original value. Open copyOf is also supported:
 // it allocates from the source vector's exact runtime component type and returns the same open
-// Array<T> carrier. Open nullable element positions and writable projected arrays remain rejected.
+// Array<T> carrier. Open `copyInto` is also representable because its exact vector or System.Array
+// capability can cross the shared range-check/copy helper without changing the returned
+// destination identity. Open nullable element positions and writable projected arrays otherwise
+// remain rejected.
 
 open class Base
 

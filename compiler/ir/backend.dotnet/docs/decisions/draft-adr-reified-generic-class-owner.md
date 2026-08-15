@@ -561,6 +561,15 @@ hostile vector without adding CLI, Runtime, KLIB, or published ABI, but its
 overhead still excludes the instrumented run from timing evidence. See
 [`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
 
+The first non-hostile application census now stages exact repository
+ArrayCopy source. Its 5,664 local dynamic events are all exact typed-entry
+candidates across both frontends and both CLRs, while its unchecked
+`Any[] as Array<T?>` initialization correctly classifies the owner-relative
+array field as semantic state. This supports a small observed capability call
+mix without conflating exact receiver provenance with typed field provenance.
+It is not yet a paired candidate/C# product or representative breadth. See
+[`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

@@ -101,6 +101,37 @@
     ldloc.2
     ret
   }
+  .method public hidebysig static !!0[] 'openCopyInto'<'T'>(!!0[] 'source', !!0[] 'destination') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] !!0[] '<copySource>',
+      [1] !!0[] '<copyDestination>',
+      [2] int32 '<copyDestinationOffset>',
+      [3] int32 '<copyStartIndex>',
+      [4] int32 '<copyEndIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldc.i4.0
+    stloc.2
+    ldc.i4.0
+    stloc.3
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc 4
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    ldloc.3
+    ldloc 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayCopyInto'(class [mscorlib]System.Array, class [mscorlib]System.Array, int32, int32, int32)
+    ldloc.1
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint

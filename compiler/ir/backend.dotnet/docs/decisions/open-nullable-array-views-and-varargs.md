@@ -52,13 +52,25 @@ site must never change the vector to `string[]`, `Nullable<int>[]`, or `T[]`.
 KLIB and callable reflection retain the source-level `Array<out T?>` vararg
 contract.
 
+The already accepted declaration-erased owner carrier also supports Common
+`copyInto`. Both source and destination retain their existing exact vector or
+`System.Array` capability; ordered arguments are spilled once, Kotlin range
+validation runs first, and CLR `System.Array.Copy` performs the overlap-safe
+bulk move and its real component store checks. The operation returns the
+original destination view. This does not create a declaration-stable writable
+carrier for a new invariant open-nullable signature: it only performs a bulk
+operation on array objects whose carrier was already selected independently.
+Method-owned open `Array<T>` similarly remains exact `T[]` and crosses the
+same helper without erasing its declaration or returned destination.
+
 This rule is limited to Kotlin-owned nullable generic varargs. An imported CLR
 `T[]` or `params T[]` declaration retains its exact selected foreign signature
 and native substitution behavior. Closed invariant Kotlin arrays also retain
 their existing exact carriers: for example `Array<String?>` remains a CLR
 reference vector and `Array<Int?>` remains `Nullable<int>[]`.
 
-An invariant array over a method-owned open `T?` remains unsupported. It is
+An otherwise unclassified invariant array over a method-owned open `T?`
+remains unsupported. It is
 writable, so one declaration-stable carrier would have to preserve both the
 component identity and store checks of reference substitutions and nullable
 value substitutions. Neither `object[]`, `T[]`, `Nullable<T>[]`, nor
