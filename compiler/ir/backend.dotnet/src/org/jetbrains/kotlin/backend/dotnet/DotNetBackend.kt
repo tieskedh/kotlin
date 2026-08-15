@@ -180,7 +180,7 @@ object DotNetBackend {
             return result(ilTarget)
         }
         genericOwnerPrototypes = context.genericOwnerArchitecturePlans.values
-            .map(DotNetGenericOwnerArchitecturePlan::toPrototypeSnapshot)
+            .map { plan -> plan.toPrototypeSnapshot(preLoweringDeclarationKeys) }
             .sortedBy(DotNetGenericOwnerPrototypeSnapshot::ownerName)
         genericOwnerCallRoutes = context.genericOwnerCallRoutes
             .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)

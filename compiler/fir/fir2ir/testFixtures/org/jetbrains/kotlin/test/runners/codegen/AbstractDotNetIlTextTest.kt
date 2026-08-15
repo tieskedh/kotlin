@@ -79,6 +79,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRe
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateTypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerRuntimeClassificationMode
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionCallableExposure
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionCapabilityExposure
@@ -456,14 +457,26 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
 ) {
     val tree = prototypes.singleOrNull { prototype -> prototype.ownerName == "OctoTree" } ?: return
+    val node = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node" }
     val branch = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Branch" }
     val leaf = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Leaf" }
-    check(tree.states.single { state -> state.fieldName == "root" }.requirement ==
-            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED) {
+    val nodeCarrier = node.logicalBindingKey?.let { logicalKey ->
+        DotNetGenericOwnerPrototypeStateTypeSnapshot.logicalGenericClassifier(
+            logicalClassifierKey = logicalKey,
+            arguments = listOf(DotNetGenericOwnerPrototypeStateTypeSnapshot.ownerParameter(0)),
+        )
+    }
+    check(tree.states.single { state -> state.fieldName == "root" }.let { root ->
+        root.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                root.exactTypedCarrierType == nodeCarrier
+    }) {
         "OctoTree.root must retain semantic nullable subtype state: ${tree.states}"
     }
     check(branch.states.single { state -> state.fieldName == "nodes" }.let { nodes ->
         nodes.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                nodes.exactTypedCarrierType == nodeCarrier?.let {
+                    DotNetGenericOwnerPrototypeStateTypeSnapshot.szArray(it)
+                } &&
                 nodes.writes.singleOrNull()?.let { write ->
                     write.producerName == "<field-initializer:nodes>" &&
                             write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
@@ -471,13 +484,35 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     }) {
         "OctoTree.Branch.nodes must retain its exact owner-classifier array producer: ${branch.states}"
     }
-    check(leaf.states.single { state -> state.fieldName == "value" }.requirement ==
-            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN) {
+    check(leaf.states.single { state -> state.fieldName == "value" }.let { value ->
+        value.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                value.exactTypedCarrierType == DotNetGenericOwnerPrototypeStateTypeSnapshot.ownerParameter(0)
+    }) {
         "OctoTree.Leaf.value must retain typed owner state: ${leaf.states}"
+    }
+    node.logicalBindingKey?.let { nodeKey ->
+        val nodesType = checkNotNull(branch.states.single { state -> state.fieldName == "nodes" }.exactTypedCarrierType)
+        check(runCatching { nodesType.bindProducerTypes(emptyMap()) }.isFailure) {
+            "OctoTree.Branch.nodes bound without a selected Node TypeDef path"
+        }
+        val nodePath = listOf("KotlinRepresentativeCandidate", "OctoTreeNode")
+        check(nodesType.bindProducerTypes(mapOf(nodeKey to nodePath)) ==
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
+                    DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+                        typePath = nodePath,
+                        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                        arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+                    ),
+                )) {
+            "OctoTree.Branch.nodes did not bind its logical recursive classifier exactly"
+        }
     }
     val routeCounts = callRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(routeCounts == mapOf(
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 25,
+        // The same-compilation driver contributes four exact calls. A published producer owns
+        // only the unchanged OctoTree source; its separately compiled consumer owns those calls.
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to
+                if (tree.logicalBindingKey == null) 25 else 21,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 9,
         DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED to 9,
     )) {
@@ -495,6 +530,9 @@ private fun validateGenericOwnerRepresentativeArrayCopyPrototype(
     val values = owner.states.singleOrNull { state -> state.fieldName == "values" }
     check(values?.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED) {
         "ArrayCopy's unchecked object-vector initialization must keep one semantic values state: $owner"
+    }
+    check(values.exactTypedCarrierType == null) {
+        "ArrayCopy's Array<T?> state must not be mistaken for a structural CLR T[] carrier: $values"
     }
     val add = owner.members.single { member -> member.sourceName == "add" }
     check(add.roles == setOf(
@@ -1027,8 +1065,15 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
         }
     }
 
-    val owners = listOf("HostileUnsafeStore", "HostileUnsafeMid", "HostileTypedStore").map { simpleName ->
-        val prototype = prototypes.single { candidate -> candidate.hasSimpleName(simpleName) }
+    val selectedPrototypes = listOf("HostileUnsafeStore", "HostileUnsafeMid", "HostileTypedStore").map { simpleName ->
+        prototypes.single { candidate -> candidate.hasSimpleName(simpleName) }
+    }
+    val physicalOwnerPathsByLogicalKey = selectedPrototypes.associate { prototype ->
+        checkNotNull(prototype.logicalBindingKey) to
+                listOf("KotlinSnapshotPrototype", prototype.ownerName.substringAfterLast('.'))
+    }
+    val owners = selectedPrototypes.map { prototype ->
+        val simpleName = prototype.ownerName.substringAfterLast('.')
         val ownerPath = listOf("KotlinSnapshotPrototype", simpleName)
         val baseOwnerPath = listOf(
             "KotlinSnapshotPrototype",
@@ -1283,7 +1328,9 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
-                            DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)
+                            checkNotNull(state.exactTypedCarrierType) {
+                                "The hostile typed state lacks an exact compiler-derived carrier: $state"
+                            }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
                         DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                         -> error("The hostile physical family cannot publish unresolved state storage")
@@ -5964,7 +6011,7 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
     ): List<TestFile> {
         val fileWithBox = module.files.firstOrNull {
             MainFunctionForBlackBoxTestsSourceProvider.containsBoxMethod(it.originalContent)
-        } ?: return emptyList()
+        }
         val tracesGenericOwnerCallRoutes =
             System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY) != null
         val representativeSourceIds = module.files.flatMap { file ->
@@ -5983,40 +6030,44 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
             }
         }
 
-        val code = buildString {
-            MainFunctionForBlackBoxTestsSourceProvider.detectPackage(fileWithBox)?.let {
-                appendLine("package $it")
-                appendLine()
-            }
-            appendLine("import kotlin.io.println")
-            appendLine()
-            if (tracesGenericOwnerCallRoutes) {
-                appendLine("private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME(callSiteIndex: Int) {")
-                appendLine("    // Replaced by the test-only backend counter hook.")
-                appendLine("}")
-                appendLine()
-                appendLine("private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME() {")
-                appendLine("    // Replaced by the test-only backend counter hook.")
-                appendLine("}")
-                appendLine()
-            }
-            appendLine("fun main() {")
-            if (tracesGenericOwnerCallRoutes) {
-                appendLine("    val result = box()")
-                appendLine("    $GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME()")
-                appendLine("    println(result)")
-            } else {
-                appendLine("    println(box())")
-            }
-            appendLine("}")
-        }
+        if (fileWithBox == null && representativeSources.isEmpty()) return emptyList()
+
         val sourceDirectory = testServices.temporaryDirectoryManager.getOrCreateTempDirectory("src")
-        val file = sourceDirectory
-            .resolve(MainFunctionForBlackBoxTestsSourceProvider.BOX_MAIN_FILE_NAME)
-        file.writeText(code)
 
         return buildList {
-            add(file.toTestFile())
+            fileWithBox?.let { boxFile ->
+                val code = buildString {
+                    MainFunctionForBlackBoxTestsSourceProvider.detectPackage(boxFile)?.let {
+                        appendLine("package $it")
+                        appendLine()
+                    }
+                    appendLine("import kotlin.io.println")
+                    appendLine()
+                    if (tracesGenericOwnerCallRoutes) {
+                        appendLine("private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME(callSiteIndex: Int) {")
+                        appendLine("    // Replaced by the test-only backend counter hook.")
+                        appendLine("}")
+                        appendLine()
+                        appendLine("private fun $GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME() {")
+                        appendLine("    // Replaced by the test-only backend counter hook.")
+                        appendLine("}")
+                        appendLine()
+                    }
+                    appendLine("fun main() {")
+                    if (tracesGenericOwnerCallRoutes) {
+                        appendLine("    val result = box()")
+                        appendLine("    $GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME()")
+                        appendLine("    println(result)")
+                    } else {
+                        appendLine("    println(box())")
+                    }
+                    appendLine("}")
+                }
+                val mainFile = sourceDirectory
+                    .resolve(MainFunctionForBlackBoxTestsSourceProvider.BOX_MAIN_FILE_NAME)
+                mainFile.writeText(code)
+                add(mainFile.toTestFile())
+            }
             if (representativeSources.isNotEmpty()) {
                 val originalTestData = testModuleStructure.originalTestDataFiles.single()
                 val repositoryRoot = generateSequence(originalTestData.canonicalFile.parentFile, File::getParentFile)
