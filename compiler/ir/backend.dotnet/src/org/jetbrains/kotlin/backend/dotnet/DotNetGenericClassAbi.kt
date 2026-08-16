@@ -1134,6 +1134,7 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
     /** Null means the field type is outside the bounded path-unbound carrier grammar. */
     val exactTypedCarrierType: DotNetGenericOwnerPrototypeTypeSnapshot?,
+    val initializers: List<DotNetGenericOwnerPrototypeStateInitializerSnapshot>,
     val writes: List<DotNetGenericOwnerPrototypeStateWriteSnapshot>,
     val directReaderNames: List<String>,
     val directWriterNames: List<String>,
@@ -1142,7 +1143,49 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
     val initializationReaderLabels: List<String>,
     val initializationWriterLabels: List<String>,
     val externalAccessGraphRequired: Boolean,
-)
+) {
+    init {
+        require(initializers.map { initializer -> initializer.producerName }.toSet().size == initializers.size) {
+            "a generic-owner prototype state has duplicate explicit initializers"
+        }
+        require(initializers.all { initializer ->
+            writes.any { write -> write.producerName == initializer.producerName }
+        }) {
+            "a generic-owner prototype state initializer is absent from its complete write evidence"
+        }
+        require(initializers.none { initializer ->
+            initializer.kind == DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+        } || exactTypedCarrierType?.kind == DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY) {
+            "a fixed zeroed generic-owner initializer requires an exact SZ-array state carrier"
+        }
+    }
+}
+
+/** Bounded compiler-derived recipe for one explicit producer-owned field initializer. */
+enum class DotNetGenericOwnerPrototypeStateInitializerKind {
+    /** A fixed-length zeroed CLR vector whose element classifier retains the owner's parameter. */
+    FIXED_ZEROED_SZ_ARRAY,
+
+    /** The initializer is real but lies outside the currently admitted physical recipe grammar. */
+    UNSUPPORTED,
+}
+
+data class DotNetGenericOwnerPrototypeStateInitializerSnapshot(
+    val producerName: String,
+    val kind: DotNetGenericOwnerPrototypeStateInitializerKind,
+    val fixedElementCount: Int?,
+) {
+    init {
+        require(producerName.isNotEmpty()) { "a generic-owner state initializer requires a producer identity" }
+        require((kind == DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY) ==
+                (fixedElementCount != null)) {
+            "only a fixed zeroed generic-owner vector initializer records an element count"
+        }
+        require(fixedElementCount == null || fixedElementCount >= 0) {
+            "a fixed zeroed generic-owner vector initializer requires a non-negative element count"
+        }
+    }
+}
 
 /** Immutable evidence for the physical domain of one producer-owned state write. */
 data class DotNetGenericOwnerPrototypeStateWriteSnapshot(
@@ -3443,6 +3486,12 @@ internal data class DotNetGenericOwnerStateWriteProvenancePlan(
     val provenance: DotNetGenericOwnerWriteValueProvenance,
 )
 
+internal data class DotNetGenericOwnerStateInitializerPlan(
+    val producerName: String,
+    val kind: DotNetGenericOwnerPrototypeStateInitializerKind,
+    val fixedElementCount: Int?,
+)
+
 internal data class DotNetGenericOwnerCallRoutePlan(
     val callerName: String,
     val callerLogicalBindingKey: String?,
@@ -3467,6 +3516,7 @@ internal data class DotNetGenericOwnerOverrideBindingPlan(
 internal data class DotNetGenericOwnerStateCarrierPlan(
     val field: IrField,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    val initializers: List<DotNetGenericOwnerStateInitializerPlan>,
     val writes: List<DotNetGenericOwnerStateWriteProvenancePlan>,
     val directReaders: Set<IrFunction>,
     val directWriters: Set<IrFunction>,
@@ -3956,14 +4006,29 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
             )
         },
         states = stateCarriers.values.map { state ->
+            val exactTypedCarrierType = state.field.type.genericOwnerPrototypeStateType(
+                owner,
+                preLoweringDeclarationKeys,
+            )?.takeIf(DotNetGenericOwnerPrototypeTypeSnapshot::referencesOwnerParameter)
             DotNetGenericOwnerPrototypeStateSnapshot(
                 fieldName = state.field.name.asString(),
                 requirement = state.requirement,
-                exactTypedCarrierType = state.field.type.genericOwnerPrototypeStateType(
-                    owner,
-                    preLoweringDeclarationKeys,
-                )
-                    ?.takeIf(DotNetGenericOwnerPrototypeTypeSnapshot::referencesOwnerParameter),
+                exactTypedCarrierType = exactTypedCarrierType,
+                initializers = state.initializers.map { initializer ->
+                    val retainsExactFixedVector =
+                        initializer.kind ==
+                                DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY &&
+                                exactTypedCarrierType?.kind == DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY
+                    DotNetGenericOwnerPrototypeStateInitializerSnapshot(
+                        producerName = initializer.producerName,
+                        kind = if (retainsExactFixedVector) {
+                            DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+                        } else {
+                            DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED
+                        },
+                        fixedElementCount = initializer.fixedElementCount.takeIf { retainsExactFixedVector },
+                    )
+                },
                 writes = state.writes.map { write ->
                     DotNetGenericOwnerPrototypeStateWriteSnapshot(
                         producerName = write.producerName,

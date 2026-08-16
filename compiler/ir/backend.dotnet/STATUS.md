@@ -27,7 +27,26 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner state and callable evidence now use
+- Last completed foundation: explicit generic-owner field initializers now
+  retain a bounded compiler-derived physical recipe instead of being reduced
+  to write provenance. A fixed `arrayOfNulls` vector is admitted only when its
+  invariant element is a local Kotlin generic classifier retaining the current
+  owner parameter and its length is an exact integer constant; every other
+  explicit initializer is recorded as unsupported. The unchanged recursive
+  OctoTree producer therefore couples `Branch.nodes: Node<T>[]` to an exact
+  zeroed eight-element vector recipe. The unchanged ArrayCopy benchmark's
+  `arrayOfNulls<Any>(capacity) as Array<T?>` remains an unsupported initializer
+  with semantic-object state, so a logical cast cannot manufacture physical
+  evidence. Same-compilation classifiers without a stable producer key also
+  fail closed instead of deriving a TypeDef path from a display name. The
+  focused PSI/LightTree x Framework 4.8/.NET 10 plus IL-text repair matrix
+  covers 14 tests with zero failures, errors, or skips. Production owners/
+  emission, physical artifact schema, DLL/KLIB, Runtime, and Common semantics
+  remain unchanged. The final strict aggregate completed in 1,859.7 seconds;
+  direct audit covers 190 XML files and 2,238 tests with zero failures, errors,
+  or skips. See
+  [`docs/archive/generic-owner-state-initializer-recipes-2026-08-16.md`](docs/archive/generic-owner-state-initializer-recipes-2026-08-16.md).
+- The preceding foundation: generic-owner state and callable evidence now use
   one path-unbound prototype type tree. Constructors, members, and masked-
   default helper tails retain owner/method GenericParams, exact arrays,
   explicit `System.Array` fallbacks, and invariant Kotlin-owned generic
