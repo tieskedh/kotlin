@@ -816,7 +816,9 @@ it satisfy typed state's WRITE obligation without a fictitious setter. The
 Schema 9 additionally represents exact producer-private typed identity state
 methods without inventing a logical KLIB callable or reflection member, while
 retaining the complete paired matrix whenever a semantic path or conversion
-exists. The next gate is the complete serialized
+exists. Schema 10 records exact owner visibility/dispatch and member-slot
+visibility, including protected semantic hooks and private/final explicit
+capability dispatchers. The next gate is the complete serialized
 OctoTree physical family plus record-driven candidate and direct C# products.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
@@ -826,6 +828,8 @@ Schema 8 is recorded in
 [`../archive/generic-owner-physical-state-initializers-2026-08-16.md`](../archive/generic-owner-physical-state-initializers-2026-08-16.md).
 Schema 9 is recorded in
 [`../archive/generic-owner-producer-private-state-access-2026-08-16.md`](../archive/generic-owner-producer-private-state-access-2026-08-16.md).
+Schema 10 is recorded in
+[`../archive/generic-owner-physical-visibility-dispatch-2026-08-16.md`](../archive/generic-owner-physical-visibility-dispatch-2026-08-16.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
