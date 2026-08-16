@@ -68,6 +68,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateInitia
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateInitializerRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessConversion
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessOperation
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessRecord
@@ -1379,8 +1380,10 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         domain = domain,
                         operation = operation,
                         conversion = conversion,
+                        bindingKind = DotNetGenericOwnerPhysicalStateAccessBindingKind.LOGICAL_MEMBER_FAMILY,
                         logicalMemberKey = logicalMemberKey,
                         role = role,
+                        physicalVisibility = null,
                         physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
                             physicalOwnerPath = slot.physicalOwnerPath,
                             physicalMethodName = slot.physicalMethodName,
@@ -1953,6 +1956,85 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             )
         })))
     }
+    val semanticReadAccess = state.accessPaths.single { access ->
+        access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC &&
+                access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ
+    }
+    val semanticWriteAccess = state.accessPaths.single { access ->
+        access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC &&
+                access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
+    }
+    fun producerPrivateAccess(
+        source: DotNetGenericOwnerPhysicalStateAccessRecord,
+        physicalMethodName: String,
+    ): DotNetGenericOwnerPhysicalStateAccessRecord = source.copy(
+        domain = DotNetGenericOwnerPhysicalStateAccessDomain.TYPED,
+        conversion = DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
+        bindingKind = DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD,
+        logicalMemberKey = null,
+        role = null,
+        physicalVisibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+        physicalMethod = source.physicalMethod.copy(
+            physicalOwnerPath = stateOwner.physicalOwnerPath,
+            physicalMethodName = physicalMethodName,
+        ),
+    )
+    val privateReadAccess = producerPrivateAccess(semanticReadAccess, "__kotlin_private_state_read")
+    val privateWriteAccess = producerPrivateAccess(semanticWriteAccess, "__kotlin_private_state_write")
+    val producerPrivateState = state.copy(accessPaths = listOf(privateReadAccess, privateWriteAccess))
+    val producerPrivateOwner = stateOwner.copy(states = listOf(producerPrivateState))
+    val producerPrivateArtifact = artifact.copy(
+        owners = artifact.owners.map { owner -> if (owner == stateOwner) producerPrivateOwner else owner },
+    )
+    val encodedProducerPrivateArtifact = DotNetGenericOwnerPhysicalFamilyCodec.encode(producerPrivateArtifact)
+    val decodedProducerPrivateArtifact = DotNetGenericOwnerPhysicalFamilyCodec.decode(
+        encodedProducerPrivateArtifact,
+        expectedProducerFingerprint = artifact.producerFingerprint,
+        expectedTargetProfile = artifact.targetProfile,
+    )
+    val decodedProducerPrivateOwner = decodedProducerPrivateArtifact.requirePhysicalFamily(
+        producerPrivateOwner.logicalOwnerKey,
+    )
+    check(DotNetGenericOwnerPhysicalFamilyCodec.encode(decodedProducerPrivateArtifact) ==
+            encodedProducerPrivateArtifact &&
+            decodedProducerPrivateOwner.states.single().accessPaths.toSet() ==
+            producerPrivateState.accessPaths.toSet() &&
+            decodedProducerPrivateOwner.reflection.callables.none { callable ->
+                callable.physicalMethods.any { method ->
+                    method == privateReadAccess.physicalMethod || method == privateWriteAccess.physicalMethod
+                }
+            }) {
+        "The generic-owner family codec did not preserve hidden producer-private state access"
+    }
+    expectRejected("a producer-private access carrying a logical ABI key") {
+        privateReadAccess.copy(logicalMemberKey = semanticReadAccess.logicalMemberKey)
+    }
+    expectRejected("a non-private producer-owned state accessor") {
+        privateReadAccess.copy(physicalVisibility = DotNetGenericOwnerPhysicalMemberVisibility.ASSEMBLY)
+    }
+    expectRejected("a semantic producer-private state accessor") {
+        privateReadAccess.copy(domain = DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC)
+    }
+    expectRejected("a producer-private state accessor on another TypeDef") {
+        producerPrivateOwner.copy(states = listOf(producerPrivateState.copy(
+            accessPaths = producerPrivateState.accessPaths.map { access ->
+                if (access != privateReadAccess) access else access.copy(
+                    physicalMethod = access.physicalMethod.copy(
+                        physicalOwnerPath = access.physicalMethod.physicalOwnerPath + "Foreign",
+                    ),
+                )
+            },
+        )))
+    }
+    expectRejected("a producer-private accessor colliding with a logical member MethodDef") {
+        producerPrivateOwner.copy(states = listOf(producerPrivateState.copy(
+            accessPaths = producerPrivateState.accessPaths.map { access ->
+                if (access != privateWriteAccess) access else access.copy(
+                    physicalMethod = semanticWriteAccess.physicalMethod,
+                )
+            },
+        )))
+    }
     expectRejected("an out-of-range owner type parameter in state storage") {
         stateOwner.copy(
             states = stateOwner.states.mapIndexed { index, state ->
@@ -2042,7 +2124,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             initializedTypedVectorEncoded &&
             initializedTypedVectorDecoded.requirePhysicalFamily(typedStateOwner.logicalOwnerKey)
                 .states.single().initializers.single() == typedVectorInitializer) {
-        "The schema-8 physical family lost its constructor-rooted typed vector initializer"
+        "The schema-9 physical family lost its constructor-rooted typed vector initializer"
     }
     expectRejected("a typed vector initializer without an exact read path") {
         initializedTypedVectorState.copy(accessPaths = emptyList())
