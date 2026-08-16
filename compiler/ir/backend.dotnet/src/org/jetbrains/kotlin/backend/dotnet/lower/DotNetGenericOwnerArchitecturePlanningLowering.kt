@@ -30,9 +30,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateInitializerPlan
 import org.jetbrains.kotlin.backend.dotnet.mergeDotNetGenericOwnerParameterSlotDomains
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
@@ -63,6 +65,7 @@ import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
+import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrSetField
@@ -493,6 +496,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
                         else ->
                             DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
+                    },
+                    initializers = producerInitializerAccesses.keys.mapNotNull { initializer ->
+                        initializer.stateInitializerPlanOrNull(field, owner)
                     },
                     writes = writes,
                     directReaders = directReaders,
@@ -1401,7 +1407,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 is IrFunctionAccessExpression -> {
                     val target = expression.symbol.owner
-                    if (expression.isPhysicallyTypedOwnerClassifierArrayAllocation()) {
+                    if (expression.isPhysicallyTypedOwnerClassifierArrayAllocation(owner)) {
                         setOf(DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED)
                     } else if (target in producerAccesses) {
                         provenances[target].orEmpty()
@@ -1420,23 +1426,6 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
          * owner emits Node<T>[]; neither route passes through object-domain element storage.
          * Direct `arrayOfNulls<T>()`/`arrayOfNulls<T?>()` deliberately fails this test.
          */
-        private fun IrFunctionAccessExpression.isPhysicallyTypedOwnerClassifierArrayAllocation(): Boolean {
-            if (symbol != context.irBuiltIns.arrayOfNulls) return false
-            val arrayType = type as? IrSimpleType ?: return false
-            if (arrayType.classifier != context.irBuiltIns.arrayClass) return false
-            val elementProjection = arrayType.arguments.singleOrNull() as? IrTypeProjection ?: return false
-            if (elementProjection.variance != Variance.INVARIANT ||
-                !elementProjection.type.referencesTypeParameterOf(owner)
-            ) {
-                return false
-            }
-            val elementClass = ((elementProjection.type as? IrSimpleType)?.classifier as? IrClassSymbol)
-                ?.owner
-                ?: return false
-            return elementClass.origin != IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
-                    elementClass.isDotNetGenericClassDeclaration
-        }
-
         private fun defaultProvenance(type: IrType): DotNetGenericOwnerWriteValueProvenance =
             if (type.referencesTypeParameterOf(owner)) {
                 DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
@@ -1501,6 +1490,48 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val element: IrElement,
         val implicitWrite: IrField? = null,
     )
+
+    private fun ProducerInitializer.stateInitializerPlanOrNull(
+        field: IrField,
+        owner: IrClass,
+    ): DotNetGenericOwnerStateInitializerPlan? {
+        if (implicitWrite != field) return null
+        val expression = (element as? IrExpressionBody)?.expression
+        val allocation = expression as? IrFunctionAccessExpression
+        val fixedElementCount = allocation
+            ?.takeIf { candidate -> candidate.isPhysicallyTypedOwnerClassifierArrayAllocation(owner) }
+            ?.arguments
+            ?.singleOrNull()
+            ?.let { argument -> (argument as? IrConst)?.value as? Int }
+        return DotNetGenericOwnerStateInitializerPlan(
+            producerName = label,
+            kind = if (fixedElementCount != null) {
+                DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+            } else {
+                DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED
+            },
+            fixedElementCount = fixedElementCount,
+        )
+    }
+
+    private fun IrFunctionAccessExpression.isPhysicallyTypedOwnerClassifierArrayAllocation(
+        owner: IrClass,
+    ): Boolean {
+        if (symbol != context.irBuiltIns.arrayOfNulls) return false
+        val arrayType = type as? IrSimpleType ?: return false
+        if (arrayType.classifier != context.irBuiltIns.arrayClass) return false
+        val elementProjection = arrayType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+        if (elementProjection.variance != Variance.INVARIANT ||
+            !elementProjection.type.referencesTypeParameterOf(owner)
+        ) {
+            return false
+        }
+        val elementClass = ((elementProjection.type as? IrSimpleType)?.classifier as? IrClassSymbol)
+            ?.owner
+            ?: return false
+        return elementClass.origin != IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
+                elementClass.isDotNetGenericClassDeclaration
+    }
 
     private fun IrElement.collectDirectAccesses(
         producerFunctions: Set<IrFunction>,

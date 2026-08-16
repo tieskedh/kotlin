@@ -79,6 +79,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRe
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerRuntimeClassificationMode
@@ -501,6 +502,16 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
                 nodes.exactTypedCarrierType == nodeCarrier?.let {
                     DotNetGenericOwnerPrototypeTypeSnapshot.szArray(it)
                 } &&
+                nodes.initializers.singleOrNull()?.let { initializer ->
+                    initializer.producerName == "<field-initializer:nodes>" && if (nodeCarrier == null) {
+                        initializer.kind == DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED &&
+                                initializer.fixedElementCount == null
+                    } else {
+                        initializer.kind ==
+                                DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY &&
+                                initializer.fixedElementCount == 8
+                    }
+                } == true &&
                 nodes.writes.singleOrNull()?.let { write ->
                     write.producerName == "<field-initializer:nodes>" &&
                             write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
@@ -589,6 +600,12 @@ private fun validateGenericOwnerRepresentativeArrayCopyPrototype(
     }
     check(values.exactTypedCarrierType == null) {
         "ArrayCopy's Array<T?> state must not be mistaken for a structural CLR T[] carrier: $values"
+    }
+    check(values.initializers.singleOrNull()?.let { initializer ->
+        initializer.kind == DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED &&
+                initializer.fixedElementCount == null
+    } == true) {
+        "ArrayCopy's unchecked object-vector initializer must remain outside the typed recipe grammar: $values"
     }
     val add = owner.members.single { member -> member.sourceName == "add" }
     check(add.roles == setOf(
