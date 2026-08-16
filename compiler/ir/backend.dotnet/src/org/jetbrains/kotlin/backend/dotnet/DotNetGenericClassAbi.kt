@@ -1728,6 +1728,7 @@ data class DotNetGenericOwnerPhysicalConstructionPlanRecord(
 /** One producer-selected physical MethodDef role in a future CLR-generic member family. */
 data class DotNetGenericOwnerPhysicalMemberSlotRecord(
     val role: DotNetGenericOwnerMemberFamilyRole,
+    val visibility: DotNetGenericOwnerPhysicalMemberVisibility,
     val physicalOwnerPath: List<String>,
     val physicalMethodName: String,
     val dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
@@ -1740,8 +1741,9 @@ data class DotNetGenericOwnerPhysicalMemberSlotRecord(
         }
         require(physicalMethodName.isNotEmpty()) { "a generic-owner physical member slot requires a method name" }
         if (role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) {
-            require(dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL) {
-                "a generic-owner capability dispatcher must remain a final non-override slot"
+            require(visibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                    dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL) {
+                "a generic-owner capability dispatcher must remain a private final non-override slot"
             }
             require(capabilitySlot != null && capabilitySlot.signature == signature) {
                 "a generic-owner capability dispatcher requires its exact matching capability slot"
@@ -1752,6 +1754,10 @@ data class DotNetGenericOwnerPhysicalMemberSlotRecord(
         } else {
             require(capabilitySlot == null) {
                 "only a generic-owner capability dispatcher may implement a capability slot"
+            }
+            require(role != DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK ||
+                    visibility == DotNetGenericOwnerPhysicalMemberVisibility.FAMILY) {
+                "a generic-owner semantic hook must retain protected physical visibility"
             }
         }
     }
@@ -1947,6 +1953,8 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val logicalOwnerKey: String,
     val physicalOwnerPath: List<String>,
     val physicalCapabilityOwnerPath: List<String>?,
+    val physicalVisibility: DotNetGenericOwnerPhysicalTypeVisibility,
+    val physicalDispatch: DotNetGenericOwnerPhysicalTypeDispatch,
     val genericArity: Int,
     val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
     val disposition: DotNetGenericOwnerCandidateDisposition,
@@ -2449,7 +2457,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 9
+    const val SCHEMA_VERSION = 10
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2499,6 +2507,8 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         ?.joinToString("\u0000")
                         ?.encoded()
                         ?: "-",
+                    owner.physicalVisibility.name,
+                    owner.physicalDispatch.name,
                     owner.genericArity.toString(),
                     owner.physicalGenericParameters.size.toString(),
                     owner.disposition.name,
@@ -2610,6 +2620,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         listOf(
                             "R",
                             slot.role.name,
+                            slot.visibility.name,
                             slot.dispatch.name,
                             slot.physicalOwnerPath.joinToString("\u0000").encoded(),
                             slot.physicalMethodName.encoded(),
@@ -2785,30 +2796,40 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
-            val fields = read("O", 12)
+            val fields = read("O", 14)
             val logicalOwnerKey = fields[1].decoded()
             val ownerPath = fields[2].decoded().split('\u0000')
             val capabilityOwnerPath = fields[3].takeUnless { it == "-" }?.decoded()?.split('\u0000')
-            val genericArity = count(fields[4], "generic-arity")
-            val physicalGenericParameterCount = count(fields[5], "physical generic parameter")
+            val physicalVisibility = enumValue(
+                fields[4],
+                DotNetGenericOwnerPhysicalTypeVisibility.entries.toTypedArray(),
+                "owner visibility",
+            )
+            val physicalDispatch = enumValue(
+                fields[5],
+                DotNetGenericOwnerPhysicalTypeDispatch.entries.toTypedArray(),
+                "owner dispatch",
+            )
+            val genericArity = count(fields[6], "generic-arity")
+            val physicalGenericParameterCount = count(fields[7], "physical generic parameter")
             val disposition = enumValue(
-                fields[6],
+                fields[8],
                 DotNetGenericOwnerCandidateDisposition.entries.toTypedArray(),
                 "owner disposition",
             )
             val runtimeClassificationMode = enumValue(
-                fields[7],
+                fields[9],
                 DotNetGenericOwnerRuntimeClassificationMode.entries.toTypedArray(),
                 "runtime classification mode",
             )
             val constructionModes = enumSet(
-                fields[8],
+                fields[10],
                 DotNetGenericOwnerConstructionMode.entries.toTypedArray(),
                 "construction mode",
             )
-            val constructorCount = count(fields[9], "constructor")
-            val memberCount = count(fields[10], "member")
-            val stateCount = count(fields[11], "state")
+            val constructorCount = count(fields[11], "constructor")
+            val memberCount = count(fields[12], "member")
+            val stateCount = count(fields[13], "state")
             val physicalGenericParameters = List(physicalGenericParameterCount) {
                 val parameterFields = read("G", 4)
                 val typeConstraintCount = count(parameterFields[3], "generic parameter type constraint")
@@ -2947,12 +2968,12 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     )
                 }
                 val slots = List(slotCount) {
-                    val slotFields = read("R", 7)
-                    val hasCapabilitySlot = when (slotFields[6]) {
+                    val slotFields = read("R", 8)
+                    val hasCapabilitySlot = when (slotFields[7]) {
                         "0" -> false
                         "1" -> true
                         else -> throw IllegalArgumentException(
-                            "generic-owner family artifact has invalid capability-slot marker '${slotFields[6]}'"
+                            "generic-owner family artifact has invalid capability-slot marker '${slotFields[7]}'"
                         )
                     }
                     val capabilitySlot = if (hasCapabilitySlot) {
@@ -2971,14 +2992,19 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             DotNetGenericOwnerMemberFamilyRole.entries.toTypedArray(),
                             "slot role",
                         ),
-                        dispatch = enumValue(
+                        visibility = enumValue(
                             slotFields[2],
+                            DotNetGenericOwnerPhysicalMemberVisibility.entries.toTypedArray(),
+                            "slot visibility",
+                        ),
+                        dispatch = enumValue(
+                            slotFields[3],
                             DotNetGenericOwnerPhysicalMemberDispatch.entries.toTypedArray(),
                             "slot dispatch",
                         ),
-                        physicalOwnerPath = slotFields[3].decoded().split('\u0000'),
-                        physicalMethodName = slotFields[4].decoded(),
-                        signature = slotFields[5].decoded().deserializedSignature(),
+                        physicalOwnerPath = slotFields[4].decoded().split('\u0000'),
+                        physicalMethodName = slotFields[5].decoded(),
+                        signature = slotFields[6].decoded().deserializedSignature(),
                         capabilitySlot = capabilitySlot,
                     )
                 }
@@ -3107,6 +3133,8 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 logicalOwnerKey = logicalOwnerKey,
                 physicalOwnerPath = ownerPath,
                 physicalCapabilityOwnerPath = capabilityOwnerPath,
+                physicalVisibility = physicalVisibility,
+                physicalDispatch = physicalDispatch,
                 genericArity = genericArity,
                 physicalGenericParameters = physicalGenericParameters,
                 disposition = disposition,

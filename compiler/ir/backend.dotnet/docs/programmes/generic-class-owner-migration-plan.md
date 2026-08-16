@@ -72,7 +72,7 @@ Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
 consumers retain the overridden producer logical key. The architecture
-artifact, now at schema 9, binds that key to the exact producer-selected
+artifact, now at schema 10, binds that key to the exact producer-selected
 typed/semantic MethodDef owner/name, dispatch, slot-domain vector, and neutral
 structural signature after complete producer-fingerprint/schema validation.
 Stale, truncated, wrong-producer, duplicate, incomplete, and
@@ -104,7 +104,7 @@ record drives the hostile C# oracle only.
 
 A separate consumer-side construction record now corrects the earlier
 constructor-owned mode model while keeping runtime roots outside producer
-schema 9. The final compilation supplies a finite set of concrete runtime
+schema 10. The final compilation supplies a finite set of concrete runtime
 types; the decoded
 producer supplies the open owner, semantic capability, and strict public
 one-`!T` constructor. The current fallback proof requires an unconstrained
@@ -227,6 +227,12 @@ callable identity or reflection record and must be a private typed identity
 method on the same TypeDef. Semantic-object state permits the private READ/
 WRITE pair only while no semantic path or conversion exists; otherwise the
 complete paired typed/semantic matrix remains mandatory.
+
+Schema 10 retains each physical owner TypeDef's visibility and dispatch plus
+each member MethodDef slot's visibility. Typed entries copy source visibility;
+semantic hooks require protected visibility, while explicit capability
+implementations require private/final. Producer consumers may not reconstruct
+public/internal or final/open/abstract/sealed shapes from role or ancestry.
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,

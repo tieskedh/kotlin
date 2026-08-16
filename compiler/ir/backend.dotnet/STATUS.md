@@ -27,7 +27,22 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner physical-family schema 9 now
+- Last completed foundation: generic-owner physical-family schema 10 now
+  serializes the compiler-derived physical visibility and dispatch of every
+  owner TypeDef and the exact visibility of every member MethodDef slot. A
+  decoded producer no longer needs compiler-local prototypes to distinguish
+  public/internal or final/open/abstract/sealed owners. Typed entries retain
+  source visibility, semantic hooks are required to be protected, and explicit
+  capability dispatchers are required to be private and final. Canonical
+  schema-10 bytes retain the declaration envelope; stale schema 9, a public
+  semantic hook, and a public capability implementation fail closed. The
+  focused PSI/LightTree x Framework 4.8/.NET 10 same/separate-compilation
+  matrix covers eight tests with zero failures, errors, or skips. Production
+  owners/emission, DLL/KLIB, Runtime, and Common semantics remain unchanged.
+  The final strict aggregate completed in 1,860.0 seconds; direct audit covers
+  190 XML files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-physical-visibility-dispatch-2026-08-16.md`](docs/archive/generic-owner-physical-visibility-dispatch-2026-08-16.md).
+- The preceding foundation: generic-owner physical-family schema 9 now
   distinguishes logical member-family state paths from exact producer-private
   MethodDefs. A private typed identity read or write records no fictitious
   KLIB callable key, member role, or reflection entry; it must be private, live
@@ -96,7 +111,7 @@ verification, and work state.
   supplied. Same-compilation snapshots without a stable library key do not
   derive ABI from a display name. External override binding now resolves local
   path-unbound signatures through the decoded producer owner map before exact
-  MethodDef comparison; the hostile schema-9/C# physicalizer remains green.
+  MethodDef comparison; the hostile schema-10/C# physicalizer remains green.
   The focused PSI/LightTree x Framework 4.8/.NET 10 matrix covers eight tests
   with zero failures, errors, or skips. Production owners/emission, physical
   artifact format, DLL/KLIB, Runtime, and Common semantics remain unchanged.
@@ -1116,7 +1131,7 @@ known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
 
-The current schema-9 family also contains the compiler-proven typed-state
+The current schema-10 family also contains the compiler-proven typed-state
 control. Codec and reflection oracles require the private field plus exact read
 and write signatures to use the owner GenericParam, and require both exact
 state paths to be identity operations. Direct C# execution proves the explicit
@@ -2556,7 +2571,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    ambiguous omission. Version 8 records fixed zeroed SZ-array state
    initializers and their exact base-delegating constructor roots; initializer
    writes compose with ordinary typed state access instead of requiring a
-   fabricated setter. A compiler-derived external Kotlin subclass physicalizer now
+   fabricated setter. Version 9 separates logical member-family state paths
+   from exact producer-private MethodDefs without inventing KLIB/reflection
+   identity. Version 10 adds exact physical owner visibility/dispatch and
+   member-slot visibility, including protected semantic hooks and private/final
+   capability implementations. A compiler-derived external Kotlin subclass physicalizer now
    records its exact current-compilation owner, delegated producer base/
    constructor, typed/semantic overrides, fake-override declaration roots,
    modality/visibility, constraints, and role-specific direct-`super` targets

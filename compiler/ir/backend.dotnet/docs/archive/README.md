@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-visibility-dispatch-2026-08-16.md`](generic-owner-physical-visibility-dispatch-2026-08-16.md)
+  records schema 10's exact owner TypeDef and member MethodDef visibility/
+  dispatch envelope, semantic/capability visibility invariants, and the
+  remaining complete OctoTree family gate.
 - [`generic-owner-producer-private-state-access-2026-08-16.md`](generic-owner-producer-private-state-access-2026-08-16.md)
   records schema 9's strict separation between logical member bindings and
   exact producer-private state MethodDefs, the semantic-object access
