@@ -377,7 +377,7 @@ capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
 slot is inferred from the current erased artifact. A production-inert family
-artifact, now at schema 10, makes the first external link objective: it
+artifact, now at schema 11, makes the first external link objective: it
 fingerprints the exact temporary producer and records logical joins,
 owner/capability paths, arity, disposition, state requirements, complete
 roles/reasons, selected
@@ -446,7 +446,7 @@ initializer, nested type, state, or non-fake member. Inherited fake overrides
 remain inherited. The result drives only the hostile temporary C# oracle and
 does not change production emission.
 
-Runtime roots remain outside producer schema 10. A separate consumer-side
+Runtime roots remain outside producer schema 11. A separate consumer-side
 record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
 open unconstrained owner, capability, and public strict one-`!T` constructor.
 It normalizes an already-nullable value idempotently, returns the semantic
@@ -627,6 +627,16 @@ the grammar's logical classifier binds as a CLR class. The separate recursive
 OctoTree producer pins typed `Node<T>[]`, capability `System.Array`, missing-
 path rejection, and equality between the bound getter return and field. See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
+
+Schema 11 applies that rule to the complete four-owner OctoTree family. A
+producer-scoped type or MethodDef owner not present in the same artifact
+rejects the artifact atomically. `Branch.nodes` combines exact `Node<T>[]`
+storage with its fixed-vector constructor recipe; `Leaf.value` combines `!T`
+storage with the exact logical constructor and parameter index which initialize
+it. Explicit default null may be omitted only after the planner proves it is
+the CLR object-field default. This remains a production-inert architecture
+record and does not authorize a mixed owner ABI. See
+[`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

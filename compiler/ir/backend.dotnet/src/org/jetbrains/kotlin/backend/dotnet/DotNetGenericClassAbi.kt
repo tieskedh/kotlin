@@ -618,21 +618,34 @@ enum class DotNetGenericOwnerPhysicalStateVisibility {
 
 enum class DotNetGenericOwnerPhysicalStateInitializerKind {
     FIXED_ZEROED_SZ_ARRAY,
+    POSITIONAL_CONSTRUCTOR_PARAMETER,
 }
 
 /** Exact constructor roots which execute one producer-owned physical field initializer. */
 data class DotNetGenericOwnerPhysicalStateInitializerRecord(
     val kind: DotNetGenericOwnerPhysicalStateInitializerKind,
     val logicalConstructorKeys: List<String>,
-    val fixedElementCount: Int,
+    val fixedElementCount: Int?,
+    val constructorParameterIndex: Int?,
 ) {
     init {
         require(logicalConstructorKeys.isNotEmpty() && logicalConstructorKeys.all(String::isNotEmpty) &&
                 logicalConstructorKeys == logicalConstructorKeys.distinct().sorted()) {
             "a generic-owner physical state initializer requires sorted unique constructor roots"
         }
-        require(fixedElementCount >= 0) {
+        require((kind == DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY) ==
+                (fixedElementCount != null)) {
+            "only a fixed zeroed generic-owner physical state initializer has an element count"
+        }
+        require(fixedElementCount == null || fixedElementCount >= 0) {
             "a fixed zeroed generic-owner physical state initializer requires a non-negative element count"
+        }
+        require((kind == DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER) ==
+                (constructorParameterIndex != null)) {
+            "only a positional generic-owner physical state initializer has a parameter index"
+        }
+        require(constructorParameterIndex == null || constructorParameterIndex >= 0) {
+            "a positional generic-owner physical state initializer requires a non-negative parameter index"
         }
     }
 }
@@ -1211,6 +1224,12 @@ enum class DotNetGenericOwnerPrototypeStateInitializerKind {
     /** A fixed-length zeroed CLR vector whose element classifier retains the owner's parameter. */
     FIXED_ZEROED_SZ_ARRAY,
 
+    /** An explicit Kotlin `null` whose object-domain field already has the CLR default value. */
+    DEFAULT_NULL_REFERENCE,
+
+    /** A constructor parameter copied without conversion into owner-dependent state. */
+    POSITIONAL_CONSTRUCTOR_PARAMETER,
+
     /** The initializer is real but lies outside the currently admitted physical recipe grammar. */
     UNSUPPORTED,
 }
@@ -1219,6 +1238,8 @@ data class DotNetGenericOwnerPrototypeStateInitializerSnapshot(
     val producerName: String,
     val kind: DotNetGenericOwnerPrototypeStateInitializerKind,
     val fixedElementCount: Int?,
+    val constructorLogicalBindingKey: String?,
+    val constructorParameterIndex: Int?,
 ) {
     init {
         require(producerName.isNotEmpty()) { "a generic-owner state initializer requires a producer identity" }
@@ -1228,6 +1249,16 @@ data class DotNetGenericOwnerPrototypeStateInitializerSnapshot(
         }
         require(fixedElementCount == null || fixedElementCount >= 0) {
             "a fixed zeroed generic-owner vector initializer requires a non-negative element count"
+        }
+        require((kind == DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER) ==
+                (constructorLogicalBindingKey != null && constructorParameterIndex != null)) {
+            "only a positional generic-owner constructor initializer records a constructor and parameter index"
+        }
+        require(constructorLogicalBindingKey == null || constructorLogicalBindingKey.isNotEmpty()) {
+            "a positional generic-owner constructor initializer requires a non-empty constructor key"
+        }
+        require(constructorParameterIndex == null || constructorParameterIndex >= 0) {
+            "a positional generic-owner constructor initializer requires a non-negative parameter index"
         }
     }
 }
@@ -1915,8 +1946,10 @@ data class DotNetGenericOwnerPhysicalStateRecord(
                         accessPaths.all { access ->
                             access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
                                     access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
-                        } && (initializers.isEmpty() ||
-                        physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY)
+                        } && initializers.all { initializer ->
+                            initializer.kind != DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ||
+                                    physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY
+                        }
             ) {
                 "typed generic-owner state requires exact typed identity access and initialization paths"
             }
@@ -1995,7 +2028,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                     (0 until genericArity).toList() &&
                     constructor.constructedOwnerType.arguments.all { argument ->
                         argument.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER
-                    }
+            }
         }) {
             "generic-owner physical family '$logicalOwnerKey' has an invalid constructed owner"
         }
@@ -2085,11 +2118,25 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         val baseDelegatingConstructorKeys = constructors.filter { constructor ->
             constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
         }.map { constructor -> constructor.logicalConstructorKey }.sorted()
-        require(states.flatMap { state -> state.initializers }.all { initializer ->
-            initializer.logicalConstructorKeys == baseDelegatingConstructorKeys &&
-                    initializer.logicalConstructorKeys.all(constructorsByLogicalKey::containsKey)
+        require(states.all { state ->
+            state.initializers.all { initializer ->
+                initializer.logicalConstructorKeys.all(constructorsByLogicalKey::containsKey) &&
+                        when (initializer.kind) {
+                            DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ->
+                                initializer.logicalConstructorKeys == baseDelegatingConstructorKeys
+                            DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER -> {
+                                val parameterIndex = checkNotNull(initializer.constructorParameterIndex)
+                                initializer.logicalConstructorKeys.singleOrNull()?.let { logicalConstructorKey ->
+                                    logicalConstructorKey in baseDelegatingConstructorKeys &&
+                                            constructorsByLogicalKey.getValue(logicalConstructorKey)
+                                                .physicalConstructor.signature.parameterSlots
+                                                .getOrNull(parameterIndex)?.type == state.physicalType
+                                } == true
+                            }
+                        }
+            }
         }) {
-            "generic-owner physical state initialization requires every exact base-delegating constructor root"
+            "generic-owner physical state initialization disagrees with its constructor roots or state carrier"
         }
         require(members.none { member ->
             DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in member.roles
@@ -2256,6 +2303,66 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         }
         val constructorsByLogicalKey = constructors.associateBy { constructor -> constructor.logicalConstructorKey }
         val ownersByPhysicalPath = owners.associateBy { owner -> owner.physicalOwnerPath }
+        fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOnlyRecordedProducerTypes(): Boolean =
+            (scope != DotNetGenericOwnerPhysicalTypeScope.PRODUCER ||
+                    ownersByPhysicalPath[typePath]?.let { owner ->
+                        namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+                                genericArity == owner.genericArity
+                    } == true) && arguments.all { argument ->
+                argument.referencesOnlyRecordedProducerTypes()
+            }
+        val producerTypeRoots = owners.flatMap { owner ->
+            buildList {
+                addAll(owner.physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints })
+                owner.constructors.forEach { constructor ->
+                    add(constructor.constructedOwnerType)
+                    add(constructor.delegation.physicalOwnerType)
+                    addAll(constructor.physicalConstructor.signature.allTypes())
+                    addAll(constructor.delegation.signature.allTypes())
+                }
+                owner.members.forEach { member ->
+                    member.slots.forEach { slot ->
+                        addAll(slot.signature.allTypes())
+                        slot.capabilitySlot?.let { capability -> addAll(capability.signature.allTypes()) }
+                    }
+                    member.directSuperTargets.forEach { target -> addAll(target.signature.allTypes()) }
+                    member.defaultDispatcher?.let { dispatcher -> addAll(dispatcher.signature.allTypes()) }
+                }
+                owner.states.forEach { state ->
+                    add(state.physicalType)
+                    state.accessPaths.forEach { access -> addAll(access.physicalMethod.signature.allTypes()) }
+                }
+            }
+        }
+        require(producerTypeRoots.all { type -> type.referencesOnlyRecordedProducerTypes() }) {
+            "a generic-owner family artifact references an unrecorded producer TypeDef"
+        }
+        val recordedMethodOwnerPaths = buildSet {
+            addAll(ownersByPhysicalPath.keys)
+            addAll(capabilityPaths)
+        }
+        require(owners.all { owner ->
+            buildList {
+                owner.constructors.forEach { constructor -> add(constructor.physicalConstructor.physicalOwnerPath) }
+                owner.members.forEach { member ->
+                    member.slots.forEach { slot ->
+                        add(slot.physicalOwnerPath)
+                        slot.capabilitySlot?.let { capability -> add(capability.physicalOwnerPath) }
+                    }
+                    member.directSuperTargets.forEach { target -> add(target.physicalOwnerPath) }
+                    member.defaultDispatcher?.let { dispatcher -> add(dispatcher.physicalOwnerPath) }
+                }
+                owner.reflection.callables.forEach { callable ->
+                    add(callable.invocationMethod.physicalOwnerPath)
+                    callable.physicalMethods.forEach { method -> add(method.physicalOwnerPath) }
+                }
+                owner.states.forEach { state ->
+                    state.accessPaths.forEach { access -> add(access.physicalMethod.physicalOwnerPath) }
+                }
+            }.all { methodOwnerPath -> methodOwnerPath in recordedMethodOwnerPaths }
+        }) {
+            "a generic-owner family artifact references an unrecorded MethodDef owner"
+        }
         require(constructors.all { constructor ->
             val delegation = constructor.delegation
             val target = delegation.logicalConstructorKey?.let(constructorsByLogicalKey::get)
@@ -2457,7 +2564,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 10
+    const val SCHEMA_VERSION = 11
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2686,7 +2793,8 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         listOf(
                             "I",
                             initializer.kind.name,
-                            initializer.fixedElementCount.toString(),
+                            initializer.fixedElementCount?.toString() ?: "-",
+                            initializer.constructorParameterIndex?.toString() ?: "-",
                             initializer.logicalConstructorKeys.size.toString(),
                         ).joinToString("\t")
                     )
@@ -3062,9 +3170,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     ),
                     physicalType = stateFields[5].decoded().deserializedType(),
                     initializers = List(initializerCount) {
-                        val initializerFields = read("I", 4)
+                        val initializerFields = read("I", 5)
                         val logicalConstructorCount = count(
-                            initializerFields[3],
+                            initializerFields[4],
                             "state initializer constructor",
                         )
                         DotNetGenericOwnerPhysicalStateInitializerRecord(
@@ -3076,10 +3184,10 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             logicalConstructorKeys = List(logicalConstructorCount) {
                                 read("J", 2)[1].decoded()
                             },
-                            fixedElementCount = count(
-                                initializerFields[2],
-                                "state initializer fixed element",
-                            ),
+                            fixedElementCount = initializerFields[2].takeUnless { value -> value == "-" }
+                                ?.let { value -> count(value, "state initializer fixed element") },
+                            constructorParameterIndex = initializerFields[3].takeUnless { value -> value == "-" }
+                                ?.let { value -> count(value, "state initializer constructor parameter") },
                         )
                     },
                     accessPaths = List(accessCount) {
@@ -3661,6 +3769,8 @@ internal data class DotNetGenericOwnerStateInitializerPlan(
     val producerName: String,
     val kind: DotNetGenericOwnerPrototypeStateInitializerKind,
     val fixedElementCount: Int?,
+    val constructorLogicalBindingKey: String?,
+    val constructorParameterIndex: Int?,
 )
 
 internal data class DotNetGenericOwnerCallRoutePlan(
@@ -4192,12 +4302,26 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                                 exactTypedCarrierType?.kind == DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY
                     DotNetGenericOwnerPrototypeStateInitializerSnapshot(
                         producerName = initializer.producerName,
-                        kind = if (retainsExactFixedVector) {
-                            DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
-                        } else {
-                            DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED
+                        kind = when {
+                            retainsExactFixedVector ->
+                                DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+                            initializer.kind ==
+                                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE ->
+                                DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
+                            initializer.kind ==
+                                    DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER ->
+                                DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER
+                            else -> DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED
                         },
                         fixedElementCount = initializer.fixedElementCount.takeIf { retainsExactFixedVector },
+                        constructorLogicalBindingKey = initializer.constructorLogicalBindingKey.takeIf {
+                            initializer.kind ==
+                                    DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER
+                        },
+                        constructorParameterIndex = initializer.constructorParameterIndex.takeIf {
+                            initializer.kind ==
+                                    DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER
+                        },
                     )
                 },
                 writes = state.writes.map { write ->
