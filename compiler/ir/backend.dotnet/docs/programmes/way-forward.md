@@ -808,10 +808,14 @@ invariants before binding, and become physical records only after one complete
 TypeDef-path selection. The separate OctoTree `nodes` getter proves typed
 `Node<T>[]` and capability `System.Array`; its typed return binds identically to
 the field and rejects a missing Node path. Unknown classifiers and generic
-value classes remain unavailable. The next gate is the complete serialized
+value classes remain unavailable. The field now independently retains an exact
+fixed zeroed `Node<T>[8]` initializer recipe; ArrayCopy's unchecked object
+vector explicitly fails that grammar. The next gate is the complete serialized
 OctoTree physical family plus record-driven candidate and direct C# products.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
+The initializer proof is recorded in
+[`../archive/generic-owner-state-initializer-recipes-2026-08-16.md`](../archive/generic-owner-state-initializer-recipes-2026-08-16.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
