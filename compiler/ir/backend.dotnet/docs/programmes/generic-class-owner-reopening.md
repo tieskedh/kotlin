@@ -199,7 +199,7 @@ generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
 producer records the overridden logical key. A production-inert family
-artifact, now at schema 7, proves the cross-assembly link: it is fingerprinted
+artifact, now at schema 8, proves the cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
 slot-domain vectors, and structural signatures for that key. A dispatcher also
@@ -253,6 +253,14 @@ kept erased. `HostileNullableDerived<T>` is therefore present as a
 metadata-fixed exclusion with no physical family. Catalog/family mismatch,
 unknown declarations, and classified absence are distinct fail-closed cases;
 none authorizes consumer-side family reconstruction.
+
+Schema 8 adds a counted physical state-initializer block. A fixed zeroed
+owner-dependent SZ-array records its exact element count and every logical
+base-delegating constructor root which executes it. Initializer writes compose
+with typed identity member access to satisfy complete state READ/WRITE; no
+setter MethodDef is fabricated. Semantic-object state, non-vector storage,
+missing or `this`-delegating roots, and incomplete operation coverage reject
+the family.
 
 Open-nullable construction now has a bounded consumer-side record rather than
 new producer-schema claims. It accepts only finite concrete final-compilation
@@ -419,10 +427,12 @@ keys and bind atomically only after the complete producer TypeDef map exists.
 The separate OctoTree `nodes` getter proves typed `Node<T>[]`, capability
 `System.Array`, missing-path rejection, and exact equality with its bound field
 carrier. Same-compilation snapshots without a stable library key remain
-unavailable. Schema 7 still serializes only fully bound physical records. The
+unavailable. Schema 8 still serializes only fully bound physical records. The
 next product must publish the complete recursive family and build its paired
 candidate/C# consumers. See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
+The physical initializer record is described in
+[`../archive/generic-owner-physical-state-initializers-2026-08-16.md`](../archive/generic-owner-physical-state-initializers-2026-08-16.md).
 
 External-family binding consequently keeps logical and physical authority
 separate. It merges inherited producer slot domains, then compares exact

@@ -64,6 +64,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOpenTypeDef
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalReflectionRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateInitializerKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateInitializerRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessConversion
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateAccessDomain
@@ -490,6 +492,11 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
             logicalClassifierKey = logicalKey,
             arguments = listOf(DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)),
         )
+    }
+    check(branch.constructors.count { constructor -> !constructor.delegatesToThis } == 1 &&
+            branch.constructors.count { constructor -> constructor.delegatesToThis } == 1) {
+        "OctoTree.Branch must retain one exact base and one this-delegating constructor root: " +
+                branch.constructors
     }
     check(tree.states.single { state -> state.fieldName == "root" }.let { root ->
         root.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
@@ -1419,6 +1426,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                         -> error("The hostile physical family cannot publish unresolved state storage")
                     },
+                    initializers = emptyList(),
                     accessPaths = when (state.requirement) {
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
                             val writer = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
@@ -1973,6 +1981,89 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     }
     expectRejected("object storage for compiler-proven typed state") {
         typedState.copy(physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType())
+    }
+    val typedStateReadAccess = typedState.accessPaths.single { access ->
+        access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ
+    }
+    val typedVectorType = DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+    )
+    val typedVectorReadMethod = typedStateReadAccess.physicalMethod.copy(
+        signature = typedStateReadAccess.physicalMethod.signature.copy(
+            returnSlot = typedStateReadAccess.physicalMethod.signature.returnSlot.copy(type = typedVectorType),
+        ),
+    )
+    val typedVectorInitializer = DotNetGenericOwnerPhysicalStateInitializerRecord(
+        kind = DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY,
+        logicalConstructorKeys = listOf(typedStateOwner.constructors.single().logicalConstructorKey),
+        fixedElementCount = 8,
+    )
+    val initializedTypedVectorState = typedState.copy(
+        physicalType = typedVectorType,
+        initializers = listOf(typedVectorInitializer),
+        accessPaths = listOf(typedStateReadAccess.copy(physicalMethod = typedVectorReadMethod)),
+    )
+    val initializedTypedVectorOwner = typedStateOwner.copy(
+        members = typedStateOwner.members.map { member ->
+            if (member.logicalMemberKey != typedStateReadAccess.logicalMemberKey) member else member.copy(
+                slots = member.slots.map { slot ->
+                    if (slot.role != typedStateReadAccess.role) slot else slot.copy(
+                        signature = typedVectorReadMethod.signature,
+                    )
+                },
+            )
+        },
+        reflection = typedStateOwner.reflection.copy(
+            callables = typedStateOwner.reflection.callables.map { callable ->
+                if (callable.logicalMemberKey != typedStateReadAccess.logicalMemberKey) callable else callable.copy(
+                    invocationMethod = typedVectorReadMethod,
+                    physicalMethods = callable.physicalMethods.map { method ->
+                        if (method != typedStateReadAccess.physicalMethod) method else typedVectorReadMethod
+                    },
+                )
+            },
+        ),
+        states = listOf(initializedTypedVectorState),
+    )
+    val initializedTypedVectorArtifact = artifact.copy(
+        owners = artifact.owners.map { owner ->
+            if (owner != typedStateOwner) owner else initializedTypedVectorOwner
+        },
+    )
+    val initializedTypedVectorEncoded = DotNetGenericOwnerPhysicalFamilyCodec.encode(
+        initializedTypedVectorArtifact,
+    )
+    val initializedTypedVectorDecoded = DotNetGenericOwnerPhysicalFamilyCodec.decode(
+        initializedTypedVectorEncoded,
+        artifact.producerFingerprint,
+        artifact.targetProfile,
+    )
+    check(DotNetGenericOwnerPhysicalFamilyCodec.encode(initializedTypedVectorDecoded) ==
+            initializedTypedVectorEncoded &&
+            initializedTypedVectorDecoded.requirePhysicalFamily(typedStateOwner.logicalOwnerKey)
+                .states.single().initializers.single() == typedVectorInitializer) {
+        "The schema-8 physical family lost its constructor-rooted typed vector initializer"
+    }
+    expectRejected("a typed vector initializer without an exact read path") {
+        initializedTypedVectorState.copy(accessPaths = emptyList())
+    }
+    expectRejected("two physical initializer recipes for one state") {
+        initializedTypedVectorState.copy(initializers = listOf(typedVectorInitializer, typedVectorInitializer))
+    }
+    expectRejected("a typed initializer on non-vector storage") {
+        typedState.copy(initializers = listOf(typedVectorInitializer))
+    }
+    expectRejected("a physical initializer with a missing constructor root") {
+        initializedTypedVectorOwner.copy(
+            states = listOf(initializedTypedVectorState.copy(
+                initializers = listOf(typedVectorInitializer.copy(
+                    logicalConstructorKeys = listOf("missing-constructor-root"),
+                )),
+            )),
+        )
+    }
+    expectRejected("a negative fixed vector initializer length") {
+        typedVectorInitializer.copy(fixedElementCount = -1)
     }
     val echo = artifact.owners.first().members.single { candidate ->
         candidate.roles == setOf(

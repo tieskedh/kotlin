@@ -14,6 +14,13 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-state-initializers-2026-08-16.md`](generic-owner-physical-state-initializers-2026-08-16.md)
+  records schema 8's fixed zeroed SZ-array initializer, exact constructor
+  roots, typed state access/init composition, canonical codec evidence, and
+  the remaining complete OctoTree product gate.
+- [`generic-owner-state-initializer-recipes-2026-08-16.md`](generic-owner-state-initializer-recipes-2026-08-16.md)
+  records compiler-derived fixed-vector recipes, separate-producer carrier
+  binding, and the opposing unchecked ArrayCopy fail-closed oracle.
 - [`generic-owner-path-unbound-member-signatures-2026-08-16.md`](generic-owner-path-unbound-member-signatures-2026-08-16.md)
   records the shared state/callable prototype type tree, atomic logical-key to
   TypeDef binding, recursive OctoTree getter evidence, and the remaining full

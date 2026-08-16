@@ -27,7 +27,25 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: explicit generic-owner field initializers now
+- Last completed foundation: generic-owner physical-family schema 8 now
+  serializes a bounded fixed zeroed SZ-array state initializer with its exact
+  non-negative element count and sorted base-delegating logical constructor
+  roots. Member access and initialization paths jointly cover typed state READ
+  and WRITE, so `Branch.nodes` will not need a fictitious setter MethodDef.
+  Initializers require exact owner-dependent SZ-array storage; semantic-object
+  state, missing or `this`-delegating constructor roots, incomplete access,
+  duplicate recipes, and stale schema 7 fail closed. A fully validated
+  synthetic `T[]` family updates its read MethodDef/reflection record, replaces
+  its ordinary write path with an eight-element initializer, and round-trips
+  canonical schema-8 bytes. The unchanged OctoTree graph independently pins
+  one base and one `this` constructor edge. The focused PSI/LightTree x
+  Framework 4.8/.NET 10 matrix covers 16 tests with zero failures, errors, or
+  skips. Production owners/emission, DLL/KLIB, Runtime, and Common semantics
+  remain unchanged. The final strict aggregate completed in 1,895.4 seconds;
+  direct audit covers 190 XML files and 2,238 tests with zero failures, errors,
+  or skips. See
+  [`docs/archive/generic-owner-physical-state-initializers-2026-08-16.md`](docs/archive/generic-owner-physical-state-initializers-2026-08-16.md).
+- The preceding foundation: explicit generic-owner field initializers now
   retain a bounded compiler-derived physical recipe instead of being reduced
   to write provenance. A fixed `arrayOfNulls` vector is admitted only when its
   invariant element is a local Kotlin generic classifier retaining the current
@@ -60,7 +78,7 @@ verification, and work state.
   supplied. Same-compilation snapshots without a stable library key do not
   derive ABI from a display name. External override binding now resolves local
   path-unbound signatures through the decoded producer owner map before exact
-  MethodDef comparison; the hostile schema-7/C# physicalizer remains green.
+  MethodDef comparison; the hostile schema-8/C# physicalizer remains green.
   The focused PSI/LightTree x Framework 4.8/.NET 10 matrix covers eight tests
   with zero failures, errors, or skips. Production owners/emission, physical
   artifact format, DLL/KLIB, Runtime, and Common semantics remain unchanged.
@@ -1080,7 +1098,7 @@ known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
 
-The current schema-7 family also contains the compiler-proven typed-state
+The current schema-8 family also contains the compiler-proven typed-state
 control. Codec and reflection oracles require the private field plus exact read
 and write signatures to use the owner GenericParam, and require both exact
 state paths to be identity operations. Direct C# execution proves the explicit
@@ -2517,7 +2535,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    constraints. Version 7 records the complete producer candidate catalog;
    optional physical families must join it exactly, and metadata-fixed
    `D<T> : C<T?>` remains a serialized erased-only exclusion rather than an
-   ambiguous omission. A compiler-derived external Kotlin subclass physicalizer now
+   ambiguous omission. Version 8 records fixed zeroed SZ-array state
+   initializers and their exact base-delegating constructor roots; initializer
+   writes compose with ordinary typed state access instead of requiring a
+   fabricated setter. A compiler-derived external Kotlin subclass physicalizer now
    records its exact current-compilation owner, delegated producer base/
    constructor, typed/semantic overrides, fake-override declaration roots,
    modality/visibility, constraints, and role-specific direct-`super` targets
