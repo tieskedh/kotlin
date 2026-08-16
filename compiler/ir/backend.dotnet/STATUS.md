@@ -27,7 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner physical-family schema 10 now
+- Last completed foundation: generic-owner physical-family schema 11 now
+  binds the complete logical-keyed recursive OctoTree family as one atomic
+  producer graph. Its four owner TypeDefs, MethodDefs, GenericParams,
+  constructors, member roles, state, initialization, capabilities, and
+  reflection records must close over the same recorded physical owners.
+  `root` remains private object state with hidden producer-private access,
+  `Branch.nodes` is exact `Node<T>[]` with its fixed eight-element initializer,
+  and `Leaf.value` is true `!T` state initialized from its exact logical
+  constructor parameter. A proven explicit null is normalized to the CLR
+  object-field default; unsupported initializers, phantom producer TypeDefs/
+  MethodDef owners, missing recursive owners, and constructor/state carrier
+  mismatches fail closed. Canonical schema-11 bytes and diagnostic-label
+  invariance are pinned in the separate producer. The focused hostile-plus-
+  OctoTree PSI/LightTree x Framework 4.8/.NET 10 same/separate-compilation
+  matrix covers 16 tests with zero failures, errors, or skips. Production
+  owners/emission, DLL/KLIB, Runtime, Common semantics, and the public C#
+  surface remain unchanged. The final strict aggregate completed in 1,879.0
+  seconds; direct audit covers 190 XML files and 2,238 tests with zero
+  failures, errors, or skips. See
+  [`docs/archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](docs/archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
+- The preceding foundation: generic-owner physical-family schema 10 now
   serializes the compiler-derived physical visibility and dispatch of every
   owner TypeDef and the exact visibility of every member MethodDef slot. A
   decoded producer no longer needs compiler-local prototypes to distinguish
@@ -1131,7 +1151,7 @@ known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
 
-The current schema-10 family also contains the compiler-proven typed-state
+The current schema-11 family also contains the compiler-proven typed-state
 control. Codec and reflection oracles require the private field plus exact read
 and write signatures to use the owner GenericParam, and require both exact
 state paths to be identity operations. Direct C# execution proves the explicit
@@ -2575,7 +2595,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    from exact producer-private MethodDefs without inventing KLIB/reflection
    identity. Version 10 adds exact physical owner visibility/dispatch and
    member-slot visibility, including protected semantic hooks and private/final
-   capability implementations. A compiler-derived external Kotlin subclass physicalizer now
+   capability implementations. Version 11 adds positionally exact constructor-
+   parameter state initialization. The complete logical-keyed OctoTree family
+   now atomically records its four TypeDefs, recursive types, constructors,
+   MethodDefs, state, initialization, and reflection graph; producer type and
+   MethodDef references to missing physical owners reject the whole artifact.
+   A compiler-derived external Kotlin subclass physicalizer now
    records its exact current-compilation owner, delegated producer base/
    constructor, typed/semantic overrides, fake-override declaration roots,
    modality/visibility, constraints, and role-specific direct-`super` targets
@@ -2605,9 +2630,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    artifact no longer claims `!T[]`. State and callable signatures now share
    one path-unbound logical-classifier grammar, and the separate OctoTree
    `nodes` getter binds typed `Node<T>[]` only after the Node TypeDef path is
-   selected. Next, serialize/bind the complete OctoTree physical family and
-   build its
-   record-driven candidate plus direct C# consumer/subclass products. Include
+   selected. The complete schema-11 OctoTree physical family now binds that
+   recursive graph plus exact `Leaf.value: !T` constructor initialization.
+   Next, build its record-driven candidate plus direct C# consumer/subclass
+   products from the decoded artifact. Include
    actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
