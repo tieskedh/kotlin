@@ -1264,6 +1264,13 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     val isCapability = role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
                     DotNetGenericOwnerPhysicalMemberSlotRecord(
                         role = role,
+                        visibility = when (role) {
+                            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY -> member.physicalVisibility
+                            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK ->
+                                DotNetGenericOwnerPhysicalMemberVisibility.FAMILY
+                            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER ->
+                                DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE
+                        },
                         physicalOwnerPath = if (isCapability) baseOwnerPath else ownerPath,
                         physicalMethodName = if (isCapability) {
                             "${capabilityOwnerPath.joinToString(".")}.$methodName"
@@ -1338,6 +1345,8 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             },
             physicalOwnerPath = ownerPath,
             physicalCapabilityOwnerPath = capabilityOwnerPath,
+            physicalVisibility = prototype.physicalVisibility,
+            physicalDispatch = prototype.physicalDispatch,
             genericArity = prototype.genericArity,
             physicalGenericParameters = checkNotNull(prototype.physicalGenericParameters) {
                 "The hostile physical family requires exact GenericParam constraints"
@@ -1659,6 +1668,18 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                 )
             )
         })
+    }
+    val semanticSlot = member.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+    }
+    val capabilityDispatcherSlot = member.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }
+    expectRejected("a non-protected semantic hook") {
+        semanticSlot.copy(visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC)
+    }
+    expectRejected("a non-private capability dispatcher") {
+        capabilityDispatcherSlot.copy(visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC)
     }
     expectRejected("an unsorted duplicate override-root family") {
         member.copy(overrideRootLogicalMemberKeys = listOf(member.logicalMemberKey, member.logicalMemberKey))
@@ -2124,7 +2145,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             initializedTypedVectorEncoded &&
             initializedTypedVectorDecoded.requirePhysicalFamily(typedStateOwner.logicalOwnerKey)
                 .states.single().initializers.single() == typedVectorInitializer) {
-        "The schema-9 physical family lost its constructor-rooted typed vector initializer"
+        "The schema-10 physical family lost its constructor-rooted typed vector initializer"
     }
     expectRejected("a typed vector initializer without an exact read path") {
         initializedTypedVectorState.copy(accessPaths = emptyList())
