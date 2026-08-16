@@ -377,7 +377,7 @@ capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
 slot is inferred from the current erased artifact. A production-inert family
-artifact, now at schema 8, makes the first external link objective: it
+artifact, now at schema 9, makes the first external link objective: it
 fingerprints the exact temporary producer and records logical joins,
 owner/capability paths, arity, disposition, state requirements, complete
 roles/reasons, selected
@@ -419,6 +419,13 @@ Schema 8 adds fixed zeroed SZ-array state initializers with exact element
 counts and base-delegating constructor roots. Their writes compose with typed
 identity member access; no missing setter is inferred or generated merely to
 satisfy the state record.
+Schema 9 separates those logical member-family paths from producer-private
+physical state methods. A private path carries no KLIB callable identity,
+member role, or reflection entry; it must be a private typed identity method
+on the same physical TypeDef and must not collide with a logical member
+MethodDef. Object storage may use exactly such a private READ/WRITE pair only
+when no semantic path or conversion exists. Any semantic crossing retains the
+complete paired typed/semantic matrix.
 The bounded external Kotlin-subclass physicalizer now joins compiler-derived
 child visibility, modality, exact admitted constructor
 signature, fake-override roots, and direct `super`
@@ -434,7 +441,7 @@ initializer, nested type, state, or non-fake member. Inherited fake overrides
 remain inherited. The result drives only the hostile temporary C# oracle and
 does not change production emission.
 
-Runtime roots remain outside producer schema 8. A separate consumer-side
+Runtime roots remain outside producer schema 9. A separate consumer-side
 record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
 open unconstrained owner, capability, and public strict one-`!T` constructor.
 It normalizes an already-nullable value idempotently, returns the semantic

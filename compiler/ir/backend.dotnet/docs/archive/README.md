@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-producer-private-state-access-2026-08-16.md`](generic-owner-producer-private-state-access-2026-08-16.md)
+  records schema 9's strict separation between logical member bindings and
+  exact producer-private state MethodDefs, the semantic-object access
+  invariant, canonical codec evidence, and the remaining complete OctoTree
+  product gate.
 - [`generic-owner-physical-state-initializers-2026-08-16.md`](generic-owner-physical-state-initializers-2026-08-16.md)
   records schema 8's fixed zeroed SZ-array initializer, exact constructor
   roots, typed state access/init composition, canonical codec evidence, and

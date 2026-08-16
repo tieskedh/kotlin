@@ -810,10 +810,13 @@ TypeDef-path selection. The separate OctoTree `nodes` getter proves typed
 the field and rejects a missing Node path. Unknown classifiers and generic
 value classes remain unavailable. The field now independently retains an exact
 fixed zeroed `Node<T>[8]` initializer recipe; ArrayCopy's unchecked object
-vector explicitly fails that grammar. Physical-family schema 8 now serializes
+vector explicitly fails that grammar. Physical-family schema 8 serializes
 that bounded recipe with its exact base-delegating constructor roots and lets
 it satisfy typed state's WRITE obligation without a fictitious setter. The
-next gate is the complete serialized
+Schema 9 additionally represents exact producer-private typed identity state
+methods without inventing a logical KLIB callable or reflection member, while
+retaining the complete paired matrix whenever a semantic path or conversion
+exists. The next gate is the complete serialized
 OctoTree physical family plus record-driven candidate and direct C# products.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
@@ -821,6 +824,8 @@ The initializer proof is recorded in
 [`../archive/generic-owner-state-initializer-recipes-2026-08-16.md`](../archive/generic-owner-state-initializer-recipes-2026-08-16.md).
 Schema 8 is recorded in
 [`../archive/generic-owner-physical-state-initializers-2026-08-16.md`](../archive/generic-owner-physical-state-initializers-2026-08-16.md).
+Schema 9 is recorded in
+[`../archive/generic-owner-producer-private-state-access-2026-08-16.md`](../archive/generic-owner-producer-private-state-access-2026-08-16.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

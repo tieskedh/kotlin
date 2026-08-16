@@ -606,6 +606,12 @@ enum class DotNetGenericOwnerPhysicalStateAccessConversion {
     STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX,
 }
 
+/** Authority which gives one physical state-access MethodDef its identity. */
+enum class DotNetGenericOwnerPhysicalStateAccessBindingKind {
+    LOGICAL_MEMBER_FAMILY,
+    PRODUCER_PRIVATE_METHOD,
+}
+
 enum class DotNetGenericOwnerPhysicalStateVisibility {
     PRIVATE,
 }
@@ -631,21 +637,39 @@ data class DotNetGenericOwnerPhysicalStateInitializerRecord(
     }
 }
 
-/** One exact member-family path which reads or writes a producer-owned physical field. */
+/** One exact path which reads or writes a producer-owned physical field. */
 data class DotNetGenericOwnerPhysicalStateAccessRecord(
     val domain: DotNetGenericOwnerPhysicalStateAccessDomain,
     val operation: DotNetGenericOwnerPhysicalStateAccessOperation,
     val conversion: DotNetGenericOwnerPhysicalStateAccessConversion,
-    val logicalMemberKey: String,
-    val role: DotNetGenericOwnerMemberFamilyRole,
+    val bindingKind: DotNetGenericOwnerPhysicalStateAccessBindingKind,
+    val logicalMemberKey: String?,
+    val role: DotNetGenericOwnerMemberFamilyRole?,
+    val physicalVisibility: DotNetGenericOwnerPhysicalMemberVisibility?,
     val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
 ) {
     init {
-        require(logicalMemberKey.isNotEmpty()) { "a generic-owner state access requires a logical member key" }
-        require(role == when (domain) {
-            DotNetGenericOwnerPhysicalStateAccessDomain.TYPED -> DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
-            DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC -> DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
-        }) { "a generic-owner state access domain disagrees with its member-family role" }
+        when (bindingKind) {
+            DotNetGenericOwnerPhysicalStateAccessBindingKind.LOGICAL_MEMBER_FAMILY -> {
+                require(!logicalMemberKey.isNullOrEmpty() && physicalVisibility == null) {
+                    "a logical generic-owner state access requires only its logical member key"
+                }
+                require(role == when (domain) {
+                    DotNetGenericOwnerPhysicalStateAccessDomain.TYPED ->
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                    DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC ->
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+                }) { "a generic-owner state access domain disagrees with its member-family role" }
+            }
+            DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD -> require(
+                logicalMemberKey == null && role == null &&
+                        physicalVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                        domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                        conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+            ) {
+                "a producer-private generic-owner state access requires a private typed identity MethodDef"
+            }
+        }
         require(physicalMethod.signature.isInstance) {
             "a generic-owner state access requires an instance MethodDef"
         }
@@ -1858,12 +1882,23 @@ data class DotNetGenericOwnerPhysicalStateRecord(
                     "semantic-object generic-owner state requires object storage"
                 }
                 val pathsByOperation = accessPaths.groupBy { access -> access.operation }
+                val crossesSemanticBoundary = accessPaths.any { access ->
+                    access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC ||
+                            access.conversion != DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+                }
                 require(pathsByOperation.keys == DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
-                        pathsByOperation.values.all { operationPaths ->
-                            operationPaths.map { access -> access.domain }.toSet() ==
-                                    DotNetGenericOwnerPhysicalStateAccessDomain.entries.toSet()
+                        if (crossesSemanticBoundary) {
+                            pathsByOperation.values.all { operationPaths ->
+                                operationPaths.map { access -> access.domain }.toSet() ==
+                                        DotNetGenericOwnerPhysicalStateAccessDomain.entries.toSet()
+                            }
+                        } else {
+                            accessPaths.all { access ->
+                                access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                                        access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+                            }
                         }) {
-                    "semantic-object generic-owner state requires paired typed and semantic reads and writes"
+                    "semantic-object generic-owner state requires complete identity access or paired semantic bridges"
                 }
             }
             DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> require(
@@ -1965,7 +2000,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         require(members.map { member -> member.logicalMemberKey }.toSet().size == members.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical members"
         }
-        val physicalMethodDefinitions = members.flatMap { member ->
+        val memberPhysicalMethodDefinitions = members.flatMap { member ->
             buildList {
                 member.slots.forEach { slot ->
                     add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
@@ -1984,6 +2019,10 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                 }
             }
         }
+        val producerPrivateStateMethods = states.flatMap { state -> state.accessPaths }.filter { access ->
+            access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD
+        }.map { access -> access.physicalMethod }
+        val physicalMethodDefinitions = memberPhysicalMethodDefinitions + producerPrivateStateMethods
         require(physicalMethodDefinitions.toSet().size == physicalMethodDefinitions.size) {
             "generic-owner physical family '$logicalOwnerKey' has colliding physical MethodDefs"
         }
@@ -2058,6 +2097,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                 member.directSuperTargets.forEach { target -> add(target.physicalOwnerPath to target.signature) }
                 member.defaultDispatcher?.let { dispatcher -> add(dispatcher.physicalOwnerPath to dispatcher.signature) }
             }
+            producerPrivateStateMethods.forEach { method -> add(method.physicalOwnerPath to method.signature) }
         }
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
                 states.map { state -> state.physicalType } +
@@ -2077,13 +2117,20 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }
         val memberSlots = members.associate { member -> member.logicalMemberKey to member.slots.associateBy { it.role } }
         require(states.flatMap { state -> state.accessPaths }.all { access ->
-            memberSlots[access.logicalMemberKey]?.get(access.role)?.let { slot ->
-                slot.physicalOwnerPath == access.physicalMethod.physicalOwnerPath &&
-                        slot.physicalMethodName == access.physicalMethod.physicalMethodName &&
-                        slot.signature == access.physicalMethod.signature
-            } == true
+            when (access.bindingKind) {
+                DotNetGenericOwnerPhysicalStateAccessBindingKind.LOGICAL_MEMBER_FAMILY ->
+                    memberSlots[access.logicalMemberKey]?.get(access.role)?.let { slot ->
+                        slot.physicalOwnerPath == access.physicalMethod.physicalOwnerPath &&
+                                slot.physicalMethodName == access.physicalMethod.physicalMethodName &&
+                                slot.signature == access.physicalMethod.signature
+                    } == true
+                DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD ->
+                    access.physicalVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                            access.physicalMethod.physicalOwnerPath == physicalOwnerPath &&
+                            access.physicalMethod !in memberPhysicalMethodDefinitions
+            }
         }) {
-            "generic-owner physical family '$logicalOwnerKey' has a state access outside its member slots"
+            "generic-owner physical family '$logicalOwnerKey' has an invalid state-access binding"
         }
         require((constructors.flatMap { constructor ->
             constructor.physicalConstructor.signature.allTypes() + constructor.delegation.signature.allTypes() + listOf(
@@ -2402,7 +2449,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 8
+    const val SCHEMA_VERSION = 9
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2636,15 +2683,19 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         appendLine("J\t${logicalConstructorKey.encoded()}")
                     }
                 }
-                state.accessPaths.sortedWith(compareBy({ it.domain.name }, { it.operation.name })).forEach { access ->
+                state.accessPaths.sortedWith(
+                    compareBy({ it.domain.name }, { it.operation.name }, { it.bindingKind.name })
+                ).forEach { access ->
                     appendLine(
                         listOf(
                             "X",
                             access.domain.name,
                             access.operation.name,
                             access.conversion.name,
-                            access.logicalMemberKey.encoded(),
-                            access.role.name,
+                            access.bindingKind.name,
+                            access.logicalMemberKey?.encoded() ?: "-",
+                            access.role?.name ?: "-",
+                            access.physicalVisibility?.name ?: "-",
                             access.physicalMethod.physicalOwnerPath.joinToString("\u0000").encoded(),
                             access.physicalMethod.physicalMethodName.encoded(),
                             access.physicalMethod.signature.serialized().encoded(),
@@ -3006,7 +3057,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         )
                     },
                     accessPaths = List(accessCount) {
-                        val accessFields = read("X", 9)
+                        val accessFields = read("X", 11)
                         DotNetGenericOwnerPhysicalStateAccessRecord(
                             domain = enumValue(
                                 accessFields[1],
@@ -3023,16 +3074,30 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                                 DotNetGenericOwnerPhysicalStateAccessConversion.entries.toTypedArray(),
                                 "state access conversion",
                             ),
-                            logicalMemberKey = accessFields[4].decoded(),
-                            role = enumValue(
-                                accessFields[5],
-                                DotNetGenericOwnerMemberFamilyRole.entries.toTypedArray(),
-                                "state access member role",
+                            bindingKind = enumValue(
+                                accessFields[4],
+                                DotNetGenericOwnerPhysicalStateAccessBindingKind.entries.toTypedArray(),
+                                "state access binding kind",
                             ),
+                            logicalMemberKey = accessFields[5].takeUnless { it == "-" }?.decoded(),
+                            role = accessFields[6].takeUnless { it == "-" }?.let { role ->
+                                enumValue(
+                                    role,
+                                    DotNetGenericOwnerMemberFamilyRole.entries.toTypedArray(),
+                                    "state access member role",
+                                )
+                            },
+                            physicalVisibility = accessFields[7].takeUnless { it == "-" }?.let { visibility ->
+                                enumValue(
+                                    visibility,
+                                    DotNetGenericOwnerPhysicalMemberVisibility.entries.toTypedArray(),
+                                    "state access physical visibility",
+                                )
+                            },
                             physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
-                                physicalOwnerPath = accessFields[6].decoded().split('\u0000'),
-                                physicalMethodName = accessFields[7].decoded(),
-                                signature = accessFields[8].decoded().deserializedSignature(),
+                                physicalOwnerPath = accessFields[8].decoded().split('\u0000'),
+                                physicalMethodName = accessFields[9].decoded(),
+                                signature = accessFields[10].decoded().deserializedSignature(),
                             ),
                         )
                     },

@@ -27,7 +27,25 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner physical-family schema 8 now
+- Last completed foundation: generic-owner physical-family schema 9 now
+  distinguishes logical member-family state paths from exact producer-private
+  MethodDefs. A private typed identity read or write records no fictitious
+  KLIB callable key, member role, or reflection entry; it must be private, live
+  on the same physical TypeDef, obey the complete carrier/GenericParam grammar,
+  and not collide with any logical member MethodDef. Semantic-object state may
+  use exactly paired private typed identity READ/WRITE paths, but the presence
+  of any semantic path or boundary conversion still requires the complete
+  paired typed/semantic READ and WRITE matrix. The schema-9 codec retains the
+  binding kind, nullable logical identity, and exact private visibility and
+  rejects stale schema 8. Positive round-trip/reflection evidence plus five
+  opposing malformed families pin the boundary. The focused PSI/LightTree x
+  Framework 4.8/.NET 10 same/separate-compilation matrix covers 16 tests with
+  zero failures, errors, or skips. Production owners/emission, DLL/KLIB,
+  Runtime, and Common semantics remain unchanged. The final strict aggregate
+  completed in 1,835.0 seconds; direct audit covers 190 XML files and 2,238
+  tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-producer-private-state-access-2026-08-16.md`](docs/archive/generic-owner-producer-private-state-access-2026-08-16.md).
+- The preceding foundation: generic-owner physical-family schema 8 now
   serializes a bounded fixed zeroed SZ-array state initializer with its exact
   non-negative element count and sorted base-delegating logical constructor
   roots. Member access and initialization paths jointly cover typed state READ
@@ -78,7 +96,7 @@ verification, and work state.
   supplied. Same-compilation snapshots without a stable library key do not
   derive ABI from a display name. External override binding now resolves local
   path-unbound signatures through the decoded producer owner map before exact
-  MethodDef comparison; the hostile schema-8/C# physicalizer remains green.
+  MethodDef comparison; the hostile schema-9/C# physicalizer remains green.
   The focused PSI/LightTree x Framework 4.8/.NET 10 matrix covers eight tests
   with zero failures, errors, or skips. Production owners/emission, physical
   artifact format, DLL/KLIB, Runtime, and Common semantics remain unchanged.
@@ -1098,7 +1116,7 @@ known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
 
-The current schema-8 family also contains the compiler-proven typed-state
+The current schema-9 family also contains the compiler-proven typed-state
 control. Codec and reflection oracles require the private field plus exact read
 and write signatures to use the owner GenericParam, and require both exact
 state paths to be identity operations. Direct C# execution proves the explicit
