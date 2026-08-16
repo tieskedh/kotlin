@@ -27,7 +27,28 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: future CLR-generic owner MethodDef evidence no
+- Last completed foundation: generic-owner state and callable evidence now use
+  one path-unbound prototype type tree. Constructors, members, and masked-
+  default helper tails retain owner/method GenericParams, exact arrays,
+  explicit `System.Array` fallbacks, and invariant Kotlin-owned generic
+  classifiers by pre-lowering logical key. A complete signature binds
+  atomically only after the artifact selects every referenced TypeDef path;
+  missing paths, unsupported classifiers/projections, invalid method-parameter
+  indices, and generic value classes fail closed. In the separately compiled
+  recursive OctoTree producer, the `nodes` getter records typed `Node<T>[]` and
+  capability `System.Array`; its typed return rejects an empty path map and
+  binds exactly to the field's structural carrier once the Node path is
+  supplied. Same-compilation snapshots without a stable library key do not
+  derive ABI from a display name. External override binding now resolves local
+  path-unbound signatures through the decoded producer owner map before exact
+  MethodDef comparison; the hostile schema-7/C# physicalizer remains green.
+  The focused PSI/LightTree x Framework 4.8/.NET 10 matrix covers eight tests
+  with zero failures, errors, or skips. Production owners/emission, physical
+  artifact format, DLL/KLIB, Runtime, and Common semantics remain unchanged.
+  The final strict aggregate completed in 1,913.7 seconds; direct audit covers
+  190 XML files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](docs/archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
+- The preceding foundation: future CLR-generic owner MethodDef evidence no
   longer claims one exact vector/GenericParam carrier where Kotlin permits
   several physical substitutions. An unconstrained open nullable `T?` input
   or output uses `object`: it can carry both a nullable reference and CLR's
@@ -2504,9 +2525,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    logical producer key, while rejecting `Array<T?>` as an exact CLR `T[]`.
    Open-nullable MethodDef positions now use `object`, and open-nullable or
    projected array positions use `System.Array`; the hostile projected echo
-   artifact no longer claims `!T[]`. Next, extend the path-unbound grammar to
-   constructed member signatures, serialize/bind the complete OctoTree
-   physical family, and build its
+   artifact no longer claims `!T[]`. State and callable signatures now share
+   one path-unbound logical-classifier grammar, and the separate OctoTree
+   `nodes` getter binds typed `Node<T>[]` only after the Node TypeDef path is
+   selected. Next, serialize/bind the complete OctoTree physical family and
+   build its
    record-driven candidate plus direct C# consumer/subclass products. Include
    actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak

@@ -599,6 +599,19 @@ the exact local owner-classifier allocation without treating a bounded direct
 broader distribution evidence, not production `C<T>` admission. See
 [`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
 
+State and callable prototypes must use one path-unbound classifier grammar.
+A Kotlin-owned constructed type is identified by its pre-lowering logical key,
+never a source/display name, until a complete physical-family builder selects
+its TypeDef path. Constructor, member, and default-helper signatures bind that
+tree atomically into the existing physical signature record. Non-exact
+semantic roles may widen only after the complete bounded classifier shape has
+been validated; an unknown `Foreign<T>` must not become `object` merely because
+it mentions the owner parameter. Generic value classes remain excluded while
+the grammar's logical classifier binds as a CLR class. The separate recursive
+OctoTree producer pins typed `Node<T>[]`, capability `System.Array`, missing-
+path rejection, and equality between the bound getter return and field. See
+[`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

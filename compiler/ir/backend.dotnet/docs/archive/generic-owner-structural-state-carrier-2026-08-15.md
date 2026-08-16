@@ -16,8 +16,9 @@ their fields are still emitted by the accepted erased ABI.
 
 ## Bounded type grammar
 
-`DotNetGenericOwnerPrototypeStateTypeSnapshot` is a path-unbound tree with the
-following admitted leaves and constructors:
+The state-only tree introduced here is now generalized as
+`DotNetGenericOwnerPrototypeTypeSnapshot`; its state subset has the following
+admitted leaves and constructors:
 
 | Logical carrier | Snapshot node |
 | --- | --- |

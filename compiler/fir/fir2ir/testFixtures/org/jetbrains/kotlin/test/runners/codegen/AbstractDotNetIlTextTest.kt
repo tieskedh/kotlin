@@ -79,7 +79,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRe
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateTypeSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerRuntimeClassificationMode
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionCallableExposure
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionCapabilityExposure
@@ -459,19 +460,16 @@ private fun validateGenericOwnerOpenNullableArraySignaturePrototype(
     val owner = prototypes.singleOrNull { prototype ->
         prototype.ownerName.endsWith("GenericNullableArrayCopier")
     } ?: return
-    val systemArray = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
-        typePath = listOf("System", "Array"),
-        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-    )
+    val systemArray = DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
     check(owner.constructors.single().let { constructor ->
         constructor.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT) &&
-                constructor.exactPhysicalSignature?.parameterSlots?.singleOrNull()?.type == systemArray
+                constructor.exactPathUnboundSignature?.parameterSlots?.singleOrNull()?.type == systemArray
     }) {
         "GenericNullableArrayCopier(Array<T?>) must not publish an open CLR T[] constructor: $owner"
     }
     val shiftRight = owner.members.single { member -> member.sourceName == "shiftRight" }
     check(shiftRight.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
-            checkNotNull(shiftRight.exactPhysicalSignatures).values.all { signature ->
+            checkNotNull(shiftRight.exactPathUnboundSignatures).values.all { signature ->
                 signature.returnSlot.type == systemArray
             }) {
         "GenericNullableArrayCopier.shiftRight(): Array<T?> must retain System.Array: $shiftRight"
@@ -487,9 +485,9 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     val branch = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Branch" }
     val leaf = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Leaf" }
     val nodeCarrier = node.logicalBindingKey?.let { logicalKey ->
-        DotNetGenericOwnerPrototypeStateTypeSnapshot.logicalGenericClassifier(
+        DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(
             logicalClassifierKey = logicalKey,
-            arguments = listOf(DotNetGenericOwnerPrototypeStateTypeSnapshot.ownerParameter(0)),
+            arguments = listOf(DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)),
         )
     }
     check(tree.states.single { state -> state.fieldName == "root" }.let { root ->
@@ -501,7 +499,7 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     check(branch.states.single { state -> state.fieldName == "nodes" }.let { nodes ->
         nodes.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
                 nodes.exactTypedCarrierType == nodeCarrier?.let {
-                    DotNetGenericOwnerPrototypeStateTypeSnapshot.szArray(it)
+                    DotNetGenericOwnerPrototypeTypeSnapshot.szArray(it)
                 } &&
                 nodes.writes.singleOrNull()?.let { write ->
                     write.producerName == "<field-initializer:nodes>" &&
@@ -512,24 +510,48 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     }
     check(leaf.states.single { state -> state.fieldName == "value" }.let { value ->
         value.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
-                value.exactTypedCarrierType == DotNetGenericOwnerPrototypeStateTypeSnapshot.ownerParameter(0)
+                value.exactTypedCarrierType == DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)
     }) {
         "OctoTree.Leaf.value must retain typed owner state: ${leaf.states}"
+    }
+    val nodesGetter = branch.members.single { member ->
+        member.sourceName.contains("nodes", ignoreCase = true) && member.parameterSlotDomains.isEmpty()
     }
     val get = tree.members.single { member -> member.sourceName == "get" }
     check(get.typedRetainsOwnerDependentOutput && get.semanticErasesOwnerDependentOutput &&
             get.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
-            checkNotNull(get.exactPhysicalSignatures).values.all { signature ->
-                signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+            checkNotNull(get.exactPathUnboundSignatures).values.all { signature ->
+                signature.returnSlot.type == DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
             }) {
         "OctoTree.get(): T? must use one truthful object carrier for nullable value/reference results: $get"
     }
     node.logicalBindingKey?.let { nodeKey ->
+        val nodesGetterSignatures = checkNotNull(nodesGetter.exactPathUnboundSignatures) {
+            "OctoTree.Branch.nodes must retain a complete path-unbound signature family: $nodesGetter"
+        }
+        check(nodesGetterSignatures.getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY).returnSlot.type ==
+                nodeCarrier?.let(DotNetGenericOwnerPrototypeTypeSnapshot::szArray) &&
+                nodesGetterSignatures.filterKeys { role ->
+                    role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                }.values.all { signature ->
+                    signature.returnSlot.type == DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
+                }) {
+            "OctoTree.Branch.nodes getter lost its typed constructed vector or semantic array carrier: $nodesGetter"
+        }
         val nodesType = checkNotNull(branch.states.single { state -> state.fieldName == "nodes" }.exactTypedCarrierType)
         check(runCatching { nodesType.bindProducerTypes(emptyMap()) }.isFailure) {
             "OctoTree.Branch.nodes bound without a selected Node TypeDef path"
         }
         val nodePath = listOf("KotlinRepresentativeCandidate", "OctoTreeNode")
+        val physicalOwnerPaths = mapOf(nodeKey to nodePath)
+        val boundNodesGetter = nodesGetterSignatures.getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+        check(runCatching { boundNodesGetter.bindProducerTypes(emptyMap()) }.isFailure) {
+            "OctoTree.Branch.nodes getter bound without a selected Node TypeDef path"
+        }
+        check(boundNodesGetter.bindProducerTypes(physicalOwnerPaths).returnSlot.type ==
+                nodesType.bindProducerTypes(physicalOwnerPaths)) {
+            "OctoTree.Branch.nodes getter did not bind the same recursive vector as its state"
+        }
         check(nodesType.bindProducerTypes(mapOf(nodeKey to nodePath)) ==
                 DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
@@ -778,11 +800,11 @@ private fun validateGenericOwnerHardestModelPrototype(
             secondaryConstructor.delegatedConstructorLogicalBindingKey == primaryConstructor.logicalBindingKey) {
         "HostileUnsafeStore must retain exact primary/secondary construction joins: ${unsafeStore.constructors}"
     }
-    check(primaryConstructor.exactPhysicalSignature?.parameterSlots?.singleOrNull()?.type?.kind ==
-            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
-            secondaryConstructor.exactPhysicalSignature?.parameterSlots?.map { slot -> slot.type.kind } == listOf(
-                DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
-                DotNetGenericOwnerPhysicalTypeKind.INT32,
+    check(primaryConstructor.exactPathUnboundSignature?.parameterSlots?.singleOrNull()?.type?.kind ==
+            DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+            secondaryConstructor.exactPathUnboundSignature?.parameterSlots?.map { slot -> slot.type.kind } == listOf(
+                DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER,
+                DotNetGenericOwnerPrototypeTypeKind.INT32,
             )) {
         "HostileUnsafeStore constructors must use compiler-derived owner/int carriers"
     }
@@ -820,12 +842,12 @@ private fun validateGenericOwnerHardestModelPrototype(
             write.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)) {
         "HostileUnsafeStore.writeUnsafe must retain its exact broad-candidate domain vector: $write"
     }
-    check(write.exactPhysicalSignatures?.keys == write.roles &&
-            write.exactPhysicalSignatures?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+    check(write.exactPathUnboundSignatures?.keys == write.roles &&
+            write.exactPathUnboundSignatures?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
                 ?.parameterSlots?.singleOrNull()?.type?.kind ==
-                DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
-            write.exactPhysicalSignatures?.get(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
-                ?.parameterSlots?.singleOrNull()?.type?.kind == DotNetGenericOwnerPhysicalTypeKind.OBJECT) {
+                DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+            write.exactPathUnboundSignatures?.get(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+                ?.parameterSlots?.singleOrNull()?.type?.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT) {
         "HostileUnsafeStore.writeUnsafe must retain its compiler-derived typed/capability carriers"
     }
     check(write.requiresDirectSuperTargets)
@@ -922,11 +944,8 @@ private fun validateGenericOwnerHardestModelPrototype(
             echo.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)) {
         "HostileUnsafeStore.echo must retain its nested broad-input/strict-output domain vector: $echo"
     }
-    val systemArray = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
-        typePath = listOf("System", "Array"),
-        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-    )
-    check(checkNotNull(echo.exactPhysicalSignatures).values.all { signature ->
+    val systemArray = DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
+    check(checkNotNull(echo.exactPathUnboundSignatures).values.all { signature ->
         signature.returnSlot.type == systemArray &&
                 signature.parameterSlots.single().type == systemArray
     }) {
@@ -935,15 +954,15 @@ private fun validateGenericOwnerHardestModelPrototype(
     val relay = unsafeStore.members.single { member -> member.sourceName == "relay" }
     check(relay.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
             relay.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) &&
-            relay.exactPhysicalSignatures?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            relay.exactPathUnboundSignatures?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
                 ?.returnSlot?.type?.arguments?.singleOrNull()?.kind ==
-                DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER) {
+                DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER) {
         "HostileUnsafeStore.relay must keep method-owned carriers outside the owner slot domain: $relay"
     }
     val label = unsafeStore.members.single { member -> member.sourceName == "label" }
     check(label.hasMaskedDefaultDispatcher &&
             label.exactMaskedDefaultDispatcher?.parameterSlotsAfterReceiver?.map { slot -> slot.type.kind } ==
-            listOf(DotNetGenericOwnerPhysicalTypeKind.STRING, DotNetGenericOwnerPhysicalTypeKind.INT32)) {
+            listOf(DotNetGenericOwnerPrototypeTypeKind.STRING, DotNetGenericOwnerPrototypeTypeKind.INT32)) {
         "HostileUnsafeStore.label must retain the lowered compiler-derived default helper tail"
     }
 
@@ -1135,17 +1154,17 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             val logicalConstructorKey = checkNotNull(constructor.logicalBindingKey) {
                 "The hostile physical family requires a logical constructor binding"
             }
-            val signature = checkNotNull(constructor.exactPhysicalSignature) {
+            val signature = checkNotNull(constructor.exactPathUnboundSignature) {
                 "The hostile physical family requires a compiler-derived constructor signature"
-            }
+            }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
             val delegatedOwnerName = checkNotNull(constructor.delegatedOwnerName) {
                 "The hostile physical family requires an exact delegated constructor owner"
             }
             val delegated = constructor.delegatedConstructorLogicalBindingKey?.let(constructorsByLogicalKey::get)
             val delegatedSignature = delegated?.let { pair ->
-                checkNotNull(pair.second.exactPhysicalSignature) {
+                checkNotNull(pair.second.exactPathUnboundSignature) {
                     "The hostile physical family requires a compiler-derived delegated constructor signature"
-                }
+                }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
             } ?: DotNetGenericOwnerPhysicalMethodSignatureRecord(
                 isInstance = true,
                 genericArity = 0,
@@ -1214,9 +1233,9 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                 semanticHookReasons = member.semanticHookReasons,
                 slots = member.roles.map { role ->
                     val methodName = genericOwnerPrototypePhysicalMethodName(member, role)
-                    val signature = checkNotNull(member.exactPhysicalSignatures?.get(role)) {
+                    val signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                         "The hostile physical family requires a compiler-derived signature for ${member.sourceName}/$role"
-                    }
+                    }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
                     val isCapability = role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
                     DotNetGenericOwnerPhysicalMemberSlotRecord(
                         role = role,
@@ -1260,9 +1279,9 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                                 call.superQualifierName.substringAfterLast('.'),
                             ),
                             physicalMethodName = genericOwnerPrototypePhysicalMethodName(member, role),
-                            signature = checkNotNull(member.exactPhysicalSignatures?.get(role)) {
+                            signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                                 "The hostile physical family requires a compiler-derived direct-super signature"
-                            },
+                            }.bindProducerTypes(physicalOwnerPathsByLogicalKey),
                         )
                     }
                 },
@@ -1273,7 +1292,11 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
                         physicalOwnerPath = listOf("KotlinSnapshotPrototype", simpleName),
                         physicalMethodName = "${genericOwnerPrototypePhysicalMethodName(member, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)}Default",
-                        signature = dispatcher.physicalSignature(ownerPath, prototype.genericArity),
+                        signature = dispatcher.physicalSignature(
+                            ownerPath,
+                            prototype.genericArity,
+                            physicalOwnerPathsByLogicalKey,
+                        ),
                     )
                 } else {
                     null
