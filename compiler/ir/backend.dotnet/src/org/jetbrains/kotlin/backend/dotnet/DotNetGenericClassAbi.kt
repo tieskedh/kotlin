@@ -828,8 +828,8 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val semanticErasesOwnerDependentOutput: Boolean,
     val returnSlotDomain: DotNetGenericOwnerPhysicalSlotDomain,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
-    val exactPhysicalSignatures:
-            Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPhysicalMethodSignatureRecord>?,
+    val exactPathUnboundSignatures:
+            Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPrototypeMethodSignatureSnapshot>?,
     val requiresDirectSuperTargets: Boolean,
     val directSuperCallCount: Int,
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallSnapshot>,
@@ -846,7 +846,7 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val reachableFromSemanticEntry: Boolean,
 ) {
     init {
-        exactPhysicalSignatures?.let { signatures ->
+        exactPathUnboundSignatures?.let { signatures ->
             require(signatures.keys == roles) {
                 "an exact generic-owner prototype signature family must cover every selected role"
             }
@@ -872,8 +872,8 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
 /** Compiler-derived static default helper shape before the producer TypeDef path is selected. */
 data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
     val genericArity: Int,
-    val returnSlot: DotNetGenericOwnerPhysicalValueSlotRecord,
-    val parameterSlotsAfterReceiver: List<DotNetGenericOwnerPhysicalValueSlotRecord>,
+    val returnSlot: DotNetGenericOwnerPrototypeValueSlotSnapshot,
+    val parameterSlotsAfterReceiver: List<DotNetGenericOwnerPrototypeValueSlotSnapshot>,
 ) {
     init {
         require(genericArity >= 0) { "a generic-owner default helper requires non-negative generic arity" }
@@ -885,6 +885,7 @@ data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
     fun physicalSignature(
         physicalOwnerPath: List<String>,
         ownerGenericArity: Int,
+        physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
     ): DotNetGenericOwnerPhysicalMethodSignatureRecord {
         require(physicalOwnerPath.isNotEmpty() && ownerGenericArity > 0) {
             "a generic-owner default helper requires an exact generic producer owner"
@@ -899,11 +900,13 @@ data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
         return DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = false,
             genericArity = genericArity,
-            returnSlot = returnSlot,
+            returnSlot = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey),
             parameterSlots = listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
                 domain = DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
                 type = receiverType,
-            )) + parameterSlotsAfterReceiver,
+            )) + parameterSlotsAfterReceiver.map { slot ->
+                slot.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+            },
         )
     }
 }
@@ -914,7 +917,7 @@ data class DotNetGenericOwnerPrototypeConstructorSnapshot(
     val logicalBindingKey: String?,
     val physicalVisibility: DotNetGenericOwnerPhysicalConstructorVisibility,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
-    val exactPhysicalSignature: DotNetGenericOwnerPhysicalMethodSignatureRecord?,
+    val exactPathUnboundSignature: DotNetGenericOwnerPrototypeMethodSignatureSnapshot?,
     val delegationArgumentMapping: DotNetGenericOwnerConstructorArgumentMapping,
     val hasOnlyDelegationAndInstanceInitializer: Boolean,
     val delegatedConstructorLogicalBindingKey: String?,
@@ -923,71 +926,96 @@ data class DotNetGenericOwnerPrototypeConstructorSnapshot(
 )
 
 /**
- * Path-unbound CLR carrier grammar for producer-owned typed state.
+ * Path-unbound CLR carrier grammar for producer-owned state and callables.
  *
  * A referenced Kotlin generic owner is retained by its logical declaration key until the
  * artifact builder selects one physical TypeDef path for the complete producer family. This
  * prevents an IR/source display name from silently becoming physical ABI.
  */
-enum class DotNetGenericOwnerPrototypeStateTypeKind {
+enum class DotNetGenericOwnerPrototypeTypeKind {
+    VOID,
     BOOLEAN,
     INT32,
     STRING,
     OBJECT,
+    SYSTEM_ARRAY,
     OWNER_TYPE_PARAMETER,
+    METHOD_TYPE_PARAMETER,
     LOGICAL_GENERIC_CLASSIFIER,
     SZ_ARRAY,
 }
 
-data class DotNetGenericOwnerPrototypeStateTypeSnapshot(
-    val kind: DotNetGenericOwnerPrototypeStateTypeKind,
+data class DotNetGenericOwnerPrototypeTypeSnapshot(
+    val kind: DotNetGenericOwnerPrototypeTypeKind,
     val parameterIndex: Int? = null,
     val logicalClassifierKey: String? = null,
-    val arguments: List<DotNetGenericOwnerPrototypeStateTypeSnapshot> = emptyList(),
+    val arguments: List<DotNetGenericOwnerPrototypeTypeSnapshot> = emptyList(),
 ) {
     init {
         when (kind) {
-            DotNetGenericOwnerPrototypeStateTypeKind.BOOLEAN,
-            DotNetGenericOwnerPrototypeStateTypeKind.INT32,
-            DotNetGenericOwnerPrototypeStateTypeKind.STRING,
-            DotNetGenericOwnerPrototypeStateTypeKind.OBJECT,
+            DotNetGenericOwnerPrototypeTypeKind.VOID,
+            DotNetGenericOwnerPrototypeTypeKind.BOOLEAN,
+            DotNetGenericOwnerPrototypeTypeKind.INT32,
+            DotNetGenericOwnerPrototypeTypeKind.STRING,
+            DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+            DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY,
             -> require(parameterIndex == null && logicalClassifierKey == null && arguments.isEmpty()) {
-                "a scalar generic-owner state carrier cannot contain a parameter, classifier, or arguments"
+                "a leaf generic-owner prototype carrier cannot contain a parameter, classifier, or arguments"
             }
-            DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER -> require(
+            DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER,
+            DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER,
+            -> require(
                 parameterIndex != null && parameterIndex >= 0 && logicalClassifierKey == null && arguments.isEmpty()
-            ) { "an owner-parameter state carrier requires only a non-negative parameter index" }
-            DotNetGenericOwnerPrototypeStateTypeKind.LOGICAL_GENERIC_CLASSIFIER -> require(
-                parameterIndex == null && !logicalClassifierKey.isNullOrEmpty() && arguments.isNotEmpty()
-            ) { "a logical generic state classifier requires only a declaration key and type arguments" }
-            DotNetGenericOwnerPrototypeStateTypeKind.SZ_ARRAY -> require(
-                parameterIndex == null && logicalClassifierKey == null && arguments.size == 1
-            ) { "a generic-owner SZ-array state carrier requires exactly one element type" }
+            ) { "a generic-parameter prototype carrier requires only a non-negative parameter index" }
+            DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER -> require(
+                parameterIndex == null && !logicalClassifierKey.isNullOrEmpty() && arguments.isNotEmpty() &&
+                        arguments.none { argument -> argument.kind == DotNetGenericOwnerPrototypeTypeKind.VOID }
+            ) { "a logical generic prototype classifier requires only a declaration key and type arguments" }
+            DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY -> require(
+                parameterIndex == null && logicalClassifierKey == null && arguments.size == 1 &&
+                        arguments.single().kind != DotNetGenericOwnerPrototypeTypeKind.VOID
+            ) { "a generic-owner prototype SZ array requires exactly one non-void element type" }
         }
     }
 
     fun referencesOwnerParameter(): Boolean =
-        kind == DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER ||
-                arguments.any(DotNetGenericOwnerPrototypeStateTypeSnapshot::referencesOwnerParameter)
+        kind == DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER ||
+                arguments.any(DotNetGenericOwnerPrototypeTypeSnapshot::referencesOwnerParameter)
+
+    internal fun methodParameterIndices(): List<Int> = buildList {
+        if (kind == DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER) {
+            add(checkNotNull(parameterIndex))
+        }
+        arguments.forEach { argument -> addAll(argument.methodParameterIndices()) }
+    }
 
     /** Binds every logical producer classifier only after the artifact owns its physical path. */
     fun bindProducerTypes(
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
     ): DotNetGenericOwnerPhysicalTypeExpressionRecord = when (kind) {
-        DotNetGenericOwnerPrototypeStateTypeKind.BOOLEAN ->
+        DotNetGenericOwnerPrototypeTypeKind.VOID ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
+        DotNetGenericOwnerPrototypeTypeKind.BOOLEAN ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType()
-        DotNetGenericOwnerPrototypeStateTypeKind.INT32 ->
+        DotNetGenericOwnerPrototypeTypeKind.INT32 ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type()
-        DotNetGenericOwnerPrototypeStateTypeKind.STRING ->
+        DotNetGenericOwnerPrototypeTypeKind.STRING ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
-        DotNetGenericOwnerPrototypeStateTypeKind.OBJECT ->
+        DotNetGenericOwnerPrototypeTypeKind.OBJECT ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
-        DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER ->
+        DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                typePath = listOf("System", "Array"),
+                category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            )
+        DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(checkNotNull(parameterIndex))
-        DotNetGenericOwnerPrototypeStateTypeKind.LOGICAL_GENERIC_CLASSIFIER -> {
+        DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.methodParameter(checkNotNull(parameterIndex))
+        DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER -> {
             val logicalKey = checkNotNull(logicalClassifierKey)
             val physicalPath = requireNotNull(physicalOwnerPathsByLogicalKey[logicalKey]) {
-                "generic-owner state classifier '$logicalKey' has no selected producer TypeDef path"
+                "generic-owner prototype classifier '$logicalKey' has no selected producer TypeDef path"
             }
             DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
                 typePath = physicalPath,
@@ -997,45 +1025,115 @@ data class DotNetGenericOwnerPrototypeStateTypeSnapshot(
                 },
             )
         }
-        DotNetGenericOwnerPrototypeStateTypeKind.SZ_ARRAY ->
+        DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
                 arguments.single().bindProducerTypes(physicalOwnerPathsByLogicalKey),
             )
     }
 
     companion object {
-        fun booleanType() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.BOOLEAN)
-        fun int32Type() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.INT32)
-        fun stringType() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.STRING)
-        fun objectType() = scalar(DotNetGenericOwnerPrototypeStateTypeKind.OBJECT)
-        fun ownerParameter(index: Int) = DotNetGenericOwnerPrototypeStateTypeSnapshot(
-            kind = DotNetGenericOwnerPrototypeStateTypeKind.OWNER_TYPE_PARAMETER,
+        fun voidType() = leaf(DotNetGenericOwnerPrototypeTypeKind.VOID)
+        fun booleanType() = leaf(DotNetGenericOwnerPrototypeTypeKind.BOOLEAN)
+        fun int32Type() = leaf(DotNetGenericOwnerPrototypeTypeKind.INT32)
+        fun stringType() = leaf(DotNetGenericOwnerPrototypeTypeKind.STRING)
+        fun objectType() = leaf(DotNetGenericOwnerPrototypeTypeKind.OBJECT)
+        fun systemArrayType() = leaf(DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY)
+        fun ownerParameter(index: Int) = DotNetGenericOwnerPrototypeTypeSnapshot(
+            kind = DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER,
+            parameterIndex = index,
+        )
+        fun methodParameter(index: Int) = DotNetGenericOwnerPrototypeTypeSnapshot(
+            kind = DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER,
             parameterIndex = index,
         )
         fun logicalGenericClassifier(
             logicalClassifierKey: String,
-            arguments: List<DotNetGenericOwnerPrototypeStateTypeSnapshot>,
-        ) = DotNetGenericOwnerPrototypeStateTypeSnapshot(
-            kind = DotNetGenericOwnerPrototypeStateTypeKind.LOGICAL_GENERIC_CLASSIFIER,
+            arguments: List<DotNetGenericOwnerPrototypeTypeSnapshot>,
+        ) = DotNetGenericOwnerPrototypeTypeSnapshot(
+            kind = DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER,
             logicalClassifierKey = logicalClassifierKey,
             arguments = arguments,
         )
-        fun szArray(elementType: DotNetGenericOwnerPrototypeStateTypeSnapshot) =
-            DotNetGenericOwnerPrototypeStateTypeSnapshot(
-                kind = DotNetGenericOwnerPrototypeStateTypeKind.SZ_ARRAY,
+        fun szArray(elementType: DotNetGenericOwnerPrototypeTypeSnapshot) =
+            DotNetGenericOwnerPrototypeTypeSnapshot(
+                kind = DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY,
                 arguments = listOf(elementType),
             )
 
-        private fun scalar(kind: DotNetGenericOwnerPrototypeStateTypeKind) =
-            DotNetGenericOwnerPrototypeStateTypeSnapshot(kind)
+        private fun leaf(kind: DotNetGenericOwnerPrototypeTypeKind) =
+            DotNetGenericOwnerPrototypeTypeSnapshot(kind)
     }
+}
+
+data class DotNetGenericOwnerPrototypeValueSlotSnapshot(
+    val domain: DotNetGenericOwnerPhysicalSlotDomain,
+    val type: DotNetGenericOwnerPrototypeTypeSnapshot,
+) {
+    fun bindProducerTypes(
+        physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+    ): DotNetGenericOwnerPhysicalValueSlotRecord = DotNetGenericOwnerPhysicalValueSlotRecord(
+        domain = domain,
+        type = type.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+    )
+}
+
+/** Complete path-unbound MethodDef signature; binding is atomic after TypeDef selection. */
+data class DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
+    val isInstance: Boolean,
+    val genericArity: Int,
+    val returnSlot: DotNetGenericOwnerPrototypeValueSlotSnapshot,
+    val parameterSlots: List<DotNetGenericOwnerPrototypeValueSlotSnapshot>,
+) {
+    init {
+        require(genericArity >= 0) { "a generic-owner prototype method requires non-negative generic arity" }
+        require(returnSlot.domain !in setOf(
+            DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+        )) { "a generic-owner prototype return has an input-only slot domain" }
+        require(returnSlot.type.kind != DotNetGenericOwnerPrototypeTypeKind.VOID ||
+                returnSlot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) {
+            "a void generic-owner prototype return must be declaration-independent"
+        }
+        require(parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+                    slot.type.kind == DotNetGenericOwnerPrototypeTypeKind.VOID
+        }) { "a generic-owner prototype parameter has an invalid domain or void type" }
+        require(!isInstance || parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER
+        }) { "an instance generic-owner prototype method cannot expose a separate exact receiver" }
+        require(returnSlot.type.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
+                returnSlot.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                !returnSlot.type.referencesOwnerParameter()) {
+            "an owner-dependent prototype return requires an owner slot domain"
+        }
+        require(parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    slot.type.referencesOwnerParameter()
+        }) { "an owner-dependent prototype parameter requires an owner slot domain" }
+        require(allTypes().flatMap { type -> type.methodParameterIndices() }.all { index -> index < genericArity }) {
+            "a generic-owner prototype signature references a missing method type parameter"
+        }
+    }
+
+    fun allTypes(): List<DotNetGenericOwnerPrototypeTypeSnapshot> =
+        listOf(returnSlot.type) + parameterSlots.map { slot -> slot.type }
+
+    fun bindProducerTypes(
+        physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+    ): DotNetGenericOwnerPhysicalMethodSignatureRecord = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+        isInstance = isInstance,
+        genericArity = genericArity,
+        returnSlot = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+        parameterSlots = parameterSlots.map { slot -> slot.bindProducerTypes(physicalOwnerPathsByLogicalKey) },
+    )
 }
 
 data class DotNetGenericOwnerPrototypeStateSnapshot(
     val fieldName: String,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
     /** Null means the field type is outside the bounded path-unbound carrier grammar. */
-    val exactTypedCarrierType: DotNetGenericOwnerPrototypeStateTypeSnapshot?,
+    val exactTypedCarrierType: DotNetGenericOwnerPrototypeTypeSnapshot?,
     val writes: List<DotNetGenericOwnerPrototypeStateWriteSnapshot>,
     val directReaderNames: List<String>,
     val directWriterNames: List<String>,
@@ -2956,6 +3054,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
 fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
     artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
 ): DotNetGenericOwnerPrototypeSnapshot {
+    val physicalOwnerPathsByLogicalKey = artifact.owners.associate { owner ->
+        owner.logicalOwnerKey to owner.physicalOwnerPath
+    }
     val externalMembers:
             Map<String, Pair<DotNetGenericOwnerPhysicalFamilyRecord, DotNetGenericOwnerPhysicalMemberFamilyRecord>> =
         buildMap {
@@ -3024,10 +3125,14 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             }
             fun consumerSignature(role: DotNetGenericOwnerMemberFamilyRole):
                     DotNetGenericOwnerPhysicalMethodSignatureRecord? =
-                member.exactPhysicalSignatures?.get(role)?.let { signature ->
-                    signature.copy(parameterSlots = signature.parameterSlots.mapIndexed { index, parameter ->
-                        parameter.copy(domain = mergedParameterSlotDomains[index])
-                    })
+                member.exactPathUnboundSignatures?.get(role)?.let { signature ->
+                    signature.bindProducerTypes(physicalOwnerPathsByLogicalKey).let { physicalSignature ->
+                        physicalSignature.copy(
+                            parameterSlots = physicalSignature.parameterSlots.mapIndexed { index, parameter ->
+                                parameter.copy(domain = mergedParameterSlotDomains[index])
+                            },
+                        )
+                    }
                 }
             require(typedSlot.signature == consumerSignature(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)) {
                 "consumer override '${member.sourceName}' disagrees with the producer typed physical signature"
@@ -3087,7 +3192,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             parameterSlotDomains = mergedParameterSlotDomains,
             // The local detached signatures predate producer-family binding and are no longer
             // authoritative after inherited broad domains and semantic roles are merged.
-            exactPhysicalSignatures = null,
+            exactPathUnboundSignatures = null,
             exactMaskedDefaultDispatcher = null,
             overrideBindings = (retained + resolved).distinctBy { binding ->
                 Triple(binding.role, binding.overriddenLogicalBindingKey, binding.overriddenPhysicalMethodName)
@@ -3256,9 +3361,12 @@ fun DotNetGenericOwnerPrototypeSnapshot.physicalizeExternalSubclass(
     }) {
         "a Kotlin generic subclass override targets a MethodDef outside its producer artifact"
     }
-    val sourceConstructorSignature = requireNotNull(sourceConstructor.exactPhysicalSignature) {
+    val sourceConstructorSignature = requireNotNull(sourceConstructor.exactPathUnboundSignature) {
         "the Kotlin generic subclass constructor is outside the exact physical signature grammar"
-    }
+    }.bindProducerTypes(
+        artifact.owners.associate { owner -> owner.logicalOwnerKey to owner.physicalOwnerPath } +
+                logicalBindingKey?.let { key -> mapOf(key to physicalOwnerPath) }.orEmpty(),
+    )
     require(sourceConstructor.delegationArgumentMapping ==
             DotNetGenericOwnerConstructorArgumentMapping.POSITIONAL_IDENTITY &&
             sourceConstructor.hasOnlyDelegationAndInstanceInitializer) {
@@ -3414,162 +3522,173 @@ private fun IrConstructor.genericOwnerPhysicalVisibility(): DotNetGenericOwnerPh
         else -> error("unsupported generic-owner prototype constructor visibility '$visibility'")
     }
 
-/**
- * Maps only the deliberately bounded carrier grammar proven by the generic-owner prototype.
- * Unknown classifiers, projections, and nested carriers remain unavailable. An unconstrained
- * open nullable parameter uses the semantic object carrier because no single CLR GenericParam
- * type can represent both nullable value and nullable reference substitutions.
- */
-private fun IrType.genericOwnerPrototypePhysicalType(
-    owner: IrClass,
-    method: IrSimpleFunction? = null,
-    eraseOwnerDependentCarrier: Boolean = false,
-): DotNetGenericOwnerPhysicalTypeExpressionRecord? {
-    if (isUnit()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
-    if (isBoolean()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType()
-    if (isInt()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type()
-    if (isString() || isNullableString()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
-    if (isAny() || isNullableAny()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
-
-    val simpleType = this as? IrSimpleType ?: return null
-    val typeParameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
-    if (typeParameter != null) {
-        val ownerParameterIndex = owner.typeParameters.indexOf(typeParameter)
-        if (ownerParameterIndex >= 0) {
-            if (simpleType.isMarkedNullable()) {
-                return DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
-            }
-            return if (eraseOwnerDependentCarrier) {
-                DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
-            } else {
-                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(ownerParameterIndex)
-            }
-        }
-        val methodParameterIndex = method?.typeParameters?.indexOf(typeParameter) ?: -1
-        if (methodParameterIndex >= 0) {
-            return if (simpleType.isMarkedNullable()) {
-                DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
-            } else {
-                DotNetGenericOwnerPhysicalTypeExpressionRecord.methodParameter(methodParameterIndex)
-            }
-        }
-        return null
-    }
-
-    val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
-    if (classifier.fqNameWhenAvailable?.asString() != "kotlin.Array") return null
-    val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return null
-    if (elementProjection.variance != Variance.INVARIANT) {
-        return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
-            typePath = listOf("System", "Array"),
-            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-        )
-    }
-    val elementSimpleType = elementProjection.type as? IrSimpleType
-    val elementParameter = (elementSimpleType?.classifier as? IrTypeParameterSymbol)?.owner
-    if (elementSimpleType?.isMarkedNullable() == true &&
-            (elementParameter in owner.typeParameters || elementParameter in method?.typeParameters.orEmpty())
-    ) {
-        return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
-            typePath = listOf("System", "Array"),
-            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-        )
-    }
-    if (eraseOwnerDependentCarrier && referencesTypeParameterOf(owner)) {
-        if (elementParameter !in owner.typeParameters) return null
-        return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
-            typePath = listOf("System", "Array"),
-            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-        )
-    }
-    val elementType = elementProjection.type.genericOwnerPrototypePhysicalType(
-        owner = owner,
-        method = method,
-        eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
-    ) ?: return null
-    if (elementType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) return null
-    return DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(elementType)
+private enum class DotNetGenericOwnerPrototypeTypeUse {
+    CALLABLE,
+    STATE,
 }
 
 /**
- * Captures an exact owner-dependent field type without selecting a producer TypeDef path.
- * Unsupported projections/classifiers stay unavailable instead of becoming object.
+ * Captures the bounded CLR carrier grammar before producer TypeDef paths are selected.
+ * Callable fallbacks preserve non-exact Kotlin positions; state remains exact or unavailable.
  */
-private fun IrType.genericOwnerPrototypeStateType(
+private fun IrType.genericOwnerPrototypeType(
     owner: IrClass,
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
-): DotNetGenericOwnerPrototypeStateTypeSnapshot? {
-    if (isBoolean()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.booleanType()
-    if (isInt()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.int32Type()
-    if (isString() || isNullableString()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.stringType()
-    if (isAny() || isNullableAny()) return DotNetGenericOwnerPrototypeStateTypeSnapshot.objectType()
+    use: DotNetGenericOwnerPrototypeTypeUse,
+    method: IrSimpleFunction? = null,
+    eraseOwnerDependentCarrier: Boolean = false,
+): DotNetGenericOwnerPrototypeTypeSnapshot? {
+    if (isUnit()) {
+        return if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE) {
+            DotNetGenericOwnerPrototypeTypeSnapshot.voidType()
+        } else {
+            null
+        }
+    }
+    if (isBoolean()) return DotNetGenericOwnerPrototypeTypeSnapshot.booleanType()
+    if (isInt()) return DotNetGenericOwnerPrototypeTypeSnapshot.int32Type()
+    if (isString() || isNullableString()) return DotNetGenericOwnerPrototypeTypeSnapshot.stringType()
+    if (isAny() || isNullableAny()) return DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
 
     val simpleType = this as? IrSimpleType ?: return null
     val typeParameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
     if (typeParameter != null) {
-        // An unconstrained Kotlin T? is not represented by CLR !T: value-type substitutions need
-        // Nullable<T>. Keep the carrier unavailable until that distinction has an exact grammar.
-        if (simpleType.isMarkedNullable()) return null
-        return owner.typeParameters.indexOf(typeParameter)
-            .takeIf { index -> index >= 0 }
-            ?.let(DotNetGenericOwnerPrototypeStateTypeSnapshot::ownerParameter)
+        if (simpleType.isMarkedNullable()) {
+            return if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE) {
+                DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+            } else {
+                null
+            }
+        }
+        val ownerParameterIndex = owner.typeParameters.indexOf(typeParameter)
+        if (ownerParameterIndex >= 0) {
+            return if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE && eraseOwnerDependentCarrier) {
+                DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+            } else {
+                DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(ownerParameterIndex)
+            }
+        }
+        val methodParameterIndex = method?.typeParameters?.indexOf(typeParameter) ?: -1
+        return methodParameterIndex.takeIf { index ->
+            use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE && index >= 0
+        }?.let(DotNetGenericOwnerPrototypeTypeSnapshot::methodParameter)
     }
 
     val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
+    if (classifier.fqNameWhenAvailable?.asString() == "kotlin.Array") {
+        val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return null
+        if (elementProjection.variance != Variance.INVARIANT) {
+            return if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE) {
+                DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
+            } else {
+                null
+            }
+        }
+        val elementSimpleType = elementProjection.type as? IrSimpleType
+        val elementParameter = (elementSimpleType?.classifier as? IrTypeParameterSymbol)?.owner
+        if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE &&
+                elementSimpleType?.isMarkedNullable() == true &&
+                (elementParameter in owner.typeParameters || elementParameter in method?.typeParameters.orEmpty())
+        ) {
+            return DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
+        }
+        val elementType = elementProjection.type.genericOwnerPrototypeType(
+            owner = owner,
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            use = use,
+            method = method,
+            eraseOwnerDependentCarrier = false,
+        ) ?: return null
+        if (elementType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID) return null
+        if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE &&
+                eraseOwnerDependentCarrier && referencesTypeParameterOf(owner)
+        ) {
+            return DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
+        }
+        return DotNetGenericOwnerPrototypeTypeSnapshot.szArray(elementType)
+    }
+
+    if (!classifier.isDotNetGenericClassDeclaration || classifier.isValue ||
+            simpleType.arguments.size != classifier.typeParameters.size
+    ) return null
+    val logicalClassifierKey = preLoweringDeclarationKeys[classifier] ?: return null
     val arguments = simpleType.arguments.map { argument ->
         val projection = argument as? IrTypeProjection ?: return null
         if (projection.variance != Variance.INVARIANT) return null
-        projection.type.genericOwnerPrototypeStateType(owner, preLoweringDeclarationKeys) ?: return null
+        projection.type.genericOwnerPrototypeType(
+            owner = owner,
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            use = use,
+            method = method,
+            eraseOwnerDependentCarrier = false,
+        ) ?: return null
     }
-    if (classifier.fqNameWhenAvailable?.asString() == "kotlin.Array") {
-        return arguments.singleOrNull()?.let(DotNetGenericOwnerPrototypeStateTypeSnapshot::szArray)
+    if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE &&
+            eraseOwnerDependentCarrier && referencesTypeParameterOf(owner)
+    ) {
+        return DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
     }
-    if (!classifier.isDotNetGenericClassDeclaration || arguments.size != classifier.typeParameters.size) return null
-    val logicalClassifierKey = preLoweringDeclarationKeys[classifier] ?: return null
-    return DotNetGenericOwnerPrototypeStateTypeSnapshot.logicalGenericClassifier(
+    return DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(
         logicalClassifierKey = logicalClassifierKey,
         arguments = arguments,
     )
 }
 
-private fun DotNetGenericOwnerConstructorPlan.exactPrototypePhysicalSignature(
+private fun IrType.genericOwnerPrototypeStateType(
     owner: IrClass,
-): DotNetGenericOwnerPhysicalMethodSignatureRecord? {
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+): DotNetGenericOwnerPrototypeTypeSnapshot? = genericOwnerPrototypeType(
+    owner = owner,
+    preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+    use = DotNetGenericOwnerPrototypeTypeUse.STATE,
+)
+
+private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature(
+    owner: IrClass,
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+): DotNetGenericOwnerPrototypeMethodSignatureSnapshot? {
     if (source.parameters.size != parameterSlotDomains.size) return null
     val parameterSlots = source.parameters.mapIndexed { index, parameter ->
-        val physicalType = parameter.type.genericOwnerPrototypePhysicalType(owner) ?: return null
+        val physicalType = parameter.type.genericOwnerPrototypeType(
+            owner = owner,
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
+        ) ?: return null
         val domain = parameterSlotDomains[index]
-        if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+        if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
                 domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
                 physicalType.referencesOwnerParameter()
         ) return null
-        DotNetGenericOwnerPhysicalValueSlotRecord(
+        DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = domain,
             type = physicalType,
         )
     }
-    return DotNetGenericOwnerPhysicalMethodSignatureRecord(
+    return DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
         isInstance = true,
         genericArity = 0,
-        returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
+        returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
-            type = DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
+            type = DotNetGenericOwnerPrototypeTypeSnapshot.voidType(),
         ),
         parameterSlots = parameterSlots,
     )
 }
 
-private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePhysicalSignatures(
+private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatures(
     owner: IrClass,
-): Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPhysicalMethodSignatureRecord>? {
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+): Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPrototypeMethodSignatureSnapshot>? {
     val explicitParameters = source.parameters.filter { parameter ->
         parameter.kind != IrParameterKind.DispatchReceiver
     }
     if (explicitParameters.size != parameterSlotDomains.size) return null
     return roles.associateWith { role ->
         val eraseOwnerDependentCarrier = role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
-        val returnType = source.returnType.genericOwnerPrototypePhysicalType(
+        val returnType = source.returnType.genericOwnerPrototypeType(
             owner = owner,
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
             method = source,
             eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
         ) ?: return null
@@ -3577,25 +3696,27 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePhysicalSignatures(
                 returnType.referencesOwnerParameter()
         ) return null
         val parameterSlots = explicitParameters.mapIndexed { index, parameter ->
-            val physicalType = parameter.type.genericOwnerPrototypePhysicalType(
+            val physicalType = parameter.type.genericOwnerPrototypeType(
                 owner = owner,
+                preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
                 method = source,
                 eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
             ) ?: return null
             val domain = parameterSlotDomains[index]
-            if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+            if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
                     domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
                     physicalType.referencesOwnerParameter()
             ) return null
-            DotNetGenericOwnerPhysicalValueSlotRecord(
+            DotNetGenericOwnerPrototypeValueSlotSnapshot(
                 domain = domain,
                 type = physicalType,
             )
         }
-        DotNetGenericOwnerPhysicalMethodSignatureRecord(
+        DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
             isInstance = true,
             genericArity = source.typeParameters.size,
-            returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(returnSlotDomain, returnType),
+            returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(returnSlotDomain, returnType),
             parameterSlots = parameterSlots,
         )
     }
@@ -3603,6 +3724,7 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePhysicalSignatures(
 
 private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
     owner: IrClass,
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
 ): DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot? {
     val dispatcher = maskedDefaultDispatcher ?: return null
     if (dispatcher.dispatchReceiverParameter != null || dispatcher.typeParameters.size != source.typeParameters.size) return null
@@ -3625,42 +3747,48 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
             parameter.origin == IrDeclarationOrigin.MASK_FOR_DEFAULT_FUNCTION
         }) return null
 
-    val returnType = dispatcher.returnType.genericOwnerPrototypePhysicalType(
+    val returnType = dispatcher.returnType.genericOwnerPrototypeType(
         owner = owner,
+        preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+        use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
         method = dispatcher,
     ) ?: return null
     if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
             returnType.referencesOwnerParameter()
     ) return null
     val sourceSlots = sourceDispatcherParameters.mapIndexed { index, parameter ->
-        val physicalType = parameter.type.genericOwnerPrototypePhysicalType(
+        val physicalType = parameter.type.genericOwnerPrototypeType(
             owner = owner,
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
             method = dispatcher,
         ) ?: return null
         val domain = parameterSlotDomains[index]
-        if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+        if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
                 domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
                 physicalType.referencesOwnerParameter()
         ) return null
-        DotNetGenericOwnerPhysicalValueSlotRecord(
+        DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = domain,
             type = physicalType,
         )
     }
     val maskSlots = maskParameters.map { parameter ->
-        val physicalType = parameter.type.genericOwnerPrototypePhysicalType(
+        val physicalType = parameter.type.genericOwnerPrototypeType(
             owner = owner,
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
             method = dispatcher,
         ) ?: return null
-        if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) return null
-        DotNetGenericOwnerPhysicalValueSlotRecord(
+        if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID) return null
+        DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
             type = physicalType,
         )
     }
     return DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
         genericArity = dispatcher.typeParameters.size,
-        returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(returnSlotDomain, returnType),
+        returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(returnSlotDomain, returnType),
         parameterSlotsAfterReceiver = sourceSlots + maskSlots,
     )
 }
@@ -3725,7 +3853,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 logicalBindingKey = constructor.logicalBindingKey,
                 physicalVisibility = constructor.source.genericOwnerPhysicalVisibility(),
                 parameterSlotDomains = constructor.parameterSlotDomains,
-                exactPhysicalSignature = constructor.exactPrototypePhysicalSignature(owner),
+                exactPathUnboundSignature = constructor.exactPrototypePathUnboundSignature(
+                    owner,
+                    preLoweringDeclarationKeys,
+                ),
                 delegationArgumentMapping = constructor.delegationArgumentMapping,
                 hasOnlyDelegationAndInstanceInitializer = constructor.source.hasOnlyPrototypePhysicalizableBody(),
                 delegatedConstructorLogicalBindingKey = constructor.delegatedConstructorLogicalBindingKey,
@@ -3758,7 +3889,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                     semantic?.returnType?.referencesTypeParameterOf(owner) == false,
                 returnSlotDomain = family.returnSlotDomain,
                 parameterSlotDomains = family.parameterSlotDomains,
-                exactPhysicalSignatures = family.exactPrototypePhysicalSignatures(owner),
+                exactPathUnboundSignatures = family.exactPrototypePathUnboundSignatures(
+                    owner,
+                    preLoweringDeclarationKeys,
+                ),
                 requiresDirectSuperTargets = family.requiresDirectSuperTargets,
                 directSuperCallCount = family.directSuperCallCount,
                 directSuperCalls = family.directSuperCalls.map { call ->
@@ -3779,7 +3913,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                     )
                 },
                 hasMaskedDefaultDispatcher = family.maskedDefaultDispatcher != null,
-                exactMaskedDefaultDispatcher = family.exactPrototypeDefaultDispatcher(owner),
+                exactMaskedDefaultDispatcher = family.exactPrototypeDefaultDispatcher(
+                    owner,
+                    preLoweringDeclarationKeys,
+                ),
                 logicalBindingKey = family.logicalBindingKey,
                 overrideBindings = overrideBindings[source].orEmpty().map { binding ->
                     val overriddenOwner = binding.overriddenSource.parent as IrClass
@@ -3826,7 +3963,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                     owner,
                     preLoweringDeclarationKeys,
                 )
-                    ?.takeIf(DotNetGenericOwnerPrototypeStateTypeSnapshot::referencesOwnerParameter),
+                    ?.takeIf(DotNetGenericOwnerPrototypeTypeSnapshot::referencesOwnerParameter),
                 writes = state.writes.map { write ->
                     DotNetGenericOwnerPrototypeStateWriteSnapshot(
                         producerName = write.producerName,

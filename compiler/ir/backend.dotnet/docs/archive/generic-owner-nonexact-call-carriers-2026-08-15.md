@@ -71,10 +71,10 @@ This changes no production owner, emitted field or method, DLL/KLIB schema,
 Runtime surface, or Common behavior. Schema 7's format is unchanged; only the
 recorded test-artifact signature is corrected.
 
-The recursive OctoTree candidate remains blocked on constructed member types
-such as `Node<T>[]`. Those require a path-unbound signature tree and late
-logical-key-to-TypeDef binding equivalent to the completed state-carrier
-mechanism. A source/display name is not an acceptable shortcut.
+At this checkpoint the recursive OctoTree candidate remained blocked on
+constructed member types such as `Node<T>[]`. The subsequent path-unbound
+signature tree closes that grammar gap with late logical-key-to-TypeDef binding;
+a source/display name is still not an acceptable shortcut.
 
 ## Verification
 

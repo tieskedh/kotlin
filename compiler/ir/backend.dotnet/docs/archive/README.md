@@ -14,10 +14,14 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-path-unbound-member-signatures-2026-08-16.md`](generic-owner-path-unbound-member-signatures-2026-08-16.md)
+  records the shared state/callable prototype type tree, atomic logical-key to
+  TypeDef binding, recursive OctoTree getter evidence, and the remaining full
+  physical-family/C# product gate.
 - [`generic-owner-nonexact-call-carriers-2026-08-15.md`](generic-owner-nonexact-call-carriers-2026-08-15.md)
   records truthful object/System.Array MethodDef carriers for open-nullable and
   projected generic positions, retained exact GenericParam cases, hostile C#
-  override evidence, and the remaining constructed-member binding gate.
+  override evidence, and the then-open constructed-member binding gate.
 - [`generic-owner-structural-state-carrier-2026-08-15.md`](generic-owner-structural-state-carrier-2026-08-15.md)
   records the path-unbound exact state-carrier grammar, logical producer-key
   binding, open-nullable rejection, separate OctoTree producer/consumer
