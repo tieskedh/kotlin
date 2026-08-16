@@ -199,7 +199,7 @@ generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
 producer records the overridden logical key. A production-inert family
-artifact, now at schema 10, proves the cross-assembly link: it is fingerprinted
+artifact, now at schema 11, proves the cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
 slot-domain vectors, and structural signatures for that key. A dispatcher also
@@ -276,6 +276,16 @@ retain source visibility, semantic hooks are protected, and explicit
 capability dispatchers are private/final. A decoded record can therefore
 distinguish public/internal and final/open/abstract/sealed declarations without
 consulting compiler-local prototypes.
+
+Schema 11 adds exact positional constructor-to-state initialization and closes
+the recursive OctoTree family atomically. All four owner TypeDefs, every
+MethodDef owner, recursive `Node<T>[]` carrier, constructor edge, state path,
+and reflection family must resolve inside one logical-keyed graph. The
+`Leaf.value: !T` field records the exact logical constructor and parameter
+index which initialize it; `root = null` is accepted only as a proven CLR
+object-field default. Unsupported initialization and phantom physical owners
+fail closed. See
+[`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
 
 Open-nullable construction now has a bounded consumer-side record rather than
 new producer-schema claims. It accepts only finite concrete final-compilation
@@ -419,9 +429,9 @@ missing paths, projections, unsupported classifiers, and open nullable `T?`
 remain unavailable. A separate OctoTree library proves structural `Node<T>[]`
 and `T` state, while the semantic `root` requirement remains unchanged. The
 hostile candidate fixture consumes the same record instead of hardcoding `T`.
-This is still production-inert and in-memory: the next product must serialize
-and bind the whole recursive owner family before a paired candidate or direct
-C# consumer/subclass can claim evidence. See
+Schema 11 now serializes and binds the whole recursive owner family while
+remaining production-inert. The next product is the paired record-driven
+candidate and direct C# consumer/subclass. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
@@ -442,9 +452,9 @@ keys and bind atomically only after the complete producer TypeDef map exists.
 The separate OctoTree `nodes` getter proves typed `Node<T>[]`, capability
 `System.Array`, missing-path rejection, and exact equality with its bound field
 carrier. Same-compilation snapshots without a stable library key remain
-unavailable. Schema 10 still serializes only fully bound physical records. The
-next product must publish the complete recursive family and build its paired
-candidate/C# consumers. See
+unavailable. Schema 11 serializes only fully bound, atomically closed physical
+records and now includes the complete recursive family. The next product must
+build its paired candidate/C# consumers from that decoded record. See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The physical initializer record is described in
 [`../archive/generic-owner-physical-state-initializers-2026-08-16.md`](../archive/generic-owner-physical-state-initializers-2026-08-16.md).
@@ -452,6 +462,8 @@ Producer-private state binding is recorded in
 [`../archive/generic-owner-producer-private-state-access-2026-08-16.md`](../archive/generic-owner-producer-private-state-access-2026-08-16.md).
 The physical declaration envelope is recorded in
 [`../archive/generic-owner-physical-visibility-dispatch-2026-08-16.md`](../archive/generic-owner-physical-visibility-dispatch-2026-08-16.md).
+The complete recursive family is recorded in
+[`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
 
 External-family binding consequently keeps logical and physical authority
 separate. It merges inherited producer slot domains, then compares exact
