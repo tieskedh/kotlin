@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-complete-octo-tree-family-2026-08-17.md`](generic-owner-complete-octo-tree-family-2026-08-17.md)
+  records schema 11's complete logical-keyed recursive OctoTree TypeDef,
+  MethodDef, constructor, state/initializer, reflection, and atomic-closure
+  graph plus the remaining record-driven candidate/C# product gate.
 - [`generic-owner-physical-visibility-dispatch-2026-08-16.md`](generic-owner-physical-visibility-dispatch-2026-08-16.md)
   records schema 10's exact owner TypeDef and member MethodDef visibility/
   dispatch envelope, semantic/capability visibility invariants, and the

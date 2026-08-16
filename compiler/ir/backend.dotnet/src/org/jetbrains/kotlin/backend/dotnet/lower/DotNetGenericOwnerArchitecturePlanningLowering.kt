@@ -1503,14 +1503,36 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             ?.arguments
             ?.singleOrNull()
             ?.let { argument -> (argument as? IrConst)?.value as? Int }
+        val isDefaultNullReference = expression is IrConst && expression.value == null
+        val constructorParameter = (expression as? IrGetValue)?.symbol?.owner?.let { parameter ->
+            owner.declarations.filterIsInstance<IrConstructor>().mapNotNull { constructor ->
+                constructor.parameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let { index ->
+                    constructor to index
+                }
+            }.singleOrNull()
+        }
+        val constructorLogicalBindingKey = constructorParameter?.first?.let { constructor ->
+            context.preLoweringDeclarationKeys[constructor] ?: constructor.dotNetLibraryAbiKeyOrNull("F")
+        }
+        val constructorParameterIndex = constructorParameter?.second?.takeIf {
+            constructorLogicalBindingKey != null
+        }
         return DotNetGenericOwnerStateInitializerPlan(
             producerName = label,
-            kind = if (fixedElementCount != null) {
-                DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
-            } else {
-                DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED
+            kind = when {
+                fixedElementCount != null ->
+                    DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+                isDefaultNullReference ->
+                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
+                constructorParameterIndex != null ->
+                    DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER
+                else -> DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED
             },
             fixedElementCount = fixedElementCount,
+            constructorLogicalBindingKey = constructorLogicalBindingKey.takeIf {
+                constructorParameterIndex != null
+            },
+            constructorParameterIndex = constructorParameterIndex,
         )
     }
 

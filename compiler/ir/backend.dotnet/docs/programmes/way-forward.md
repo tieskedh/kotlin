@@ -781,11 +781,13 @@ open nullable `T?` fail closed. In a real separate OctoTree producer this
 records `Node<T>[]` for `Branch.nodes`, `T` for `Leaf.value`, and the structural
 `Node<T>` candidate for semantic `root`. The producer census has 21 exact,
 nine capability, and nine external static routes; four additional exact sites
-belong only to the consumer. This remains an in-memory, production-inert
-snapshot: it changes no emitted field, KLIB/DLL schema, or public owner. The
-next gate is to serialize and bind the complete recursive physical family,
-then build paired candidate and direct C# consumer/subclass products rather
-than infer field types inside a fixture. See
+belong only to the consumer. Schema 11 now serializes and binds the complete
+four-owner recursive physical family. It includes atomic TypeDef/MethodDef
+closure, private semantic root access, exact `Node<T>[]` initialization, and
+the exact constructor parameter which initializes `Leaf.value: !T`. This
+remains production-inert: it changes no emitted production field, KLIB/DLL
+schema, or public owner. The next gate is the paired record-driven candidate
+and direct C# consumer/subclass products. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
 The existing physical member-signature grammar has also been corrected at its
@@ -818,8 +820,10 @@ methods without inventing a logical KLIB callable or reflection member, while
 retaining the complete paired matrix whenever a semantic path or conversion
 exists. Schema 10 records exact owner visibility/dispatch and member-slot
 visibility, including protected semantic hooks and private/final explicit
-capability dispatchers. The next gate is the complete serialized
-OctoTree physical family plus record-driven candidate and direct C# products.
+capability dispatchers. Schema 11 completes the logical-keyed recursive
+OctoTree family, adds exact positional constructor-to-state initialization,
+and rejects phantom producer TypeDefs or MethodDef owners atomically. The next
+gate is the record-driven OctoTree candidate and direct C# products.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -830,6 +834,8 @@ Schema 9 is recorded in
 [`../archive/generic-owner-producer-private-state-access-2026-08-16.md`](../archive/generic-owner-producer-private-state-access-2026-08-16.md).
 Schema 10 is recorded in
 [`../archive/generic-owner-physical-visibility-dispatch-2026-08-16.md`](../archive/generic-owner-physical-visibility-dispatch-2026-08-16.md).
+Schema 11 is recorded in
+[`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
