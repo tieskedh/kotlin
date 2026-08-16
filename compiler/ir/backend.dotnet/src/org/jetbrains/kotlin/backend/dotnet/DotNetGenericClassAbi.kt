@@ -610,6 +610,27 @@ enum class DotNetGenericOwnerPhysicalStateVisibility {
     PRIVATE,
 }
 
+enum class DotNetGenericOwnerPhysicalStateInitializerKind {
+    FIXED_ZEROED_SZ_ARRAY,
+}
+
+/** Exact constructor roots which execute one producer-owned physical field initializer. */
+data class DotNetGenericOwnerPhysicalStateInitializerRecord(
+    val kind: DotNetGenericOwnerPhysicalStateInitializerKind,
+    val logicalConstructorKeys: List<String>,
+    val fixedElementCount: Int,
+) {
+    init {
+        require(logicalConstructorKeys.isNotEmpty() && logicalConstructorKeys.all(String::isNotEmpty) &&
+                logicalConstructorKeys == logicalConstructorKeys.distinct().sorted()) {
+            "a generic-owner physical state initializer requires sorted unique constructor roots"
+        }
+        require(fixedElementCount >= 0) {
+            "a fixed zeroed generic-owner physical state initializer requires a non-negative element count"
+        }
+    }
+}
+
 /** One exact member-family path which reads or writes a producer-owned physical field. */
 data class DotNetGenericOwnerPhysicalStateAccessRecord(
     val domain: DotNetGenericOwnerPhysicalStateAccessDomain,
@@ -1809,6 +1830,7 @@ data class DotNetGenericOwnerPhysicalStateRecord(
     val physicalVisibility: DotNetGenericOwnerPhysicalStateVisibility,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val initializers: List<DotNetGenericOwnerPhysicalStateInitializerRecord>,
     val accessPaths: List<DotNetGenericOwnerPhysicalStateAccessRecord>,
 ) {
     init {
@@ -1821,11 +1843,17 @@ data class DotNetGenericOwnerPhysicalStateRecord(
         require(accessPaths.map { access -> access.domain to access.operation }.toSet().size == accessPaths.size) {
             "a generic-owner physical state record has duplicate domain/operation access paths"
         }
-        require(accessPaths.isNotEmpty()) {
-            "a generic-owner physical state record requires exact access paths"
+        require(accessPaths.isNotEmpty() || initializers.isNotEmpty()) {
+            "a generic-owner physical state record requires exact access or initialization paths"
+        }
+        require(initializers.map { initializer -> initializer.kind }.toSet().size == initializers.size) {
+            "a generic-owner physical state record has duplicate initializer recipes"
         }
         when (requirement) {
             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
+                require(initializers.isEmpty()) {
+                    "semantic-object generic-owner state does not admit a typed initializer recipe"
+                }
                 require(physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()) {
                     "semantic-object generic-owner state requires object storage"
                 }
@@ -1840,14 +1868,16 @@ data class DotNetGenericOwnerPhysicalStateRecord(
             }
             DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> require(
                 physicalType.referencesOwnerParameter() &&
-                        accessPaths.map { access -> access.operation }.toSet() ==
-                        DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
+                        (accessPaths.map { access -> access.operation } + initializers.map {
+                            DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
+                        }).toSet() == DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
                         accessPaths.all { access ->
                             access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
                                     access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
-                        }
+                        } && (initializers.isEmpty() ||
+                        physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY)
             ) {
-                "typed generic-owner state requires exact typed identity read and write paths"
+                "typed generic-owner state requires exact typed identity access and initialization paths"
             }
             DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
             DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
@@ -2001,6 +2031,18 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }
         require(states.map { state -> state.physicalFieldName }.toSet().size == states.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate physical state"
+        }
+        val constructorsByLogicalKey = constructors.associateBy { constructor ->
+            constructor.logicalConstructorKey
+        }
+        val baseDelegatingConstructorKeys = constructors.filter { constructor ->
+            constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
+        }.map { constructor -> constructor.logicalConstructorKey }.sorted()
+        require(states.flatMap { state -> state.initializers }.all { initializer ->
+            initializer.logicalConstructorKeys == baseDelegatingConstructorKeys &&
+                    initializer.logicalConstructorKeys.all(constructorsByLogicalKey::containsKey)
+        }) {
+            "generic-owner physical state initialization requires every exact base-delegating constructor root"
         }
         require(members.none { member ->
             DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in member.roles
@@ -2360,7 +2402,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 7
+    const val SCHEMA_VERSION = 8
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2577,9 +2619,23 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         state.physicalVisibility.name,
                         state.requirement.name,
                         state.physicalType.serialized().encoded(),
+                        state.initializers.size.toString(),
                         state.accessPaths.size.toString(),
                     ).joinToString("\t")
                 )
+                state.initializers.sortedBy { initializer -> initializer.kind.name }.forEach { initializer ->
+                    appendLine(
+                        listOf(
+                            "I",
+                            initializer.kind.name,
+                            initializer.fixedElementCount.toString(),
+                            initializer.logicalConstructorKeys.size.toString(),
+                        ).joinToString("\t")
+                    )
+                    initializer.logicalConstructorKeys.forEach { logicalConstructorKey ->
+                        appendLine("J\t${logicalConstructorKey.encoded()}")
+                    }
+                }
                 state.accessPaths.sortedWith(compareBy({ it.domain.name }, { it.operation.name })).forEach { access ->
                     appendLine(
                         listOf(
@@ -2911,8 +2967,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val states = List(stateCount) {
-                val stateFields = read("S", 7)
-                val accessCount = count(stateFields[6], "state access")
+                val stateFields = read("S", 8)
+                val initializerCount = count(stateFields[6], "state initializer")
+                val accessCount = count(stateFields[7], "state access")
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = stateFields[1].decoded(),
                     physicalFieldName = stateFields[2].decoded(),
@@ -2927,6 +2984,27 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         "state requirement",
                     ),
                     physicalType = stateFields[5].decoded().deserializedType(),
+                    initializers = List(initializerCount) {
+                        val initializerFields = read("I", 4)
+                        val logicalConstructorCount = count(
+                            initializerFields[3],
+                            "state initializer constructor",
+                        )
+                        DotNetGenericOwnerPhysicalStateInitializerRecord(
+                            kind = enumValue(
+                                initializerFields[1],
+                                DotNetGenericOwnerPhysicalStateInitializerKind.entries.toTypedArray(),
+                                "state initializer kind",
+                            ),
+                            logicalConstructorKeys = List(logicalConstructorCount) {
+                                read("J", 2)[1].decoded()
+                            },
+                            fixedElementCount = count(
+                                initializerFields[2],
+                                "state initializer fixed element",
+                            ),
+                        )
+                    },
                     accessPaths = List(accessCount) {
                         val accessFields = read("X", 9)
                         DotNetGenericOwnerPhysicalStateAccessRecord(
