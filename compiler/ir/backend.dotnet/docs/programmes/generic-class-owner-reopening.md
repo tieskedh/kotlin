@@ -410,10 +410,19 @@ non-null/invariant and independent method-generic arrays remain typed. The
 hostile projected `echo` typed and semantic MethodDefs now both record
 `System.Array`, but the capability dispatcher retains its compatibility probe
 and hence the correct override route. OctoTree `get(): T?` and an invariant
-`Array<T?>` constructor/result independently pin the nullable cases. Constructed
-classifier member types such as `Node<T>[]` remain the next late-binding
-grammar extension; field evidence alone must not be reused by name. See
+`Array<T?>` constructor/result independently pin the nullable cases. See
 [`../archive/generic-owner-nonexact-call-carriers-2026-08-15.md`](../archive/generic-owner-nonexact-call-carriers-2026-08-15.md).
+
+Constructed callable carriers now use the same path-unbound type tree as state.
+Constructor, member, and masked-default snapshots retain logical classifier
+keys and bind atomically only after the complete producer TypeDef map exists.
+The separate OctoTree `nodes` getter proves typed `Node<T>[]`, capability
+`System.Array`, missing-path rejection, and exact equality with its bound field
+carrier. Same-compilation snapshots without a stable library key remain
+unavailable. Schema 7 still serializes only fully bound physical records. The
+next product must publish the complete recursive family and build its paired
+candidate/C# consumers. See
+[`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 
 External-family binding consequently keeps logical and physical authority
 separate. It merges inherited producer slot domains, then compares exact

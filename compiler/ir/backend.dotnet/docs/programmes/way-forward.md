@@ -797,11 +797,21 @@ invariant `Array<T>`, and independent method-generic `Array<R>` retain their
 native GenericParam forms. OctoTree `get(): T?`, a nullable-array constructor/
 result pair, and the hostile C# producer/subclass projected-echo family prove
 the boundary on Framework 4.8 and .NET 10. This changes only production-inert
-records and their test physicalizer. The next recursive-product step must add
-late-bound constructed member types such as `Node<T>[]`; it may not regress to
-a display-name path or overstate an open vector merely to complete the C#
-surface. See
+records and their test physicalizer. See
 [`../archive/generic-owner-nonexact-call-carriers-2026-08-15.md`](../archive/generic-owner-nonexact-call-carriers-2026-08-15.md).
+
+The recursive callable grammar now shares one path-unbound tree with state.
+It adds void, method-GenericParam, and explicit `System.Array` leaves without
+adding a second classifier representation. Constructor/member/default-helper
+signatures retain logical producer keys, enforce their slot and GenericParam
+invariants before binding, and become physical records only after one complete
+TypeDef-path selection. The separate OctoTree `nodes` getter proves typed
+`Node<T>[]` and capability `System.Array`; its typed return binds identically to
+the field and rejects a missing Node path. Unknown classifiers and generic
+value classes remain unavailable. The next gate is the complete serialized
+OctoTree physical family plus record-driven candidate and direct C# products.
+See
+[`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
