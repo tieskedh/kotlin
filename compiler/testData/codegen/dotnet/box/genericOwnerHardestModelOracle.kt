@@ -84,6 +84,12 @@ private open class HostileMixed<in I, out O> {
 private open class HostileUnsafeStore<out T>(initial: T) {
     private var stored: T = initial
 
+    open var exposed: @UnsafeVariance T
+        get() = stored
+        set(value) {
+            installUnchecked(value)
+        }
+
     constructor(initial: T, marker: Int) : this(initial)
 
     @Suppress("UNCHECKED_CAST")
@@ -213,6 +219,16 @@ fun box(): String {
     val nullableString = openNullableCell<String>(null)
     if (nullableString.write("text") != null || nullableString.read() != "text") {
         return fail("open nullable reference construction")
+    }
+
+    val broadPropertyOwner = HostileUnsafeStore(11)
+    val broadPropertyView: HostileUnsafeStore<Any?> = broadPropertyOwner
+    broadPropertyView.exposed = "property-widened"
+    if (broadPropertyView.exposed != "property-widened") {
+        return fail("widened property semantic state")
+    }
+    if (runCatching { broadPropertyOwner.exposed }.exceptionOrNull() !is ClassCastException) {
+        return fail("widened property delayed typed failure")
     }
 
     val nullableDerivedInt = HostileNullableIntLeaf(null)
