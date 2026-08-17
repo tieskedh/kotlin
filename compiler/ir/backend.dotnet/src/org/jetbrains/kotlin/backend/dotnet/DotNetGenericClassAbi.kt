@@ -890,6 +890,7 @@ internal data class DotNetGenericOwnerPrototypeMember(
 /** Immutable, IR-free observation of one detached prototype member for compiler tests. */
 data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val sourceName: String,
+    val isPropertyAccessor: Boolean,
     val physicalBaseName: String,
     val sourceIndex: Int,
     val isFakeOverride: Boolean,
@@ -1208,6 +1209,7 @@ data class DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
 
 data class DotNetGenericOwnerPrototypeStateSnapshot(
     val fieldName: String,
+    val isFinal: Boolean,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
     /** Null means the field type is outside the bounded path-unbound carrier grammar. */
     val exactTypedCarrierType: DotNetGenericOwnerPrototypeTypeSnapshot?,
@@ -1240,6 +1242,9 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
 
 /** Bounded compiler-derived recipe for one explicit producer-owned field initializer. */
 enum class DotNetGenericOwnerPrototypeStateInitializerKind {
+    /** An explicit Kotlin zero/false initializer already supplied by CLR zero-initialization. */
+    DEFAULT_ZERO_VALUE,
+
     /** A fixed-length zeroed CLR vector whose element classifier retains the owner's parameter. */
     FIXED_ZEROED_SZ_ARRAY,
 
@@ -1845,6 +1850,24 @@ data class DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
     }
 }
 
+/**
+ * Producer-private MethodDef which has no KLIB callable identity but is required by an admitted
+ * owner's ordinary body graph. It remains outside member families, capabilities, and reflection.
+ */
+data class DotNetGenericOwnerPhysicalImplementationMethodRecord(
+    val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+    val visibility: DotNetGenericOwnerPhysicalMemberVisibility,
+    val dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+) {
+    init {
+        require(visibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
+                physicalMethod.signature.isInstance) {
+            "a generic-owner implementation method must be a private final instance MethodDef"
+        }
+    }
+}
+
 /** Complete producer-owned physical family for one logical Kotlin member. */
 data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
     val logicalMemberKey: String,
@@ -1903,7 +1926,7 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
     }
 }
 
-/** Producer-selected physical carrier for one logical owner-dependent field. */
+/** Producer-selected physical carrier for one field owned by a logical generic classifier. */
 data class DotNetGenericOwnerPhysicalStateRecord(
     val logicalFieldName: String,
     val physicalFieldName: String,
@@ -1912,6 +1935,7 @@ data class DotNetGenericOwnerPhysicalStateRecord(
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
     val initializers: List<DotNetGenericOwnerPhysicalStateInitializerRecord>,
     val accessPaths: List<DotNetGenericOwnerPhysicalStateAccessRecord>,
+    val isInitOnly: Boolean = false,
 ) {
     init {
         require(logicalFieldName.isNotEmpty() && physicalFieldName.isNotEmpty()) {
@@ -1923,13 +1947,27 @@ data class DotNetGenericOwnerPhysicalStateRecord(
         require(accessPaths.map { access -> access.domain to access.operation }.toSet().size == accessPaths.size) {
             "a generic-owner physical state record has duplicate domain/operation access paths"
         }
-        require(accessPaths.isNotEmpty() || initializers.isNotEmpty()) {
+        require(requirement == DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ||
+                accessPaths.isNotEmpty() || initializers.isNotEmpty()) {
             "a generic-owner physical state record requires exact access or initialization paths"
         }
         require(initializers.map { initializer -> initializer.kind }.toSet().size == initializers.size) {
             "a generic-owner physical state record has duplicate initializer recipes"
         }
+        require(!isInitOnly || initializers.isNotEmpty() && accessPaths.none { access ->
+            access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
+        }) {
+            "an init-only generic-owner field requires initialization and cannot publish a write path"
+        }
         when (requirement) {
+            DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> require(
+                !physicalType.referencesOwnerParameter() && accessPaths.all { access ->
+                    access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                            access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+                }
+            ) {
+                "declaration-independent generic-owner state requires an exact non-owner carrier"
+            }
             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
                 require(initializers.isEmpty()) {
                     "semantic-object generic-owner state does not admit a typed initializer recipe"
@@ -2016,6 +2054,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val reflection: DotNetGenericOwnerPhysicalReflectionRecord,
     val members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
     val states: List<DotNetGenericOwnerPhysicalStateRecord>,
+    val implementationMethods: List<DotNetGenericOwnerPhysicalImplementationMethodRecord> = emptyList(),
 ) {
     init {
         require(logicalOwnerKey.isNotEmpty()) { "a generic-owner physical family requires a logical owner key" }
@@ -2085,10 +2124,17 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                 }
             }
         }
+        require(implementationMethods.all { method ->
+            method.physicalMethod.physicalOwnerPath == physicalOwnerPath
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has an implementation MethodDef on another owner"
+        }
         val producerPrivateStateMethods = states.flatMap { state -> state.accessPaths }.filter { access ->
             access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD
         }.map { access -> access.physicalMethod }
-        val physicalMethodDefinitions = memberPhysicalMethodDefinitions + producerPrivateStateMethods
+        val implementationMethodDefinitions = implementationMethods.map { method -> method.physicalMethod }
+        val physicalMethodDefinitions = memberPhysicalMethodDefinitions + implementationMethodDefinitions +
+                producerPrivateStateMethods
         require(physicalMethodDefinitions.toSet().size == physicalMethodDefinitions.size) {
             "generic-owner physical family '$logicalOwnerKey' has colliding physical MethodDefs"
         }
@@ -2178,6 +2224,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                 member.defaultDispatcher?.let { dispatcher -> add(dispatcher.physicalOwnerPath to dispatcher.signature) }
             }
             producerPrivateStateMethods.forEach { method -> add(method.physicalOwnerPath to method.signature) }
+            implementationMethodDefinitions.forEach { method -> add(method.physicalOwnerPath to method.signature) }
         }
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
                 states.map { state -> state.physicalType } +
@@ -2353,6 +2400,9 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
                     member.directSuperTargets.forEach { target -> addAll(target.signature.allTypes()) }
                     member.defaultDispatcher?.let { dispatcher -> addAll(dispatcher.signature.allTypes()) }
                 }
+                owner.implementationMethods.forEach { method ->
+                    addAll(method.physicalMethod.signature.allTypes())
+                }
                 owner.states.forEach { state ->
                     add(state.physicalType)
                     state.accessPaths.forEach { access -> addAll(access.physicalMethod.signature.allTypes()) }
@@ -2380,6 +2430,9 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
                 owner.reflection.callables.forEach { callable ->
                     add(callable.invocationMethod.physicalOwnerPath)
                     callable.physicalMethods.forEach { method -> add(method.physicalOwnerPath) }
+                }
+                owner.implementationMethods.forEach { method ->
+                    add(method.physicalMethod.physicalOwnerPath)
                 }
                 owner.states.forEach { state ->
                     state.accessPaths.forEach { access -> add(access.physicalMethod.physicalOwnerPath) }
@@ -2618,7 +2671,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 12
+    const val SCHEMA_VERSION = 13
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2658,6 +2711,10 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         appendLine("N\t${owners.size}")
         owners.forEach { owner ->
             val members = owner.members.sortedBy { member -> member.logicalMemberKey }
+            val implementationMethods = owner.implementationMethods.sortedWith(compareBy(
+                { method -> method.physicalMethod.physicalMethodName },
+                { method -> method.physicalMethod.signature.serialized() },
+            ))
             val states = owner.states.sortedBy { state -> state.logicalFieldName }
             appendLine(
                 listOf(
@@ -2678,6 +2735,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     owner.constructors.size.toString(),
                     members.size.toString(),
                     states.size.toString(),
+                    implementationMethods.size.toString(),
                 ).joinToString("\t")
             )
             owner.physicalGenericParameters.forEach { parameter ->
@@ -2829,6 +2887,18 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     )
                 }
             }
+            implementationMethods.forEach { method ->
+                appendLine(
+                    listOf(
+                        "H",
+                        method.physicalMethod.physicalOwnerPath.joinToString("\u0000").encoded(),
+                        method.physicalMethod.physicalMethodName.encoded(),
+                        method.physicalMethod.signature.serialized().encoded(),
+                        method.visibility.name,
+                        method.dispatch.name,
+                    ).joinToString("\t")
+                )
+            }
             states.forEach { state ->
                 appendLine(
                     listOf(
@@ -2840,6 +2910,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         state.physicalType.serialized().encoded(),
                         state.initializers.size.toString(),
                         state.accessPaths.size.toString(),
+                        state.isInitOnly.toString(),
                     ).joinToString("\t")
                 )
                 state.initializers.sortedBy { initializer -> initializer.kind.name }.forEach { initializer ->
@@ -2958,7 +3029,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
-            val fields = read("O", 14)
+            val fields = read("O", 15)
             val logicalOwnerKey = fields[1].decoded()
             val ownerPath = fields[2].decoded().split('\u0000')
             val capabilityOwnerPath = fields[3].takeUnless { it == "-" }?.decoded()?.split('\u0000')
@@ -2992,6 +3063,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             val constructorCount = count(fields[11], "constructor")
             val memberCount = count(fields[12], "member")
             val stateCount = count(fields[13], "state")
+            val implementationMethodCount = count(fields[14], "implementation method")
             val physicalGenericParameters = List(physicalGenericParameterCount) {
                 val parameterFields = read("G", 4)
                 val typeConstraintCount = count(parameterFields[3], "generic parameter type constraint")
@@ -3205,8 +3277,28 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     defaultDispatcher = defaultDispatcher,
                 )
             }
+            val implementationMethods = List(implementationMethodCount) {
+                val methodFields = read("H", 6)
+                DotNetGenericOwnerPhysicalImplementationMethodRecord(
+                    physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        physicalOwnerPath = methodFields[1].decoded().split('\u0000'),
+                        physicalMethodName = methodFields[2].decoded(),
+                        signature = methodFields[3].decoded().deserializedSignature(),
+                    ),
+                    visibility = enumValue(
+                        methodFields[4],
+                        DotNetGenericOwnerPhysicalMemberVisibility.entries.toTypedArray(),
+                        "implementation method visibility",
+                    ),
+                    dispatch = enumValue(
+                        methodFields[5],
+                        DotNetGenericOwnerPhysicalMemberDispatch.entries.toTypedArray(),
+                        "implementation method dispatch",
+                    ),
+                )
+            }
             val states = List(stateCount) {
-                val stateFields = read("S", 8)
+                val stateFields = read("S", 9)
                 val initializerCount = count(stateFields[6], "state initializer")
                 val accessCount = count(stateFields[7], "state access")
                 DotNetGenericOwnerPhysicalStateRecord(
@@ -3289,6 +3381,13 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             ),
                         )
                     },
+                    isInitOnly = when (stateFields[8]) {
+                        "true" -> true
+                        "false" -> false
+                        else -> throw IllegalArgumentException(
+                            "generic-owner family artifact has invalid init-only marker '${stateFields[8]}'"
+                        )
+                    },
                 )
             }
             DotNetGenericOwnerPhysicalFamilyRecord(
@@ -3306,6 +3405,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 reflection = reflection,
                 members = members,
                 states = states,
+                implementationMethods = implementationMethods,
             )
         }
         require(index == lines.size) { "generic-owner family artifact has trailing records" }
@@ -3786,8 +3886,11 @@ fun DotNetGenericOwnerPrototypeSnapshot.physicalizeExternalSubclass(
     )
 }
 
-/** The only safe conclusion currently available for one owner-dependent field. */
+/** The physical-carrier conclusion available for one producer-owned generic-class field. */
 enum class DotNetGenericOwnerStateCarrierRequirement {
+    /** The exact field carrier is independent of every owner type parameter. */
+    DECLARATION_INDEPENDENT_STORAGE,
+
     /** A complete field/call/access graph is still required before selecting a physical carrier. */
     COMPLETE_ACCESS_GRAPH_REQUIRED,
 
@@ -4258,6 +4361,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 ?: prototypeFor(source, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
             DotNetGenericOwnerPrototypeMemberSnapshot(
                 sourceName = source.name.asString(),
+                isPropertyAccessor = source.correspondingPropertySymbol != null,
                 physicalBaseName = source.dotNetIlMethodName(),
                 sourceIndex = sourceIndex,
                 isFakeOverride = source.isFakeOverride,
@@ -4344,9 +4448,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
             val exactTypedCarrierType = state.field.type.genericOwnerPrototypeStateType(
                 owner,
                 preLoweringDeclarationKeys,
-            )?.takeIf(DotNetGenericOwnerPrototypeTypeSnapshot::referencesOwnerParameter)
+            )
             DotNetGenericOwnerPrototypeStateSnapshot(
                 fieldName = state.field.name.asString(),
+                isFinal = state.field.isFinal,
                 requirement = state.requirement,
                 exactTypedCarrierType = exactTypedCarrierType,
                 initializers = state.initializers.map { initializer ->
@@ -4359,6 +4464,9 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                         kind = when {
                             retainsExactFixedVector ->
                                 DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+                            initializer.kind ==
+                                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_ZERO_VALUE ->
+                                DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_ZERO_VALUE
                             initializer.kind ==
                                     DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE ->
                                 DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE

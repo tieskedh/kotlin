@@ -72,7 +72,7 @@ Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
 consumers retain the overridden producer logical key. The architecture
-   artifact, now at schema 12, binds that key to the exact producer-selected
+   artifact, now at schema 13, binds that key to the exact producer-selected
 typed/semantic MethodDef owner/name, dispatch, slot-domain vector, and neutral
 structural signature after complete producer-fingerprint/schema validation.
 Stale, truncated, wrong-producer, duplicate, incomplete, and
@@ -103,8 +103,8 @@ sealed and final producer slots reject the physicalization. The resulting
 record drives the hostile C# oracle only.
 
 A separate consumer-side construction record now corrects the earlier
-constructor-owned mode model while keeping runtime roots outside producer
-schema 12. The final compilation supplies a finite set of concrete runtime
+constructor-owned mode model while keeping runtime roots outside the producer
+artifact. The final compilation supplies a finite set of concrete runtime
 types; the decoded
 producer supplies the open owner, semantic capability, and strict public
 one-`!T` constructor. The current fallback proof requires an unconstrained
@@ -273,10 +273,14 @@ capability returns the same `Node<T>[]` reference through `System.Array`.
 Direct C# proves incompatible pre-mutation failure and private/final
 interface-map targets. The outer open Tree now materializes its semantic
 object root, public constructor/members and non-generic capability. Its
-physicalizer requires the three real state-to-child compiler-census calls to
-remain semantic-capability routes; external C# proves one graph and inherited
-base dispatchers. The next migration proof is exact whole-family metadata and
-reflection normalization. See
+  physicalizer requires the three real state-to-child compiler-census calls to
+  remain semantic-capability routes; external C# proves one graph and inherited
+  base dispatchers. Exhaustive metadata/reflection normalization then closes
+  every physical table and logical callable join. Schema 13 completes the same
+  product with declaration-independent exact/init-only fields, a private-final
+  non-KLIB implementation MethodDef, and the complete recursive algorithms.
+  The next migration proof is paired representative measurement, not another
+  owner or body substitute. See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
@@ -286,6 +290,10 @@ The state-access capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 The outer-root checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
+The metadata/reflection checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
+The schema-13 ordinary-body closure is recorded in
+[`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,

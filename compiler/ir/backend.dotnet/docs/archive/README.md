@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md)
+  records schema-13 declaration-independent fields, private non-KLIB
+  implementation MethodDefs, the complete OctoTree algorithms, and executable
+  state/body evidence on CLR 4 and CoreCLR.
 - [`generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md)
   records classifier-contextual physical MethodDef normalization, hidden
   capability/private methods, exhaustive raw ECMA-335 table inspection, and
