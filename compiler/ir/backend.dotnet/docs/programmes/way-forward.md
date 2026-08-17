@@ -781,20 +781,23 @@ open nullable `T?` fail closed. In a real separate OctoTree producer this
 records `Node<T>[]` for `Branch.nodes`, `T` for `Leaf.value`, and the structural
 `Node<T>` candidate for semantic `root`. The producer census has 21 exact,
 nine capability, and nine external static routes; four additional exact sites
-  belong only to the consumer. Schema 12 now serializes and binds the complete
-  four-owner recursive physical family. It includes atomic TypeDef/MethodDef
-  closure, private semantic root access, exact `Node<T>[]` initialization, and
-  the exact constructor parameter which initializes `Leaf.value: !T`. This
-  schema also fixes the Kotlin-sealed CLR shape before the product grows:
-  `Node<T>` is abstract rather than CLI-sealed and every base constructor is
-  `FamilyAndAssembly`, so only a derived TypeDef in the producer assembly can
-  invoke it. A decoded record drives a real `Node<T>`/`Leaf<T>` C# producer;
-  external C# constructs and reflects `Leaf<int>` with true `T` state, while
-  an external subclass fails compilation on both runtime profiles. This remains
-  production-inert: it changes no emitted production field, KLIB/DLL schema,
-  or public owner. The next gate extends the same record-driven candidate over
-  Tree/Branch, member roles, semantic state/calls, and the complete direct C#
-  surface. See
+belong only to the consumer. Schema 12 now serializes and binds the complete
+four-owner recursive physical family. It includes atomic TypeDef/MethodDef
+closure, private semantic root access, exact `Node<T>[]` initialization, and
+the exact constructor parameter which initializes `Leaf.value: !T`. This
+schema also fixes the Kotlin-sealed CLR shape before the product grows:
+`Node<T>` is abstract rather than CLI-sealed and every base constructor is
+`FamilyAndAssembly`, so only a derived TypeDef in the producer assembly can
+invoke it. A decoded record first drove a real `Node<T>`/`Leaf<T>` C# producer;
+external C# constructs and reflects `Leaf<int>` with true `T` state, while an
+external subclass fails compilation on both runtime profiles. The same product
+now adds final `Branch<T> : Node<T>`, both exact base/this constructors, and a
+true private `Node<T>[8]` initializer on only the base root. External C# proves
+the open `Node<T>[]` and closed `Node<int>[]` field plus empty and populated
+constructor behavior. This remains production-inert: it changes no emitted
+production field, KLIB/DLL schema, or public owner. The next gate adds the
+recorded Node/Leaf/Branch callable families and state access, followed by the
+outer Tree semantic root/calls and complete direct C# surface. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
 The existing physical member-signature grammar has also been corrected at its
@@ -827,13 +830,15 @@ methods without inventing a logical KLIB callable or reflection member, while
 retaining the complete paired matrix whenever a semantic path or conversion
 exists. Schema 10 records exact owner visibility/dispatch and member-slot
 visibility, including protected semantic hooks and private/final explicit
-  capability dispatchers. Schema 11 completes the logical-keyed recursive
-  OctoTree family, adds exact positional constructor-to-state initialization,
-  and rejects phantom producer TypeDefs or MethodDef owners atomically. Schema
-  12 adds the abstract/non-CLI-sealed base plus `FamilyAndAssembly` constructor
-  rule and proves it with a record-driven true-`T` Leaf product, positive C#
-  consumer, and rejected external subclass. The next gate completes that same
-  OctoTree candidate and direct C# product rather than selecting another owner.
+capability dispatchers. Schema 11 completes the logical-keyed recursive
+OctoTree family, adds exact positional constructor-to-state initialization,
+and rejects phantom producer TypeDefs or MethodDef owners atomically. Schema
+12 adds the abstract/non-CLI-sealed base plus `FamilyAndAssembly` constructor
+rule and proves it with a record-driven true-`T` Leaf product, positive C#
+consumer, and rejected external subclass. That same product now includes the
+exact recursive Branch `Node<T>[]` carrier, fixed length-eight initializer,
+both constructor edges, and open/closed direct C# evidence. The next gate adds
+its callable/state-access families rather than selecting another owner.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -848,6 +853,8 @@ Schema 11 is recorded in
 [`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
 Schema 12 is recorded in
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
+The Branch product is recorded in
+[`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
