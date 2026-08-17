@@ -103,6 +103,7 @@ enum class DotNetGenericOwnerPropertyAccessorKind {
 enum class DotNetGenericOwnerSemanticHookReason {
     GENERAL_WIDENED_BODY,
     PAIRED_OPEN_OUTPUT_STATE,
+    ABSTRACT_BROAD_PROPERTY_OBLIGATION,
     INHERITED_SEMANTIC_OVERRIDE,
 }
 
@@ -2053,6 +2054,15 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
                 "generic-owner semantic member family '$logicalMemberKey' lacks its capability dispatcher"
             }
         }
+        if (DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION in semanticHookReasons) {
+            require(slots.single { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            }.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT && slots.single { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+            }.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) {
+                "generic-owner abstract broad-property family '$logicalMemberKey' must retain both abstract slots"
+            }
+        }
         require(directSuperTargets.toSet().size == directSuperTargets.size) {
             "generic-owner physical member family '$logicalMemberKey' has duplicate direct-super targets"
         }
@@ -2453,15 +2463,24 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             val getterRouteIsComplete = when (property.getterRoute) {
                 DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY ->
                     DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in getterFamily.roles
-                DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK ->
+                DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK -> {
+                    val typedSlot = getterFamily.slots.single { slot ->
+                        slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                    }
+                    val semanticSlot = getterFamily.slots.single { slot ->
+                        slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+                    }
                     getterFamily.roles.containsAll(setOf(
                         DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
                         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
                         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
                     )) && getterFamily.semanticHookReasons.any { reason ->
                         reason == DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE ||
+                                reason == DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION ||
                                 reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
-                    }
+                    } && (typedSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) ==
+                            (semanticSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT)
+                }
             }
             val setterRouteIsComplete = when (property.setterRoute) {
                 DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT ->
@@ -2471,6 +2490,12 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                             membersByLogicalKey.getValue(checkNotNull(property.setterLogicalMemberKey)).roles
                 DotNetGenericOwnerPhysicalPropertySetterRoute.COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK -> {
                     val setterFamily = membersByLogicalKey.getValue(checkNotNull(property.setterLogicalMemberKey))
+                    val typedSlot = setterFamily.slots.single { slot ->
+                        slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                    }
+                    val semanticSlot = setterFamily.slots.single { slot ->
+                        slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+                    }
                     setterFamily.roles.containsAll(setOf(
                         DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
                         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
@@ -2478,7 +2503,8 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                     )) && setterFamily.semanticHookReasons.any { reason ->
                         reason == DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY ||
                                 reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
-                    }
+                    } && (typedSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) ==
+                            (semanticSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT)
                 }
             }
             getterRouteIsComplete && setterRouteIsComplete
@@ -3032,7 +3058,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 17
+    const val SCHEMA_VERSION = 18
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()

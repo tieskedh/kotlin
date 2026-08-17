@@ -103,6 +103,20 @@ public open class HostileUnsafeStore<out T>(initial: T) {
     public open fun label(prefix: String = "default"): String = prefix
 }
 
+public abstract class HostileAbstractProperty<out T> {
+    public abstract var exposed: @UnsafeVariance T
+}
+
+public class HostileAbstractPropertyStorage<T>(initial: T) : HostileAbstractProperty<T>() {
+    private var stored: T = initial
+
+    public override var exposed: T
+        get() = stored
+        set(value) {
+            stored = value
+        }
+}
+
 public open class HostileTypedStore<T>(initial: T) {
     private var stored: T = initial
 
@@ -288,6 +302,19 @@ fun box(): String {
         return fail("cross-library widened property delayed typed failure")
     }
     widenedUnsafeStore.exposed = 2
+    val exactAbstractProperty = HostileAbstractPropertyStorage(17)
+    val widenedAbstractProperty: HostileAbstractProperty<Any?> = exactAbstractProperty
+    widenedAbstractProperty.exposed = "abstract-property-widened"
+    if (widenedAbstractProperty.exposed != "abstract-property-widened") {
+        return fail("cross-library abstract widened property semantic state")
+    }
+    if (runCatching { exactAbstractProperty.exposed }.exceptionOrNull() !is ClassCastException) {
+        return fail("cross-library abstract widened property delayed typed failure")
+    }
+    widenedAbstractProperty.exposed = 18
+    if (exactAbstractProperty.exposed != 18) {
+        return fail("cross-library abstract widened property recovery")
+    }
     val exactNested = arrayOf(2, 3)
     val semanticNested = arrayOf<Any?>("nested", null)
     if (exactUnsafeStore.echo(exactNested) !== exactNested ||

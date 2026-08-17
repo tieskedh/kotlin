@@ -1024,6 +1024,32 @@ nullable transforms, or the atomic public owner migration. Continue with the
 next complete hostile condition. See
 [`../archive/generic-owner-broad-property-routing-2026-08-17.md`](../archive/generic-owner-broad-property-routing-2026-08-17.md).
 
+The abstract broad-property condition is now closed at physical-family schema
+18. An abstract covariant property cannot derive a raw read obligation from a
+local backing field because neither body nor field exists yet. The planner now
+records `ABSTRACT_BROAD_PROPERTY_OBLIGATION` on its getter whenever the paired
+abstract setter has a general widened domain. The physical family consequently
+requires an abstract typed getter/setter and abstract protected semantic
+getter/setter together; its concrete private-final capability dispatchers call
+the typed property for compatible values and the semantic hooks otherwise.
+Roslyn rejects a concrete typed-only C# subclass and accepts a complete one on
+Framework 4.8 and .NET 10.
+
+This work also closed the more dangerous derived-state bug found by that
+oracle. A concrete Kotlin override previously inherited the semantic method
+roles after its field had already been classified as true `T` storage.
+Inherited logical semantic obligations now enter reachability before field
+classification, so the overriding body and private setter taint the one field
+to `object`. The Kotlin erased oracle and the record-driven candidate both
+prove incompatible widened write, raw read, delayed typed failure, and
+recovery. The closed census adds two exact and three capability property calls
+without a missing route. Schema validation rejects mismatched abstract
+dispatch, a concrete family claiming the abstract reason, and an unknown
+serialized obligation. This closes abstract broad properties, not overload/
+generated-name collisions, base/interface nullable transforms, or the atomic
+public owner migration. See
+[`../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md`](../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

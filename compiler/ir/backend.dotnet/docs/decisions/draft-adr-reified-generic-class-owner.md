@@ -304,6 +304,24 @@ operation fails C# compilation because implementing only the typed member does
 not satisfy the wider semantic obligation. This remains physical feasibility
 evidence: the producer is not yet emitted from Kotlin IR.
 
+Physical-family schema 18 now advances that feasibility result to
+compiler-derived Kotlin evidence for broad properties. An abstract covariant
+property records a distinct raw getter obligation from its paired abstract
+broad setter even though it has no local state. Its typed PropertyDef
+accessors and protected semantic hooks are all abstract, with only the
+explicit capability dispatchers implemented on the base. The record-driven
+producer causes both supported C# compilers to reject a typed-only concrete
+subclass and executes a complete subclass across separate assemblies.
+
+The same oracle found that inherited semantic roles were previously merged
+after state-carrier selection in a concrete Kotlin override. That ordering is
+invalid: a base capability can reach the derived semantic setter and mutate
+derived state. The planner now includes inherited logical semantic
+obligations in reachability before selecting storage, so the concrete override
+uses one `object` field rather than a prematurely approved `!T` field. This is
+still production-inert architecture evidence and does not admit the public
+generic owner ABI.
+
 The backend now also contains a production-inert, fail-closed architecture
 planner immediately before the existing erased generic-owner/interface work.
 For each local Kotlin-owned generic class it records member authority, explicit
