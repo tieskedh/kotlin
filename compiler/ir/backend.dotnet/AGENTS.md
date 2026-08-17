@@ -644,7 +644,15 @@ See the
   input provenance and never manufactures typed evidence. All producers must
   be physically typed to select typed storage; any object-domain producer
   selects semantic state, and an unsupported or source-free path remains fail-
-  closed. Neither conclusion admits its owner. The hostile test-owned
+  closed. A null literal is physically neutral only when its destination is a
+  marked-nullable reference to a local non-value generic class with a stable
+  logical key, exact arity, invariant arguments, and no explicitly nullable
+  owner-parameter argument. A constructor supplies typed evidence only for the
+  same proven carrier. Bare unconstrained `T?`, `C<T?>`, external classifiers,
+  projections, value classes, and an owner without a selected physical family
+  remain semantic or unresolved. Null contributes no receiver origin; an
+  only-null field must still fail closed when read. Neither conclusion admits
+  its owner. The hostile test-owned
   physicalizer may consume immutable snapshots to generate temporary CLR/C#
   assemblies, but production codegen still must not consume them. Detached
   Kotlin generic subclass families link typed entry to typed entry and semantic
@@ -696,7 +704,11 @@ See the
   same owner's strict capability must check/narrow input before mutation and
   widen/box output after reading; it may not add object fallback state or a
   typed cache. An incompatible capability write must leave the prior state
-  unchanged. Any semantic, unresolved, source-free, or externally writable
+  unchanged. A proven private generic-class reference state may use private
+  typed identity accessors while the owning public operation retains its
+  non-generic open-world capability; exact internal bodies must not cross that
+  capability merely because the capability exists. Any semantic, unresolved,
+  source-free, or externally writable
   producer continues to require semantic object state. This rule is
   architecture-test-only and does not admit production `C<T>`. Derive
   representative call mixes from a production-inert Kotlin IR census, never

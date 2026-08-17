@@ -509,19 +509,48 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
             arguments = listOf(DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)),
         )
     }
+    prototypes.singleOrNull { prototype ->
+        prototype.ownerName == "GenericOwnerBareNullableSlot"
+    }?.let { nullableControl ->
+        check(nullableControl.states.single { state -> state.fieldName == "value" }.let { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                    state.initializers.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE &&
+                    state.writes.single { write ->
+                        write.producerName == "<field-initializer:value>"
+                    }.provenance == DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+        }) {
+            "Bare T? null state must remain semantic across value/reference substitutions: " +
+                    nullableControl.states
+        }
+    }
     check(branch.constructors.count { constructor -> !constructor.delegatesToThis } == 1 &&
             branch.constructors.count { constructor -> constructor.delegatesToThis } == 1) {
         "OctoTree.Branch must retain one exact base and one this-delegating constructor root: " +
                 branch.constructors
     }
     check(tree.states.single { state -> state.fieldName == "root" }.let { root ->
-        root.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
-                root.exactTypedCarrierType == nodeCarrier &&
-                root.initializers.all { initializer ->
-                    initializer.kind == DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
-                }
+        if (nodeCarrier == null) {
+            root.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                    root.exactTypedCarrierType == null &&
+                    root.initializers.all { initializer ->
+                        initializer.kind == DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
+                    }
+        } else {
+            root.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                    root.exactTypedCarrierType == nodeCarrier &&
+                    root.initializers.all { initializer ->
+                        initializer.kind == DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
+                    } && root.writes.map { write -> write.producerName }.toSet() ==
+                    setOf("<set-root>", "<field-initializer:root>") &&
+                    root.writes.all { write ->
+                        write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                    }
+        }
     }) {
-        "OctoTree.root must retain semantic nullable subtype state: ${tree.states}"
+        "OctoTree.root must remain semantic without a physical family and become a proven " +
+                "nullable Node<T> reference with one: ${tree.states}"
     }
     check(tree.states.single { state -> state.fieldName == "depth" }.let { depth ->
         depth.isFinal &&
@@ -685,8 +714,14 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         }
         val rootState = treeOwner.states.single { state -> state.logicalFieldName == "root" }
         val privateRootMethods = rootState.accessPaths.map { access -> access.physicalMethod }.toSet()
-        check(rootState.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
-                rootState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+        val rootPhysicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+            typePath = nodeOwner.physicalOwnerPath,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+        )
+        check(rootState.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                rootState.physicalType == rootPhysicalType &&
                 rootState.accessPaths.map { access -> access.operation }.toSet() ==
                 DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
                 rootState.accessPaths.all { access ->
@@ -697,7 +732,7 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
                 } && treeOwner.reflection.callables.none { callable ->
                     callable.physicalMethods.any { method -> method in privateRootMethods }
         }) {
-            "OctoTree.root did not bind to hidden producer-private object state access: $rootState"
+            "OctoTree.root did not bind to hidden producer-private Node<T> state access: $rootState"
         }
         val depthState = treeOwner.states.single { state -> state.logicalFieldName == "depth" }
         val actualState = treeOwner.states.single { state -> state.logicalFieldName == "actual" }
@@ -1080,9 +1115,15 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             }) {
         "The bounded OctoTree root proof received an unsupported owner/constructor record: $tree"
     }
+    val expectedRootType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+        typePath = node.physicalOwnerPath,
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+    )
     check(rootState.physicalVisibility == DotNetGenericOwnerPhysicalStateVisibility.PRIVATE &&
-            rootState.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
-            rootState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            rootState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+            rootState.physicalType == expectedRootType &&
             rootState.initializers.isEmpty() &&
             listOf(rootReadAccess, rootWriteAccess).all { access ->
                 access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
@@ -1097,7 +1138,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             rootWriteAccess.physicalMethod.signature.parameterSlots.singleOrNull()?.type == rootState.physicalType &&
             rootWriteAccess.physicalMethod.signature.returnSlot.type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()) {
-        "The OctoTree root did not retain one private semantic object state/access pair: $rootState"
+        "The OctoTree root did not retain one private typed Node<T> state/access pair: $rootState"
     }
     val treeIndependentIntParameters = listOf(
         DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
@@ -1707,8 +1748,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     stopwatch.Stop();
                     long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
                     long periodic = PeriodicRenderingCalls(iterations);
-                    long typed = Candidate ? iterations * 2L + periodic : 0L;
-                    long semantic = Candidate ? iterations * 4L : 0L;
+                    long typed = Candidate ? iterations * 6L + periodic : 0L;
+                    long semantic = 0L;
                     long erased = Candidate ? 0L : iterations * 2L + periodic;
                     Console.WriteLine(
                         "GENERIC_OWNER_APPLICATION_MEASUREMENT|workloadVersion=2" +
@@ -1752,23 +1793,20 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     {
                         if (route == "octo-tree-typed-path")
                         {
-                            typed = iterations * 2L;
-                            semantic = iterations * 4L;
-                            conversions = iterations * 4L;
-                            checks = iterations;
+                            typed = iterations * 6L;
+                            conversions = iterations * 2L;
                         }
                         else if (route == "octo-tree-capability-path")
                         {
-                            semantic = iterations * 6L;
-                            conversions = iterations * 6L;
-                            checks = iterations * 2L;
+                            typed = iterations * 4L;
+                            semantic = iterations * 2L;
+                            conversions = iterations * 4L;
+                            checks = iterations;
                         }
                         else if (route == "octo-tree-clusterization")
                         {
-                            typed = iterations * 9L;
-                            semantic = iterations * 9L;
-                            conversions = iterations * 18L;
-                            checks = iterations * 8L;
+                            typed = iterations * 18L;
+                            conversions = iterations * 2L;
                         }
                         else if (route == "octo-tree-rendering") typed = iterations;
                     }
@@ -1783,7 +1821,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         "GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT|workloadVersion=2" +
                         "|representation=" + Representation + "|route=" + route +
                         "|ownerStateCarrierRequirement=" +
-                        (Candidate ? "MIXED_EXACT_AND_SEMANTIC" : "ERASED_OBJECT") +
+                        (Candidate ? "TYPED_PRIVATE_ROOT_WITH_SEMANTIC_EXPORT" : "ERASED_OBJECT") +
                         "|iterations=" + iterations + "|checksum=" + checksum +
                         "|elapsedTicks=" + stopwatch.ElapsedTicks + "|frequency=" + Stopwatch.Frequency +
                         "|allocatedBytes=" + allocated + "|typedEntryCalls=" + typed +
@@ -1924,18 +1962,21 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 )
                 {
                     int depth = this.${treeDepthSlot.physicalMethodName}();
-                    object current = this.${rootReadAccess.physicalMethod.physicalMethodName}();
+                    $rootStateType current = this.${rootReadAccess.physicalMethod.physicalMethodName}();
                     while (true)
                     {
                         if (current == null) return null;
-                        $leafCapabilityType leaf = current as $leafCapabilityType;
+                        ${leaf.physicalOwnerPath.joinToString(".")}<${treeTypeParameters.joinToString(", ")}> leaf =
+                            current as ${leaf.physicalOwnerPath.joinToString(".")}<${treeTypeParameters.joinToString(", ")}>;
                         if (leaf != null)
                         {
-                            return leaf.${leafReadCapabilityIdentity.physicalMethodName}();
+                            return leaf.${leafReadSlot.physicalMethodName}();
                         }
-                        $branchCapabilityType branch = ($branchCapabilityType)current;
-                        System.Array nodes = branch.${branchReadCapabilityIdentity.physicalMethodName}();
-                        current = nodes.GetValue(__kotlin_number(value0, value1, value2, --depth));
+                        ${branch.physicalOwnerPath.joinToString(".")}<${treeTypeParameters.joinToString(", ")}> branch =
+                            (${branch.physicalOwnerPath.joinToString(".")}<${treeTypeParameters.joinToString(", ")}>)current;
+                        ${branchState.physicalType.renderSnapshotCSharpType(treeTypeParameters)} nodes =
+                            branch.${branchReadSlot.physicalMethodName}();
+                        current = nodes[__kotlin_number(value0, value1, value2, --depth)];
                     }
                 }
 
@@ -1943,14 +1984,13 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     ${treeSetSlot.renderParameters(treeTypeParameters)}
                 )
                 {
-                    object current = this.${rootReadAccess.physicalMethod.physicalMethodName}();
+                    $rootStateType current = this.${rootReadAccess.physicalMethod.physicalMethodName}();
                     if (current == null)
                     {
                         current = new ${branch.physicalOwnerPath.joinToString(".")}<${treeTypeParameters.joinToString(", ")}>();
                         this.${rootWriteAccess.physicalMethod.physicalMethodName}(current);
                     }
-                    $nodeCapabilityType node = ($nodeCapabilityType)current;
-                    if (node.${nodeSetCapabilityIdentity.physicalMethodName}(
+                    if (current.${nodeSetSlot.physicalMethodName}(
                             value0, value1, value2, value3,
                             this.${treeDepthSlot.physicalMethodName}() - 1))
                     {
@@ -1963,7 +2003,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
 
                 ${treeToStringSlot.visibility.renderVisibility()} override $treeToStringReturnType ${treeToStringSlot.physicalMethodName}()
                 {
-                    object value = this.${rootReadAccess.physicalMethod.physicalMethodName}();
+                    $rootStateType value = this.${rootReadAccess.physicalMethod.physicalMethodName}();
                     return value == null ? "null" : value.ToString();
                 }
 
@@ -2252,8 +2292,13 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
                 );
                 if (openRootField == null || closedRootField == null ||
-                        openRootField.FieldType != typeof(object) ||
-                        closedRootField.FieldType != typeof(object) ||
+                        !openRootField.FieldType.IsGenericType ||
+                        openRootField.FieldType.GetGenericTypeDefinition() != typeof($nodeOpenType) ||
+                        openRootField.FieldType.GetGenericArguments().Length != 1 ||
+                        openRootField.FieldType.GetGenericArguments()[0] !=
+                            treeDefinition.GetGenericArguments()[0] ||
+                        closedRootField.FieldType !=
+                            typeof(${node.physicalOwnerPath.joinToString(".")}<int>) ||
                         closedRootField.GetValue(tree) != null) return 52;
                 FieldInfo openDepthField = treeDefinition.GetField(
                     ${depthState.physicalFieldName.asCSharpStringLiteral()},
@@ -2282,10 +2327,13 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
                 );
                 if (rootReader == null || rootWriter == null ||
-                        !rootReader.IsPrivate || rootReader.ReturnType != typeof(object) ||
+                        !rootReader.IsPrivate ||
+                        rootReader.ReturnType !=
+                            typeof(${node.physicalOwnerPath.joinToString(".")}<int>) ||
                         rootReader.GetParameters().Length != 0 || !rootWriter.IsPrivate ||
                         rootWriter.ReturnType != typeof(void) || rootWriter.GetParameters().Length != 1 ||
-                        rootWriter.GetParameters()[0].ParameterType != typeof(object)) return 53;
+                        rootWriter.GetParameters()[0].ParameterType !=
+                            typeof(${node.physicalOwnerPath.joinToString(".")}<int>)) return 53;
                 if (tree.${treeDepthSlot.physicalMethodName}() != 2 ||
                         tree.${treeGetSlot.physicalMethodName}(0, 0, 0) != null) return 54;
 
@@ -4142,10 +4190,12 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                             logicalConstructorKeys = baseConstructorKeys,
                         )
                     DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE -> {
-                        check(physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()) {
-                            "The OctoTree default-null initializer does not target object storage: $state"
+                        check(physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                                physicalType.namedTypeCategory ==
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS) {
+                            "The OctoTree default-null initializer does not target proven reference storage: $state"
                         }
-                        // CLR object fields are already null before any constructor body executes.
+                        // CLR reference fields are already null before any constructor body executes.
                         null
                     }
                     DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER ->
@@ -4208,6 +4258,77 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 }
                 return candidates.singleOrNull()
             }
+            fun privateTypedAccessOrNull(
+                operation: DotNetGenericOwnerPhysicalStateAccessOperation,
+            ): DotNetGenericOwnerPhysicalStateAccessRecord? {
+                val candidates = prototype.members.filter { source ->
+                    val reachesState = when (operation) {
+                        DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                            state.fieldName in source.directStateReadNames
+                        DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                            state.fieldName in source.directStateWriteNames
+                    }
+                    reachesState && source.logicalBindingKey == null && source.isPropertyAccessor &&
+                            source.physicalVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                            source.roles == setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) &&
+                            source.exactPathUnboundSignatures
+                                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                                ?.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                                ?.let { signature ->
+                                    when (operation) {
+                                        DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                                            signature.parameterSlots.isEmpty() &&
+                                                    signature.returnSlot.type == physicalType
+                                        DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                                            signature.parameterSlots.singleOrNull()?.type == physicalType &&
+                                                    signature.returnSlot.type.kind ==
+                                                    DotNetGenericOwnerPhysicalTypeKind.VOID
+                                    }
+                                } == true
+                }
+                check(candidates.size <= 1) {
+                    "The OctoTree state '${state.fieldName}' has ambiguous private typed $operation access: $candidates"
+                }
+                if (candidates.isEmpty()) return null
+                val signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+                    isInstance = true,
+                    genericArity = 0,
+                    returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
+                        if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
+                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
+                        } else {
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                        },
+                        if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
+                            physicalType
+                        } else {
+                            DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
+                        },
+                    ),
+                    parameterSlots = if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE) {
+                        listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
+                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                            physicalType,
+                        ))
+                    } else {
+                        emptyList()
+                    },
+                )
+                return DotNetGenericOwnerPhysicalStateAccessRecord(
+                    domain = DotNetGenericOwnerPhysicalStateAccessDomain.TYPED,
+                    operation = operation,
+                    conversion = DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
+                    bindingKind = DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD,
+                    logicalMemberKey = null,
+                    role = null,
+                    physicalVisibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+                    physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        physicalOwnerPath = ownerPath,
+                        physicalMethodName = "__kotlin_state_${stateIndex}_${operation.name.lowercase()}",
+                        signature = signature,
+                    ),
+                )
+            }
             val accessPaths = when (state.requirement) {
                 DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> buildList {
                     logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.READ)?.let(::add)
@@ -4266,10 +4387,14 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                     DotNetGenericOwnerPhysicalStateAccessOperation.entries.map(::privateAccess)
                 }
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> buildList {
-                    add(checkNotNull(logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.READ)) {
+                    add(checkNotNull(
+                        logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
+                            ?: privateTypedAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
+                    ) {
                         "The OctoTree typed state '${state.fieldName}' lacks one exact logical read"
                     })
-                    logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)?.let(::add)
+                    (logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
+                        ?: privateTypedAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE))?.let(::add)
                     check(initializers.isNotEmpty() || any { access ->
                         access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
                     }) {

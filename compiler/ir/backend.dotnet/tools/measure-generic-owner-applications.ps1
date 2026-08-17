@@ -526,21 +526,18 @@ function Get-ExpectedRouteProtocol(
         if ($Representation -eq 'candidate') {
             switch ($Route) {
                 'octo-tree-typed-path' {
-                    $result.typedEntryCalls = $ExpectedIterations * 2L
-                    $result.semanticCapabilityCalls = $ExpectedIterations * 4L
+                    $result.typedEntryCalls = $ExpectedIterations * 6L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+                }
+                'octo-tree-capability-path' {
+                    $result.typedEntryCalls = $ExpectedIterations * 4L
+                    $result.semanticCapabilityCalls = $ExpectedIterations * 2L
                     $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 4L
                     $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
                 }
-                'octo-tree-capability-path' {
-                    $result.semanticCapabilityCalls = $ExpectedIterations * 6L
-                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 6L
-                    $result.runtimeCompatibilityChecks = $ExpectedIterations * 2L
-                }
                 'octo-tree-clusterization' {
-                    $result.typedEntryCalls = $ExpectedIterations * 9L
-                    $result.semanticCapabilityCalls = $ExpectedIterations * 9L
-                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 18L
-                    $result.runtimeCompatibilityChecks = $ExpectedIterations * 8L
+                    $result.typedEntryCalls = $ExpectedIterations * 18L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
                 }
                 'octo-tree-rendering' {
                     $result.typedEntryCalls = [long]$ExpectedIterations
@@ -800,7 +797,7 @@ function Invoke-MeasuredApplication(
     if ($isRouteAttribution) {
         $expectedStateCarrier = if ($Representation -eq 'candidate') {
             if ($CorpusKind -eq 'octo-tree') {
-                'MIXED_EXACT_AND_SEMANTIC'
+                'TYPED_PRIVATE_ROOT_WITH_SEMANTIC_EXPORT'
             } else {
                 if ($Route -in @(
                         'typed-entry-typed-state', 'capability-value-typed-state',
@@ -829,8 +826,8 @@ function Invoke-MeasuredApplication(
         if ($CorpusKind -eq 'octo-tree') {
             $periodicRoutes = [long]([Math]::Floor(($ExpectedIterations + 511L) / 512L))
             if ($Representation -eq 'candidate') {
-                $expectedTyped = $ExpectedIterations * 2L + $periodicRoutes
-                $expectedSemantic = $ExpectedIterations * 4L
+                $expectedTyped = $ExpectedIterations * 6L + $periodicRoutes
+                $expectedSemantic = 0L
                 $expectedErased = 0L
             } else {
                 $expectedTyped = 0L

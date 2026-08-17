@@ -939,7 +939,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     access.writeValues.forEach { entry ->
                         changed = addOrigins(
                             entry.key,
-                            entry.value.flatMapTo(linkedSetOf()) { value -> originsOf(value) },
+                            entry.value.flatMapTo(linkedSetOf()) { value ->
+                                originsOfWrite(entry.key, value)
+                            },
                         ) || changed
                     }
                 }
@@ -1137,6 +1139,19 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             return DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
         }
 
+        private fun originsOfWrite(field: IrField, value: IrExpression?): Set<ReceiverOrigin> {
+            val owner = field.parent as? IrClass
+            if (owner != null && value is IrConst && value.value == null &&
+                    field.type.isRepresentationNeutralNullableGenericOwnerReference(owner)
+            ) {
+                // Null is not a possible call receiver. Keep an only-null field originless so a
+                // later read still fails closed, but do not merge an unresolved receiver into
+                // the exact non-null constructions written through the same private field.
+                return emptySet()
+            }
+            return originsOf(value)
+        }
+
         private fun originsOf(expression: IrExpression?): Set<ReceiverOrigin> {
             if (expression == null) return unresolved()
             return when (expression) {
@@ -1326,7 +1341,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             add(DotNetGenericOwnerStateWriteProvenancePlan(
                                 producerName = function.name.asString(),
                                 provenance = select(values.flatMapTo(linkedSetOf()) { value ->
-                                    provenanceOf(value).ifEmpty {
+                                    writeProvenance(field, value).ifEmpty {
                                         setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
                                     }
                                 }),
@@ -1342,7 +1357,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             add(DotNetGenericOwnerStateWriteProvenancePlan(
                                 producerName = initializer.label,
                                 provenance = select(values.flatMapTo(linkedSetOf()) { value ->
-                                    provenanceOf(value).ifEmpty {
+                                    writeProvenance(field, value).ifEmpty {
                                         setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
                                     }
                                 }),
@@ -1424,6 +1439,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         private fun provenanceOf(expression: IrExpression?): Set<DotNetGenericOwnerWriteValueProvenance> {
             if (expression == null) return setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
             return when (expression) {
+                is IrConstructorCall -> if (expression.type.isPhysicallyTypedLocalGenericOwnerReference(owner)) {
+                    setOf(DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED)
+                } else {
+                    setOf(defaultProvenance(expression.type))
+                }
                 is IrGetValue -> provenances[expression.symbol.owner].orEmpty()
                 is IrTypeOperatorCall -> provenanceOf(expression.argument)
                 is IrReturn -> provenanceOf(expression.value)
@@ -1460,6 +1480,26 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
             } else {
                 DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+            }
+
+        /**
+         * A null literal has no useful expression carrier (`Nothing?`), but it is the CLR zero
+         * value of a proven local generic class reference such as `Node<T>?`. Treating that
+         * initializer as object-domain input needlessly poisons an otherwise closed private
+         * producer graph. This deliberately excludes a bare `T?`: an unconstrained owner
+         * parameter can close over a CLR value type and therefore has no single nullable `!T`
+         * field representation.
+         */
+        private fun writeProvenance(
+            field: IrField,
+            value: IrExpression?,
+        ): Set<DotNetGenericOwnerWriteValueProvenance> =
+            if (value is IrConst && value.value == null &&
+                    field.type.isRepresentationNeutralNullableGenericOwnerReference(owner)
+            ) {
+                setOf(DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED)
+            } else {
+                provenanceOf(value)
             }
 
         private fun node(key: Any): MutableSet<DotNetGenericOwnerWriteValueProvenance> =
@@ -1707,6 +1747,36 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         directAccesses: Map<IrFunction, DirectMemberAccesses>,
     ): Set<IrField> = (transitiveCalls(directAccesses) + this)
         .flatMapTo(linkedSetOf()) { function -> directAccesses.getValue(function).writes }
+
+    private fun IrType.isRepresentationNeutralNullableGenericOwnerReference(owner: IrClass): Boolean {
+        val simple = this as? IrSimpleType ?: return false
+        return simple.nullability == SimpleTypeNullability.MARKED_NULLABLE &&
+                isPhysicallyTypedLocalGenericOwnerReference(owner)
+    }
+
+    /**
+     * Bounded physical reference proof used only by the production-inert owner analysis. A local
+     * non-value generic class with invariant, non-open-nullable arguments has one stable CLR
+     * reference carrier once its complete physical family is selected. This does not admit that
+     * family and deliberately rejects `C<T?>`, external classifiers, projections, and value
+     * classes.
+     */
+    private fun IrType.isPhysicallyTypedLocalGenericOwnerReference(owner: IrClass): Boolean {
+        val simple = this as? IrSimpleType ?: return false
+        val classifier = (simple.classifier as? IrClassSymbol)?.owner ?: return false
+        if (classifier.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB ||
+                !classifier.isDotNetGenericClassDeclaration || classifier.isValue ||
+                context.preLoweringDeclarationKeys[classifier] == null ||
+                simple.arguments.size != classifier.typeParameters.size
+        ) {
+            return false
+        }
+        return simple.arguments.all { argument ->
+            val projection = argument as? IrTypeProjection ?: return@all false
+            projection.variance == Variance.INVARIANT &&
+                    !projection.type.hasExplicitNullableParameterOf(owner)
+        }
+    }
 
     /** Detects the `D<T> : C<T?>` family whose TypeDef edge cannot vary per closed T. */
     private fun IrType.hasExplicitNullableParameterOf(owner: IrClass): Boolean {

@@ -27,7 +27,29 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed product slice: the schema-13 OctoTree candidate now has one
+- Last completed product slice: the separate-compilation OctoTree candidate
+  now stores its private `root: Node<T>?` as a real `OctoTreeNode<T>` CLR
+  reference and keeps the non-generic semantic capability only at the
+  open-world boundary. Null supplies typed write evidence only for a proven
+  local non-value generic class reference with an exact invariant carrier;
+  constructor writes must independently prove the same carrier. Bare
+  unconstrained `T?`, `C<T?>`, external/projected/unresolved classifiers, and
+  same-compilation owners without a selected logical TypeDef path remain
+  fail-closed semantic. Private typed identity accessors stay outside KLIB and
+  logical reflection. The regenerated PSI/LightTree x Framework 4.8/.NET 10
+  schema-3 corpus retains 21 exact plus nine semantic static sites and proves
+  open/closed root fields and private accessors use `Node<T>`/`Node<int>`.
+  At 200,000 iterations and five throughput runs the aggregate
+  candidate/erased ratios improve from 2.41/1.05/1.29/1.23/1.06x to
+  1.62/0.80/0.95/0.77/0.71x across Framework/JIT/ReadyToRun/trimmed/NativeAOT;
+  allocation changes from 23.0%-27.3% more to 5.2%-11.3% less. Typed and
+  cluster routes now have zero internal semantic calls/checks; the external
+  capability still pays its required boundary and Framework remains slower.
+  Production owners/emission, DLL/KLIB, Runtime, Common semantics, and public
+  C# ABI remain unchanged. The final strict aggregate direct audit covers 190
+  XML files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-typed-private-root-2026-08-17.md`](docs/archive/generic-owner-octo-tree-typed-private-root-2026-08-17.md).
+- The preceding product slice: the schema-13 OctoTree candidate now has one
   closed, paired schema-3 application corpus generated independently through
   PSI/LightTree on Framework 4.8 and .NET 10. It fingerprints the unchanged
   Kotlin/Native source, separate Kotlin oracle, candidate/erased producers,
@@ -2840,14 +2862,17 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    evidence with route attribution. It does not select the ABI because the
    candidate remains a generated C# physicalization rather than a complete
    Kotlin product.
-   Next, correct the material private-root proof defect found by the
-   attribution: a null initializer is representation-neutral for a proven
-   `Node<T>?` reference carrier and must not become `SEMANTIC_OBJECT` merely
-   because the IR expression type is `Nothing?`. Bare unconstrained `T?`,
-   unresolved producers, non-private access, or any semantic non-null write
-   remain fail-closed. Require the complete write/access graph, physicalize
-   and rerun the exact five-lane corpus before considering any owner choice.
-   Kotlin/Native VTA and Swift SIL
+   The private-root proof is now closed: null is physically neutral only for a
+   proven local generic class reference, every non-null constructor/write still
+   requires exact provenance, and the selected OctoTree family stores
+   `Node<T>` with private typed identity access while preserving the external
+   semantic capability. The five-lane paired rerun is faster than erased on
+   every modern lane and allocates less everywhere; Framework remains 1.62x
+   slower. Perform only a large-impact audit of the remaining capability and
+   Framework costs. If it exposes no avoidable compiler crossing or other
+   material defect, advance the still-open one-state concurrency/memory-model
+   migration condition instead of tuning microbenchmarks or selecting an easy
+   owner. Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll
    out an easy owner before the hostile prototype and real-app measurement

@@ -2,6 +2,12 @@
 // FILE: marker.kt
 // DOTNET_REPRESENTATIVE_SOURCE: octo-tree
 
+// Control for the physical null-write proof: unlike OctoTree.Node<T>?, bare T? has no one
+// truthful CLR field carrier across value- and reference-type substitutions.
+private class GenericOwnerBareNullableSlot<T> {
+    private var value: T? = null
+}
+
 // MODULE: main(lib)
 // FILE: main.kt
 
