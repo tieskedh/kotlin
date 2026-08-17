@@ -18,7 +18,7 @@ $countsFileName = 'generic-owner-call-route-counts.tsv'
 $traceFileName = 'generic-owner-call-route-trace.properties'
 $expectedFiles = @($countsFileName, $routeFileName, $traceFileName) | Sort-Object
 $corpusDefinition = if ($Corpus -eq 'hostile') {
-    $siteIndices = @(0, 1, 2, 3, 4, 5, 6, 7) + @(14..41) + @(44, 46, 47, 48)
+    $siteIndices = @(0, 1, 2, 3, 4, 5, 6, 7) + @(14..43) + @(46, 48, 49, 50)
     $siteCounts = @{}
     foreach ($siteIndex in $siteIndices) {
         $siteCounts[$siteIndex] =
@@ -30,18 +30,18 @@ $corpusDefinition = if ($Corpus -eq 'hostile') {
         SiteCounts = $siteCounts
         StaticRequirementCounts = @{
             PRODUCER_ERASED_OWNER = 24
-            EXACT_TYPED_ENTRY = 11
+            EXACT_TYPED_ENTRY = 13
             SEMANTIC_CAPABILITY = 4
             MISSING_CAPABILITY = 1
         }
         DynamicRequirementCounts = @{
             PRODUCER_ERASED_OWNER = 24L
-            EXACT_TYPED_ENTRY = 11L
+            EXACT_TYPED_ENTRY = 13L
             SEMANTIC_CAPABILITY = 4L
             MISSING_CAPABILITY = 1L
         }
-        AllEventCount = 49L
-        ProducerEventCount = 40L
+        AllEventCount = 51L
+        ProducerEventCount = 42L
         UnrelatedEventCount = 9L
     }
 } elseif ($Corpus -eq 'array-copy') {
@@ -132,6 +132,17 @@ $expectedSiteIndices = $corpusDefinition.SiteIndices
 $expectedSiteCounts = $corpusDefinition.SiteCounts
 $expectedRequirementCounts = $corpusDefinition.StaticRequirementCounts
 $expectedDynamicRequirementCounts = $corpusDefinition.DynamicRequirementCounts
+$expectedStaticSiteCount = [long](($expectedRequirementCounts.Values | Measure-Object -Sum).Sum)
+$expectedDynamicEventCount = [long](($expectedDynamicRequirementCounts.Values | Measure-Object -Sum).Sum)
+$expectedSiteCountKeys = @($expectedSiteCounts.Keys | ForEach-Object { [int]$_ } | Sort-Object)
+if ($expectedSiteIndices.Count -ne $expectedStaticSiteCount -or
+        $expectedSiteIndices.Count -ne $expectedSiteCounts.Count -or
+        (Compare-Object @($expectedSiteIndices | Sort-Object) $expectedSiteCountKeys) -or
+        $expectedDynamicEventCount -ne $corpusDefinition.ProducerEventCount -or
+        $corpusDefinition.AllEventCount -ne
+            $corpusDefinition.ProducerEventCount + $corpusDefinition.UnrelatedEventCount) {
+    throw "The $Corpus route-trace corpus definition is internally inconsistent"
+}
 
 if (-not [string]::IsNullOrWhiteSpace($OutputDirectory) -and
         -not [string]::IsNullOrWhiteSpace($ExistingCorpus)) {

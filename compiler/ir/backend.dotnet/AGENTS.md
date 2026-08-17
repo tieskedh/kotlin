@@ -663,12 +663,13 @@ See the
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
   channel has one versioned, producer-fingerprinted physical-family artifact,
-  currently schema 13,
+  currently schema 14,
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
   neutral structural method/type expressions, declaration-independent state,
-  init-only flags, and producer-private ordinary implementation MethodDefs. A
+  init-only flags, per-state plain/volatile memory semantics, constructor-input
+  conversions, and producer-private ordinary implementation MethodDefs. A
   capability dispatcher must
   name the exact non-generic interface MethodDef it implements and carry the
   same signature; nested `!T`/`!!T`, named generic instances, and SZ arrays are
@@ -709,7 +710,17 @@ See the
   non-generic open-world capability; exact internal bodies must not cross that
   capability merely because the capability exists. Any semantic, unresolved,
   source-free, or externally writable
-  producer continues to require semantic object state. This rule is
+  producer continues to require semantic object state. An owner-parameter-
+  dependent `kotlin.concurrent.Volatile` field cannot use arbitrary
+  unconstrained `!T` storage: record one volatile `object` field with an
+  input-widening/boxing initializer, typed write widening/boxing, and typed read
+  checked cast/unbox. A pre-existing semantic-widening reason remains semantic
+  object authority even when that field is also volatile. This decision is
+  field-local: a plain sibling with complete typed producer evidence retains
+  `!T` identity storage. Volatile access, typed access, semantic capability
+  access, construction, and failed pre-mutation compatibility checks must all
+  observe that one recorded field; never add a shadow/copy field or a
+  representation-specific locking protocol. This rule is
   architecture-test-only and does not admit production `C<T>`. Derive
   representative call mixes from a production-inert Kotlin IR census, never
   from handwritten benchmark weights. An exact typed-entry candidate requires

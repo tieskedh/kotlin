@@ -93,6 +93,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionClassifie
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionTypeArgumentAuthority
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilyRoute
@@ -3319,14 +3320,28 @@ private fun validateGenericOwnerHardestModelPrototype(
     val typedStore = prototypes.single { prototype ->
         prototype.hasSimpleName("HostileTypedStore")
     }
-    val typedState = typedStore.states.single()
+    val typedState = typedStore.states.single { state -> state.fieldName == "stored" }
+    val volatileState = typedStore.states.single { state -> state.fieldName == "published" }
     check(typedState.requirement ==
             DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+            typedState.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN &&
             typedState.writes.associate { write -> write.producerName to write.provenance } == mapOf(
                 "<set-stored>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
                 "<field-initializer:stored>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
             )) {
         "HostileTypedStore must prove both initializer and function writes physically typed: $typedState"
+    }
+    check(typedStore.disposition == DotNetGenericOwnerCandidateDisposition.REQUIRES_STATE_MEMORY_MODEL_PROOF &&
+            volatileState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED &&
+            volatileState.memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE &&
+            volatileState.exactTypedCarrierType?.kind ==
+            DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+            volatileState.writes.associate { write -> write.producerName to write.provenance } == mapOf(
+                "<set-published>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+                "<field-initializer:published>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+            )) {
+        "HostileTypedStore must keep volatile T state on one ordered object carrier: $volatileState"
     }
     val typedWrite = typedStore.members.single { member -> member.sourceName == "write" }
     check(typedWrite.directProducerCallNames == listOf("installBoxed") &&
@@ -3839,6 +3854,8 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                                 DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> false
                                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                                     DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles
+                                DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
+                                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles
                                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
                                     DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles
                                 DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
@@ -3846,15 +3863,49 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                                 -> false
                             }
                 }
+                val physicalInitializers = state.initializers.mapNotNull { initializer ->
+                    when (initializer.kind) {
+                        DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_ZERO_VALUE,
+                        DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE,
+                        -> null
+                        DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER ->
+                            DotNetGenericOwnerPhysicalStateInitializerRecord(
+                                kind =
+                                    DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER,
+                                conversion = when (state.requirement) {
+                                    DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,
+                                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                                    -> DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+                                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+                                    DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED,
+                                    -> DotNetGenericOwnerPhysicalStateAccessConversion
+                                        .INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN
+                                    DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+                                    DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+                                    -> error("An unresolved hostile state cannot publish an initializer")
+                                },
+                                logicalConstructorKeys =
+                                    listOf(checkNotNull(initializer.constructorLogicalBindingKey)),
+                                fixedElementCount = null,
+                                constructorParameterIndex = checkNotNull(initializer.constructorParameterIndex),
+                            )
+                        DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY,
+                        DotNetGenericOwnerPrototypeStateInitializerKind.UNSUPPORTED,
+                        -> error("The hostile physical family has an unsupported state initializer: $initializer")
+                    }
+                }
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = state.fieldName,
                     physicalFieldName = state.fieldName,
                     physicalVisibility = DotNetGenericOwnerPhysicalStateVisibility.PRIVATE,
                     requirement = state.requirement,
+                    memorySemantics = state.memorySemantics,
                     physicalType = when (state.requirement) {
                         DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
                             error("The hostile family does not admit declaration-independent scenario state")
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
+                            DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+                        DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
                             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
                             checkNotNull(state.exactTypedCarrierType) {
@@ -3864,7 +3915,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                         -> error("The hostile physical family cannot publish unresolved state storage")
                     },
-                    initializers = emptyList(),
+                    initializers = physicalInitializers,
                     accessPaths = when (state.requirement) {
                         DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
                             error("The hostile family does not admit declaration-independent scenario state")
@@ -3895,6 +3946,24 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                                     DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC,
                                     DotNetGenericOwnerPhysicalStateAccessOperation.READ,
                                     DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
+                                ),
+                            )
+                        }
+                        DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED -> {
+                            val writer = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
+                            val reader = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
+                            listOf(
+                                access(
+                                    writer,
+                                    DotNetGenericOwnerPhysicalStateAccessDomain.TYPED,
+                                    DotNetGenericOwnerPhysicalStateAccessOperation.WRITE,
+                                    DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN,
+                                ),
+                                access(
+                                    reader,
+                                    DotNetGenericOwnerPhysicalStateAccessDomain.TYPED,
+                                    DotNetGenericOwnerPhysicalStateAccessOperation.READ,
+                                    DotNetGenericOwnerPhysicalStateAccessConversion.STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX,
                                 ),
                             )
                         }
@@ -4232,6 +4301,8 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                     }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+                DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
+                    error("The OctoTree fixture does not admit volatile owner state")
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
                     checkNotNull(state.exactTypedCarrierType) {
                         "The OctoTree typed state lacks an exact compiler-derived carrier"
@@ -4252,6 +4323,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                     DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ->
                         DotNetGenericOwnerPhysicalStateInitializerRecord(
                             kind = DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY,
+                            conversion = DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
                             fixedElementCount = checkNotNull(initializer.fixedElementCount),
                             constructorParameterIndex = null,
                             logicalConstructorKeys = baseConstructorKeys,
@@ -4268,6 +4340,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                     DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER ->
                         DotNetGenericOwnerPhysicalStateInitializerRecord(
                             kind = DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER,
+                            conversion = DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
                             fixedElementCount = null,
                             constructorParameterIndex = checkNotNull(initializer.constructorParameterIndex),
                             logicalConstructorKeys = listOf(checkNotNull(initializer.constructorLogicalBindingKey)),
@@ -4453,6 +4526,8 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                     }
                     DotNetGenericOwnerPhysicalStateAccessOperation.entries.map(::privateAccess)
                 }
+                DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
+                    error("The OctoTree fixture does not admit volatile owner state")
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> buildList {
                     add(checkNotNull(
                         logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
@@ -4477,6 +4552,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 physicalFieldName = state.fieldName,
                 physicalVisibility = DotNetGenericOwnerPhysicalStateVisibility.PRIVATE,
                 requirement = state.requirement,
+                memorySemantics = state.memorySemantics,
                 physicalType = physicalType,
                 initializers = initializers,
                 accessPaths = accessPaths,
@@ -5136,10 +5212,17 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         )
     }
     val typedStateOwner = artifact.owners.single { owner ->
-        owner.states.singleOrNull()?.requirement ==
-                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        owner.states.any { state ->
+            state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        }
     }
-    val typedState = typedStateOwner.states.single()
+    val typedState = typedStateOwner.states.single { state ->
+        state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+    }
+    val volatileState = typedStateOwner.states.single { state ->
+        state.requirement == DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
+    }
     check(typedStateOwner.physicalOwnerPath.last() == "HostileTypedStore" &&
             typedStateOwner.physicalCapabilityOwnerPath?.last() == "IHostileTypedStoreSemantic" &&
             typedState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
@@ -5149,8 +5232,46 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
             typedState.accessPaths.all { access ->
                 access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
-            }) {
+            } && typedState.initializers.singleOrNull()?.conversion ==
+            DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
         "The generic-owner artifact did not retain its compiler-proven !T state family: $typedStateOwner"
+    }
+    check(volatileState.memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE &&
+            volatileState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            volatileState.accessPaths.map { access -> access.operation }.toSet() ==
+            DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
+            volatileState.accessPaths.all { access ->
+                access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                        access.conversion == when (access.operation) {
+                    DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                        DotNetGenericOwnerPhysicalStateAccessConversion.STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX
+                    DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                        DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN
+                }
+            } && volatileState.initializers.singleOrNull()?.conversion ==
+            DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN) {
+        "The generic-owner artifact lost its bounded volatile object-state family: $volatileState"
+    }
+    expectRejected("typed storage for owner-dependent volatile state") {
+        volatileState.copy(
+            requirement = DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+            physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+        )
+    }
+    expectRejected("plain access semantics for volatile object state") {
+        volatileState.copy(memorySemantics = DotNetGenericOwnerStateMemorySemantics.PLAIN)
+    }
+    expectRejected("identity constructor input for volatile object state") {
+        volatileState.copy(initializers = volatileState.initializers.map { initializer ->
+            initializer.copy(conversion = DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY)
+        })
+    }
+    expectRejected("widening constructor input for typed state") {
+        typedState.copy(initializers = typedState.initializers.map { initializer ->
+            initializer.copy(
+                conversion = DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN,
+            )
+        })
     }
     expectRejected("object storage for compiler-proven typed state") {
         typedState.copy(physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType())
@@ -5168,6 +5289,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     )
     val typedVectorInitializer = DotNetGenericOwnerPhysicalStateInitializerRecord(
         kind = DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY,
+        conversion = DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY,
         logicalConstructorKeys = listOf(typedStateOwner.constructors.single().logicalConstructorKey),
         fixedElementCount = 8,
         constructorParameterIndex = null,
@@ -5197,7 +5319,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                 )
             },
         ),
-        states = listOf(initializedTypedVectorState),
+        states = listOf(initializedTypedVectorState, volatileState),
     )
     val initializedTypedVectorArtifact = artifact.copy(
         owners = artifact.owners.map { owner ->
@@ -5215,7 +5337,8 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     check(DotNetGenericOwnerPhysicalFamilyCodec.encode(initializedTypedVectorDecoded) ==
             initializedTypedVectorEncoded &&
             initializedTypedVectorDecoded.requirePhysicalFamily(typedStateOwner.logicalOwnerKey)
-                .states.single().initializers.single() == typedVectorInitializer) {
+                .states.single { state -> state.logicalFieldName == initializedTypedVectorState.logicalFieldName }
+                .initializers.single() == typedVectorInitializer) {
         "The schema-11 physical family lost its constructor-rooted typed vector initializer"
     }
     expectRejected("a typed vector initializer without an exact read path") {
@@ -5331,9 +5454,12 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val label = owner.members.single { member -> member.sourceName == "label" }
     val state = owner.states.single()
     val typedStorageOwner = prototypes.single { prototype -> prototype.hasSimpleName("HostileTypedStore") }
-    val typedStorageState = typedStorageOwner.states.single()
+    val typedStorageState = typedStorageOwner.states.single { state -> state.fieldName == "stored" }
+    val volatileStorageState = typedStorageOwner.states.single { state -> state.fieldName == "published" }
     val typedStorageWrite = typedStorageOwner.members.single { member -> member.sourceName == "write" }
     val typedStorageRead = typedStorageOwner.members.single { member -> member.sourceName == "read" }
+    val volatileStorageWrite = typedStorageOwner.members.single { member -> member.sourceName == "publish" }
+    val volatileStorageRead = typedStorageOwner.members.single { member -> member.sourceName == "observe" }
     fun hasRole(
         member: DotNetGenericOwnerPrototypeMemberSnapshot,
         role: DotNetGenericOwnerMemberFamilyRole,
@@ -5370,6 +5496,22 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         typedStorageRead,
         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
     )
+    val volatileStorageWriteTypedName = physicalName(
+        volatileStorageWrite,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val volatileStorageWriteCapabilityName = physicalName(
+        volatileStorageWrite,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+    val volatileStorageReadTypedName = physicalName(
+        volatileStorageRead,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val volatileStorageReadCapabilityName = physicalName(
+        volatileStorageRead,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
 
     check(typedStorageState.requirement ==
             DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
@@ -5379,8 +5521,17 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
             ) && typedStorageRead.roles == setOf(
                 DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
                 DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && volatileStorageState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED &&
+            volatileStorageState.memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE &&
+            volatileStorageWrite.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && volatileStorageRead.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
             )) {
-        "The typed-state physicalizer requires exact typed entries plus strict capability dispatch: " +
+        "The mixed typed/volatile-state physicalizer requires exact entries plus strict capability dispatch: " +
                 "$typedStorageOwner"
     }
 
@@ -5388,6 +5539,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
             error("The hostile physicalizer does not accept declaration-independent scenario state")
         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> "object"
+        DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
+            error("HostileUnsafeStore does not admit volatile owner state")
         DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> "T"
         DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED ->
             error("The hostile physicalizer cannot select storage while the access graph is incomplete")
@@ -5495,15 +5648,20 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 {
                     object $typedStorageReadCapabilityName();
                     void $typedStorageWriteCapabilityName(object next);
+                    object $volatileStorageReadCapabilityName();
+                    void $volatileStorageWriteCapabilityName(object next);
                 }
 
                 public class HostileTypedStore<T> : IHostileTypedStoreSemantic
                 {
                     private T ${typedStorageState.fieldName};
+                    private object ${volatileStorageState.fieldName};
 
                     public HostileTypedStore(T initial)
                     {
                         ${typedStorageState.fieldName} = initial;
+                        System.Threading.Volatile.Write(
+                            ref ${volatileStorageState.fieldName}, (object)initial);
                     }
 
                     public virtual void $typedStorageWriteTypedName(T next)
@@ -5524,6 +5682,28 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     object IHostileTypedStoreSemantic.$typedStorageReadCapabilityName()
                     {
                         return $typedStorageReadTypedName();
+                    }
+
+                    public virtual void $volatileStorageWriteTypedName(T next)
+                    {
+                        System.Threading.Volatile.Write(
+                            ref ${volatileStorageState.fieldName}, (object)next);
+                    }
+
+                    public virtual T $volatileStorageReadTypedName()
+                    {
+                        return (T)System.Threading.Volatile.Read(
+                            ref ${volatileStorageState.fieldName});
+                    }
+
+                    void IHostileTypedStoreSemantic.$volatileStorageWriteCapabilityName(object next)
+                    {
+                        $volatileStorageWriteTypedName((T)next);
+                    }
+
+                    object IHostileTypedStoreSemantic.$volatileStorageReadCapabilityName()
+                    {
+                        return $volatileStorageReadTypedName();
                     }
                 }
 
@@ -5657,6 +5837,82 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
 
             public static class SnapshotConsumer
             {
+                private static void VerifyVolatileOneState()
+                {
+                    HostileTypedStore<int> owner = new HostileTypedStore<int>(0);
+                    IHostileTypedStoreSemantic capability = owner;
+                    Exception typedFailure = null;
+                    Exception capabilityFailure = null;
+                    int stopped = 0;
+                    using (System.Threading.AutoResetEvent typedReady =
+                        new System.Threading.AutoResetEvent(false))
+                    using (System.Threading.AutoResetEvent capabilityDone =
+                        new System.Threading.AutoResetEvent(false))
+                    {
+                        System.Threading.Thread typedThread = new System.Threading.Thread(delegate()
+                        {
+                            try
+                            {
+                                for (int value = 1; value <= 512; value++)
+                                {
+                                    owner.$volatileStorageWriteTypedName(value);
+                                    typedReady.Set();
+                                    capabilityDone.WaitOne();
+                                    if (System.Threading.Volatile.Read(ref stopped) != 0) return;
+                                    if (owner.$volatileStorageReadTypedName() != -value)
+                                        throw new InvalidOperationException("typed volatile handoff");
+                                }
+                            }
+                            catch (Exception failure)
+                            {
+                                typedFailure = failure;
+                                System.Threading.Interlocked.Exchange(ref stopped, 1);
+                                typedReady.Set();
+                                capabilityDone.Set();
+                            }
+                        });
+                        System.Threading.Thread capabilityThread = new System.Threading.Thread(delegate()
+                        {
+                            try
+                            {
+                                for (int value = 1; value <= 512; value++)
+                                {
+                                    typedReady.WaitOne();
+                                    if (System.Threading.Volatile.Read(ref stopped) != 0) return;
+                                    if (!object.Equals(
+                                        capability.$volatileStorageReadCapabilityName(), value))
+                                        throw new InvalidOperationException("capability volatile handoff");
+                                    try
+                                    {
+                                        capability.$volatileStorageWriteCapabilityName("wrong");
+                                        throw new InvalidOperationException("incompatible volatile write");
+                                    }
+                                    catch (InvalidCastException)
+                                    {
+                                    }
+                                    if (owner.$volatileStorageReadTypedName() != value)
+                                        throw new InvalidOperationException("failed volatile write mutated state");
+                                    capability.$volatileStorageWriteCapabilityName(-value);
+                                    capabilityDone.Set();
+                                }
+                            }
+                            catch (Exception failure)
+                            {
+                                capabilityFailure = failure;
+                                System.Threading.Interlocked.Exchange(ref stopped, 1);
+                                typedReady.Set();
+                                capabilityDone.Set();
+                            }
+                        });
+                        typedThread.Start();
+                        capabilityThread.Start();
+                        if (!typedThread.Join(30000) || !capabilityThread.Join(30000))
+                            throw new TimeoutException("volatile one-state handoff timed out");
+                    }
+                    if (typedFailure != null) throw typedFailure;
+                    if (capabilityFailure != null) throw capabilityFailure;
+                }
+
                 public static int Main()
                 {
                     HostileUnsafeStore<int> value = new HostileUnsafeStore<int>(1);
@@ -5760,6 +6016,21 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     {
                     }
                     if (typedState.$typedStorageReadTypedName() != 3) return 23;
+                    typedState.$volatileStorageWriteTypedName(4);
+                    if (typedState.$volatileStorageReadTypedName() != 4) return 28;
+                    typedStateCapability.$volatileStorageWriteCapabilityName(5);
+                    if (!object.Equals(
+                        typedStateCapability.$volatileStorageReadCapabilityName(), 5)) return 29;
+                    try
+                    {
+                        typedStateCapability.$volatileStorageWriteCapabilityName("wrong");
+                        return 30;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    if (typedState.$volatileStorageReadTypedName() != 5) return 31;
+                    VerifyVolatileOneState();
 
                     Type typedDefinition = typeof(HostileTypedStore<>);
                     Type typedOwnerParameter = typedDefinition.GetGenericArguments()[0];
@@ -5768,7 +6039,17 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         System.Reflection.BindingFlags.NonPublic |
                         System.Reflection.BindingFlags.DeclaredOnly
                     );
-                    if (typedFields.Length != 1 || typedFields[0].FieldType != typedOwnerParameter) return 24;
+                    if (typedFields.Length != 2) return 24;
+                    bool foundTypedState = false;
+                    bool foundVolatileState = false;
+                    for (int index = 0; index < typedFields.Length; index++)
+                    {
+                        foundTypedState |= typedFields[index].Name == "${typedStorageState.fieldName}" &&
+                            typedFields[index].FieldType == typedOwnerParameter;
+                        foundVolatileState |= typedFields[index].Name == "${volatileStorageState.fieldName}" &&
+                            typedFields[index].FieldType == typeof(object);
+                    }
+                    if (!foundTypedState || !foundVolatileState) return 32;
                     System.Reflection.MethodInfo typedStateWrite =
                         typedDefinition.GetMethod("$typedStorageWriteTypedName");
                     System.Reflection.MethodInfo typedStateRead =
@@ -5779,7 +6060,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         typedStateRead.ReturnType != typedOwnerParameter) return 25;
                     System.Reflection.InterfaceMapping typedStateMap =
                         typeof(HostileTypedStore<int>).GetInterfaceMap(typeof(IHostileTypedStoreSemantic));
-                    if (typedStateMap.TargetMethods.Length != 2) return 26;
+                    if (typedStateMap.TargetMethods.Length != 4) return 26;
                     for (int index = 0; index < typedStateMap.TargetMethods.Length; index++)
                     {
                         System.Reflection.MethodInfo method = typedStateMap.TargetMethods[index];
@@ -5887,7 +6168,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 11,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 13,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 4,
         DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY to 1,
     )) {
@@ -6297,8 +6578,10 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         owner.physicalOwnerPath.last() == "HostileUnsafeStore"
     }
     val typedStateOwnerRecord = artifact.owners.single { owner ->
-        owner.states.singleOrNull()?.requirement ==
-                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        owner.states.any { state ->
+            state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        }
     }
     val physicalizedLabel = physicalized.members.single { member -> member.sourceName == "label" }
         .slots.single()
@@ -6519,11 +6802,22 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         "The family capability owner differs from its exact recorded interface slots"
     }
     val capabilityTypeName = capabilityPath.joinToString(".")
-    val typedStateRecord = typedStateOwnerRecord.states.single()
+    val typedStateRecord = typedStateOwnerRecord.states.single { state ->
+        state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+    }
+    val volatileStateRecord = typedStateOwnerRecord.states.single { state ->
+        state.requirement == DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
+    }
     val typedStateWriteAccess = typedStateRecord.accessPaths.single { access ->
         access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
     }
     val typedStateReadAccess = typedStateRecord.accessPaths.single { access ->
+        access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ
+    }
+    val volatileStateWriteAccess = volatileStateRecord.accessPaths.single { access ->
+        access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE
+    }
+    val volatileStateReadAccess = volatileStateRecord.accessPaths.single { access ->
         access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ
     }
     val typedStateConstructor = typedStateOwnerRecord.constructors.single()
@@ -6545,12 +6839,30 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     }.slots.single { slot ->
         slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
     }.let { slot -> checkNotNull(slot.capabilitySlot).physicalMethodName }
+    val volatileStateWriteCapability = typedStateOwnerRecord.members.single { member ->
+        member.logicalMemberKey == volatileStateWriteAccess.logicalMemberKey
+    }.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }.let { slot -> checkNotNull(slot.capabilitySlot).physicalMethodName }
+    val volatileStateReadCapability = typedStateOwnerRecord.members.single { member ->
+        member.logicalMemberKey == volatileStateReadAccess.logicalMemberKey
+    }.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }.let { slot -> checkNotNull(slot.capabilitySlot).physicalMethodName }
     check(typedStateRecord.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
             typedStateWriteAccess.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
             typedStateReadAccess.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
             typedStateWriteAccess.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY &&
             typedStateReadAccess.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
         "The paired application cannot measure an unproven typed-state family: $typedStateOwnerRecord"
+    }
+    check(volatileStateRecord.memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE &&
+            volatileStateRecord.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            volatileStateWriteAccess.conversion ==
+            DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN &&
+            volatileStateReadAccess.conversion ==
+            DotNetGenericOwnerPhysicalStateAccessConversion.STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX) {
+        "The paired application cannot prove the volatile one-state migration condition: $typedStateOwnerRecord"
     }
     val defaultEntry = artifact.owners.flatMap { owner ->
         owner.members.mapNotNull { member -> member.defaultDispatcher?.let { owner to member } }
@@ -6874,6 +7186,71 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             public static class RecordedFamilyEntry
             {
+                private static void VerifyVolatileOneState()
+                {
+                    $typedStateClosedTypeName owner = new $typedStateClosedTypeName(0);
+                    $typedStateCapabilityTypeName capability = owner;
+                    Exception typedFailure = null;
+                    Exception capabilityFailure = null;
+                    int stopped = 0;
+                    using (System.Threading.AutoResetEvent typedReady =
+                        new System.Threading.AutoResetEvent(false))
+                    using (System.Threading.AutoResetEvent capabilityDone =
+                        new System.Threading.AutoResetEvent(false))
+                    {
+                        System.Threading.Thread typedThread = new System.Threading.Thread(delegate()
+                        {
+                            try
+                            {
+                                for (int value = 1; value <= 64; value++)
+                                {
+                                    owner.${volatileStateWriteAccess.physicalMethod.physicalMethodName}(value);
+                                    typedReady.Set();
+                                    capabilityDone.WaitOne();
+                                    if (System.Threading.Volatile.Read(ref stopped) != 0) return;
+                                    if (owner.${volatileStateReadAccess.physicalMethod.physicalMethodName}() != -value)
+                                        throw new InvalidOperationException("typed volatile handoff");
+                                }
+                            }
+                            catch (Exception failure)
+                            {
+                                typedFailure = failure;
+                                System.Threading.Interlocked.Exchange(ref stopped, 1);
+                                typedReady.Set();
+                                capabilityDone.Set();
+                            }
+                        });
+                        System.Threading.Thread capabilityThread = new System.Threading.Thread(delegate()
+                        {
+                            try
+                            {
+                                for (int value = 1; value <= 64; value++)
+                                {
+                                    typedReady.WaitOne();
+                                    if (System.Threading.Volatile.Read(ref stopped) != 0) return;
+                                    if (!object.Equals(capability.$volatileStateReadCapability(), value))
+                                        throw new InvalidOperationException("capability volatile handoff");
+                                    capability.$volatileStateWriteCapability(-value);
+                                    capabilityDone.Set();
+                                }
+                            }
+                            catch (Exception failure)
+                            {
+                                capabilityFailure = failure;
+                                System.Threading.Interlocked.Exchange(ref stopped, 1);
+                                typedReady.Set();
+                                capabilityDone.Set();
+                            }
+                        });
+                        typedThread.Start();
+                        capabilityThread.Start();
+                        if (!typedThread.Join(30000) || !capabilityThread.Join(30000))
+                            throw new TimeoutException("volatile one-state handoff timed out");
+                    }
+                    if (typedFailure != null) throw typedFailure;
+                    if (capabilityFailure != null) throw capabilityFailure;
+                }
+
                 #if GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
                 private static int MixRouteChecksum(int checksum, int value)
                 {
@@ -7225,6 +7602,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
                 public static int Main(string[] arguments)
                 {
+                    VerifyVolatileOneState();
                     bool holdForPeakWorkingSet = arguments.Length == 4 &&
                         arguments[3] == "--hold-for-peak-working-set";
                     if ((arguments.Length != 3 && !holdForPeakWorkingSet) ||
@@ -7486,6 +7864,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
                 public static int Main(string[] arguments)
                 {
+                    VerifyVolatileOneState();
                     bool holdForPeakWorkingSet = arguments.Length == 3 &&
                         arguments[2] == "--hold-for-peak-working-set";
                     if ((arguments.Length != 2 && !holdForPeakWorkingSet) ||
@@ -7616,6 +7995,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
                 public static int Main(string[] arguments)
                 {
+                    VerifyVolatileOneState();
                     bool holdForPeakWorkingSet = arguments.Length == 3 &&
                         arguments[2] == "--hold-for-peak-working-set";
                     if ((arguments.Length != 2 && !holdForPeakWorkingSet) ||
@@ -7657,6 +8037,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                 #else
                 public static int Main()
                 {
+                    VerifyVolatileOneState();
                     $capabilityTypeName exactValue = RecordedOpenNullableFactory.Create(typeof(int), null);
                     if (exactValue.GetType().GetGenericArguments()[0] != typeof(int?) ||
                         RecordedReflectionRegistry.NormalizeExact(exactValue.GetType()) !=
@@ -8099,6 +8480,70 @@ private fun prepareGenericOwnerApplicationBundle(
 
             public static class ErasedApplicationEntry
             {
+                private static void VerifyVolatileOneState()
+                {
+                    ErasedTypedStore owner = new ErasedTypedStore(0);
+                    Exception typedFailure = null;
+                    Exception capabilityFailure = null;
+                    int stopped = 0;
+                    using (System.Threading.AutoResetEvent typedReady =
+                        new System.Threading.AutoResetEvent(false))
+                    using (System.Threading.AutoResetEvent capabilityDone =
+                        new System.Threading.AutoResetEvent(false))
+                    {
+                        System.Threading.Thread typedThread = new System.Threading.Thread(delegate()
+                        {
+                            try
+                            {
+                                for (int value = 1; value <= 64; value++)
+                                {
+                                    owner.publish(value);
+                                    typedReady.Set();
+                                    capabilityDone.WaitOne();
+                                    if (System.Threading.Volatile.Read(ref stopped) != 0) return;
+                                    if ((int)owner.observe() != -value)
+                                        throw new InvalidOperationException("typed volatile handoff");
+                                }
+                            }
+                            catch (Exception failure)
+                            {
+                                typedFailure = failure;
+                                System.Threading.Interlocked.Exchange(ref stopped, 1);
+                                typedReady.Set();
+                                capabilityDone.Set();
+                            }
+                        });
+                        System.Threading.Thread capabilityThread = new System.Threading.Thread(delegate()
+                        {
+                            try
+                            {
+                                for (int value = 1; value <= 64; value++)
+                                {
+                                    typedReady.WaitOne();
+                                    if (System.Threading.Volatile.Read(ref stopped) != 0) return;
+                                    if (!object.Equals(owner.observe(), value))
+                                        throw new InvalidOperationException("capability volatile handoff");
+                                    owner.publish(-value);
+                                    capabilityDone.Set();
+                                }
+                            }
+                            catch (Exception failure)
+                            {
+                                capabilityFailure = failure;
+                                System.Threading.Interlocked.Exchange(ref stopped, 1);
+                                typedReady.Set();
+                                capabilityDone.Set();
+                            }
+                        });
+                        typedThread.Start();
+                        capabilityThread.Start();
+                        if (!typedThread.Join(30000) || !capabilityThread.Join(30000))
+                            throw new TimeoutException("volatile one-state handoff timed out");
+                    }
+                    if (typedFailure != null) throw typedFailure;
+                    if (capabilityFailure != null) throw capabilityFailure;
+                }
+
                 #if GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
                 private static int MixRouteChecksum(int checksum, int value)
                 {
@@ -8443,6 +8888,7 @@ private fun prepareGenericOwnerApplicationBundle(
 
                 public static int Main(string[] arguments)
                 {
+                    VerifyVolatileOneState();
                     bool holdForPeakWorkingSet = arguments.Length == 4 &&
                         arguments[3] == "--hold-for-peak-working-set";
                     if ((arguments.Length != 3 && !holdForPeakWorkingSet) ||
@@ -8649,6 +9095,7 @@ private fun prepareGenericOwnerApplicationBundle(
 
                 public static int Main(string[] arguments)
                 {
+                    VerifyVolatileOneState();
                     bool holdForPeakWorkingSet = arguments.Length == 3 &&
                         arguments[2] == "--hold-for-peak-working-set";
                     if ((arguments.Length != 2 && !holdForPeakWorkingSet) ||
@@ -8704,6 +9151,7 @@ private fun prepareGenericOwnerApplicationBundle(
 
                 public static int Main()
                 {
+                    VerifyVolatileOneState();
                     Guid guid = new Guid("00112233-4455-6677-8899-aabbccddeeff");
                     DateTime date = new DateTime(638900000000000000L, DateTimeKind.Utc);
                     decimal amount = 1234567.8901m;

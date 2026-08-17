@@ -27,6 +27,32 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+- Last completed generic-owner migration condition: physical-family schema 14
+  now makes memory semantics and constructor input conversion explicit for
+  every state. In the hostile owner, plain `stored: T` remains a true CLR `!T`
+  field, while owner-dependent volatile `published: T` uses one volatile
+  `object` field with widening/boxing construction and writes plus checked
+  cast/unbox reads. Typed and non-generic semantic-capability access share that
+  field; an incompatible capability write fails before mutation. A semantic-
+  widened volatile field retains semantic object authority, and one volatile
+  sibling does not erase independently proven typed fields. Separate C#
+  consumers run multi-threaded handoff on Framework 4.8 and CoreCLR. The
+  focused PSI/LightTree x profile matrix covers eight tests with zero failures,
+  errors, or skips; the correctness-only Framework/JIT/ReadyToRun/trimmed/
+  NativeAOT deployment run agrees on checksum `16564`. Net10/net48 manifest
+  hashes are respectively
+  `ebf81a1c283c75eca8f02d7187ca11be508382e3717b982a97b2bbb8c97ecd9a`
+  and `c6297589b7940cf828ba17fd4e762b80921e49d34d9946d840ed60bcd62f19f3`;
+  physical artifact hash is
+  `f4440e253d8f476342afc15da79ec07683c647812e42786769cb56fbbdf72ad0`.
+  A fresh four-lane instrumented trace confirms 42 producer plus nine unrelated
+  events and rejects an internally inconsistent route oracle before generation.
+  The strict aggregate exited successfully; direct audit covers 190 XML files
+  and 2,238 tests with zero failures, errors, or skips.
+  This closes a migration condition only: production Kotlin-owned generic
+  owners remain erased and the public concurrency/atomic surface remains
+  parked. See
+  [`docs/archive/generic-owner-one-state-memory-model-2026-08-17.md`](docs/archive/generic-owner-one-state-memory-model-2026-08-17.md).
 - Last completed product correction: Runtime surface 38 and production
   structural-equality codegen now provide one exact same-open-`T` generic
   entry. References, null, Float/Double, and nullable floating types retain
@@ -1395,7 +1421,7 @@ known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
 
-The current schema-13 family also contains the compiler-proven typed-state
+The current schema-14 family also contains the compiler-proven typed-state
 control. Codec and reflection oracles require the private field plus exact read
 and write signatures to use the owner GenericParam, and require both exact
 state paths to be identity operations. Direct C# execution proves the explicit
@@ -2917,13 +2943,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    or hostile struct behavior on any deployment lane. Candidate excess falls
    to about 34% on managed lanes and becomes an 11.25% NativeAOT saving, but
    capability dispatch and Framework timing remain independently expensive.
-   Do not pursue small equality variants. Next, close the one-state
-   concurrency/memory-model migration condition: prove that typed entries,
-   semantic capabilities, constructor publication, mutation, and rollback all
-   observe one authoritative field graph under Kotlin's permitted memory
-   semantics on Framework 4.8 and CoreCLR, including multi-threaded hostile
-   readers/writers and failed capability writes. No shadow/copy state, wrapper
-   identity, or representation-dependent synchronization is admissible.
+   Do not pursue small equality variants. The one-state concurrency/memory-
+   model migration condition is now closed at schema 14: typed entries,
+   semantic capabilities, constructor publication, mutation, and failed-write
+   rollback observe one authoritative field graph on Framework 4.8 and
+   CoreCLR. The owner-dependent volatile state uses one reference-safe object
+   field while its ordinary sibling remains true `T` storage; no shadow/copy
+   state, wrapper identity, or representation-dependent synchronization is
+   admitted. Continue only with the next complete hostile migration condition,
+   not a per-owner rollout or small performance variant.
    Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
    direct paths and never replace the open-world capability. Do not emit a
    production `C<T>` TypeDef or roll out an easy owner before the hostile

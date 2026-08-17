@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateInitializerPlan
 import org.jetbrains.kotlin.backend.dotnet.mergeDotNetGenericOwnerParameterSlotDomains
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
@@ -93,6 +94,7 @@ import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
@@ -100,12 +102,15 @@ import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.types.Variance
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import java.util.Collections
 import java.util.IdentityHashMap
 
 private val DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER")
+
+private val DOTNET_GENERIC_OWNER_VOLATILE_FQ_NAME = FqName("kotlin.concurrent.Volatile")
 
 /**
  * Records conservative proof obligations for the eventual CLR-generic Kotlin class-owner ABI.
@@ -512,6 +517,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
                 }
                 val externalAccessGraphRequired = !DescriptorVisibilities.isPrivate(field.visibility)
+                val memorySemantics = if (field.hasAnnotation(DOTNET_GENERIC_OWNER_VOLATILE_FQ_NAME)) {
+                    DotNetGenericOwnerStateMemorySemantics.VOLATILE
+                } else {
+                    DotNetGenericOwnerStateMemorySemantics.PLAIN
+                }
                 DotNetGenericOwnerStateCarrierPlan(
                     field = field,
                     requirement = when {
@@ -519,6 +529,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE
                         semanticReachableWriters.isNotEmpty() || field in semanticValueWriteFields ->
                             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+                        memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE ->
+                            DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
                         externalAccessGraphRequired ->
                             DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED
                         hasOnlyProvenTypedWrites ->
@@ -526,6 +538,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         else ->
                             DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
                     },
+                    memorySemantics = memorySemantics,
                     initializers = producerInitializerAccesses.keys.mapNotNull { initializer ->
                         initializer.stateInitializerPlanOrNull(field, owner)
                     },
@@ -547,6 +560,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             semanticStateWriteFields.isNotEmpty() ->
                 DotNetGenericOwnerCandidateDisposition.REQUIRES_SEMANTIC_STATE_PROOF
             stateCarriers.values.any { state ->
+                state.requirement == DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
+            } ->
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_STATE_MEMORY_MODEL_PROOF
+            stateCarriers.values.any { state ->
                 state.requirement == DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED
             } ->
                 DotNetGenericOwnerCandidateDisposition.REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH
@@ -567,6 +584,19 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             stateCarriers[field]?.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
         }) {
             "Internal .NET backend error: a widened semantic state write retained typed-only storage"
+        }
+        check(stateCarriers.values.all { state ->
+            if (state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE &&
+                state.field in ownerDependentFields
+            ) {
+                state.requirement ==
+                        DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ||
+                        state.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+            } else {
+                state.requirement != DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
+            }
+        }) {
+            "Internal .NET backend error: owner-dependent volatility lost its object migration condition"
         }
         if (disposition == DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE) {
             check(openOutputs.all { output ->

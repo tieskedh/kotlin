@@ -58,8 +58,15 @@ enum class DotNetGenericOwnerCandidateDisposition {
     REQUIRES_SEMANTIC_STATE_PROOF,
     REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH,
     REQUIRES_TYPED_WRITE_VALUE_PROVENANCE,
+    REQUIRES_STATE_MEMORY_MODEL_PROOF,
     REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA,
     REQUIRES_MEMBER_PHYSICALIZATION_PROOF,
+}
+
+/** Memory ordering required on every physical access to one producer-owned field. */
+enum class DotNetGenericOwnerStateMemorySemantics {
+    PLAIN,
+    VOLATILE,
 }
 
 /** The semantic authority required for one member's future canonical CLR entry point. */
@@ -643,6 +650,7 @@ enum class DotNetGenericOwnerPhysicalStateInitializerKind {
 /** Exact constructor roots which execute one producer-owned physical field initializer. */
 data class DotNetGenericOwnerPhysicalStateInitializerRecord(
     val kind: DotNetGenericOwnerPhysicalStateInitializerKind,
+    val conversion: DotNetGenericOwnerPhysicalStateAccessConversion,
     val logicalConstructorKeys: List<String>,
     val fixedElementCount: Int?,
     val constructorParameterIndex: Int?,
@@ -665,6 +673,11 @@ data class DotNetGenericOwnerPhysicalStateInitializerRecord(
         }
         require(constructorParameterIndex == null || constructorParameterIndex >= 0) {
             "a positional generic-owner physical state initializer requires a non-negative parameter index"
+        }
+        require(conversion != DotNetGenericOwnerPhysicalStateAccessConversion.STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX &&
+                (kind != DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ||
+                        conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY)) {
+            "a generic-owner state initializer has an invalid input conversion"
         }
     }
 }
@@ -736,6 +749,22 @@ private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOwnerParame
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesScope(
     expectedScope: DotNetGenericOwnerPhysicalTypeScope,
 ): Boolean = scope == expectedScope || arguments.any { argument -> argument.referencesScope(expectedScope) }
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.isSupportedVolatileReferenceCarrier(): Boolean =
+    when (kind) {
+        DotNetGenericOwnerPhysicalTypeKind.STRING,
+        DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+        DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+        -> true
+        DotNetGenericOwnerPhysicalTypeKind.NAMED ->
+            namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+        DotNetGenericOwnerPhysicalTypeKind.VOID,
+        DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+        DotNetGenericOwnerPhysicalTypeKind.INT32,
+        DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+        DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+        -> false
+    }
 
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.containsTypeParameter(): Boolean =
     kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
@@ -1211,6 +1240,7 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
     val fieldName: String,
     val isFinal: Boolean,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
     /** Null means the field type is outside the bounded path-unbound carrier grammar. */
     val exactTypedCarrierType: DotNetGenericOwnerPrototypeTypeSnapshot?,
     val initializers: List<DotNetGenericOwnerPrototypeStateInitializerSnapshot>,
@@ -1224,6 +1254,13 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
     val externalAccessGraphRequired: Boolean,
 ) {
     init {
+        require(memorySemantics != DotNetGenericOwnerStateMemorySemantics.VOLATILE || !isFinal) {
+            "a volatile generic-owner prototype state cannot be final"
+        }
+        require(memorySemantics != DotNetGenericOwnerStateMemorySemantics.VOLATILE ||
+                requirement != DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN) {
+            "an owner-generic volatile state cannot select an unconstrained typed carrier"
+        }
         require(initializers.map { initializer -> initializer.producerName }.toSet().size == initializers.size) {
             "a generic-owner prototype state has duplicate explicit initializers"
         }
@@ -1932,6 +1969,7 @@ data class DotNetGenericOwnerPhysicalStateRecord(
     val physicalFieldName: String,
     val physicalVisibility: DotNetGenericOwnerPhysicalStateVisibility,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
     val initializers: List<DotNetGenericOwnerPhysicalStateInitializerRecord>,
     val accessPaths: List<DotNetGenericOwnerPhysicalStateAccessRecord>,
@@ -1943,6 +1981,17 @@ data class DotNetGenericOwnerPhysicalStateRecord(
         }
         require(physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
             "a generic-owner physical state record cannot use void storage"
+        }
+        require(requirement != DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ||
+                memorySemantics == DotNetGenericOwnerStateMemorySemantics.VOLATILE) {
+            "volatile object storage requires volatile access semantics"
+        }
+        require(memorySemantics != DotNetGenericOwnerStateMemorySemantics.VOLATILE ||
+                physicalType.isSupportedVolatileReferenceCarrier()) {
+            "volatile generic-owner state currently requires a reference-safe physical carrier"
+        }
+        require(memorySemantics != DotNetGenericOwnerStateMemorySemantics.VOLATILE || !isInitOnly) {
+            "volatile generic-owner state cannot be init-only"
         }
         require(accessPaths.map { access -> access.domain to access.operation }.toSet().size == accessPaths.size) {
             "a generic-owner physical state record has duplicate domain/operation access paths"
@@ -1961,7 +2010,9 @@ data class DotNetGenericOwnerPhysicalStateRecord(
         }
         when (requirement) {
             DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> require(
-                !physicalType.referencesOwnerParameter() && accessPaths.all { access ->
+                !physicalType.referencesOwnerParameter() && initializers.all { initializer ->
+                    initializer.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+                } && accessPaths.all { access ->
                     access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
                             access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
                 }
@@ -1969,9 +2020,10 @@ data class DotNetGenericOwnerPhysicalStateRecord(
                 "declaration-independent generic-owner state requires an exact non-owner carrier"
             }
             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
-                require(initializers.isEmpty()) {
-                    "semantic-object generic-owner state does not admit a typed initializer recipe"
-                }
+                require(initializers.all { initializer ->
+                    initializer.conversion ==
+                            DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN
+                }) { "semantic-object generic-owner initialization requires an input widening conversion" }
                 require(physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()) {
                     "semantic-object generic-owner state requires object storage"
                 }
@@ -1995,6 +2047,25 @@ data class DotNetGenericOwnerPhysicalStateRecord(
                     "semantic-object generic-owner state requires complete identity access or paired semantic bridges"
                 }
             }
+            DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED -> require(
+                initializers.all { initializer ->
+                    initializer.conversion ==
+                            DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN
+                } && physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+                        accessPaths.map { access -> access.operation }.toSet() ==
+                        DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
+                        accessPaths.all { access ->
+                            access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                                    access.conversion == when (access.operation) {
+                                DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                                    DotNetGenericOwnerPhysicalStateAccessConversion.STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX
+                                DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                                    DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN
+                            }
+                        }
+            ) {
+                "volatile owner-generic state requires one object carrier and typed conversion paths"
+            }
             DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> require(
                 physicalType.referencesOwnerParameter() &&
                         (accessPaths.map { access -> access.operation } + initializers.map {
@@ -2004,8 +2075,10 @@ data class DotNetGenericOwnerPhysicalStateRecord(
                             access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
                                     access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
                         } && initializers.all { initializer ->
-                            initializer.kind != DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ||
-                                    physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY
+                            initializer.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY &&
+                                    (initializer.kind !=
+                                            DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ||
+                                            physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY)
                         }
             ) {
                 "typed generic-owner state requires exact typed identity access and initialization paths"
@@ -2198,10 +2271,23 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                             DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER -> {
                                 val parameterIndex = checkNotNull(initializer.constructorParameterIndex)
                                 initializer.logicalConstructorKeys.singleOrNull()?.let { logicalConstructorKey ->
-                                    logicalConstructorKey in baseDelegatingConstructorKeys &&
-                                            constructorsByLogicalKey.getValue(logicalConstructorKey)
-                                                .physicalConstructor.signature.parameterSlots
-                                                .getOrNull(parameterIndex)?.type == state.physicalType
+                                    val parameterType = constructorsByLogicalKey.getValue(logicalConstructorKey)
+                                        .physicalConstructor.signature.parameterSlots
+                                        .getOrNull(parameterIndex)?.type
+                                    logicalConstructorKey in baseDelegatingConstructorKeys && when (
+                                        initializer.conversion
+                                    ) {
+                                        DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY ->
+                                            parameterType == state.physicalType
+                                        DotNetGenericOwnerPhysicalStateAccessConversion
+                                            .INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN ->
+                                            state.physicalType ==
+                                                    DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+                                                    parameterType != null &&
+                                                    parameterType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID
+                                        DotNetGenericOwnerPhysicalStateAccessConversion
+                                            .STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX -> false
+                                    }
                                 } == true
                             }
                         }
@@ -2671,7 +2757,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 13
+    const val SCHEMA_VERSION = 14
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2907,6 +2993,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         state.physicalFieldName.encoded(),
                         state.physicalVisibility.name,
                         state.requirement.name,
+                        state.memorySemantics.name,
                         state.physicalType.serialized().encoded(),
                         state.initializers.size.toString(),
                         state.accessPaths.size.toString(),
@@ -2918,6 +3005,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         listOf(
                             "I",
                             initializer.kind.name,
+                            initializer.conversion.name,
                             initializer.fixedElementCount?.toString() ?: "-",
                             initializer.constructorParameterIndex?.toString() ?: "-",
                             initializer.logicalConstructorKeys.size.toString(),
@@ -3298,9 +3386,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val states = List(stateCount) {
-                val stateFields = read("S", 9)
-                val initializerCount = count(stateFields[6], "state initializer")
-                val accessCount = count(stateFields[7], "state access")
+                val stateFields = read("S", 10)
+                val initializerCount = count(stateFields[7], "state initializer")
+                val accessCount = count(stateFields[8], "state access")
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = stateFields[1].decoded(),
                     physicalFieldName = stateFields[2].decoded(),
@@ -3314,11 +3402,16 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         DotNetGenericOwnerStateCarrierRequirement.entries.toTypedArray(),
                         "state requirement",
                     ),
-                    physicalType = stateFields[5].decoded().deserializedType(),
+                    memorySemantics = enumValue(
+                        stateFields[5],
+                        DotNetGenericOwnerStateMemorySemantics.entries.toTypedArray(),
+                        "state memory semantics",
+                    ),
+                    physicalType = stateFields[6].decoded().deserializedType(),
                     initializers = List(initializerCount) {
-                        val initializerFields = read("I", 5)
+                        val initializerFields = read("I", 6)
                         val logicalConstructorCount = count(
-                            initializerFields[4],
+                            initializerFields[5],
                             "state initializer constructor",
                         )
                         DotNetGenericOwnerPhysicalStateInitializerRecord(
@@ -3327,12 +3420,17 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                                 DotNetGenericOwnerPhysicalStateInitializerKind.entries.toTypedArray(),
                                 "state initializer kind",
                             ),
+                            conversion = enumValue(
+                                initializerFields[2],
+                                DotNetGenericOwnerPhysicalStateAccessConversion.entries.toTypedArray(),
+                                "state initializer conversion",
+                            ),
                             logicalConstructorKeys = List(logicalConstructorCount) {
                                 read("J", 2)[1].decoded()
                             },
-                            fixedElementCount = initializerFields[2].takeUnless { value -> value == "-" }
+                            fixedElementCount = initializerFields[3].takeUnless { value -> value == "-" }
                                 ?.let { value -> count(value, "state initializer fixed element") },
-                            constructorParameterIndex = initializerFields[3].takeUnless { value -> value == "-" }
+                            constructorParameterIndex = initializerFields[4].takeUnless { value -> value == "-" }
                                 ?.let { value -> count(value, "state initializer constructor parameter") },
                         )
                     },
@@ -3381,11 +3479,11 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             ),
                         )
                     },
-                    isInitOnly = when (stateFields[8]) {
+                    isInitOnly = when (stateFields[9]) {
                         "true" -> true
                         "false" -> false
                         else -> throw IllegalArgumentException(
-                            "generic-owner family artifact has invalid init-only marker '${stateFields[8]}'"
+                            "generic-owner family artifact has invalid init-only marker '${stateFields[9]}'"
                         )
                     },
                 )
@@ -3900,6 +3998,9 @@ enum class DotNetGenericOwnerStateCarrierRequirement {
     /** Function writes exist, but their complete value provenance is not proved physically typed. */
     TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
 
+    /** Owner-dependent volatility forbids arbitrary `!T` layout, but does not add semantic behavior. */
+    VOLATILE_OBJECT_STORAGE_REQUIRED,
+
     /** A widened semantic write has been observed, so the one field must accept object-domain state. */
     SEMANTIC_OBJECT_REQUIRED,
 }
@@ -3954,6 +4055,7 @@ internal data class DotNetGenericOwnerOverrideBindingPlan(
 internal data class DotNetGenericOwnerStateCarrierPlan(
     val field: IrField,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
     val initializers: List<DotNetGenericOwnerStateInitializerPlan>,
     val writes: List<DotNetGenericOwnerStateWriteProvenancePlan>,
     val directReaders: Set<IrFunction>,
@@ -4453,6 +4555,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 fieldName = state.field.name.asString(),
                 isFinal = state.field.isFinal,
                 requirement = state.requirement,
+                memorySemantics = state.memorySemantics,
                 exactTypedCarrierType = exactTypedCarrierType,
                 initializers = state.initializers.map { initializer ->
                     val retainsExactFixedVector =

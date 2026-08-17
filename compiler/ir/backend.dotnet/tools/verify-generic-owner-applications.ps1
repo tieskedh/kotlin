@@ -138,7 +138,7 @@ function Read-CallRouteManifest([string]$Path, [string]$Kind) {
     $expectedCounts = if ($Kind -eq 'hostile') {
         [ordered]@{
             PRODUCER_ERASED_OWNER = 24
-            EXACT_TYPED_ENTRY = 11
+            EXACT_TYPED_ENTRY = 13
             SEMANTIC_CAPABILITY = 4
             MISSING_CAPABILITY = 1
         }
@@ -262,6 +262,27 @@ function Assert-ApplicationBundle([string]$Directory) {
     $erasedCSharpSource = Get-Content -LiteralPath (
         Join-Path $Directory $fileByHashKey.erasedCSharpSourceSha256) -Raw
     if ($manifestKind -eq 'hostile') {
+        foreach ($requiredKotlinShape in @(
+                '@kotlin.concurrent.Volatile', 'private var published: T',
+                'open fun publish(next: T)', 'open fun observe(): T')) {
+            if ($kotlinSource -notmatch [Regex]::Escape($requiredKotlinShape)) {
+                throw "The hostile Kotlin application lost volatile shape '$requiredKotlinShape'"
+            }
+        }
+        foreach ($sourceText in @($candidateSource, $erasedCSharpSource)) {
+            foreach ($requiredConcurrencyShape in @(
+                    'VerifyVolatileOneState', 'System.Threading.AutoResetEvent',
+                    'typed volatile handoff', 'capability volatile handoff')) {
+                if ($sourceText -notmatch [Regex]::Escape($requiredConcurrencyShape)) {
+                    throw "The paired hostile application lost concurrency shape '$requiredConcurrencyShape'"
+                }
+            }
+        }
+        $physicalFamilyText = Get-Content -LiteralPath (
+            Join-Path $Directory $fileByHashKey.physicalFamilyArtifactSha256) -Raw
+        if ($physicalFamilyText -notmatch 'VOLATILE_OBJECT_STORAGE_REQUIRED\s+VOLATILE') {
+            throw 'The hostile physical family lost its volatile object-state migration condition'
+        }
         foreach ($requiredShape in @('Guid', 'DateTime', 'decimal', 'ApplicationEnum',
                 'ValueTuple<int, string>', 'ApplicationStruct', 'ErasedCSharpGrandchild')) {
             if ($erasedCSharpSource -notmatch [Regex]::Escape($requiredShape)) {

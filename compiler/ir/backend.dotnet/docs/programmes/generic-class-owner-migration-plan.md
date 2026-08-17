@@ -72,7 +72,7 @@ Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
 consumers retain the overridden producer logical key. The architecture
-   artifact, now at schema 13, binds that key to the exact producer-selected
+artifact, now at schema 14, binds that key to the exact producer-selected
 typed/semantic MethodDef owner/name, dispatch, slot-domain vector, and neutral
 structural signature after complete producer-fingerprint/schema validation.
 Stale, truncated, wrong-producer, duplicate, incomplete, and
@@ -84,7 +84,12 @@ direct-super targets and the static masked-default helper also carry complete
 signatures. Version 4 also binds the exact target profile, open-TypeDef
 classification, statically exact constructor MethodDefs/visibility/constructed
 owners and `this`/`base` edges, plus each selected state field and its exact
-typed/semantic read/write conversions. Runtime-selected and semantic-fallback
+typed/semantic read/write conversions. Schema 14 also records each state's
+plain/volatile memory semantics and the constructor-input conversion. An
+owner-dependent volatile state uses one reference-safe `object` carrier; typed
+construction/writes widen or box and typed reads check/cast or unbox. This is
+field-local, so a proven plain sibling may remain true `!T` state. Runtime-
+selected and semantic-fallback
 construction remain unadmitted. Version 5 also binds each producer open
 implementation TypeDef to its existing KLIB classifier key, retains logical
 type arguments only in KLIB, hides capability TypeDefs from classifier/member
@@ -361,7 +366,10 @@ The cutover is not considered until all of these are true:
 9. JIT, ReadyToRun, NativeAOT, trimming, metadata/code size, startup,
    allocations, boxing, compile time, and memory measurements are reviewed.
 10. Concurrency and memory-model primitives do not require a second state or
-   representation-specific locking protocol.
+   representation-specific locking protocol. The schema-14 hostile proof
+   closes this for an owner-dependent volatile field beside a true-`T` field
+   on Framework 4.8 and CoreCLR; broader synchronization and atomics remain
+   separate language-surface work.
 11. The exact C# public/protected surface is judged understandable, including
    any documented semantic candidate hook.
 12. The complete migration diff and exact revert are rehearsed on a temporary

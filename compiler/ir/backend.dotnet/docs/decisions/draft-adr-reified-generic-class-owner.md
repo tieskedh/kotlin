@@ -377,7 +377,7 @@ capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
 slot is inferred from the current erased artifact. A production-inert family
-  artifact, now at schema 13, makes the first external link objective: it
+artifact, now at schema 14, makes the first external link objective: it
 fingerprints the exact temporary producer and records logical joins,
 owner/capability paths, arity, disposition, state requirements, complete
 roles/reasons, selected
@@ -431,6 +431,15 @@ visibility. Typed entries retain source visibility, semantic hooks require
 protected visibility, and explicit capability implementations require private/
 final. A decoded producer record must not reconstruct public/internal or
 final/open/abstract/sealed shapes from roles or ancestry.
+Schema 14 records plain/volatile memory semantics and constructor-input
+conversion for every selected state. An owner-dependent volatile field cannot
+use arbitrary unconstrained `!T` storage, so the bounded hostile family records
+one reference-safe volatile `object` field with widening/boxing construction
+and writes plus checked cast/unbox reads. The ordinary proven sibling remains
+true `!T` state. Semantic widening takes precedence over the volatile physical
+reason, and every typed/capability access must share the same field. This is a
+migration invariant, not authorization for production `C<T>` emission or the
+public concurrency API.
 The bounded external Kotlin-subclass physicalizer now joins compiler-derived
 child visibility, modality, exact admitted constructor
 signature, fake-override roots, and direct `super`
@@ -546,7 +555,7 @@ as producer-erased rather than mistaken for an incomplete record. Default-
 argument calls participate through the existing dispatcher binding and moved
 receiver parameter, never through a `$default` spelling heuristic.
 
-The first separate hostile census contains 40 producer-owned static call
+The initial separate hostile census contained 40 producer-owned static call
 sites: 24 producer-erased, 11 exact typed-entry candidates, four semantic-
 capability requirements, and one missing capability. Those figures are not
 dynamic weights and do not validate the earlier handwritten three-typed/
