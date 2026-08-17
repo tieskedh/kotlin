@@ -1,5 +1,11 @@
 # Generic-owner OctoTree typed private root (2026-08-17)
 
+> **Superseded performance evidence:** a later large-only audit found that the
+> generated candidate used CLR `EqualityComparer<T>.Default` where real Kotlin
+> calls Runtime `AreEqual(object, object)`. The structural private-root proof
+> remains valid, but every timing/allocation conclusion below is superseded by
+> [`generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md`](generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md).
+
 ## Scope
 
 This checkpoint removes one conservative classification defect from the
