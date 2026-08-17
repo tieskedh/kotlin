@@ -93,6 +93,12 @@ enum class DotNetGenericOwnerMemberFamilyRole {
     CAPABILITY_DISPATCHER,
 }
 
+/** The source accessor which gives one detached physical prototype member its PropertyDef role. */
+enum class DotNetGenericOwnerPropertyAccessorKind {
+    GETTER,
+    SETTER,
+}
+
 /** Why a member family needs a separately overridable object-domain semantic entry. */
 enum class DotNetGenericOwnerSemanticHookReason {
     GENERAL_WIDENED_BODY,
@@ -920,6 +926,8 @@ internal data class DotNetGenericOwnerPrototypeMember(
 data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val sourceName: String,
     val isPropertyAccessor: Boolean,
+    val propertyAccessorKind: DotNetGenericOwnerPropertyAccessorKind?,
+    val physicalPropertyName: String?,
     val physicalBaseName: String,
     val sourceIndex: Int,
     val isFakeOverride: Boolean,
@@ -953,6 +961,10 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val reachableFromSemanticEntry: Boolean,
 ) {
     init {
+        require(isPropertyAccessor == (propertyAccessorKind != null) &&
+                isPropertyAccessor == (physicalPropertyName != null)) {
+            "a generic-owner prototype property accessor requires its exact accessor kind and physical name"
+        }
         exactPathUnboundSignatures?.let { signatures ->
             require(signatures.keys == roles) {
                 "an exact generic-owner prototype signature family must cover every selected role"
@@ -1963,6 +1975,56 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
     }
 }
 
+/**
+ * One real CLR Property row over existing typed-entry MethodDefs.
+ *
+ * Getter/setter logical keys remain the KLIB authority. The physical methods and property name
+ * are producer-selected metadata identities; a consumer must never reconstruct either from the
+ * Kotlin source spelling. Semantic hooks and capability dispatchers deliberately cannot be
+ * attached to the ordinary C# property surface.
+ */
+data class DotNetGenericOwnerPhysicalPropertyRecord(
+    val physicalPropertyName: String,
+    val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val getterLogicalMemberKey: String?,
+    val getterPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
+    val setterLogicalMemberKey: String?,
+    val setterPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
+) {
+    init {
+        require(physicalPropertyName.isNotEmpty() &&
+                physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+            "a generic-owner physical property requires a PropertyDef name and non-void type"
+        }
+        require(getterLogicalMemberKey != null && getterPhysicalMethod != null &&
+                (setterLogicalMemberKey == null) == (setterPhysicalMethod == null) &&
+                (setterPhysicalMethod == null || setterPhysicalMethod != getterPhysicalMethod)) {
+            "generic-owner property '$physicalPropertyName' requires a getter and complete optional setter binding"
+        }
+        require(getterLogicalMemberKey.isNotEmpty() && setterLogicalMemberKey?.isNotEmpty() != false) {
+            "generic-owner property '$physicalPropertyName' has an empty logical accessor key"
+        }
+        require(getterLogicalMemberKey != setterLogicalMemberKey) {
+            "generic-owner property '$physicalPropertyName' cannot bind both accessors to one logical member"
+        }
+        getterPhysicalMethod.let { getter ->
+            require(getter.signature.isInstance && getter.signature.genericArity == 0 &&
+                    getter.signature.parameterSlots.isEmpty() &&
+                    getter.signature.returnSlot.type == physicalType &&
+                    physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                "generic-owner property '$physicalPropertyName' has an invalid getter MethodDef"
+            }
+        }
+        setterPhysicalMethod?.let { setter ->
+            require(setter.signature.isInstance && setter.signature.genericArity == 0 &&
+                    setter.signature.parameterSlots.singleOrNull()?.type == physicalType &&
+                    setter.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                "generic-owner property '$physicalPropertyName' has an invalid setter MethodDef"
+            }
+        }
+    }
+}
+
 /** Producer-selected physical carrier for one field owned by a logical generic classifier. */
 data class DotNetGenericOwnerPhysicalStateRecord(
     val logicalFieldName: String,
@@ -2126,6 +2188,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val constructors: List<DotNetGenericOwnerPhysicalConstructorRecord>,
     val reflection: DotNetGenericOwnerPhysicalReflectionRecord,
     val members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
+    val properties: List<DotNetGenericOwnerPhysicalPropertyRecord> = emptyList(),
     val states: List<DotNetGenericOwnerPhysicalStateRecord>,
     val implementationMethods: List<DotNetGenericOwnerPhysicalImplementationMethodRecord> = emptyList(),
 ) {
@@ -2178,6 +2241,9 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         require(members.map { member -> member.logicalMemberKey }.toSet().size == members.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical members"
         }
+        require(properties.map { property -> property.physicalPropertyName }.toSet().size == properties.size) {
+            "generic-owner physical family '$logicalOwnerKey' has duplicate physical properties"
+        }
         val memberPhysicalMethodDefinitions = members.flatMap { member ->
             buildList {
                 member.slots.forEach { slot ->
@@ -2212,6 +2278,34 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             "generic-owner physical family '$logicalOwnerKey' has colliding physical MethodDefs"
         }
         val membersByLogicalKey = members.associateBy { member -> member.logicalMemberKey }
+        val propertyAccessorMethods = properties.flatMap { property ->
+            listOfNotNull(property.getterPhysicalMethod, property.setterPhysicalMethod)
+        }
+        require(propertyAccessorMethods.toSet().size == propertyAccessorMethods.size) {
+            "generic-owner physical family '$logicalOwnerKey' binds one MethodDef to multiple properties"
+        }
+        require(properties.all { property ->
+            fun matchesTypedEntry(
+                logicalMemberKey: String?,
+                physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
+            ): Boolean {
+                if (logicalMemberKey == null || physicalMethod == null) return logicalMemberKey == null && physicalMethod == null
+                val typedSlot = membersByLogicalKey[logicalMemberKey]?.slots?.singleOrNull { slot ->
+                    slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                } ?: return false
+                return typedSlot.visibility != DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                        physicalMethod.physicalOwnerPath == physicalOwnerPath &&
+                        physicalMethod == DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                            typedSlot.physicalOwnerPath,
+                            typedSlot.physicalMethodName,
+                            typedSlot.signature,
+                        )
+            }
+            matchesTypedEntry(property.getterLogicalMemberKey, property.getterPhysicalMethod) &&
+                    matchesTypedEntry(property.setterLogicalMemberKey, property.setterPhysicalMethod)
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has a property outside its visible typed entries"
+        }
         require(reflection.callables.map { callable -> callable.logicalMemberKey }.toSet() ==
                 membersByLogicalKey.keys) {
             "generic-owner physical family '$logicalOwnerKey' has incomplete reflected callables"
@@ -2314,6 +2408,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
                 states.map { state -> state.physicalType } +
+                properties.map { property -> property.physicalType } +
                 physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints })
             .flatMap { type -> type.typeParameterReferences() }
             .all { reference ->
@@ -2358,6 +2453,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
                 states.map { state -> state.physicalType } +
+                properties.map { property -> property.physicalType } +
                 physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints } +
                 constructors.flatMap { constructor ->
                     constructor.physicalConstructor.signature.allTypes() +
@@ -2757,7 +2853,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 14
+    const val SCHEMA_VERSION = 15
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2801,6 +2897,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 { method -> method.physicalMethod.physicalMethodName },
                 { method -> method.physicalMethod.signature.serialized() },
             ))
+            val properties = owner.properties.sortedBy { property -> property.physicalPropertyName }
             val states = owner.states.sortedBy { state -> state.logicalFieldName }
             appendLine(
                 listOf(
@@ -2820,6 +2917,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     owner.constructionModes.sortedBy { mode -> mode.name }.joinToString(",") { mode -> mode.name },
                     owner.constructors.size.toString(),
                     members.size.toString(),
+                    properties.size.toString(),
                     states.size.toString(),
                     implementationMethods.size.toString(),
                 ).joinToString("\t")
@@ -2973,6 +3071,25 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     )
                 }
             }
+            properties.forEach { property ->
+                val getter = property.getterPhysicalMethod
+                val setter = property.setterPhysicalMethod
+                appendLine(
+                    listOf(
+                        "W",
+                        property.physicalPropertyName.encoded(),
+                        property.physicalType.serialized().encoded(),
+                        property.getterLogicalMemberKey?.encoded() ?: "-",
+                        getter?.physicalOwnerPath?.joinToString("\u0000")?.encoded() ?: "-",
+                        getter?.physicalMethodName?.encoded() ?: "-",
+                        getter?.signature?.serialized()?.encoded() ?: "-",
+                        property.setterLogicalMemberKey?.encoded() ?: "-",
+                        setter?.physicalOwnerPath?.joinToString("\u0000")?.encoded() ?: "-",
+                        setter?.physicalMethodName?.encoded() ?: "-",
+                        setter?.signature?.serialized()?.encoded() ?: "-",
+                    ).joinToString("\t")
+                )
+            }
             implementationMethods.forEach { method ->
                 appendLine(
                     listOf(
@@ -3117,7 +3234,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
-            val fields = read("O", 15)
+            val fields = read("O", 16)
             val logicalOwnerKey = fields[1].decoded()
             val ownerPath = fields[2].decoded().split('\u0000')
             val capabilityOwnerPath = fields[3].takeUnless { it == "-" }?.decoded()?.split('\u0000')
@@ -3150,8 +3267,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             )
             val constructorCount = count(fields[11], "constructor")
             val memberCount = count(fields[12], "member")
-            val stateCount = count(fields[13], "state")
-            val implementationMethodCount = count(fields[14], "implementation method")
+            val propertyCount = count(fields[13], "property")
+            val stateCount = count(fields[14], "state")
+            val implementationMethodCount = count(fields[15], "implementation method")
             val physicalGenericParameters = List(physicalGenericParameterCount) {
                 val parameterFields = read("G", 4)
                 val typeConstraintCount = count(parameterFields[3], "generic parameter type constraint")
@@ -3365,6 +3483,34 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     defaultDispatcher = defaultDispatcher,
                 )
             }
+            val properties = List(propertyCount) {
+                val propertyFields = read("W", 11)
+                fun accessorOrNull(keyIndex: Int, ownerIndex: Int): DotNetGenericOwnerPhysicalMethodIdentityRecord? {
+                    val logicalKey = propertyFields[keyIndex].takeUnless { value -> value == "-" }
+                    val owner = propertyFields[ownerIndex].takeUnless { value -> value == "-" }
+                    val methodName = propertyFields[ownerIndex + 1].takeUnless { value -> value == "-" }
+                    val signature = propertyFields[ownerIndex + 2].takeUnless { value -> value == "-" }
+                    require(listOf(logicalKey, owner, methodName, signature).all { value -> value == null } ||
+                            listOf(logicalKey, owner, methodName, signature).all { value -> value != null }) {
+                        "generic-owner family artifact has a partial physical property accessor"
+                    }
+                    return owner?.let { physicalOwnerPath ->
+                        DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                            physicalOwnerPath = physicalOwnerPath.decoded().split('\u0000'),
+                            physicalMethodName = checkNotNull(methodName).decoded(),
+                            signature = checkNotNull(signature).decoded().deserializedSignature(),
+                        )
+                    }
+                }
+                DotNetGenericOwnerPhysicalPropertyRecord(
+                    physicalPropertyName = propertyFields[1].decoded(),
+                    physicalType = propertyFields[2].decoded().deserializedType(),
+                    getterLogicalMemberKey = propertyFields[3].takeUnless { value -> value == "-" }?.decoded(),
+                    getterPhysicalMethod = accessorOrNull(3, 4),
+                    setterLogicalMemberKey = propertyFields[7].takeUnless { value -> value == "-" }?.decoded(),
+                    setterPhysicalMethod = accessorOrNull(7, 8),
+                )
+            }
             val implementationMethods = List(implementationMethodCount) {
                 val methodFields = read("H", 6)
                 DotNetGenericOwnerPhysicalImplementationMethodRecord(
@@ -3502,6 +3648,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 constructors = constructors,
                 reflection = reflection,
                 members = members,
+                properties = properties,
                 states = states,
                 implementationMethods = implementationMethods,
             )
@@ -4464,6 +4611,19 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
             DotNetGenericOwnerPrototypeMemberSnapshot(
                 sourceName = source.name.asString(),
                 isPropertyAccessor = source.correspondingPropertySymbol != null,
+                propertyAccessorKind = source.correspondingPropertySymbol?.owner?.let { property ->
+                    when (source) {
+                        property.getter -> DotNetGenericOwnerPropertyAccessorKind.GETTER
+                        property.setter -> DotNetGenericOwnerPropertyAccessorKind.SETTER
+                        else -> error("generic-owner prototype member is not its property's getter or setter")
+                    }
+                },
+                physicalPropertyName = source.correspondingPropertySymbol?.owner?.let { property ->
+                    dotNetPhysicalPropertyName(
+                        property.name.asString(),
+                        property.getter?.dotNetIlMethodName() ?: source.dotNetIlMethodName(),
+                    )
+                },
                 physicalBaseName = source.dotNetIlMethodName(),
                 sourceIndex = sourceIndex,
                 isFakeOverride = source.isFakeOverride,

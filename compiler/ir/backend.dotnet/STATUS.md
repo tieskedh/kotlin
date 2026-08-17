@@ -27,7 +27,31 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed generic-owner migration condition: physical-family schema 14
+- Last completed generic-owner migration condition: physical-family schema 15
+  now records a real direct CLR Property surface over existing typed-entry
+  MethodDefs. Compiler-derived prototype facts carry getter/setter kind and the
+  producer-selected physical Property name; the artifact binds that name and
+  type to the logical getter/setter KLIB keys without inventing a property key,
+  shadow state, or consumer name reconstruction. Semantic hooks and explicit
+  non-generic capability dispatchers cannot appear as ordinary property
+  accessors. The decoded OctoTree family exposes getter-only `depth: int`,
+  get/set `Leaf.value: T`, and getter-only `Branch.nodes: Node<T>[]`; separate
+  C# consumers use property syntax and verify the same typed fields remain
+  visible through capability calls on Framework 4.8 and .NET 10. The exhaustive
+  raw ECMA-335 reader now pins Property/PropertyMap rows, signatures, and
+  getter/setter MethodSemantics. The first full run found one concrete Roslyn
+  authoring defect: private fields and public properties shared the same C#
+  names. Producer-selected hidden backing-field names fixed the collision while
+  retaining exactly one field and one object identity. Duplicate/partial/
+  mismatched records, capability accessors, and fake-override republication
+  fail closed. The focused PSI/LightTree x profile matrix covers four products
+  with zero failures, errors, or skips. Production owners remain erased;
+  nullable annotations, collision policy, broad properties, and atomic ABI
+  migration remain open. The final strict aggregate exited successfully; the
+  direct audit covers 190 XML files and 2,238 tests with zero failures, errors,
+  or skips. See
+  [`docs/archive/generic-owner-direct-property-surface-2026-08-17.md`](docs/archive/generic-owner-direct-property-surface-2026-08-17.md).
+- The preceding generic-owner migration condition: physical-family schema 14
   now makes memory semantics and constructor input conversion explicit for
   every state. In the hostile owner, plain `stored: T` remains a true CLR `!T`
   field, while owner-dependent volatile `published: T` uses one volatile
