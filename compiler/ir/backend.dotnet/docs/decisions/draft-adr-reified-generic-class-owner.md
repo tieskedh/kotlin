@@ -668,8 +668,15 @@ capability now reads/writes the same true `T` field through its non-generic
 `object` boundary, and the Branch state capability returns the same
 `Node<T>[]` reference through `System.Array`. Direct C# proves value boxing at
 only the Leaf capability boundary, incompatible pre-mutation failure, array
-identity, and private/final interface-map targets. Outer Tree semantic routes
-remain required before this is a complete candidate.
+identity, and private/final interface-map targets. The outer open Tree now
+materializes its recorded public constructor and members over one private
+semantic `object` root. Its physicalizer consumes the compiler census and
+requires Tree.get-to-Leaf-read, Tree.get-to-Branch-read, and Tree.set-to-
+Node.set to remain semantic-capability calls. Direct C# proves typed and
+non-generic calls share one object graph, incompatible input fails before
+mutation, and an external subclass inherits the base-declared dispatchers.
+Whole-family metadata/reflection normalization remains required before this is
+a complete candidate.
 See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
@@ -678,6 +685,8 @@ The strict capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
 The state-access capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
+The outer-root checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

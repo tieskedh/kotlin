@@ -28,6 +28,26 @@ verification, and work state.
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Last completed product slice: the schema-12 decoded OctoTree candidate now
+  materializes its outer open `OctoTree<T>` owner, public constructor and
+  typed member slots over the recorded private semantic `object` root. Its
+  non-generic get/set interface uses truthful object carriers, and the set
+  dispatcher casts/unboxes before typed entry. The physicalizer consumes the
+  real compiler census and requires Tree.get-to-Leaf-read, Tree.get-to-Branch-
+  read, and Tree.set-to-Node.set to remain semantic-capability calls. A
+  separately compiled C# product proves typed/capability calls share one
+  Branch/Leaf graph, incompatible input fails before root/child mutation, the
+  Tree remains externally subclassable, and an external child inherits the
+  base-declared private/final dispatchers. Declaration-independent depth
+  storage/calculation remain explicitly named scenario-body details, not
+  generic-owner ABI evidence. The focused hostile-plus-OctoTree PSI/LightTree
+  x Framework 4.8/.NET 10 same/separate-compilation matrix covers 16 tests with
+  zero failures, errors, or skips. Production owners/emission, DLL/KLIB,
+  Runtime, Common semantics, and the public C# surface remain unchanged. The
+  final warm-cache strict aggregate completed in 660.2 seconds; direct audit
+  covers 190 XML files and 2,238 tests with zero failures, errors, or skips.
+  See
+  [`docs/archive/generic-owner-octo-tree-root-product-2026-08-17.md`](docs/archive/generic-owner-octo-tree-root-product-2026-08-17.md).
+- The preceding product slice: the schema-12 decoded OctoTree candidate now
   materializes the recorded state-access capability families over its one
   physical generic state. Leaf's non-generic capability reads and writes the
   same private `!T` field through `object`; its explicit write dispatcher
@@ -2737,9 +2757,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    dispatchers now preserve that most-derived override path and fail before
    incompatible mutation. Leaf's state capability now reads/writes the same
    true `T` field through `object`, while Branch's state capability returns the
-   same `Node<T>[]` through `System.Array`. Next, extend the same product over
-   Tree's semantic root, actual calls, and the complete direct C# surface
-   rather than starting a second representation.
+   same `Node<T>[]` through `System.Array`. The same product now includes the
+   outer open Tree, its semantic object root, compiler-census capability calls,
+   and typed/non-generic direct C# surface. Next, close whole-family metadata
+   and reflection normalization rather than starting a second representation.
    Include
    actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak

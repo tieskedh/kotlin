@@ -271,8 +271,12 @@ incompatible input fails before mutation. The matching Leaf state capability
 now reads/writes the same true `T` field through `object`, and the Branch state
 capability returns the same `Node<T>[]` reference through `System.Array`.
 Direct C# proves incompatible pre-mutation failure and private/final
-interface-map targets. The next migration proof is the outer Tree semantic
-root and its actual call routes. See
+interface-map targets. The outer open Tree now materializes its semantic
+object root, public constructor/members and non-generic capability. Its
+physicalizer requires the three real state-to-child compiler-census calls to
+remain semantic-capability routes; external C# proves one graph and inherited
+base dispatchers. The next migration proof is exact whole-family metadata and
+reflection normalization. See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
@@ -280,6 +284,8 @@ The strict capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
 The state-access capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
+The outer-root checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,
