@@ -447,8 +447,10 @@ owner-specific routes reach the most-derived typed override; incompatible input
 fails before mutation. The Leaf capability now reads/writes the same true `T`
 field through `object`, while the Branch capability exposes the same
 `Node<T>[]` reference through `System.Array`; incompatible Leaf writes fail
-before mutation. Next, emit the outer Tree semantic/member routes and complete
-direct C# surface. See
+before mutation. The outer open Tree now materializes its semantic object root,
+typed/capability members and three compiler-census semantic child calls.
+Direct C# proves one graph plus inherited base dispatchers on an external
+subclass. Next, close whole-family metadata and reflection normalization. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 The sealed-construction checkpoint is recorded in
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
@@ -460,6 +462,8 @@ The strict capability product is recorded in
 [`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
 The state-access capability product is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
+The outer-root product is recorded in
+[`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable

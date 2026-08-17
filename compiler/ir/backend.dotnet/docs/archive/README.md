@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-root-product-2026-08-17.md`](generic-owner-octo-tree-root-product-2026-08-17.md)
+  records the outer open Tree, semantic object root, compiler-census capability
+  calls, typed/non-generic C# surface, inherited base dispatchers, and explicit
+  declaration-independent scenario-body boundary.
 - [`generic-owner-octo-tree-state-capabilities-2026-08-17.md`](generic-owner-octo-tree-state-capabilities-2026-08-17.md)
   records the Leaf object-boundary read/write and Branch `System.Array` read
   capabilities over the same true generic state, incompatible pre-mutation
