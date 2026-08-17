@@ -663,7 +663,7 @@ See the
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
   channel has one versioned, producer-fingerprinted physical-family artifact,
-  currently schema 14,
+  currently schema 18,
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
@@ -678,7 +678,16 @@ See the
   truncated, duplicate, incomplete, missing-member, or wrong-producer input.
   Typed entries may override typed entries and semantic hooks may override
   semantic hooks; a recorded final capability dispatcher is never an override
-  target. This artifact remains test/architecture-only while production owners
+  target. An abstract broad property has no body or state from which to infer
+  its paired raw output. When its abstract setter admits a wider Kotlin domain,
+  record the abstract getter's semantic obligation explicitly. The typed
+  property accessors and protected semantic hooks must remain abstract or
+  concrete together; only the explicit capability dispatchers are concrete on
+  the abstract base. A foreign concrete subclass which implements only the
+  typed property must be rejected. In a Kotlin override, inherited logical
+  semantic obligations participate in call/field reachability before storage
+  selection; do not first prove `!T` state and merge the semantic family later.
+  This artifact remains test/architecture-only while production owners
   are erased. Do not serialize it into today's DLL/KLIB, add a speculative
   `dotnet.ir` node, advance production admission, or claim that the still-
   missing runtime-selected/fallback construction is complete. Version 3
