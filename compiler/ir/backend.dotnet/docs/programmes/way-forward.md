@@ -965,6 +965,25 @@ surface. Continue with the next complete hostile migration condition rather
 than an easy-owner rollout or a micro-optimization. See
 [`../archive/generic-owner-one-state-memory-model-2026-08-17.md`](../archive/generic-owner-one-state-memory-model-2026-08-17.md).
 
+The direct C# PropertyDef condition is now closed at physical-family schema 15.
+Prototype accessors carry a compiler-derived getter/setter kind and physical
+Property name. The family artifact binds that name and physical type to the
+existing typed-entry MethodDefs through their logical getter/setter KLIB keys;
+it introduces neither a second property key nor a second state carrier.
+Semantic hooks and capability dispatchers cannot become ordinary property
+accessors. The complete OctoTree product now publishes `depth: int`,
+`value: T`, and `nodes: Node<T>[]` as real properties, with hidden distinct
+backing-field names selected after Roslyn exposed the otherwise-colliding C#
+source shape. Separate consumers use property syntax on Framework 4.8 and
+.NET 10, while the raw metadata inspector verifies Property/PropertyMap and
+getter/setter MethodSemantics rows. Duplicate names, partial codec accessors,
+foreign/capability accessors, mismatched signatures, and fake-override
+republication fail closed. This is still production-inert: nullable-reference
+annotations, overload/name collision policy, broad property semantics, and
+the atomic public owner migration remain open. Continue with the next hostile
+migration condition rather than rolling out easy owners. See
+[`../archive/generic-owner-direct-property-surface-2026-08-17.md`](../archive/generic-owner-direct-property-surface-2026-08-17.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

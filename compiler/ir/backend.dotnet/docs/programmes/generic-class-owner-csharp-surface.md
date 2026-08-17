@@ -232,8 +232,9 @@ A supported direct C# subclass must preserve:
 
 The permanent direct CLR probe already proves the core compatible/incompatible
 dispatcher shape and multi-level typed C# overrides on CLR 4 and CoreCLR. The
-compiler prototype still has to prove Kotlin-produced MethodImpl rows and a
-C# subclass in another assembly.
+compiler prototype and raw metadata product now also prove producer-selected
+MethodImpl rows plus a C# subclass in another assembly. This remains
+production-inert admission evidence rather than the accepted public owner ABI.
 
 ## Imported CLR actuals and expect/actual
 
@@ -330,6 +331,23 @@ the remaining acceptance matrix or representative product gate is complete.
 See
 [`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
 
+The recursive product now has a real CLR property surface as well. Physical-
+family schema 15 records each Property name and type together with the exact
+logical getter/setter keys and their existing typed-entry MethodDefs. It does
+not invent a property KLIB key or attach a semantic hook/capability dispatcher
+to ordinary C# discovery. The record-driven producer exposes getter-only
+`OctoTree<T>.depth: int`, get/set `Leaf<T>.value: T`, and getter-only
+`Branch<T>.nodes: Node<T>[]`; a separately compiled C# consumer uses property
+syntax on Framework 4.8 and .NET 10. A raw ECMA-335 reader checks the Property,
+PropertyMap, and getter/setter MethodSemantics associations rather than relying
+on reflection alone. The product also found a concrete authoring collision:
+private state and a property cannot share one C# source name, so the producer
+selects hidden physical backing-field names while retaining exactly one typed
+field and the natural public property name. This closes the bounded direct-
+property migration condition, not nullability annotations, collision policy,
+or the complete acceptance matrix. See
+[`../archive/generic-owner-direct-property-surface-2026-08-17.md`](../archive/generic-owner-direct-property-surface-2026-08-17.md).
+
 The first repository application census sharpens that distinction. ArrayCopy
 executes 5,664 local owner calls and every one has exact-entry provenance, but
 its source-authored unchecked object-array initialization still requires
@@ -343,9 +361,9 @@ typing need not wait for public owner reification. Its `Array<Node<T>?>` state
 is already an honest `Node[]` because the production erased `Node<T>` has one
 CLR classifier; direct `T` arrays and `T` value fields remain erased. The
 application executes 5,941 exact and 3,096 semantic-capability local events.
-That narrows where canonical adapters may be needed, but only a paired direct
-C# product can establish whether the eventual `C<T>` surface and those
-capabilities are idiomatic enough. See
+That narrowed where canonical adapters may be needed. The later paired direct
+C# product now proves its bounded typed state, callable, capability, and real
+property surface, while the wider acceptance matrix below remains open. See
 [`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
 
 Before this surface is accepted, Roslyn must compile and execute:
