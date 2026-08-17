@@ -254,6 +254,7 @@ enum class DotNetGenericOwnerPhysicalTypeScope {
 
 enum class DotNetGenericOwnerPhysicalNamedTypeCategory {
     CLASS,
+    INTERFACE,
     VALUE_TYPE,
 }
 
@@ -906,7 +907,9 @@ private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.openNullableRuntimeAr
                     arguments = listOf(this),
                 )
             }
-            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS -> this
+            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            -> this
             null -> null
         }
         DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
@@ -1189,6 +1192,8 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
     /** Binds every logical producer classifier only after the artifact owns its physical path. */
     fun bindProducerTypes(
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+        physicalNamedTypeCategoriesByLogicalKey:
+                Map<String, DotNetGenericOwnerPhysicalNamedTypeCategory> = emptyMap(),
     ): DotNetGenericOwnerPhysicalTypeExpressionRecord = when (kind) {
         DotNetGenericOwnerPrototypeTypeKind.VOID ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
@@ -1216,15 +1221,22 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
             }
             DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
                 typePath = physicalPath,
-                category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                category = physicalNamedTypeCategoriesByLogicalKey[logicalKey]
+                    ?: DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
                 arguments = arguments.map { argument ->
-                    argument.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                    argument.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    )
                 },
             )
         }
         DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
-                arguments.single().bindProducerTypes(physicalOwnerPathsByLogicalKey),
+                arguments.single().bindProducerTypes(
+                    physicalOwnerPathsByLogicalKey,
+                    physicalNamedTypeCategoriesByLogicalKey,
+                ),
             )
     }
 
@@ -1305,6 +1317,64 @@ data class DotNetGenericOwnerPrototypeValueSlotSnapshot(
         type = type.bindProducerTypes(physicalOwnerPathsByLogicalKey),
         nullableReferenceFlags = nullableReferenceFlags,
     )
+}
+
+/** Metadata-fixed role of one direct supertype on a future CLR-generic TypeDef. */
+enum class DotNetGenericOwnerDirectSupertypeKind {
+    BASE_CLASS,
+    INTERFACE,
+}
+
+/** Why a direct Kotlin supertype can or cannot become one exact CLR metadata edge. */
+enum class DotNetGenericOwnerPrototypeSupertypeDisposition {
+    EXACT_PHYSICAL_EDGE,
+    CONDITIONAL_OPEN_NULLABLE_ARGUMENT,
+    UNSUPPORTED_PHYSICAL_EDGE,
+}
+
+data class DotNetGenericOwnerPrototypeSupertypeSnapshot(
+    val kind: DotNetGenericOwnerDirectSupertypeKind,
+    val logicalClassifierKey: String?,
+    val disposition: DotNetGenericOwnerPrototypeSupertypeDisposition,
+    val exactPhysicalType: DotNetGenericOwnerPrototypeTypeSnapshot?,
+    val nullableReferenceFlags: List<DotNetNullableReferenceFlag>?,
+    val conditionalOwnerParameterIndices: List<Int>,
+) {
+    init {
+        require(logicalClassifierKey == null || logicalClassifierKey.isNotEmpty()) {
+            "a generic-owner prototype supertype has an empty logical classifier"
+        }
+        require(conditionalOwnerParameterIndices == conditionalOwnerParameterIndices.distinct().sorted() &&
+                conditionalOwnerParameterIndices.all { index -> index >= 0 }) {
+            "a generic-owner prototype supertype has unordered conditional owner parameters"
+        }
+        when (disposition) {
+            DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE -> {
+                val physicalType = requireNotNull(exactPhysicalType) {
+                    "an exact generic-owner prototype supertype requires a physical type"
+                }
+                physicalType.requiresNullableReferenceFlags(
+                    requireNotNull(nullableReferenceFlags),
+                    "an exact generic-owner prototype supertype",
+                )
+                require(conditionalOwnerParameterIndices.isEmpty()) {
+                    "an exact generic-owner prototype supertype cannot retain a conditional parameter"
+                }
+            }
+            DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT -> require(
+                exactPhysicalType == null && nullableReferenceFlags == null &&
+                        conditionalOwnerParameterIndices.isNotEmpty()
+            ) {
+                "a conditional generic-owner prototype supertype requires only its owner-parameter blockers"
+            }
+            DotNetGenericOwnerPrototypeSupertypeDisposition.UNSUPPORTED_PHYSICAL_EDGE -> require(
+                exactPhysicalType == null && nullableReferenceFlags == null &&
+                        conditionalOwnerParameterIndices.isEmpty()
+            ) {
+                "an unsupported generic-owner prototype supertype cannot claim partial physical facts"
+            }
+        }
+    }
 }
 
 /** Complete path-unbound MethodDef signature; binding is atomic after TypeDef selection. */
@@ -1701,6 +1771,7 @@ data class DotNetGenericOwnerPrototypeSnapshot(
     val physicalDispatch: DotNetGenericOwnerPhysicalTypeDispatch,
     val isInner: Boolean,
     val directSupertypeCount: Int,
+    val directSupertypes: List<DotNetGenericOwnerPrototypeSupertypeSnapshot>,
     val directFieldCount: Int,
     val anonymousInitializerCount: Int,
     val directNestedClassCount: Int,
@@ -1710,7 +1781,17 @@ data class DotNetGenericOwnerPrototypeSnapshot(
     val members: List<DotNetGenericOwnerPrototypeMemberSnapshot>,
     val states: List<DotNetGenericOwnerPrototypeStateSnapshot>,
     val metadataFixedConditionalSupertypeCount: Int,
-)
+) {
+    init {
+        require(directSupertypeCount == directSupertypes.size &&
+                metadataFixedConditionalSupertypeCount == directSupertypes.count { supertype ->
+                    supertype.disposition ==
+                            DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT
+                }) {
+            "a generic-owner prototype has an incomplete direct-supertype graph"
+        }
+    }
+}
 
 /** One compiler-derived MethodDef override for a future Kotlin-produced generic subclass. */
 data class DotNetGenericOwnerPhysicalizedOverrideSlotRecord(
@@ -2405,6 +2486,82 @@ private data class DotNetGenericOwnerCSharpMethodIdentity(
     val parameterTypes: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
 )
 
+/** One producer-owned generic interface TypeDef which participates in an owner's exact ancestry. */
+data class DotNetGenericOwnerPhysicalInterfaceTypeRecord(
+    val logicalInterfaceKey: String,
+    val physicalTypePath: List<String>,
+    val physicalVisibility: DotNetGenericOwnerPhysicalTypeVisibility,
+    val genericArity: Int,
+    val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
+) {
+    init {
+        require(logicalInterfaceKey.isNotEmpty()) {
+            "a generic-owner physical interface requires a logical interface key"
+        }
+        require(physicalTypePath.isNotEmpty() && physicalTypePath.all(String::isNotEmpty)) {
+            "generic-owner physical interface '$logicalInterfaceKey' requires a complete TypeDef path"
+        }
+        require(genericArity > 0 &&
+                physicalGenericParameters.map { parameter -> parameter.index } == (0 until genericArity).toList()) {
+            "generic-owner physical interface '$logicalInterfaceKey' requires every ordered GenericParam row"
+        }
+        require(physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints }
+            .none { constraint ->
+                constraint.referencesScope(DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION)
+            }) {
+            "generic-owner producer interface cannot reference a consumer compilation TypeDef"
+        }
+    }
+}
+
+/** Exact TypeDef BaseType or InterfaceImpl row selected by the producer. */
+data class DotNetGenericOwnerPhysicalDirectSupertypeRecord(
+    val kind: DotNetGenericOwnerDirectSupertypeKind,
+    val logicalClassifierKey: String?,
+    val isSemanticCapability: Boolean,
+    val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val nullableReferenceFlags: List<DotNetNullableReferenceFlag>,
+) {
+    init {
+        require(logicalClassifierKey == null || logicalClassifierKey.isNotEmpty()) {
+            "a generic-owner physical supertype has an empty logical classifier key"
+        }
+        require(physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                physicalType.namedTypeCategory == when (kind) {
+                    DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS ->
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE ->
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                }) {
+            "a generic-owner physical supertype must name a CLR ${kind.name.lowercase()} type"
+        }
+        physicalType.requiresNullableReferenceFlags(
+            nullableReferenceFlags,
+            "a generic-owner physical supertype",
+        )
+        require(nullableReferenceFlags.firstOrNull() == DotNetNullableReferenceFlag.OBLIVIOUS) {
+            "a TypeDef base or interface root uses the CLR/Roslyn non-nullable ancestry sentinel"
+        }
+        require(physicalType.typeParameterReferences().none { reference ->
+            reference.first == DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER
+        } && !physicalType.referencesScope(DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION)) {
+            "a generic-owner TypeDef supertype cannot reference a method or consumer type"
+        }
+        require(!isSemanticCapability ||
+                kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE && logicalClassifierKey == null &&
+                physicalType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                physicalType.genericArity == 0) {
+            "a semantic capability edge must be one producer-owned non-generic interface"
+        }
+        require(isSemanticCapability || logicalClassifierKey != null ||
+                kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS &&
+                physicalType.scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+                physicalType.typePath == listOf("System", "Object") && physicalType.genericArity == 0) {
+            "only System.Object may be a physical supertype without logical or capability authority"
+        }
+    }
+}
+
 /**
  * Versioned cross-assembly prototype record for one future CLR-generic owner.
  *
@@ -2420,6 +2577,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val physicalDispatch: DotNetGenericOwnerPhysicalTypeDispatch,
     val genericArity: Int,
     val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
+    val directSupertypes: List<DotNetGenericOwnerPhysicalDirectSupertypeRecord>,
     val disposition: DotNetGenericOwnerCandidateDisposition,
     val runtimeClassificationMode: DotNetGenericOwnerRuntimeClassificationMode,
     val constructionModes: Set<DotNetGenericOwnerConstructionMode>,
@@ -2442,6 +2600,23 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         require(genericArity > 0) { "generic-owner physical family '$logicalOwnerKey' requires positive arity" }
         require(physicalGenericParameters.map { parameter -> parameter.index } == (0 until genericArity).toList()) {
             "generic-owner physical family '$logicalOwnerKey' requires every ordered GenericParam constraint row"
+        }
+        val baseType = directSupertypes.singleOrNull { supertype ->
+            supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+        }
+        require(baseType != null && directSupertypes.map { supertype -> supertype.physicalType }.toSet().size ==
+                directSupertypes.size && directSupertypes.none { supertype ->
+            supertype.physicalType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                    supertype.physicalType.typePath == physicalOwnerPath
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' requires one acyclic base and unique interfaces"
+        }
+        require(directSupertypes.flatMap { supertype -> supertype.physicalType.typeParameterReferences() }
+            .all { reference ->
+                reference.first != DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
+                        reference.second < genericArity
+            }) {
+            "generic-owner physical family '$logicalOwnerKey' has a supertype with a missing owner parameter"
         }
         require(constructionModes == constructors.map { constructor -> constructor.constructionMode }.toSet() &&
                 constructors.isNotEmpty()) {
@@ -2469,6 +2644,11 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             }
         }) {
             "generic-owner physical family '$logicalOwnerKey' has an invalid constructed owner"
+        }
+        require(constructors.filter { constructor ->
+            constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
+        }.all { constructor -> constructor.delegation.physicalOwnerType == baseType.physicalType }) {
+            "generic-owner physical family '$logicalOwnerKey' has constructor delegation outside its BaseType row"
         }
         require(reflection.logicalClassifierKey == logicalOwnerKey &&
                 reflection.physicalOpenTypeDefinition.physicalTypePath == physicalOwnerPath &&
@@ -2708,6 +2888,17 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         } || physicalCapabilityOwnerPath != null) {
             "generic-owner physical family '$logicalOwnerKey' lacks its capability owner"
         }
+        val ownsCapabilityDispatchers = members.flatMap { member -> member.slots }.any { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+                    slot.physicalOwnerPath == physicalOwnerPath
+        }
+        val directCapabilityEdges = directSupertypes.filter { supertype -> supertype.isSemanticCapability }
+        require(ownsCapabilityDispatchers == directCapabilityEdges.isNotEmpty() &&
+                directCapabilityEdges.size <= 1 && directCapabilityEdges.all { supertype ->
+            supertype.physicalType.typePath == physicalCapabilityOwnerPath
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has an inconsistent direct capability InterfaceImpl"
+        }
         val recordedMethods = buildList {
             members.forEach { member ->
                 member.slots.forEach { slot ->
@@ -2723,6 +2914,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
                 states.map { state -> state.physicalType } +
                 properties.map { property -> property.physicalType } +
+                directSupertypes.map { supertype -> supertype.physicalType } +
                 physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints })
             .flatMap { type -> type.typeParameterReferences() }
             .all { reference ->
@@ -2768,6 +2960,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
                 states.map { state -> state.physicalType } +
                 properties.map { property -> property.physicalType } +
+                directSupertypes.map { supertype -> supertype.physicalType } +
                 physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints } +
                 constructors.flatMap { constructor ->
                     constructor.physicalConstructor.signature.allTypes() +
@@ -2797,6 +2990,7 @@ data class DotNetGenericOwnerCandidateClassificationRecord(
     val disposition: DotNetGenericOwnerCandidateDisposition,
     val logicalConstructorKeys: List<String>,
     val logicalMemberKeys: List<String>,
+    val conditionalSupertypes: List<DotNetGenericOwnerConditionalSupertypeRecord> = emptyList(),
 ) {
     init {
         require(logicalOwnerKey.isNotEmpty()) {
@@ -2813,6 +3007,35 @@ data class DotNetGenericOwnerCandidateClassificationRecord(
                 logicalMemberKeys == logicalMemberKeys.distinct().sorted()) {
             "generic-owner candidate '$logicalOwnerKey' has unordered or duplicate logical members"
         }
+        require(conditionalSupertypes == conditionalSupertypes.distinct().sortedWith(compareBy(
+            { supertype -> supertype.kind.name },
+            { supertype -> supertype.logicalClassifierKey },
+        ))) {
+            "generic-owner candidate '$logicalOwnerKey' has unordered or duplicate conditional supertypes"
+        }
+        require(conditionalSupertypes.flatMap { supertype -> supertype.conditionalOwnerParameterIndices }
+            .all { parameterIndex -> parameterIndex < genericArity }) {
+            "generic-owner candidate '$logicalOwnerKey' has a conditional supertype with a missing owner parameter"
+        }
+        require((disposition == DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE) ==
+                conditionalSupertypes.isNotEmpty()) {
+            "generic-owner candidate '$logicalOwnerKey' has inconsistent conditional-supertype authority"
+        }
+    }
+}
+
+/** Producer-authoritative reason why one Kotlin supertype cannot become a fixed CLR metadata edge. */
+data class DotNetGenericOwnerConditionalSupertypeRecord(
+    val kind: DotNetGenericOwnerDirectSupertypeKind,
+    val logicalClassifierKey: String,
+    val conditionalOwnerParameterIndices: List<Int>,
+) {
+    init {
+        require(logicalClassifierKey.isNotEmpty() && conditionalOwnerParameterIndices.isNotEmpty() &&
+                conditionalOwnerParameterIndices == conditionalOwnerParameterIndices.distinct().sorted() &&
+                conditionalOwnerParameterIndices.all { index -> index >= 0 }) {
+            "a conditional generic-owner supertype requires a logical classifier and ordered blockers"
+        }
     }
 }
 
@@ -2821,6 +3044,7 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
     val producerFingerprint: String,
     val targetProfile: DotNetGenericOwnerPhysicalTargetProfile,
     val classifications: List<DotNetGenericOwnerCandidateClassificationRecord>,
+    val interfaceTypes: List<DotNetGenericOwnerPhysicalInterfaceTypeRecord> = emptyList(),
     val owners: List<DotNetGenericOwnerPhysicalFamilyRecord>,
 ) {
     init {
@@ -2840,9 +3064,21 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         require(owners.map { owner -> owner.physicalOwnerPath }.toSet().size == owners.size) {
             "a generic-owner family artifact has duplicate physical owner TypeDefs"
         }
+        require(interfaceTypes.map { type -> type.logicalInterfaceKey }.toSet().size == interfaceTypes.size &&
+                interfaceTypes.map { type -> type.physicalTypePath }.toSet().size == interfaceTypes.size) {
+            "a generic-owner family artifact has duplicate generic interface TypeDefs"
+        }
+        require(interfaceTypes.none { type ->
+            owners.any { owner ->
+                owner.logicalOwnerKey == type.logicalInterfaceKey || owner.physicalOwnerPath == type.physicalTypePath
+            }
+        }) {
+            "a generic-owner family artifact confuses interface and class TypeDefs"
+        }
         val capabilityPaths = owners.mapNotNull { owner -> owner.physicalCapabilityOwnerPath }
         require(capabilityPaths.none { capabilityPath ->
-            owners.any { owner -> owner.physicalOwnerPath == capabilityPath }
+            owners.any { owner -> owner.physicalOwnerPath == capabilityPath } ||
+                    interfaceTypes.any { type -> type.physicalTypePath == capabilityPath }
         }) {
             "a generic-owner family artifact confuses a capability TypeDef with a classifier TypeDef"
         }
@@ -2871,12 +3107,18 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         }
         val constructorsByLogicalKey = constructors.associateBy { constructor -> constructor.logicalConstructorKey }
         val ownersByPhysicalPath = owners.associateBy { owner -> owner.physicalOwnerPath }
+        val interfacesByPhysicalPath = interfaceTypes.associateBy { type -> type.physicalTypePath }
         fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOnlyRecordedProducerTypes(): Boolean =
             (scope != DotNetGenericOwnerPhysicalTypeScope.PRODUCER ||
                     ownersByPhysicalPath[typePath]?.let { owner ->
                         namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
                                 genericArity == owner.genericArity
-                    } == true) && arguments.all { argument ->
+                    } == true || interfacesByPhysicalPath[typePath]?.let { type ->
+                        namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+                                genericArity == type.genericArity
+                    } == true || typePath in capabilityPaths &&
+                    namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE && genericArity == 0) &&
+                    arguments.all { argument ->
                 argument.referencesOnlyRecordedProducerTypes()
             }
         val producerTypeRoots = owners.flatMap { owner ->
@@ -2888,6 +3130,7 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
                     addAll(constructor.physicalConstructor.signature.allTypes())
                     addAll(constructor.delegation.signature.allTypes())
                 }
+                owner.directSupertypes.forEach { supertype -> add(supertype.physicalType) }
                 owner.members.forEach { member ->
                     member.slots.forEach { slot ->
                         addAll(slot.signature.allTypes())
@@ -2904,6 +3147,8 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
                     state.accessPaths.forEach { access -> addAll(access.physicalMethod.signature.allTypes()) }
                 }
             }
+        } + interfaceTypes.flatMap { type ->
+            type.physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints }
         }
         require(producerTypeRoots.all { type -> type.referencesOnlyRecordedProducerTypes() }) {
             "a generic-owner family artifact references an unrecorded producer TypeDef"
@@ -2911,6 +3156,25 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         val recordedMethodOwnerPaths = buildSet {
             addAll(ownersByPhysicalPath.keys)
             addAll(capabilityPaths)
+        }
+        val logicalPhysicalTypes = buildMap {
+            owners.forEach { owner -> put(owner.logicalOwnerKey, owner.physicalOwnerPath to owner.genericArity) }
+            interfaceTypes.forEach { type -> put(type.logicalInterfaceKey, type.physicalTypePath to type.genericArity) }
+        }
+        require(owners.flatMap { owner -> owner.directSupertypes }.all { supertype ->
+            when {
+                supertype.isSemanticCapability -> supertype.physicalType.typePath in capabilityPaths
+                supertype.logicalClassifierKey == null ->
+                    supertype.physicalType.scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+                            supertype.physicalType.typePath == listOf("System", "Object")
+                else -> logicalPhysicalTypes[supertype.logicalClassifierKey]?.let { physical ->
+                    supertype.physicalType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                            supertype.physicalType.typePath == physical.first &&
+                            supertype.physicalType.genericArity == physical.second
+                } == true
+            }
+        }) {
+            "a generic-owner family artifact has a supertype outside its logical producer graph"
         }
         require(owners.all { owner ->
             buildList {
@@ -3167,7 +3431,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 19
+    const val SCHEMA_VERSION = 20
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -3194,6 +3458,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     classification.disposition.name,
                     classification.logicalConstructorKeys.size.toString(),
                     classification.logicalMemberKeys.size.toString(),
+                    classification.conditionalSupertypes.size.toString(),
                 ).joinToString("\t")
             )
             classification.logicalConstructorKeys.forEach { logicalConstructorKey ->
@@ -3201,6 +3466,45 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             }
             classification.logicalMemberKeys.forEach { logicalMemberKey ->
                 appendLine("V\t${logicalMemberKey.encoded()}")
+            }
+            classification.conditionalSupertypes.forEach { supertype ->
+                appendLine(
+                    listOf(
+                        "l",
+                        supertype.kind.name,
+                        supertype.logicalClassifierKey.encoded(),
+                        supertype.conditionalOwnerParameterIndices.joinToString(","),
+                    ).joinToString("\t")
+                )
+            }
+        }
+        val interfaceTypes = artifact.interfaceTypes.sortedBy { type -> type.logicalInterfaceKey }
+        appendLine("e\t${interfaceTypes.size}")
+        interfaceTypes.forEach { type ->
+            appendLine(
+                listOf(
+                    "t",
+                    type.logicalInterfaceKey.encoded(),
+                    type.physicalTypePath.joinToString("\u0000").encoded(),
+                    type.physicalVisibility.name,
+                    type.genericArity.toString(),
+                    type.physicalGenericParameters.size.toString(),
+                ).joinToString("\t")
+            )
+            type.physicalGenericParameters.forEach { parameter ->
+                appendLine(
+                    listOf(
+                        "G",
+                        parameter.index.toString(),
+                        parameter.specialConstraints.sortedBy { constraint -> constraint.name }
+                            .joinToString(",") { constraint -> constraint.name }
+                            .ifEmpty { "-" },
+                        parameter.typeConstraints.size.toString(),
+                    ).joinToString("\t")
+                )
+                parameter.typeConstraints.forEach { constraint ->
+                    appendLine("B\t${constraint.serialized().encoded()}")
+                }
             }
         }
         val owners = artifact.owners.sortedBy { owner -> owner.logicalOwnerKey }
@@ -3234,6 +3538,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     properties.size.toString(),
                     states.size.toString(),
                     implementationMethods.size.toString(),
+                    owner.directSupertypes.size.toString(),
                 ).joinToString("\t")
             )
             owner.physicalGenericParameters.forEach { parameter ->
@@ -3250,6 +3555,21 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 parameter.typeConstraints.forEach { constraint ->
                     appendLine("B\t${constraint.serialized().encoded()}")
                 }
+            }
+            owner.directSupertypes.sortedWith(compareBy(
+                { supertype -> supertype.kind.name },
+                { supertype -> supertype.physicalType.serialized() },
+            )).forEach { supertype ->
+                appendLine(
+                    listOf(
+                        "T",
+                        supertype.kind.name,
+                        supertype.logicalClassifierKey?.encoded() ?: "-",
+                        supertype.isSemanticCapability.toString(),
+                        supertype.physicalType.serialized().encoded(),
+                        supertype.nullableReferenceFlags.serializedNullableReferenceFlags(),
+                    ).joinToString("\t")
+                )
             }
             owner.constructors.sortedBy { constructor -> constructor.logicalConstructorKey }.forEach { constructor ->
                 val delegation = constructor.delegation
@@ -3528,7 +3848,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         val classificationCount = count(read("E", 2)[1], "candidate classification")
         val classifications = List(classificationCount) {
-            val fields = read("L", 6)
+            val fields = read("L", 7)
             val logicalOwnerKey = fields[1].decoded()
             val genericArity = count(fields[2], "candidate generic-arity")
             val disposition = enumValue(
@@ -3538,6 +3858,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             )
             val logicalConstructorCount = count(fields[4], "candidate logical constructor")
             val logicalMemberCount = count(fields[5], "candidate logical member")
+            val conditionalSupertypeCount = count(fields[6], "candidate conditional supertype")
             DotNetGenericOwnerCandidateClassificationRecord(
                 logicalOwnerKey = logicalOwnerKey,
                 genericArity = genericArity,
@@ -3548,11 +3869,55 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 logicalMemberKeys = List(logicalMemberCount) {
                     read("V", 2)[1].decoded()
                 },
+                conditionalSupertypes = List(conditionalSupertypeCount) {
+                    val supertypeFields = read("l", 4)
+                    DotNetGenericOwnerConditionalSupertypeRecord(
+                        kind = enumValue(
+                            supertypeFields[1],
+                            DotNetGenericOwnerDirectSupertypeKind.entries.toTypedArray(),
+                            "conditional supertype kind",
+                        ),
+                        logicalClassifierKey = supertypeFields[2].decoded(),
+                        conditionalOwnerParameterIndices = supertypeFields[3].split(',').map { value ->
+                            count(value, "conditional owner parameter")
+                        },
+                    )
+                },
+            )
+        }
+        val interfaceTypeCount = count(read("e", 2)[1], "generic interface TypeDef")
+        val interfaceTypes = List(interfaceTypeCount) {
+            val fields = read("t", 6)
+            val genericParameterCount = count(fields[5], "interface generic parameter")
+            DotNetGenericOwnerPhysicalInterfaceTypeRecord(
+                logicalInterfaceKey = fields[1].decoded(),
+                physicalTypePath = fields[2].decoded().split('\u0000'),
+                physicalVisibility = enumValue(
+                    fields[3],
+                    DotNetGenericOwnerPhysicalTypeVisibility.entries.toTypedArray(),
+                    "interface visibility",
+                ),
+                genericArity = count(fields[4], "interface generic-arity"),
+                physicalGenericParameters = List(genericParameterCount) {
+                    val parameterFields = read("G", 4)
+                    val typeConstraintCount = count(parameterFields[3], "interface generic parameter type constraint")
+                    DotNetGenericOwnerPhysicalGenericParameterRecord(
+                        index = count(parameterFields[1], "interface generic parameter index"),
+                        specialConstraints = enumSet(
+                            parameterFields[2],
+                            DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.entries.toTypedArray(),
+                            "interface generic parameter special constraint",
+                        ),
+                        typeConstraints = List(typeConstraintCount) {
+                            read("B", 2)[1].decoded().deserializedType()
+                        },
+                    )
+                },
             )
         }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
-            val fields = read("O", 16)
+            val fields = read("O", 17)
             val logicalOwnerKey = fields[1].decoded()
             val ownerPath = fields[2].decoded().split('\u0000')
             val capabilityOwnerPath = fields[3].takeUnless { it == "-" }?.decoded()?.split('\u0000')
@@ -3588,6 +3953,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             val propertyCount = count(fields[13], "property")
             val stateCount = count(fields[14], "state")
             val implementationMethodCount = count(fields[15], "implementation method")
+            val directSupertypeCount = count(fields[16], "direct supertype")
             val physicalGenericParameters = List(physicalGenericParameterCount) {
                 val parameterFields = read("G", 4)
                 val typeConstraintCount = count(parameterFields[3], "generic parameter type constraint")
@@ -3601,6 +3967,27 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     typeConstraints = List(typeConstraintCount) {
                         read("B", 2)[1].decoded().deserializedType()
                     },
+                )
+            }
+            val directSupertypes = List(directSupertypeCount) {
+                val supertypeFields = read("T", 6)
+                DotNetGenericOwnerPhysicalDirectSupertypeRecord(
+                    kind = enumValue(
+                        supertypeFields[1],
+                        DotNetGenericOwnerDirectSupertypeKind.entries.toTypedArray(),
+                        "direct supertype kind",
+                    ),
+                    logicalClassifierKey = supertypeFields[2].takeUnless { value -> value == "-" }?.decoded(),
+                    isSemanticCapability = when (supertypeFields[3]) {
+                        "true" -> true
+                        "false" -> false
+                        else -> throw IllegalArgumentException(
+                            "generic-owner family artifact has invalid semantic-capability marker " +
+                                    "'${supertypeFields[3]}'"
+                        )
+                    },
+                    physicalType = supertypeFields[4].decoded().deserializedType(),
+                    nullableReferenceFlags = supertypeFields[5].deserializedNullableReferenceFlags(),
                 )
             }
             val constructors = List(constructorCount) {
@@ -3972,6 +4359,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 physicalDispatch = physicalDispatch,
                 genericArity = genericArity,
                 physicalGenericParameters = physicalGenericParameters,
+                directSupertypes = directSupertypes,
                 disposition = disposition,
                 runtimeClassificationMode = runtimeClassificationMode,
                 constructionModes = constructionModes,
@@ -3985,10 +4373,11 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         require(index == lines.size) { "generic-owner family artifact has trailing records" }
         return DotNetGenericOwnerPhysicalFamilyArtifact(
-            producerFingerprint,
-            targetProfile,
-            classifications,
-            owners,
+            producerFingerprint = producerFingerprint,
+            targetProfile = targetProfile,
+            classifications = classifications,
+            interfaceTypes = interfaceTypes,
+            owners = owners,
         )
     }
 
@@ -4725,6 +5114,89 @@ private fun IrType.genericOwnerPrototypeStateType(
     use = DotNetGenericOwnerPrototypeTypeUse.STATE,
 )
 
+private fun IrType.explicitNullableOwnerParameterIndices(owner: IrClass): List<Int> {
+    val simpleType = this as? IrSimpleType ?: return emptyList()
+    val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+    return buildList {
+        if (parameter != null && simpleType.isMarkedNullable()) {
+            owner.typeParameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let(::add)
+        }
+        simpleType.arguments.forEach { argument ->
+            (argument as? IrTypeProjection)?.type?.let { type ->
+                addAll(type.explicitNullableOwnerParameterIndices(owner))
+            }
+        }
+    }.distinct().sorted()
+}
+
+private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
+    owner: IrClass,
+    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+): DotNetGenericOwnerPrototypeSupertypeSnapshot {
+    val simpleType = this as? IrSimpleType
+    val classifier = (simpleType?.classifier as? IrClassSymbol)?.owner
+    val kind = if (classifier?.isInterface == true) {
+        DotNetGenericOwnerDirectSupertypeKind.INTERFACE
+    } else {
+        DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+    }
+    val logicalClassifierKey = classifier?.let(preLoweringDeclarationKeys::get)
+    fun unsupported(classifierKey: String? = logicalClassifierKey) =
+        DotNetGenericOwnerPrototypeSupertypeSnapshot(
+            kind,
+            classifierKey,
+            DotNetGenericOwnerPrototypeSupertypeDisposition.UNSUPPORTED_PHYSICAL_EDGE,
+            null,
+            null,
+            emptyList(),
+        )
+    val conditionalParameters = explicitNullableOwnerParameterIndices(owner)
+    if (conditionalParameters.isNotEmpty()) {
+        return DotNetGenericOwnerPrototypeSupertypeSnapshot(
+            kind = kind,
+            logicalClassifierKey = logicalClassifierKey,
+            disposition = DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT,
+            exactPhysicalType = null,
+            nullableReferenceFlags = null,
+            conditionalOwnerParameterIndices = conditionalParameters,
+        )
+    }
+    val physicalType = when {
+        isAny() -> DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+        simpleType == null || classifier == null || classifier.isValue || classifier.typeParameters.isEmpty() ||
+                simpleType.arguments.size != classifier.typeParameters.size ||
+                (!classifier.isDotNetGenericClassDeclaration && !classifier.isInterface) -> null
+        else -> {
+            val classifierKey = logicalClassifierKey ?: return unsupported(null)
+            val arguments = simpleType.arguments.map { argument ->
+                val projection = argument as? IrTypeProjection
+                    ?: return unsupported(classifierKey)
+                if (projection.variance != Variance.INVARIANT) {
+                    return unsupported(classifierKey)
+                }
+                projection.type.genericOwnerPrototypeType(
+                    owner = owner,
+                    preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                    use = DotNetGenericOwnerPrototypeTypeUse.STATE,
+                ) ?: return unsupported(classifierKey)
+            }
+            DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(classifierKey, arguments)
+        }
+    }
+    return if (physicalType == null) {
+        unsupported()
+    } else {
+        DotNetGenericOwnerPrototypeSupertypeSnapshot(
+            kind,
+            logicalClassifierKey,
+            DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE,
+            physicalType,
+            DotNetNullableMetadata.flags(this, physicalType),
+            emptyList(),
+        )
+    }
+}
+
 private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature(
     owner: IrClass,
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
@@ -4935,6 +5407,9 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
         },
         isInner = owner.isInner,
         directSupertypeCount = owner.superTypes.size,
+        directSupertypes = owner.superTypes.map { supertype ->
+            supertype.genericOwnerPrototypeSupertypeSnapshot(owner, preLoweringDeclarationKeys)
+        },
         directFieldCount = owner.declarations.count { declaration -> declaration is IrField },
         anonymousInitializerCount = owner.declarations.count { declaration ->
             declaration is IrAnonymousInitializer
