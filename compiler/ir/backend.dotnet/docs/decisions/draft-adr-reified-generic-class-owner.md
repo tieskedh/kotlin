@@ -661,11 +661,16 @@ all declaration and ABI identities come from the artifact. The typed callable
 part now emits the recorded abstract `Node.set` plus ordinary non-final virtual
 Leaf/Branch overrides and exact typed identity accessors. Direct C# proves
 base-reference dispatch and same-field mutation. The non-generic strict
-capability dispatcher and outer Tree semantic routes remain required before
-this is a complete candidate. See
+capability interfaces and private-final object-to-`!T` dispatchers now prove
+inherited and owner-specific routes reach the same most-derived typed override,
+while incompatible input fails before mutation. State-access capabilities and
+outer Tree semantic routes remain required before this is a complete candidate.
+See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
+The strict capability checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
