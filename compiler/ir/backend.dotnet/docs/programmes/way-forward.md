@@ -1168,6 +1168,17 @@ eager operations, comparison/all-equality families, Random/entropy, unsigned,
 CharSequence/array variants, and reified dependencies rather than treating
 this closure as authority for any of them.
 
+The next generator census has also completed the exact eager Iterable family
+whose removed dependency is Kotlin Sequence: four Sequence-result `flatMap*`
+overloads, `minus(Sequence)`, and both Iterable/Collection `plus(Sequence)`
+overloads. The four CLR Function-carrier collisions preserve all pre-existing
+Iterable-result method names and give only the new siblings their source-
+aligned `...Sequence...` physical names. This bounded stdlib rule is neither a
+general `@JvmName` interpretation nor a public `DotNetName`. KLIB remains
+logically generic. The physical erased `Sequence` owner must still wait for the
+atomic generic-interface cutover, while a typed C# adapter/export may be
+selected independently and additively.
+
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
 interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.
