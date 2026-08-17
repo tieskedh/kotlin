@@ -1101,6 +1101,27 @@ erased until the complete family and representative application evidence select
 one atomic public-ABI migration. See
 [`../archive/generic-owner-direct-supertype-metadata-2026-08-17.md`](../archive/generic-owner-direct-supertype-metadata-2026-08-17.md).
 
+The following atomic public-owner checkpoint records **no-go for now**. The
+schema-20 products prove the intended CLR representation, but the complete
+candidate is still generated C# rather than normal Kotlin-emitted CIL with its
+self-describing DLL/KLIB binding. Temporary uncommitted rehearsal probes showed
+why changing only TypeDef arity is not a migration. A global switch makes the
+existing erased Runtime/Stdlib bodies, bridges, static owners, open-nullable
+carriers, and classifier tests disagree with constructed owners. Even a
+bounded `Box<T>` switch reaches an owner-dependent covariant-return bridge
+formed for the erased contract and fails converting concrete `int32`/`string`
+to open `!0`.
+
+The target therefore retains the erased production epoch while ordinary
+language and real-application breadth continue to grow. Reopen the owner ABI
+only for one complete rehearsal which materializes typed/semantic families
+before ordinary bridges, changes emission and the physical binding epoch with
+all consumers, compiles Runtime/Stdlib and representative applications as real
+Kotlin-produced `C<T>` products on both profiles, repeats every deployment
+measurement, and proves the exact inverse rollback. A per-owner switch or a
+`DotNetName`-style naming annotation cannot satisfy this boundary. See
+[`../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md`](../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
