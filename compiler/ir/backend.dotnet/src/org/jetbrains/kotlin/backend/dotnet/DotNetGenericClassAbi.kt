@@ -360,10 +360,45 @@ data class DotNetGenericOwnerPhysicalTypeExpressionRecord(
     }
 }
 
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.nullableReferenceTransformCount(): Int = when (kind) {
+    DotNetGenericOwnerPhysicalTypeKind.VOID,
+    DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+    DotNetGenericOwnerPhysicalTypeKind.INT32,
+        -> 0
+
+    DotNetGenericOwnerPhysicalTypeKind.STRING,
+    DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+    DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+        -> 1
+
+    DotNetGenericOwnerPhysicalTypeKind.NAMED,
+    DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+        -> 1 + arguments.sumOf { argument -> argument.nullableReferenceTransformCount() }
+}
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.obliviousNullableReferenceFlags():
+        List<DotNetNullableReferenceFlag> =
+    List(nullableReferenceTransformCount()) { DotNetNullableReferenceFlag.OBLIVIOUS }
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.requiresNullableReferenceFlags(
+    flags: List<DotNetNullableReferenceFlag>,
+    position: String,
+) {
+    require(flags.size == nullableReferenceTransformCount()) {
+        "$position requires ${nullableReferenceTransformCount()} nullable-reference transforms but has ${flags.size}"
+    }
+}
+
 data class DotNetGenericOwnerPhysicalValueSlotRecord(
     val domain: DotNetGenericOwnerPhysicalSlotDomain,
     val type: DotNetGenericOwnerPhysicalTypeExpressionRecord,
-)
+    val nullableReferenceFlags: List<DotNetNullableReferenceFlag> = type.obliviousNullableReferenceFlags(),
+) {
+    init {
+        type.requiresNullableReferenceFlags(nullableReferenceFlags, "a generic-owner physical value slot")
+    }
+}
 
 /** Complete physical MethodDef signature plus the logical domain of every value position. */
 data class DotNetGenericOwnerPhysicalMethodSignatureRecord(
@@ -1184,15 +1219,48 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
     }
 }
 
+private fun DotNetGenericOwnerPrototypeTypeSnapshot.nullableReferenceTransformCount(): Int = when (kind) {
+    DotNetGenericOwnerPrototypeTypeKind.VOID,
+    DotNetGenericOwnerPrototypeTypeKind.BOOLEAN,
+    DotNetGenericOwnerPrototypeTypeKind.INT32,
+        -> 0
+
+    DotNetGenericOwnerPrototypeTypeKind.STRING,
+    DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+    DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY,
+    DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER,
+    DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER,
+        -> 1
+
+    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER,
+    DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY,
+        -> 1 + arguments.sumOf { argument -> argument.nullableReferenceTransformCount() }
+}
+
+private fun DotNetGenericOwnerPrototypeTypeSnapshot.requiresNullableReferenceFlags(
+    flags: List<DotNetNullableReferenceFlag>,
+    position: String,
+) {
+    require(flags.size == nullableReferenceTransformCount()) {
+        "$position requires ${nullableReferenceTransformCount()} nullable-reference transforms but has ${flags.size}"
+    }
+}
+
 data class DotNetGenericOwnerPrototypeValueSlotSnapshot(
     val domain: DotNetGenericOwnerPhysicalSlotDomain,
     val type: DotNetGenericOwnerPrototypeTypeSnapshot,
+    val nullableReferenceFlags: List<DotNetNullableReferenceFlag>,
 ) {
+    init {
+        type.requiresNullableReferenceFlags(nullableReferenceFlags, "a generic-owner prototype value slot")
+    }
+
     fun bindProducerTypes(
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
     ): DotNetGenericOwnerPhysicalValueSlotRecord = DotNetGenericOwnerPhysicalValueSlotRecord(
         domain = domain,
         type = type.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+        nullableReferenceFlags = nullableReferenceFlags,
     )
 }
 
@@ -1255,6 +1323,8 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
     val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
     /** Null means the field type is outside the bounded path-unbound carrier grammar. */
     val exactTypedCarrierType: DotNetGenericOwnerPrototypeTypeSnapshot?,
+    /** Null means no complete physical carrier has yet been proved for this state. */
+    val physicalCarrierNullableReferenceFlags: List<DotNetNullableReferenceFlag>?,
     val initializers: List<DotNetGenericOwnerPrototypeStateInitializerSnapshot>,
     val writes: List<DotNetGenericOwnerPrototypeStateWriteSnapshot>,
     val directReaderNames: List<String>,
@@ -1266,6 +1336,28 @@ data class DotNetGenericOwnerPrototypeStateSnapshot(
     val externalAccessGraphRequired: Boolean,
 ) {
     init {
+        val candidateCarrierType = when (requirement) {
+            DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                -> exactTypedCarrierType
+
+            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+            DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED,
+                -> DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+
+            DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+                -> null
+        }
+        require((candidateCarrierType == null) == (physicalCarrierNullableReferenceFlags == null)) {
+            "a generic-owner prototype state must retain nullable metadata exactly when it has a physical carrier"
+        }
+        if (candidateCarrierType != null) {
+            candidateCarrierType.requiresNullableReferenceFlags(
+                checkNotNull(physicalCarrierNullableReferenceFlags),
+                "generic-owner prototype state '$fieldName'",
+            )
+        }
         require(memorySemantics != DotNetGenericOwnerStateMemorySemantics.VOLATILE || !isFinal) {
             "a volatile generic-owner prototype state cannot be final"
         }
@@ -1986,12 +2078,18 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
 data class DotNetGenericOwnerPhysicalPropertyRecord(
     val physicalPropertyName: String,
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val nullableReferenceFlags: List<DotNetNullableReferenceFlag> =
+        physicalType.obliviousNullableReferenceFlags(),
     val getterLogicalMemberKey: String?,
     val getterPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
     val setterLogicalMemberKey: String?,
     val setterPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
 ) {
     init {
+        physicalType.requiresNullableReferenceFlags(
+            nullableReferenceFlags,
+            "generic-owner property '$physicalPropertyName'",
+        )
         require(physicalPropertyName.isNotEmpty() &&
                 physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
             "a generic-owner physical property requires a PropertyDef name and non-void type"
@@ -2011,6 +2109,7 @@ data class DotNetGenericOwnerPhysicalPropertyRecord(
             require(getter.signature.isInstance && getter.signature.genericArity == 0 &&
                     getter.signature.parameterSlots.isEmpty() &&
                     getter.signature.returnSlot.type == physicalType &&
+                    getter.signature.returnSlot.nullableReferenceFlags == nullableReferenceFlags &&
                     physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
                 "generic-owner property '$physicalPropertyName' has an invalid getter MethodDef"
             }
@@ -2018,6 +2117,7 @@ data class DotNetGenericOwnerPhysicalPropertyRecord(
         setterPhysicalMethod?.let { setter ->
             require(setter.signature.isInstance && setter.signature.genericArity == 0 &&
                     setter.signature.parameterSlots.singleOrNull()?.type == physicalType &&
+                    setter.signature.parameterSlots.single().nullableReferenceFlags == nullableReferenceFlags &&
                     setter.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
                 "generic-owner property '$physicalPropertyName' has an invalid setter MethodDef"
             }
@@ -2033,11 +2133,17 @@ data class DotNetGenericOwnerPhysicalStateRecord(
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
     val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val nullableReferenceFlags: List<DotNetNullableReferenceFlag> =
+        physicalType.obliviousNullableReferenceFlags(),
     val initializers: List<DotNetGenericOwnerPhysicalStateInitializerRecord>,
     val accessPaths: List<DotNetGenericOwnerPhysicalStateAccessRecord>,
     val isInitOnly: Boolean = false,
 ) {
     init {
+        physicalType.requiresNullableReferenceFlags(
+            nullableReferenceFlags,
+            "generic-owner state '$logicalFieldName'",
+        )
         require(logicalFieldName.isNotEmpty() && physicalFieldName.isNotEmpty()) {
             "a generic-owner physical state record requires logical and physical field names"
         }
@@ -2156,7 +2262,13 @@ data class DotNetGenericOwnerPhysicalStateRecord(
                     access.physicalMethod.signature.parameterSlots.single().type
             }
             require(if (access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
-                valueType == physicalType
+                val valueSlot = when (access.operation) {
+                    DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                        access.physicalMethod.signature.returnSlot
+                    DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                        access.physicalMethod.signature.parameterSlots.single()
+                }
+                valueType == physicalType && valueSlot.nullableReferenceFlags == nullableReferenceFlags
             } else {
                 physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
                         valueType.referencesOwnerParameter()
@@ -2853,7 +2965,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 15
+    const val SCHEMA_VERSION = 16
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -3079,6 +3191,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         "W",
                         property.physicalPropertyName.encoded(),
                         property.physicalType.serialized().encoded(),
+                        property.nullableReferenceFlags.serializedNullableReferenceFlags(),
                         property.getterLogicalMemberKey?.encoded() ?: "-",
                         getter?.physicalOwnerPath?.joinToString("\u0000")?.encoded() ?: "-",
                         getter?.physicalMethodName?.encoded() ?: "-",
@@ -3112,6 +3225,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         state.requirement.name,
                         state.memorySemantics.name,
                         state.physicalType.serialized().encoded(),
+                        state.nullableReferenceFlags.serializedNullableReferenceFlags(),
                         state.initializers.size.toString(),
                         state.accessPaths.size.toString(),
                         state.isInitOnly.toString(),
@@ -3484,7 +3598,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val properties = List(propertyCount) {
-                val propertyFields = read("W", 11)
+                val propertyFields = read("W", 12)
                 fun accessorOrNull(keyIndex: Int, ownerIndex: Int): DotNetGenericOwnerPhysicalMethodIdentityRecord? {
                     val logicalKey = propertyFields[keyIndex].takeUnless { value -> value == "-" }
                     val owner = propertyFields[ownerIndex].takeUnless { value -> value == "-" }
@@ -3505,10 +3619,11 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 DotNetGenericOwnerPhysicalPropertyRecord(
                     physicalPropertyName = propertyFields[1].decoded(),
                     physicalType = propertyFields[2].decoded().deserializedType(),
-                    getterLogicalMemberKey = propertyFields[3].takeUnless { value -> value == "-" }?.decoded(),
-                    getterPhysicalMethod = accessorOrNull(3, 4),
-                    setterLogicalMemberKey = propertyFields[7].takeUnless { value -> value == "-" }?.decoded(),
-                    setterPhysicalMethod = accessorOrNull(7, 8),
+                    nullableReferenceFlags = propertyFields[3].deserializedNullableReferenceFlags(),
+                    getterLogicalMemberKey = propertyFields[4].takeUnless { value -> value == "-" }?.decoded(),
+                    getterPhysicalMethod = accessorOrNull(4, 5),
+                    setterLogicalMemberKey = propertyFields[8].takeUnless { value -> value == "-" }?.decoded(),
+                    setterPhysicalMethod = accessorOrNull(8, 9),
                 )
             }
             val implementationMethods = List(implementationMethodCount) {
@@ -3532,9 +3647,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val states = List(stateCount) {
-                val stateFields = read("S", 10)
-                val initializerCount = count(stateFields[7], "state initializer")
-                val accessCount = count(stateFields[8], "state access")
+                val stateFields = read("S", 11)
+                val initializerCount = count(stateFields[8], "state initializer")
+                val accessCount = count(stateFields[9], "state access")
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = stateFields[1].decoded(),
                     physicalFieldName = stateFields[2].decoded(),
@@ -3554,6 +3669,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         "state memory semantics",
                     ),
                     physicalType = stateFields[6].decoded().deserializedType(),
+                    nullableReferenceFlags = stateFields[7].deserializedNullableReferenceFlags(),
                     initializers = List(initializerCount) {
                         val initializerFields = read("I", 6)
                         val logicalConstructorCount = count(
@@ -3625,11 +3741,11 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             ),
                         )
                     },
-                    isInitOnly = when (stateFields[9]) {
+                    isInitOnly = when (stateFields[10]) {
                         "true" -> true
                         "false" -> false
                         else -> throw IllegalArgumentException(
-                            "generic-owner family artifact has invalid init-only marker '${stateFields[9]}'"
+                            "generic-owner family artifact has invalid init-only marker '${stateFields[10]}'"
                         )
                     },
                 )
@@ -3714,16 +3830,31 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         )
     }
 
+    private fun List<DotNetNullableReferenceFlag>.serializedNullableReferenceFlags(): String =
+        joinToString(",") { flag -> flag.name }.ifEmpty { "-" }
+
+    private fun String.deserializedNullableReferenceFlags(): List<DotNetNullableReferenceFlag> {
+        if (this == "-") return emptyList()
+        return split(',').map { name ->
+            DotNetNullableReferenceFlag.entries.firstOrNull { candidate -> candidate.name == name }
+                ?: throw IllegalArgumentException("generic-owner nullable-reference flag '$name' is unknown")
+        }
+    }
+
     private fun DotNetGenericOwnerPhysicalValueSlotRecord.serialized(): String =
-        "${domain.name};${type.serialized().encoded()}"
+        "${domain.name};${type.serialized().encoded()};${nullableReferenceFlags.serializedNullableReferenceFlags()}"
 
     private fun String.deserializedValueSlot(): DotNetGenericOwnerPhysicalValueSlotRecord {
         val fields = split(';')
-        require(fields.size == 2) { "generic-owner physical value slot has an invalid field count" }
+        require(fields.size == 3) { "generic-owner physical value slot has an invalid field count" }
         val domain = DotNetGenericOwnerPhysicalSlotDomain.entries.firstOrNull { candidate ->
             candidate.name == fields[0]
         } ?: throw IllegalArgumentException("generic-owner physical value slot has unknown domain '${fields[0]}'")
-        return DotNetGenericOwnerPhysicalValueSlotRecord(domain, fields[1].decoded().deserializedType())
+        return DotNetGenericOwnerPhysicalValueSlotRecord(
+            domain,
+            fields[1].decoded().deserializedType(),
+            fields[2].deserializedNullableReferenceFlags(),
+        )
     }
 
     private fun DotNetGenericOwnerPhysicalMethodSignatureRecord.serialized(): String =
@@ -4399,6 +4530,7 @@ private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature
         DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = domain,
             type = physicalType,
+            nullableReferenceFlags = DotNetNullableMetadata.flags(parameter.type, physicalType),
         )
     }
     return DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
@@ -4407,6 +4539,7 @@ private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature
         returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
             type = DotNetGenericOwnerPrototypeTypeSnapshot.voidType(),
+            nullableReferenceFlags = emptyList(),
         ),
         parameterSlots = parameterSlots,
     )
@@ -4448,12 +4581,17 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatur
             DotNetGenericOwnerPrototypeValueSlotSnapshot(
                 domain = domain,
                 type = physicalType,
+                nullableReferenceFlags = DotNetNullableMetadata.flags(parameter.type, physicalType),
             )
         }
         DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
             isInstance = true,
             genericArity = source.typeParameters.size,
-            returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(returnSlotDomain, returnType),
+            returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(
+                returnSlotDomain,
+                returnType,
+                DotNetNullableMetadata.flags(source.returnType, returnType),
+            ),
             parameterSlots = parameterSlots,
         )
     }
@@ -4508,6 +4646,7 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
         DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = domain,
             type = physicalType,
+            nullableReferenceFlags = DotNetNullableMetadata.flags(parameter.type, physicalType),
         )
     }
     val maskSlots = maskParameters.map { parameter ->
@@ -4521,11 +4660,16 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
         DotNetGenericOwnerPrototypeValueSlotSnapshot(
             domain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
             type = physicalType,
+            nullableReferenceFlags = DotNetNullableMetadata.flags(parameter.type, physicalType),
         )
     }
     return DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
         genericArity = dispatcher.typeParameters.size,
-        returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(returnSlotDomain, returnType),
+        returnSlot = DotNetGenericOwnerPrototypeValueSlotSnapshot(
+            returnSlotDomain,
+            returnType,
+            DotNetNullableMetadata.flags(dispatcher.returnType, returnType),
+        ),
         parameterSlotsAfterReceiver = sourceSlots + maskSlots,
     )
 }
@@ -4711,12 +4855,28 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 owner,
                 preLoweringDeclarationKeys,
             )
+            val physicalCarrierType = when (state.requirement) {
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                    -> exactTypedCarrierType
+
+                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+                DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED,
+                    -> DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+
+                DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+                    -> null
+            }
             DotNetGenericOwnerPrototypeStateSnapshot(
                 fieldName = state.field.name.asString(),
                 isFinal = state.field.isFinal,
                 requirement = state.requirement,
                 memorySemantics = state.memorySemantics,
                 exactTypedCarrierType = exactTypedCarrierType,
+                physicalCarrierNullableReferenceFlags = physicalCarrierType?.let { carrierType ->
+                    DotNetNullableMetadata.flags(state.field.type, carrierType)
+                },
                 initializers = state.initializers.map { initializer ->
                     val retainsExactFixedVector =
                         initializer.kind ==
