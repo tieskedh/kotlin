@@ -3131,9 +3131,12 @@ private class DotNetIlEqualityIntrinsic(
             ?: dotNetUnsupported("missing right operand of an equality comparison")
         val leftType = codegen.toDotNetIlValueType(left.type)
         val rightType = codegen.toDotNetIlValueType(right.type)
-        // Structural equality on an open T uses the universal object fallback: each value is
-        // boxed if its CLR instantiation is value-shaped, then AreEqual dispatches its Equals
-        // implementation. For identity, one open T against one stable reference has an exact
+        // Structural equality between the exact same open T uses the runtime's cached generic
+        // entry. It keeps reference/null and Kotlin floating behavior on the universal object
+        // path, but uses constrained Object.Equals for other value-type instantiations so an
+        // overriding struct avoids the receiver box. Different open parameters, or an open T
+        // against another physical carrier, still need the universal object fallback.
+        // For identity, one open T against one stable reference has an exact
         // representation too: `box !T` preserves a reference instantiation and creates a fresh,
         // necessarily non-identical object for a value instantiation. Common AbstractCollection's
         // `element === this` recursion guard is the canonical shape. Two open operands remain
@@ -3155,7 +3158,17 @@ private class DotNetIlEqualityIntrinsic(
                             "(a CLR value-type instantiation has no stable reference identity)"
                 )
             }
-            emitObjectEquality(codegen, left, right)
+            if (leftType is DotNetIlValueType.TypeParameter && leftType == rightType) {
+                codegen.emitExpression(left, leftType)
+                codegen.emitExpression(right, leftType)
+                codegen.emit(
+                    DotNetRuntimeLibraryHelpers.areEqualGenericCallInstruction(leftType),
+                    pops = 2,
+                    pushes = 1,
+                )
+            } else {
+                emitObjectEquality(codegen, left, right)
+            }
             return true
         }
         if (leftType is DotNetIlValueType.NullableValue || rightType is DotNetIlValueType.NullableValue) {

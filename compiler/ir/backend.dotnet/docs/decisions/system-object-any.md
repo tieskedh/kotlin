@@ -89,6 +89,18 @@ Specialized codegen may avoid boxing or helper calls only when it preserves
 the same result. A value or open type parameter boxes when it reaches the
 universal object fallback.
 
+For structural equality between two operands with the exact same physical
+open CLR type parameter, generated code calls the Runtime-owned generic entry.
+One private per-constructed-`T` cache selects a constrained
+`System.Object.Equals(object)` receiver for non-floating value types, boxing
+only the right argument at that boundary. Reference types, `Float`, `Double`,
+and nullable floating types retain the universal object helper. This is not
+CLR comparer semantics: the constrained call targets the left-biased virtual
+Object slot and must not substitute `IEquatable<T>`, an operator, or
+`EqualityComparer<T>.Default`. Mixed physical type parameters and mixed open/
+stable carriers also retain the universal fallback. Runtime surface and
+cross-profile tests pin this entry as compiler ABI, not user API.
+
 The helper owner is metadata-public because generated callers live in other
 assemblies. Its reserved internal namespace marks compiler/runtime ABI, not a
 Kotlin or C# user API.

@@ -373,10 +373,8 @@ IL_whenEnd_2:
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any !!0
-    box !!0
     ldarg.1
-    box !!0
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqualGeneric'<!!0>(!!0, !!0)
     br IL_whenEnd_0
 IL_whenNext_1:
     ldc.i4.0
