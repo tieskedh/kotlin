@@ -688,10 +688,11 @@ signatures retain construction proof; star/projected/variant or unresolved
 views require a capability. Separate consumers resolve only exact logical
 member keys claimed by the decoded producer catalog and distinguish physical,
 producer-erased, unrelated, and missing-capability outcomes. The hostile
-separate corpus has 40 producer-owned static sites: 24 producer-erased, 11
+separate corpus has 42 producer-owned static sites: 24 producer-erased, 13
 exact typed candidates, four capability routes, and one missing capability.
-These are structural sites, not dynamic frequency. The next reopening work is
-to run this compiler-derived census over complete representative applications
+The volatile publish/observe calls add two exact sites to the initial 40-site
+checkpoint. These are structural sites, not dynamic frequency. The next
+reopening work is to run this compiler-derived census over complete applications
 and collect execution weights on Framework 4.8 and all .NET 10 deployment
 lanes. See
 [`../archive/generic-owner-call-route-census-2026-08-14.md`](../archive/generic-owner-call-route-census-2026-08-14.md).
@@ -700,10 +701,12 @@ That census now crosses the compiler/tool boundary without handwritten route
 selection. Application bundle schema 2 fingerprints a canonical route artifact
 whose records retain the original compilation site index and KLIB logical
 member identity but omit diagnostic/physical names. PSI, LightTree, Framework
-4.8, and net10 produce byte-identical route bytes. The hostile artifact has 40
-records over indices 0 through 48; the nine gaps are unrelated external owners,
+4.8, and net10 produce byte-identical route bytes. The hostile artifact has 42
+records over indices 0 through 50; the nine gaps are unrelated external owners,
 not renumbered producer sites. This creates the exact instrumentation join but
-does not make the hostile application representative. See
+does not make the hostile application representative. The linked archive
+records the initial 40-record checkpoint; schema 14 retains the grammar with
+the two additional exact records. See
 [`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
 
 The first compiler-indexed execution profile closed that join for the bounded
@@ -719,8 +722,10 @@ executable owns one private exact-sized `Int64[]`; every event performs one
 linearizable `Interlocked.Increment`, and a post-`box()` flush atomically reads
 the table and prints only visited sites. Trace schema 2 names the
 `FINAL_FLUSH` protocol. PSI/LightTree and Framework 4.8/net10 retain identical
-route/count bytes and the same 49-event hostile vector, while all 34 normal
-bundle-file comparisons remain byte-identical to the pre-feature baseline.
+route/count bytes. The current schema-14 hostile vector has 42 producer plus
+nine unrelated events; its two additions to the original 49-event checkpoint
+are typed volatile publish/observe calls. All 34 normal bundle-file comparisons
+remain byte-identical to the pre-feature baseline.
 The workload must join its own workers before returning. Collection output is
 O(visited sites), but the counter run still measures no performance: collect
 representative route/state distributions independently, then time clean
@@ -909,9 +914,7 @@ struct runs in all five deployment lanes. Final aggregate candidate/erased
 ratios are 1.65x Framework, 0.87x JIT, 1.02x ReadyToRun, 0.84x trimmed, and
 0.73x NativeAOT. Managed allocation excess falls to about 34%, while
 NativeAOT allocates 11.25% less. Capability allocation and Framework dispatch
-remain material, so equality is closed without selecting the owner ABI. Close
-the one-state concurrency/memory-model migration condition next rather than
-adding an easy-owner pilot or small equality variants.
+remain material, so equality is closed without selecting the owner ABI.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -950,6 +953,17 @@ recorded in
 The production-used lower-boxing equality helper and final five-lane evidence
 are recorded in
 [`../archive/generic-open-equality-lower-boxing-2026-08-17.md`](../archive/generic-open-equality-lower-boxing-2026-08-17.md).
+The one-state concurrency/memory-model condition is now closed at schema 14.
+The hostile owner keeps its ordinary `stored: T` as true `T` storage while its
+owner-dependent volatile `published: T` uses one reference-safe volatile
+`object` field. Typed initialization/write widening and read narrowing are
+explicit record facts; typed and semantic capability paths share that field,
+and failed capability writes cannot mutate it. Multi-threaded handoff runs in
+separately compiled products on Framework 4.8 and CoreCLR. This does not select
+the production owner ABI or implement the parked public concurrency/atomic
+surface. Continue with the next complete hostile migration condition rather
+than an easy-owner rollout or a micro-optimization. See
+[`../archive/generic-owner-one-state-memory-model-2026-08-17.md`](../archive/generic-owner-one-state-memory-model-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
@@ -1251,7 +1265,7 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   type/class/array/enum/`typeOf` closure;
 - coroutine scheduling, `kotlinx.coroutines`, debugger metadata, broad suspend-
   callable reflection, and `Task`/`ValueTask` exports;
-- concurrency, volatility, synchronization, and atomics;
+- the public/full concurrency, volatility, synchronization, and atomic surface;
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.
 
