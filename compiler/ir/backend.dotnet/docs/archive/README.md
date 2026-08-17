@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-strict-capability-2026-08-17.md`](generic-owner-octo-tree-strict-capability-2026-08-17.md)
+  records the strict set non-generic interface slots, object-to-`!T` explicit
+  dispatchers, most-derived C# override routing, incompatible pre-mutation
+  failure, and private/final interface maps.
 - [`generic-owner-octo-tree-typed-callables-2026-08-17.md`](generic-owner-octo-tree-typed-callables-2026-08-17.md)
   records the decoded abstract/override Node.set typed family, exact Leaf/
   Branch identity accessors, direct base-reference C# dispatch, and retained

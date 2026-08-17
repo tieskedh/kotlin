@@ -799,9 +799,13 @@ production field, KLIB/DLL schema, or public owner. The product now also emits
 the recorded public abstract typed `Node.set` slot, ordinary non-final virtual
 Leaf/Branch overrides on final TypeDefs, and the exact typed Leaf read/write
 plus Branch read accessors over those same fields. Direct C# proves real base-
-reference dispatch and field identity. The next gate adds this strict family's
-non-generic capability interface/object-carrier dispatcher, followed by the
-outer Tree semantic root/calls and complete direct C# surface. See
+reference dispatch and field identity. The strict family now also emits each
+recorded non-generic capability interface and private-final object-to-`!T`
+dispatcher. Direct C# proves inherited and owner-specific routes reach Branch's
+most-derived typed override, while incompatible input fails before state
+mutation. The next gate adds the Leaf/Branch state-access capability slots,
+followed by the outer Tree semantic root/calls and complete direct C# surface.
+See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
 The existing physical member-signature grammar has also been corrected at its
@@ -844,8 +848,10 @@ exact recursive Branch `Node<T>[]` carrier, fixed length-eight initializer,
 both constructor edges, and open/closed direct C# evidence. Its typed callable
 slice now consumes the exact abstract/override MethodDefs and typed identity
 state accessors; final child TypeDefs retain the recorded non-final virtual
-overrides. The next gate physicalizes the matching strict capability interface
-and dispatchers rather than selecting another owner.
+overrides. The matching strict capability interfaces and private-final
+dispatchers now preserve most-derived typed override routing with an object
+input carrier. The next gate physicalizes the state-access capability slots
+rather than selecting another owner.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -864,6 +870,8 @@ The Branch product is recorded in
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable product is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
+The strict capability product is recorded in
+[`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
