@@ -150,6 +150,17 @@ public open class HostileTypedStore<T>(initial: T) {
     public open fun observe(): T = published
 }
 
+// These nested nullable reference arguments have one exact CLR TypeSpec for every T. They are
+// deliberately paired with HostileNullableDerived<T> : HostileCell<T?>, whose bare nullable
+// owner parameter has no truthful metadata-fixed physical construction.
+public interface HostileNullableMarker<T>
+
+public open class HostileNullableReferenceBase<T>
+
+public class HostileNullableReferenceDerived<T> :
+    HostileNullableReferenceBase<HostileTypedStore<T>?>(),
+    HostileNullableMarker<HostileAbstractPropertyStorage<T>?>
+
 public fun readInvariantTypedStore(store: HostileTypedStore<String>): String = store.read()
 
 public fun readStarTypedStore(store: HostileTypedStore<*>): Any? = store.read()
@@ -343,6 +354,14 @@ fun box(): String {
     }
 
     val typedStore = HostileTypedStore("before")
+    val nullableReferenceDerived = HostileNullableReferenceDerived<String>()
+    val nullableReferenceBase: HostileNullableReferenceBase<HostileTypedStore<String>?> =
+        nullableReferenceDerived
+    val nullableReferenceMarker: HostileNullableMarker<HostileAbstractPropertyStorage<String>?> =
+        nullableReferenceDerived
+    if (nullableReferenceBase as Any !== nullableReferenceMarker as Any) {
+        return fail("cross-library nested nullable base/interface identity")
+    }
     typedStore.write("after")
     typedStore.publish("published")
     val typedStoreRoutes = TypedStoreRouteHolder(typedStore, typedStore)

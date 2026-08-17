@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetBackendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateClassificationRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConditionalSupertypeRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteManifest
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteManifestCodec
@@ -42,13 +43,16 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectSupertypeRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalInterfaceTypeRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalImplementationMethodRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionMode
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorArgumentMapping
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorDelegationKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionRouteKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSupertypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDelegatingConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorVisibility
@@ -89,6 +93,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnap
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPropertyAccessorKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSupertypeDisposition
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerRuntimeClassificationMode
@@ -3475,11 +3480,83 @@ private fun validateGenericOwnerHardestModelPrototype(
     check(nullableDerived.metadataFixedConditionalSupertypeCount == 1) {
         "HostileNullableDerived must record exactly one metadata-fixed conditional supertype"
     }
+    val conditionalBase = nullableDerived.directSupertypes.single()
+    check(conditionalBase.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS &&
+            (conditionalBase.logicalClassifierKey != null || nullableDerived.logicalBindingKey == null) &&
+            conditionalBase.disposition ==
+            DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT &&
+            conditionalBase.exactPhysicalType == null &&
+            conditionalBase.nullableReferenceFlags == null &&
+            conditionalBase.conditionalOwnerParameterIndices == listOf(0)) {
+        "HostileNullableDerived must retain the exact reason its T? base cannot become one CLR TypeSpec: " +
+                conditionalBase
+    }
     val directBaseRead = nullableDerived.members.single { member ->
         member.sourceName == "readDirectFromBase"
     }
     check(directBaseRead.directSuperCallCount == 1) {
         "HostileNullableDerived.readDirectFromBase must retain one exact direct-super target"
+    }
+
+    val nullableReferenceBase = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileNullableReferenceBase")
+    }
+    val nullableReferenceDerived = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileNullableReferenceDerived")
+    }
+    val referenceBaseEdge = nullableReferenceDerived.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+    }
+    val referenceInterfaceEdge = nullableReferenceDerived.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE
+    }
+    fun hasNestedNullableReferenceTransform(
+        edge: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSupertypeSnapshot,
+        nestedClassifierKey: String,
+    ): Boolean {
+        val physicalType = edge.exactPhysicalType ?: return false
+        val nestedType = physicalType.arguments.singleOrNull() ?: return false
+        return edge.disposition == DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE &&
+                edge.nullableReferenceFlags == listOf(
+                    DotNetNullableReferenceFlag.NON_NULL,
+                    DotNetNullableReferenceFlag.NULLABLE,
+                    DotNetNullableReferenceFlag.NON_NULL,
+                ) && nestedType.kind == DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                nestedType.logicalClassifierKey == nestedClassifierKey &&
+                nestedType.arguments.singleOrNull()?.let { argument ->
+                    argument.kind == DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                            argument.parameterIndex == 0
+                } == true
+    }
+    val nestedReferenceGraphIsComplete = if (nullableReferenceDerived.logicalBindingKey == null) {
+        nullableReferenceDerived.directSupertypes.all { supertype ->
+            supertype.disposition == DotNetGenericOwnerPrototypeSupertypeDisposition.UNSUPPORTED_PHYSICAL_EDGE &&
+                    supertype.logicalClassifierKey == null
+        }
+    } else {
+        referenceBaseEdge.logicalClassifierKey == nullableReferenceBase.logicalBindingKey &&
+                hasNestedNullableReferenceTransform(
+                    referenceBaseEdge,
+                    checkNotNull(prototypes.single {
+                        prototype -> prototype.hasSimpleName("HostileTypedStore")
+                    }.logicalBindingKey),
+                ) && referenceInterfaceEdge.logicalClassifierKey != null &&
+                hasNestedNullableReferenceTransform(
+                    referenceInterfaceEdge,
+                    checkNotNull(prototypes.single {
+                        prototype -> prototype.hasSimpleName("HostileAbstractPropertyStorage")
+                    }.logicalBindingKey),
+                )
+    }
+    check(nullableReferenceBase.directSupertypes.single().let { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS &&
+                supertype.logicalClassifierKey == null &&
+                supertype.disposition == DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE &&
+                supertype.exactPhysicalType == DotNetGenericOwnerPrototypeTypeSnapshot.objectType() &&
+                supertype.nullableReferenceFlags == listOf(DotNetNullableReferenceFlag.NON_NULL)
+    } && nestedReferenceGraphIsComplete) {
+        "The nested nullable base/interface graph lost its exact physical transform: " +
+                "$nullableReferenceBase / $nullableReferenceDerived"
     }
 
     val unsafeStore = prototypes.single { prototype ->
@@ -4044,6 +4121,21 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             logicalMemberKeys = prototype.members.mapNotNull { member ->
                 member.logicalBindingKey
             }.distinct().sorted(),
+            conditionalSupertypes = prototype.directSupertypes.mapNotNull { supertype ->
+                if (supertype.disposition !=
+                        DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT
+                ) return@mapNotNull null
+                DotNetGenericOwnerConditionalSupertypeRecord(
+                    kind = supertype.kind,
+                    logicalClassifierKey = checkNotNull(supertype.logicalClassifierKey) {
+                        "The separate hostile producer requires a logical conditional-supertype binding"
+                    },
+                    conditionalOwnerParameterIndices = supertype.conditionalOwnerParameterIndices,
+                )
+            }.distinct().sortedWith(compareBy(
+                { supertype -> supertype.kind.name },
+                { supertype -> supertype.logicalClassifierKey },
+            )),
         )
     }.sortedBy { classification -> classification.logicalOwnerKey }
     fun overrideRoots(
@@ -4067,13 +4159,43 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
         "HostileTypedStore",
         "HostileAbstractProperty",
         "HostileAbstractPropertyStorage",
+        "HostileNullableReferenceBase",
+        "HostileNullableReferenceDerived",
     ).map { simpleName ->
         prototypes.single { candidate -> candidate.hasSimpleName(simpleName) }
     }
+    val nullableReferenceDerived = selectedPrototypes.single { prototype ->
+        prototype.hasSimpleName("HostileNullableReferenceDerived")
+    }
+    val markerLogicalKey = checkNotNull(nullableReferenceDerived.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE &&
+                supertype.disposition == DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE
+    }.logicalClassifierKey) {
+        "The separate hostile producer requires the nullable marker interface binding"
+    }
+    val markerPhysicalPath = listOf("KotlinSnapshotPrototype", "HostileNullableMarker")
     val physicalOwnerPathsByLogicalKey = selectedPrototypes.associate { prototype ->
         checkNotNull(prototype.logicalBindingKey) to
                 listOf("KotlinSnapshotPrototype", prototype.ownerName.substringAfterLast('.'))
+    } + (markerLogicalKey to markerPhysicalPath)
+    val physicalNamedTypeCategoriesByLogicalKey = physicalOwnerPathsByLogicalKey.keys.associateWith { logicalKey ->
+        if (logicalKey == markerLogicalKey) {
+            DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+        } else {
+            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+        }
     }
+    val interfaceTypes = listOf(
+        DotNetGenericOwnerPhysicalInterfaceTypeRecord(
+            logicalInterfaceKey = markerLogicalKey,
+            physicalTypePath = markerPhysicalPath,
+            physicalVisibility = DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC,
+            genericArity = 1,
+            physicalGenericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(0, emptySet(), emptyList())
+            ),
+        )
+    )
     val owners = selectedPrototypes.map { prototype ->
         val simpleName = prototype.ownerName.substringAfterLast('.')
         val ownerPath = listOf("KotlinSnapshotPrototype", simpleName)
@@ -4082,15 +4204,68 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             "HostileAbstractPropertyStorage" -> "HostileAbstractProperty"
             else -> simpleName
         })
-        val capabilityOwnerPath = listOf(
-            "KotlinSnapshotPrototype",
-            when (simpleName) {
-                "HostileTypedStore" -> "IHostileTypedStoreSemantic"
-                "HostileAbstractProperty", "HostileAbstractPropertyStorage" ->
-                    "IHostileAbstractPropertySemantic"
-                else -> "IHostileUnsafeStoreSemantic"
-            },
-        )
+        val hasCapabilityFamily = prototype.members.any { member ->
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in member.roles
+        }
+        val capabilityOwnerPath = if (hasCapabilityFamily) {
+            listOf(
+                "KotlinSnapshotPrototype",
+                when (simpleName) {
+                    "HostileTypedStore" -> "IHostileTypedStoreSemantic"
+                    "HostileAbstractProperty", "HostileAbstractPropertyStorage" ->
+                        "IHostileAbstractPropertySemantic"
+                    else -> "IHostileUnsafeStoreSemantic"
+                },
+            )
+        } else {
+            null
+        }
+        val exactDirectSupertypes = prototype.directSupertypes.mapNotNull { supertype ->
+            if (supertype.disposition != DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE) {
+                return@mapNotNull null
+            }
+            val prototypeType = checkNotNull(supertype.exactPhysicalType)
+            val physicalType = if (prototypeType.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT) {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                    typePath = listOf("System", "Object"),
+                    category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                )
+            } else {
+                prototypeType.bindProducerTypes(
+                    physicalOwnerPathsByLogicalKey,
+                    physicalNamedTypeCategoriesByLogicalKey,
+                )
+            }
+            DotNetGenericOwnerPhysicalDirectSupertypeRecord(
+                kind = supertype.kind,
+                logicalClassifierKey = supertype.logicalClassifierKey,
+                isSemanticCapability = false,
+                physicalType = physicalType,
+                nullableReferenceFlags = checkNotNull(supertype.nullableReferenceFlags).toMutableList().apply {
+                    this[0] = DotNetNullableReferenceFlag.OBLIVIOUS
+                },
+            )
+        }
+        val ownsCapabilityDispatchers = hasCapabilityFamily && baseOwnerPath == ownerPath
+        val directSupertypes = exactDirectSupertypes + if (ownsCapabilityDispatchers) {
+            listOf(
+                DotNetGenericOwnerPhysicalDirectSupertypeRecord(
+                    kind = DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    logicalClassifierKey = null,
+                    isSemanticCapability = true,
+                    physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+                        typePath = checkNotNull(capabilityOwnerPath),
+                        category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    ),
+                    nullableReferenceFlags = listOf(DotNetNullableReferenceFlag.OBLIVIOUS),
+                )
+            )
+        } else {
+            emptyList()
+        }
+        val physicalBaseType = directSupertypes.single { supertype ->
+            supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+        }.physicalType
         val constructors = prototype.constructors.map { constructor ->
             val logicalConstructorKey = checkNotNull(constructor.logicalBindingKey) {
                 "The hostile physical family requires a logical constructor binding"
@@ -4098,7 +4273,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             val signature = checkNotNull(constructor.exactPathUnboundSignature) {
                 "The hostile physical family requires a compiler-derived constructor signature"
             }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
-            val delegatedOwnerName = checkNotNull(constructor.delegatedOwnerName) {
+            checkNotNull(constructor.delegatedOwnerName) {
                 "The hostile physical family requires an exact delegated constructor owner"
             }
             val delegated = constructor.delegatedConstructorLogicalBindingKey?.let(constructorsByLogicalKey::get)
@@ -4115,21 +4290,16 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                 ),
                 parameterSlots = emptyList(),
             )
-            val delegatedOwnerType = when {
-                delegatedOwnerName == "kotlin.Any" || delegatedOwnerName == "Any" ->
-                    DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
-                        typePath = listOf("System", "Object"),
-                        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-                    )
-                else -> DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
-                    typePath = if (constructor.delegatesToThis) {
-                        ownerPath
-                    } else {
-                        listOf("KotlinSnapshotPrototype", delegatedOwnerName.substringAfterLast('.'))
-                    },
+            val delegatedOwnerType = if (constructor.delegatesToThis) {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+                    typePath = ownerPath,
                     category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-                    arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+                    arguments = List(prototype.genericArity) { index ->
+                        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(index)
+                    },
                 )
+            } else {
+                physicalBaseType
             }
             DotNetGenericOwnerPhysicalConstructorRecord(
                 logicalConstructorKey = logicalConstructorKey,
@@ -4190,7 +4360,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         },
                         physicalOwnerPath = if (isCapability) baseOwnerPath else ownerPath,
                         physicalMethodName = if (isCapability) {
-                            "${capabilityOwnerPath.joinToString(".")}.$methodName"
+                            "${checkNotNull(capabilityOwnerPath).joinToString(".")}.$methodName"
                         } else {
                             methodName
                         },
@@ -4204,7 +4374,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         signature = signature,
                         capabilitySlot = if (isCapability) {
                             DotNetGenericOwnerPhysicalMethodIdentityRecord(
-                                physicalOwnerPath = capabilityOwnerPath,
+                                physicalOwnerPath = checkNotNull(capabilityOwnerPath),
                                 physicalMethodName = methodName,
                                 signature = signature,
                             )
@@ -4283,6 +4453,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             physicalGenericParameters = checkNotNull(prototype.physicalGenericParameters) {
                 "The hostile physical family requires exact GenericParam constraints"
             },
+            directSupertypes = directSupertypes,
             disposition = prototype.disposition,
             runtimeClassificationMode = DotNetGenericOwnerRuntimeClassificationMode.OPEN_TYPEDEF_ANCESTRY,
             constructionModes = setOf(DotNetGenericOwnerConstructionMode.STATIC_EXACT),
@@ -4514,6 +4685,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             DotNetTarget.NETSTANDARD_2_0 -> error("The hostile physical family has no netstandard profile")
         },
         classifications = classifications,
+        interfaceTypes = interfaceTypes,
         owners = owners,
     )
 }
@@ -5101,6 +5273,46 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 isInitOnly = state.isFinal,
             )
         }
+        val directSupertypes = prototype.directSupertypes.mapNotNull { supertype ->
+            if (supertype.disposition != DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE) {
+                return@mapNotNull null
+            }
+            val prototypeType = checkNotNull(supertype.exactPhysicalType)
+            DotNetGenericOwnerPhysicalDirectSupertypeRecord(
+                kind = supertype.kind,
+                logicalClassifierKey = supertype.logicalClassifierKey,
+                isSemanticCapability = false,
+                physicalType = if (prototypeType.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT) {
+                    DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                        typePath = listOf("System", "Object"),
+                        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    )
+                } else {
+                    prototypeType.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                },
+                nullableReferenceFlags = checkNotNull(supertype.nullableReferenceFlags).toMutableList().apply {
+                    this[0] = DotNetNullableReferenceFlag.OBLIVIOUS
+                },
+            )
+        } + if (members.flatMap { member -> member.slots }.any { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+                    slot.physicalOwnerPath == ownerPath
+        }) {
+            listOf(
+                DotNetGenericOwnerPhysicalDirectSupertypeRecord(
+                    kind = DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    logicalClassifierKey = null,
+                    isSemanticCapability = true,
+                    physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+                        typePath = checkNotNull(capabilityOwnerPath),
+                        category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    ),
+                    nullableReferenceFlags = listOf(DotNetNullableReferenceFlag.OBLIVIOUS),
+                )
+            )
+        } else {
+            emptyList()
+        }
         DotNetGenericOwnerPhysicalFamilyRecord(
             logicalOwnerKey = logicalOwnerKey,
             physicalOwnerPath = ownerPath,
@@ -5111,6 +5323,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             physicalGenericParameters = checkNotNull(prototype.physicalGenericParameters) {
                 "The OctoTree physical family requires exact GenericParam constraints"
             },
+            directSupertypes = directSupertypes,
             disposition = prototype.disposition,
             runtimeClassificationMode = DotNetGenericOwnerRuntimeClassificationMode.OPEN_TYPEDEF_ANCESTRY,
             constructionModes = setOf(DotNetGenericOwnerConstructionMode.STATIC_EXACT),
@@ -5173,6 +5386,22 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             decoded.owners.none { owner -> owner.logicalOwnerKey == metadataFixedExclusion.logicalOwnerKey }) {
         "The producer catalog did not retain its metadata-fixed erased-only classification"
     }
+    val conditionalBase = metadataFixedExclusion.conditionalSupertypes.singleOrNull()
+    check(conditionalBase?.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS &&
+            conditionalBase.logicalClassifierKey.isNotEmpty() &&
+            conditionalBase.conditionalOwnerParameterIndices == listOf(0)) {
+        "The metadata-fixed exclusion lost its exact bare-T? base blocker: $metadataFixedExclusion"
+    }
+    expectRejected("a metadata-fixed disposition without its conditional-supertype authority") {
+        metadataFixedExclusion.copy(conditionalSupertypes = emptyList())
+    }
+    expectRejected("an out-of-range conditional-supertype owner parameter") {
+        metadataFixedExclusion.copy(conditionalSupertypes = listOf(
+            checkNotNull(conditionalBase).copy(
+                conditionalOwnerParameterIndices = listOf(metadataFixedExclusion.genericArity),
+            ),
+        ))
+    }
     val metadataFixedFailure = runCatching {
         decoded.requirePhysicalFamily(metadataFixedExclusion.logicalOwnerKey)
     }.exceptionOrNull()
@@ -5210,6 +5439,141 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                 }
     }) {
         "The generic-owner artifact lacks its exact construction/profile/reflection record"
+    }
+    val nullableBaseOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileNullableReferenceBase"
+    }
+    val nullableDerivedOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileNullableReferenceDerived"
+    }
+    val typedStoreOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileTypedStore"
+    }
+    val abstractStorageSupertypeOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileAbstractPropertyStorage"
+    }
+    val nullableMarkerInterface = decoded.interfaceTypes.single { type ->
+        type.physicalTypePath.last() == "HostileNullableMarker"
+    }
+    val expectedNestedNullableFlags = listOf(
+        DotNetNullableReferenceFlag.OBLIVIOUS,
+        DotNetNullableReferenceFlag.NULLABLE,
+        DotNetNullableReferenceFlag.NON_NULL,
+    )
+    val expectedNullableBaseType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+        typePath = nullableBaseOwner.physicalOwnerPath,
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+            typePath = typedStoreOwner.physicalOwnerPath,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+        )),
+    )
+    val expectedNullableInterfaceType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+        typePath = nullableMarkerInterface.physicalTypePath,
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+            typePath = abstractStorageSupertypeOwner.physicalOwnerPath,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+        )),
+    )
+    val nullableDerivedBaseEdge = nullableDerivedOwner.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+    }
+    val nullableDerivedInterfaceEdge = nullableDerivedOwner.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE
+    }
+    check(nullableMarkerInterface.genericArity == 1 &&
+            nullableMarkerInterface.physicalGenericParameters == listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(0, emptySet(), emptyList()),
+            ) && nullableDerivedBaseEdge.logicalClassifierKey == nullableBaseOwner.logicalOwnerKey &&
+            nullableDerivedBaseEdge.physicalType == expectedNullableBaseType &&
+            nullableDerivedInterfaceEdge.logicalClassifierKey == nullableMarkerInterface.logicalInterfaceKey &&
+            nullableDerivedInterfaceEdge.physicalType == expectedNullableInterfaceType &&
+            !nullableDerivedInterfaceEdge.isSemanticCapability &&
+            nullableDerivedBaseEdge.nullableReferenceFlags == expectedNestedNullableFlags &&
+            nullableDerivedInterfaceEdge.nullableReferenceFlags == expectedNestedNullableFlags &&
+            nullableDerivedOwner.constructors.filter { constructor ->
+                constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
+            }.all { constructor ->
+                constructor.delegation.physicalOwnerType == nullableDerivedBaseEdge.physicalType
+            }) {
+        "The ordinary nullable owner lost its exact BaseType/InterfaceImpl graph: $nullableDerivedOwner"
+    }
+    check(listOf(nullableBaseOwner, nullableDerivedOwner).all { owner ->
+        owner.physicalCapabilityOwnerPath == null &&
+                owner.directSupertypes.none { supertype -> supertype.isSemanticCapability }
+    }) {
+        "A method-free nullable owner acquired a synthetic semantic capability interface"
+    }
+    expectRejected("an owner without a physical BaseType row") {
+        nullableDerivedOwner.copy(directSupertypes = nullableDerivedOwner.directSupertypes.filterNot { supertype ->
+            supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+        })
+    }
+    expectRejected("a constructor delegation which differs from its physical BaseType row") {
+        nullableDerivedOwner.copy(constructors = nullableDerivedOwner.constructors.map { constructor ->
+            if (constructor.delegation.kind != DotNetGenericOwnerConstructorDelegationKind.BASE) {
+                constructor
+            } else {
+                constructor.copy(delegation = constructor.delegation.copy(
+                    physicalOwnerType = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                ))
+            }
+        })
+    }
+    expectRejected("an ancestry root marked non-null instead of using the CLR metadata sentinel") {
+        nullableDerivedBaseEdge.copy(nullableReferenceFlags = listOf(
+            DotNetNullableReferenceFlag.NON_NULL,
+            DotNetNullableReferenceFlag.NULLABLE,
+            DotNetNullableReferenceFlag.NON_NULL,
+        ))
+    }
+    expectRejected("a generic interface TypeDef omitted from the producer catalog") {
+        artifact.copy(interfaceTypes = artifact.interfaceTypes - nullableMarkerInterface)
+    }
+    expectRejected("a generic interface TypeDef colliding with a class TypeDef") {
+        artifact.copy(interfaceTypes = artifact.interfaceTypes.map { type ->
+            if (type != nullableMarkerInterface) type else type.copy(
+                physicalTypePath = nullableBaseOwner.physicalOwnerPath,
+            )
+        })
+    }
+    val directCapabilityOwners = decoded.owners.filter { owner ->
+        owner.members.flatMap { member -> member.slots }.any { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+                    slot.physicalOwnerPath == owner.physicalOwnerPath
+        }
+    }
+    check(directCapabilityOwners.isNotEmpty() && decoded.owners.all { owner ->
+        owner.directSupertypes.count { supertype -> supertype.isSemanticCapability } ==
+                if (owner in directCapabilityOwners) 1 else 0
+    }) {
+        "The producer duplicated or omitted a direct semantic capability InterfaceImpl"
+    }
+    val directCapabilityOwner = directCapabilityOwners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileUnsafeStore"
+    }
+    val directCapabilityEdge = directCapabilityOwner.directSupertypes.single { supertype ->
+        supertype.isSemanticCapability
+    }
+    expectRejected("a dispatcher-owning TypeDef without its direct capability InterfaceImpl") {
+        directCapabilityOwner.copy(
+            directSupertypes = directCapabilityOwner.directSupertypes - directCapabilityEdge,
+        )
+    }
+    val inheritedCapabilityOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileUnsafeMid"
+    }
+    check(inheritedCapabilityOwner.physicalCapabilityOwnerPath == directCapabilityEdge.physicalType.typePath &&
+            inheritedCapabilityOwner.directSupertypes.none { supertype -> supertype.isSemanticCapability }) {
+        "The hostile inherited owner did not retain capability ancestry without a duplicate InterfaceImpl"
+    }
+    expectRejected("a duplicate direct capability InterfaceImpl on an inherited owner") {
+        inheritedCapabilityOwner.copy(
+            directSupertypes = inheritedCapabilityOwner.directSupertypes + directCapabilityEdge,
+        )
     }
     expectRejected("a method parameter in a TypeDef GenericParam constraint") {
         DotNetGenericOwnerPhysicalGenericParameterRecord(
@@ -5252,6 +5616,20 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     expectRejected("an unknown nullable-reference transform flag") {
         DotNetGenericOwnerPhysicalFamilyCodec.decode(
             unknownNullableFlagArtifact,
+            artifact.producerFingerprint,
+            artifact.targetProfile,
+        )
+    }
+    val unknownSupertypeNullableFlagArtifact = encoded.lineSequence().joinToString("\n", postfix = "\n") { line ->
+        val fields = line.split('\t').toMutableList()
+        if (fields.firstOrNull() == "T" && fields[5].contains(',')) {
+            fields[5] = "UNKNOWN_NULLABLE_FLAG"
+        }
+        fields.joinToString("\t")
+    }
+    expectRejected("an unknown direct-supertype nullable-reference transform flag") {
+        DotNetGenericOwnerPhysicalFamilyCodec.decode(
+            unknownSupertypeNullableFlagArtifact,
             artifact.producerFingerprint,
             artifact.targetProfile,
         )
@@ -5302,10 +5680,11 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     }
     expectRejected("a duplicate logical owner") {
         DotNetGenericOwnerPhysicalFamilyArtifact(
-            artifact.producerFingerprint,
-            artifact.targetProfile,
-            artifact.classifications,
-            artifact.owners + artifact.owners.first(),
+            producerFingerprint = artifact.producerFingerprint,
+            targetProfile = artifact.targetProfile,
+            classifications = artifact.classifications,
+            interfaceTypes = artifact.interfaceTypes,
+            owners = artifact.owners + artifact.owners.first(),
         )
     }
     expectRejected("a duplicate candidate classification") {
@@ -5625,10 +6004,11 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     }
     expectRejected("a local delegated constructor with a different physical signature") {
         DotNetGenericOwnerPhysicalFamilyArtifact(
-            artifact.producerFingerprint,
-            artifact.targetProfile,
-            artifact.classifications,
-            artifact.owners.map { owner ->
+            producerFingerprint = artifact.producerFingerprint,
+            targetProfile = artifact.targetProfile,
+            classifications = artifact.classifications,
+            interfaceTypes = artifact.interfaceTypes,
+            owners = artifact.owners.map { owner ->
                 if (owner != constructionOwner) owner else owner.copy(
                     constructors = owner.constructors.map { constructor ->
                         if (constructor != secondaryConstructor) constructor else constructor.copy(
@@ -5659,10 +6039,11 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             ),
         )
         DotNetGenericOwnerPhysicalFamilyArtifact(
-            artifact.producerFingerprint,
-            artifact.targetProfile,
-            artifact.classifications,
-            artifact.owners.map { owner ->
+            producerFingerprint = artifact.producerFingerprint,
+            targetProfile = artifact.targetProfile,
+            classifications = artifact.classifications,
+            interfaceTypes = artifact.interfaceTypes,
+            owners = artifact.owners.map { owner ->
                 if (owner != constructionOwner) owner else owner.copy(
                     constructors = owner.constructors.map { constructor ->
                         if (constructor == primary) cyclicPrimary else constructor
@@ -6161,7 +6542,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             initializedTypedVectorDecoded.requirePhysicalFamily(typedStateOwner.logicalOwnerKey)
                 .states.single { state -> state.logicalFieldName == initializedTypedVectorState.logicalFieldName }
                 .initializers.single() == typedVectorInitializer) {
-        "The schema-11 physical family lost its constructor-rooted typed vector initializer"
+        "The schema-20 physical family lost its constructor-rooted typed vector initializer"
     }
     expectRejected("a typed vector initializer without an exact read path") {
         initializedTypedVectorState.copy(accessPaths = emptyList())
@@ -6684,6 +7065,17 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
 
             namespace KotlinSnapshotPrototype
             {
+                #nullable enable
+                public interface HostileNullableMarker<T> {}
+
+                public class HostileNullableReferenceBase<T> {}
+
+                public sealed class HostileNullableReferenceDerived<T> :
+                    HostileNullableReferenceBase<HostileTypedStore<T>?>,
+                    HostileNullableMarker<HostileAbstractPropertyStorage<T>?>
+                {}
+                #nullable disable
+
                 public interface IHostileUnsafeStoreSemantic
                 {
                     object $readCapabilityName();
@@ -7566,12 +7958,17 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     if (owner.logicalBindingKey != null) {
         val fingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(producer.readBytes())
         val artifact = createGenericOwnerPhysicalFamilyArtifact(prototypes, fingerprint, target)
+        val physicalFamilyOwnerNames = setOf(
+            "HostileUnsafeStore",
+            "HostileUnsafeMid",
+            "HostileTypedStore",
+            "HostileAbstractProperty",
+            "HostileAbstractPropertyStorage",
+            "HostileNullableReferenceBase",
+            "HostileNullableReferenceDerived",
+        )
         val sourceRelabeledPrototypes = prototypes.map { prototype ->
-            if (!prototype.hasSimpleName("HostileUnsafeStore") &&
-                    !prototype.hasSimpleName("HostileUnsafeMid") &&
-                    !prototype.hasSimpleName("HostileTypedStore") &&
-                    !prototype.hasSimpleName("HostileAbstractProperty") &&
-                    !prototype.hasSimpleName("HostileAbstractPropertyStorage")) {
+            if (physicalFamilyOwnerNames.none(prototype::hasSimpleName)) {
                 prototype
             } else {
                 prototype.copy(members = prototype.members.mapIndexed { index, member ->
@@ -7585,6 +7982,22 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         val encoded = DotNetGenericOwnerPhysicalFamilyCodec.encode(artifact)
         validateGenericOwnerPhysicalFamilyCodec(artifact, encoded)
         directory.resolve(GENERIC_OWNER_PHYSICAL_FAMILY_FILE).writeText(encoded)
+        val metadataInspectorSource = directory.resolve("HostileSupertypeMetadataInspector.cs").apply {
+            writeText(genericOwnerHostileSupertypeMetadataInspectorSource(artifact, producer))
+        }
+        val metadataInspector = directory.resolve("HostileSupertypeMetadataInspector.dll")
+        val metadataToolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+            "Modern C# compiler is required for the hostile supertype raw metadata inspector"
+        }
+        val metadataCompilation = compileModernSnapshotCSharp(
+            metadataToolchain,
+            metadataInspectorSource,
+            metadataInspector,
+            references = emptyList(),
+            executable = true,
+        )
+        check(metadataCompilation.exitCode == 0) { metadataCompilation.output }
+        executeSnapshotConsumer(DotNetTarget.NET10_0, metadataInspector, directory)
     }
     executeSnapshotConsumer(target, consumer, directory)
 }
@@ -10939,6 +11352,216 @@ private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.renderMetadataSignatu
         "${arguments.single().renderMetadataSignatureType()}[]"
 }
 
+private fun genericOwnerHostileSupertypeMetadataInspectorSource(
+    artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
+    producer: File,
+): String {
+    fun String.csharpLiteral(): String = "\"" +
+            replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
+    fun nullableFlags(values: List<DotNetNullableReferenceFlag>): String =
+        "new byte[] { ${values.joinToString(", ") { value -> value.metadataValue.toString() }} }"
+
+    val derived = artifact.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileNullableReferenceDerived"
+    }
+    val base = artifact.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileNullableReferenceBase"
+    }
+    val marker = artifact.interfaceTypes.single { type ->
+        type.physicalTypePath.last() == "HostileNullableMarker"
+    }
+    val baseEdge = derived.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+    }
+    val interfaceEdge = derived.directSupertypes.single { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE
+    }
+    check(!interfaceEdge.isSemanticCapability && interfaceEdge.logicalClassifierKey == marker.logicalInterfaceKey &&
+            baseEdge.logicalClassifierKey == base.logicalOwnerKey &&
+            baseEdge.nullableReferenceFlags == listOf(
+                DotNetNullableReferenceFlag.OBLIVIOUS,
+                DotNetNullableReferenceFlag.NULLABLE,
+                DotNetNullableReferenceFlag.NON_NULL,
+            ) && interfaceEdge.nullableReferenceFlags == baseEdge.nullableReferenceFlags) {
+        "The hostile metadata inspector requires the exact nested-nullable base/interface graph"
+    }
+
+    return """
+        using System;
+        using System.Collections.Immutable;
+        using System.IO;
+        using System.Linq;
+        using System.Reflection;
+        using System.Reflection.Metadata;
+        using System.Reflection.PortableExecutable;
+
+        public static class Program
+        {
+            private sealed class SignatureTypeProvider : ISignatureTypeProvider<string, object>
+            {
+                public string GetArrayType(string elementType, ArrayShape shape) => elementType + "[array]";
+                public string GetByReferenceType(string elementType) => elementType + "&";
+                public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr";
+                public string GetGenericInstantiation(string genericType, ImmutableArray<string> arguments) =>
+                    genericType + "<" + string.Join(",", arguments) + ">";
+                public string GetGenericMethodParameter(object context, int index) => "!!" + index;
+                public string GetGenericTypeParameter(object context, int index) => "!" + index;
+                public string GetModifiedType(string modifier, string unmodifiedType, bool required) => unmodifiedType;
+                public string GetPinnedType(string elementType) => elementType;
+                public string GetPointerType(string elementType) => elementType + "*";
+                public string GetPrimitiveType(PrimitiveTypeCode code)
+                {
+                    if (code == PrimitiveTypeCode.Object) return "System.Object";
+                    if (code == PrimitiveTypeCode.Void) return "System.Void";
+                    return "primitive:" + code;
+                }
+                public string GetSZArrayType(string elementType) => elementType + "[]";
+                public string GetTypeFromDefinition(
+                    MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => TypeName(reader, handle);
+                public string GetTypeFromReference(
+                    MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => TypeName(reader, handle);
+                public string GetTypeFromSpecification(
+                    MetadataReader reader, object context, TypeSpecificationHandle handle, byte rawTypeKind) =>
+                    reader.GetTypeSpecification(handle).DecodeSignature(this, context);
+            }
+
+            private static readonly SignatureTypeProvider Provider = new SignatureTypeProvider();
+            private static string JoinName(string ns, string name) =>
+                string.IsNullOrEmpty(ns) ? name : ns + "." + name;
+            private static string TypeName(MetadataReader reader, TypeDefinitionHandle handle)
+            {
+                TypeDefinition type = reader.GetTypeDefinition(handle);
+                return JoinName(reader.GetString(type.Namespace), reader.GetString(type.Name));
+            }
+            private static string TypeName(MetadataReader reader, TypeReferenceHandle handle)
+            {
+                TypeReference type = reader.GetTypeReference(handle);
+                return JoinName(reader.GetString(type.Namespace), reader.GetString(type.Name));
+            }
+            private static string TypeName(MetadataReader reader, EntityHandle handle)
+            {
+                if (handle.Kind == HandleKind.TypeDefinition) return TypeName(reader, (TypeDefinitionHandle)handle);
+                if (handle.Kind == HandleKind.TypeReference) return TypeName(reader, (TypeReferenceHandle)handle);
+                if (handle.Kind == HandleKind.TypeSpecification)
+                    return reader.GetTypeSpecification((TypeSpecificationHandle)handle).DecodeSignature(Provider, null);
+                throw new InvalidOperationException("Unsupported type handle " + handle.Kind);
+            }
+            private static TypeDefinitionHandle FindType(MetadataReader reader, string ns, string name)
+            {
+                TypeDefinitionHandle[] matches = reader.TypeDefinitions.Where(handle =>
+                {
+                    TypeDefinition type = reader.GetTypeDefinition(handle);
+                    return reader.GetString(type.Namespace) == ns && reader.GetString(type.Name) == name;
+                }).ToArray();
+                if (matches.Length != 1) throw new InvalidOperationException("Expected one TypeDef " + name);
+                return matches[0];
+            }
+            private static TypeDefinitionHandle DeclaringType(
+                MetadataReader reader, MethodDefinitionHandle methodHandle)
+            {
+                return reader.TypeDefinitions.Single(typeHandle =>
+                    reader.GetTypeDefinition(typeHandle).GetMethods().Contains(methodHandle));
+            }
+            private static string AttributeTypeName(MetadataReader reader, CustomAttribute attribute)
+            {
+                if (attribute.Constructor.Kind == HandleKind.MemberReference)
+                    return TypeName(reader, reader.GetMemberReference(
+                        (MemberReferenceHandle)attribute.Constructor).Parent);
+                if (attribute.Constructor.Kind == HandleKind.MethodDefinition)
+                    return TypeName(reader, DeclaringType(reader, (MethodDefinitionHandle)attribute.Constructor));
+                throw new InvalidOperationException("Unsupported attribute constructor");
+            }
+            private static byte[] DecodeNullableTransform(MetadataReader reader, CustomAttribute attribute)
+            {
+                BlobReader blob = reader.GetBlobReader(attribute.Value);
+                if (blob.ReadUInt16() != 1) throw new InvalidOperationException("Invalid attribute prolog");
+                if (blob.RemainingBytes == 3)
+                {
+                    byte scalar = blob.ReadByte();
+                    if (blob.ReadUInt16() != 0 || blob.RemainingBytes != 0)
+                        throw new InvalidOperationException("Invalid scalar nullable transform");
+                    return new byte[] { scalar };
+                }
+                int count = blob.ReadInt32();
+                if (count < 0 || blob.RemainingBytes != count + 2)
+                    throw new InvalidOperationException("Invalid nullable transform vector");
+                byte[] result = blob.ReadBytes(count);
+                if (blob.ReadUInt16() != 0 || blob.RemainingBytes != 0)
+                    throw new InvalidOperationException("Invalid nullable transform suffix");
+                return result;
+            }
+            private static byte[] LocalNullableTransform(
+                MetadataReader reader, EntityHandle handle, string attributeName)
+            {
+                CustomAttribute[] matches = reader.GetCustomAttributes(handle).Select(reader.GetCustomAttribute)
+                    .Where(attribute => AttributeTypeName(reader, attribute) == attributeName).ToArray();
+                if (matches.Length > 1) throw new InvalidOperationException("Duplicate " + attributeName);
+                return matches.Length == 0 ? null : DecodeNullableTransform(reader, matches[0]);
+            }
+            private static void CheckNullableTransform(
+                MetadataReader reader,
+                EntityHandle position,
+                TypeDefinitionHandle typeHandle,
+                byte[] expected,
+                string description)
+            {
+                byte[] actual = LocalNullableTransform(
+                    reader, position, "System.Runtime.CompilerServices.NullableAttribute");
+                if (actual != null && actual.Length == 1)
+                    actual = Enumerable.Repeat(actual[0], expected.Length).ToArray();
+                if (actual == null)
+                {
+                    byte[] context = LocalNullableTransform(
+                        reader, typeHandle, "System.Runtime.CompilerServices.NullableContextAttribute");
+                    byte fallback = context == null ? (byte)0 : context.Single();
+                    actual = Enumerable.Repeat(fallback, expected.Length).ToArray();
+                }
+                if (!actual.SequenceEqual(expected))
+                    throw new InvalidOperationException(
+                        description + " nullable transform differs: expected " + string.Join(",", expected) +
+                        ", actual " + string.Join(",", actual));
+            }
+
+            public static int Main()
+            {
+                using (FileStream stream = File.OpenRead(${producer.absolutePath.csharpLiteral()}))
+                using (var pe = new PEReader(stream))
+                {
+                    MetadataReader reader = pe.GetMetadataReader();
+                    string ns = ${derived.physicalOwnerPath.dropLast(1).joinToString(".").csharpLiteral()};
+                    TypeDefinitionHandle derivedHandle = FindType(
+                        reader, ns, ${(derived.physicalOwnerPath.last() + "`" + derived.genericArity).csharpLiteral()});
+                    TypeDefinition definition = reader.GetTypeDefinition(derivedHandle);
+                    if (TypeName(reader, definition.BaseType) !=
+                            ${baseEdge.physicalType.renderMetadataSignatureType().csharpLiteral()})
+                        throw new InvalidOperationException("BaseType row differs");
+                    InterfaceImplementationHandle[] interfaces = definition.GetInterfaceImplementations().ToArray();
+                    if (interfaces.Length != 1 || TypeName(
+                            reader, reader.GetInterfaceImplementation(interfaces[0]).Interface) !=
+                            ${interfaceEdge.physicalType.renderMetadataSignatureType().csharpLiteral()})
+                        throw new InvalidOperationException("InterfaceImpl row differs");
+                    CheckNullableTransform(
+                        reader, derivedHandle, derivedHandle, ${nullableFlags(baseEdge.nullableReferenceFlags)},
+                        "BaseType");
+                    CheckNullableTransform(
+                        reader, interfaces[0], derivedHandle,
+                        ${nullableFlags(interfaceEdge.nullableReferenceFlags)}, "InterfaceImpl");
+
+                    TypeDefinition markerDefinition = reader.GetTypeDefinition(FindType(
+                        reader,
+                        ${marker.physicalTypePath.dropLast(1).joinToString(".").csharpLiteral()},
+                        ${(marker.physicalTypePath.last() + "`" + marker.genericArity).csharpLiteral()}));
+                    if ((markerDefinition.Attributes & TypeAttributes.Interface) == 0 ||
+                            markerDefinition.GetGenericParameters().Count != ${marker.genericArity} ||
+                            markerDefinition.GetInterfaceImplementations().Count != 0)
+                        throw new InvalidOperationException("Marker interface TypeDef differs");
+                }
+                return 0;
+            }
+        }
+    """.trimIndent()
+}
+
 private fun genericOwnerMetadataInspectorSource(
     artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
     producer: File,
@@ -11002,9 +11625,13 @@ private fun genericOwnerMetadataInspectorSource(
         check(owner.members.all { member -> member.defaultDispatcher == null }) {
             "The OctoTree metadata inspector requires every default helper to be explicitly modeled"
         }
-        val baseType = owner.constructors.single { constructor ->
-            constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
-        }.delegation.physicalOwnerType.renderMetadataSignatureType()
+        val baseEdge = owner.directSupertypes.single { supertype ->
+            supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+        }
+        val baseType = baseEdge.physicalType.renderMetadataSignatureType()
+        val directInterfaceEdges = owner.directSupertypes
+            .filter { supertype -> supertype.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE }
+            .sortedBy { supertype -> supertype.physicalType.renderMetadataSignatureType() }
         val methods = buildList {
             owner.constructors.forEach { constructor ->
                 add(methodExpectation(
@@ -11076,7 +11703,6 @@ private fun genericOwnerMetadataInspectorSource(
             }
         }
         val properties = owner.properties.map(::propertyExpectation)
-        val capabilityPath = checkNotNull(owner.physicalCapabilityOwnerPath)
         val methodImpls = owner.members.flatMap { member -> member.slots }
             .filter { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER }
             .map { slot ->
@@ -11108,7 +11734,13 @@ private fun genericOwnerMetadataInspectorSource(
             $isAbstract,
             $isSealed,
             ${baseType.csharpLiteral()},
-            ${capabilityPath.joinToString(".").csharpLiteral()},
+            ${nullableFlags(baseEdge.nullableReferenceFlags)},
+            ${strings(directInterfaceEdges.map { supertype ->
+                supertype.physicalType.renderMetadataSignatureType()
+            })},
+            ${nullableFlagLists(directInterfaceEdges.map { supertype ->
+                supertype.nullableReferenceFlags
+            })},
             new int[] { ${owner.physicalGenericParameters.joinToString(", ") { parameter -> parameter.index.toString() }} },
             new int[] { ${specialConstraints.joinToString(", ")} },
             new string[][] { ${constraints.joinToString(", ")} },
@@ -11515,7 +12147,9 @@ private fun genericOwnerMetadataInspectorSource(
                 bool isAbstract,
                 bool isSealed,
                 string baseType,
-                string directInterface,
+                byte[] baseNullableFlags,
+                string[] directInterfaces,
+                byte[][] directInterfaceNullableFlags,
                 int[] genericParameterIndices,
                 int[] genericParameterAttributes,
                 string[][] genericParameterConstraints,
@@ -11532,6 +12166,13 @@ private fun genericOwnerMetadataInspectorSource(
                     ((attributes & TypeAttributes.Sealed) != 0) != isSealed ||
                     (attributes & TypeAttributes.Interface) != 0 || TypeName(reader, definition.BaseType) != baseType)
                     throw new InvalidOperationException("TypeDef row differs for " + JoinName(ns, name));
+                CheckNullableTransform(
+                    reader,
+                    handle,
+                    baseNullableFlags,
+                    default(MethodDefinitionHandle),
+                    handle,
+                    JoinName(ns, name) + " BaseType");
 
                 GenericParameterHandle[] parameters = definition.GetGenericParameters().ToArray();
                 if (parameters.Length != genericParameterIndices.Length ||
@@ -11550,9 +12191,25 @@ private fun genericOwnerMetadataInspectorSource(
                 }
 
                 InterfaceImplementationHandle[] interfaces = definition.GetInterfaceImplementations().ToArray();
-                if (interfaces.Length != 1 ||
-                    TypeName(reader, reader.GetInterfaceImplementation(interfaces[0]).Interface) != directInterface)
+                if (interfaces.Length != directInterfaces.Length ||
+                    directInterfaces.Length != directInterfaceNullableFlags.Length)
                     throw new InvalidOperationException("InterfaceImpl row differs for " + JoinName(ns, name));
+                for (int interfaceIndex = 0; interfaceIndex < directInterfaces.Length; interfaceIndex++)
+                {
+                    InterfaceImplementationHandle[] matches = interfaces.Where(interfaceHandle =>
+                        TypeName(reader, reader.GetInterfaceImplementation(interfaceHandle).Interface) ==
+                            directInterfaces[interfaceIndex]).ToArray();
+                    if (matches.Length != 1)
+                        throw new InvalidOperationException(
+                            "Expected one exact InterfaceImpl " + directInterfaces[interfaceIndex]);
+                    CheckNullableTransform(
+                        reader,
+                        matches[0],
+                        directInterfaceNullableFlags[interfaceIndex],
+                        default(MethodDefinitionHandle),
+                        handle,
+                        JoinName(ns, name) + " InterfaceImpl " + directInterfaces[interfaceIndex]);
+                }
 
                 FieldDefinitionHandle[] fields = definition.GetFields().ToArray();
                 if (fields.Length != expectedFields.Length)

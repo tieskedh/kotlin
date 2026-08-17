@@ -1075,6 +1075,32 @@ naming remains a separate proposal. Base/interface nullable transforms and the
 atomic public owner migration remain open. See
 [`../archive/generic-owner-overload-family-names-2026-08-17.md`](../archive/generic-owner-overload-family-names-2026-08-17.md).
 
+The direct-supertype condition is now closed at physical-family schema 20.
+Every admitted generic owner records one exact `TypeDef.BaseType` and all direct
+`InterfaceImpl` rows, including their complete constructed type expression and
+physical nullable-reference transform. Producer-owned generic interface
+TypeDefs are part of the same catalog. Base-delegating constructors must target
+the recorded base, dispatcher-owning TypeDefs implement their semantic
+capability exactly once, inherited dispatchers do not duplicate that interface,
+and method-free owners do not acquire an empty capability.
+
+The hostile pair distinguishes representable nested reference nullability from
+unrepresentable conditional open nullability. A derived owner with
+`ReferenceBase<TypedStore<T>?>` and
+`Marker<AbstractPropertyStorage<T>?>` has one truthful construction for every
+`T` and is admitted. Live IR retains its logical `1,2,1` nullable vector; the
+bound ancestry record retains Roslyn's actual physical `0,2,1` root sentinel.
+A raw metadata reader pins both layers on Framework 4.8 and .NET 10. In
+contrast, `Derived<T> : Base<T?>` cannot choose one fixed CLR base for both
+value and reference substitutions. Its producer classification records the
+blocked classifier and owner-parameter index and keeps it erased instead of
+inventing a false TypeSpec. The recursive metadata inspector now consumes the
+same recorded ancestry rather than deriving it from constructors. This closes
+the final named hostile representation condition; production owners remain
+erased until the complete family and representative application evidence select
+one atomic public-ABI migration. See
+[`../archive/generic-owner-direct-supertype-metadata-2026-08-17.md`](../archive/generic-owner-direct-supertype-metadata-2026-08-17.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
