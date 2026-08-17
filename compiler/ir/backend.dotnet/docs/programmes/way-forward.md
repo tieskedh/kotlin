@@ -1158,6 +1158,16 @@ non-random generated range operations. `Random`, unsigned ranges, and reified
 helpers remain independent closures. See
 [`../decisions/ordinary-ranges-and-progressions.md`](../decisions/ordinary-ranges-and-progressions.md).
 
+The exact eager `Iterable.windowed`/`chunked` closure is now complete as one
+generated classifier family: both ordinary and transforming variants compose
+the already completed Common sliding-window machinery with the exact
+`List(size, init)`/`MutableList(size, init)` factory pair. RandomAccess and
+iterator/RingBuffer paths retain their Common behavior on Framework CLR 4 and
+.NET 10. The next generator census must independently classify Sequence-valued
+eager operations, comparison/all-equality families, Random/entropy, unsigned,
+CharSequence/array variants, and reified dependencies rather than treating
+this closure as authority for any of them.
+
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
 interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.

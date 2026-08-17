@@ -385,6 +385,15 @@ not target loops. Execute the same portable Sequence consumer on the real
 Framework CLR 4 host and .NET 10; modern `System.Object`, boxing, interface-
 dispatch, or generic optimizations are not Framework proof.
 
+Eager `Iterable.windowed`/`chunked` follows the same source-authority rule.
+Admit the complete four-member generated Iterable classifier family together
+with Common's exact `List(size, init)`/`MutableList(size, init)` factory pair
+and the already selected `SlidingWindow.kt` machinery. Preserve both the
+RandomAccess snapshot/sublist route and the iterator/RingBuffer route; do not
+replace either with a target loop or BCL enumeration. Execute one portable
+consumer on Framework CLR 4 and .NET 10. CharSequence, array, Random, unsigned,
+and reified variants remain independently selected families.
+
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common
 aggregate/fold/reduce/count source remains authoritative. Admit the Iterable,

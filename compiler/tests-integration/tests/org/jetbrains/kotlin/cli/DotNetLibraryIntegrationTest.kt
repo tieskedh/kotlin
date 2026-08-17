@@ -35032,6 +35032,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intProgressionType = implementationType("Kotlin.Ranges", "IntProgression")
         val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
+        val collectionsFacadeType = implementationType("Kotlin.Collections", "CollectionsKt")
         val sequenceType = implementationType("Kotlin.Sequences", "Sequence")
         val sequenceScopeType = implementationType("Kotlin.Sequences", "SequenceScope")
         val sequencesFacadeType = implementationType("Kotlin.Sequences", "SequencesKt")
@@ -35071,6 +35072,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }) {
             "Kotlin SequenceScope must retain one non-generic erased CLR identity"
         }
+        val eagerWindowingMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle &&
+                    method.name in setOf("chunked", "windowed")
+        }
+        assertEquals(2, eagerWindowingMethods.count { method -> method.name == "chunked" })
+        assertEquals(2, eagerWindowingMethods.count { method -> method.name == "windowed" })
+        val sizedListFactoryMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle &&
+                    method.name in setOf("List", "MutableList")
+        }
+        assertEquals(1, sizedListFactoryMethods.count { method -> method.name == "List" })
+        assertEquals(1, sizedListFactoryMethods.count { method -> method.name == "MutableList" })
         val sequenceMethodNames = implementationMetadata.methodDefinitions
             .filter { method -> method.declaringType == sequencesFacadeType.handle }
             .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
@@ -37646,6 +37659,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return values.singleOrNull()
                 }
 
+                public fun <T> installedWindowed(
+                    values: Iterable<T>,
+                    size: Int,
+                    step: Int,
+                    partialWindows: Boolean,
+                ): List<List<T>> = values.windowed(size, step, partialWindows)
+
+                public fun <T, R> installedWindowedTransform(
+                    values: Iterable<T>,
+                    size: Int,
+                    transform: (List<T>) -> R,
+                ): List<R> = values.windowed(size, transform = transform)
+
+                public fun <T> installedChunked(values: Iterable<T>, size: Int): List<List<T>> =
+                    values.chunked(size)
+
+                public fun <T, R> installedChunkedTransform(
+                    values: Iterable<T>,
+                    size: Int,
+                    transform: (List<T>) -> R,
+                ): List<R> = values.chunked(size, transform)
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -37798,6 +37833,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             mutableFailFast &&
                             builtList.toString() == "[6, 7]" &&
                             builderSealed
+                    val installedWindowSource = arrayOf(1, 2, 3, 4, 5).asIterable()
+                    val installedWindows = installedWindowed(installedWindowSource, 3, 2, true)
+                    val installedWindowTransforms = installedWindowedTransform(installedWindowSource, 3) { window ->
+                        window[0]
+                    }
+                    val installedChunks = installedChunked(installedWindowSource, 2)
+                    val installedChunkTransforms = installedChunkedTransform(installedWindowSource, 2) { window ->
+                        window[0]
+                    }
                     val collectionsOk =
                         view[0] == "changed" &&
                             view[1] == "K" &&
@@ -37825,7 +37869,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             arrayOf("only").asIterable().single() == "only" &&
                             arrayOf("only").asList().singleOrNull() == "only" &&
                             view.singleOrNull() == null &&
-                            emptyList<String>().lastIndex == -1
+                            emptyList<String>().lastIndex == -1 &&
+                            installedWindows == listOf(listOf(1, 2, 3), listOf(3, 4, 5), listOf(5)) &&
+                            installedWindowTransforms == listOf(1, 2, 3) &&
+                            installedChunks == listOf(listOf(1, 2), listOf(3, 4), listOf(5)) &&
+                            installedChunkTransforms == listOf(1, 3, 5)
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38163,6 +38211,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'singleOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
         assertTrue("::'singleOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
+        assertTrue(
+            "::'windowed'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32, int32, bool)" in il
+        )
+        assertTrue(
+            "::'chunked'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
+        )
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
         assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'Add'(object)" in il)
@@ -40235,6 +40289,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                private class CountingIterable<T>(private val values: Array<T>) : Iterable<T> {
+                    var iteratorCalls: Int = 0
+                    var nextCalls: Int = 0
+
+                    override fun iterator(): Iterator<T> {
+                        iteratorCalls++
+                        return CountingIterator(this, values)
+                    }
+
+                    private class CountingIterator<T>(
+                        private val owner: CountingIterable<T>,
+                        private val values: Array<T>,
+                    ) : Iterator<T> {
+                        private var index: Int = 0
+
+                        override fun hasNext(): Boolean = index < values.size
+
+                        override fun next(): T {
+                            owner.nextCalls++
+                            return values[index++]
+                        }
+                    }
+                }
+
                 fun main() {
                     val counted = CountingSequence(arrayOf(1, 2, 3, 4))
                     val pipeline = counted.map { it * 2 }.filter { it > 3 }.take(2)
@@ -40400,6 +40478,57 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         invalidWindow = true
                     }
                     check(invalidWindow)
+
+                    val eagerList = arrayListOf(1, 2, 3, 4, 5)
+                    check(eagerList is RandomAccess)
+                    check(
+                        eagerList.windowed(3, step = 2, partialWindows = true) ==
+                            listOf(listOf(1, 2, 3), listOf(3, 4, 5), listOf(5))
+                    )
+                    check(eagerList.windowed(2, step = 3, partialWindows = true) ==
+                        listOf(listOf(1, 2), listOf(4, 5)))
+                    check(eagerList.chunked(2) == listOf(listOf(1, 2), listOf(3, 4), listOf(5)))
+
+                    var firstEagerView: List<Int>? = null
+                    var reusedEagerView = false
+                    check(eagerList.windowed(3) { window ->
+                        if (firstEagerView === window) reusedEagerView = true
+                        firstEagerView = window
+                        window[0] * 100 + window[1] * 10 + window[2]
+                    } == listOf(123, 234, 345))
+                    check(reusedEagerView)
+                    check(eagerList.chunked(2) { window -> window[0] } == listOf(1, 3, 5))
+
+                    val eagerCounted = CountingIterable(arrayOf(1, 2, 3, 4, 5))
+                    check(
+                        eagerCounted.windowed(3, step = 2, partialWindows = true) ==
+                            listOf(listOf(1, 2, 3), listOf(3, 4, 5), listOf(5))
+                    )
+                    check(eagerCounted.iteratorCalls == 1 && eagerCounted.nextCalls == 5)
+
+                    val eagerFailure = IllegalStateException("eager window failure")
+                    val eagerFailing = CountingIterable(arrayOf(1, 2, 3, 4))
+                    var eagerCallbackCalls = 0
+                    try {
+                        eagerFailing.windowed(2) { window ->
+                            eagerCallbackCalls++
+                            if (eagerCallbackCalls == 2) throw eagerFailure
+                            window[0]
+                        }
+                        error("missing eager window failure")
+                    } catch (caught: IllegalStateException) {
+                        check(caught === eagerFailure)
+                    }
+                    check(eagerCallbackCalls == 2 && eagerFailing.nextCalls == 3)
+
+                    var invalidEagerWindow = false
+                    try {
+                        eagerList.windowed(2, step = 0)
+                    } catch (caught: IllegalArgumentException) {
+                        invalidEagerWindow =
+                            caught.message == "Both size 2 and step 0 must be greater than zero."
+                    }
+                    check(invalidEagerWindow)
                     check(sequenceOf(2, 4, 8).zipWithNext().toList() == listOf(Pair(2, 4), Pair(4, 8)))
                     check(sequenceOf(2, 4, 8).zipWithNext { left, right -> right - left }.toList() == listOf(2, 4))
                     println("OK")
