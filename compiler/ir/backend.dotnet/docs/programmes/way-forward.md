@@ -875,10 +875,25 @@ field, records declaration-independent exact carriers and init-only state, and
 adds private-final non-KLIB implementation MethodDefs outside capabilities and
 logical reflection. The same decoded family now executes the complete original
 OctoTree algorithms with real depth/actual state and no bounded scenario-body
-substitute. The next gate is paired representative measurement of this complete
-candidate against the erased production application on Framework 4.8 and every
-required .NET 10 deployment lane, with route-level attribution rather than one
-aggregate ratio.
+substitute. The complete candidate now has a closed schema-3 paired corpus
+through PSI/LightTree and Framework 4.8/.NET 10. At 200,000 iterations its
+aggregate candidate/erased ratios are 2.41x Framework, 1.05x JIT, 1.29x
+ReadyToRun, 1.23x trimmed, and 1.06x NativeAOT, with 23.0%-27.3% more
+allocation. Route attribution separates expensive typed/capability crossings
+from clusterization wins on JIT/NativeAOT. Rendering is explicitly
+lowering-confounded because the candidate is generated C#, not a complete
+Kotlin product, so this checkpoint does not select the public owner ABI.
+
+The next hardest-first gate is the material classification defect exposed by
+that attribution. The private `root: Node<T>? = null` is currently poisoned to
+semantic object state because the write-provenance analyzer classifies the
+initializer through its `Nothing?` expression type. Admit null as a
+representation-neutral write only when the target field has a proven reference
+carrier such as `Node<T>?`; never extend that rule to bare unconstrained `T?`.
+Then require the entire non-null producer/access graph, physicalize the root as
+`Node<T>`, retain an object capability only where open-world semantics require
+it, and rerun the same five-lane aggregate and route products before drawing an
+ABI conclusion.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -907,6 +922,8 @@ The metadata/reflection product is recorded in
 [`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
 The schema-13 ordinary-body closure is recorded in
 [`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
+The paired schema-3 measurement and route attribution are recorded in
+[`../archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md`](../archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

@@ -14,6 +14,8 @@
 #>
 [CmdletBinding()]
 param(
+    [ValidateSet('hostile', 'octo-tree')]
+    [string]$CorpusKind = 'hostile',
     [ValidateSet('framework', 'jit', 'ready-to-run', 'trimmed', 'native-aot')]
     [string[]]$Modes = @('framework', 'jit', 'ready-to-run', 'trimmed'),
     [ValidateRange(1, 1000000000)]
@@ -40,7 +42,11 @@ param(
         'semantic-array',
         'method-generic-array',
         'compatible-override-object-state',
-        'hostile-override-state'
+        'hostile-override-state',
+        'octo-tree-typed-path',
+        'octo-tree-capability-path',
+        'octo-tree-clusterization',
+        'octo-tree-rendering'
     )]
     [string[]]$AttributionRoutes = @(),
     [string]$OutputDirectory,
@@ -57,6 +63,21 @@ if ($Modes.Count -eq 0 -or @($Modes | Select-Object -Unique).Count -ne $Modes.Co
 if (@($AttributionRoutes | Select-Object -Unique).Count -ne $AttributionRoutes.Count) {
     throw 'Attribution routes must be unique'
 }
+$octoTreeRoutes = @(
+    'octo-tree-typed-path',
+    'octo-tree-capability-path',
+    'octo-tree-clusterization',
+    'octo-tree-rendering'
+)
+$invalidRoutes = if ($CorpusKind -eq 'octo-tree') {
+    @($AttributionRoutes | Where-Object { $_ -notin $octoTreeRoutes })
+} else {
+    @($AttributionRoutes | Where-Object { $_ -in $octoTreeRoutes })
+}
+if ($invalidRoutes.Count -ne 0) {
+    throw "Attribution routes do not belong to the $CorpusKind corpus: $($invalidRoutes -join ', ')"
+}
+$workloadVersion = if ($CorpusKind -eq 'octo-tree') { 2 } else { 1 }
 $isRouteAttribution = $AttributionRoutes.Count -gt 0
 $measurementDefine = if ($isRouteAttribution) {
     'GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT'
@@ -75,7 +96,8 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $verifyTool = Join-Path $PSScriptRoot 'verify-generic-owner-applications.ps1'
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-    $OutputDirectory = Join-Path $backendDirectory "build\generic-owner-application-measurement\$timestamp"
+    $OutputDirectory = Join-Path $backendDirectory `
+        "build\generic-owner-$CorpusKind-application-measurement\$timestamp"
 }
 $runDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $runDirectory) {
@@ -229,11 +251,11 @@ if (-not [string]::IsNullOrWhiteSpace($NativeLinker)) {
 
 if ([string]::IsNullOrWhiteSpace($ExistingCorpus)) {
     $corpusDirectory = Join-Path $runDirectory 'corpus'
-    & $verifyTool -OutputDirectory $corpusDirectory
+    & $verifyTool -CorpusKind $CorpusKind -OutputDirectory $corpusDirectory
     if ($LASTEXITCODE -ne 0) { throw 'The paired application corpus producer failed' }
 } else {
     $corpusDirectory = [IO.Path]::GetFullPath($ExistingCorpus)
-    & $verifyTool -ExistingCorpus $corpusDirectory
+    & $verifyTool -CorpusKind $CorpusKind -ExistingCorpus $corpusDirectory
     if ($LASTEXITCODE -ne 0) { throw 'The existing paired application corpus failed verification' }
 }
 $net10Bundle = Join-Path $corpusDirectory 'net10\psi'
@@ -487,6 +509,64 @@ function Get-ExpectedRouteProtocol(
     [string]$Route,
     [int]$ExpectedIterations
 ) {
+    if ($CorpusKind -eq 'octo-tree') {
+        $result = [ordered]@{
+            typedEntryCalls = 0L
+            semanticCapabilityCalls = 0L
+            erasedVirtualCalls = 0L
+            ownerConstructions = if ($Route -eq 'octo-tree-clusterization') {
+                [long]$ExpectedIterations
+            } else {
+                1L
+            }
+            loopValueBoxOrUnboxOperations = 0L
+            runtimeCompatibilityChecks = 0L
+            expectedFailures = 0L
+        }
+        if ($Representation -eq 'candidate') {
+            switch ($Route) {
+                'octo-tree-typed-path' {
+                    $result.typedEntryCalls = $ExpectedIterations * 2L
+                    $result.semanticCapabilityCalls = $ExpectedIterations * 4L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 4L
+                    $result.runtimeCompatibilityChecks = [long]$ExpectedIterations
+                }
+                'octo-tree-capability-path' {
+                    $result.semanticCapabilityCalls = $ExpectedIterations * 6L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 6L
+                    $result.runtimeCompatibilityChecks = $ExpectedIterations * 2L
+                }
+                'octo-tree-clusterization' {
+                    $result.typedEntryCalls = $ExpectedIterations * 9L
+                    $result.semanticCapabilityCalls = $ExpectedIterations * 9L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 18L
+                    $result.runtimeCompatibilityChecks = $ExpectedIterations * 8L
+                }
+                'octo-tree-rendering' {
+                    $result.typedEntryCalls = [long]$ExpectedIterations
+                }
+                default { throw "Unknown candidate OctoTree attribution route: $Route" }
+            }
+        } elseif ($Representation -eq 'erased') {
+            switch ($Route) {
+                { $_ -in @('octo-tree-typed-path', 'octo-tree-capability-path') } {
+                    $result.erasedVirtualCalls = $ExpectedIterations * 2L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 2L
+                }
+                'octo-tree-clusterization' {
+                    $result.erasedVirtualCalls = $ExpectedIterations * 9L
+                    $result.loopValueBoxOrUnboxOperations = $ExpectedIterations * 9L
+                }
+                'octo-tree-rendering' {
+                    $result.erasedVirtualCalls = [long]$ExpectedIterations
+                }
+                default { throw "Unknown erased OctoTree attribution route: $Route" }
+            }
+        } else {
+            throw "Unknown generic-owner representation: $Representation"
+        }
+        return $result
+    }
     $result = [ordered]@{
         typedEntryCalls = 0L
         semanticCapabilityCalls = 0L
@@ -624,7 +704,8 @@ function Invoke-MeasuredApplication(
         $script = "`$ErrorActionPreference='Stop'; try { " +
             "`$assembly=[Reflection.Assembly]::LoadFrom('$escapedAssembly'); " +
             "`$entryArguments=[string[]]@($($escapedArguments -join ',')); " +
-            "`$invokeArguments=[object[]](,`$entryArguments); " +
+            "`$invokeArguments=New-Object 'System.Object[]' 1; " +
+            "`$invokeArguments[0]=`$entryArguments; " +
             "`$result=`$assembly.EntryPoint.Invoke(`$null,`$invokeArguments); " +
             "if([int]`$result -ne 0){exit [int]`$result} " +
             "} catch { [Console]::Error.WriteLine(`$_.Exception.ToString()); exit 1 }"
@@ -710,21 +791,26 @@ function Invoke-MeasuredApplication(
         )
     }
     if (@(Compare-Object @($fields.Keys) $required).Count -ne 0 -or
-            $fields.workloadVersion -ne '1' -or $fields.representation -ne $Representation -or
+            $fields.workloadVersion -ne $workloadVersion.ToString() -or
+            $fields.representation -ne $Representation -or
             [int]$fields.iterations -ne $ExpectedIterations -or
             ($isRouteAttribution -and $fields.route -ne $Route)) {
         throw "Unexpected application measurement protocol: $measurementLine"
     }
     if ($isRouteAttribution) {
         $expectedStateCarrier = if ($Representation -eq 'candidate') {
-            if ($Route -in @(
-                    'typed-entry-typed-state', 'capability-value-typed-state',
-                    'typed-entry-struct-typed-state', 'capability-struct-typed-state',
-                    'typed-entry-nullable-typed-state', 'capability-nullable-typed-state'
-                )) {
-                'TYPED_STORAGE_PRODUCER_GRAPH_PROVEN'
+            if ($CorpusKind -eq 'octo-tree') {
+                'MIXED_EXACT_AND_SEMANTIC'
             } else {
-                'SEMANTIC_OBJECT_REQUIRED'
+                if ($Route -in @(
+                        'typed-entry-typed-state', 'capability-value-typed-state',
+                        'typed-entry-struct-typed-state', 'capability-struct-typed-state',
+                        'typed-entry-nullable-typed-state', 'capability-nullable-typed-state'
+                    )) {
+                    'TYPED_STORAGE_PRODUCER_GRAPH_PROVEN'
+                } else {
+                    'SEMANTIC_OBJECT_REQUIRED'
+                }
             }
         } else {
             'ERASED_OBJECT'
@@ -740,15 +826,28 @@ function Invoke-MeasuredApplication(
             }
         }
     } else {
-        $periodicRoutes = [long]([Math]::Floor(($ExpectedIterations + 63L) / 64L))
-        if ($Representation -eq 'candidate') {
-            $expectedTyped = $ExpectedIterations * 3L + $periodicRoutes
-            $expectedSemantic = $ExpectedIterations * 24L + $periodicRoutes * 2L
-            $expectedErased = 0L
+        if ($CorpusKind -eq 'octo-tree') {
+            $periodicRoutes = [long]([Math]::Floor(($ExpectedIterations + 511L) / 512L))
+            if ($Representation -eq 'candidate') {
+                $expectedTyped = $ExpectedIterations * 2L + $periodicRoutes
+                $expectedSemantic = $ExpectedIterations * 4L
+                $expectedErased = 0L
+            } else {
+                $expectedTyped = 0L
+                $expectedSemantic = 0L
+                $expectedErased = $ExpectedIterations * 2L + $periodicRoutes
+            }
         } else {
-            $expectedTyped = 0L
-            $expectedSemantic = 0L
-            $expectedErased = $ExpectedIterations * 27L + $periodicRoutes * 2L
+            $periodicRoutes = [long]([Math]::Floor(($ExpectedIterations + 63L) / 64L))
+            if ($Representation -eq 'candidate') {
+                $expectedTyped = $ExpectedIterations * 3L + $periodicRoutes
+                $expectedSemantic = $ExpectedIterations * 24L + $periodicRoutes * 2L
+                $expectedErased = 0L
+            } else {
+                $expectedTyped = 0L
+                $expectedSemantic = 0L
+                $expectedErased = $ExpectedIterations * 27L + $periodicRoutes * 2L
+            }
         }
         if ([long]$fields.typedEntryCalls -ne $expectedTyped -or
                 [long]$fields.semanticCapabilityCalls -ne $expectedSemantic -or
@@ -984,8 +1083,9 @@ $net48Manifest = Read-Manifest $net48Bundle
 $repositoryHead = (& git -C $repositoryRoot rev-parse HEAD).Trim()
 $repositoryStatus = @(& git -C $repositoryRoot status --porcelain --untracked-files=no)
 $result = [ordered]@{
-    schema = if ($isRouteAttribution) { 2 } else { 1 }
-    workloadVersion = 1
+    schema = if ($CorpusKind -eq 'octo-tree') { 3 } elseif ($isRouteAttribution) { 2 } else { 1 }
+    corpusKind = $CorpusKind
+    workloadVersion = $workloadVersion
     measurementKind = if ($isRouteAttribution) { 'route-attribution' } else { 'aggregate' }
     measuredAtUtc = [DateTime]::UtcNow.ToString('O')
     scope = [ordered]@{
@@ -994,9 +1094,11 @@ $result = [ordered]@{
         publishedBytesAreEndToEndComparable = $false
         compileDriverPeakWorkingSetIncludesChildren = $false
         representativeApplicationGateClosed = $false
+        pairedApplicationCorpusClosed = $CorpusKind -eq 'octo-tree'
         routeAttributionIsBoundedMicroWorkload = $isRouteAttribution
         frameworkAndNet10AreIndependentEvidenceLanes = $true
-        routeCallCountersCountWorkloadEntriesNotInternalOverrideFrames = $isRouteAttribution
+        routeCallCountersCountWorkloadEntriesNotInternalOverrideFrames =
+            $isRouteAttribution -and $CorpusKind -eq 'hostile'
         valueConversionCountersExcludeSetupAndIncludeFailedLoopUnboxAttempts = $isRouteAttribution
     }
     environment = [ordered]@{

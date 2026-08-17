@@ -743,6 +743,19 @@ See the
   collection (which can recursively enter the census), emit per-call console
   events, or add a CLI/Runtime/KLIB/published ABI. Counter tracing proves
   correctness and route frequency only; it is never performance evidence.
+  Representative generic-owner performance evidence must come from one closed
+  paired corpus, not a separately handwritten favorable model. The current
+  OctoTree corpus is manifest schema 3/workload 2: it fingerprints the exact
+  repository source, separate Kotlin oracle, generated candidate and erased
+  application sources/products, physical-family artifact, resolved route
+  manifest, Runtime/Stdlib, and target configs. Require PSI/LightTree equality,
+  Framework 4.8 plus .NET 10 JIT/ReadyToRun/trimmed/real-NativeAOT execution,
+  checksum equality, and route-level call/conversion/check counters. Preserve
+  hostile schema-2 verification. A generated C# candidate is not a complete
+  Kotlin product: published byte size is non-comparable, and an ordinary-body
+  lowering difference such as C# rendering versus Common `joinToString` cannot
+  decide the ABI. Record aggregate and route results, including regressions;
+  do not select an owner from one favorable route.
   Version 5 adds the reflection join
   without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
