@@ -27,7 +27,32 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed product slice: schema 13 closes the ordinary state/helper/body
+- Last completed product slice: the schema-13 OctoTree candidate now has one
+  closed, paired schema-3 application corpus generated independently through
+  PSI/LightTree on Framework 4.8 and .NET 10. It fingerprints the unchanged
+  Kotlin/Native source, separate Kotlin oracle, candidate/erased producers,
+  checksum-identical C# applications, physical-family artifact, and the
+  compiler's 21 exact plus nine semantic resolved call sites. The verifier
+  pins the mixed field model (`root: object`, `Leaf.value: T0`, and
+  `Branch.nodes: Node<T0>[]`) and found real standalone-product defects in
+  Framework argument invocation, dependency staging, assembly identity, and
+  logical-key path validation. The older hostile schema-2 corpus remains
+  accepted. At 200,000 iterations and five throughput runs the aggregate
+  candidate/erased ratios are 2.41x Framework, 1.05x JIT, 1.29x ReadyToRun,
+  1.23x trimmed, and 1.06x NativeAOT, with 23.0%-27.3% more allocation. Route
+  attribution shows typed/capability costs of 1.38x-1.83x on modern lanes and
+  5.14x/5.59x on Framework, while clusterization reaches 0.73x JIT and 0.77x
+  NativeAOT. Rendering is faster but remains lowering-confounded because the
+  candidate is generated C#, not a complete Kotlin product. The large-only
+  audit found one material next proof: the private `Node<T>?` root's null
+  initializer is currently classified from `Nothing?` as semantic object,
+  even though null is representation-neutral for that proven reference
+  carrier. Bare unconstrained `T?` must remain excluded. Production emission,
+  public ABI, KLIB, Runtime, and Common semantics remain unchanged. The final
+  strict aggregate direct audit covers 190 XML files and 2,238 tests with zero
+  failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md`](docs/archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md).
+- The preceding product slice: schema 13 closes the ordinary state/helper/body
   graph of the decoded OctoTree candidate. The compiler now projects every
   direct generic-owner field while restricting generic semantic taint to
   owner-parameter-dependent carriers. Declaration-independent fields retain
@@ -2808,13 +2833,20 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    true `T` field through `object`, while Branch's state capability returns the
    same `Node<T>[]` through `System.Array`. The same product now includes the
    outer open Tree, its semantic object root, compiler-census capability calls,
-   and typed/non-generic direct C# surface. Next, close whole-family metadata
-   and reflection normalization rather than starting a second representation.
-   Include
-   actual call mixes,
-   native/managed size, compile cost, startup, throughput, allocation, peak
-   memory, and bridge crossings; the bounded hostile corpus alone is
-   insufficient.
+   and typed/non-generic direct C# surface. Whole-family metadata/reflection,
+   ordinary body closure, and the closed paired schema-3 measurement are now
+   complete. That checkpoint includes Framework 4.8 plus JIT, ReadyToRun,
+   trimmed, and real NativeAOT compile/startup/throughput/allocation/working-set
+   evidence with route attribution. It does not select the ABI because the
+   candidate remains a generated C# physicalization rather than a complete
+   Kotlin product.
+   Next, correct the material private-root proof defect found by the
+   attribution: a null initializer is representation-neutral for a proven
+   `Node<T>?` reference carrier and must not become `SEMANTIC_OBJECT` merely
+   because the IR expression type is `Nothing?`. Bare unconstrained `T?`,
+   unresolved producers, non-private access, or any semantic non-null write
+   remain fail-closed. Require the complete write/access graph, physicalize
+   and rerun the exact five-lane corpus before considering any owner choice.
    Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll
