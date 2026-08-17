@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-sealed-construction-closure-2026-08-17.md`](generic-owner-sealed-construction-closure-2026-08-17.md)
+  records schema 12's abstract Kotlin-sealed base plus
+  `FamilyAndAssembly` constructor closure, record-driven true-`T` Leaf product,
+  positive C# construction/reflection, and rejected external C# subclass.
 - [`generic-owner-complete-octo-tree-family-2026-08-17.md`](generic-owner-complete-octo-tree-family-2026-08-17.md)
   records schema 11's complete logical-keyed recursive OctoTree TypeDef,
   MethodDef, constructor, state/initializer, reflection, and atomic-closure
