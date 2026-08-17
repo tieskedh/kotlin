@@ -3701,6 +3701,53 @@ private fun validateGenericOwnerHardestModelPrototype(
         "HostileUnsafeStore.exposed lost its typed/semantic nullable carrier split"
     }
 
+    val abstractProperty = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileAbstractProperty")
+    }
+    check(abstractProperty.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.ABSTRACT &&
+            abstractProperty.states.isEmpty()) {
+        "HostileAbstractProperty must remain a stateless abstract contract: $abstractProperty"
+    }
+    val abstractPropertyGetter = abstractProperty.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
+    }
+    val abstractPropertySetter = abstractProperty.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
+    }
+    check(abstractPropertyGetter.isAbstract && abstractPropertySetter.isAbstract &&
+            abstractPropertyGetter.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && abstractPropertyGetter.semanticHookReasons == setOf(
+                DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION,
+            ) && abstractPropertySetter.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && abstractPropertySetter.semanticHookReasons == setOf(
+                DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY,
+            )) {
+        "HostileAbstractProperty must retain both abstract typed and semantic obligations: " +
+                "$abstractPropertyGetter / $abstractPropertySetter"
+    }
+    val abstractPropertyStorage = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileAbstractPropertyStorage")
+    }
+    val storagePropertyAccessors = abstractPropertyStorage.members.filter { member ->
+        member.physicalPropertyName == "exposed" && member.propertyAccessorKind != null
+    }
+    check(storagePropertyAccessors.size == 2 && storagePropertyAccessors.all { member ->
+        !member.isAbstract &&
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles &&
+                DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE in member.semanticHookReasons
+    }) {
+        "HostileAbstractPropertyStorage did not inherit the complete broad property family: " +
+                storagePropertyAccessors
+    }
+
     val echo = unsafeStore.members.single { member -> member.sourceName == "echo" }
     check(echo.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
             echo.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)) {
@@ -3977,7 +4024,13 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
         }
     }
 
-    val selectedPrototypes = listOf("HostileUnsafeStore", "HostileUnsafeMid", "HostileTypedStore").map { simpleName ->
+    val selectedPrototypes = listOf(
+        "HostileUnsafeStore",
+        "HostileUnsafeMid",
+        "HostileTypedStore",
+        "HostileAbstractProperty",
+        "HostileAbstractPropertyStorage",
+    ).map { simpleName ->
         prototypes.single { candidate -> candidate.hasSimpleName(simpleName) }
     }
     val physicalOwnerPathsByLogicalKey = selectedPrototypes.associate { prototype ->
@@ -3987,16 +4040,18 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
     val owners = selectedPrototypes.map { prototype ->
         val simpleName = prototype.ownerName.substringAfterLast('.')
         val ownerPath = listOf("KotlinSnapshotPrototype", simpleName)
-        val baseOwnerPath = listOf(
-            "KotlinSnapshotPrototype",
-            if (simpleName == "HostileUnsafeMid") "HostileUnsafeStore" else simpleName,
-        )
+        val baseOwnerPath = listOf("KotlinSnapshotPrototype", when (simpleName) {
+            "HostileUnsafeMid" -> "HostileUnsafeStore"
+            "HostileAbstractPropertyStorage" -> "HostileAbstractProperty"
+            else -> simpleName
+        })
         val capabilityOwnerPath = listOf(
             "KotlinSnapshotPrototype",
-            if (simpleName == "HostileTypedStore") {
-                "IHostileTypedStoreSemantic"
-            } else {
-                "IHostileUnsafeStoreSemantic"
+            when (simpleName) {
+                "HostileTypedStore" -> "IHostileTypedStoreSemantic"
+                "HostileAbstractProperty", "HostileAbstractPropertyStorage" ->
+                    "IHostileAbstractPropertySemantic"
+                else -> "IHostileUnsafeStoreSemantic"
             },
         )
         val constructors = prototype.constructors.map { constructor ->
@@ -5143,6 +5198,21 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             artifact.targetProfile,
         )
     }
+    val unknownAbstractObligationArtifact = encoded.lineSequence().joinToString("\n", postfix = "\n") { line ->
+        val fields = line.split('\t').toMutableList()
+        if (fields.firstOrNull() == "M" &&
+                DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION.name in fields[4]) {
+            fields[4] = "UNKNOWN_ABSTRACT_PROPERTY_OBLIGATION"
+        }
+        fields.joinToString("\t")
+    }
+    expectRejected("an unknown abstract broad-property obligation") {
+        DotNetGenericOwnerPhysicalFamilyCodec.decode(
+            unknownAbstractObligationArtifact,
+            artifact.producerFingerprint,
+            artifact.targetProfile,
+        )
+    }
     val unknownPropertyRouteArtifact = encoded.lineSequence().joinToString("\n", postfix = "\n") { line ->
         val fields = line.split('\t').toMutableList()
         if (fields.firstOrNull() == "W") fields[12] = "UNKNOWN_PROPERTY_ROUTE"
@@ -5230,6 +5300,106 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         broadPropertyOwner.copy(properties = listOf(broadProperty.copy(
             setterRoute = DotNetGenericOwnerPhysicalPropertySetterRoute.TYPED_ENTRY,
         )))
+    }
+    val abstractPropertyOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileAbstractProperty"
+    }
+    val abstractProperty = abstractPropertyOwner.properties.single { property ->
+        property.physicalPropertyName == "exposed"
+    }
+    val abstractGetterFamily = abstractPropertyOwner.members.single { member ->
+        member.logicalMemberKey == abstractProperty.getterLogicalMemberKey
+    }
+    val abstractSetterFamily = abstractPropertyOwner.members.single { member ->
+        member.logicalMemberKey == abstractProperty.setterLogicalMemberKey
+    }
+    fun DotNetGenericOwnerPhysicalMemberFamilyRecord.dispatchFor(
+        role: DotNetGenericOwnerMemberFamilyRole,
+    ): DotNetGenericOwnerPhysicalMemberDispatch = slots.single { slot -> slot.role == role }.dispatch
+    check(abstractPropertyOwner.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.ABSTRACT &&
+            abstractPropertyOwner.states.isEmpty() &&
+            abstractProperty.getterRoute == DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK &&
+            abstractProperty.setterRoute ==
+            DotNetGenericOwnerPhysicalPropertySetterRoute.COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK &&
+            abstractGetterFamily.semanticHookReasons == setOf(
+                DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION,
+            ) && abstractSetterFamily.semanticHookReasons == setOf(
+                DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY,
+            ) && listOf(abstractGetterFamily, abstractSetterFamily).all { member ->
+                member.dispatchFor(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) ==
+                        DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT &&
+                        member.dispatchFor(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) ==
+                        DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT &&
+                        member.dispatchFor(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) ==
+                        DotNetGenericOwnerPhysicalMemberDispatch.FINAL
+            }) {
+        "The abstract broad property lost its complete dual obligation: " +
+                "$abstractProperty / $abstractGetterFamily / $abstractSetterFamily"
+    }
+    val abstractStorageOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileAbstractPropertyStorage"
+    }
+    val abstractStorageProperty = abstractStorageOwner.properties.single { property ->
+        property.physicalPropertyName == "exposed"
+    }
+    val abstractStorageState = abstractStorageOwner.states.single { state ->
+        state.logicalFieldName == "stored"
+    }
+    check(abstractStorageOwner.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.FINAL &&
+            abstractStorageProperty.getterRoute ==
+            DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK &&
+            abstractStorageProperty.setterRoute ==
+            DotNetGenericOwnerPhysicalPropertySetterRoute.COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK &&
+            abstractStorageState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            abstractStorageState.accessPaths.all { access ->
+                access.logicalMemberKey == when (access.operation) {
+                    DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                        abstractStorageProperty.getterLogicalMemberKey
+                    DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                        abstractStorageProperty.setterLogicalMemberKey
+                }
+            }) {
+        "The concrete abstract-property override lost its inherited semantic state: " +
+                "$abstractStorageProperty / $abstractStorageState"
+    }
+    expectRejected("a concrete semantic getter paired with an abstract typed getter") {
+        abstractPropertyOwner.copy(members = abstractPropertyOwner.members.map { member ->
+            if (member.logicalMemberKey != abstractProperty.getterLogicalMemberKey) {
+                member
+            } else {
+                member.copy(slots = member.slots.map { slot ->
+                    if (slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) {
+                        slot.copy(dispatch = DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE)
+                    } else {
+                        slot
+                    }
+                })
+            }
+        })
+    }
+    expectRejected("concrete slots claiming an abstract broad-property obligation") {
+        abstractGetterFamily.copy(slots = abstractGetterFamily.slots.map { slot ->
+            if (slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) {
+                slot
+            } else {
+                slot.copy(dispatch = DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE)
+            }
+        })
+    }
+    expectRejected("a concrete semantic setter paired with an abstract typed setter") {
+        abstractPropertyOwner.copy(members = abstractPropertyOwner.members.map { member ->
+            if (member.logicalMemberKey != abstractProperty.setterLogicalMemberKey) {
+                member
+            } else {
+                member.copy(slots = member.slots.map { slot ->
+                    if (slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) {
+                        slot.copy(dispatch = DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE)
+                    } else {
+                        slot
+                    }
+                })
+            }
+        })
     }
     val member = artifact.owners.first().members.first { candidate ->
         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in candidate.roles &&
@@ -5467,7 +5637,11 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         constructionOwner.reflection.physicalOpenTypeDefinition,
     )
     val capabilityPaths = artifact.owners.mapNotNull { owner -> owner.physicalCapabilityOwnerPath }.distinct()
-    check(capabilityPaths.size == 2 &&
+    check(capabilityPaths.toSet() == setOf(
+        listOf("KotlinSnapshotPrototype", "IHostileUnsafeStoreSemantic"),
+        listOf("KotlinSnapshotPrototype", "IHostileTypedStoreSemantic"),
+        listOf("KotlinSnapshotPrototype", "IHostileAbstractPropertySemantic"),
+    ) &&
             exactReflection == constructionOwner.reflection &&
             capabilityPaths.all { capabilityPath -> artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
                 constructionOwner.reflection.physicalOpenTypeDefinition.copy(
@@ -5964,6 +6138,29 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val relay = owner.members.single { member -> member.sourceName == "relay" }
     val label = owner.members.single { member -> member.sourceName == "label" }
     val state = owner.states.single()
+    val abstractPropertyOwner = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileAbstractProperty")
+    }
+    val abstractPropertyGetter = abstractPropertyOwner.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
+    }
+    val abstractPropertySetter = abstractPropertyOwner.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
+    }
+    val abstractPropertyStorageOwner = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileAbstractPropertyStorage")
+    }
+    val abstractPropertyStorageState = abstractPropertyStorageOwner.states.single()
+    val abstractStorageGetter = abstractPropertyStorageOwner.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
+    }
+    val abstractStorageSetter = abstractPropertyStorageOwner.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
+    }
     val typedStorageOwner = prototypes.single { prototype -> prototype.hasSimpleName("HostileTypedStore") }
     val typedStorageState = typedStorageOwner.states.single { state -> state.fieldName == "stored" }
     val volatileStorageState = typedStorageOwner.states.single { state -> state.fieldName == "published" }
@@ -6008,6 +6205,31 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     )
     val exposedSetterCapabilityName = physicalName(
         exposedSetter,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+    val abstractPropertyName = checkNotNull(abstractPropertyGetter.physicalPropertyName)
+    val abstractGetterTypedName = physicalName(
+        abstractPropertyGetter,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val abstractSetterTypedName = physicalName(
+        abstractPropertySetter,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val abstractGetterSemanticName = physicalName(
+        abstractPropertyGetter,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+    )
+    val abstractSetterSemanticName = physicalName(
+        abstractPropertySetter,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+    )
+    val abstractGetterCapabilityName = physicalName(
+        abstractPropertyGetter,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+    val abstractSetterCapabilityName = physicalName(
+        abstractPropertySetter,
         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
     )
     val echoTypedName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
@@ -6069,6 +6291,32 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
             )) {
         "The mixed typed/volatile-state physicalizer requires exact entries plus strict capability dispatch: " +
                 "$typedStorageOwner"
+    }
+    check(abstractPropertyOwner.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.ABSTRACT &&
+            abstractPropertyOwner.states.isEmpty() &&
+            abstractPropertyGetter.isAbstract && abstractPropertySetter.isAbstract &&
+            abstractPropertyStorageState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+            abstractPropertyStorageState.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN &&
+            listOf(abstractStorageGetter, abstractStorageSetter).all { member ->
+                !member.isAbstract && DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles &&
+                        DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE in
+                        member.semanticHookReasons
+            } && abstractGetterTypedName == physicalName(
+                abstractStorageGetter,
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            ) && abstractSetterTypedName == physicalName(
+                abstractStorageSetter,
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            ) && abstractGetterSemanticName == physicalName(
+                abstractStorageGetter,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            ) && abstractSetterSemanticName == physicalName(
+                abstractStorageSetter,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            )) {
+        "The abstract broad-property physicalizer requires one coherent inherited member family: " +
+                "$abstractPropertyOwner / $abstractPropertyStorageOwner"
     }
 
     val stateType = when (state.requirement) {
@@ -6210,12 +6458,72 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     Array $echoCapabilityName(Array values);
                 }
 
+                public interface IHostileAbstractPropertySemantic
+                {
+                    object $abstractGetterCapabilityName();
+                    void $abstractSetterCapabilityName(object value);
+                }
+
                 public interface IHostileTypedStoreSemantic
                 {
                     object $typedStorageReadCapabilityName();
                     void $typedStorageWriteCapabilityName(object next);
                     object $volatileStorageReadCapabilityName();
                     void $volatileStorageWriteCapabilityName(object next);
+                }
+
+                public abstract class HostileAbstractProperty<T> : IHostileAbstractPropertySemantic
+                {
+                    public HostileAbstractProperty() {}
+
+                    public abstract T $abstractPropertyName { get; set; }
+
+                    protected abstract object $abstractGetterSemanticName();
+
+                    protected abstract void $abstractSetterSemanticName(object value);
+
+                    private static bool IsCompatible(object candidate)
+                    {
+                        if (candidate != null) return candidate is T;
+                        return object.ReferenceEquals(default(T), null);
+                    }
+
+                    object IHostileAbstractPropertySemantic.$abstractGetterCapabilityName()
+                    {
+                        return $abstractGetterSemanticName();
+                    }
+
+                    void IHostileAbstractPropertySemantic.$abstractSetterCapabilityName(object value)
+                    {
+                        if (IsCompatible(value)) $abstractPropertyName = (T)value;
+                        else $abstractSetterSemanticName(value);
+                    }
+                }
+
+                public sealed class HostileAbstractPropertyStorage<T> : HostileAbstractProperty<T>
+                {
+                    private object ${abstractPropertyStorageState.fieldName};
+
+                    public HostileAbstractPropertyStorage(T initial) : base()
+                    {
+                        ${abstractPropertyStorageState.fieldName} = initial;
+                    }
+
+                    public override T $abstractPropertyName
+                    {
+                        get { return (T)${abstractPropertyStorageState.fieldName}; }
+                        set { ${abstractPropertyStorageState.fieldName} = value; }
+                    }
+
+                    protected override object $abstractGetterSemanticName()
+                    {
+                        return ${abstractPropertyStorageState.fieldName};
+                    }
+
+                    protected override void $abstractSetterSemanticName(object value)
+                    {
+                        ${abstractPropertyStorageState.fieldName} = value;
+                    }
                 }
 
                 public class HostileTypedStore<T> : IHostileTypedStoreSemantic
@@ -6419,6 +6727,32 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 }
             }
 
+            public sealed class AbstractPropertyConsumer : HostileAbstractProperty<int>
+            {
+                private object state;
+
+                public AbstractPropertyConsumer() : base()
+                {
+                    state = 1;
+                }
+
+                public override int $abstractPropertyName
+                {
+                    get { return (int)state + 100; }
+                    set { state = value + 1; }
+                }
+
+                protected override object $abstractGetterSemanticName()
+                {
+                    return state;
+                }
+
+                protected override void $abstractSetterSemanticName(object value)
+                {
+                    state = "semantic:" + value;
+                }
+            }
+
             public static class SnapshotConsumer
             {
                 private static void VerifyVolatileOneState()
@@ -6551,6 +6885,43 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     if (property.$exposedPropertyName != 105 ||
                         !object.Equals(propertySemantic.$exposedGetterCapabilityName(), 5)) return 36;
 
+                    AbstractPropertyConsumer abstractProperty = new AbstractPropertyConsumer();
+                    IHostileAbstractPropertySemantic abstractSemantic = abstractProperty;
+                    abstractSemantic.$abstractSetterCapabilityName(41);
+                    if (abstractProperty.$abstractPropertyName != 142 ||
+                        !object.Equals(abstractSemantic.$abstractGetterCapabilityName(), 42)) return 60;
+                    abstractSemantic.$abstractSetterCapabilityName("wrong");
+                    if (!object.Equals(
+                        abstractSemantic.$abstractGetterCapabilityName(), "semantic:wrong")) return 61;
+                    try
+                    {
+                        int impossible = abstractProperty.$abstractPropertyName;
+                        return 62;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    abstractSemantic.$abstractSetterCapabilityName(4);
+                    if (abstractProperty.$abstractPropertyName != 105 ||
+                        !object.Equals(abstractSemantic.$abstractGetterCapabilityName(), 5)) return 63;
+
+                    HostileAbstractPropertyStorage<int> generatedStorage =
+                        new HostileAbstractPropertyStorage<int>(7);
+                    IHostileAbstractPropertySemantic generatedStorageSemantic = generatedStorage;
+                    generatedStorageSemantic.$abstractSetterCapabilityName("storage-wrong");
+                    if (!object.Equals(
+                        generatedStorageSemantic.$abstractGetterCapabilityName(), "storage-wrong")) return 64;
+                    try
+                    {
+                        int impossible = generatedStorage.$abstractPropertyName;
+                        return 65;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    generatedStorageSemantic.$abstractSetterCapabilityName(8);
+                    if (generatedStorage.$abstractPropertyName != 8) return 66;
+
                     Type definition = typeof(HostileUnsafeStore<>);
                     if (!definition.IsGenericTypeDefinition || definition.GetGenericArguments().Length != 1) return 7;
                     Type ownerParameter = definition.GetGenericArguments()[0];
@@ -6627,6 +6998,75 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         broadProperty.SetMethod == null || !broadProperty.SetMethod.IsVirtual ||
                         broadProperty.SetMethod.Name != "$exposedSetterTypedName") return 37;
 
+                    Type abstractPropertyDefinition = typeof(HostileAbstractProperty<>);
+                    Type abstractOwnerParameter = abstractPropertyDefinition.GetGenericArguments()[0];
+                    if (!abstractPropertyDefinition.IsAbstract || abstractPropertyDefinition.IsSealed ||
+                        abstractPropertyDefinition.GetFields(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly
+                        ).Length != 0) return 67;
+                    System.Reflection.PropertyInfo abstractPropertyInfo =
+                        abstractPropertyDefinition.GetProperty("$abstractPropertyName");
+                    if (abstractPropertyInfo == null ||
+                        abstractPropertyInfo.PropertyType != abstractOwnerParameter ||
+                        abstractPropertyInfo.GetMethod == null ||
+                        abstractPropertyInfo.GetMethod.Name != "$abstractGetterTypedName" ||
+                        !abstractPropertyInfo.GetMethod.IsAbstract ||
+                        abstractPropertyInfo.SetMethod == null ||
+                        abstractPropertyInfo.SetMethod.Name != "$abstractSetterTypedName" ||
+                        !abstractPropertyInfo.SetMethod.IsAbstract) return 68;
+                    System.Reflection.MethodInfo abstractSemanticGetter =
+                        abstractPropertyDefinition.GetMethod(
+                            "$abstractGetterSemanticName",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly
+                        );
+                    System.Reflection.MethodInfo abstractSemanticSetter =
+                        abstractPropertyDefinition.GetMethod(
+                            "$abstractSetterSemanticName",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly
+                        );
+                    if (abstractSemanticGetter == null || !abstractSemanticGetter.IsAbstract ||
+                        !abstractSemanticGetter.IsFamily || abstractSemanticGetter.ReturnType != typeof(object) ||
+                        abstractSemanticSetter == null || !abstractSemanticSetter.IsAbstract ||
+                        !abstractSemanticSetter.IsFamily ||
+                        abstractSemanticSetter.GetParameters().Length != 1 ||
+                        abstractSemanticSetter.GetParameters()[0].ParameterType != typeof(object)) return 69;
+                    System.Reflection.InterfaceMapping abstractMap =
+                        typeof(AbstractPropertyConsumer).GetInterfaceMap(
+                            typeof(IHostileAbstractPropertySemantic));
+                    if (abstractMap.TargetMethods.Length != 2) return 70;
+                    for (int index = 0; index < abstractMap.TargetMethods.Length; index++)
+                    {
+                        System.Reflection.MethodInfo method = abstractMap.TargetMethods[index];
+                        if (!method.IsPrivate || !method.IsVirtual || !method.IsFinal ||
+                            method.DeclaringType != abstractPropertyDefinition.MakeGenericType(typeof(int))) return 71;
+                    }
+                    System.Reflection.FieldInfo[] abstractConsumerFields =
+                        typeof(AbstractPropertyConsumer).GetFields(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly
+                        );
+                    if (abstractConsumerFields.Length != 1 ||
+                        abstractConsumerFields[0].FieldType != typeof(object)) return 72;
+                    Type generatedStorageDefinition = typeof(HostileAbstractPropertyStorage<>);
+                    System.Reflection.FieldInfo[] generatedStorageFields =
+                        generatedStorageDefinition.GetFields(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly
+                        );
+                    if (!generatedStorageDefinition.IsSealed || generatedStorageFields.Length != 1 ||
+                        generatedStorageFields[0].FieldType != typeof(object) ||
+                        generatedStorageDefinition.BaseType == null ||
+                        generatedStorageDefinition.BaseType.GetGenericTypeDefinition() !=
+                            abstractPropertyDefinition) return 73;
+
                     HostileTypedStore<int> typedState = new HostileTypedStore<int>(1);
                     typedState.$typedStorageWriteTypedName(2);
                     if (typedState.$typedStorageReadTypedName() != 2) return 20;
@@ -6699,8 +7139,22 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         )
     }
 
+    val typedOnlyAbstractConsumerSource = directory.resolve("TypedOnlyAbstractPropertyConsumer.cs").apply {
+        writeText(
+            """
+            using KotlinSnapshotPrototype;
+
+            public sealed class TypedOnlyAbstractPropertyConsumer : HostileAbstractProperty<int>
+            {
+                public override int $abstractPropertyName { get; set; }
+            }
+            """.trimIndent()
+        )
+    }
+
     val producer = directory.resolve("SnapshotProducer.dll")
     val consumer = directory.resolve(if (target == DotNetTarget.NET48) "SnapshotConsumer.exe" else "SnapshotConsumer.dll")
+    val typedOnlyAbstractConsumer = directory.resolve("TypedOnlyAbstractPropertyConsumer.dll")
     val compilation = when (target) {
         DotNetTarget.NET48 -> {
             val compiler = checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
@@ -6715,6 +7169,18 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 warningsAsErrors = true,
             )
                 .also { result -> check(result.exitCode == 0) { result.output } }
+            compileFrameworkSnapshotCSharp(
+                compiler,
+                typedOnlyAbstractConsumerSource,
+                typedOnlyAbstractConsumer,
+                references = listOf(producer),
+                executable = false,
+            ).also { result ->
+                check(result.exitCode != 0 && abstractGetterSemanticName in result.output &&
+                        abstractSetterSemanticName in result.output) {
+                    "Framework C# accepted a typed-only abstract broad-property subclass: ${result.output}"
+                }
+            }
             compileFrameworkSnapshotCSharp(compiler, consumerSource, consumer, references = listOf(producer), executable = true)
         }
         DotNetTarget.NET10_0 -> {
@@ -6730,6 +7196,18 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 warningsAsErrors = true,
             )
                 .also { result -> check(result.exitCode == 0) { result.output } }
+            compileModernSnapshotCSharp(
+                toolchain,
+                typedOnlyAbstractConsumerSource,
+                typedOnlyAbstractConsumer,
+                references = listOf(producer),
+                executable = false,
+            ).also { result ->
+                check(result.exitCode != 0 && abstractGetterSemanticName in result.output &&
+                        abstractSetterSemanticName in result.output) {
+                    ".NET 10 C# accepted a typed-only abstract broad-property subclass: ${result.output}"
+                }
+            }
             compileModernSnapshotCSharp(toolchain, consumerSource, consumer, references = listOf(producer), executable = true)
         }
         DotNetTarget.NETSTANDARD_2_0 -> error("The hostile box oracle cannot target netstandard2.0")
@@ -6741,7 +7219,9 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         val sourceRelabeledPrototypes = prototypes.map { prototype ->
             if (!prototype.hasSimpleName("HostileUnsafeStore") &&
                     !prototype.hasSimpleName("HostileUnsafeMid") &&
-                    !prototype.hasSimpleName("HostileTypedStore")) {
+                    !prototype.hasSimpleName("HostileTypedStore") &&
+                    !prototype.hasSimpleName("HostileAbstractProperty") &&
+                    !prototype.hasSimpleName("HostileAbstractPropertyStorage")) {
                 prototype
             } else {
                 prototype.copy(members = prototype.members.mapIndexed { index, member ->
@@ -6808,8 +7288,8 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 14,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 7,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 16,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 10,
         DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY to 1,
     )) {
         "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
@@ -6827,12 +7307,25 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     ))) {
         "The separate hostile corpus did not exercise every external call route: $resolvedCallRoutes"
     }
-    check(resolvedCallRoutes.filter { route -> route.calleeName.contains("exposed") }
+    check(resolvedCallRoutes.filter { route ->
+        route.calleeOwnerName.endsWith("HostileUnsafeStore") && route.calleeName.contains("exposed")
+    }
         .groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
         DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 1,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
     )) {
         "The broad property calls did not split exact and widened routes correctly: $resolvedCallRoutes"
+    }
+    check(resolvedCallRoutes.filter { route ->
+        (route.calleeOwnerName.endsWith("HostileAbstractProperty") ||
+                route.calleeOwnerName.endsWith("HostileAbstractPropertyStorage")) &&
+                route.calleeName.contains("exposed")
+    }.groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 2,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
+    )) {
+        "The abstract broad-property calls did not split exact and widened routes correctly: " +
+                resolvedCallRoutes
     }
     check(resolvedCallRoutes.singleOrNull { route ->
         route.callerName.endsWith("consumerLabelStarUnsafeStore") && route.calleeName == "label"

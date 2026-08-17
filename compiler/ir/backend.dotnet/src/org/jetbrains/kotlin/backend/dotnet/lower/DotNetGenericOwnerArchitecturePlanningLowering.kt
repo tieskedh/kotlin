@@ -313,6 +313,26 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val memberPolicies = members.associateWithTo(linkedMapOf()) { member ->
             member.policyFor(owner)
         }
+        fun IrSimpleFunction.isAbstractBroadPropertyGetter(): Boolean {
+            val property = correspondingPropertySymbol?.owner ?: return false
+            val setter = property.setter ?: return false
+            val declaringOwner = property.parent as? IrClass ?: return false
+            return this == property.getter && modality == Modality.ABSTRACT &&
+                    setter.modality == Modality.ABSTRACT &&
+                    setter.policyFor(declaringOwner) == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY
+        }
+        fun IrSimpleFunction.inheritsSemanticObligation(
+            visiting: Set<IrSimpleFunction> = emptySet(),
+        ): Boolean {
+            if (this in visiting) return false
+            return overriddenSymbols.any { overriddenSymbol ->
+                val overridden = overriddenSymbol.owner
+                val declaringOwner = overridden.parent as? IrClass ?: return@any false
+                overridden.policyFor(declaringOwner) == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY ||
+                        overridden.isAbstractBroadPropertyGetter() ||
+                        overridden.inheritsSemanticObligation(visiting + this)
+            }
+        }
         val conditionalSupertypes = owner.superTypes.filter { superType ->
             superType.hasExplicitNullableParameterOf(owner)
         }
@@ -322,9 +342,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val initializerAccesses = producerInitializerAccesses.mapValuesTo(linkedMapOf()) { entry ->
             entry.value.restrictTo(fields)
         }
-        val semanticEntries = memberPolicies
-            .filterValues { policy -> policy == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY }
-            .keys
+        val semanticEntries = members.filterTo(linkedSetOf()) { member ->
+            memberPolicies.getValue(member) == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY ||
+                    member.inheritsSemanticObligation()
+        }
         val semanticReachableMembers = semanticEntries
             .flatMapTo(linkedSetOf<IrFunction>()) { member -> member.transitiveCalls(directAccesses) + member }
         val memberAccesses = members.associateWithTo(linkedMapOf()) { member ->
@@ -372,6 +393,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             members.filterTo(linkedSetOf()) { member ->
                 member.modality != Modality.FINAL && member.returnType.referencesTypeParameterOf(owner)
             }
+        }
+        val abstractBroadPropertyGetters = members.filterTo(linkedSetOf()) { member ->
+            member.isAbstractBroadPropertyGetter()
         }
         val memberFamilies = members.associateWithTo(linkedMapOf()) { member ->
             val directSuperCalls = mutableListOf<DotNetGenericOwnerDirectSuperCallPlan>()
@@ -428,6 +452,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 if (semanticStateWriteFields.isNotEmpty() && member in openOutputs) {
                     add(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE)
+                }
+                if (member in abstractBroadPropertyGetters) {
+                    add(DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION)
                 }
             }
             val roles = buildSet {

@@ -397,6 +397,28 @@ output hook required above without making C# users build an adapter or own a
 second state object. See
 [`../archive/generic-owner-broad-property-routing-2026-08-17.md`](../archive/generic-owner-broad-property-routing-2026-08-17.md).
 
+Physical-family schema 18 now closes the abstract form rather than silently
+narrowing it to the attractive C# property. For an abstract
+`var exposed: @UnsafeVariance T` on a covariant owner, the public abstract
+`T exposed { get; set; }` and the protected raw getter/setter hooks are all
+real obligations. The base alone owns the two concrete explicit capability
+dispatchers. A concrete C# subclass which supplies only the typed property is
+therefore rejected by both supported C# toolchains; the compiler does not
+invent a raw result or an incompatible setter result on its behalf.
+
+A complete external C# subclass implements the typed property and protected
+hooks over one `object` field. Compatible capability writes observe its typed
+override, incompatible writes observe its semantic override, widened reads
+return the raw state, and typed reads check at the use boundary. A generated
+concrete Kotlin override uses the same shape. The latter exposed an ordering
+bug in the architecture planner: inherited semantic roles were merged after
+typed storage proof. Logical inherited semantic reachability now taints the
+body graph before storage selection, making that field semantic without a
+shadow. Reflection pins the abstract accessor/hook flags, the inherited
+private-final interface map, and the one-field concrete implementations on
+Framework 4.8 and .NET 10. See
+[`../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md`](../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md).
+
 The first repository application census sharpens that distinction. ArrayCopy
 executes 5,664 local owner calls and every one has exact-entry provenance, but
 its source-authored unchecked object-array initialization still requires
