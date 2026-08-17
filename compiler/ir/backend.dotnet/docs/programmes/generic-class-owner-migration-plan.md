@@ -1,6 +1,6 @@
 # Generic class owner migration and rollback plan
 
-- Status: **Draft programme artifact — no production migration authorized**
+- Status: **Checkpoint outcome: no-go for now — no production migration authorized**
 - Date: 2026-08-12
 - Programme:
   [`generic-class-owner-reopening.md`](generic-class-owner-reopening.md)
@@ -12,6 +12,17 @@
 This plan answers when and how the target may move from the accepted erased
 generic-class owner to the candidate real CLR-generic owner without cycling
 through incompatible intermediate ABIs.
+
+The 2026-08-17 atomic checkpoint selected **no-go for now**. Schema 20 closes
+the named hostile representation conditions, but the executable candidate is
+still a generated C# physicalization of a production-inert compiler record,
+not a normal Kotlin-emitted self-describing product. Temporary uncommitted
+global and bounded TypeDef-arity probes confirmed that existing erased-contract
+bodies and bridges cannot be changed after registration: Runtime/Stdlib fail
+across receiver, static, open-nullable, and RTTI seams, while the bounded
+`Box<T>` inheritance cluster reaches an erased-contract covariant-return bridge
+which cannot convert concrete `int32`/`string` to open `!0`. See
+[`../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md`](../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md).
 
 ## Timing decision
 

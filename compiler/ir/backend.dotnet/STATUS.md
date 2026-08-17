@@ -27,6 +27,23 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+- Atomic generic-owner public migration checkpoint: **no-go for now**. The
+  schema-20 hostile and OctoTree candidates prove the CLR representation, but
+  they remain generated C# physicalizations rather than complete Kotlin-
+  emitted DLL/KLIB products. Two temporary, uncommitted rehearsal probes
+  confirmed that changing only TypeDef arity recreates the rejected half-model.
+  A global switch makes Runtime/Stdlib bodies, bridges, statics, open-nullable
+  carriers, and classifier tests disagree with their constructed owners. A
+  bounded `Box<T>` switch reaches normal compilation but then fails where the
+  existing erased-contract covariant-return bridge tries to convert concrete
+  `int32`/`string` to open owner `!0`. Typed/semantic member families must be
+  materialized before bridge lowering, and the self-describing binding epoch,
+  consumers, Runtime, and Stdlib must change in that same tranche. Production
+  Kotlin generic owners therefore remain erased; no per-owner switch or naming
+  annotation is authorized. Reopen only for a complete Kotlin-emitter cutover
+  and inverse-rollback rehearsal. Ordinary language/application development
+  continues without freezing new erased-owner assumptions. See
+  [`docs/archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md`](docs/archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md).
 - Last completed generic-owner migration condition: physical-family schema 20
   now closes exact `TypeDef.BaseType`/`InterfaceImpl` ancestry and its nullable-
   reference metadata. Live IR contributes the complete logical supertype tree.
@@ -58,10 +75,10 @@ verification, and work state.
   product. The four-lane dynamic trace remains exactly 18 exact, 12 semantic-
   capability, 24 erased-owner, and one intentional missing route: 55 producer
   plus 11 unrelated events. Production Kotlin-owned owners remain erased. The
-  remaining gate is the one atomic public-owner migration checkpoint, not
-  another per-owner rollout. The final strict aggregate and explicit freshness
-  rerun cover 190 freshly written XML suites and 2,238 tests with zero
-  failures, errors, or skips. See
+  then-remaining gate was the one atomic public-owner migration checkpoint,
+  whose no-go-for-now outcome is recorded above. The final strict aggregate
+  and explicit freshness rerun cover 190 freshly written XML suites and 2,238
+  tests with zero failures, errors, or skips. See
   [`docs/archive/generic-owner-direct-supertype-metadata-2026-08-17.md`](docs/archive/generic-owner-direct-supertype-metadata-2026-08-17.md).
 - The preceding generic-owner migration condition: physical-family schema 19
   now closes overload/generated-name collisions without sacrificing natural C#
@@ -3137,9 +3154,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    exact `BaseType` and `InterfaceImpl` constructions, generic interface
    TypeDefs, constructor delegation, capability ownership, and their physical
    nullable blobs are producer facts, while bare `T?` ancestry remains an
-   explicit deterministic exclusion. Continue with the one atomic public-owner
-   migration checkpoint across the entire hostile family and representative
-   application evidence, not a per-owner rollout or small performance variant.
+   explicit deterministic exclusion. The atomic checkpoint now records no-go
+   for production cutover until one complete Kotlin-emitter and rollback
+   rehearsal replaces the generated C# physicalizer; do not pursue a per-owner
+   rollout or small performance variant in the meantime.
    Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
    direct paths and never replace the open-world capability. Do not emit a
    production `C<T>` TypeDef or roll out an easy owner before the hostile
