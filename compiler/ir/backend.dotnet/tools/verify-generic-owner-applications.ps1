@@ -303,7 +303,7 @@ function Assert-ApplicationBundle([string]$Directory) {
                 'public class OctoTree<T0>',
                 'private KotlinRepresentativeCandidate.OctoTreeNode<T0> root;', 'private T0 value;',
                 'private readonly KotlinRepresentativeCandidate.OctoTreeNode<T0>[] nodes;',
-                'Kotlin.Runtime.Internal.Intrinsics.AreEqual'
+                'Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<T0>'
             )) {
             if ($candidateProducerSource -notmatch [Regex]::Escape($requiredPhysicalShape)) {
                 throw "The OctoTree candidate lost required physical shape '$requiredPhysicalShape'"
@@ -312,10 +312,16 @@ function Assert-ApplicationBundle([string]$Directory) {
         if ($candidateProducerSource -match 'EqualityComparer\s*<') {
             throw 'The OctoTree candidate replaced Kotlin generic equality with a CLR comparer'
         }
+        if ($candidateProducerSource -match 'Intrinsics\.AreEqual\s*\(') {
+            throw 'The OctoTree candidate retained the two-box object equality fallback'
+        }
         foreach ($sourceText in @($candidateSource, $erasedCSharpSource)) {
             foreach ($requiredShape in @(
                     'octo-tree-typed-path', 'octo-tree-capability-path',
-                    'octo-tree-clusterization', 'octo-tree-rendering', 'workloadVersion=2'
+                    'octo-tree-clusterization', 'octo-tree-rendering', 'workloadVersion=2',
+                    'HostileEquality : IEquatable<HostileEquality>',
+                    'Intrinsics.AreEqualGeneric<HostileEquality>',
+                    'Intrinsics.AreEqualGeneric<double?>'
                 )) {
                 if ($sourceText -notmatch [Regex]::Escape($requiredShape)) {
                     throw "The paired OctoTree application lost required shape '$requiredShape'"

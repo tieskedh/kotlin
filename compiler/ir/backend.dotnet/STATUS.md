@@ -27,7 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed product correction: the large-only audit found that the
+- Last completed product correction: Runtime surface 38 and production
+  structural-equality codegen now provide one exact same-open-`T` generic
+  entry. References, null, Float/Double, and nullable floating types retain
+  the universal object helper; other value types box the right operand and
+  use constrained left-biased `Object.Equals`, never `IEquatable<T>` or a CLR
+  comparer. Mixed physical parameters remain on the object fallback. The
+  emitted generic caller has no `box !!0`. A deliberately conflicting
+  `IEquatable<T>`/`object.Equals` struct, asymmetric reference equality,
+  nullable floating rules, Framework 4.8, JIT, ReadyToRun, full trimming, and
+  real NativeAOT pin the boundary. The corrected OctoTree candidate saves
+  5,861,184 bytes on Framework/JIT/ReadyToRun/trimmed and 11,722,368 on
+  NativeAOT versus its two-box baseline. Aggregate candidate/erased ratios are
+  1.65x Framework, 0.87x JIT, 1.02x ReadyToRun, 0.84x trimmed, and 0.73x
+  NativeAOT; managed allocation excess falls to about 34%, while NativeAOT
+  allocates 11.25% less. Capability allocation and Framework dispatch remain
+  material independent costs, so equality is closed without selecting the
+  owner ABI. Production Kotlin-owned class owners remain erased. The final
+  strict aggregate direct audit covers 190 XML files and 2,238 tests with zero
+  failures, errors, or skips. See
+  [`docs/archive/generic-open-equality-lower-boxing-2026-08-17.md`](docs/archive/generic-open-equality-lower-boxing-2026-08-17.md).
+- The preceding product correction: the large-only audit found that the
   generated OctoTree candidate used CLR `EqualityComparer<T>.Default` for
   ordinary generic Kotlin `==`, while the real backend boxes open `T` and
   calls `Kotlin.Runtime.Internal.Intrinsics.AreEqual(object, object)`. The old
@@ -2891,17 +2911,24 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    Framework costs. That audit found a material ordinary-body defect: the C#
    candidate used `EqualityComparer<T>.Default` instead of Runtime
    `AreEqual(object, object)`. The corrected candidate is now semantically
-   aligned and exposes 72.3%-76.6% excess aggregate allocation. Next, prove or
-   reject one production-used generic Runtime equality helper which reduces
-   boxing while retaining Kotlin signed-zero, NaN, null, left-biased equality,
-   and custom/foreign struct behavior on all five lanes. A CLR comparer or
-   candidate-only shortcut is not admissible. If exact lower-boxing equality
-   is impossible, retain this measured cost and advance the one-state
-   concurrency/memory-model migration condition. Kotlin/Native VTA and Swift SIL
-   remain optional proof engines for private/direct paths and never replace
-   the open-world capability. Do not emit a production `C<T>` TypeDef or roll
-   out an easy owner before the hostile prototype and real-app measurement
-   checkpoint select the one atomic cutover.
+   aligned and exposes 72.3%-76.6% excess aggregate allocation. The bounded
+   production-used equality helper is now closed: exact same-open-`T` calls
+   remove one box without changing Kotlin reference, null, floating, nullable,
+   or hostile struct behavior on any deployment lane. Candidate excess falls
+   to about 34% on managed lanes and becomes an 11.25% NativeAOT saving, but
+   capability dispatch and Framework timing remain independently expensive.
+   Do not pursue small equality variants. Next, close the one-state
+   concurrency/memory-model migration condition: prove that typed entries,
+   semantic capabilities, constructor publication, mutation, and rollback all
+   observe one authoritative field graph under Kotlin's permitted memory
+   semantics on Framework 4.8 and CoreCLR, including multi-threaded hostile
+   readers/writers and failed capability writes. No shadow/copy state, wrapper
+   identity, or representation-dependent synchronization is admissible.
+   Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
+   direct paths and never replace the open-world capability. Do not emit a
+   production `C<T>` TypeDef or roll out an easy owner before the hostile
+   prototype and real-app measurement checkpoint select the one atomic
+   cutover.
 2. Recompute the remaining Common generator/source dependency graph after the
    completed Sequence builder/window, Grouping, open-nullable-array, and signed-
    sorting closures. Choose one complete next family only after separating

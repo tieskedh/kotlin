@@ -3590,6 +3590,72 @@ $propertyAccessorSupportTypesIl
             |    .field [0] public int32 IntValue
             |  }
             |
+            |  // One cache is materialized per constructed T. Structural equality can use a
+            |  // constrained Object.Equals call for non-floating value types: this preserves
+            |  // Kotlin's left-biased object-equality contract while avoiding a receiver box
+            |  // whenever T overrides Object.Equals. References retain the null-safe object
+            |  // helper, and Float/Double (including Nullable<T>) retain Kotlin's canonical-NaN
+            |  // and signed-zero rules instead of inheriting CLR floating Equals semantics.
+            |  .class private abstract sealed auto ansi 'GenericEqualityMode`1'<T>
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    .field assembly static initonly bool 'UseConstrainedValue'
+            |
+            |    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init (
+            |        [0] class ${coreLibraryReference}System.Type 'type',
+            |        [1] class ${coreLibraryReference}System.Type 'underlying'
+            |      )
+            |      ldtoken !0
+            |      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+            |          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+            |      stloc.0
+            |      ldloc.0
+            |      callvirt instance bool ${coreLibraryReference}System.Type::get_IsValueType()
+            |      brfalse.s IL_genericEqualityObject
+            |      ldloc.0
+            |      ldtoken ${coreLibraryReference}System.Single
+            |      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+            |          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+            |      ceq
+            |      brtrue.s IL_genericEqualityObject
+            |      ldloc.0
+            |      ldtoken ${coreLibraryReference}System.Double
+            |      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+            |          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+            |      ceq
+            |      brtrue.s IL_genericEqualityObject
+            |      ldloc.0
+            |      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Nullable::GetUnderlyingType(
+            |          class ${coreLibraryReference}System.Type)
+            |      stloc.1
+            |      ldloc.1
+            |      brfalse.s IL_genericEqualityConstrained
+            |      ldloc.1
+            |      ldtoken ${coreLibraryReference}System.Single
+            |      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+            |          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+            |      ceq
+            |      brtrue.s IL_genericEqualityObject
+            |      ldloc.1
+            |      ldtoken ${coreLibraryReference}System.Double
+            |      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+            |          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+            |      ceq
+            |      brtrue.s IL_genericEqualityObject
+            |IL_genericEqualityConstrained:
+            |      ldc.i4.1
+            |      stsfld bool class Kotlin.Runtime.Internal.'GenericEqualityMode`1'<!0>::'UseConstrainedValue'
+            |      ret
+            |IL_genericEqualityObject:
+            |      ldc.i4.0
+            |      stsfld bool class Kotlin.Runtime.Internal.'GenericEqualityMode`1'<!0>::'UseConstrainedValue'
+            |      ret
+            |    }
+            |  }
+            |
             |  .class public abstract sealed auto ansi beforefieldinit Intrinsics
             |         extends ${coreLibraryReference}System.Object
             |  {
@@ -4351,6 +4417,27 @@ $propertyAccessorSupportTypesIl
             |      ldarg.0
             |      ldarg.1
             |      callvirt instance bool ${coreLibraryReference}System.Object::Equals(object)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static bool 'AreEqualGeneric'<T>(
+            |        !!0 'left', !!0 'right') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldsfld bool class Kotlin.Runtime.Internal.'GenericEqualityMode`1'<!!0>::'UseConstrainedValue'
+            |      brfalse.s IL_genericEqualityFallback
+            |      ldarga.s 'left'
+            |      ldarg.1
+            |      box !!0
+            |      constrained. !!0
+            |      callvirt instance bool ${coreLibraryReference}System.Object::Equals(object)
+            |      ret
+            |IL_genericEqualityFallback:
+            |      ldarg.0
+            |      box !!0
+            |      ldarg.1
+            |      box !!0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
             |      ret
             |    }
             |
@@ -6244,6 +6331,17 @@ $factoryCases
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"AreEqual".toIlIdentifier()}(object, object)"
+
+    /**
+     * The exact open-T equality entry. Runtime caches the constructed T classification and avoids
+     * the receiver box for semantically safe value types while retaining [areEqualCallInstruction]
+     * behavior for references and Kotlin floating equality.
+     */
+    fun areEqualGenericCallInstruction(typeParameter: DotNetIlValueType.TypeParameter): String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"AreEqualGeneric".toIlIdentifier()}<${typeParameter.nameInSignature}>" +
+                "(${typeParameter.nameInSignature}, ${typeParameter.nameInSignature})"
 
     /** Kotlin object-boundary hash semantics, including Boolean, Char, and boxed Double differences. */
     val hashCodeCallInstruction: String =

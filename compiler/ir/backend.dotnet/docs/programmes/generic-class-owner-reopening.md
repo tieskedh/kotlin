@@ -481,6 +481,20 @@ The outer-root product is recorded in
   The schema-13 ordinary-body closure is recorded in
   [`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
 
+The ordinary-body equality correction is now followed by one production-used
+lower-boxing Runtime entry. Exact same-open-`T` structural equality preserves
+reference/null and Kotlin floating behavior through the universal helper, but
+uses constrained left-biased `Object.Equals` for other value types. A hostile
+struct whose `IEquatable<T>` disagrees with `object.Equals` executes in every
+deployment lane. Relative to the corrected two-box candidate this removes
+5,861,184 aggregate bytes on Framework/JIT/ReadyToRun/trimmed and 11,722,368
+on NativeAOT; managed candidate excess falls to about 34%, while NativeAOT now
+allocates 11.25% less than erased. Capability dispatch remains materially
+costly, especially on Framework, so this closes equality rather than selecting
+the owner ABI. The next bounded hostile gate is the one-state concurrency/
+memory-model migration condition. See
+[`../archive/generic-open-equality-lower-boxing-2026-08-17.md`](../archive/generic-open-equality-lower-boxing-2026-08-17.md).
+
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable
 value while reference substitutions do not. Its universal call carrier is

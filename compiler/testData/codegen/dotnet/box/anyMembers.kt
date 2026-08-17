@@ -64,6 +64,14 @@ fun box(): String {
     if (genericRender(missing) != "null") return "fail 16: generic null string"
     if (genericRender(first) != "override") return "fail 17: generic virtual string"
     if (genericString(missing) != "null") return "fail 18: generic member string"
+    if (!genericSame(first, second) || !genericSame(second, first)) {
+        return "fail 18b: generic left-biased virtual equality"
+    }
+    val asymmetric = AnyValue()
+    asymmetric.peer = first
+    if (!genericSame(asymmetric, first) || genericSame(first, asymmetric)) {
+        return "fail 18c: generic asymmetric virtual equality"
+    }
 
     val negativeZero: Any = -0.0
     val positiveZero: Any = 0.0
@@ -90,6 +98,15 @@ fun box(): String {
     val charValue: Any = 'a'
     if (anyHash(charValue) != 97) return "fail 30: boxed Char hash"
     if ('Z'.hashCode() != 90) return "fail 31: direct Char hash"
+    if (genericSame(-0.0, 0.0)) return "fail 31b: generic Double signed-zero equality"
+    if (!genericSame(directNanA, directNanB)) return "fail 31c: generic Double NaN equality"
+    if (genericSame(-0.0 as Double?, 0.0 as Double?)) {
+        return "fail 31d: generic nullable Double signed-zero equality"
+    }
+    val absentInt: Int? = null
+    if (!genericSame(absentInt, absentInt) || !genericSame(37 as Int?, 37 as Int?)) {
+        return "fail 31e: generic nullable value equality"
+    }
 
     val both = Both()
     val left: Left = both

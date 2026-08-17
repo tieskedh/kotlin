@@ -1600,6 +1600,39 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 private const int Extent = 8;
                 private const int PointCount = Extent * Extent * Extent;
 
+                private struct HostileEquality : IEquatable<HostileEquality>
+                {
+                    private readonly int value;
+
+                    public HostileEquality(int value) { this.value = value; }
+
+                    public bool Equals(HostileEquality other) { return false; }
+
+                    public override bool Equals(object other)
+                    {
+                        return other is HostileEquality &&
+                            ((HostileEquality)other).value == value;
+                    }
+
+                    public override int GetHashCode() { return value; }
+                }
+
+                private static void VerifyGenericEqualityRuntime()
+                {
+                    if (!Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<HostileEquality>(
+                            new HostileEquality(42), new HostileEquality(42)) ||
+                            Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<HostileEquality>(
+                                new HostileEquality(42), new HostileEquality(43)))
+                        throw new InvalidOperationException("generic hostile equality");
+                    if (Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<double>(-0.0d, +0.0d) ||
+                            !Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<double>(
+                                double.NaN, double.NaN))
+                        throw new InvalidOperationException("generic floating equality");
+                    if (Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<double?>(-0.0d, +0.0d) ||
+                            !Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<double?>(null, null))
+                        throw new InvalidOperationException("generic nullable equality");
+                }
+
                 private static int Mix(int checksum, int value)
                 {
                     return unchecked(checksum * 31 + value);
@@ -1738,6 +1771,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     int iterations;
                     if (!int.TryParse(arguments[1], out iterations) || iterations < 0)
                         throw new ArgumentException("iterations");
+                    VerifyGenericEqualityRuntime();
                     ExecuteAggregate(1);
                     GC.Collect();
                     GC.WaitForPendingFinalizers();
@@ -1774,6 +1808,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     int iterations;
                     if (!int.TryParse(arguments[2], out iterations) || iterations < 0)
                         throw new ArgumentException("iterations");
+                    VerifyGenericEqualityRuntime();
                     ExecuteRoute(route, 1);
                     GC.Collect();
                     GC.WaitForPendingFinalizers();
@@ -1841,6 +1876,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     #elif GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
                     return RunRoute(arguments);
                     #else
+                    VerifyGenericEqualityRuntime();
                     ExecuteAggregate(1024);
                     ExecuteCapabilityPath(32);
                     ExecuteClusterization(32);
@@ -2172,7 +2208,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         if (leaf != null)
                         {
                             ${branchTypeParameters.single()} oldValue = leaf.${leafReadSlot.physicalMethodName}();
-                            if (Kotlin.Runtime.Internal.Intrinsics.AreEqual(oldValue, value3))
+                            if (Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<${branchTypeParameters.single()}>(
+                                    oldValue, value3))
                             {
                                 return false;
                             }
@@ -2208,7 +2245,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     {
                         $branchLeafType leaf = this.${branchState.physicalFieldName}[index] as $branchLeafType;
                         if (leaf == null ||
-                                !Kotlin.Runtime.Internal.Intrinsics.AreEqual(
+                                !Kotlin.Runtime.Internal.Intrinsics.AreEqualGeneric<${branchTypeParameters.single()}>(
                                     value0, leaf.${leafReadSlot.physicalMethodName}()))
                         {
                             return false;

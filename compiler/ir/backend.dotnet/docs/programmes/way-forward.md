@@ -896,19 +896,22 @@ typed provenance. The separate OctoTree therefore stores its private root as
 non-generic semantic export remains on the same object graph. The exact
 five-lane rerun initially appeared strongly favorable, but the large-only
 audit found that generated C# had replaced Kotlin open-`T` equality with CLR
-`EqualityComparer<T>.Default`. The corrected product now calls the same
-Runtime `AreEqual(object, object)` as production Kotlin and pins signed-zero
-and NaN behavior. Its aggregate candidate/erased ratios are 1.68x Framework,
+`EqualityComparer<T>.Default`. The corrected product first called the same
+Runtime `AreEqual(object, object)` as production Kotlin and pinned signed-zero
+and NaN behavior. Its aggregate candidate/erased ratios were 1.68x Framework,
 0.91x JIT, 1.10x ReadyToRun, 0.92x trimmed, and 0.89x NativeAOT, with
-72.3%-76.6% more allocation. Typed storage/direct calls remain structurally
-valid, but ordinary generic equality boxing is now the dominant measured
-candidate cost. The next bounded foundation must prove or reject a
-production-used generic Runtime equality helper with fewer boxes while
-retaining Kotlin signed-zero, NaN, null, left-biased equality, and conflicting
-custom/foreign `IEquatable<T>` versus `object.Equals` behavior. A CLR comparer
-or candidate-only shortcut is not admissible. If that exact optimization is
-impossible, keep the cost and close the one-state concurrency/memory-model
-migration condition rather than adding an easy-owner pilot.
+72.3%-76.6% more allocation. Runtime surface 38 now supplies the selected
+production-used generic entry: it removes the open-`T` receiver box for
+semantically safe value types while retaining the universal reference, null,
+floating, and nullable-floating path. It invokes constrained left-biased
+`Object.Equals`, not `IEquatable<T>` or a comparer; a deliberately conflicting
+struct runs in all five deployment lanes. Final aggregate candidate/erased
+ratios are 1.65x Framework, 0.87x JIT, 1.02x ReadyToRun, 0.84x trimmed, and
+0.73x NativeAOT. Managed allocation excess falls to about 34%, while
+NativeAOT allocates 11.25% less. Capability allocation and Framework dispatch
+remain material, so equality is closed without selecting the owner ABI. Close
+the one-state concurrency/memory-model migration condition next rather than
+adding an easy-owner pilot or small equality variants.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -944,6 +947,9 @@ The typed private-root proof and five-lane remeasurement are recorded in
 The Kotlin-equality correction and superseding five-lane measurement are
 recorded in
 [`../archive/generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md`](../archive/generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md).
+The production-used lower-boxing equality helper and final five-lane evidence
+are recorded in
+[`../archive/generic-open-equality-lower-boxing-2026-08-17.md`](../archive/generic-open-equality-lower-boxing-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
