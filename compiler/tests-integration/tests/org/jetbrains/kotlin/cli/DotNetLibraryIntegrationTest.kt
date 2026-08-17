@@ -29521,6 +29521,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun boxedHash(value: Any?): Int = value?.hashCode() ?: 0
 
+                public fun <T> genericEquals(left: T, right: T): Boolean = left == right
+
                 public fun render(value: Float): String = value.toString()
 
                 public class FloatBox<T>(public val value: T)
@@ -29545,6 +29547,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "valuetype [netstandard]System.Nullable`1<float32> 'nullable'" in libraryIl
         ) { libraryIl }
         assertTrue("float32 'add'(float32 'left', float32 'right')" in libraryIl) { libraryIl }
+        assertTrue(
+            "call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::" +
+                    "'AreEqualGeneric'<!!0>(!!0, !!0)" in libraryIl
+        ) { libraryIl }
+        val genericEqualsIl = libraryIl
+            .substringAfter(".method public hidebysig static bool 'genericEquals'<'T'>")
+            .substringBefore("\n  }")
+        assertFalse("box !!0" in genericEqualsIl) {
+            genericEqualsIl
+        }
         assertTrue("class 'floatscalarabi.FloatBox' 'boxed'" in libraryIl) { libraryIl }
 
         data class Profile(
@@ -29703,6 +29715,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public static class FloatScalarVerifier
                     {
+                        private struct HostileEquality : IEquatable<HostileEquality>
+                        {
+                            private readonly int value;
+
+                            public HostileEquality(int value) { this.value = value; }
+
+                            public bool Equals(HostileEquality other) { return false; }
+
+                            public override bool Equals(object other)
+                            {
+                                return other is HostileEquality &&
+                                    ((HostileEquality)other).value == value;
+                            }
+
+                            public override int GetHashCode() { return value; }
+                        }
+
                         private static int Bits(float value)
                         {
                             return BitConverter.ToInt32(BitConverter.GetBytes(value), 0);
@@ -29725,8 +29754,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             if (floatscalarabi.floatScalarLibraryKt.boxedHash((object)float.NaN) !=
                                 floatscalarabi.floatScalarLibraryKt.boxedHash((object)PayloadNaN())) return 8;
                             if (floatscalarabi.floatScalarLibraryKt.render(-0.0f) != "-0.0") return 9;
-                            if (floatscalarconsumer.consumerKt.verifyKotlinLibrary() != 42) return 10;
-                            if (floatscalarconsumer.consumerKt.verifyForeign(new FloatApiImpl()) != 42) return 11;
+                            if (!floatscalarabi.floatScalarLibraryKt.genericEquals<HostileEquality>(
+                                    new HostileEquality(42), new HostileEquality(42))) return 10;
+                            if (floatscalarabi.floatScalarLibraryKt.genericEquals<HostileEquality>(
+                                    new HostileEquality(42), new HostileEquality(43))) return 11;
+                            if (floatscalarabi.floatScalarLibraryKt.genericEquals<float>(-0.0f, 0.0f)) return 12;
+                            if (!floatscalarabi.floatScalarLibraryKt.genericEquals<float>(float.NaN, PayloadNaN())) return 13;
+                            if (floatscalarabi.floatScalarLibraryKt.genericEquals<float?>(-0.0f, 0.0f)) return 14;
+                            if (!floatscalarabi.floatScalarLibraryKt.genericEquals<float?>(
+                                    (float?)float.NaN, (float?)PayloadNaN())) return 15;
+                            if (!floatscalarabi.floatScalarLibraryKt.genericEquals<int?>(null, null)) return 16;
+                            if (floatscalarconsumer.consumerKt.verifyKotlinLibrary() != 42) return 17;
+                            if (floatscalarconsumer.consumerKt.verifyForeign(new FloatApiImpl()) != 42) return 18;
                             Console.WriteLine("OK");
                             return 0;
                         }

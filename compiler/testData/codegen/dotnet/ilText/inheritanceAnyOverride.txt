@@ -175,10 +175,8 @@
   {
     .maxstack 2
     ldarg.0
-    box !!0
     ldarg.1
-    box !!0
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqualGeneric'<!!0>(!!0, !!0)
     ret
   }
   .method public hidebysig static string 'genericRender'<'T'>(!!0 'value') cil managed
