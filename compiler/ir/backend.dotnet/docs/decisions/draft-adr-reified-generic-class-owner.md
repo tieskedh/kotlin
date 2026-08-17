@@ -377,7 +377,7 @@ capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
 slot is inferred from the current erased artifact. A production-inert family
-artifact, now at schema 11, makes the first external link objective: it
+  artifact, now at schema 12, makes the first external link objective: it
 fingerprints the exact temporary producer and records logical joins,
 owner/capability paths, arity, disposition, state requirements, complete
 roles/reasons, selected
@@ -446,7 +446,7 @@ initializer, nested type, state, or non-fake member. Inherited fake overrides
 remain inherited. The result drives only the hostile temporary C# oracle and
 does not change production emission.
 
-Runtime roots remain outside producer schema 11. A separate consumer-side
+Runtime roots remain outside producer schema 12. A separate consumer-side
 record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
 open unconstrained owner, capability, and public strict one-`!T` constructor.
 It normalizes an already-nullable value idempotently, returns the semantic
@@ -637,6 +637,19 @@ it. Explicit default null may be omitted only after the planner proves it is
 the CLR object-field default. This remains a production-inert architecture
 record and does not authorize a mixed owner ABI. See
 [`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
+
+Schema 12 fixes the sealed-base mapping before the complete product is built.
+Kotlin `sealed` is not the CLI sealed flag: known subclasses still need a legal
+base edge. The physical base is abstract and its constructors are
+`FamilyAndAssembly` (C# `private protected`), which admits only a derived
+TypeDef in the producer assembly. `Assembly` would unnecessarily admit every
+producer type; `Family` or `FamilyOrAssembly` would admit an external C#
+subclass. A decoded OctoTree record now drives an executable `Node<T>`/`Leaf<T>`
+producer with true `!T` state. A separate C# consumer constructs and reflects
+`Leaf<int>`, while a separate C# subclass must fail compilation on Framework
+4.8 and .NET 10. This is a construction/Leaf-state slice of the candidate, not
+the atomic owner cutover. See
+[`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

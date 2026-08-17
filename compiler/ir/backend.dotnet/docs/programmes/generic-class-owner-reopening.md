@@ -199,7 +199,7 @@ generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
 producer records the overridden logical key. A production-inert family
-artifact, now at schema 11, proves the cross-assembly link: it is fingerprinted
+  artifact, now at schema 12, proves the cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
 slot-domain vectors, and structural signatures for that key. A dispatcher also
@@ -429,10 +429,17 @@ missing paths, projections, unsupported classifiers, and open nullable `T?`
 remain unavailable. A separate OctoTree library proves structural `Node<T>[]`
 and `T` state, while the semantic `root` requirement remains unchanged. The
 hostile candidate fixture consumes the same record instead of hardcoding `T`.
-Schema 11 now serializes and binds the whole recursive owner family while
-remaining production-inert. The next product is the paired record-driven
-candidate and direct C# consumer/subclass. See
+Schema 12 now serializes and binds the whole recursive owner family while
+remaining production-inert. It also fixes Kotlin sealed construction as an
+abstract, non-CLI-sealed base whose constructors are `FamilyAndAssembly`.
+The decoded record drives a bounded real `Node<T>`/`Leaf<T>` product with true
+`T` state: external C# constructs and reflects `Leaf<int>`, while an external
+subclass fails compilation on Framework 4.8 and .NET 10. The next product
+extends this same candidate over Tree/Branch, semantic/member routing, and the
+complete direct C# surface. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
+The sealed-construction checkpoint is recorded in
+[`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable

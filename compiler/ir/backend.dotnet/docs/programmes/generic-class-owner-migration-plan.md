@@ -72,7 +72,7 @@ Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
 consumers retain the overridden producer logical key. The architecture
-artifact, now at schema 11, binds that key to the exact producer-selected
+   artifact, now at schema 12, binds that key to the exact producer-selected
 typed/semantic MethodDef owner/name, dispatch, slot-domain vector, and neutral
 structural signature after complete producer-fingerprint/schema validation.
 Stale, truncated, wrong-producer, duplicate, incomplete, and
@@ -104,7 +104,7 @@ record drives the hostile C# oracle only.
 
 A separate consumer-side construction record now corrects the earlier
 constructor-owned mode model while keeping runtime roots outside producer
-schema 11. The final compilation supplies a finite set of concrete runtime
+schema 12. The final compilation supplies a finite set of concrete runtime
 types; the decoded
 producer supplies the open owner, semantic capability, and strict public
 one-`!T` constructor. The current fallback proof requires an unconstrained
@@ -243,6 +243,17 @@ producer type and MethodDef owner must resolve inside the same recorded owner/
 capability graph; no consumer may repair a missing `Node<T>` or phantom method
 owner. See
 [`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
+
+Schema 12 closes Kotlin sealed generic-owner construction without incorrectly
+marking the base CLI-sealed. Such a base remains abstract and every recorded
+constructor must be `FamilyAndAssembly`: only a derived TypeDef in the producer
+assembly may invoke it. The decoded OctoTree record drives a bounded real C#
+`Node<T>`/`Leaf<T>` producer, retains `Leaf.value` as true `!T`, permits a
+separately compiled C# consumer to construct `Leaf<int>`, and makes an external
+C# subclass fail compilation on Framework 4.8 and .NET 10. This closes one
+hardest inheritance/construction prerequisite; it does not authorize production
+emission or replace the remaining complete OctoTree product gate. See
+[`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,
