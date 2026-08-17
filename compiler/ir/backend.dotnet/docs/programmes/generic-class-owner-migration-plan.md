@@ -255,6 +255,16 @@ hardest inheritance/construction prerequisite; it does not authorize production
 emission or replace the remaining complete OctoTree product gate. See
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
 
+The same decoded product now includes `Branch<T> : Node<T>`, both exact public
+constructors and their base/this edges, and the private true `Node<T>[]` field
+with its fixed length-eight initializer on only the base constructor root. A
+separately compiled C# consumer proves open `Node<T>[]`, closed `Node<int>[]`,
+distinct zeroed vectors, and the populated secondary-constructor behavior on
+both profiles. This removes another product prerequisite without changing
+schema 12 or authorizing production. The next migration proof is its recorded
+Node/Leaf/Branch callable and state-access family. See
+[`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
+
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,
 initializers, nested types, states, non-fake members, secondary constructors, or
