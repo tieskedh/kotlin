@@ -86,6 +86,7 @@ import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.copyTo
@@ -311,10 +312,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             superType.hasExplicitNullableParameterOf(owner)
         }
         val directAccesses = producerAccesses.mapValuesTo(linkedMapOf()) { entry ->
-            entry.value.restrictTo(ownerDependentFields)
+            entry.value.restrictTo(fields)
         }
         val initializerAccesses = producerInitializerAccesses.mapValuesTo(linkedMapOf()) { entry ->
-            entry.value.restrictTo(ownerDependentFields)
+            entry.value.restrictTo(fields)
         }
         val semanticEntries = memberPolicies
             .filterValues { policy -> policy == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY }
@@ -341,10 +342,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
         val directSemanticWriteFields = semanticEntries.flatMapTo(linkedSetOf()) { member ->
             directAccesses.getValue(member).writes
-        }
+        }.filterTo(linkedSetOf()) { field -> field in ownerDependentFields }
         val semanticReachableWriteFields = semanticReachableMembers.flatMapTo(linkedSetOf()) { member ->
             directAccesses.getValue(member).writes
-        }
+        }.filterTo(linkedSetOf()) { field -> field in ownerDependentFields }
         val writeValueProvenances = TypedWriteValueProvenanceAnalyzer(
             owner = owner,
             members = members,
@@ -426,7 +427,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
             val roles = buildSet {
                 add(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
-                if (ownerDependentInputs.isNotEmpty() || hasOwnerDependentOutput) {
+                if (!DescriptorVisibilities.isPrivate(member.visibility) &&
+                        (ownerDependentInputs.isNotEmpty() || hasOwnerDependentOutput)
+                ) {
                     add(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
                 }
                 if (semanticHookReasons.isNotEmpty()) {
@@ -447,10 +450,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 directSuperCallCount = directSuperCalls.size,
                 directSuperCalls = directSuperCalls,
                 maskedDefaultDispatcher = context.defaultArgumentDispatchers[member],
-                logicalBindingKey = context.preLoweringDeclarationKeys[member],
+                logicalBindingKey = context.preLoweringDeclarationKeys[member].takeUnless {
+                    DescriptorVisibilities.isPrivate(member.visibility)
+                },
             )
         }
-        val stateCarriers = ownerDependentFields
+        val stateCarriers = fields
             .associateWithTo(linkedMapOf()) { field ->
                 val directReaders = directAccesses
                     .filterTo(linkedMapOf()) { entry -> field in entry.value.reads }
@@ -480,7 +485,29 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     }
                     .keys
                     .mapTo(linkedSetOf()) { initializer -> initializer.label }
-                val writes = writeValueProvenances.getValue(field)
+                val ownerDependent = field in ownerDependentFields
+                val writes = if (ownerDependent) {
+                    writeValueProvenances.getValue(field)
+                } else {
+                    buildList {
+                        directAccesses.forEach { entry ->
+                            if (field in entry.value.writes) {
+                                add(DotNetGenericOwnerStateWriteProvenancePlan(
+                                    producerName = entry.key.name.asString(),
+                                    provenance = DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+                                ))
+                            }
+                        }
+                        initializerAccesses.forEach { entry ->
+                            if (field in entry.value.writes) {
+                                add(DotNetGenericOwnerStateWriteProvenancePlan(
+                                    producerName = entry.key.label,
+                                    provenance = DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+                                ))
+                            }
+                        }
+                    }.distinctBy { write -> write.producerName }
+                }
                 val hasOnlyProvenTypedWrites = writes.isNotEmpty() && writes.all { write ->
                     write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
                 }
@@ -488,6 +515,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 DotNetGenericOwnerStateCarrierPlan(
                     field = field,
                     requirement = when {
+                        !ownerDependent ->
+                            DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE
                         semanticReachableWriters.isNotEmpty() || field in semanticValueWriteFields ->
                             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
                         externalAccessGraphRequired ->
@@ -1504,6 +1533,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             ?.singleOrNull()
             ?.let { argument -> (argument as? IrConst)?.value as? Int }
         val isDefaultNullReference = expression is IrConst && expression.value == null
+        val isDefaultZeroValue = expression is IrConst && when {
+            field.type.isBoolean() -> expression.value == false
+            field.type.isInt() -> expression.value == 0
+            else -> false
+        }
         val constructorParameter = (expression as? IrGetValue)?.symbol?.owner?.let { parameter ->
             owner.declarations.filterIsInstance<IrConstructor>().mapNotNull { constructor ->
                 constructor.parameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let { index ->
@@ -1522,6 +1556,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             kind = when {
                 fixedElementCount != null ->
                     DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY
+                isDefaultZeroValue ->
+                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_ZERO_VALUE
                 isDefaultNullReference ->
                     DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
                 constructorParameterIndex != null ->

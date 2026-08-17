@@ -869,11 +869,16 @@ one true generic state while exposing the recorded `object`/`System.Array`
 capability carriers. The outer Tree now consumes that family through its
 recorded semantic object root, exact member/capability slots, and compiler-
 census call routes. Exact raw TypeDef/GenericParam/InterfaceImpl/MethodImpl/
-field/method rows and classifier-contextual callable normalization now close
-the whole-family metadata/reflection gate. The next gate does not select
-another owner: it must eliminate bounded scenario-body substitutes by
-composing private non-KLIB helpers, declaration-independent state, and the
-complete original OctoTree algorithms with this same decoded family.
+field/method rows and classifier-contextual callable normalization close the
+whole-family metadata/reflection gate. Schema 13 then projects every direct
+field, records declaration-independent exact carriers and init-only state, and
+adds private-final non-KLIB implementation MethodDefs outside capabilities and
+logical reflection. The same decoded family now executes the complete original
+OctoTree algorithms with real depth/actual state and no bounded scenario-body
+substitute. The next gate is paired representative measurement of this complete
+candidate against the erased production application on Framework 4.8 and every
+required .NET 10 deployment lane, with route-level attribution rather than one
+aggregate ratio.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -898,6 +903,10 @@ The state-access capability product is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 The outer-root product is recorded in
 [`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
+The metadata/reflection product is recorded in
+[`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
+The schema-13 ordinary-body closure is recorded in
+[`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

@@ -199,7 +199,7 @@ generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
 producer records the overridden logical key. A production-inert family
-  artifact, now at schema 12, proves the cross-assembly link: it is fingerprinted
+  artifact, now at schema 13, proves the cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
 slot-domain vectors, and structural signatures for that key. A dispatcher also
@@ -456,9 +456,13 @@ reader over both profile products. Context preserves the hostile derived
 owner's legal sharing of its base capability TypeDef/dispatcher; capability
 types and producer-private methods remain absent from the logical Kotlin view.
 The reader also found and closed missing recorded Leaf/Branch rendering
-MethodDefs that inherited Object rendering had hidden. Next, compose private
-non-KLIB helpers, declaration-independent state, and complete source bodies
-with this same family before paired representative measurement. See
+  MethodDefs that inherited Object rendering had hidden. Schema 13 now composes
+  private non-KLIB helpers, declaration-independent exact/init-only state, and
+  complete source bodies with this same family. The executable product uses the
+  real depth/actual fields and complete recursive algorithms, while the helper
+  remains a private-final MethodDef outside capabilities and logical reflection.
+  The next gate is paired erased-versus-candidate representative measurement on
+  Framework 4.8 and all required .NET 10 deployment lanes. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 The sealed-construction checkpoint is recorded in
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
@@ -472,8 +476,10 @@ The state-access capability product is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 The outer-root product is recorded in
 [`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
-The whole-family metadata/reflection product is recorded in
-[`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
+  The whole-family metadata/reflection product is recorded in
+  [`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
+  The schema-13 ordinary-body closure is recorded in
+  [`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable
@@ -494,8 +500,8 @@ The separate OctoTree `nodes` getter proves typed `Node<T>[]`, capability
 `System.Array`, missing-path rejection, and exact equality with its bound field
 carrier. Same-compilation snapshots without a stable library key remain
 unavailable. Schema 11 serializes only fully bound, atomically closed physical
-records and now includes the complete recursive family. The next product must
-build its paired candidate/C# consumers from that decoded record. See
+records and includes the complete recursive family. The following product gate
+therefore built its paired candidate/C# consumers from that decoded record. See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The physical initializer record is described in
 [`../archive/generic-owner-physical-state-initializers-2026-08-16.md`](../archive/generic-owner-physical-state-initializers-2026-08-16.md).

@@ -377,7 +377,7 @@ capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
 slot is inferred from the current erased artifact. A production-inert family
-  artifact, now at schema 12, makes the first external link objective: it
+  artifact, now at schema 13, makes the first external link objective: it
 fingerprints the exact temporary producer and records logical joins,
 owner/capability paths, arity, disposition, state requirements, complete
 roles/reasons, selected
@@ -446,7 +446,7 @@ initializer, nested type, state, or non-fake member. Inherited fake overrides
 remain inherited. The result drives only the hostile temporary C# oracle and
 does not change production emission.
 
-Runtime roots remain outside producer schema 12. A separate consumer-side
+Runtime roots remain outside the producer artifact. A separate consumer-side
 record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
 open unconstrained owner, capability, and public strict one-`!T` constructor.
 It normalizes an already-nullable value idempotently, returns the semantic
@@ -656,8 +656,9 @@ two public constructors retain the recorded base/this edges, and only the base
 root executes the recorded private `Node<T>[8]` initializer. Direct C# proves
 the open field is `Node<T>[]`, the closed value is `Node<int>[]`, and empty and
 populated constructor behavior share the same typed vector/Leaf state on both
-profiles. The source-body loop remains an explicit bounded scenario oracle;
-all declaration and ABI identities come from the artifact. The typed callable
+profiles. At that checkpoint the source-body loop remained an explicit bounded
+scenario oracle; all declaration and ABI identities came from the artifact.
+The typed callable
 part now emits the recorded abstract `Node.set` plus ordinary non-final virtual
 Leaf/Branch overrides and exact typed identity accessors. Direct C# proves
 base-reference dispatch and same-field mutation. The non-generic strict
@@ -685,9 +686,14 @@ independently compiled `System.Reflection.Metadata` product reads each
 Framework/net10 candidate and exhaustively checks its TypeDef, GenericParam,
 InterfaceImpl, MethodImpl, field, method, signature, and flag rows. It found
 and closed previously omitted Leaf/Branch rendering overrides which inherited
-Object rendering had hidden from the execution oracle. The next product must
-compose the ordinary declaration/body closure, including private non-KLIB
-helpers and declaration-independent state, before representative measurement.
+Object rendering had hidden from the execution oracle. Schema 13 now records
+every declaration-independent field with its exact carrier, initializer,
+access, and init-only contract, plus each ordinary private non-KLIB helper as a
+private-final implementation MethodDef outside capabilities and logical
+reflection. The record-driven product executes the complete recursive OctoTree
+algorithms over its real depth/actual fields. The next product is paired
+representative measurement across Framework 4.8 and every required .NET 10
+deployment lane.
 See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
@@ -700,6 +706,8 @@ The outer-root checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
 The whole-family metadata/reflection checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
+The schema-13 ordinary-body closure is recorded in
+[`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

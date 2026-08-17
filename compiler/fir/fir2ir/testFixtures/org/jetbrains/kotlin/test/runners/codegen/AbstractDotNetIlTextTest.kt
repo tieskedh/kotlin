@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalImplementationMethodRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionMode
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorArgumentMapping
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorDelegationKind
@@ -521,8 +522,49 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     }) {
         "OctoTree.root must retain semantic nullable subtype state: ${tree.states}"
     }
+    check(tree.states.single { state -> state.fieldName == "depth" }.let { depth ->
+        depth.isFinal &&
+                depth.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                depth.exactTypedCarrierType == DotNetGenericOwnerPrototypeTypeSnapshot.int32Type() &&
+                depth.initializers.singleOrNull()?.let { initializer ->
+                    initializer.kind ==
+                            DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER &&
+                            initializer.constructorParameterIndex == 0
+                } == true
+    } && tree.states.single { state -> state.fieldName == "actual" }.let { actual ->
+        !actual.isFinal &&
+                actual.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                actual.exactTypedCarrierType == DotNetGenericOwnerPrototypeTypeSnapshot.booleanType() &&
+                actual.initializers.singleOrNull()?.kind ==
+                DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_ZERO_VALUE
+    } && "actual" in tree.members.single { member -> member.sourceName == "set" }.transitiveStateWriteNames
+    ) {
+        "OctoTree declaration-independent state was omitted or widened: ${tree.states}"
+    }
+    if (tree.logicalBindingKey != null) {
+        check(branch.members.filter { member ->
+            member.logicalBindingKey == null &&
+                    member.physicalVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                    !member.isPropertyAccessor && !member.isFakeOverride
+        }.singleOrNull()?.let { helper ->
+            helper.sourceName == "canClusterize" &&
+                    helper.roles == setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) &&
+                    helper.exactPathUnboundSignatures?.get(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    )?.let { signature ->
+                        signature.returnSlot.type == DotNetGenericOwnerPrototypeTypeSnapshot.booleanType() &&
+                                signature.parameterSlots.singleOrNull()?.type ==
+                                DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)
+                    } == true
+        } == true) {
+            "OctoTree.Branch.canClusterize must remain one private non-KLIB typed helper: ${branch.members}"
+        }
+    }
     check(branch.states.single { state -> state.fieldName == "nodes" }.let { nodes ->
-        nodes.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+        nodes.isFinal &&
+                nodes.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
                 nodes.exactTypedCarrierType == nodeCarrier?.let {
                     DotNetGenericOwnerPrototypeTypeSnapshot.szArray(it)
                 } &&
@@ -544,7 +586,8 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         "OctoTree.Branch.nodes must retain its exact owner-classifier array producer: ${branch.states}"
     }
     check(leaf.states.single { state -> state.fieldName == "value" }.let { value ->
-        value.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+        !value.isFinal &&
+                value.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
                 value.exactTypedCarrierType == DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)
     }) {
         "OctoTree.Leaf.value must retain typed owner state: ${leaf.states}"
@@ -652,13 +695,43 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
                             access.physicalMethod.physicalOwnerPath == treeOwner.physicalOwnerPath
                 } && treeOwner.reflection.callables.none { callable ->
                     callable.physicalMethods.any { method -> method in privateRootMethods }
-                }) {
+        }) {
             "OctoTree.root did not bind to hidden producer-private object state access: $rootState"
         }
+        val depthState = treeOwner.states.single { state -> state.logicalFieldName == "depth" }
+        val actualState = treeOwner.states.single { state -> state.logicalFieldName == "actual" }
+        check(depthState.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                depthState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type() &&
+                depthState.isInitOnly && depthState.initializers.singleOrNull()?.let { initializer ->
+                    initializer.kind ==
+                            DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER &&
+                            initializer.constructorParameterIndex == 0
+                } == true && actualState.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                actualState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
+                !actualState.isInitOnly && actualState.initializers.isEmpty()) {
+            "OctoTree declaration-independent physical state is incomplete: $depthState / $actualState"
+        }
         val branchOwner = decoded.requirePhysicalFamily(checkNotNull(branch.logicalBindingKey))
+        val branchImplementationMethod = branchOwner.implementationMethods.singleOrNull()
+        check(branchImplementationMethod?.let { helper ->
+            helper.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                    helper.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
+                    helper.physicalMethod.signature.returnSlot.type ==
+                    DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
+                    helper.physicalMethod.signature.parameterSlots.singleOrNull()?.type ==
+                    DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
+                    decoded.reflectionCallableForExactPhysicalMethodOrNull(
+                        branchOwner.logicalOwnerKey,
+                        helper.physicalMethod,
+                    ) == null
+        } == true) {
+            "OctoTree.Branch private helper escaped or disappeared: ${branchOwner.implementationMethods}"
+        }
         val nodesState = branchOwner.states.single { state -> state.logicalFieldName == "nodes" }
         val nodesInitializer = nodesState.initializers.single()
-        check(nodesState.physicalType == checkNotNull(branch.states.single { state ->
+        check(nodesState.isInitOnly && nodesState.physicalType == checkNotNull(branch.states.single { state ->
             state.fieldName == "nodes"
         }.exactTypedCarrierType).bindProducerTypes(physicalOwnerPathsByLogicalKey = mapOf(
             checkNotNull(node.logicalBindingKey) to decoded.requirePhysicalFamily(nodeKey).physicalOwnerPath,
@@ -673,7 +746,8 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         }
         val leafOwner = decoded.requirePhysicalFamily(checkNotNull(leaf.logicalBindingKey))
         val leafValueState = leafOwner.states.single { state -> state.logicalFieldName == "value" }
-        check(leafValueState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
+        check(!leafValueState.isInitOnly &&
+                leafValueState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
                 leafValueState.initializers.singleOrNull()?.let { initializer ->
                     initializer.kind ==
                             DotNetGenericOwnerPhysicalStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER &&
@@ -705,6 +779,26 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
             })
         }.isFailure) {
             "The recursive OctoTree family accepted a state/constructor-parameter mismatch"
+        }
+        check(runCatching {
+            artifact.copy(owners = artifact.owners.map { owner ->
+                if (owner.logicalOwnerKey != branchOwner.logicalOwnerKey) {
+                    owner
+                } else {
+                    val occupied = owner.members.first().slots.first()
+                    owner.copy(implementationMethods = listOf(
+                        checkNotNull(branchImplementationMethod).copy(
+                            physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                                occupied.physicalOwnerPath,
+                                occupied.physicalMethodName,
+                                occupied.signature,
+                            ),
+                        ),
+                    ))
+                }
+            })
+        }.isFailure) {
+            "The recursive OctoTree family accepted an implementation/logical MethodDef collision"
         }
         val relabeled = prototypes.map { prototype ->
             if (prototype.ownerName !in expectedOwners.values.map { owner -> owner.ownerName }.toSet()) {
@@ -770,8 +864,9 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
 
 /**
  * Test-owned physicalization of the decoded recursive OctoTree candidate. Physical declaration,
- * signature, inheritance, constructor, and state identities come from the record; the bounded C#
- * bodies remain scenario oracles. Production emission cannot observe this product.
+ * signature, inheritance, constructor, state, and private-helper identities come from the record;
+ * the C# producer implements the complete source algorithms. Production emission cannot observe
+ * this product.
  */
 private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
@@ -863,6 +958,9 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchInitializer = branchState.initializers.single()
     val branchElementType = branchState.physicalType.arguments.singleOrNull()
     val rootState = tree.states.single { state -> state.logicalFieldName == "root" }
+    val depthState = tree.states.single { state -> state.logicalFieldName == "depth" }
+    val actualState = tree.states.single { state -> state.logicalFieldName == "actual" }
+    val branchCanClusterize = branch.implementationMethods.single()
     val rootReadAccess = rootState.accessPaths.single { access ->
         access.operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ
     }
@@ -1352,6 +1450,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchParameters = branchParameterTypes.mapIndexed { index, type -> "$type value$index" }.joinToString(", ")
     val leafStateType = leafState.physicalType.renderSnapshotCSharpType(leafTypeParameters)
     val rootStateType = rootState.physicalType.renderSnapshotCSharpType(treeTypeParameters)
+    val depthStateType = depthState.physicalType.renderSnapshotCSharpType(treeTypeParameters)
+    val actualStateType = actualState.physicalType.renderSnapshotCSharpType(treeTypeParameters)
     val branchStateType = branchState.physicalType.renderSnapshotCSharpType(branchTypeParameters)
     val branchElementTypeName = checkNotNull(branchElementType).renderSnapshotCSharpType(branchTypeParameters)
     val branchLeafType = leafConstructor.constructedOwnerType.renderSnapshotCSharpType(branchTypeParameters)
@@ -1370,6 +1470,10 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val nodeSetReturnType = nodeSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(nodeTypeParameters)
     val leafSetReturnType = leafSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(leafTypeParameters)
     val branchSetReturnType = branchSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(branchTypeParameters)
+    val branchCanClusterizeReturnType = branchCanClusterize.physicalMethod.signature.returnSlot.type
+        .renderSnapshotCSharpType(branchTypeParameters)
+    fun DotNetGenericOwnerPhysicalStateRecord.renderInitOnlyModifier(): String =
+        if (isInitOnly) "readonly " else ""
     val leafReadReturnType = leafReadSlot.signature.returnSlot.type.renderSnapshotCSharpType(leafTypeParameters)
     val branchReadReturnType = branchReadSlot.signature.returnSlot.type.renderSnapshotCSharpType(branchTypeParameters)
     val treeGetCapabilityIdentity = checkNotNull(treeGetCapability.capabilitySlot)
@@ -1462,12 +1566,13 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
 
             public class $treeSimpleName<${treeTypeParameters.joinToString(", ")}> : $treeCapabilityType
             {
-                private $rootStateType ${rootState.physicalFieldName};
-                private readonly int __scenarioDepth;
+                private ${rootState.renderInitOnlyModifier()}$rootStateType ${rootState.physicalFieldName};
+                private ${depthState.renderInitOnlyModifier()}$depthStateType ${depthState.physicalFieldName};
+                private ${actualState.renderInitOnlyModifier()}$actualStateType ${actualState.physicalFieldName};
 
                 ${treeConstructor.visibility.renderVisibility()} $treeSimpleName($treeParameters) : base()
                 {
-                    this.__scenarioDepth = value0;
+                    this.${depthState.physicalFieldName} = value0;
                 }
 
                 private $rootReadReturnType ${rootReadAccess.physicalMethod.physicalMethodName}()
@@ -1484,7 +1589,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
 
                 ${treeDepthSlot.visibility.renderVisibility()} $treeDepthReturnType ${treeDepthSlot.physicalMethodName}()
                 {
-                    return this.__scenarioDepth;
+                    return this.${depthState.physicalFieldName};
                 }
 
                 ${treeGetSlot.visibility.renderVisibility()} $treeGetReturnType ${treeGetSlot.physicalMethodName}(
@@ -1503,7 +1608,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         }
                         $branchCapabilityType branch = ($branchCapabilityType)current;
                         System.Array nodes = branch.${branchReadCapabilityIdentity.physicalMethodName}();
-                        current = nodes.GetValue(ScenarioNumber(value0, value1, value2, --depth));
+                        current = nodes.GetValue(__kotlin_number(value0, value1, value2, --depth));
                     }
                 }
 
@@ -1526,6 +1631,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                             new ${leaf.physicalOwnerPath.joinToString(".")}<${treeTypeParameters.joinToString(", ")}>(value3)
                         );
                     }
+                    this.${actualState.physicalFieldName} = false;
                 }
 
                 ${treeToStringSlot.visibility.renderVisibility()} override $treeToStringReturnType ${treeToStringSlot.physicalMethodName}()
@@ -1550,7 +1656,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     );
                 }
 
-                private static int ScenarioNumber(int x, int y, int z, int depth)
+                internal static int __kotlin_number(int x, int y, int z, int depth)
                 {
                     int mask = 1 << depth;
                     if ((x & mask) != 0)
@@ -1586,7 +1692,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             public sealed class $leafSimpleName<${leafTypeParameters.joinToString(", ")}> :
                 $leafBaseType, $leafCapabilityType
             {
-                private $leafStateType ${leafState.physicalFieldName};
+                private ${leafState.renderInitOnlyModifier()}$leafStateType ${leafState.physicalFieldName};
 
                 ${leafConstructor.visibility.renderVisibility()} $leafSimpleName($leafParameters) : base()
                 {
@@ -1623,7 +1729,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     ${leafSetSlot.renderParameters(leafTypeParameters)}
                 )
                 {
-                    throw new System.InvalidOperationException("set on Leaf element");
+                    throw new System.NotSupportedException("set on Leaf element");
                 }
 
                 $leafCapabilityReturnType $leafCapabilityType.${leafSetCapabilityIdentity.physicalMethodName}(
@@ -1645,7 +1751,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             public sealed class $branchSimpleName<${branchTypeParameters.joinToString(", ")}> :
                 $branchBaseType, $branchCapabilityType
             {
-                private $branchStateType ${branchState.physicalFieldName};
+                private ${branchState.renderInitOnlyModifier()}$branchStateType ${branchState.physicalFieldName};
 
                 ${branchBaseConstructor.visibility.renderVisibility()} $branchSimpleName() : base()
                 {
@@ -1679,8 +1785,70 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     ${branchSetSlot.renderParameters(branchTypeParameters)}
                 )
                 {
-                    this.${branchState.physicalFieldName}[0] = new $branchLeafType(value3);
-                    return value4 == 0;
+                    int branchIndex = $treeSimpleName<${branchTypeParameters.joinToString(", ")}>.__kotlin_number(
+                        value0, value1, value2, value4
+                    );
+                    $branchElementTypeName node = this.${branchState.physicalFieldName}[branchIndex];
+                    if (node == null)
+                    {
+                        if (value4 == 0)
+                        {
+                            this.${branchState.physicalFieldName}[branchIndex] = new $branchLeafType(value3);
+                            return this.${branchCanClusterize.physicalMethod.physicalMethodName}(value3);
+                        }
+                        this.${branchState.physicalFieldName}[branchIndex] =
+                            new ${branch.physicalOwnerPath.joinToString(".")}<${branchTypeParameters.joinToString(", ")}>();
+                    }
+                    else
+                    {
+                        $branchLeafType leaf = node as $branchLeafType;
+                        if (leaf != null)
+                        {
+                            ${branchTypeParameters.single()} oldValue = leaf.${leafReadSlot.physicalMethodName}();
+                            if (System.Collections.Generic.EqualityComparer<${branchTypeParameters.single()}>.Default.Equals(
+                                    oldValue, value3))
+                            {
+                                return false;
+                            }
+                            if (value4 == 0)
+                            {
+                                leaf.${leafWriteSlot.physicalMethodName}(value3);
+                                return this.${branchCanClusterize.physicalMethod.physicalMethodName}(value3);
+                            }
+                            this.${branchState.physicalFieldName}[branchIndex] =
+                                new ${branch.physicalOwnerPath.joinToString(".")}<${branchTypeParameters.joinToString(", ")}>(
+                                    oldValue,
+                                    $treeSimpleName<${branchTypeParameters.joinToString(", ")}>.__kotlin_number(
+                                        value0, value1, value2, value4 - 1
+                                    )
+                                );
+                        }
+                    }
+
+                    if (this.${branchState.physicalFieldName}[branchIndex].${branchSetSlot.physicalMethodName}(
+                            value0, value1, value2, value3, value4 - 1))
+                    {
+                        this.${branchState.physicalFieldName}[branchIndex] = new $branchLeafType(value3);
+                        return this.${branchCanClusterize.physicalMethod.physicalMethodName}(value3);
+                    }
+                    return false;
+                }
+
+                private $branchCanClusterizeReturnType ${branchCanClusterize.physicalMethod.physicalMethodName}(
+                    ${branchCanClusterize.physicalMethod.signature.renderParameters(branchTypeParameters)}
+                )
+                {
+                    for (int index = 0; index < this.${branchState.physicalFieldName}.Length; index++)
+                    {
+                        $branchLeafType leaf = this.${branchState.physicalFieldName}[index] as $branchLeafType;
+                        if (leaf == null ||
+                                !System.Collections.Generic.EqualityComparer<${branchTypeParameters.single()}>.Default.Equals(
+                                    value0, leaf.${leafReadSlot.physicalMethodName}()))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
                 }
 
                 $branchCapabilityReturnType $branchCapabilityType.${branchSetCapabilityIdentity.physicalMethodName}(
@@ -1758,6 +1926,24 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         openRootField.FieldType != typeof(object) ||
                         closedRootField.FieldType != typeof(object) ||
                         closedRootField.GetValue(tree) != null) return 52;
+                FieldInfo openDepthField = treeDefinition.GetField(
+                    ${depthState.physicalFieldName.asCSharpStringLiteral()},
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+                );
+                FieldInfo closedDepthField = tree.GetType().GetField(
+                    ${depthState.physicalFieldName.asCSharpStringLiteral()},
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+                );
+                FieldInfo closedActualField = tree.GetType().GetField(
+                    ${actualState.physicalFieldName.asCSharpStringLiteral()},
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+                );
+                if (openDepthField == null || closedDepthField == null || closedActualField == null ||
+                        openDepthField.FieldType != typeof(int) || !openDepthField.IsInitOnly ||
+                        closedDepthField.FieldType != typeof(int) ||
+                        !object.Equals(closedDepthField.GetValue(tree), 2) ||
+                        closedActualField.FieldType != typeof(bool) || closedActualField.IsInitOnly ||
+                        !object.Equals(closedActualField.GetValue(tree), false)) return 52;
                 MethodInfo rootReader = tree.GetType().GetMethod(
                     ${rootReadAccess.physicalMethod.physicalMethodName.asCSharpStringLiteral()},
                     BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
@@ -1774,8 +1960,10 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 if (tree.${treeDepthSlot.physicalMethodName}() != 2 ||
                         tree.${treeGetSlot.physicalMethodName}(0, 0, 0) != null) return 54;
 
+                closedActualField.SetValue(tree, true);
                 tree.${treeSetSlot.physicalMethodName}(0, 0, 0, 17);
                 if (!object.Equals(tree.${treeGetSlot.physicalMethodName}(0, 0, 0), 17)) return 55;
+                if (!object.Equals(closedActualField.GetValue(tree), false)) return 55;
                 object typedRoot = closedRootField.GetValue(tree);
                 if (typedRoot == null ||
                         typedRoot.GetType() != typeof(${branch.physicalOwnerPath.joinToString(".")}<int>)) return 56;
@@ -1828,6 +2016,43 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         !derivedSetTarget.IsPrivate || !derivedSetTarget.IsVirtual ||
                         !derivedSetTarget.IsFinal) return 63;
 
+                var workloadTree = new ${tree.physicalOwnerPath.joinToString(".")}<int>(2);
+                const int workloadExtent = 8;
+                for (int x = 0; x < workloadExtent; x++)
+                for (int y = 0; y < workloadExtent; y++)
+                for (int z = 0; z < workloadExtent; z++)
+                {
+                    int value = (z + workloadExtent * y + workloadExtent * workloadExtent * x) & 1;
+                    workloadTree.${treeSetSlot.physicalMethodName}(x, y, z, value);
+                }
+                int workloadMatched = 0;
+                for (int x = 0; x < workloadExtent; x++)
+                for (int y = 0; y < workloadExtent; y++)
+                for (int z = 0; z < workloadExtent; z++)
+                {
+                    int expected = (z + workloadExtent * y + workloadExtent * workloadExtent * x) & 1;
+                    if (object.Equals(workloadTree.${treeGetSlot.physicalMethodName}(x, y, z), expected))
+                    {
+                        workloadMatched++;
+                    }
+                }
+                if (workloadMatched != workloadExtent * workloadExtent * workloadExtent ||
+                        string.IsNullOrEmpty(workloadTree.${treeToStringSlot.physicalMethodName}())) return 64;
+
+                var clusteredTree = new ${tree.physicalOwnerPath.joinToString(".")}<int>(1);
+                const int clusteredExtent = 2;
+                for (int x = 0; x < clusteredExtent; x++)
+                for (int y = 0; y < clusteredExtent; y++)
+                for (int z = 0; z < clusteredExtent; z++)
+                {
+                    clusteredTree.${treeSetSlot.physicalMethodName}(x, y, z, 91);
+                }
+                object clusteredRoot = closedRootField.GetValue(clusteredTree);
+                if (clusteredRoot == null ||
+                        clusteredRoot.GetType() != typeof(${leaf.physicalOwnerPath.joinToString(".")}<int>) ||
+                        !object.Equals(clusteredTree.${treeGetSlot.physicalMethodName}(0, 0, 0), 91) ||
+                        !object.Equals(clusteredTree.${treeGetSlot.physicalMethodName}(1, 1, 1), 91)) return 65;
+
                 var leaf = new ${leaf.physicalOwnerPath.joinToString(".")}<int>(42);
                 Type nodeDefinition = typeof($nodeOpenType);
                 ConstructorInfo[] nodeConstructors = nodeDefinition.GetConstructors(
@@ -1859,7 +2084,16 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
                 );
                 if (!branchDefinition.IsSealed || openNodesField == null ||
-                        !openNodesField.FieldType.IsArray) return 5;
+                        !openNodesField.FieldType.IsArray || !openNodesField.IsInitOnly) return 5;
+                MethodInfo canClusterizeMethod = branchDefinition.GetMethod(
+                    ${branchCanClusterize.physicalMethod.physicalMethodName.asCSharpStringLiteral()},
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+                );
+                if (canClusterizeMethod == null || !canClusterizeMethod.IsPrivate ||
+                        canClusterizeMethod.IsVirtual || canClusterizeMethod.ReturnType != typeof(bool) ||
+                        canClusterizeMethod.GetParameters().Length != 1 ||
+                        canClusterizeMethod.GetParameters()[0].ParameterType !=
+                        branchDefinition.GetGenericArguments()[0]) return 5;
                 Type openNodeElement = openNodesField.FieldType.GetElementType();
                 if (openNodeElement == null || !openNodeElement.IsGenericType ||
                         openNodeElement.GetGenericTypeDefinition() != typeof($nodeOpenType) ||
@@ -1900,7 +2134,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 if (!object.ReferenceEquals(getterNodes, filledNodes)) return 14;
 
                 ${node.physicalOwnerPath.joinToString(".")}<int> typedNode = filledBranch;
-                if (!typedNode.${nodeSetSlot.physicalMethodName}(0, 0, 0, 19, 0)) return 15;
+                if (typedNode.${nodeSetSlot.physicalMethodName}(0, 0, 0, 19, 0)) return 15;
                 object replacedNode = filledNodes.GetValue(0);
                 if (replacedNode == null || replacedNode.GetType() != leaf.GetType() ||
                         !object.Equals(closedValueField.GetValue(replacedNode), 19)) return 16;
@@ -1911,20 +2145,20 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     typedNode = leaf;
                     typedNode.${nodeSetSlot.physicalMethodName}(0, 0, 0, 23, 0);
                 }
-                catch (InvalidOperationException)
+                catch (NotSupportedException)
                 {
                     leafThrew = true;
                 }
                 if (!leafThrew) return 17;
 
                 $nodeCapabilityType nodeCapability = filledBranch;
-                if (!nodeCapability.${nodeSetCapabilityIdentity.physicalMethodName}(0, 0, 0, 29, 0)) return 18;
+                if (nodeCapability.${nodeSetCapabilityIdentity.physicalMethodName}(0, 0, 0, 29, 0)) return 18;
                 object nodeCapabilityValue = filledNodes.GetValue(0);
                 if (nodeCapabilityValue == null || nodeCapabilityValue.GetType() != leaf.GetType() ||
                         !object.Equals(closedValueField.GetValue(nodeCapabilityValue), 29)) return 19;
 
                 $branchCapabilityType branchCapability = filledBranch;
-                if (!branchCapability.${branchSetCapabilityIdentity.physicalMethodName}(0, 0, 0, 31, 0)) return 20;
+                if (branchCapability.${branchSetCapabilityIdentity.physicalMethodName}(0, 0, 0, 31, 0)) return 20;
                 object branchCapabilityValue = filledNodes.GetValue(0);
                 if (branchCapabilityValue == null || branchCapabilityValue.GetType() != leaf.GetType() ||
                         !object.Equals(closedValueField.GetValue(branchCapabilityValue), 31)) return 21;
@@ -1948,7 +2182,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 {
                     leafCapability.${leafSetCapabilityIdentity.physicalMethodName}(0, 0, 0, 37, 0);
                 }
-                catch (InvalidOperationException)
+                catch (NotSupportedException)
                 {
                     leafCapabilityThrew = true;
                 }
@@ -2223,11 +2457,24 @@ private fun validateGenericOwnerHardestModelPrototype(
     }
 
     prototypes.singleOrNull { prototype -> prototype.hasSimpleName("WidenedProbe") }?.let { probe ->
-        check(probe.states.singleOrNull()?.let { state ->
-            state.fieldName == "expected" &&
-                    state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        val states = probe.states.associateBy { state -> state.fieldName }
+        val expected = states["expected"]
+        val lastPacket = states["lastPacket"]
+        check(states.keys == setOf("expected", "lastPacket") && expected?.let { state ->
+            state.isFinal &&
+                    state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                    state.exactTypedCarrierType?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER
+        } == true && lastPacket?.let { state ->
+            !state.isFinal &&
+                    state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                    state.exactTypedCarrierType?.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    state.initializers.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_NULL_REFERENCE
         } == true) {
-            "Only owner-dependent expected:T, not lastPacket:Any?, may enter the generic-owner carrier proof: ${probe.states}"
+            "WidenedProbe must separate owner-dependent expected:T from exact lastPacket:Any? state: ${probe.states}"
         }
     }
 
@@ -2905,6 +3152,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                             member.logicalBindingKey != null &&
                             members.any { family -> family.logicalMemberKey == member.logicalBindingKey } &&
                             when (state.requirement) {
+                                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> false
                                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                                     DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles
                                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
@@ -2920,6 +3168,8 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     physicalVisibility = DotNetGenericOwnerPhysicalStateVisibility.PRIVATE,
                     requirement = state.requirement,
                     physicalType = when (state.requirement) {
+                        DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
+                            error("The hostile family does not admit declaration-independent scenario state")
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
@@ -2932,6 +3182,8 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     },
                     initializers = emptyList(),
                     accessPaths = when (state.requirement) {
+                        DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
+                            error("The hostile family does not admit declaration-independent scenario state")
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
                             val writer = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)
                             val reader = stateFamily(DotNetGenericOwnerPhysicalStateAccessOperation.READ)
@@ -2984,6 +3236,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                         -> error("The hostile physical family cannot publish unresolved state access")
                     },
+                    isInitOnly = state.isFinal,
                 )
             },
         )
@@ -3250,6 +3503,36 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 },
             )
         }
+        val implementationMethods = prototype.members.mapNotNull { member ->
+            if (member.logicalBindingKey != null ||
+                    member.physicalVisibility != DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE ||
+                    member.isPropertyAccessor || member.isFakeOverride
+            ) {
+                return@mapNotNull null
+            }
+            check(member.physicalVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                    !member.isAbstract && !member.isOverridable && !member.isFakeOverride &&
+                    member.roles == setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) &&
+                    member.overrideBindings.isEmpty() && member.directSuperCalls.isEmpty() &&
+                    member.exactMaskedDefaultDispatcher == null) {
+                "The OctoTree physical family cannot retain unsupported non-KLIB member '${member.sourceName}'"
+            }
+            val signature = checkNotNull(member.exactPathUnboundSignatures)
+                .getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                .bindProducerTypes(physicalOwnerPathsByLogicalKey)
+            DotNetGenericOwnerPhysicalImplementationMethodRecord(
+                physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    physicalOwnerPath = ownerPath,
+                    physicalMethodName = genericOwnerPrototypePhysicalMethodName(
+                        member,
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    ),
+                    signature = signature,
+                ),
+                visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+                dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            )
+        }
         check(members.map { member -> member.logicalMemberKey }.toSet() ==
                 prototype.members.mapNotNull { member -> member.logicalBindingKey }.toSet()) {
             "The OctoTree physical family omitted a bindable logical member"
@@ -3259,6 +3542,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
         }.map { constructor -> constructor.logicalConstructorKey }.sorted()
         val states = prototype.states.mapIndexed { stateIndex, state ->
             val physicalType = when (state.requirement) {
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
+                    checkNotNull(state.exactTypedCarrierType) {
+                        "The OctoTree declaration-independent state lacks an exact compiler-derived carrier"
+                    }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
@@ -3271,6 +3558,13 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             }
             val initializers = state.initializers.mapNotNull { initializer ->
                 when (initializer.kind) {
+                    DotNetGenericOwnerPrototypeStateInitializerKind.DEFAULT_ZERO_VALUE -> {
+                        check(state.exactTypedCarrierType?.referencesOwnerParameter() == false) {
+                            "The OctoTree default-zero initializer targets owner-dependent state: $state"
+                        }
+                        // CLR fields already contain their zero value before constructor execution.
+                        null
+                    }
                     DotNetGenericOwnerPrototypeStateInitializerKind.FIXED_ZEROED_SZ_ARRAY ->
                         DotNetGenericOwnerPhysicalStateInitializerRecord(
                             kind = DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY,
@@ -3346,6 +3640,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 return candidates.singleOrNull()
             }
             val accessPaths = when (state.requirement) {
+                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> buildList {
+                    logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.READ)?.let(::add)
+                    logicalAccessOrNull(DotNetGenericOwnerPhysicalStateAccessOperation.WRITE)?.let(::add)
+                }
                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
                     check(initializers.isEmpty() && prototype.members.any { member ->
                         state.fieldName in member.transitiveStateReadNames
@@ -3421,6 +3719,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 physicalType = physicalType,
                 initializers = initializers,
                 accessPaths = accessPaths,
+                isInitOnly = state.isFinal,
             )
         }
         DotNetGenericOwnerPhysicalFamilyRecord(
@@ -3452,6 +3751,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             ),
             members = members,
             states = states,
+            implementationMethods = implementationMethods,
         )
     }
     check(owners.map { owner -> owner.logicalOwnerKey }.toSet() == prototypesByLogicalKey.keys) {
@@ -4324,6 +4624,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     }
 
     val stateType = when (state.requirement) {
+        DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
+            error("The hostile physicalizer does not accept declaration-independent scenario state")
         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> "object"
         DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> "T"
         DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED ->
@@ -7934,6 +8236,15 @@ private fun genericOwnerMetadataInspectorSource(
                     ))
                 }
             }
+            owner.implementationMethods.forEach { method ->
+                add(methodExpectation(
+                    method.physicalMethod,
+                    method.visibility.metadataAttribute(),
+                    isAbstract = false,
+                    isVirtual = false,
+                    isFinal = false,
+                ))
+            }
             owner.states.flatMap { state -> state.accessPaths }.filter { access ->
                 access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD
             }.forEach { access ->
@@ -7947,9 +8258,9 @@ private fun genericOwnerMetadataInspectorSource(
             }
             if (owner.logicalOwnerKey == scenarioTreeLogicalOwnerKey) {
                 add(
-                    "new ExpectedMethod(\"ScenarioNumber\", \"System.Int32\", " +
+                    "new ExpectedMethod(\"__kotlin_number\", \"System.Int32\", " +
                             "new string[] { \"System.Int32\", \"System.Int32\", \"System.Int32\", " +
-                            "\"System.Int32\" }, MethodAttributes.Private, true, false, false, false)"
+                            "\"System.Int32\" }, MethodAttributes.Assembly, true, false, false, false)"
                 )
             }
         }
@@ -7960,11 +8271,9 @@ private fun genericOwnerMetadataInspectorSource(
             owner.states.forEach { state ->
                 add(
                     "new ExpectedField(${state.physicalFieldName.csharpLiteral()}, " +
-                            "${state.physicalType.renderMetadataSignatureType().csharpLiteral()}, false)"
+                            "${state.physicalType.renderMetadataSignatureType().csharpLiteral()}, " +
+                            "${state.isInitOnly})"
                 )
-            }
-            if (owner.logicalOwnerKey == scenarioTreeLogicalOwnerKey) {
-                add("new ExpectedField(\"__scenarioDepth\", \"System.Int32\", true)")
             }
         }
         val capabilityPath = checkNotNull(owner.physicalCapabilityOwnerPath)
