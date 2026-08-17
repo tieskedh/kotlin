@@ -571,6 +571,14 @@ fun main(args: Array<String>) {
         family = Family.Iterables,
         signature = "flatMapIndexedTo(destination: C, transform: (index: Int, T) -> Iterable<R>)",
     )
+    val iterableFlatMapIndexedSequence = Mapping.f_flatMapIndexed.singleCommonTemplate(
+        family = Family.Iterables,
+        signature = "flatMapIndexed(transform: (index: Int, T) -> Sequence<R>)",
+    )
+    val iterableFlatMapIndexedSequenceTo = Mapping.f_flatMapIndexedTo.singleCommonTemplate(
+        family = Family.Iterables,
+        signature = "flatMapIndexedTo(destination: C, transform: (index: Int, T) -> Sequence<R>)",
+    )
     val signedArrayOrderingSelections = listOf(
         Ordering.f_reverse selectedFor
                 setOf(Family.InvariantArraysOfObjects, Family.ArraysOfPrimitives),
@@ -706,11 +714,13 @@ fun main(args: Array<String>) {
         Generators.f_minus selectedFor setOf(Family.Iterables),
         Generators.f_minus_array selectedFor setOf(Family.Iterables),
         Generators.f_minus_iterable selectedFor setOf(Family.Iterables),
+        Generators.f_minus_sequence selectedFor setOf(Family.Iterables),
         Generators.f_minusElement selectedFor setOf(Family.Iterables),
         Generators.f_partition selectedFor setOf(Family.Iterables),
         Generators.f_plus selectedFor setOf(Family.Iterables, Family.Collections),
         Generators.f_plus_array selectedFor setOf(Family.Iterables, Family.Collections),
         Generators.f_plus_iterable selectedFor setOf(Family.Iterables, Family.Collections),
+        Generators.f_plus_sequence selectedFor setOf(Family.Iterables, Family.Collections),
         Generators.f_plusElement selectedFor setOf(Family.Iterables, Family.Collections),
         Generators.f_chunked selectedFor setOf(Family.Iterables),
         Generators.f_chunked_transform selectedFor setOf(Family.Iterables),
@@ -724,9 +734,13 @@ fun main(args: Array<String>) {
         Generators.f_zipWithNext_transform selectedFor setOf(Family.Iterables),
         Guards.f_requireNoNulls selectedFor setOf(Family.Iterables, Family.Lists),
         Mapping.f_flatMap selectedFor setOf(Family.Iterables),
+        Mapping.f_flatMapSequence selectedFor setOf(Family.Iterables),
         iterableFlatMapIndexed selectedFor setOf(Family.Iterables),
+        iterableFlatMapIndexedSequence selectedFor setOf(Family.Iterables),
         iterableFlatMapIndexedTo selectedFor setOf(Family.Iterables),
+        iterableFlatMapIndexedSequenceTo selectedFor setOf(Family.Iterables),
         Mapping.f_flatMapTo selectedFor setOf(Family.Iterables),
+        Mapping.f_flatMapToSequence selectedFor setOf(Family.Iterables),
         Mapping.f_groupBy_key selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Mapping.f_groupBy_key_value selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Mapping.f_groupByTo_key selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),

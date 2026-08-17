@@ -1247,6 +1247,19 @@ public inline fun <T, R> Iterable<T>.flatMap(transform: (T) -> Iterable<R>): Lis
 }
 
 /**
+ * Returns a single list of all elements yielded from results of [transform] function being invoked on each element of original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.flatMap
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.jvm.JvmName("flatMapSequence")
+public inline fun <T, R> Iterable<T>.flatMap(transform: (T) -> Sequence<R>): List<R> {
+    return flatMapTo(ArrayList<R>(), transform)
+}
+
+/**
  * Returns a single list of all elements yielded from results of [transform] function being invoked on each element
  * and its index in the original collection.
  *
@@ -1258,6 +1271,21 @@ public inline fun <T, R> Iterable<T>.flatMap(transform: (T) -> Iterable<R>): Lis
 @kotlin.jvm.JvmName("flatMapIndexedIterable")
 @kotlin.internal.InlineOnly
 public inline fun <T, R> Iterable<T>.flatMapIndexed(transform: (index: Int, T) -> Iterable<R>): List<R> {
+    return flatMapIndexedTo(ArrayList<R>(), transform)
+}
+
+/**
+ * Returns a single list of all elements yielded from results of [transform] function being invoked on each element
+ * and its index in the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.flatMapIndexed
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.jvm.JvmName("flatMapIndexedSequence")
+@kotlin.internal.InlineOnly
+public inline fun <T, R> Iterable<T>.flatMapIndexed(transform: (index: Int, T) -> Sequence<R>): List<R> {
     return flatMapIndexedTo(ArrayList<R>(), transform)
 }
 
@@ -1281,10 +1309,45 @@ public inline fun <T, R, C : MutableCollection<in R>> Iterable<T>.flatMapIndexed
 }
 
 /**
+ * Appends all elements yielded from results of [transform] function being invoked on each element
+ * and its index in the original collection, to the given [destination].
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.jvm.JvmName("flatMapIndexedSequenceTo")
+@IgnorableReturnValue
+@kotlin.internal.InlineOnly
+public inline fun <T, R, C : MutableCollection<in R>> Iterable<T>.flatMapIndexedTo(destination: C, transform: (index: Int, T) -> Sequence<R>): C {
+    var index = 0
+    for (element in this) {
+        val list = transform(checkIndexOverflow(index++), element)
+        destination.addAll(list)
+    }
+    return destination
+}
+
+/**
  * Appends all elements yielded from results of [transform] function being invoked on each element of original collection, to the given [destination].
  */
 @IgnorableReturnValue
 public inline fun <T, R, C : MutableCollection<in R>> Iterable<T>.flatMapTo(destination: C, transform: (T) -> Iterable<R>): C {
+    for (element in this) {
+        val list = transform(element)
+        destination.addAll(list)
+    }
+    return destination
+}
+
+/**
+ * Appends all elements yielded from results of [transform] function being invoked on each element of original collection, to the given [destination].
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.jvm.JvmName("flatMapSequenceTo")
+@IgnorableReturnValue
+public inline fun <T, R, C : MutableCollection<in R>> Iterable<T>.flatMapTo(destination: C, transform: (T) -> Sequence<R>): C {
     for (element in this) {
         val list = transform(element)
         destination.addAll(list)
@@ -3599,6 +3662,16 @@ public operator fun <T> Iterable<T>.minus(elements: Iterable<T>): List<T> {
 }
 
 /**
+ * Returns a list containing all elements of the original collection except the elements contained in the given [elements] sequence.
+ */
+public operator fun <T> Iterable<T>.minus(elements: Sequence<T>): List<T> {
+    val other = elements.toList()
+    if (other.isEmpty())
+        return this.toList()
+    return this.filterNot { it in other }
+}
+
+/**
  * Returns a list containing all elements of the original collection without the first occurrence of the given [element].
  */
 @kotlin.internal.InlineOnly
@@ -3733,6 +3806,26 @@ public operator fun <T> Collection<T>.plus(elements: Iterable<T>): List<T> {
         result.addAll(elements)
         return result
     }
+}
+
+/**
+ * Returns a list containing all elements of the original collection and then all elements of the given [elements] sequence.
+ */
+public operator fun <T> Iterable<T>.plus(elements: Sequence<T>): List<T> {
+    val result = ArrayList<T>()
+    result.addAll(this)
+    result.addAll(elements)
+    return result
+}
+
+/**
+ * Returns a list containing all elements of the original collection and then all elements of the given [elements] sequence.
+ */
+public operator fun <T> Collection<T>.plus(elements: Sequence<T>): List<T> {
+    val result = ArrayList<T>(this.size + 10)
+    result.addAll(this)
+    result.addAll(elements)
+    return result
 }
 
 /**

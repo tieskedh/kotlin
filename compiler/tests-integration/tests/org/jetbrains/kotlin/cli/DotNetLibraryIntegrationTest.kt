@@ -34927,6 +34927,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             return 32;
                         if (Kotlin.Sequences.SequencesKt.sumOfInt(sequence) != 3)
                             return 33;
+
+                        object leftObject = Activator.CreateInstance(typeof(Kotlin.Collections.ArrayList));
+                        var add = leftObject.GetType().GetMethod("add", new Type[] { typeof(object) });
+                        if (add == null)
+                            return 34;
+                        add.Invoke(leftObject, new object[] { 1 });
+                        add.Invoke(leftObject, new object[] { 2 });
+                        add.Invoke(leftObject, new object[] { 2 });
+                        add.Invoke(leftObject, new object[] { 3 });
+                        var iterableLeft = (Kotlin.Collections.Iterable)leftObject;
+                        var collectionLeft = (Kotlin.Collections.Collection)leftObject;
+                        object plusIterable = Kotlin.Collections.CollectionsKt.plus<object>(iterableLeft, new ForeignSequence());
+                        object plusCollection = Kotlin.Collections.CollectionsKt.plus<object>(collectionLeft, new ForeignSequence());
+                        object minusIterable = Kotlin.Collections.CollectionsKt.minus<object>(iterableLeft, new ForeignSequence());
+                        var plusIterableGet = plusIterable.GetType().GetMethod("get", new Type[] { typeof(int) });
+                        var plusCollectionGet = plusCollection.GetType().GetMethod("get", new Type[] { typeof(int) });
+                        var minusIterableGet = minusIterable.GetType().GetMethod("get", new Type[] { typeof(int) });
+                        if (plusIterableGet == null || plusCollectionGet == null || minusIterableGet == null)
+                            return 35;
+                        if ((int)plusIterableGet.Invoke(plusIterable, new object[] { 4 }) != 1 ||
+                            (int)plusIterableGet.Invoke(plusIterable, new object[] { 5 }) != 2)
+                            return 36;
+                        if ((int)plusCollectionGet.Invoke(plusCollection, new object[] { 4 }) != 1 ||
+                            (int)plusCollectionGet.Invoke(plusCollection, new object[] { 5 }) != 2)
+                            return 37;
+                        if ((int)minusIterableGet.Invoke(minusIterable, new object[] { 0 }) != 3)
+                            return 38;
                         return 0;
                     }
 
@@ -35084,6 +35111,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(1, sizedListFactoryMethods.count { method -> method.name == "List" })
         assertEquals(1, sizedListFactoryMethods.count { method -> method.name == "MutableList" })
+        val eagerSequenceTransformMethodNames = implementationMetadata.methodDefinitions
+            .filter { method ->
+                method.declaringType == collectionsFacadeType.handle &&
+                        method.name in setOf(
+                            "flatMapSequence",
+                            "flatMapIndexedSequence",
+                            "flatMapIndexedSequenceTo",
+                            "flatMapSequenceTo",
+                        )
+            }
+            .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
+        assertEquals(
+            setOf(
+                "flatMapSequence",
+                "flatMapIndexedSequence",
+                "flatMapIndexedSequenceTo",
+                "flatMapSequenceTo",
+            ),
+            eagerSequenceTransformMethodNames,
+        )
         val sequenceMethodNames = implementationMetadata.methodDefinitions
             .filter { method -> method.declaringType == sequencesFacadeType.handle }
             .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
@@ -35618,9 +35665,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "filterNotTo" to 1,
             "filterTo" to 1,
             "flatMap" to 1,
+            "flatMapSequence" to 1,
             "flatMapIndexed" to 1,
+            "flatMapIndexedSequence" to 1,
             "flatMapIndexedTo" to 1,
+            "flatMapIndexedSequenceTo" to 1,
             "flatMapTo" to 1,
+            "flatMapSequenceTo" to 1,
             "flatten" to 1,
             "getOrElse" to 1,
             "map" to 1,
@@ -35631,11 +35682,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "mapNotNull" to 1,
             "mapNotNullTo" to 1,
             "mapTo" to 1,
-            "minus" to 3,
+            "minus" to 4,
             "minusAssign" to 3,
             "minusElement" to 1,
             "partition" to 1,
-            "plus" to 6,
+            "plus" to 8,
             "plusAssign" to 3,
             "plusElement" to 2,
             "removeAll" to 5,
@@ -37681,6 +37732,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     transform: (List<T>) -> R,
                 ): List<R> = values.chunked(size, transform)
 
+                public fun <T, R> installedFlatMapSequence(
+                    values: Iterable<T>,
+                    transform: (T) -> Sequence<R>,
+                ): List<R> = values.flatMap(transform)
+
+                public fun <T, R> installedFlatMapIndexedSequence(
+                    values: Iterable<T>,
+                    transform: (Int, T) -> Sequence<R>,
+                ): List<R> = values.flatMapIndexed(transform)
+
+                public fun <T, R> installedFlatMapSequenceTo(
+                    values: Iterable<T>,
+                    destination: MutableCollection<in R>,
+                    transform: (T) -> Sequence<R>,
+                ): MutableCollection<in R> = values.flatMapTo(destination, transform)
+
+                public fun <T, R> installedFlatMapIndexedSequenceTo(
+                    values: Iterable<T>,
+                    destination: MutableCollection<in R>,
+                    transform: (Int, T) -> Sequence<R>,
+                ): MutableCollection<in R> = values.flatMapIndexedTo(destination, transform)
+
+                public fun <T> installedIterablePlusSequence(values: Iterable<T>, added: Sequence<T>): List<T> =
+                    values + added
+
+                public fun <T> installedCollectionPlusSequence(values: Collection<T>, added: Sequence<T>): List<T> =
+                    values + added
+
+                public fun <T> installedIterableMinusSequence(values: Iterable<T>, removed: Sequence<T>): List<T> =
+                    values - removed
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -37842,6 +37924,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val installedChunkTransforms = installedChunkedTransform(installedWindowSource, 2) { window ->
                         window[0]
                     }
+                    val installedFlatMap = installedFlatMapSequence(installedWindowSource) { value ->
+                        sequenceOf(value, -value)
+                    }
+                    val installedFlatMapIndexed = installedFlatMapIndexedSequence(installedWindowSource) { index, value ->
+                        sequenceOf(index, value)
+                    }
+                    val installedFlatMapDestination = arrayListOf(99)
+                    val installedFlatMapDestinationResult = installedFlatMapSequenceTo(
+                        installedWindowSource,
+                        installedFlatMapDestination,
+                    ) { value -> sequenceOf(value) }
+                    val installedIndexedDestination = arrayListOf(98)
+                    val installedIndexedDestinationResult = installedFlatMapIndexedSequenceTo(
+                        installedWindowSource,
+                        installedIndexedDestination,
+                    ) { index, value -> sequenceOf(index + value) }
+                    val installedIterablePlus = installedIterablePlusSequence(
+                        installedWindowSource,
+                        sequenceOf(6, 7),
+                    )
+                    val installedCollectionPlus = installedCollectionPlusSequence(
+                        arrayListOf(1, 2),
+                        sequenceOf(3, 4),
+                    )
+                    val installedIterableMinus = installedIterableMinusSequence(
+                        installedWindowSource,
+                        sequenceOf(2, 4),
+                    )
                     val collectionsOk =
                         view[0] == "changed" &&
                             view[1] == "K" &&
@@ -37873,7 +37983,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedWindows == listOf(listOf(1, 2, 3), listOf(3, 4, 5), listOf(5)) &&
                             installedWindowTransforms == listOf(1, 2, 3) &&
                             installedChunks == listOf(listOf(1, 2), listOf(3, 4), listOf(5)) &&
-                            installedChunkTransforms == listOf(1, 3, 5)
+                            installedChunkTransforms == listOf(1, 3, 5) &&
+                            installedFlatMap == listOf(1, -1, 2, -2, 3, -3, 4, -4, 5, -5) &&
+                            installedFlatMapIndexed == listOf(0, 1, 1, 2, 2, 3, 3, 4, 4, 5) &&
+                            installedFlatMapDestinationResult === installedFlatMapDestination &&
+                            installedFlatMapDestination == listOf(99, 1, 2, 3, 4, 5) &&
+                            installedIndexedDestinationResult === installedIndexedDestination &&
+                            installedIndexedDestination == listOf(98, 1, 3, 5, 7, 9) &&
+                            installedIterablePlus == listOf(1, 2, 3, 4, 5, 6, 7) &&
+                            installedCollectionPlus == listOf(1, 2, 3, 4) &&
+                            installedIterableMinus == listOf(1, 3, 5)
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38216,6 +38335,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             "::'chunked'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
+        )
+        for (inlinedName in listOf(
+            "flatMapSequence",
+            "flatMapIndexedSequence",
+            "flatMapIndexedSequenceTo",
+            "flatMapSequenceTo",
+        )) {
+            assertTrue("::'$inlinedName'<" !in il) {
+                "The installed consumer must inline Common $inlinedName rather than call its fallback:\n$il"
+            }
+        }
+        assertTrue(
+            "::'plus'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class " +
+                    "[Kotlin.Stdlib]'Kotlin.Sequences.Sequence')" in il
+        )
+        assertTrue(
+            "::'plus'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Collection', class " +
+                    "[Kotlin.Stdlib]'Kotlin.Sequences.Sequence')" in il
+        )
+        assertTrue(
+            "::'minus'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class " +
+                    "[Kotlin.Stdlib]'Kotlin.Sequences.Sequence')" in il
         )
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
