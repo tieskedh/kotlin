@@ -199,7 +199,7 @@ generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
 producer records the overridden logical key. A production-inert family
-  artifact, now at schema 13, proves the cross-assembly link: it is fingerprinted
+artifact, now at schema 14, proves the cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
 slot-domain vectors, and structural signatures for that key. A dispatcher also
@@ -387,9 +387,10 @@ The scalable collection transport is now closed. The explicitly instrumented
 executable alone receives one private exact-sized primitive counter table and
 private physical recorder/flusher bodies. `Interlocked.Increment` records each
 attempt; an atomic final snapshot prints one line per visited site after
-`box()` returns. Both frontends and both CLR profiles retain the same 49 total,
-40 producer, and nine unrelated hostile events; normal products remain byte-
-identical in all 34 control comparisons. There is no CLI/Runtime/KLIB/
+`box()` returns. At that checkpoint both frontends and both CLR profiles
+retained the same 49 total, 40 producer, and nine unrelated hostile events;
+normal products remained byte-identical in all 34 control comparisons. There
+is no CLI/Runtime/KLIB/
 published ABI. Representative applications must join workers before returning
 and use this only to collect route/state distributions; throughput, allocation,
 startup, and scheduling must be measured in separate uninstrumented products.
@@ -491,9 +492,21 @@ deployment lane. Relative to the corrected two-box candidate this removes
 on NativeAOT; managed candidate excess falls to about 34%, while NativeAOT now
 allocates 11.25% less than erased. Capability dispatch remains materially
 costly, especially on Framework, so this closes equality rather than selecting
-the owner ABI. The next bounded hostile gate is the one-state concurrency/
-memory-model migration condition. See
+the owner ABI. See
 [`../archive/generic-open-equality-lower-boxing-2026-08-17.md`](../archive/generic-open-equality-lower-boxing-2026-08-17.md).
+
+The one-state concurrency/memory-model migration condition is now closed for
+the hostile owner. Schema 14 records plain/volatile semantics and constructor
+input conversion for every state. Its ordinary `stored: T` remains a physical
+`T` field, while owner-dependent volatile `published: T` becomes one volatile
+`object` field because unconstrained `T` is not a reference-safe CLR volatile
+carrier. Typed construction and writes widen/box into that same field; typed
+reads check/cast or unbox from it. Semantic-capability access shares the field,
+and an incompatible write fails before mutation. Separate consumers exercise
+multi-threaded typed/capability handoff on Framework 4.8 and CoreCLR. This
+closes a migration condition, not the public concurrency API or production
+owner cutover. See
+[`../archive/generic-owner-one-state-memory-model-2026-08-17.md`](../archive/generic-owner-one-state-memory-model-2026-08-17.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable

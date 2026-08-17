@@ -100,6 +100,10 @@ public open class HostileUnsafeStore<out T>(initial: T) {
 public open class HostileTypedStore<T>(initial: T) {
     private var stored: T = initial
 
+    @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
+    @kotlin.concurrent.Volatile
+    private var published: T = initial
+
     @Suppress("UNCHECKED_CAST")
     private fun installBoxed(candidate: Any?) {
         stored = candidate as T
@@ -110,6 +114,12 @@ public open class HostileTypedStore<T>(initial: T) {
     }
 
     public open fun read(): T = stored
+
+    public open fun publish(next: T) {
+        published = next
+    }
+
+    public open fun observe(): T = published
 }
 
 public fun readInvariantTypedStore(store: HostileTypedStore<String>): String = store.read()
@@ -278,8 +288,9 @@ fun box(): String {
 
     val typedStore = HostileTypedStore("before")
     typedStore.write("after")
+    typedStore.publish("published")
     val typedStoreRoutes = TypedStoreRouteHolder(typedStore, typedStore)
-    if (typedStore.read() != "after" ||
+    if (typedStore.read() != "after" || typedStore.observe() != "published" ||
         readInvariantTypedStore(typedStore) != "after" ||
         readStarTypedStore(typedStore) != "after" ||
         readMergedTypedStore(false, typedStore, typedStore) != "after" ||
