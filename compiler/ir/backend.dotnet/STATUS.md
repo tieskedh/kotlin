@@ -27,7 +27,34 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed generic-owner migration condition: physical-family schema 17
+- Last completed generic-owner migration condition: physical-family schema 18
+  now closes abstract broad-property obligations across Kotlin and foreign C#
+  subclasses. A new hostile `HostileAbstractProperty<out T>.exposed` has no
+  body or state from which the old planner could infer a raw getter. Its
+  abstract broad setter now induces an explicit
+  `ABSTRACT_BROAD_PROPERTY_OBLIGATION` on the paired getter. Both typed
+  PropertyDef accessors and both protected semantic hooks remain abstract,
+  while the two explicit capability dispatchers remain private/final concrete
+  methods on the base. Roslyn rejects a typed-property-only concrete C#
+  subclass on Framework 4.8 and .NET 10; a complete subclass implements both
+  domains and preserves compatible typed overrides, incompatible semantic
+  writes, raw reads, delayed typed failure, and recovery with one `object`
+  field. This gate exposed and fixes a real planner ordering defect: a concrete
+  Kotlin override inherited the semantic methods only after its field had
+  already been classified as typed. Inherited logical semantic obligations
+  now taint the complete local call/field graph before storage selection, so
+  the concrete override records one semantic field and no typed shadow.
+  Schema validation rejects half-abstract or falsely concrete obligation
+  families, and the hostile census changes by exactly two exact and three
+  semantic property calls with no new missing capability. The focused
+  ordinary/separate/recursive PSI/LightTree x profile matrix covers 12
+  products with zero failures, errors, or skips. Production Kotlin-owned
+  generic owners remain erased; overload/name collisions, base/interface
+  nullable transforms, and the atomic ABI migration remain open. The final
+  strict aggregate exited successfully; the direct XML audit covers 187
+  suites and 2,107 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md`](docs/archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md).
+- The preceding generic-owner migration condition: physical-family schema 17
   now records complete semantic routing for direct CLR properties whose Kotlin
   domain is broader than their natural C# type. The hostile covariant
   `HostileUnsafeStore<out T>.exposed` remains one `object` state carrier:
@@ -3032,8 +3059,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    17 closes broad property routing: compatible capability writes observe the
    typed C# property override, incompatible writes retain the semantic hook,
    raw reads retain semantic state, and a later typed read checks at its true
-   use boundary. Continue only with the next complete hostile migration
-   condition, not a per-owner rollout or small performance variant.
+   use boundary. Schema 18 then closes the abstract form: both typed accessors
+   and protected semantic hooks remain obligations, and inherited logical
+   semantic reachability selects one object state before physical storage is
+   chosen. Continue only with the next complete hostile migration condition,
+   not a per-owner rollout or small performance variant.
    Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
    direct paths and never replace the open-world capability. Do not emit a
    production `C<T>` TypeDef or roll out an easy owner before the hostile

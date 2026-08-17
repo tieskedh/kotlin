@@ -110,6 +110,20 @@ private open class HostileUnsafeStore<out T>(initial: T) {
     open fun label(prefix: String = "default"): String = prefix
 }
 
+private abstract class HostileAbstractProperty<out T> {
+    abstract var exposed: @UnsafeVariance T
+}
+
+private class HostileAbstractPropertyStorage<T>(initial: T) : HostileAbstractProperty<T>() {
+    private var stored: T = initial
+
+    override var exposed: T
+        get() = stored
+        set(value) {
+            stored = value
+        }
+}
+
 // A cast-shaped helper is not automatically unsafe. This producer graph accepts only exact T at
 // its public boundary, widens the local alias to Any?, and narrows it again before the write. The
 // physical provenance proof must follow the value through that chain instead of trusting or
@@ -229,6 +243,20 @@ fun box(): String {
     }
     if (runCatching { broadPropertyOwner.exposed }.exceptionOrNull() !is ClassCastException) {
         return fail("widened property delayed typed failure")
+    }
+
+    val abstractPropertyOwner = HostileAbstractPropertyStorage(17)
+    val abstractPropertyView: HostileAbstractProperty<Any?> = abstractPropertyOwner
+    abstractPropertyView.exposed = "abstract-property-widened"
+    if (abstractPropertyView.exposed != "abstract-property-widened") {
+        return fail("abstract widened property semantic state")
+    }
+    if (runCatching { abstractPropertyOwner.exposed }.exceptionOrNull() !is ClassCastException) {
+        return fail("abstract widened property delayed typed failure")
+    }
+    abstractPropertyView.exposed = 18
+    if (abstractPropertyOwner.exposed != 18) {
+        return fail("abstract widened property recovery")
     }
 
     val nullableDerivedInt = HostileNullableIntLeaf(null)
