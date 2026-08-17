@@ -162,6 +162,17 @@ private open class HostileTypedStore<T>(initial: T) {
     open fun observe(): T = published
 }
 
+// Unlike the bare T? base in HostileNullableDerived, these nested nullable references have one
+// metadata-fixed CLR carrier for every T. The future TypeDef must preserve their complete
+// BaseType and InterfaceImpl nullable transforms rather than flattening either edge to a name.
+private interface HostileNullableMarker<T>
+
+private open class HostileNullableReferenceBase<T>
+
+private class HostileNullableReferenceDerived<T> :
+    HostileNullableReferenceBase<HostileTypedStore<T>?>(),
+    HostileNullableMarker<HostileAbstractPropertyStorage<T>?>
+
 private fun readInvariantTypedStore(store: HostileTypedStore<String>): String = store.read()
 
 private fun readStarTypedStore(store: HostileTypedStore<*>): Any? = store.read()
@@ -334,6 +345,14 @@ fun box(): String {
     }
 
     val typedStore = HostileTypedStore("before")
+    val nullableReferenceDerived = HostileNullableReferenceDerived<String>()
+    val nullableReferenceBase: HostileNullableReferenceBase<HostileTypedStore<String>?> =
+        nullableReferenceDerived
+    val nullableReferenceMarker: HostileNullableMarker<HostileAbstractPropertyStorage<String>?> =
+        nullableReferenceDerived
+    if (nullableReferenceBase as Any !== nullableReferenceMarker as Any) {
+        return fail("nested nullable base/interface identity")
+    }
     typedStore.write("after")
     typedStore.publish("published")
     val typedStoreRoutes = TypedStoreRouteHolder(typedStore, typedStore)
