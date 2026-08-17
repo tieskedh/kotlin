@@ -625,9 +625,17 @@ See the
   semantic field write is not proof of typed storage. The architecture planner
   must build one module-wide producer graph over functions, constructors,
   delegating/function calls, field initializers, and anonymous initializers,
-  then project every owner-dependent field from it. Private helpers are strict
-  implementation nodes, not independent widened entries; reachability from an
-  exposed semantic body taints their writes. A private field may be marked
+  then project every direct field of the generic owner from it. Only fields
+  whose carrier references an owner parameter participate in generic semantic
+  taint and typed-write admission; declaration-independent fields retain their
+  exact non-owner carrier, initialization, and init-only contract. Private
+  helpers are strict implementation nodes, not independent widened entries;
+  reachability from an exposed semantic body taints their writes. A private
+  declaration never acquires a logical KLIB binding merely because producer
+  and consumer are compiled together. A private property accessor or fake
+  override may be optimized away, but every ordinary private helper reached by
+  an admitted body must have an exact private-final implementation MethodDef;
+  it is absent from capability dispatch and logical reflection. A private field may be marked
   producer-typed only after that complete graph, while any externally
   accessible field retains an explicit cross-assembly obligation. Absence of
   semantic reachability is still not typed-value proof. Trace every actual
@@ -646,11 +654,14 @@ See the
   retain a producer logical-member binding requirement and block admission
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
-  channel now has a version-7, producer-fingerprinted physical-family artifact
+  channel has one versioned, producer-fingerprinted physical-family artifact,
+  currently schema 13,
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
-  and neutral structural method/type expressions. A capability dispatcher must
+  neutral structural method/type expressions, declaration-independent state,
+  init-only flags, and producer-private ordinary implementation MethodDefs. A
+  capability dispatcher must
   name the exact non-generic interface MethodDef it implements and carry the
   same signature; nested `!T`/`!!T`, named generic instances, and SZ arrays are
   recursive records, never emitter strings. Decode and validate the
@@ -780,7 +791,7 @@ See the
   emission remains erased.
   Open-nullable runtime construction is consumer/application knowledge, not a
   property of a producer constructor MethodDef. Keep final-compilation roots
-  out of the version-7 producer artifact. A separate production-inert
+  out of the versioned producer artifact. A separate production-inert
   construction plan may accept a finite, duplicate-free set of concrete
   runtime types and derive exact `C<P(T?)>` routes only from the decoded
   unconstrained one-parameter producer owner, capability, and public
