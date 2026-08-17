@@ -138,8 +138,8 @@ function Read-CallRouteManifest([string]$Path, [string]$Kind) {
     $expectedCounts = if ($Kind -eq 'hostile') {
         [ordered]@{
             PRODUCER_ERASED_OWNER = 24
-            EXACT_TYPED_ENTRY = 13
-            SEMANTIC_CAPABILITY = 4
+            EXACT_TYPED_ENTRY = 18
+            SEMANTIC_CAPABILITY = 12
             MISSING_CAPABILITY = 1
         }
     } else {
