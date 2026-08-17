@@ -651,6 +651,17 @@ producer with true `!T` state. A separate C# consumer constructs and reflects
 the atomic owner cutover. See
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
 
+That decoded product now also physicalizes final `Branch<T> : Node<T>`. Its
+two public constructors retain the recorded base/this edges, and only the base
+root executes the recorded private `Node<T>[8]` initializer. Direct C# proves
+the open field is `Node<T>[]`, the closed value is `Node<int>[]`, and empty and
+populated constructor behavior share the same typed vector/Leaf state on both
+profiles. The source-body loop remains an explicit bounded scenario oracle;
+all declaration and ABI identities come from the artifact. Callable families
+and outer Tree semantic routes remain required before this is a complete
+candidate. See
+[`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override
