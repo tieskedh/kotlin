@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-state-capabilities-2026-08-17.md`](generic-owner-octo-tree-state-capabilities-2026-08-17.md)
+  records the Leaf object-boundary read/write and Branch `System.Array` read
+  capabilities over the same true generic state, incompatible pre-mutation
+  failure, array identity, and private/final interface maps.
 - [`generic-owner-octo-tree-strict-capability-2026-08-17.md`](generic-owner-octo-tree-strict-capability-2026-08-17.md)
   records the strict set non-generic interface slots, object-to-`!T` explicit
   dispatchers, most-derived C# override routing, incompatible pre-mutation

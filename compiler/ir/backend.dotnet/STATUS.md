@@ -28,6 +28,24 @@ verification, and work state.
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Last completed product slice: the schema-12 decoded OctoTree candidate now
+  materializes the recorded state-access capability families over its one
+  physical generic state. Leaf's non-generic capability reads and writes the
+  same private `!T` field through `object`; its explicit write dispatcher
+  casts/unboxes before invoking the typed writer. Branch's capability returns
+  the same private `Node<T>[]` through `System.Array`, without copying or
+  wrapping. Separately compiled C# proves Leaf value boxing at only the
+  capability boundary, an incompatible string fails before mutation, and the
+  Branch capability/typed getter/reflected field all expose the identical
+  `Node<int>[]` object. Interface maps prove the three new targets are
+  private/virtual/final on their closed Leaf or Branch TypeDefs. The focused
+  hostile-plus-OctoTree PSI/LightTree x Framework 4.8/.NET 10 same/separate-
+  compilation matrix covers 16 tests with zero failures, errors, or skips.
+  Production owners/emission, DLL/KLIB, Runtime, Common semantics, and the
+  public C# surface remain unchanged. The final warm-cache strict aggregate
+  completed in 626.2 seconds; direct audit covers 190 XML files and 2,238
+  tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](docs/archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
+- The preceding product slice: the schema-12 decoded OctoTree candidate now
   completes the strict `Node.set` family with each owner's recorded
   non-generic capability interface and private-final explicit dispatcher. The
   capability signature uses `object` only for the strict owner input; each
@@ -2717,9 +2735,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    state accessors are also executable through direct C# base dispatch. The
    strict set capability interfaces and private-final object-to-`!T`
    dispatchers now preserve that most-derived override path and fail before
-   incompatible mutation. Next, add the Leaf/Branch state-access capabilities,
-   then extend the same product over Tree's semantic root, actual calls, and
-   the complete direct C# surface rather than starting a second representation.
+   incompatible mutation. Leaf's state capability now reads/writes the same
+   true `T` field through `object`, while Branch's state capability returns the
+   same `Node<T>[]` through `System.Array`. Next, extend the same product over
+   Tree's semantic root, actual calls, and the complete direct C# surface
+   rather than starting a second representation.
    Include
    actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak

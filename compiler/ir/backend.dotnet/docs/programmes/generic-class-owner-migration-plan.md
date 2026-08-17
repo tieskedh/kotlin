@@ -267,13 +267,19 @@ on final TypeDefs, and the recorded typed identity accessors. Direct C# proves
 base-reference dispatch and same-field mutation. The matching non-generic
 strict capability interfaces and private-final object-to-`!T` dispatchers now
 prove inherited and owner-specific routes reach the same most-derived override;
-incompatible input fails before mutation. The next migration proof is the
-Leaf/Branch state-access capability family. See
+incompatible input fails before mutation. The matching Leaf state capability
+now reads/writes the same true `T` field through `object`, and the Branch state
+capability returns the same `Node<T>[]` reference through `System.Array`.
+Direct C# proves incompatible pre-mutation failure and private/final
+interface-map targets. The next migration proof is the outer Tree semantic
+root and its actual call routes. See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
 The strict capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
+The state-access capability checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,

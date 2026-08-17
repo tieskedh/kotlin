@@ -803,8 +803,12 @@ reference dispatch and field identity. The strict family now also emits each
 recorded non-generic capability interface and private-final object-to-`!T`
 dispatcher. Direct C# proves inherited and owner-specific routes reach Branch's
 most-derived typed override, while incompatible input fails before state
-mutation. The next gate adds the Leaf/Branch state-access capability slots,
-followed by the outer Tree semantic root/calls and complete direct C# surface.
+mutation. The Leaf state capability now reads/writes the same true `T` field
+through `object`, and the Branch state capability returns the same `Node<T>[]`
+through `System.Array`. Direct C# proves boxing only at the Leaf object boundary,
+incompatible pre-mutation failure, vector identity, and private/final
+interface-map targets. The next gate adds the outer Tree semantic root/calls
+and complete direct C# surface.
 See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
@@ -850,7 +854,9 @@ slice now consumes the exact abstract/override MethodDefs and typed identity
 state accessors; final child TypeDefs retain the recorded non-final virtual
 overrides. The matching strict capability interfaces and private-final
 dispatchers now preserve most-derived typed override routing with an object
-input carrier. The next gate physicalizes the state-access capability slots
+input carrier. The matching Leaf/Branch state-access dispatchers now preserve
+one true generic state while exposing the recorded `object`/`System.Array`
+capability carriers. The next gate physicalizes the outer Tree semantic root
 rather than selecting another owner.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
@@ -872,6 +878,8 @@ The typed callable product is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
 The strict capability product is recorded in
 [`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
+The state-access capability product is recorded in
+[`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

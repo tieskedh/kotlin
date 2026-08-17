@@ -829,23 +829,27 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     ): DotNetGenericOwnerPhysicalMemberSlotRecord = member.slots.single { slot ->
         slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
     }
-    fun stateAccessSlot(
+    fun stateAccessMemberAndSlot(
         owner: DotNetGenericOwnerPhysicalFamilyRecord,
         state: DotNetGenericOwnerPhysicalStateRecord,
         operation: DotNetGenericOwnerPhysicalStateAccessOperation,
-    ): DotNetGenericOwnerPhysicalMemberSlotRecord {
+    ): Pair<DotNetGenericOwnerPhysicalMemberFamilyRecord, DotNetGenericOwnerPhysicalMemberSlotRecord> {
         val access = state.accessPaths.single { candidate -> candidate.operation == operation }
         check(access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.LOGICAL_MEMBER_FAMILY &&
                 access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
                 access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
             "The OctoTree candidate state access is not a typed logical identity path: $access"
         }
-        return owner.members.flatMap { member -> member.slots }.single { slot ->
-            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
-                    slot.physicalOwnerPath == access.physicalMethod.physicalOwnerPath &&
-                    slot.physicalMethodName == access.physicalMethod.physicalMethodName &&
-                    slot.signature == access.physicalMethod.signature
+        val member = owner.members.single { candidate ->
+            candidate.logicalMemberKey == access.logicalMemberKey
         }
+        val slot = member.slots.single { candidate ->
+            candidate.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                    candidate.physicalOwnerPath == access.physicalMethod.physicalOwnerPath &&
+                    candidate.physicalMethodName == access.physicalMethod.physicalMethodName &&
+                    candidate.signature == access.physicalMethod.signature
+        }
+        return member to slot
     }
     val nodeSetMember = physicalMember(node, nodePrototype, "set")
     val leafSetMember = physicalMember(leaf, leafPrototype, "set")
@@ -856,15 +860,24 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val nodeSetCapability = capabilitySlot(nodeSetMember)
     val leafSetCapability = capabilitySlot(leafSetMember)
     val branchSetCapability = capabilitySlot(branchSetMember)
-    val leafReadSlot = stateAccessSlot(
+    val leafReadAccess = stateAccessMemberAndSlot(
         leaf, leafState, DotNetGenericOwnerPhysicalStateAccessOperation.READ,
     )
-    val leafWriteSlot = stateAccessSlot(
+    val leafWriteAccess = stateAccessMemberAndSlot(
         leaf, leafState, DotNetGenericOwnerPhysicalStateAccessOperation.WRITE,
     )
-    val branchReadSlot = stateAccessSlot(
+    val branchReadAccess = stateAccessMemberAndSlot(
         branch, branchState, DotNetGenericOwnerPhysicalStateAccessOperation.READ,
     )
+    val leafReadMember = leafReadAccess.first
+    val leafReadSlot = leafReadAccess.second
+    val leafWriteMember = leafWriteAccess.first
+    val leafWriteSlot = leafWriteAccess.second
+    val branchReadMember = branchReadAccess.first
+    val branchReadSlot = branchReadAccess.second
+    val leafReadCapability = capabilitySlot(leafReadMember)
+    val leafWriteCapability = capabilitySlot(leafWriteMember)
+    val branchReadCapability = capabilitySlot(branchReadMember)
     val nodeTypeParameters = List(node.genericArity) { index -> "T$index" }
     val leafTypeParameters = List(leaf.genericArity) { index -> "T$index" }
     val branchTypeParameters = List(branch.genericArity) { index -> "T$index" }
@@ -991,6 +1004,47 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             branchReadSlot.signature.returnSlot.type == branchState.physicalType) {
         "The OctoTree candidate state accessors lost their exact recorded carriers"
     }
+    val systemArrayType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+        typePath = listOf("System", "Array"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+    )
+    check(leafReadMember.roles == setOf(
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    ) && leafWriteMember.roles == setOf(
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    ) && branchReadMember.roles == setOf(
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    ) && leafReadCapability.signature.parameterSlots.isEmpty() &&
+            leafReadCapability.signature.returnSlot.type ==
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            leafWriteCapability.signature.parameterSlots.singleOrNull()?.type ==
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            leafWriteCapability.signature.returnSlot.type ==
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
+            branchReadCapability.signature.parameterSlots.isEmpty() &&
+            branchReadCapability.signature.returnSlot.type == systemArrayType &&
+            listOf(
+                leaf to leafReadCapability,
+                leaf to leafWriteCapability,
+                branch to branchReadCapability,
+            ).all { ownerAndSlot ->
+                val owner = ownerAndSlot.first
+                val slot = ownerAndSlot.second
+                val interfaceSlot = slot.capabilitySlot
+                slot.physicalOwnerPath == owner.physicalOwnerPath &&
+                        slot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
+                        slot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
+                        interfaceSlot != null &&
+                        interfaceSlot.physicalOwnerPath == owner.physicalCapabilityOwnerPath &&
+                        interfaceSlot.signature == slot.signature &&
+                        slot.physicalMethodName ==
+                        "${interfaceSlot.physicalOwnerPath.joinToString(".")}.${interfaceSlot.physicalMethodName}"
+            }) {
+        "The OctoTree state-access capabilities lost their recorded erased ABI boundary"
+    }
     check(node.physicalOwnerPath.dropLast(1) == leaf.physicalOwnerPath.dropLast(1) &&
             node.physicalOwnerPath.dropLast(1) == branch.physicalOwnerPath.dropLast(1) &&
             node.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
@@ -1000,7 +1054,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             branchState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
             listOf(nodeSetSlot, leafReadSlot, leafWriteSlot, branchReadSlot).all { slot ->
                 slot.physicalMethodName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))
-            } && listOf(nodeSetCapability, leafSetCapability, branchSetCapability).all { slot ->
+            } && listOf(
+                nodeSetCapability,
+                leafSetCapability,
+                branchSetCapability,
+                leafReadCapability,
+                leafWriteCapability,
+                branchReadCapability,
+            ).all { slot ->
                 checkNotNull(slot.capabilitySlot).let { interfaceSlot ->
                     interfaceSlot.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
                             interfaceSlot.physicalMethodName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))
@@ -1072,6 +1133,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         slot.type.renderSnapshotCSharpType(branchTypeParameters)
     }
     val branchParameters = branchParameterTypes.mapIndexed { index, type -> "$type value$index" }.joinToString(", ")
+    val leafStateType = leafState.physicalType.renderSnapshotCSharpType(leafTypeParameters)
     val branchStateType = branchState.physicalType.renderSnapshotCSharpType(branchTypeParameters)
     val branchElementTypeName = checkNotNull(branchElementType).renderSnapshotCSharpType(branchTypeParameters)
     val branchLeafType = leafConstructor.constructedOwnerType.renderSnapshotCSharpType(branchTypeParameters)
@@ -1084,6 +1146,9 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val nodeSetCapabilityIdentity = checkNotNull(nodeSetCapability.capabilitySlot)
     val leafSetCapabilityIdentity = checkNotNull(leafSetCapability.capabilitySlot)
     val branchSetCapabilityIdentity = checkNotNull(branchSetCapability.capabilitySlot)
+    val leafReadCapabilityIdentity = checkNotNull(leafReadCapability.capabilitySlot)
+    val leafWriteCapabilityIdentity = checkNotNull(leafWriteCapability.capabilitySlot)
+    val branchReadCapabilityIdentity = checkNotNull(branchReadCapability.capabilitySlot)
     val nodeCapabilityType = nodeSetCapabilityIdentity.physicalOwnerPath.joinToString(".")
     val leafCapabilityType = leafSetCapabilityIdentity.physicalOwnerPath.joinToString(".")
     val branchCapabilityType = branchSetCapabilityIdentity.physicalOwnerPath.joinToString(".")
@@ -1096,6 +1161,10 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         leafSetCapability.signature.returnSlot.type.renderSnapshotCSharpType(emptyList())
     val branchCapabilityReturnType =
         branchSetCapability.signature.returnSlot.type.renderSnapshotCSharpType(emptyList())
+    val leafReadCapabilityReturnType =
+        leafReadCapability.signature.returnSlot.type.renderSnapshotCSharpType(emptyList())
+    val branchReadCapabilityReturnType =
+        branchReadCapability.signature.returnSlot.type.renderSnapshotCSharpType(emptyList())
     val producerSource = directory.resolve("OctoTreeCandidateProducer.cs")
     val positiveConsumerSource = directory.resolve("OctoTreeCandidatePositiveConsumer.cs")
     val negativeConsumerSource = directory.resolve("OctoTreeCandidateNegativeSubclass.cs")
@@ -1122,12 +1191,24 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 $leafCapabilityReturnType ${leafSetCapabilityIdentity.physicalMethodName}(
                     ${leafSetCapability.renderParameters(emptyList())}
                 );
+
+                $leafReadCapabilityReturnType ${leafReadCapabilityIdentity.physicalMethodName}(
+                    ${leafReadCapability.renderParameters(emptyList())}
+                );
+
+                void ${leafWriteCapabilityIdentity.physicalMethodName}(
+                    ${leafWriteCapability.renderParameters(emptyList())}
+                );
             }
 
             public interface $branchCapabilitySimpleName
             {
                 $branchCapabilityReturnType ${branchSetCapabilityIdentity.physicalMethodName}(
                     ${branchSetCapability.renderParameters(emptyList())}
+                );
+
+                $branchReadCapabilityReturnType ${branchReadCapabilityIdentity.physicalMethodName}(
+                    ${branchReadCapability.renderParameters(emptyList())}
                 );
             }
 
@@ -1154,7 +1235,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             public sealed class $leafSimpleName<${leafTypeParameters.joinToString(", ")}> :
                 $leafBaseType, $leafCapabilityType
             {
-                private ${leafState.physicalType.renderSnapshotCSharpType(leafTypeParameters)} ${leafState.physicalFieldName};
+                private $leafStateType ${leafState.physicalFieldName};
 
                 ${leafConstructor.visibility.renderVisibility()} $leafSimpleName($leafParameters) : base()
                 {
@@ -1171,6 +1252,20 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 )
                 {
                     this.${leafState.physicalFieldName} = value0;
+                }
+
+                $leafReadCapabilityReturnType $leafCapabilityType.${leafReadCapabilityIdentity.physicalMethodName}(
+                    ${leafReadCapability.renderParameters(emptyList())}
+                )
+                {
+                    return this.${leafReadSlot.physicalMethodName}();
+                }
+
+                void $leafCapabilityType.${leafWriteCapabilityIdentity.physicalMethodName}(
+                    ${leafWriteCapability.renderParameters(emptyList())}
+                )
+                {
+                    this.${leafWriteSlot.physicalMethodName}(($leafStateType)value0);
                 }
 
                 ${leafSetSlot.visibility.renderVisibility()} override $leafSetReturnType ${leafSetSlot.physicalMethodName}(
@@ -1216,6 +1311,13 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     return this.${branchState.physicalFieldName};
                 }
 
+                $branchReadCapabilityReturnType $branchCapabilityType.${branchReadCapabilityIdentity.physicalMethodName}(
+                    ${branchReadCapability.renderParameters(emptyList())}
+                )
+                {
+                    return this.${branchReadSlot.physicalMethodName}();
+                }
+
                 ${branchSetSlot.visibility.renderVisibility()} override $branchSetReturnType ${branchSetSlot.physicalMethodName}(
                     ${branchSetSlot.renderParameters(branchTypeParameters)}
                 )
@@ -1243,6 +1345,19 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
 
         public static class Program
         {
+            private static MethodInfo CapabilityTarget(Type implementationType, Type interfaceType, string methodName)
+            {
+                InterfaceMapping map = implementationType.GetInterfaceMap(interfaceType);
+                for (int index = 0; index < map.InterfaceMethods.Length; index++)
+                {
+                    if (map.InterfaceMethods[index].Name == methodName)
+                    {
+                        return map.TargetMethods[index];
+                    }
+                }
+                return null;
+            }
+
             public static int Main()
             {
                 var leaf = new ${leaf.physicalOwnerPath.joinToString(".")}<int>(42);
@@ -1371,15 +1486,56 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 }
                 if (!leafCapabilityThrew) return 23;
 
-                InterfaceMapping nodeMap = filledBranch.GetType().GetInterfaceMap(typeof($nodeCapabilityType));
-                InterfaceMapping branchMap = filledBranch.GetType().GetInterfaceMap(typeof($branchCapabilityType));
-                if (nodeMap.TargetMethods.Length != 1 || branchMap.TargetMethods.Length != 1) return 24;
-                MethodInfo nodeTarget = nodeMap.TargetMethods[0];
-                MethodInfo branchTarget = branchMap.TargetMethods[0];
-                if (!nodeTarget.IsPrivate || !nodeTarget.IsVirtual || !nodeTarget.IsFinal ||
+                leafCapability.${leafWriteCapabilityIdentity.physicalMethodName}(41);
+                object leafCapabilityValue = leafCapability.${leafReadCapabilityIdentity.physicalMethodName}();
+                if (!object.Equals(leafCapabilityValue, 41) ||
+                        leaf.${leafReadSlot.physicalMethodName}() != 41) return 24;
+                bool leafWriteThrew = false;
+                try
+                {
+                    leafCapability.${leafWriteCapabilityIdentity.physicalMethodName}("wrong");
+                }
+                catch (InvalidCastException)
+                {
+                    leafWriteThrew = true;
+                }
+                if (!leafWriteThrew || leaf.${leafReadSlot.physicalMethodName}() != 41) return 25;
+
+                Array branchCapabilityNodes = branchCapability.${branchReadCapabilityIdentity.physicalMethodName}();
+                if (!object.ReferenceEquals(branchCapabilityNodes, filledNodes)) return 26;
+
+                MethodInfo nodeTarget = CapabilityTarget(
+                    filledBranch.GetType(), typeof($nodeCapabilityType),
+                    ${nodeSetCapabilityIdentity.physicalMethodName.asCSharpStringLiteral()}
+                );
+                MethodInfo branchTarget = CapabilityTarget(
+                    filledBranch.GetType(), typeof($branchCapabilityType),
+                    ${branchSetCapabilityIdentity.physicalMethodName.asCSharpStringLiteral()}
+                );
+                if (nodeTarget == null || branchTarget == null ||
+                        !nodeTarget.IsPrivate || !nodeTarget.IsVirtual || !nodeTarget.IsFinal ||
                         nodeTarget.DeclaringType != typeof(${node.physicalOwnerPath.joinToString(".")}<int>) ||
                         !branchTarget.IsPrivate || !branchTarget.IsVirtual || !branchTarget.IsFinal ||
-                        branchTarget.DeclaringType != filledBranch.GetType()) return 25;
+                        branchTarget.DeclaringType != filledBranch.GetType()) return 27;
+                MethodInfo leafReadTarget = CapabilityTarget(
+                    leaf.GetType(), typeof($leafCapabilityType),
+                    ${leafReadCapabilityIdentity.physicalMethodName.asCSharpStringLiteral()}
+                );
+                MethodInfo leafWriteTarget = CapabilityTarget(
+                    leaf.GetType(), typeof($leafCapabilityType),
+                    ${leafWriteCapabilityIdentity.physicalMethodName.asCSharpStringLiteral()}
+                );
+                MethodInfo branchReadTarget = CapabilityTarget(
+                    filledBranch.GetType(), typeof($branchCapabilityType),
+                    ${branchReadCapabilityIdentity.physicalMethodName.asCSharpStringLiteral()}
+                );
+                if (leafReadTarget == null || leafWriteTarget == null || branchReadTarget == null ||
+                        !leafReadTarget.IsPrivate || !leafReadTarget.IsVirtual || !leafReadTarget.IsFinal ||
+                        leafReadTarget.DeclaringType != leaf.GetType() ||
+                        !leafWriteTarget.IsPrivate || !leafWriteTarget.IsVirtual || !leafWriteTarget.IsFinal ||
+                        leafWriteTarget.DeclaringType != leaf.GetType() ||
+                        !branchReadTarget.IsPrivate || !branchReadTarget.IsVirtual || !branchReadTarget.IsFinal ||
+                        branchReadTarget.DeclaringType != filledBranch.GetType()) return 28;
                 return 0;
             }
         }
