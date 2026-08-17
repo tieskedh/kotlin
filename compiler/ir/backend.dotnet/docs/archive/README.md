@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`common-eager-iterable-sequence-consumers-2026-08-18.md`](common-eager-iterable-sequence-consumers-2026-08-18.md)
+  records the exact seven-declaration eager Sequence-consumer release, stable
+  logical-selector physical names, direct Kotlin/C# evidence, the physical
+  Sequence-owner boundary, and the final 2,246-test proof.
 - [`common-eager-iterable-windowing-2026-08-18.md`](common-eager-iterable-windowing-2026-08-18.md)
   records the exact four-member eager Iterable window/chunk family, its Common
   sized-list factory prerequisite, both execution routes, and the final
