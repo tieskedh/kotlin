@@ -436,6 +436,7 @@ private class BackendCliDotNetFacade(
             completedOutput.genericOwnerCallRoutes,
             loweredInput.configuration.dotNetTarget,
             completedOutput.output,
+            testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-octo-tree-candidate"),
         )
         validateGenericOwnerOpenNullableArraySignaturePrototype(completedOutput.genericOwnerPrototypes)
@@ -873,6 +874,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
     target: DotNetTarget,
     erasedProducerOutput: File,
+    applicationSource: File,
     directory: File,
 ) {
     val treePrototype = prototypes.singleOrNull { prototype -> prototype.ownerName == "OctoTree" }
@@ -892,8 +894,9 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         ),
         target = target,
     )
+    val encodedArtifact = DotNetGenericOwnerPhysicalFamilyCodec.encode(artifact)
     val decoded = DotNetGenericOwnerPhysicalFamilyCodec.decode(
-        DotNetGenericOwnerPhysicalFamilyCodec.encode(artifact),
+        encodedArtifact,
         expectedProducerFingerprint = artifact.producerFingerprint,
         expectedTargetProfile = artifact.targetProfile,
     )
@@ -1504,18 +1507,342 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         leafReadCapability.signature.returnSlot.type.renderSnapshotCSharpType(emptyList())
     val branchReadCapabilityReturnType =
         branchReadCapability.signature.returnSlot.type.renderSnapshotCSharpType(emptyList())
+    fun erasedMemberName(sourceName: String): String = treePrototype.members.single { member ->
+        member.sourceName == sourceName
+    }.physicalBaseName
+    val erasedTreeType = treePrototype.ownerName
+    check(erasedTreeType.matches(Regex("[A-Za-z_][A-Za-z0-9_.]*"))) {
+        "The OctoTree erased application requires a C#-representable owner: $erasedTreeType"
+    }
+    val erasedTreeDepthMethod = erasedMemberName("<get-depth>")
+    val erasedTreeGetMethod = erasedMemberName("get")
+    val erasedTreeSetMethod = erasedMemberName("set")
+
+    fun octoTreeMeasurementSource(candidate: Boolean): String {
+        val representation = if (candidate) "candidate" else "erased"
+        val treeType = if (candidate) {
+            "${tree.physicalOwnerPath.joinToString(".")}<int>"
+        } else {
+            erasedTreeType
+        }
+        val capabilityType = if (candidate) treeCapabilityType else treeType
+        val typedSet = if (candidate) treeSetSlot.physicalMethodName else erasedTreeSetMethod
+        val typedGet = if (candidate) treeGetSlot.physicalMethodName else erasedTreeGetMethod
+        val depthAccess = if (candidate) {
+            "tree.${treeDepthSlot.physicalMethodName}()"
+        } else {
+            check(erasedTreeDepthMethod.startsWith("get_")) {
+                "The erased OctoTree depth accessor lost its CLR property getter: $erasedTreeDepthMethod"
+            }
+            "tree.${erasedTreeDepthMethod.removePrefix("get_")}"
+        }
+        val capabilitySet = if (candidate) {
+            treeSetCapabilityIdentity.physicalMethodName
+        } else {
+            erasedTreeSetMethod
+        }
+        val capabilityGet = if (candidate) {
+            treeGetCapabilityIdentity.physicalMethodName
+        } else {
+            erasedTreeGetMethod
+        }
+        val candidateTyped = if (candidate) "true" else "false"
+        return """
+            using System;
+            using System.Diagnostics;
+            using System.Runtime.CompilerServices;
+
+            public static class Program
+            {
+                private const string Representation = "$representation";
+                private static readonly bool Candidate = $candidateTyped;
+                private const int Extent = 8;
+                private const int PointCount = Extent * Extent * Extent;
+
+                private static int Mix(int checksum, int value)
+                {
+                    return unchecked(checksum * 31 + value);
+                }
+
+                private static void Coordinates(int point, out int x, out int y, out int z)
+                {
+                    z = point & 7;
+                    y = (point >> 3) & 7;
+                    x = (point >> 6) & 7;
+                }
+
+                private static $treeType PreparedTree()
+                {
+                    var tree = new $treeType(2);
+                    for (int point = 0; point < PointCount; point++)
+                    {
+                        int x, y, z;
+                        Coordinates(point, out x, out y, out z);
+                        tree.$typedSet(x, y, z, (x + y + z) & 1);
+                    }
+                    if ($depthAccess != 2) throw new InvalidOperationException("depth");
+                    return tree;
+                }
+
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                private static int ExecuteAggregate(int iterations)
+                {
+                    int checksum = 17;
+                    $treeType tree = PreparedTree();
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int x, y, z;
+                        Coordinates(index & (PointCount - 1), out x, out y, out z);
+                        int expected = (x + y + z + (index >> 9)) & 1;
+                        tree.$typedSet(x, y, z, expected);
+                        int observed = (int)tree.$typedGet(x, y, z);
+                        if (observed != expected) throw new InvalidOperationException("aggregate value");
+                        checksum = Mix(checksum, observed);
+                        if ((index & (PointCount - 1)) == PointCount - 1)
+                            checksum = Mix(checksum, tree.ToString().Length);
+                    }
+                    return checksum;
+                }
+
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                private static int ExecuteTypedPath(int iterations)
+                {
+                    int checksum = 17;
+                    $treeType tree = PreparedTree();
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int x, y, z;
+                        Coordinates(index & (PointCount - 1), out x, out y, out z);
+                        int expected = (x + y + z + (index >> 9)) & 1;
+                        tree.$typedSet(x, y, z, expected);
+                        int observed = (int)tree.$typedGet(x, y, z);
+                        if (observed != expected) throw new InvalidOperationException("typed path");
+                        checksum = Mix(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                private static int ExecuteCapabilityPath(int iterations)
+                {
+                    int checksum = 17;
+                    $capabilityType tree = PreparedTree();
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int x, y, z;
+                        Coordinates(index & (PointCount - 1), out x, out y, out z);
+                        int expected = (x + y + z + (index >> 9)) & 1;
+                        tree.$capabilitySet(x, y, z, expected);
+                        int observed = (int)tree.$capabilityGet(x, y, z);
+                        if (observed != expected) throw new InvalidOperationException("capability path");
+                        checksum = Mix(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                private static int ExecuteClusterization(int iterations)
+                {
+                    int checksum = 17;
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int expected = index & 1023;
+                        var tree = new $treeType(1);
+                        for (int x = 0; x < 2; x++)
+                        for (int y = 0; y < 2; y++)
+                        for (int z = 0; z < 2; z++) tree.$typedSet(x, y, z, expected);
+                        int observed = (int)tree.$typedGet(1, 1, 1);
+                        if (observed != expected) throw new InvalidOperationException("clusterization");
+                        checksum = Mix(checksum, observed);
+                    }
+                    return checksum;
+                }
+
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                private static int ExecuteRendering(int iterations)
+                {
+                    int checksum = 17;
+                    $treeType tree = PreparedTree();
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        string rendered = tree.ToString();
+                        if (rendered.Length == 0) throw new InvalidOperationException("rendering");
+                        checksum = Mix(checksum, rendered.Length);
+                    }
+                    return checksum;
+                }
+
+                private static int ExecuteRoute(string route, int iterations)
+                {
+                    switch (route)
+                    {
+                        case "octo-tree-typed-path": return ExecuteTypedPath(iterations);
+                        case "octo-tree-capability-path": return ExecuteCapabilityPath(iterations);
+                        case "octo-tree-clusterization": return ExecuteClusterization(iterations);
+                        case "octo-tree-rendering": return ExecuteRendering(iterations);
+                        default: throw new ArgumentException("unknown route", "route");
+                    }
+                }
+
+                private static long PeriodicRenderingCalls(int iterations)
+                {
+                    return (iterations + PointCount - 1L) / PointCount;
+                }
+
+                private static int RunAggregate(string[] arguments)
+                {
+                    if (arguments.Length != 3 || arguments[0] != "--measurement" ||
+                            arguments[2] != "--hold-for-peak-working-set")
+                        throw new ArgumentException("usage: --measurement <iterations> --hold-for-peak-working-set");
+                    int iterations;
+                    if (!int.TryParse(arguments[1], out iterations) || iterations < 0)
+                        throw new ArgumentException("iterations");
+                    ExecuteAggregate(1);
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    int checksum = ExecuteAggregate(iterations);
+                    stopwatch.Stop();
+                    long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                    long periodic = PeriodicRenderingCalls(iterations);
+                    long typed = Candidate ? iterations * 2L + periodic : 0L;
+                    long semantic = Candidate ? iterations * 4L : 0L;
+                    long erased = Candidate ? 0L : iterations * 2L + periodic;
+                    Console.WriteLine(
+                        "GENERIC_OWNER_APPLICATION_MEASUREMENT|workloadVersion=2" +
+                        "|representation=" + Representation + "|iterations=" + iterations +
+                        "|checksum=" + checksum + "|elapsedTicks=" + stopwatch.ElapsedTicks +
+                        "|frequency=" + Stopwatch.Frequency + "|allocatedBytes=" + allocated +
+                        "|typedEntryCalls=" + typed + "|semanticCapabilityCalls=" + semantic +
+                        "|erasedVirtualCalls=" + erased
+                    );
+                    Console.In.ReadLine();
+                    return 0;
+                }
+
+                private static int RunRoute(string[] arguments)
+                {
+                    if (arguments.Length != 4 || arguments[0] != "--route-measurement" ||
+                            arguments[3] != "--hold-for-peak-working-set")
+                        throw new ArgumentException(
+                            "usage: --route-measurement <route> <iterations> --hold-for-peak-working-set"
+                        );
+                    string route = arguments[1];
+                    int iterations;
+                    if (!int.TryParse(arguments[2], out iterations) || iterations < 0)
+                        throw new ArgumentException("iterations");
+                    ExecuteRoute(route, 1);
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    int checksum = ExecuteRoute(route, iterations);
+                    stopwatch.Stop();
+                    long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                    long typed = 0L;
+                    long semantic = 0L;
+                    long erased = 0L;
+                    long constructions = route == "octo-tree-clusterization" ? iterations : 1L;
+                    long conversions = 0L;
+                    long checks = 0L;
+                    if (Candidate)
+                    {
+                        if (route == "octo-tree-typed-path")
+                        {
+                            typed = iterations * 2L;
+                            semantic = iterations * 4L;
+                            conversions = iterations * 4L;
+                            checks = iterations;
+                        }
+                        else if (route == "octo-tree-capability-path")
+                        {
+                            semantic = iterations * 6L;
+                            conversions = iterations * 6L;
+                            checks = iterations * 2L;
+                        }
+                        else if (route == "octo-tree-clusterization")
+                        {
+                            typed = iterations * 9L;
+                            semantic = iterations * 9L;
+                            conversions = iterations * 18L;
+                            checks = iterations * 8L;
+                        }
+                        else if (route == "octo-tree-rendering") typed = iterations;
+                    }
+                    else
+                    {
+                        erased = route == "octo-tree-clusterization" ? iterations * 9L :
+                            route == "octo-tree-rendering" ? iterations : iterations * 2L;
+                        conversions = route == "octo-tree-clusterization" ? iterations * 9L :
+                            route == "octo-tree-rendering" ? 0L : iterations * 2L;
+                    }
+                    Console.WriteLine(
+                        "GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT|workloadVersion=2" +
+                        "|representation=" + Representation + "|route=" + route +
+                        "|ownerStateCarrierRequirement=" +
+                        (Candidate ? "MIXED_EXACT_AND_SEMANTIC" : "ERASED_OBJECT") +
+                        "|iterations=" + iterations + "|checksum=" + checksum +
+                        "|elapsedTicks=" + stopwatch.ElapsedTicks + "|frequency=" + Stopwatch.Frequency +
+                        "|allocatedBytes=" + allocated + "|typedEntryCalls=" + typed +
+                        "|semanticCapabilityCalls=" + semantic + "|erasedVirtualCalls=" + erased +
+                        "|ownerConstructions=" + constructions +
+                        "|loopValueBoxOrUnboxOperations=" + conversions +
+                        "|runtimeCompatibilityChecks=" + checks + "|expectedFailures=0"
+                    );
+                    Console.In.ReadLine();
+                    return 0;
+                }
+
+                public static int Main(string[] arguments)
+                {
+                    #if GENERIC_OWNER_APPLICATION_MEASUREMENT
+                    return RunAggregate(arguments);
+                    #elif GENERIC_OWNER_APPLICATION_ROUTE_MEASUREMENT
+                    return RunRoute(arguments);
+                    #else
+                    ExecuteAggregate(1024);
+                    ExecuteCapabilityPath(32);
+                    ExecuteClusterization(32);
+                    ExecuteRendering(32);
+                    return 0;
+                    #endif
+                }
+            }
+        """.trimIndent()
+    }
     val producerSource = directory.resolve("OctoTreeCandidateProducer.cs")
     val positiveConsumerSource = directory.resolve("OctoTreeCandidatePositiveConsumer.cs")
     val negativeConsumerSource = directory.resolve("OctoTreeCandidateNegativeSubclass.cs")
     val metadataInspectorSource = directory.resolve("OctoTreeCandidateMetadataInspector.cs")
-    val producer = directory.resolve("OctoTreeCandidateProducer.dll")
+    val candidateMeasurementSource = directory.resolve("RecordedFamilyConsumer.cs")
+    val erasedMeasurementSource = directory.resolve(GENERIC_OWNER_ERASED_CSHARP_SOURCE_FILE)
+    val producer = directory.resolve("SnapshotProducer.dll")
     val positiveConsumer = directory.resolve(
         if (target == DotNetTarget.NET48) "OctoTreeCandidatePositiveConsumer.exe"
         else "OctoTreeCandidatePositiveConsumer.dll"
     )
     val negativeConsumer = directory.resolve("OctoTreeCandidateNegativeSubclass.dll")
     val metadataInspector = directory.resolve("OctoTreeCandidateMetadataInspector.dll")
+    val candidateMeasurement = directory.resolve(
+        if (target == DotNetTarget.NET48) "RecordedFamilyConsumer.exe" else "RecordedFamilyConsumer.dll"
+    )
+    val erasedMeasurement = directory.resolve(genericOwnerErasedCSharpAssemblyFile(target))
     directory.mkdirs()
+    val recordFile = directory.resolve(GENERIC_OWNER_PHYSICAL_FAMILY_FILE).apply {
+        writeText(encodedArtifact)
+    }
+    val resolvedCallRoutes = callRoutes.filter { route ->
+        route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY ||
+                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
+    }
+    val callRouteManifestFile = directory.resolve(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE).apply {
+        writeText(DotNetGenericOwnerCallRouteManifestCodec.encode(
+            DotNetGenericOwnerCallRouteManifest.fromResolvedCallRoutes(resolvedCallRoutes),
+        ))
+    }
     producerSource.writeText(
         """
         namespace $physicalNamespace
@@ -1875,6 +2202,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         }
         """.trimIndent()
     )
+    candidateMeasurementSource.writeText(octoTreeMeasurementSource(candidate = true))
+    erasedMeasurementSource.writeText(octoTreeMeasurementSource(candidate = false))
     positiveConsumerSource.writeText(
         """
         using System;
@@ -2264,9 +2593,19 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         genericOwnerMetadataInspectorSource(decoded, producer, treeLogicalKey)
     )
 
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The OctoTree paired application lacks reusable Runtime/Stdlib artifacts"
+    }
     val producerCompilation: SnapshotCSharpCompilation
     val positiveCompilation: SnapshotCSharpCompilation
     val negativeCompilation: SnapshotCSharpCompilation
+    val candidateMeasurementCompilation: SnapshotCSharpCompilation
+    val erasedMeasurementCompilation: SnapshotCSharpCompilation
     when (target) {
         DotNetTarget.NET48 -> {
             val compiler = checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
@@ -2276,6 +2615,20 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 compiler, producerSource, producer, references = emptyList(), executable = false,
             )
             check(producerCompilation.exitCode == 0) { producerCompilation.output }
+            candidateMeasurementCompilation = compileFrameworkSnapshotCSharp(
+                compiler,
+                candidateMeasurementSource,
+                candidateMeasurement,
+                references = listOf(producer),
+                executable = true,
+            )
+            erasedMeasurementCompilation = compileFrameworkSnapshotCSharp(
+                compiler,
+                erasedMeasurementSource,
+                erasedMeasurement,
+                references = listOf(erasedProducerOutput, runtime, stdlib),
+                executable = true,
+            )
             positiveCompilation = compileFrameworkSnapshotCSharp(
                 compiler, positiveConsumerSource, positiveConsumer, references = listOf(producer), executable = true,
             )
@@ -2291,6 +2644,20 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 toolchain, producerSource, producer, references = emptyList(), executable = false,
             )
             check(producerCompilation.exitCode == 0) { producerCompilation.output }
+            candidateMeasurementCompilation = compileModernSnapshotCSharp(
+                toolchain,
+                candidateMeasurementSource,
+                candidateMeasurement,
+                references = listOf(producer),
+                executable = true,
+            )
+            erasedMeasurementCompilation = compileModernSnapshotCSharp(
+                toolchain,
+                erasedMeasurementSource,
+                erasedMeasurement,
+                references = listOf(erasedProducerOutput, runtime, stdlib),
+                executable = true,
+            )
             positiveCompilation = compileModernSnapshotCSharp(
                 toolchain, positiveConsumerSource, positiveConsumer, references = listOf(producer), executable = true,
             )
@@ -2300,6 +2667,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         }
         DotNetTarget.NETSTANDARD_2_0 -> error("The OctoTree candidate cannot target netstandard2.0")
     }
+    check(candidateMeasurementCompilation.exitCode == 0) { candidateMeasurementCompilation.output }
+    check(erasedMeasurementCompilation.exitCode == 0) { erasedMeasurementCompilation.output }
     check(positiveCompilation.exitCode == 0) { positiveCompilation.output }
     check(negativeCompilation.exitCode != 0 && listOf("CS0122", "CS1729").any { diagnostic ->
         diagnostic in negativeCompilation.output
@@ -2317,8 +2686,204 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         executable = true,
     )
     check(metadataCompilation.exitCode == 0) { metadataCompilation.output }
+    listOf(erasedProducerOutput, runtime, stdlib).forEach { dependency ->
+        val localDependency = directory.resolve(dependency.name)
+        if (dependency.canonicalFile != localDependency.canonicalFile) {
+            check(!localDependency.exists()) {
+                "The OctoTree paired application dependency collides with ${localDependency.path}"
+            }
+            dependency.copyTo(localDependency)
+        }
+    }
     executeSnapshotConsumer(DotNetTarget.NET10_0, metadataInspector, directory)
     executeSnapshotConsumer(target, positiveConsumer, directory)
+    executeSnapshotConsumer(target, candidateMeasurement, directory)
+    executeSnapshotConsumer(target, erasedMeasurement, directory)
+    System.getProperty(GENERIC_OWNER_APPLICATION_EXPORT_PROPERTY)?.let { exportPath ->
+        check(exportPath.isNotBlank()) { "Generic-owner application export path must not be blank" }
+        prepareGenericOwnerOctoTreeApplicationBundle(
+            directory = directory,
+            target = target,
+            applicationSource = applicationSource,
+            candidateProducerSource = producerSource,
+            candidateProducer = producer,
+            candidateConsumerSource = candidateMeasurementSource,
+            candidateConsumer = candidateMeasurement,
+            physicalFamilyArtifact = recordFile,
+            callRouteManifest = callRouteManifestFile,
+            erasedProducer = erasedProducerOutput,
+            erasedConsumerSource = erasedMeasurementSource,
+            erasedConsumer = erasedMeasurement,
+            runtime = runtime,
+            stdlib = stdlib,
+            exportDirectory = File(exportPath),
+        )
+    }
+}
+
+private fun prepareGenericOwnerOctoTreeApplicationBundle(
+    directory: File,
+    target: DotNetTarget,
+    applicationSource: File,
+    candidateProducerSource: File,
+    candidateProducer: File,
+    candidateConsumerSource: File,
+    candidateConsumer: File,
+    physicalFamilyArtifact: File,
+    callRouteManifest: File,
+    erasedProducer: File,
+    erasedConsumerSource: File,
+    erasedConsumer: File,
+    runtime: File,
+    stdlib: File,
+    exportDirectory: File,
+) {
+    val repositoryRoot = generateSequence(applicationSource.canonicalFile.parentFile, File::getParentFile)
+        .firstOrNull { candidate ->
+            candidate.resolve("kotlin-native").isDirectory && candidate.resolve("compiler").isDirectory
+        }
+        ?: error("Cannot locate the repository root from ${applicationSource.path}")
+    val representativeSource = repositoryRoot.resolve(
+        GENERIC_OWNER_OCTO_TREE_REPRESENTATIVE_SOURCE_PATH,
+    ).canonicalFile
+    check(representativeSource.isFile &&
+            representativeSource.path.startsWith(repositoryRoot.canonicalPath + File.separator)) {
+        "The closed OctoTree representative source is missing or escaped the repository"
+    }
+    check(listOf(
+        applicationSource,
+        candidateProducerSource,
+        candidateProducer,
+        candidateConsumerSource,
+        candidateConsumer,
+        physicalFamilyArtifact,
+        callRouteManifest,
+        erasedProducer,
+        erasedConsumerSource,
+        erasedConsumer,
+        runtime,
+        stdlib,
+    ).all(File::isFile)) {
+        "The OctoTree application bundle requires complete candidate, erased, and platform products"
+    }
+
+    fun stage(source: File, name: String): File = directory.resolve(name).also { destination ->
+        if (source.canonicalFile != destination.canonicalFile) {
+            if (destination.exists()) {
+                check(destination.isFile && destination.readBytes().contentEquals(source.readBytes())) {
+                    "The OctoTree bundle found a stale staged dependency at ${destination.path}"
+                }
+            } else {
+                source.copyTo(destination)
+            }
+        }
+    }
+
+    val stagedApplicationSource = stage(
+        applicationSource,
+        GENERIC_OWNER_OCTO_TREE_APPLICATION_SOURCE_FILE,
+    )
+    val stagedRepresentativeSource = stage(
+        representativeSource,
+        GENERIC_OWNER_OCTO_TREE_REPRESENTATIVE_SOURCE_FILE,
+    )
+    val stagedCandidateProducer = stage(candidateProducer, "SnapshotProducer.dll")
+    val stagedErasedProducer = stage(erasedProducer, GENERIC_OWNER_ERASED_PRODUCER_FILE)
+    val stagedRuntime = stage(runtime, runtime.name)
+    val stagedStdlib = stage(stdlib, stdlib.name)
+    val candidateRuntimeConfig = if (target == DotNetTarget.NET10_0) {
+        candidateConsumer.resolveSibling("${candidateConsumer.nameWithoutExtension}.runtimeconfig.json").also { file ->
+            check(file.isFile) { "The OctoTree candidate measurement lacks its runtime config" }
+        }
+    } else {
+        null
+    }
+    val erasedCSharpRuntimeConfig = if (target == DotNetTarget.NET10_0) {
+        erasedConsumer.resolveSibling("${erasedConsumer.nameWithoutExtension}.runtimeconfig.json").also { file ->
+            check(file.isFile) { "The OctoTree erased measurement lacks its runtime config" }
+        }
+    } else {
+        null
+    }
+    val globalJson = if (target == DotNetTarget.NET10_0) {
+        directory.resolve("global.json").apply {
+            writeText(
+                """
+                {
+                  "sdk": {
+                    "version": "10.0.100",
+                    "rollForward": "disable",
+                    "allowPrerelease": false
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+    } else {
+        null
+    }
+
+    val manifest = directory.resolve(GENERIC_OWNER_APPLICATION_MANIFEST_FILE).apply {
+        writeText(buildString {
+            appendLine("schema=3")
+            appendLine("corpusKind=octo-tree")
+            appendLine("workloadVersion=2")
+            appendLine("sdkVersion=${if (target == DotNetTarget.NET10_0) "10.0.100" else "framework-clr"}")
+            appendLine("targetProfile=${target.name}")
+            fun hash(name: String, file: File) {
+                appendLine("$name=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(file.readBytes())}")
+            }
+            hash("applicationSourceSha256", stagedApplicationSource)
+            hash("representativeSourceSha256", stagedRepresentativeSource)
+            hash("candidateProducerSourceSha256", candidateProducerSource)
+            hash("candidateProducerSha256", stagedCandidateProducer)
+            hash("candidateConsumerSha256", candidateConsumer)
+            hash("candidateSourceSha256", candidateConsumerSource)
+            hash("physicalFamilyArtifactSha256", physicalFamilyArtifact)
+            hash("callRouteManifestSha256", callRouteManifest)
+            hash("erasedProducerSha256", stagedErasedProducer)
+            hash("erasedCSharpSourceSha256", erasedConsumerSource)
+            hash("erasedCSharpAssemblySha256", erasedConsumer)
+            hash("runtimeSha256", stagedRuntime)
+            hash("stdlibSha256", stagedStdlib)
+            candidateRuntimeConfig?.let { hash("candidateRuntimeConfigSha256", it) }
+            erasedCSharpRuntimeConfig?.let { hash("erasedCSharpRuntimeConfigSha256", it) }
+            globalJson?.let { hash("globalJsonSha256", it) }
+        }.trimEnd())
+    }
+    val bundleFiles = listOf(
+        stagedApplicationSource,
+        stagedRepresentativeSource,
+        candidateProducerSource,
+        stagedCandidateProducer,
+        candidateConsumerSource,
+        candidateConsumer,
+        physicalFamilyArtifact,
+        callRouteManifest,
+        stagedErasedProducer,
+        erasedConsumerSource,
+        erasedConsumer,
+        stagedRuntime,
+        stagedStdlib,
+        manifest,
+    ) + listOfNotNull(
+        candidateRuntimeConfig,
+        erasedCSharpRuntimeConfig,
+        globalJson,
+    )
+    check(bundleFiles.map(File::getName).toSet().size == bundleFiles.size && bundleFiles.all(File::isFile)) {
+        "The OctoTree application bundle is incomplete or has colliding file names"
+    }
+    check(!exportDirectory.exists() || exportDirectory.isDirectory) {
+        "Generic-owner application export path is not a directory: $exportDirectory"
+    }
+    check(exportDirectory.mkdirs() || exportDirectory.isDirectory) {
+        "Cannot create generic-owner application export directory: $exportDirectory"
+    }
+    check(exportDirectory.list()?.isEmpty() == true) {
+        "Generic-owner application export directory must be empty: $exportDirectory"
+    }
+    bundleFiles.forEach { file -> file.copyTo(exportDirectory.resolve(file.name), overwrite = false) }
 }
 
 private fun validateGenericOwnerRepresentativeArrayCopyPrototype(
@@ -2755,6 +3320,10 @@ private const val GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION = 2
 private const val GENERIC_OWNER_ERASED_PRODUCER_FILE = "lib.dll"
 private const val GENERIC_OWNER_ERASED_CSHARP_SOURCE_FILE = "ErasedCSharpConsumer.cs"
 private const val GENERIC_OWNER_APPLICATION_SOURCE_FILE = "genericOwnerHardestModelOracle.kt"
+private const val GENERIC_OWNER_OCTO_TREE_APPLICATION_SOURCE_FILE = "genericOwnerRepresentativeOctoTree.kt"
+private const val GENERIC_OWNER_OCTO_TREE_REPRESENTATIVE_SOURCE_FILE = "ocTree.kt"
+private const val GENERIC_OWNER_OCTO_TREE_REPRESENTATIVE_SOURCE_PATH =
+    "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/OctoTest/ocTree.kt"
 private const val GENERIC_OWNER_APPLICATION_MANIFEST_FILE = "generic-owner-application.properties"
 private const val GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE = "generic-owner-call-routes.tsv"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY =
@@ -8769,7 +9338,12 @@ private fun executeSnapshotConsumer(target: DotNetTarget, assembly: File, direct
                 ${'$'}ErrorActionPreference = 'Stop'
                 try {
                     ${'$'}assembly = [Reflection.Assembly]::LoadFrom('$escapedAssembly')
-                    ${'$'}result = ${'$'}assembly.EntryPoint.Invoke(${'$'}null, ${'$'}null)
+                    ${'$'}arguments = ${'$'}null
+                    if (${'$'}assembly.EntryPoint.GetParameters().Length -ne 0) {
+                        ${'$'}arguments = New-Object 'System.Object[]' 1
+                        ${'$'}arguments[0] = [string[]]@()
+                    }
+                    ${'$'}result = ${'$'}assembly.EntryPoint.Invoke(${'$'}null, ${'$'}arguments)
                     if ([int]${'$'}result -ne 0) { exit [int]${'$'}result }
                 } catch {
                     [Console]::Error.WriteLine(${'$'}_.Exception.ToString())

@@ -3,15 +3,17 @@
     Produces and verifies the paired generic-owner application corpus.
 
 .DESCRIPTION
-    Builds the hostile separate-compilation application through PSI and
-    LightTree on Framework CLR and CoreCLR, verifies the closed bundles,
+    Builds a separate-compilation application through PSI and LightTree on
+    Framework CLR and CoreCLR, verifies the closed bundles,
     compiler-derived call-route manifests, and every SHA-256 fingerprint,
     compares exact executable CLR content and all KLIB entries outside the
-    parser-owned body stream, and runs the candidate, erased Kotlin, and direct
-    erased C# applications.
+    parser-owned body stream, and runs every candidate/erased application
+    product present in the selected corpus schema.
 #>
 [CmdletBinding()]
 param(
+    [ValidateSet('hostile', 'octo-tree')]
+    [string]$CorpusKind = 'hostile',
     [string]$OutputDirectory,
     [string]$ExistingBundle,
     [string]$ExistingCorpus,
@@ -75,7 +77,7 @@ function ConvertFrom-RouteText([string]$Value) {
     return $decoded
 }
 
-function Read-CallRouteManifest([string]$Path) {
+function Read-CallRouteManifest([string]$Path, [string]$Kind) {
     $lines = @(Get-Content -LiteralPath $Path)
     if ($lines.Count -lt 2) { throw 'The generic-owner call-route manifest is truncated' }
     $header = @($lines[0].Split("`t", [StringSplitOptions]::None))
@@ -116,7 +118,8 @@ function Read-CallRouteManifest([string]$Path) {
         $calleeKey = ConvertFrom-RouteText $fields[4]
         if ([string]::IsNullOrEmpty($callerKey) -and $null -ne $callerKey -or
                 [string]::IsNullOrEmpty($calleeKey) -or
-                $callerKey -match '[A-Za-z]:[\\/]' -or $calleeKey -match '[A-Za-z]:[\\/]') {
+                $callerKey -match '^[A-Za-z]:\\' -or $calleeKey -match '^[A-Za-z]:\\' -or
+                $callerKey -match '^(?!F:/)[A-Za-z]:/' -or $calleeKey -match '^(?!F:/)[A-Za-z]:/') {
             throw "The generic-owner call-route manifest contains an empty or absolute logical binding"
         }
         if ($fields[5] -cnotin $provenances -or $fields[6] -cnotin $requirements -or
@@ -132,43 +135,71 @@ function Read-CallRouteManifest([string]$Path) {
             RouteRequirement = $fields[6]
         }
     }
-    $expectedCounts = [ordered]@{
-        PRODUCER_ERASED_OWNER = 24
-        EXACT_TYPED_ENTRY = 11
-        SEMANTIC_CAPABILITY = 4
-        MISSING_CAPABILITY = 1
+    $expectedCounts = if ($Kind -eq 'hostile') {
+        [ordered]@{
+            PRODUCER_ERASED_OWNER = 24
+            EXACT_TYPED_ENTRY = 11
+            SEMANTIC_CAPABILITY = 4
+            MISSING_CAPABILITY = 1
+        }
+    } else {
+        [ordered]@{
+            EXACT_TYPED_ENTRY = 21
+            SEMANTIC_CAPABILITY = 9
+        }
     }
     foreach ($requirement in $expectedCounts.Keys) {
         $actualCount = @($records | Where-Object { $_.RouteRequirement -ceq $requirement }).Count
         if ($actualCount -ne $expectedCounts[$requirement]) {
-            throw "The hostile compiler-derived route count for $requirement is $actualCount, expected $($expectedCounts[$requirement])"
+            throw "The $Kind compiler-derived route count for $requirement is $actualCount, expected $($expectedCounts[$requirement])"
         }
     }
-    if ($records.Count -ne 40) {
-        throw "The hostile compiler-derived route manifest has $($records.Count) sites, expected 40"
+    $expectedTotal = [int](($expectedCounts.Values | Measure-Object -Sum).Sum)
+    if ($records.Count -ne $expectedTotal) {
+        throw "The $Kind compiler-derived route manifest has $($records.Count) sites, expected $expectedTotal"
     }
     return $records
 }
 
-function Get-FileByHashKey([string]$TargetProfile) {
+function Get-FileByHashKey([string]$TargetProfile, [string]$Kind) {
     $executableExtension = if ($TargetProfile -eq 'NET48') { 'exe' } else { 'dll' }
-    $files = [ordered]@{
-        applicationSourceSha256 = 'genericOwnerHardestModelOracle.kt'
-        candidateProducerSha256 = 'SnapshotProducer.dll'
-        candidateConsumerSha256 = "RecordedFamilyConsumer.$executableExtension"
-        candidateSourceSha256 = 'RecordedFamilyConsumer.cs'
-        physicalFamilyArtifactSha256 = 'SnapshotProducer.generic-owner-families'
-        callRouteManifestSha256 = 'generic-owner-call-routes.tsv'
-        erasedProducerSha256 = 'lib.dll'
-        erasedConsumerSha256 = "ErasedConsumer.$executableExtension"
-        erasedCSharpSourceSha256 = 'ErasedCSharpConsumer.cs'
-        erasedCSharpAssemblySha256 = "ErasedCSharpConsumer.$executableExtension"
-        runtimeSha256 = 'Kotlin.Runtime.dll'
-        stdlibSha256 = 'Kotlin.Stdlib.dll'
+    $files = if ($Kind -eq 'hostile') {
+        [ordered]@{
+            applicationSourceSha256 = 'genericOwnerHardestModelOracle.kt'
+            candidateProducerSha256 = 'SnapshotProducer.dll'
+            candidateConsumerSha256 = "RecordedFamilyConsumer.$executableExtension"
+            candidateSourceSha256 = 'RecordedFamilyConsumer.cs'
+            physicalFamilyArtifactSha256 = 'SnapshotProducer.generic-owner-families'
+            callRouteManifestSha256 = 'generic-owner-call-routes.tsv'
+            erasedProducerSha256 = 'lib.dll'
+            erasedConsumerSha256 = "ErasedConsumer.$executableExtension"
+            erasedCSharpSourceSha256 = 'ErasedCSharpConsumer.cs'
+            erasedCSharpAssemblySha256 = "ErasedCSharpConsumer.$executableExtension"
+            runtimeSha256 = 'Kotlin.Runtime.dll'
+            stdlibSha256 = 'Kotlin.Stdlib.dll'
+        }
+    } else {
+        [ordered]@{
+            applicationSourceSha256 = 'genericOwnerRepresentativeOctoTree.kt'
+            representativeSourceSha256 = 'ocTree.kt'
+            candidateProducerSourceSha256 = 'OctoTreeCandidateProducer.cs'
+            candidateProducerSha256 = 'SnapshotProducer.dll'
+            candidateConsumerSha256 = "RecordedFamilyConsumer.$executableExtension"
+            candidateSourceSha256 = 'RecordedFamilyConsumer.cs'
+            physicalFamilyArtifactSha256 = 'SnapshotProducer.generic-owner-families'
+            callRouteManifestSha256 = 'generic-owner-call-routes.tsv'
+            erasedProducerSha256 = 'lib.dll'
+            erasedCSharpSourceSha256 = 'ErasedCSharpConsumer.cs'
+            erasedCSharpAssemblySha256 = "ErasedCSharpConsumer.$executableExtension"
+            runtimeSha256 = 'Kotlin.Runtime.dll'
+            stdlibSha256 = 'Kotlin.Stdlib.dll'
+        }
     }
     if ($TargetProfile -eq 'NET10_0') {
         $files.candidateRuntimeConfigSha256 = 'RecordedFamilyConsumer.runtimeconfig.json'
-        $files.erasedConsumerRuntimeConfigSha256 = 'ErasedConsumer.runtimeconfig.json'
+        if ($Kind -eq 'hostile') {
+            $files.erasedConsumerRuntimeConfigSha256 = 'ErasedConsumer.runtimeconfig.json'
+        }
         $files.erasedCSharpRuntimeConfigSha256 = 'ErasedCSharpConsumer.runtimeconfig.json'
         $files.globalJsonSha256 = 'global.json'
     }
@@ -184,13 +215,25 @@ function Assert-ApplicationBundle([string]$Directory) {
     if ($manifest.targetProfile -notin @('NET10_0', 'NET48')) {
         throw "Unsupported generic-owner application target: $($manifest.targetProfile)"
     }
-    $fileByHashKey = Get-FileByHashKey $manifest.targetProfile
-    $requiredKeys = @('schema', 'sdkVersion', 'targetProfile') + @($fileByHashKey.Keys)
+    $manifestKind = if ($manifest.schema -eq '3') { $manifest.corpusKind } else { 'hostile' }
+    if ($manifestKind -ne $CorpusKind) {
+        throw "Expected a $CorpusKind application bundle, found $manifestKind at $Directory"
+    }
+    $fileByHashKey = Get-FileByHashKey $manifest.targetProfile $manifestKind
+    $requiredKeys = if ($manifestKind -eq 'hostile') {
+        @('schema', 'sdkVersion', 'targetProfile') + @($fileByHashKey.Keys)
+    } else {
+        @('schema', 'corpusKind', 'workloadVersion', 'sdkVersion', 'targetProfile') +
+            @($fileByHashKey.Keys)
+    }
     if (@(Compare-Object @($manifest.Keys) $requiredKeys).Count -ne 0) {
         throw "The application manifest has an unexpected shape: $($manifest | ConvertTo-Json -Compress)"
     }
     $expectedSdk = if ($manifest.targetProfile -eq 'NET10_0') { '10.0.100' } else { 'framework-clr' }
-    if ($manifest.schema -ne '2' -or $manifest.sdkVersion -ne $expectedSdk) {
+    $expectedSchema = if ($manifestKind -eq 'hostile') { '2' } else { '3' }
+    $expectedWorkload = if ($manifestKind -eq 'octo-tree') { '2' } else { $null }
+    if ($manifest.schema -ne $expectedSchema -or $manifest.sdkVersion -ne $expectedSdk -or
+            ($null -ne $expectedWorkload -and $manifest.workloadVersion -ne $expectedWorkload)) {
         throw "Unsupported generic-owner application manifest: $($manifest | ConvertTo-Json -Compress)"
     }
 
@@ -207,37 +250,76 @@ function Assert-ApplicationBundle([string]$Directory) {
             throw "Stale $($fileByHashKey[$hashKey]): expected $($manifest[$hashKey]), found $actual"
         }
     }
-    $callRoutes = @(Read-CallRouteManifest (Join-Path $Directory $fileByHashKey.callRouteManifestSha256))
+    $callRoutes = @(
+        Read-CallRouteManifest (Join-Path $Directory $fileByHashKey.callRouteManifestSha256) $manifestKind
+    )
     $kotlinSource = Get-Content -LiteralPath (Join-Path $Directory $fileByHashKey.applicationSourceSha256) -Raw
     if ($kotlinSource -notmatch 'MODULE:\s+lib' -or
             $kotlinSource -notmatch 'MODULE:\s+main\(lib\)') {
         throw 'The application corpus lost its separate Kotlin producer/consumer source'
     }
-    $erasedCSharpSource =
-        Get-Content -LiteralPath (Join-Path $Directory $fileByHashKey.erasedCSharpSourceSha256) -Raw
-    foreach ($requiredShape in @('Guid', 'DateTime', 'decimal', 'ApplicationEnum',
-            'ValueTuple<int, string>', 'ApplicationStruct', 'ErasedCSharpGrandchild')) {
-        if ($erasedCSharpSource -notmatch [Regex]::Escape($requiredShape)) {
-            throw "The direct C# application lost required shape '$requiredShape'"
+    $candidateSource = Get-Content -LiteralPath (Join-Path $Directory $fileByHashKey.candidateSourceSha256) -Raw
+    $erasedCSharpSource = Get-Content -LiteralPath (
+        Join-Path $Directory $fileByHashKey.erasedCSharpSourceSha256) -Raw
+    if ($manifestKind -eq 'hostile') {
+        foreach ($requiredShape in @('Guid', 'DateTime', 'decimal', 'ApplicationEnum',
+                'ValueTuple<int, string>', 'ApplicationStruct', 'ErasedCSharpGrandchild')) {
+            if ($erasedCSharpSource -notmatch [Regex]::Escape($requiredShape)) {
+                throw "The direct C# application lost required shape '$requiredShape'"
+            }
         }
-    }
-    $hostileCellInterfaces = [GenericOwnerApplicationAudit]::DirectInterfaces(
-        (Join-Path $Directory $fileByHashKey.erasedProducerSha256),
-        'generic.owner.oracle.HostileCell'
-    )
-    $requiredReimplementations = @(
-        'Kotlin.Collections.Collection',
-        'Kotlin.Collections.Iterable',
-        'Kotlin.Collections.MutableCollection',
-        'Kotlin.Collections.MutableIterable'
-    )
-    $missingReimplementations = @($requiredReimplementations | Where-Object {
-        $_ -notin $hostileCellInterfaces
-    })
-    if ($missingReimplementations.Count -ne 0) {
-        throw "The erased HostileCell lost direct CLR interface reimplementation edges: " +
-                ($missingReimplementations -join ', ') + "; found: " +
-                ($hostileCellInterfaces -join ', ')
+        $hostileCellInterfaces = [GenericOwnerApplicationAudit]::DirectInterfaces(
+            (Join-Path $Directory $fileByHashKey.erasedProducerSha256),
+            'generic.owner.oracle.HostileCell'
+        )
+        $requiredReimplementations = @(
+            'Kotlin.Collections.Collection',
+            'Kotlin.Collections.Iterable',
+            'Kotlin.Collections.MutableCollection',
+            'Kotlin.Collections.MutableIterable'
+        )
+        $missingReimplementations = @($requiredReimplementations | Where-Object {
+            $_ -notin $hostileCellInterfaces
+        })
+        if ($missingReimplementations.Count -ne 0) {
+            throw "The erased HostileCell lost direct CLR interface reimplementation edges: " +
+                    ($missingReimplementations -join ', ') + "; found: " +
+                    ($hostileCellInterfaces -join ', ')
+        }
+    } else {
+        $representativeSource = Get-Content -LiteralPath (
+            Join-Path $Directory $fileByHashKey.representativeSourceSha256) -Raw
+        $candidateProducerSource = Get-Content -LiteralPath (
+            Join-Path $Directory $fileByHashKey.candidateProducerSourceSha256) -Raw
+        foreach ($requiredShape in @(
+                'class OctoTree<T>', 'private var root: Node<T>?',
+                'class Leaf<T>(var value: T)', 'val nodes = arrayOfNulls<Node<T>>(8)'
+            )) {
+            if ($representativeSource -notmatch [Regex]::Escape($requiredShape)) {
+                throw "The OctoTree representative source lost required shape '$requiredShape'"
+            }
+        }
+        foreach ($requiredPhysicalShape in @(
+                'public class OctoTree<T0>', 'private object root;', 'private T0 value;',
+                'private readonly KotlinRepresentativeCandidate.OctoTreeNode<T0>[] nodes;'
+            )) {
+            if ($candidateProducerSource -notmatch [Regex]::Escape($requiredPhysicalShape)) {
+                throw "The OctoTree candidate lost required physical shape '$requiredPhysicalShape'"
+            }
+        }
+        foreach ($sourceText in @($candidateSource, $erasedCSharpSource)) {
+            foreach ($requiredShape in @(
+                    'octo-tree-typed-path', 'octo-tree-capability-path',
+                    'octo-tree-clusterization', 'octo-tree-rendering', 'workloadVersion=2'
+                )) {
+                if ($sourceText -notmatch [Regex]::Escape($requiredShape)) {
+                    throw "The paired OctoTree application lost required shape '$requiredShape'"
+                }
+            }
+            if ($sourceText -match 'MakeGenericType|Activator\.CreateInstance|\bdynamic\b') {
+                throw 'The paired OctoTree application introduced an unbounded dynamic-code path'
+            }
+        }
     }
     return [pscustomobject]@{
         Directory = $Directory
@@ -431,7 +513,9 @@ function Invoke-Application([string]$Directory, [string]$AssemblyName, [string]$
         $escapedAssembly = $assembly.Replace("'", "''")
         $frameworkScript = "`$ErrorActionPreference='Stop'; try { " +
             "`$a=[Reflection.Assembly]::LoadFrom('$escapedAssembly'); " +
-            "`$r=`$a.EntryPoint.Invoke(`$null,`$null); if([int]`$r -ne 0){exit [int]`$r} " +
+            "`$arguments=`$null; if(`$a.EntryPoint.GetParameters().Length -ne 0){" +
+            "`$arguments=New-Object 'System.Object[]' 1; `$arguments[0]=[string[]]@()}; " +
+            "`$r=`$a.EntryPoint.Invoke(`$null,`$arguments); if([int]`$r -ne 0){exit [int]`$r} " +
             "} catch { [Console]::Error.WriteLine(`$_.Exception.ToString()); exit 1 }"
         $applicationOutput = @(& $frameworkHost -NoLogo -NoProfile -NonInteractive -Command $frameworkScript 2>&1)
     } else {
@@ -445,8 +529,12 @@ function Invoke-Application([string]$Directory, [string]$AssemblyName, [string]$
 function Invoke-ProducerTest([string]$BundleDirectory, [string]$TestClass) {
     New-Item -ItemType Directory -Force -Path $BundleDirectory | Out-Null
     $gradle = Join-Path $repositoryRoot 'gradlew.bat'
-    $testFilter = "org.jetbrains.kotlin.test.runners.codegen.${TestClass}`$Box." +
+    $testMethod = if ($CorpusKind -eq 'hostile') {
         'testGenericOwnerHardestModelOracleSeparateCompilation'
+    } else {
+        'testGenericOwnerRepresentativeOctoTreeSeparateCompilation'
+    }
+    $testFilter = "org.jetbrains.kotlin.test.runners.codegen.${TestClass}`$Box.$testMethod"
     $applicationProperty = "-Pkotlin.dotnet.genericOwnerApplicationDir=$BundleDirectory"
     & $gradle --no-daemon $applicationProperty -q `
         :compiler:fir:fir2ir:dotNetTest --rerun --tests $testFilter
@@ -462,7 +550,8 @@ if (-not [string]::IsNullOrWhiteSpace($ExistingBundle)) {
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
         if ([string]::IsNullOrWhiteSpace($ExistingCorpus)) {
             $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-            $OutputDirectory = Join-Path $backendDirectory "build\generic-owner-applications\$timestamp"
+            $OutputDirectory = Join-Path $backendDirectory `
+                "build\generic-owner-$CorpusKind-applications\$timestamp"
         } else {
             $OutputDirectory = $ExistingCorpus
         }
@@ -507,7 +596,9 @@ if (-not [string]::IsNullOrWhiteSpace($ExistingBundle)) {
 
 foreach ($bundle in $verifiedBundles) {
     Invoke-Application $bundle.Directory $bundle.Files.candidateConsumerSha256 $bundle.Manifest.targetProfile
-    Invoke-Application $bundle.Directory $bundle.Files.erasedConsumerSha256 $bundle.Manifest.targetProfile
+    if ($bundle.Files.Contains('erasedConsumerSha256')) {
+        Invoke-Application $bundle.Directory $bundle.Files.erasedConsumerSha256 $bundle.Manifest.targetProfile
+    }
     Invoke-Application $bundle.Directory $bundle.Files.erasedCSharpAssemblySha256 $bundle.Manifest.targetProfile
-    Write-Host "Verified $($bundle.Manifest.targetProfile) generic-owner application bundle: $($bundle.Directory)"
+    Write-Host "Verified $CorpusKind/$($bundle.Manifest.targetProfile) generic-owner application bundle: $($bundle.Directory)"
 }
