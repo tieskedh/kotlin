@@ -27,7 +27,34 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed generic-owner migration condition: physical-family schema 15
+- Last completed generic-owner migration condition: physical-family schema 16
+  now preserves Roslyn nullable-reference transforms at every direct generic-
+  owner value position. Nullability is attached to each use, not folded into
+  the physical type identity: the same `object` carrier may be non-null,
+  nullable, or oblivious. Compiler-derived transforms are captured while live
+  IR is still available, carried through path-unbound prototypes, atomically
+  bound into MethodDef, Property, and state records, and rejected when their
+  structural count or accessor/state join disagrees. The complete OctoTree
+  product emits `Node<T>?`, `Node<T>?[]`, exact `T`, and the deliberately
+  widened nullable `object` carriers under `#nullable enable`; producer
+  compilation treats every warning as an error. A raw ECMA-335 inspector
+  decodes scalar/vector `NullableAttribute` blobs and effective
+  `NullableContextAttribute` fallback on fields, properties, returns, and
+  parameters on Framework 4.8 and .NET 10. This exposed and fixed an existing
+  export defect: an unmarked exact CLR type-parameter position used flag `0`,
+  while Roslyn's truthful encoding is non-null flag `1`; nullable substitutions
+  remain permitted because no CLR generic constraint was added. Open `T?`
+  stays on its semantic nullable `object` carrier. Unknown flags, malformed
+  transform lengths, property/accessor disagreement, state/access-path
+  disagreement, and partial schema records fail closed. The focused
+  PSI/LightTree x profile matrix covers eight products with zero failures,
+  errors, or skips. Production Kotlin-owned generic owners remain erased; this
+  closes nullable direct-surface metadata, not the atomic public ABI migration.
+  The final strict aggregate exited successfully; the direct XML audit covers
+  187 suites and 2,107 tests with zero failures, errors, or skips.
+  See
+  [`docs/archive/generic-owner-nullable-surface-2026-08-17.md`](docs/archive/generic-owner-nullable-surface-2026-08-17.md).
+- The preceding generic-owner migration condition: physical-family schema 15
   now records a real direct CLR Property surface over existing typed-entry
   MethodDefs. Compiler-derived prototype facts carry getter/setter kind and the
   producer-selected physical Property name; the artifact binds that name and

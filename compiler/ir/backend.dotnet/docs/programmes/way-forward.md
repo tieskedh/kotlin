@@ -984,6 +984,26 @@ the atomic public owner migration remain open. Continue with the next hostile
 migration condition rather than rolling out easy owners. See
 [`../archive/generic-owner-direct-property-surface-2026-08-17.md`](../archive/generic-owner-direct-property-surface-2026-08-17.md).
 
+The direct nullable-reference surface is now closed at physical-family schema
+16. Nullable transforms are per-position compiler facts, captured from live IR
+before the generic-owner prototype becomes detached and preserved through the
+complete producer record. They are not a property of the physical type: exact
+`T`, nullable semantic `object`, `Node<T>?`, and `Node<T>?[]` retain distinct
+truthful shapes even where CLR signatures otherwise share a carrier. Property
+and identity state joins require exact transform equality with their MethodDef
+accessors, and the codec rejects unknown or structurally incomplete vectors.
+The record-driven C# producer compiles under `#nullable enable` with warnings
+as errors. A raw metadata consumer verifies effective nullable attributes on
+fields, properties, returns, and parameters on Framework 4.8 and .NET 10. The
+work also corrects the existing export encoding of an unmarked exact CLR type
+parameter from oblivious flag `0` to Roslyn-compatible non-null flag `1`; this
+adds no CLR constraint and therefore does not prohibit nullable type arguments.
+Open Kotlin `T?` still selects the nullable semantic `object` carrier. This
+closes the nullable direct-surface condition, not base/interface transforms,
+the collision/overload matrix, broad property semantics, or the atomic public
+owner migration. Continue with the next complete hostile condition. See
+[`../archive/generic-owner-nullable-surface-2026-08-17.md`](../archive/generic-owner-nullable-surface-2026-08-17.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

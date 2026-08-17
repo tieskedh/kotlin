@@ -3754,7 +3754,7 @@ internal class DotNetIlEmitter(
 
     private fun StringBuilder.appendExportParameterAttributes(
         parameterIndex: Int,
-        nullableFlags: List<Int>,
+        nullableFlags: List<DotNetNullableReferenceFlag>,
         codeAnalysisAttributes: List<String>,
     ) {
         if (nullableFlags.isEmpty() && codeAnalysisAttributes.isEmpty()) return
@@ -3811,7 +3811,7 @@ internal class DotNetIlEmitter(
         val methods: List<DotNetRenderedExportMethod>,
         val usesNullableMetadata: Boolean,
         val usesCodeAnalysisMetadata: Boolean,
-        val returnNullabilityFlags: List<Int>,
+        val returnNullabilityFlags: List<DotNetNullableReferenceFlag>,
     )
 
     private data class DotNetRenderedExportMethod(
@@ -3834,14 +3834,14 @@ internal class DotNetIlEmitter(
 
     private data class DotNetExportedCallableBoundary(
         val delegateBoundary: DotNetDelegateBoundary,
-        val nullabilityFlags: List<Int>,
+        val nullabilityFlags: List<DotNetNullableReferenceFlag>,
     )
 
     private data class DotNetExportedBoundary(
         val exportedType: String,
         val adaptationCallInstruction: String,
         val projectionCallInstruction: String,
-        val nullabilityFlags: List<Int>,
+        val nullabilityFlags: List<DotNetNullableReferenceFlag>,
     )
 
     private fun StringBuilder.appendHeader(
