@@ -114,6 +114,11 @@ enum class DotNetGenericOwnerPhysicalTypeVisibility {
     NOT_PUBLIC,
 }
 
+/**
+ * Physical owner dispatch policy. [SEALED] is a Kotlin closed-subclass policy, not the CLI
+ * `sealed` TypeDef flag: its constructors are callable only by a derived type in the producer
+ * assembly.
+ */
 enum class DotNetGenericOwnerPhysicalTypeDispatch {
     FINAL,
     OVERRIDABLE,
@@ -455,6 +460,7 @@ enum class DotNetGenericOwnerPhysicalConstructorVisibility {
     PUBLIC,
     FAMILY,
     ASSEMBLY,
+    FAMILY_AND_ASSEMBLY,
     FAMILY_OR_ASSEMBLY,
     PRIVATE,
 }
@@ -2018,6 +2024,12 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         require(constructors.map { constructor -> constructor.logicalConstructorKey }.toSet().size == constructors.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical constructors"
         }
+        require(physicalDispatch != DotNetGenericOwnerPhysicalTypeDispatch.SEALED ||
+                constructors.isNotEmpty() && constructors.all { constructor ->
+                    constructor.visibility == DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY_AND_ASSEMBLY
+                }) {
+            "a sealed generic-owner physical family requires producer-family-only construction"
+        }
         require(constructors.map { constructor -> constructor.physicalConstructor }.toSet().size == constructors.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate physical constructors"
         }
@@ -2564,7 +2576,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 11
+    const val SCHEMA_VERSION = 12
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
