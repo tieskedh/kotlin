@@ -657,10 +657,15 @@ root executes the recorded private `Node<T>[8]` initializer. Direct C# proves
 the open field is `Node<T>[]`, the closed value is `Node<int>[]`, and empty and
 populated constructor behavior share the same typed vector/Leaf state on both
 profiles. The source-body loop remains an explicit bounded scenario oracle;
-all declaration and ABI identities come from the artifact. Callable families
-and outer Tree semantic routes remain required before this is a complete
-candidate. See
+all declaration and ABI identities come from the artifact. The typed callable
+part now emits the recorded abstract `Node.set` plus ordinary non-final virtual
+Leaf/Branch overrides and exact typed identity accessors. Direct C# proves
+base-reference dispatch and same-field mutation. The non-generic strict
+capability dispatcher and outer Tree semantic routes remain required before
+this is a complete candidate. See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
+The typed callable checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

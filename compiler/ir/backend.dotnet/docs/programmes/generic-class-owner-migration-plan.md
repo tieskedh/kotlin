@@ -261,9 +261,15 @@ with its fixed length-eight initializer on only the base constructor root. A
 separately compiled C# consumer proves open `Node<T>[]`, closed `Node<int>[]`,
 distinct zeroed vectors, and the populated secondary-constructor behavior on
 both profiles. This removes another product prerequisite without changing
-schema 12 or authorizing production. The next migration proof is its recorded
-Node/Leaf/Branch callable and state-access family. See
+schema 12 or authorizing production. The typed part of that callable proof now
+emits the exact abstract Node MethodDef, ordinary virtual Leaf/Branch overrides
+on final TypeDefs, and the recorded typed identity accessors. Direct C# proves
+base-reference dispatch and same-field mutation. The next migration proof is
+the matching non-generic strict capability interface and object-to-`!T`
+dispatcher. See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
+The typed callable checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,
