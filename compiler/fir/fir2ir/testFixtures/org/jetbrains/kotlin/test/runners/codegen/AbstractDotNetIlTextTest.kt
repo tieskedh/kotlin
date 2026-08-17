@@ -98,6 +98,8 @@ import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilyRoute
 import org.jetbrains.kotlin.backend.dotnet.requirePhysicalFamily
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierForExactOpenTypeDefinitionOrNull
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierMatchesAncestry
+import org.jetbrains.kotlin.backend.dotnet.reflectionCallableForExactPhysicalMethodOrNull
+import org.jetbrains.kotlin.backend.dotnet.reflectionCallableForLogicalMemberOrNull
 import org.jetbrains.kotlin.backend.dotnet.physicalizeExternalSubclass
 import org.jetbrains.kotlin.backend.dotnet.planFiniteOpenNullableConstruction
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
@@ -804,6 +806,47 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val node = decoded.requirePhysicalFamily(nodeLogicalKey)
     val leaf = decoded.requirePhysicalFamily(leafLogicalKey)
     val branch = decoded.requirePhysicalFamily(branchLogicalKey)
+    val reflectedPhysicalMethods = decoded.owners.flatMap { owner ->
+        owner.reflection.callables.flatMap { callable ->
+            callable.physicalMethods.map { physicalMethod -> Triple(owner, callable, physicalMethod) }
+        }
+    }
+    check(reflectedPhysicalMethods.isNotEmpty() && reflectedPhysicalMethods.all { reflectedMethod ->
+        val owner = reflectedMethod.first
+        val callable = reflectedMethod.second
+        val physicalMethod = reflectedMethod.third
+        decoded.reflectionCallableForExactPhysicalMethodOrNull(
+            owner.logicalOwnerKey,
+            physicalMethod,
+        )?.let { normalization ->
+            normalization.classifier == owner.reflection &&
+                    normalization.callable == callable &&
+                    normalization.physicalMethod == physicalMethod
+        } == true && decoded.reflectionCallableForLogicalMemberOrNull(callable.logicalMemberKey) == callable
+    } && decoded.owners.all { owner ->
+        owner.states.flatMap { state -> state.accessPaths }.filter { access ->
+            access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD
+        }.all { access ->
+            decoded.reflectionCallableForExactPhysicalMethodOrNull(
+                owner.logicalOwnerKey,
+                access.physicalMethod,
+            ) == null
+        }
+    }) {
+        "The decoded OctoTree family did not collapse every physical MethodDef to one logical callable"
+    }
+    check(decoded.owners.all { owner ->
+        decoded.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+            owner.reflection.physicalOpenTypeDefinition,
+        ) == owner.reflection && decoded.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+            owner.reflection.physicalOpenTypeDefinition.copy(
+                physicalTypePath = checkNotNull(owner.physicalCapabilityOwnerPath),
+                genericArity = owner.genericArity,
+            ),
+        ) == null
+    }) {
+        "The decoded OctoTree family exposed a capability TypeDef as a logical Kotlin classifier"
+    }
     val treeConstructor = tree.constructors.single()
     val nodeConstructor = node.constructors.single()
     val leafConstructor = leaf.constructors.single()
@@ -872,10 +915,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val treeGetMember = physicalMember(tree, treePrototype, "get")
     val treeSetMember = physicalMember(tree, treePrototype, "set")
     val treeToStringMember = physicalMember(tree, treePrototype, "toString")
+    val leafToStringMember = physicalMember(leaf, leafPrototype, "toString")
+    val branchToStringMember = physicalMember(branch, branchPrototype, "toString")
     val treeDepthSlot = typedSlot(treeDepthMember)
     val treeGetSlot = typedSlot(treeGetMember)
     val treeSetSlot = typedSlot(treeSetMember)
     val treeToStringSlot = typedSlot(treeToStringMember)
+    val leafToStringSlot = typedSlot(leafToStringMember)
+    val branchToStringSlot = typedSlot(branchToStringMember)
     val treeGetCapability = capabilitySlot(treeGetMember)
     val treeSetCapability = capabilitySlot(treeSetMember)
     val nodeSetSlot = typedSlot(nodeSetMember)
@@ -992,6 +1039,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             treeToStringSlot.signature.returnSlot.type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()) {
         "The OctoTree root member families lost their exact recorded MethodDef slots"
+    }
+    check(listOf(leafToStringSlot, branchToStringSlot).all { slot ->
+        slot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+                slot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
+                slot.signature.parameterSlots.isEmpty() &&
+                slot.signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
+    }) {
+        "The OctoTree Leaf/Branch rendering overrides lost their exact recorded MethodDef slots"
     }
     check(listOf(treeGetCapability, treeSetCapability).all { slot ->
         val interfaceSlot = slot.capabilitySlot
@@ -1194,6 +1249,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 treeGetSlot,
                 treeSetSlot,
                 treeToStringSlot,
+                leafToStringSlot,
+                branchToStringSlot,
                 nodeSetSlot,
                 leafReadSlot,
                 leafWriteSlot,
@@ -1304,6 +1361,10 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val treeGetReturnType = treeGetSlot.signature.returnSlot.type.renderSnapshotCSharpType(treeTypeParameters)
     val treeToStringReturnType =
         treeToStringSlot.signature.returnSlot.type.renderSnapshotCSharpType(treeTypeParameters)
+    val leafToStringReturnType =
+        leafToStringSlot.signature.returnSlot.type.renderSnapshotCSharpType(leafTypeParameters)
+    val branchToStringReturnType =
+        branchToStringSlot.signature.returnSlot.type.renderSnapshotCSharpType(branchTypeParameters)
     val rootReadReturnType =
         rootReadAccess.physicalMethod.signature.returnSlot.type.renderSnapshotCSharpType(treeTypeParameters)
     val nodeSetReturnType = nodeSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(nodeTypeParameters)
@@ -1342,12 +1403,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val producerSource = directory.resolve("OctoTreeCandidateProducer.cs")
     val positiveConsumerSource = directory.resolve("OctoTreeCandidatePositiveConsumer.cs")
     val negativeConsumerSource = directory.resolve("OctoTreeCandidateNegativeSubclass.cs")
+    val metadataInspectorSource = directory.resolve("OctoTreeCandidateMetadataInspector.cs")
     val producer = directory.resolve("OctoTreeCandidateProducer.dll")
     val positiveConsumer = directory.resolve(
         if (target == DotNetTarget.NET48) "OctoTreeCandidatePositiveConsumer.exe"
         else "OctoTreeCandidatePositiveConsumer.dll"
     )
     val negativeConsumer = directory.resolve("OctoTreeCandidateNegativeSubclass.dll")
+    val metadataInspector = directory.resolve("OctoTreeCandidateMetadataInspector.dll")
     directory.mkdirs()
     producerSource.writeText(
         """
@@ -1571,6 +1634,12 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         ${leafSetCapability.renderStrictCapabilityForwardArguments(leafTypeParameters)}
                     );
                 }
+
+                ${leafToStringSlot.visibility.renderVisibility()} override $leafToStringReturnType ${leafToStringSlot.physicalMethodName}()
+                {
+                    object value = this.${leafState.physicalFieldName};
+                    return "L{" + (value == null ? "null" : value.ToString()) + "}";
+                }
             }
 
             public sealed class $branchSimpleName<${branchTypeParameters.joinToString(", ")}> :
@@ -1621,6 +1690,18 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     return this.${branchSetSlot.physicalMethodName}(
                         ${branchSetCapability.renderStrictCapabilityForwardArguments(branchTypeParameters)}
                     );
+                }
+
+                ${branchToStringSlot.visibility.renderVisibility()} override $branchToStringReturnType ${branchToStringSlot.physicalMethodName}()
+                {
+                    string result = "[";
+                    for (int index = 0; index < this.${branchState.physicalFieldName}.Length; index++)
+                    {
+                        if (index != 0) result += ", ";
+                        object value = this.${branchState.physicalFieldName}[index];
+                        result += value == null ? "null" : value.ToString();
+                    }
+                    return result + "]";
                 }
             }
         }
@@ -1945,6 +2026,9 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         }
         """.trimIndent()
     )
+    metadataInspectorSource.writeText(
+        genericOwnerMetadataInspectorSource(decoded, producer, treeLogicalKey)
+    )
 
     val producerCompilation: SnapshotCSharpCompilation
     val positiveCompilation: SnapshotCSharpCompilation
@@ -1988,6 +2072,18 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     }) {
         "External C# unexpectedly subclassed Kotlin sealed Node<T>: ${negativeCompilation.output}"
     }
+    val metadataToolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+        "Modern C# compiler is required for the OctoTree raw metadata inspector"
+    }
+    val metadataCompilation = compileModernSnapshotCSharp(
+        metadataToolchain,
+        metadataInspectorSource,
+        metadataInspector,
+        references = emptyList(),
+        executable = true,
+    )
+    check(metadataCompilation.exitCode == 0) { metadataCompilation.output }
+    executeSnapshotConsumer(DotNetTarget.NET10_0, metadataInspector, directory)
     executeSnapshotConsumer(target, positiveConsumer, directory)
 }
 
@@ -3691,6 +3787,54 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                 },
             ),
         )
+    }
+    val reflectedMethods = artifact.owners.flatMap { owner ->
+        owner.reflection.callables.flatMap { callable ->
+            callable.physicalMethods.map { physicalMethod -> Triple(owner, callable, physicalMethod) }
+        }
+    }
+    check(reflectedMethods.all { reflectedMethod ->
+        val owner = reflectedMethod.first
+        val callable = reflectedMethod.second
+        val physicalMethod = reflectedMethod.third
+        artifact.reflectionCallableForExactPhysicalMethodOrNull(
+            owner.logicalOwnerKey,
+            physicalMethod,
+        )?.let { normalization ->
+            normalization.classifier == owner.reflection &&
+                    normalization.callable == callable &&
+                    normalization.physicalMethod == physicalMethod
+        } == true && artifact.reflectionCallableForLogicalMemberOrNull(callable.logicalMemberKey) == callable
+    }) {
+        "Generic-owner reflection did not normalize every physical MethodDef to one logical callable"
+    }
+    val privateStateMethods = artifact.owners.flatMap { owner ->
+        owner.states.flatMap { state -> state.accessPaths }.filter { access ->
+            access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD
+        }.map { access -> owner.logicalOwnerKey to access.physicalMethod }
+    }
+    check(privateStateMethods.all { privateStateMethod ->
+        artifact.reflectionCallableForExactPhysicalMethodOrNull(
+            privateStateMethod.first,
+            privateStateMethod.second,
+        ) == null
+    } && artifact.reflectionCallableForExactPhysicalMethodOrNull(
+        "missing-logical-classifier",
+        reflectedMethods.first().third,
+    ) == null && artifact.reflectionCallableForLogicalMemberOrNull("missing-logical-member") == null) {
+        "Generic-owner reflection exposed a producer-private state method as a Kotlin callable"
+    }
+    val sharedPhysicalMethods = reflectedMethods.groupBy { reflectedMethod -> reflectedMethod.third }
+        .filterValues { occurrences ->
+            occurrences.map { occurrence -> occurrence.first.logicalOwnerKey }.distinct().size > 1
+        }
+    check(sharedPhysicalMethods.isNotEmpty() && sharedPhysicalMethods.values.flatten().all { occurrence ->
+        artifact.reflectionCallableForExactPhysicalMethodOrNull(
+            occurrence.first.logicalOwnerKey,
+            occurrence.third,
+        )?.callable == occurrence.second
+    }) {
+        "Generic-owner reflection lost classifier-contextual inherited capability normalization"
     }
     val exactReflection = artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
         constructionOwner.reflection.physicalOpenTypeDefinition,
@@ -7691,6 +7835,545 @@ private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.renderSnapshotCSharpT
     }
     DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY ->
         "${arguments.single().renderSnapshotCSharpType(ownerArguments, methodArguments)}[]"
+}
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.renderMetadataSignatureType(): String = when (kind) {
+    DotNetGenericOwnerPhysicalTypeKind.VOID -> "System.Void"
+    DotNetGenericOwnerPhysicalTypeKind.BOOLEAN -> "System.Boolean"
+    DotNetGenericOwnerPhysicalTypeKind.INT32 -> "System.Int32"
+    DotNetGenericOwnerPhysicalTypeKind.STRING -> "System.String"
+    DotNetGenericOwnerPhysicalTypeKind.OBJECT -> "System.Object"
+    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER -> "!${checkNotNull(parameterIndex)}"
+    DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER -> "!!${checkNotNull(parameterIndex)}"
+    DotNetGenericOwnerPhysicalTypeKind.NAMED -> buildString {
+        append(typePath.joinToString("."))
+        if (genericArity > 0) append("`").append(genericArity)
+        if (arguments.isNotEmpty()) {
+            append('<')
+            append(arguments.joinToString(",") { argument -> argument.renderMetadataSignatureType() })
+            append('>')
+        }
+    }
+    DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY ->
+        "${arguments.single().renderMetadataSignatureType()}[]"
+}
+
+private fun genericOwnerMetadataInspectorSource(
+    artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
+    producer: File,
+    scenarioTreeLogicalOwnerKey: String,
+): String {
+    fun String.csharpLiteral(): String = "\"" +
+            replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
+    fun strings(values: List<String>): String =
+        "new string[] { ${values.joinToString(", ") { value -> value.csharpLiteral() }} }"
+    fun DotNetGenericOwnerPhysicalMemberVisibility.metadataAttribute(): String = when (this) {
+        DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC -> "MethodAttributes.Public"
+        DotNetGenericOwnerPhysicalMemberVisibility.FAMILY -> "MethodAttributes.Family"
+        DotNetGenericOwnerPhysicalMemberVisibility.ASSEMBLY -> "MethodAttributes.Assembly"
+        DotNetGenericOwnerPhysicalMemberVisibility.FAMILY_OR_ASSEMBLY -> "MethodAttributes.FamORAssem"
+        DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE -> "MethodAttributes.Private"
+    }
+    fun DotNetGenericOwnerPhysicalConstructorVisibility.metadataAttribute(): String = when (this) {
+        DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC -> "MethodAttributes.Public"
+        DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY -> "MethodAttributes.Family"
+        DotNetGenericOwnerPhysicalConstructorVisibility.ASSEMBLY -> "MethodAttributes.Assembly"
+        DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY_AND_ASSEMBLY -> "MethodAttributes.FamANDAssem"
+        DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY_OR_ASSEMBLY -> "MethodAttributes.FamORAssem"
+        DotNetGenericOwnerPhysicalConstructorVisibility.PRIVATE -> "MethodAttributes.Private"
+    }
+    fun methodExpectation(
+        identity: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+        visibility: String,
+        isAbstract: Boolean,
+        isVirtual: Boolean,
+        isFinal: Boolean,
+    ): String = "new ExpectedMethod(" + listOf(
+        identity.physicalMethodName.csharpLiteral(),
+        identity.signature.returnSlot.type.renderMetadataSignatureType().csharpLiteral(),
+        strings(identity.signature.parameterSlots.map { parameter ->
+            parameter.type.renderMetadataSignatureType()
+        }),
+        visibility,
+        (!identity.signature.isInstance).toString(),
+        isAbstract.toString(),
+        isVirtual.toString(),
+        isFinal.toString(),
+    ).joinToString(", ") + ")"
+
+    val ownerChecks = artifact.owners.joinToString("\n") { owner ->
+        check(owner.members.all { member -> member.defaultDispatcher == null }) {
+            "The OctoTree metadata inspector requires every default helper to be explicitly modeled"
+        }
+        val baseType = owner.constructors.single { constructor ->
+            constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
+        }.delegation.physicalOwnerType.renderMetadataSignatureType()
+        val methods = buildList {
+            owner.constructors.forEach { constructor ->
+                add(methodExpectation(
+                    constructor.physicalConstructor,
+                    constructor.visibility.metadataAttribute(),
+                    isAbstract = false,
+                    isVirtual = false,
+                    isFinal = false,
+                ))
+            }
+            owner.members.forEach { member ->
+                member.slots.forEach { slot ->
+                    add(methodExpectation(
+                        DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                            slot.physicalOwnerPath,
+                            slot.physicalMethodName,
+                            slot.signature,
+                        ),
+                        slot.visibility.metadataAttribute(),
+                        isAbstract = slot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+                        isVirtual = slot.dispatch != DotNetGenericOwnerPhysicalMemberDispatch.FINAL ||
+                                slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                        isFinal = slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    ))
+                }
+            }
+            owner.states.flatMap { state -> state.accessPaths }.filter { access ->
+                access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.PRODUCER_PRIVATE_METHOD
+            }.forEach { access ->
+                add(methodExpectation(
+                    access.physicalMethod,
+                    checkNotNull(access.physicalVisibility).metadataAttribute(),
+                    isAbstract = false,
+                    isVirtual = false,
+                    isFinal = false,
+                ))
+            }
+            if (owner.logicalOwnerKey == scenarioTreeLogicalOwnerKey) {
+                add(
+                    "new ExpectedMethod(\"ScenarioNumber\", \"System.Int32\", " +
+                            "new string[] { \"System.Int32\", \"System.Int32\", \"System.Int32\", " +
+                            "\"System.Int32\" }, MethodAttributes.Private, true, false, false, false)"
+                )
+            }
+        }
+        check(methods.size == methods.toSet().size) {
+            "The OctoTree metadata inspector received duplicate expected methods for ${owner.logicalOwnerKey}"
+        }
+        val fields = buildList {
+            owner.states.forEach { state ->
+                add(
+                    "new ExpectedField(${state.physicalFieldName.csharpLiteral()}, " +
+                            "${state.physicalType.renderMetadataSignatureType().csharpLiteral()}, false)"
+                )
+            }
+            if (owner.logicalOwnerKey == scenarioTreeLogicalOwnerKey) {
+                add("new ExpectedField(\"__scenarioDepth\", \"System.Int32\", true)")
+            }
+        }
+        val capabilityPath = checkNotNull(owner.physicalCapabilityOwnerPath)
+        val methodImpls = owner.members.flatMap { member -> member.slots }
+            .filter { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER }
+            .map { slot ->
+                val declaration = checkNotNull(slot.capabilitySlot)
+                "new ExpectedMethodImpl(${declaration.physicalMethodName.csharpLiteral()}, " +
+                        "${slot.physicalMethodName.csharpLiteral()})"
+            }
+        val specialConstraints = owner.physicalGenericParameters.map { parameter ->
+            parameter.specialConstraints.fold(0) { bits, constraint ->
+                bits or when (constraint) {
+                    DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.REFERENCE_TYPE -> 4
+                    DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.NON_NULLABLE_VALUE_TYPE -> 8
+                    DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.DEFAULT_CONSTRUCTOR -> 16
+                }
+            }
+        }
+        val constraints = owner.physicalGenericParameters.map { parameter ->
+            strings(parameter.typeConstraints.map { constraint -> constraint.renderMetadataSignatureType() })
+        }
+        val isAbstract = owner.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.ABSTRACT ||
+                owner.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.SEALED
+        val isSealed = owner.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.FINAL
+        """
+        CheckOwner(
+            reader,
+            ${owner.physicalOwnerPath.dropLast(1).joinToString(".").csharpLiteral()},
+            ${(owner.physicalOwnerPath.last() + "`" + owner.genericArity).csharpLiteral()},
+            ${owner.physicalVisibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC},
+            $isAbstract,
+            $isSealed,
+            ${baseType.csharpLiteral()},
+            ${capabilityPath.joinToString(".").csharpLiteral()},
+            new int[] { ${owner.physicalGenericParameters.joinToString(", ") { parameter -> parameter.index.toString() }} },
+            new int[] { ${specialConstraints.joinToString(", ")} },
+            new string[][] { ${constraints.joinToString(", ")} },
+            new ExpectedField[] { ${fields.joinToString(",\n")} },
+            new ExpectedMethod[] { ${methods.joinToString(",\n")} },
+            new ExpectedMethodImpl[] { ${methodImpls.joinToString(",\n")} }
+        );
+        """.trimIndent()
+    }
+    val capabilityChecks = artifact.owners.joinToString("\n") { owner ->
+        val capabilityPath = checkNotNull(owner.physicalCapabilityOwnerPath)
+        val methods = owner.members.flatMap { member -> member.slots }
+            .mapNotNull { slot -> slot.capabilitySlot }
+            .distinct()
+            .map { identity ->
+                methodExpectation(
+                    identity,
+                    "MethodAttributes.Public",
+                    isAbstract = true,
+                    isVirtual = true,
+                    isFinal = false,
+                )
+            }
+        "CheckCapability(reader, " +
+                "${capabilityPath.dropLast(1).joinToString(".").csharpLiteral()}, " +
+                "${capabilityPath.last().csharpLiteral()}, " +
+                "new ExpectedMethod[] { ${methods.joinToString(",\n")} });"
+    }
+    val targetTypeNames = artifact.owners.flatMap { owner ->
+        listOf(
+            owner.physicalOwnerPath.dropLast(1).joinToString(".") + "." +
+                    owner.physicalOwnerPath.last() + "`" + owner.genericArity,
+            checkNotNull(owner.physicalCapabilityOwnerPath).joinToString("."),
+        )
+    }.sorted()
+    val compilerSupportTypeNames = when (artifact.targetProfile) {
+        DotNetGenericOwnerPhysicalTargetProfile.NET48 -> listOf(
+            "Microsoft.CodeAnalysis.EmbeddedAttribute",
+            "System.Runtime.CompilerServices.RefSafetyRulesAttribute",
+        )
+        DotNetGenericOwnerPhysicalTargetProfile.NET10_0 -> emptyList()
+        DotNetGenericOwnerPhysicalTargetProfile.NETSTANDARD_2_0 ->
+            error("The OctoTree metadata inspector has no netstandard product")
+    }
+    val expectedAssemblyTypeNames = (targetTypeNames + compilerSupportTypeNames).sorted()
+    val targetNamespaces = artifact.owners.flatMap { owner ->
+        listOf(
+            owner.physicalOwnerPath.dropLast(1).joinToString("."),
+            checkNotNull(owner.physicalCapabilityOwnerPath).dropLast(1).joinToString("."),
+        )
+    }.distinct()
+    check(targetNamespaces.size == 1) {
+        "The bounded OctoTree metadata inspector requires one physical namespace"
+    }
+    val targetNamespacePrefix = targetNamespaces.single() + "."
+
+    return """
+        using System;
+        using System.Collections.Generic;
+        using System.Collections.Immutable;
+        using System.IO;
+        using System.Linq;
+        using System.Reflection;
+        using System.Reflection.Metadata;
+        using System.Reflection.PortableExecutable;
+
+        public static class Program
+        {
+            private sealed class ExpectedField
+            {
+                internal readonly string Name;
+                internal readonly string Type;
+                internal readonly bool IsInitOnly;
+                internal ExpectedField(string name, string type, bool isInitOnly)
+                {
+                    Name = name; Type = type; IsInitOnly = isInitOnly;
+                }
+            }
+
+            private sealed class ExpectedMethod
+            {
+                internal readonly string Name;
+                internal readonly string ReturnType;
+                internal readonly string[] ParameterTypes;
+                internal readonly MethodAttributes Visibility;
+                internal readonly bool IsStatic;
+                internal readonly bool IsAbstract;
+                internal readonly bool IsVirtual;
+                internal readonly bool IsFinal;
+                internal ExpectedMethod(
+                    string name,
+                    string returnType,
+                    string[] parameterTypes,
+                    MethodAttributes visibility,
+                    bool isStatic,
+                    bool isAbstract,
+                    bool isVirtual,
+                    bool isFinal)
+                {
+                    Name = name;
+                    ReturnType = returnType;
+                    ParameterTypes = parameterTypes;
+                    Visibility = visibility;
+                    IsStatic = isStatic;
+                    IsAbstract = isAbstract;
+                    IsVirtual = isVirtual;
+                    IsFinal = isFinal;
+                }
+            }
+
+            private sealed class ExpectedMethodImpl
+            {
+                internal readonly string Declaration;
+                internal readonly string Body;
+                internal ExpectedMethodImpl(string declaration, string body)
+                {
+                    Declaration = declaration; Body = body;
+                }
+            }
+
+            private sealed class SignatureTypeProvider : ISignatureTypeProvider<string, object>
+            {
+                public string GetArrayType(string elementType, ArrayShape shape) => elementType + "[array]";
+                public string GetByReferenceType(string elementType) => elementType + "&";
+                public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr";
+                public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments) =>
+                    genericType + "<" + string.Join(",", typeArguments) + ">";
+                public string GetGenericMethodParameter(object context, int index) => "!!" + index;
+                public string GetGenericTypeParameter(object context, int index) => "!" + index;
+                public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => unmodifiedType;
+                public string GetPinnedType(string elementType) => elementType;
+                public string GetPointerType(string elementType) => elementType + "*";
+                public string GetPrimitiveType(PrimitiveTypeCode typeCode)
+                {
+                    switch (typeCode)
+                    {
+                        case PrimitiveTypeCode.Boolean: return "System.Boolean";
+                        case PrimitiveTypeCode.Int32: return "System.Int32";
+                        case PrimitiveTypeCode.Object: return "System.Object";
+                        case PrimitiveTypeCode.String: return "System.String";
+                        case PrimitiveTypeCode.Void: return "System.Void";
+                        default: return "primitive:" + typeCode;
+                    }
+                }
+                public string GetSZArrayType(string elementType) => elementType + "[]";
+                public string GetTypeFromDefinition(
+                    MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => TypeName(reader, handle);
+                public string GetTypeFromReference(
+                    MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => TypeName(reader, handle);
+                public string GetTypeFromSpecification(
+                    MetadataReader reader, object context, TypeSpecificationHandle handle, byte rawTypeKind) =>
+                    reader.GetTypeSpecification(handle).DecodeSignature(this, context);
+            }
+
+            private static readonly SignatureTypeProvider TypeProvider = new SignatureTypeProvider();
+
+            private static string JoinName(string ns, string name) =>
+                string.IsNullOrEmpty(ns) ? name : ns + "." + name;
+
+            private static string TypeName(MetadataReader reader, TypeDefinitionHandle handle)
+            {
+                TypeDefinition definition = reader.GetTypeDefinition(handle);
+                return JoinName(reader.GetString(definition.Namespace), reader.GetString(definition.Name));
+            }
+
+            private static string TypeName(MetadataReader reader, TypeReferenceHandle handle)
+            {
+                TypeReference reference = reader.GetTypeReference(handle);
+                return JoinName(reader.GetString(reference.Namespace), reader.GetString(reference.Name));
+            }
+
+            private static string TypeName(MetadataReader reader, EntityHandle handle)
+            {
+                if (handle.Kind == HandleKind.TypeDefinition)
+                    return TypeName(reader, (TypeDefinitionHandle)handle);
+                if (handle.Kind == HandleKind.TypeReference)
+                    return TypeName(reader, (TypeReferenceHandle)handle);
+                if (handle.Kind == HandleKind.TypeSpecification)
+                    return reader.GetTypeSpecification((TypeSpecificationHandle)handle)
+                        .DecodeSignature(TypeProvider, null);
+                throw new InvalidOperationException("Unsupported type handle " + handle.Kind);
+            }
+
+            private static TypeDefinitionHandle FindType(MetadataReader reader, string ns, string name)
+            {
+                TypeDefinitionHandle[] matches = reader.TypeDefinitions.Where(handle =>
+                {
+                    TypeDefinition definition = reader.GetTypeDefinition(handle);
+                    return reader.GetString(definition.Namespace) == ns && reader.GetString(definition.Name) == name;
+                }).ToArray();
+                if (matches.Length != 1)
+                    throw new InvalidOperationException("Expected one TypeDef " + JoinName(ns, name));
+                return matches[0];
+            }
+
+            private static string MethodName(MetadataReader reader, EntityHandle handle)
+            {
+                if (handle.Kind == HandleKind.MethodDefinition)
+                    return reader.GetString(reader.GetMethodDefinition((MethodDefinitionHandle)handle).Name);
+                if (handle.Kind == HandleKind.MemberReference)
+                    return reader.GetString(reader.GetMemberReference((MemberReferenceHandle)handle).Name);
+                throw new InvalidOperationException("Unsupported method handle " + handle.Kind);
+            }
+
+            private static void CheckMethods(
+                MetadataReader reader,
+                TypeDefinition definition,
+                ExpectedMethod[] expected)
+            {
+                MethodDefinitionHandle[] actual = definition.GetMethods().ToArray();
+                if (actual.Length != expected.Length)
+                    throw new InvalidOperationException(
+                        "MethodDef count differs: expected " + expected.Length + ", actual " + actual.Length +
+                        "; expected rows " + string.Join(",", expected.Select(item => item.Name)) +
+                        "; actual rows " + string.Join(",", actual.Select(handle =>
+                            reader.GetString(reader.GetMethodDefinition(handle).Name))));
+                var remaining = new List<MethodDefinitionHandle>(actual);
+                foreach (ExpectedMethod item in expected)
+                {
+                    MethodDefinitionHandle[] matches = remaining.Where(handle =>
+                    {
+                        MethodDefinition method = reader.GetMethodDefinition(handle);
+                        if (reader.GetString(method.Name) != item.Name) return false;
+                        MethodSignature<string> signature = method.DecodeSignature(TypeProvider, null);
+                        return signature.ReturnType == item.ReturnType &&
+                            signature.ParameterTypes.SequenceEqual(item.ParameterTypes);
+                    }).ToArray();
+                    if (matches.Length != 1)
+                        throw new InvalidOperationException("Expected one exact MethodDef " + item.Name);
+                    MethodDefinition selected = reader.GetMethodDefinition(matches[0]);
+                    MethodAttributes attributes = selected.Attributes;
+                    if ((attributes & MethodAttributes.MemberAccessMask) != item.Visibility ||
+                        ((attributes & MethodAttributes.Static) != 0) != item.IsStatic ||
+                        ((attributes & MethodAttributes.Abstract) != 0) != item.IsAbstract ||
+                        ((attributes & MethodAttributes.Virtual) != 0) != item.IsVirtual ||
+                        ((attributes & MethodAttributes.Final) != 0) != item.IsFinal)
+                        throw new InvalidOperationException("MethodDef flags differ for " + item.Name + ": " + attributes);
+                    remaining.Remove(matches[0]);
+                }
+                if (remaining.Count != 0)
+                    throw new InvalidOperationException("Unexpected MethodDef rows remain");
+            }
+
+            private static void CheckOwner(
+                MetadataReader reader,
+                string ns,
+                string name,
+                bool isPublic,
+                bool isAbstract,
+                bool isSealed,
+                string baseType,
+                string directInterface,
+                int[] genericParameterIndices,
+                int[] genericParameterAttributes,
+                string[][] genericParameterConstraints,
+                ExpectedField[] expectedFields,
+                ExpectedMethod[] expectedMethods,
+                ExpectedMethodImpl[] expectedMethodImpls)
+            {
+                TypeDefinitionHandle handle = FindType(reader, ns, name);
+                TypeDefinition definition = reader.GetTypeDefinition(handle);
+                TypeAttributes attributes = definition.Attributes;
+                if (((attributes & TypeAttributes.VisibilityMask) == TypeAttributes.Public) != isPublic ||
+                    ((attributes & TypeAttributes.Abstract) != 0) != isAbstract ||
+                    ((attributes & TypeAttributes.Sealed) != 0) != isSealed ||
+                    (attributes & TypeAttributes.Interface) != 0 || TypeName(reader, definition.BaseType) != baseType)
+                    throw new InvalidOperationException("TypeDef row differs for " + JoinName(ns, name));
+
+                GenericParameterHandle[] parameters = definition.GetGenericParameters().ToArray();
+                if (parameters.Length != genericParameterIndices.Length ||
+                    parameters.Length != genericParameterAttributes.Length ||
+                    parameters.Length != genericParameterConstraints.Length)
+                    throw new InvalidOperationException("GenericParam count differs for " + JoinName(ns, name));
+                for (int index = 0; index < parameters.Length; index++)
+                {
+                    GenericParameter parameter = reader.GetGenericParameter(parameters[index]);
+                    string[] constraints = parameter.GetConstraints().Select(constraint =>
+                        TypeName(reader, reader.GetGenericParameterConstraint(constraint).Type)).ToArray();
+                    if (parameter.Index != genericParameterIndices[index] ||
+                        (int)parameter.Attributes != genericParameterAttributes[index] ||
+                        !constraints.SequenceEqual(genericParameterConstraints[index]))
+                        throw new InvalidOperationException("GenericParam row differs for " + JoinName(ns, name));
+                }
+
+                InterfaceImplementationHandle[] interfaces = definition.GetInterfaceImplementations().ToArray();
+                if (interfaces.Length != 1 ||
+                    TypeName(reader, reader.GetInterfaceImplementation(interfaces[0]).Interface) != directInterface)
+                    throw new InvalidOperationException("InterfaceImpl row differs for " + JoinName(ns, name));
+
+                FieldDefinitionHandle[] fields = definition.GetFields().ToArray();
+                if (fields.Length != expectedFields.Length)
+                    throw new InvalidOperationException("Field row count differs for " + JoinName(ns, name));
+                foreach (ExpectedField item in expectedFields)
+                {
+                    FieldDefinitionHandle[] matches = fields.Where(fieldHandle =>
+                    {
+                        FieldDefinition field = reader.GetFieldDefinition(fieldHandle);
+                        return reader.GetString(field.Name) == item.Name &&
+                            field.DecodeSignature(TypeProvider, null) == item.Type &&
+                            (field.Attributes & FieldAttributes.FieldAccessMask) == FieldAttributes.Private &&
+                            ((field.Attributes & FieldAttributes.InitOnly) != 0) == item.IsInitOnly;
+                    }).ToArray();
+                    if (matches.Length != 1)
+                        throw new InvalidOperationException("Field row differs for " + item.Name);
+                }
+
+                CheckMethods(reader, definition, expectedMethods);
+                MethodImplementationHandle[] implementations = definition.GetMethodImplementations().ToArray();
+                if (implementations.Length != expectedMethodImpls.Length)
+                    throw new InvalidOperationException("MethodImpl count differs for " + JoinName(ns, name));
+                var pairs = implementations.Select(implementationHandle =>
+                {
+                    MethodImplementation implementation = reader.GetMethodImplementation(implementationHandle);
+                    return MethodName(reader, implementation.MethodDeclaration) + "|" +
+                        MethodName(reader, implementation.MethodBody);
+                }).OrderBy(value => value).ToArray();
+                string[] expectedPairs = expectedMethodImpls.Select(item => item.Declaration + "|" + item.Body)
+                    .OrderBy(value => value).ToArray();
+                if (!pairs.SequenceEqual(expectedPairs))
+                    throw new InvalidOperationException("MethodImpl rows differ for " + JoinName(ns, name));
+            }
+
+            private static void CheckCapability(
+                MetadataReader reader,
+                string ns,
+                string name,
+                ExpectedMethod[] expectedMethods)
+            {
+                TypeDefinition definition = reader.GetTypeDefinition(FindType(reader, ns, name));
+                TypeAttributes attributes = definition.Attributes;
+                if ((attributes & TypeAttributes.VisibilityMask) != TypeAttributes.Public ||
+                    (attributes & TypeAttributes.Interface) == 0 ||
+                    (attributes & TypeAttributes.Abstract) == 0 ||
+                    definition.GetGenericParameters().Count != 0 ||
+                    definition.GetFields().Count != 0 ||
+                    definition.GetInterfaceImplementations().Count != 0 ||
+                    definition.GetMethodImplementations().Count != 0)
+                    throw new InvalidOperationException("Capability TypeDef row differs for " + JoinName(ns, name));
+                CheckMethods(reader, definition, expectedMethods);
+            }
+
+            public static int Main()
+            {
+                using (FileStream stream = File.OpenRead(${producer.absolutePath.csharpLiteral()}))
+                using (var peReader = new PEReader(stream))
+                {
+                    if (!peReader.HasMetadata) throw new InvalidOperationException("Candidate has no CLR metadata");
+                    MetadataReader reader = peReader.GetMetadataReader();
+                    string[] expectedTypes = ${strings(targetTypeNames)};
+                    string[] expectedAssemblyTypes = ${strings(expectedAssemblyTypeNames)};
+                    string[] actualAssemblyTypes = reader.TypeDefinitions
+                        .Select(handle => TypeName(reader, handle))
+                        .Where(name => name != "<Module>")
+                        .OrderBy(name => name, StringComparer.Ordinal).ToArray();
+                    if (!actualAssemblyTypes.SequenceEqual(expectedAssemblyTypes))
+                        throw new InvalidOperationException(
+                            "The candidate contains an unexpected TypeDef outside the physical family: " +
+                            string.Join(",", actualAssemblyTypes));
+                    string[] actualTypes = reader.TypeDefinitions.Select(handle => TypeName(reader, handle))
+                        .Where(name => name.StartsWith(
+                            ${targetNamespacePrefix.csharpLiteral()}, StringComparison.Ordinal))
+                        .OrderBy(name => name, StringComparer.Ordinal).ToArray();
+                    if (!actualTypes.SequenceEqual(expectedTypes))
+                        throw new InvalidOperationException(
+                            "The physical family TypeDef set differs: expected " +
+                            string.Join(",", expectedTypes) + "; actual " + string.Join(",", actualTypes));
+
+                    $ownerChecks
+                    $capabilityChecks
+                }
+                return 0;
+            }
+        }
+    """.trimIndent()
 }
 
 private data class SnapshotCSharpCompilation(

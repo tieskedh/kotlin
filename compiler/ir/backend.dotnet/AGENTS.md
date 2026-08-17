@@ -742,8 +742,12 @@ See the
   interfaces are hidden compiler ABI and must never normalize as Kotlin
   classifiers. Every source callable collapses its typed, semantic,
   capability, and default-helper MethodDefs to one logical key and records the
-  one typed or semantic-dispatcher invocation entry. Do not enumerate those
-  MethodDefs as Kotlin members, derive logical arguments from closed CLR type
+  one typed or semantic-dispatcher invocation entry. KLIB must select the
+  logical classifier before an exact physical MethodDef is normalized: a
+  derived owner may share its base capability TypeDef and inherited private
+  dispatcher while retaining a distinct logical override declaration. Do not
+  require artifact-global MethodDef-to-callable uniqueness. Do not enumerate
+  those MethodDefs as Kotlin members, derive logical arguments from closed CLR type
   arguments, or reconstruct a logical declaration from CLR names.
   A completely resolved external Kotlin subclass may now become one
   production-inert physicalization record. The caller supplies only a distinct

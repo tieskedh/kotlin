@@ -450,7 +450,15 @@ field through `object`, while the Branch capability exposes the same
 before mutation. The outer open Tree now materializes its semantic object root,
 typed/capability members and three compiler-census semantic child calls.
 Direct C# proves one graph plus inherited base dispatchers on an external
-subclass. Next, close whole-family metadata and reflection normalization. See
+subclass. Whole-family metadata/reflection normalization is now closed by a
+classifier-contextual inverse MethodDef join and an exhaustive raw ECMA-335
+reader over both profile products. Context preserves the hostile derived
+owner's legal sharing of its base capability TypeDef/dispatcher; capability
+types and producer-private methods remain absent from the logical Kotlin view.
+The reader also found and closed missing recorded Leaf/Branch rendering
+MethodDefs that inherited Object rendering had hidden. Next, compose private
+non-KLIB helpers, declaration-independent state, and complete source bodies
+with this same family before paired representative measurement. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 The sealed-construction checkpoint is recorded in
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
@@ -464,6 +472,8 @@ The state-access capability product is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 The outer-root product is recorded in
 [`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
+The whole-family metadata/reflection product is recorded in
+[`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable

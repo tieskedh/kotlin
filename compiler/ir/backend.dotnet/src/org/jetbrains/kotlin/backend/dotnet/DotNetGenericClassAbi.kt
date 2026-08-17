@@ -595,6 +595,19 @@ data class DotNetGenericOwnerPhysicalReflectionRecord(
     }
 }
 
+/** One exact physical MethodDef normalized to its producer-authoritative Kotlin declaration. */
+data class DotNetGenericOwnerPhysicalCallableNormalizationRecord(
+    val classifier: DotNetGenericOwnerPhysicalReflectionRecord,
+    val callable: DotNetGenericOwnerPhysicalCallableReflectionRecord,
+    val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+) {
+    init {
+        require(callable in classifier.callables && physicalMethod in callable.physicalMethods) {
+            "a generic-owner callable normalization must remain inside one reflected physical family"
+        }
+    }
+}
+
 enum class DotNetGenericOwnerPhysicalStateAccessDomain {
     TYPED,
     SEMANTIC,
@@ -2567,6 +2580,35 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
         ?: return false
     return reflection.physicalOpenTypeDefinition in physicalOpenTypeDefinitionAncestry
 }
+
+/**
+ * Resolves an exact producer-recorded MethodDef within one KLIB-selected logical classifier.
+ *
+ * Capability interface slots and their private dispatchers deliberately normalize to the same
+ * callable as the typed/semantic entry. Producer-private state access and foreign MethodDefs
+ * return null: they are physical implementation details, not Kotlin declarations. Classifier
+ * context is mandatory because a derived owner can reuse its base's capability TypeDef and
+ * inherited private dispatcher while retaining a distinct logical override declaration.
+ */
+fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForExactPhysicalMethodOrNull(
+    logicalClassifierKey: String,
+    physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+): DotNetGenericOwnerPhysicalCallableNormalizationRecord? {
+    val reflection = owners.singleOrNull { owner ->
+        owner.logicalOwnerKey == logicalClassifierKey
+    }?.reflection ?: return null
+    val callable = reflection.callables.singleOrNull { candidate ->
+        physicalMethod in candidate.physicalMethods
+    } ?: return null
+    return DotNetGenericOwnerPhysicalCallableNormalizationRecord(reflection, callable, physicalMethod)
+}
+
+/** Resolves one KLIB logical callable key without consulting CLR names or signatures. */
+fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberOrNull(
+    logicalMemberKey: String,
+): DotNetGenericOwnerPhysicalCallableReflectionRecord? = owners.asSequence()
+    .flatMap { owner -> owner.reflection.callables.asSequence() }
+    .singleOrNull { callable -> callable.logicalMemberKey == logicalMemberKey }
 
 /**
  * Deterministic codec for the production-inert generic-owner family artifact.

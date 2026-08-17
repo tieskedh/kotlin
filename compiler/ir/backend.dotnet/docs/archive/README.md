@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md)
+  records classifier-contextual physical MethodDef normalization, hidden
+  capability/private methods, exhaustive raw ECMA-335 table inspection, and
+  the missing Leaf/Branch rendering MethodDef repair.
 - [`generic-owner-octo-tree-root-product-2026-08-17.md`](generic-owner-octo-tree-root-product-2026-08-17.md)
   records the outer open Tree, semantic object root, compiler-census capability
   calls, typed/non-generic C# surface, inherited base dispatchers, and explicit

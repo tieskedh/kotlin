@@ -675,8 +675,19 @@ requires Tree.get-to-Leaf-read, Tree.get-to-Branch-read, and Tree.set-to-
 Node.set to remain semantic-capability calls. Direct C# proves typed and
 non-generic calls share one object graph, incompatible input fails before
 mutation, and an external subclass inherits the base-declared dispatchers.
-Whole-family metadata/reflection normalization remains required before this is
-a complete candidate.
+Whole-family metadata/reflection normalization is now closed for this detached
+candidate. An inverse join takes the KLIB-selected logical classifier as
+mandatory context and maps every exact physical MethodDef family to one
+callable while hiding capability TypeDefs and producer-private methods. The
+context cannot be removed: the hostile derived owner legitimately reuses its
+base capability TypeDef and inherited dispatcher for a distinct override. An
+independently compiled `System.Reflection.Metadata` product reads each
+Framework/net10 candidate and exhaustively checks its TypeDef, GenericParam,
+InterfaceImpl, MethodImpl, field, method, signature, and flag rows. It found
+and closed previously omitted Leaf/Branch rendering overrides which inherited
+Object rendering had hidden from the execution oracle. The next product must
+compose the ordinary declaration/body closure, including private non-KLIB
+helpers and declaration-independent state, before representative measurement.
 See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
@@ -687,6 +698,8 @@ The state-access capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 The outer-root checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
+The whole-family metadata/reflection checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
