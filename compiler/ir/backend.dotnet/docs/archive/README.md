@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-branch-product-2026-08-17.md`](generic-owner-octo-tree-branch-product-2026-08-17.md)
+  records the decoded Branch `Node<T>[]` field, fixed eight-element base-root
+  initializer, exact base/this constructors, and direct Framework/.NET C#
+  open/closed carrier and execution evidence.
 - [`generic-owner-sealed-construction-closure-2026-08-17.md`](generic-owner-sealed-construction-closure-2026-08-17.md)
   records schema 12's abstract Kotlin-sealed base plus
   `FamilyAndAssembly` constructor closure, record-driven true-`T` Leaf product,

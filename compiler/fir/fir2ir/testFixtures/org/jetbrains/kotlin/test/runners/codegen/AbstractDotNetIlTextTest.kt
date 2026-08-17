@@ -428,11 +428,11 @@ private class BackendCliDotNetFacade(
             loweredInput.configuration.dotNetTarget,
             completedOutput.output,
         )
-        physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
+        physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             loweredInput.configuration.dotNetTarget,
             completedOutput.output,
-            testServices.getOrCreateTempDirectory("generic-owner-octo-tree-sealed-construction"),
+            testServices.getOrCreateTempDirectory("generic-owner-octo-tree-candidate"),
         )
         validateGenericOwnerOpenNullableArraySignaturePrototype(completedOutput.genericOwnerPrototypes)
         physicalizeGenericOwnerHardestModelPrototype(
@@ -766,11 +766,11 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
 }
 
 /**
- * Test-owned, record-driven proof of the CLR representation for one Kotlin sealed generic owner.
- * The producer must be able to derive its known Leaf in the same assembly, while separately
- * compiled C# must be able to construct Leaf<T> but not add another Node<T> subclass.
+ * Test-owned physicalization of the decoded recursive OctoTree candidate. Physical declaration,
+ * signature, inheritance, constructor, and state identities come from the record; the bounded C#
+ * bodies remain scenario oracles. Production emission cannot observe this product.
  */
-private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
+private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     target: DotNetTarget,
     erasedProducerOutput: File,
@@ -781,6 +781,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
     val nodeLogicalKey = nodePrototype.logicalBindingKey ?: return
     val leafPrototype = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Leaf" }
     val leafLogicalKey = checkNotNull(leafPrototype.logicalBindingKey)
+    val branchPrototype = prototypes.single { prototype -> prototype.ownerName == "OctoTree.Node.Branch" }
+    val branchLogicalKey = checkNotNull(branchPrototype.logicalBindingKey)
     val artifact = createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
         prototypes = prototypes,
         producerFingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(
@@ -795,13 +797,24 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
     )
     val node = decoded.requirePhysicalFamily(nodeLogicalKey)
     val leaf = decoded.requirePhysicalFamily(leafLogicalKey)
+    val branch = decoded.requirePhysicalFamily(branchLogicalKey)
     val nodeConstructor = node.constructors.single()
     val leafConstructor = leaf.constructors.single()
+    val branchBaseConstructor = branch.constructors.single { constructor ->
+        constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.BASE
+    }
+    val branchThisConstructor = branch.constructors.single { constructor ->
+        constructor.delegation.kind == DotNetGenericOwnerConstructorDelegationKind.THIS
+    }
     val leafState = leaf.states.single { state -> state.logicalFieldName == "value" }
     val leafInitializer = leafState.initializers.single()
     val leafParameterIndex = checkNotNull(leafInitializer.constructorParameterIndex)
+    val branchState = branch.states.single { state -> state.logicalFieldName == "nodes" }
+    val branchInitializer = branchState.initializers.single()
+    val branchElementType = branchState.physicalType.arguments.singleOrNull()
     val nodeTypeParameters = List(node.genericArity) { index -> "T$index" }
     val leafTypeParameters = List(leaf.genericArity) { index -> "T$index" }
+    val branchTypeParameters = List(branch.genericArity) { index -> "T$index" }
 
     check(node.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.SEALED &&
             node.physicalVisibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC &&
@@ -827,11 +840,47 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
             }) {
         "The bounded OctoTree sealed-construction proof received an unsupported Leaf record: $leaf"
     }
+    check(branch.physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.FINAL &&
+            branch.physicalVisibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC &&
+            branchBaseConstructor.visibility == DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC &&
+            branchThisConstructor.visibility == DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC &&
+            branchBaseConstructor.delegation.physicalOwnerType.typePath == node.physicalOwnerPath &&
+            branchBaseConstructor.physicalConstructor.signature.parameterSlots.isEmpty() &&
+            branchBaseConstructor.delegation.signature.parameterSlots.isEmpty() &&
+            branchThisConstructor.delegation.physicalOwnerType.typePath == branch.physicalOwnerPath &&
+            branchThisConstructor.delegation.logicalConstructorKey ==
+            branchBaseConstructor.logicalConstructorKey &&
+            branchThisConstructor.delegation.signature ==
+            branchBaseConstructor.physicalConstructor.signature &&
+            branchThisConstructor.physicalConstructor.signature.parameterSlots.map { slot -> slot.type } == listOf(
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
+            ) && branchState.physicalVisibility == DotNetGenericOwnerPhysicalStateVisibility.PRIVATE &&
+            branchState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+            branchState.physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY &&
+            branchInitializer.kind == DotNetGenericOwnerPhysicalStateInitializerKind.FIXED_ZEROED_SZ_ARRAY &&
+            branchInitializer.fixedElementCount == 8 &&
+            branchInitializer.logicalConstructorKeys == listOf(branchBaseConstructor.logicalConstructorKey) &&
+            branch.physicalGenericParameters.all { parameter ->
+                parameter.specialConstraints.isEmpty() && parameter.typeConstraints.isEmpty()
+            }) {
+        "The bounded OctoTree Branch-state proof received an unsupported record: $branch"
+    }
+    check(branchElementType?.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+            branchElementType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+            branchElementType.typePath == node.physicalOwnerPath &&
+            branchElementType.arguments == listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0))) {
+        "The OctoTree Branch vector is not the recorded recursive Node<T>[] carrier: $branchState"
+    }
     check(node.physicalOwnerPath.dropLast(1) == leaf.physicalOwnerPath.dropLast(1) &&
+            node.physicalOwnerPath.dropLast(1) == branch.physicalOwnerPath.dropLast(1) &&
             node.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
             leaf.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
-            leafState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) {
-        "The bounded OctoTree sealed-construction proof requires C#-representable physical identities"
+            branch.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
+            leafState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
+            branchState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) {
+        "The bounded OctoTree candidate requires C#-representable physical identities"
     }
     check(leafParameterIndex in leafConstructor.physicalConstructor.signature.parameterSlots.indices &&
             leafConstructor.physicalConstructor.signature.parameterSlots[leafParameterIndex].type ==
@@ -853,24 +902,37 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
     val physicalNamespace = node.physicalOwnerPath.dropLast(1).joinToString(".")
     val nodeSimpleName = node.physicalOwnerPath.last()
     val leafSimpleName = leaf.physicalOwnerPath.last()
+    val branchSimpleName = branch.physicalOwnerPath.last()
     val nodeOpenType = node.physicalOwnerPath.joinToString(".") + "<" +
             ",".repeat(node.genericArity - 1) + ">"
     val leafOpenType = leaf.physicalOwnerPath.joinToString(".") + "<" +
             ",".repeat(leaf.genericArity - 1) + ">"
+    val branchOpenType = branch.physicalOwnerPath.joinToString(".") + "<" +
+            ",".repeat(branch.genericArity - 1) + ">"
     val leafBaseType = leafConstructor.delegation.physicalOwnerType.renderSnapshotCSharpType(leafTypeParameters)
     val leafParameterTypes = leafConstructor.physicalConstructor.signature.parameterSlots.map { slot ->
         slot.type.renderSnapshotCSharpType(leafTypeParameters)
     }
     val leafParameters = leafParameterTypes.mapIndexed { index, type -> "$type value$index" }.joinToString(", ")
-    val producerSource = directory.resolve("OctoTreeSealedProducer.cs")
-    val positiveConsumerSource = directory.resolve("OctoTreeSealedPositiveConsumer.cs")
-    val negativeConsumerSource = directory.resolve("OctoTreeSealedNegativeSubclass.cs")
-    val producer = directory.resolve("OctoTreeSealedProducer.dll")
+    val branchBaseType = branchBaseConstructor.delegation.physicalOwnerType
+        .renderSnapshotCSharpType(branchTypeParameters)
+    val branchParameterTypes = branchThisConstructor.physicalConstructor.signature.parameterSlots.map { slot ->
+        slot.type.renderSnapshotCSharpType(branchTypeParameters)
+    }
+    val branchParameters = branchParameterTypes.mapIndexed { index, type -> "$type value$index" }.joinToString(", ")
+    val branchStateType = branchState.physicalType.renderSnapshotCSharpType(branchTypeParameters)
+    val branchElementTypeName = checkNotNull(branchElementType).renderSnapshotCSharpType(branchTypeParameters)
+    val branchLeafType = leafConstructor.constructedOwnerType.renderSnapshotCSharpType(branchTypeParameters)
+    val branchElementCount = checkNotNull(branchInitializer.fixedElementCount)
+    val producerSource = directory.resolve("OctoTreeCandidateProducer.cs")
+    val positiveConsumerSource = directory.resolve("OctoTreeCandidatePositiveConsumer.cs")
+    val negativeConsumerSource = directory.resolve("OctoTreeCandidateNegativeSubclass.cs")
+    val producer = directory.resolve("OctoTreeCandidateProducer.dll")
     val positiveConsumer = directory.resolve(
-        if (target == DotNetTarget.NET48) "OctoTreeSealedPositiveConsumer.exe"
-        else "OctoTreeSealedPositiveConsumer.dll"
+        if (target == DotNetTarget.NET48) "OctoTreeCandidatePositiveConsumer.exe"
+        else "OctoTreeCandidatePositiveConsumer.dll"
     )
-    val negativeConsumer = directory.resolve("OctoTreeSealedNegativeSubclass.dll")
+    val negativeConsumer = directory.resolve("OctoTreeCandidateNegativeSubclass.dll")
     directory.mkdirs()
     producerSource.writeText(
         """
@@ -890,6 +952,27 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
                 ${leafConstructor.visibility.renderVisibility()} $leafSimpleName($leafParameters) : base()
                 {
                     this.${leafState.physicalFieldName} = value$leafParameterIndex;
+                }
+            }
+
+            public sealed class $branchSimpleName<${branchTypeParameters.joinToString(", ")}> : $branchBaseType
+            {
+                private $branchStateType ${branchState.physicalFieldName};
+
+                ${branchBaseConstructor.visibility.renderVisibility()} $branchSimpleName() : base()
+                {
+                    this.${branchState.physicalFieldName} = new $branchElementTypeName[$branchElementCount];
+                }
+
+                ${branchThisConstructor.visibility.renderVisibility()} $branchSimpleName($branchParameters) : this()
+                {
+                    for (int index = 0; index < $branchElementCount; index++)
+                    {
+                        if (index != value1)
+                        {
+                            this.${branchState.physicalFieldName}[index] = new $branchLeafType(value0);
+                        }
+                    }
                 }
             }
         }
@@ -926,6 +1009,49 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
                 );
                 if (closedValueField == null || closedValueField.FieldType != typeof(int) ||
                         !object.Equals(closedValueField.GetValue(leaf), 42)) return 4;
+
+                var emptyBranch = new ${branch.physicalOwnerPath.joinToString(".")}<int>();
+                var filledBranch = new ${branch.physicalOwnerPath.joinToString(".")}<int>(7, 3);
+                Type branchDefinition = typeof($branchOpenType);
+                FieldInfo openNodesField = branchDefinition.GetField(
+                    ${branchState.physicalFieldName.asCSharpStringLiteral()},
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+                );
+                if (!branchDefinition.IsSealed || openNodesField == null ||
+                        !openNodesField.FieldType.IsArray) return 5;
+                Type openNodeElement = openNodesField.FieldType.GetElementType();
+                if (openNodeElement == null || !openNodeElement.IsGenericType ||
+                        openNodeElement.GetGenericTypeDefinition() != typeof($nodeOpenType) ||
+                        openNodeElement.GetGenericArguments()[0] !=
+                        branchDefinition.GetGenericArguments()[0]) return 6;
+                ConstructorInfo[] branchConstructors = branchDefinition.GetConstructors(
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly
+                );
+                if (branchConstructors.Length != 2) return 7;
+
+                FieldInfo closedNodesField = emptyBranch.GetType().GetField(
+                    ${branchState.physicalFieldName.asCSharpStringLiteral()},
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+                );
+                if (closedNodesField == null ||
+                        closedNodesField.FieldType != typeof(${node.physicalOwnerPath.joinToString(".")}<int>[])) return 8;
+                Array emptyNodes = (Array)closedNodesField.GetValue(emptyBranch);
+                Array filledNodes = (Array)closedNodesField.GetValue(filledBranch);
+                if (emptyNodes == null || filledNodes == null ||
+                        emptyNodes.Length != $branchElementCount ||
+                        filledNodes.Length != $branchElementCount ||
+                        object.ReferenceEquals(emptyNodes, filledNodes)) return 9;
+                for (int index = 0; index < $branchElementCount; index++)
+                {
+                    if (emptyNodes.GetValue(index) != null) return 10;
+                    object node = filledNodes.GetValue(index);
+                    if (index == 3)
+                    {
+                        if (node != null) return 11;
+                    }
+                    else if (node == null || node.GetType() != leaf.GetType() ||
+                            !object.Equals(closedValueField.GetValue(node), 7)) return 12;
+                }
                 return 0;
             }
         }
@@ -948,7 +1074,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
     when (target) {
         DotNetTarget.NET48 -> {
             val compiler = checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
-                ".NET Framework C# compiler is required for the OctoTree sealed-construction proof"
+                ".NET Framework C# compiler is required for the OctoTree candidate"
             }
             producerCompilation = compileFrameworkSnapshotCSharp(
                 compiler, producerSource, producer, references = emptyList(), executable = false,
@@ -963,7 +1089,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
         }
         DotNetTarget.NET10_0 -> {
             val toolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
-                "Modern C# compiler is required for the OctoTree sealed-construction proof"
+                "Modern C# compiler is required for the OctoTree candidate"
             }
             producerCompilation = compileModernSnapshotCSharp(
                 toolchain, producerSource, producer, references = emptyList(), executable = false,
@@ -976,7 +1102,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeSealedConstruction(
                 toolchain, negativeConsumerSource, negativeConsumer, references = listOf(producer), executable = false,
             )
         }
-        DotNetTarget.NETSTANDARD_2_0 -> error("The OctoTree sealed-construction proof cannot target netstandard2.0")
+        DotNetTarget.NETSTANDARD_2_0 -> error("The OctoTree candidate cannot target netstandard2.0")
     }
     check(positiveCompilation.exitCode == 0) { positiveCompilation.output }
     check(negativeCompilation.exitCode != 0 && listOf("CS0122", "CS1729").any { diagnostic ->
