@@ -27,7 +27,24 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: all four eager generated
+- Latest completed Common collection feature: the full seven-declaration eager
+  Iterable/Sequence-consumer closure now publishes four Sequence-result
+  `flatMap*` variants, `minus(Sequence)`, and both Iterable/Collection
+  `plus(Sequence)` overloads. Existing Iterable-result flatMap physical names
+  remain unchanged; only the new colliding siblings receive deterministic
+  logical-selector-derived `...Sequence...` names. KLIB inlines all four
+  flatMap bodies, installed Kotlin calls the three ordinary operators, and
+  Roslyn implements the erased Kotlin Sequence interface and calls those
+  operators directly. PSI/LightTree and Framework CLR/.NET 10 execution pin
+  eager inner traversal, destination identity, exception and materialization
+  order, nullable/widened values, and single RHS consumption. The logical
+  `Sequence<T>` API remains generic; this tranche does not authorize a partial
+  physical Sequence-owner cutover. The final full aggregate direct audit
+  covers 190 XML suites and 2,246 tests with zero failures, errors, or skips;
+  FIR and integration were freshly written and the unchanged six-test
+  `dotnet.ir` root remained up-to-date. See
+  [`docs/archive/common-eager-iterable-sequence-consumers-2026-08-18.md`](docs/archive/common-eager-iterable-sequence-consumers-2026-08-18.md).
+- Preceding completed Common collection feature: all four eager generated
   `Iterable.windowed`/`chunked` variants and the exact Common
   `List(size, init)`/`MutableList(size, init)` prerequisite are published on
   `Kotlin.Collections.CollectionsKt`. Common retains both its RandomAccess and
@@ -2653,6 +2670,19 @@ one portable netstandard product are green on Framework CLR 4 and .NET 10.
 This does not select CharSequence/array windowing, Random, unsigned, reified, or
 BCL enumeration/export families.
 
+The completed eager Iterable/Sequence-consumer family publishes exactly seven
+generated declarations: four Sequence-result `flatMap*` methods,
+`minus(Sequence)`, and Iterable plus Collection `plus(Sequence)`. Their Common
+bodies use the already admitted `MutableCollection.addAll(Sequence)`,
+Sequence-to-list, filtering, and snapshot foundations. Physical naming keeps
+all old Iterable-result flatMap names and pins only the new siblings to
+`flatMapSequence`, `flatMapIndexedSequence`,
+`flatMapIndexedSequenceTo`, and `flatMapSequenceTo`. Installed KLIB consumers
+inline those bodies and call the public plus/minus fallbacks; direct Roslyn
+implements the erased Kotlin Sequence contract and calls both plus receiver
+forms and minus. This is no general `@JvmName`/`DotNetName` policy and no
+authority for a separate physical `Sequence<T>` migration.
+
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
@@ -3189,13 +3219,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    production `C<T>` TypeDef or roll out an easy owner before the hostile
    prototype and real-app measurement checkpoint select the one atomic
    cutover.
-2. The dependency recomputation after Sequence builders selected and completed
-   the exact four-member eager `Iterable.windowed`/`chunked` family plus its
-   exact sized-list factory prerequisite. Recompute again before the next
-   tranche and choose one complete dependency-homogeneous classifier family;
-   in particular, audit Sequence-valued eager `flatMap*` and Sequence-operand
-   plus/minus together before deciding whether they form one closure. Keep
-   comparison/all-equality, Random and entropy, unsigned value-class/range
+2. The dependency recomputation after eager windowing selected and completed
+   the exact seven-declaration Iterable/Sequence-consumer closure: all four
+   Sequence-result `flatMap*` variants, `minus(Sequence)`, and both
+   `plus(Sequence)` receiver variants. Recompute again before the next tranche
+   and choose one complete dependency-homogeneous classifier family. Keep
+   comparison/all-equality, min/max, Random and entropy, unsigned value-class/range
    representation, CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not

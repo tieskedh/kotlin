@@ -394,6 +394,18 @@ replace either with a target loop or BCL enumeration. Execute one portable
 consumer on Framework CLR 4 and .NET 10. CharSequence, array, Random, unsigned,
 and reified variants remain independently selected families.
 
+Once the Kotlin-owned Sequence foundation is present, admit its complete eager
+Iterable-consumer release as one seven-declaration family: all four
+Sequence-result `flatMap*` variants, `minus(Sequence)`, and both Iterable/
+Collection `plus(Sequence)` overloads. The lambda-return overloads collide on
+the CLR Function carrier; preserve every existing Iterable-result physical
+name and derive only the new Sequence-result `...Sequence...` names from the
+logical selector result. This is bounded stdlib ABI allocation, not general
+`@JvmName` interpretation or a public `DotNetName`. The logical signatures stay
+generic in KLIB. Their use does not authorize changing the canonical erased
+physical `Sequence` owner before an atomic generic-interface cutover, nor does
+it block an independently selected additive typed C# adapter/export.
+
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common
 aggregate/fold/reduce/count source remains authoritative. Admit the Iterable,

@@ -124,8 +124,9 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 `HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
 generic interface as Kotlin identity.
 
-The Kotlin-owned Sequence, eager Iterable window/chunk, Grouping, and signed
-primitive/object-array sorting closures are completed separately below. Unsigned arrays/ranges, random,
+The Kotlin-owned Sequence, eager Iterable window/chunk and Sequence-consumer,
+Grouping, and signed primitive/object-array sorting closures are completed
+separately below. Unsigned arrays/ranges, random,
 dependency-blocked reified variants, concurrency, and BCL adapters remain
 separate closures. The formerly parked open-nullable boundary is complete under
 [`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
@@ -215,6 +216,38 @@ from an installed Kotlin library and from one portable netstandard stdlib on
 the real Framework CLR 4 and .NET 10 hosts. No `IEnumerable<T>`, LINQ, or BCL
 window implementation is introduced. CharSequence/array windowing, Random,
 unsigned, reified, and idiomatic C# export remain separate selections.
+
+### Completed eager Iterable Sequence-consumer closure
+
+The completed tranche publishes exactly the seven generated Iterable-family
+declarations whose removed dependency is Kotlin Sequence: ordinary and indexed
+`flatMap` plus both destination variants when the transform returns Sequence,
+`minus(Sequence)`, and `plus(Sequence)` for both Iterable and Collection
+receivers. Their exact Common bodies compose the already selected
+`MutableCollection.addAll(Sequence)`, Sequence-to-list, filter, snapshot, and
+overflow helpers. No operation is rewritten for .NET.
+
+The four flatMap pairs have identical physical Function parameter carriers
+because CLR overload identity cannot observe the lambda result type. The
+existing Iterable-result declarations keep their physical names. Only the new
+siblings receive the source-aligned `flatMapSequence`,
+`flatMapIndexedSequence`, `flatMapIndexedSequenceTo`, and
+`flatMapSequenceTo` names, derived from the logical selector result in IR. This
+is a bounded compiler-owned stdlib ABI projection; it does not give general
+.NET meaning to `@JvmName` and does not introduce a public `DotNetName`.
+
+Tests pin overload resolution by lambda return type, eager transform and inner-
+Sequence order, destination identity, exception identity/stopping, one RHS
+traversal, `minus` RHS materialization before receiver traversal, empty
+snapshots, and nullable/widened elements. Installed KLIB consumers inline all
+four flatMap bodies and call the public plus/minus fallbacks on Framework CLR 4
+and .NET 10. Roslyn directly implements the canonical erased Sequence
+interface and calls both plus receiver forms and minus. KLIB retains the full
+generic `Sequence<T>` signatures. This closure neither authorizes a partial
+physical `Sequence<T>` owner migration nor blocks a separately selected typed
+C# adapter/export; the canonical owner can change only through the atomic
+generic-interface cutover with primitive covariance, iterator/state, casts,
+reflection, overrides, and separate compilation proved together.
 
 ### Completed Kotlin-owned Grouping foundation
 
@@ -335,7 +368,8 @@ variant whose dependency closure consists only of the already published read-onl
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
 closure above. Ordinary signed ranges, complete Sequence builders, Grouping,
-eager Iterable windowing, and signed-array sorting have since landed as complete independent
+eager Iterable windowing and Sequence consumers, and signed-array sorting have
+since landed as complete independent
 foundations. Random, dependency-blocked reified variants, reflection, and
 unsigned families remain excluded when they introduce an independent
 dependency rather than being approximated or copied.
@@ -1208,8 +1242,10 @@ second loop or collection-specific type-token path was added.
    factories over admitted carriers without adding BCL grouping/enumeration identity.
 10. **Completed:** publish all four eager generated Iterable window/chunk variants with the exact
     Common sized-list factory pair and both RandomAccess and iterator/RingBuffer routes.
-11. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-12. Remove the bootstrap allowlist when the complete generated product is supportable.
+11. **Completed:** publish all seven eager Iterable/Sequence-consumer variants with stable
+    logical-selector-derived collision names and direct Kotlin/C# product evidence.
+12. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+13. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

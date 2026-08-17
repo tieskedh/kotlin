@@ -580,6 +580,7 @@ internal object DotNetStdlibLibrary {
     fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
         stringBuilderPlatformMethodNameOrNull(function)?.let { return it }
         rangePlatformMethodNameOrNull(function)?.let { return it }
+        collectionSequenceTransformPlatformMethodNameOrNull(function)?.let { return it }
         sequencePlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
@@ -645,6 +646,43 @@ internal object DotNetStdlibLibrary {
                 "Common Iterable.$logicalName selector result '${selectorResultType.render()}' " +
                         "has no pinned CLR method name"
             )
+    }
+
+    /**
+     * Common gives eager collection flatMap overloads the same erased Function carrier while the
+     * transform result distinguishes Iterable from Sequence only in KLIB. Preserve every existing
+     * Iterable-result method name and pin only the newly admitted Sequence-result siblings to the
+     * source-derived `...Sequence...` names. This is a bounded stdlib projection, not a general
+     * interpretation of `@JvmName` or a user-facing export annotation.
+     */
+    private fun collectionSequenceTransformPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        if (implementationFunctionFacadeIlName(function) != COLLECTIONS_FACADE_IL_NAME) return null
+        val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
+        val sequenceName = collectionSequenceTransformPlatformNames[functionFqName] ?: return null
+        val selectorType = function.parameters
+            .mapNotNull { parameter -> parameter.type as? IrSimpleType }
+            .singleOrNull { type ->
+                type.classFqName?.asString() in setOf("kotlin.Function1", "kotlin.Function2")
+            }
+            ?: dotNetUnsupported(
+                "Common collection transform '$functionFqName' has no single Function selector: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        val selectorResultType = (selectorType.arguments.lastOrNull() as? IrTypeProjection)?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common collection transform '$functionFqName' selector '${selectorType.render()}' " +
+                        "has no exact result type"
+            )
+        return when (selectorResultType.classFqName?.asString()) {
+            "kotlin.collections.Iterable" -> null
+            "kotlin.sequences.Sequence" -> sequenceName
+            else -> dotNetUnsupported(
+                "Common collection transform '$functionFqName' has unexpected selector result " +
+                        "'${selectorResultType.render()}'"
+            )
+        }
     }
 
     /**
@@ -1016,6 +1054,12 @@ internal object DotNetStdlibLibrary {
             "kotlin.collections.Iterable" to "flatMapIterableTo",
             "kotlin.sequences.Sequence" to "flatMapTo",
         ),
+    )
+    private val collectionSequenceTransformPlatformNames = mapOf(
+        "kotlin.collections.flatMap" to "flatMapSequence",
+        "kotlin.collections.flatMapIndexed" to "flatMapIndexedSequence",
+        "kotlin.collections.flatMapIndexedTo" to "flatMapIndexedSequenceTo",
+        "kotlin.collections.flatMapTo" to "flatMapSequenceTo",
     )
     private val sequenceFlattenPlatformNames = mapOf(
         "kotlin.sequences.Sequence" to "flatten",
