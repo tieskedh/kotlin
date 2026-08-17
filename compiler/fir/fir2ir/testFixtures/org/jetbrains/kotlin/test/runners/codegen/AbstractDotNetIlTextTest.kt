@@ -63,7 +63,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodIdent
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodSignatureRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNamedTypeCategory
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalPropertyGetterRoute
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalPropertyRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalPropertySetterRoute
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalReflectionRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateRecord
@@ -786,6 +788,8 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         val depthProperty = treeOwner.properties.single()
         check(depthProperty.physicalPropertyName == checkNotNull(depthGetter.physicalPropertyName) &&
                 depthProperty.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type() &&
+                depthProperty.getterRoute == DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY &&
+                depthProperty.setterRoute == DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT &&
                 depthProperty.getterLogicalMemberKey == depthGetter.logicalBindingKey &&
                 depthProperty.setterPhysicalMethod == null) {
             "OctoTree.depth did not retain one exact getter-only CLR Property row: $depthProperty"
@@ -842,6 +846,8 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         check(nodesProperty.physicalPropertyName == "nodes" &&
                 nodesProperty.physicalType == nodesState.physicalType &&
                 nodesProperty.nullableReferenceFlags == nodesState.nullableReferenceFlags &&
+                nodesProperty.getterRoute == DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY &&
+                nodesProperty.setterRoute == DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT &&
                 nodesProperty.getterLogicalMemberKey == nodesGetter.logicalBindingKey &&
                 nodesProperty.setterPhysicalMethod == null) {
             "OctoTree.Branch.nodes did not retain one exact recursive getter Property row: $nodesProperty"
@@ -869,6 +875,8 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
                 leafValueProperty.physicalType ==
                 DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
                 leafValueProperty.nullableReferenceFlags == leafValueState.nullableReferenceFlags &&
+                leafValueProperty.getterRoute == DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY &&
+                leafValueProperty.setterRoute == DotNetGenericOwnerPhysicalPropertySetterRoute.TYPED_ENTRY &&
                 leafValueProperty.getterPhysicalMethod != null &&
                 leafValueProperty.setterPhysicalMethod != null) {
             "OctoTree.Leaf.value did not retain one get/set !T CLR Property row: $leafValueProperty"
@@ -3641,6 +3649,58 @@ private fun validateGenericOwnerHardestModelPrototype(
     }
     check(read.requiresDirectSuperTargets)
 
+    val exposedGetter = unsafeStore.members.singleOrNull { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
+    } ?: error("HostileUnsafeStore has no unique exposed getter: ${unsafeStore.members}")
+    val exposedSetter = unsafeStore.members.singleOrNull { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
+    } ?: error("HostileUnsafeStore has no unique exposed setter: ${unsafeStore.members}")
+    check(exposedGetter.policy == DotNetGenericOwnerMemberPolicy.STRICT_TYPED &&
+            exposedGetter.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            exposedGetter.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && exposedGetter.semanticHookReasons == setOf(
+                DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE,
+            )) {
+        "HostileUnsafeStore.exposed getter must retain a paired raw semantic output: $exposedGetter"
+    }
+    check(exposedSetter.policy == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY &&
+            exposedSetter.parameterSlotDomains == listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+            ) && exposedSetter.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) && exposedSetter.semanticHookReasons == setOf(
+                DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY,
+            ) && exposedSetter.transitiveStateWriteNames == listOf("stored")) {
+        "HostileUnsafeStore.exposed setter must retain its widened semantic state write: $exposedSetter"
+    }
+    check(exposedGetter.exactPathUnboundSignatures?.let { signatures ->
+        signatures.getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY).returnSlot.let { slot ->
+            slot.type.kind == DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                    slot.nullableReferenceFlags == listOf(DotNetNullableReferenceFlag.NON_NULL)
+        } && signatures.getValue(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK).returnSlot.let { slot ->
+            slot.type.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    slot.nullableReferenceFlags == listOf(DotNetNullableReferenceFlag.NULLABLE)
+        }
+    } == true && exposedSetter.exactPathUnboundSignatures?.let { signatures ->
+        signatures.getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY).parameterSlots.single().let { slot ->
+            slot.type.kind == DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                    slot.nullableReferenceFlags == listOf(DotNetNullableReferenceFlag.NON_NULL)
+        } && signatures.getValue(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+            .parameterSlots.single().let { slot ->
+                slot.type.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                        slot.nullableReferenceFlags == listOf(DotNetNullableReferenceFlag.NULLABLE)
+            }
+    } == true) {
+        "HostileUnsafeStore.exposed lost its typed/semantic nullable carrier split"
+    }
+
     val echo = unsafeStore.members.single { member -> member.sourceName == "echo" }
     check(echo.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
             echo.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)) {
@@ -3788,6 +3848,89 @@ private fun genericOwnerPhysicalReflectionCallables(
         },
     )
 }
+
+private fun genericOwnerPhysicalProperties(
+    prototype: DotNetGenericOwnerPrototypeSnapshot,
+    members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
+    scenario: String,
+): List<DotNetGenericOwnerPhysicalPropertyRecord> = prototype.members.asSequence()
+    .filter { member ->
+        member.logicalBindingKey != null && member.propertyAccessorKind != null &&
+                !member.isFakeOverride &&
+                member.physicalVisibility != DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE
+    }
+    .groupBy { member -> checkNotNull(member.physicalPropertyName) }
+    .map { entry ->
+        val physicalPropertyName = entry.key
+        val accessors = entry.value
+        check(accessors.map { accessor -> accessor.propertyAccessorKind }.toSet().size == accessors.size) {
+            "$scenario physical property '$physicalPropertyName' has duplicate accessor kinds"
+        }
+        val getter = accessors.singleOrNull { accessor ->
+            accessor.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
+        }
+        val setter = accessors.singleOrNull { accessor ->
+            accessor.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
+        }
+        fun typedMethod(
+            accessor: DotNetGenericOwnerPrototypeMemberSnapshot?,
+        ): Pair<String, DotNetGenericOwnerPhysicalMethodIdentityRecord>? {
+            accessor ?: return null
+            val logicalKey = checkNotNull(accessor.logicalBindingKey)
+            val slot = members.single { member -> member.logicalMemberKey == logicalKey }
+                .slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY }
+            return logicalKey to DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                physicalOwnerPath = slot.physicalOwnerPath,
+                physicalMethodName = slot.physicalMethodName,
+                signature = slot.signature,
+            )
+        }
+        val getterBinding = typedMethod(getter)
+        val setterBinding = typedMethod(setter)
+        val propertyType = getterBinding?.second?.signature?.let { signature ->
+            check(signature.parameterSlots.isEmpty()) {
+                "$scenario PropertyDef proof only admits ordinary non-indexed getters"
+            }
+            signature.returnSlot.type
+        } ?: setterBinding?.second?.signature?.let { signature ->
+            check(signature.parameterSlots.size == 1) {
+                "$scenario PropertyDef proof only admits ordinary non-indexed setters"
+            }
+            signature.parameterSlots.single().type
+        } ?: error("$scenario physical property '$physicalPropertyName' has no accessor")
+        val propertyNullableReferenceFlags = getterBinding?.second?.signature?.returnSlot
+            ?.nullableReferenceFlags
+            ?: setterBinding?.second?.signature?.parameterSlots?.single()?.nullableReferenceFlags
+            ?: error("$scenario physical property '$physicalPropertyName' has no nullable contract")
+        check(setterBinding == null || setterBinding.second.signature.parameterSlots.singleOrNull()?.type ==
+                propertyType && setterBinding.second.signature.parameterSlots.single().nullableReferenceFlags ==
+                propertyNullableReferenceFlags) {
+            "$scenario physical property '$physicalPropertyName' has mismatched accessor types"
+        }
+        DotNetGenericOwnerPhysicalPropertyRecord(
+            physicalPropertyName = physicalPropertyName,
+            physicalType = propertyType,
+            nullableReferenceFlags = propertyNullableReferenceFlags,
+            getterLogicalMemberKey = getterBinding?.first,
+            getterPhysicalMethod = getterBinding?.second,
+            setterLogicalMemberKey = setterBinding?.first,
+            setterPhysicalMethod = setterBinding?.second,
+            getterRoute = if (getter?.roles?.contains(
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            ) == true) {
+                DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK
+            } else {
+                DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY
+            },
+            setterRoute = when {
+                setter == null -> DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in setter.roles ->
+                    DotNetGenericOwnerPhysicalPropertySetterRoute.COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK
+                else -> DotNetGenericOwnerPhysicalPropertySetterRoute.TYPED_ENTRY
+            },
+        )
+    }
+    .sortedBy { property -> property.physicalPropertyName }
 
 private fun createGenericOwnerPhysicalFamilyArtifact(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
@@ -4020,6 +4163,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                 prototype.members.mapNotNull { member -> member.logicalBindingKey }.toSet()) {
             "The hostile producer physical-family record omitted a bindable logical member"
         }
+        val properties = genericOwnerPhysicalProperties(prototype, members, "The hostile owner")
         DotNetGenericOwnerPhysicalFamilyRecord(
             logicalOwnerKey = checkNotNull(prototype.logicalBindingKey) {
                 "The separate hostile producer requires a logical owner binding"
@@ -4050,6 +4194,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                 callables = genericOwnerPhysicalReflectionCallables(members),
             ),
             members = members,
+            properties = properties,
             states = prototype.states.map { state ->
                 fun access(
                     source: DotNetGenericOwnerPrototypeMemberSnapshot,
@@ -4083,28 +4228,42 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                 }
                 fun stateFamily(
                     operation: DotNetGenericOwnerPhysicalStateAccessOperation,
-                ): DotNetGenericOwnerPrototypeMemberSnapshot = prototype.members.single { member ->
-                    val reachesState = when (operation) {
-                        DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
-                            state.fieldName in member.transitiveStateReadNames
-                        DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
-                            state.fieldName in member.transitiveStateWriteNames
+                ): DotNetGenericOwnerPrototypeMemberSnapshot {
+                    val candidates = prototype.members.filter { member ->
+                        val reachesState = when (operation) {
+                            DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                                state.fieldName in member.transitiveStateReadNames
+                            DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                                state.fieldName in member.transitiveStateWriteNames
+                        }
+                        reachesState &&
+                                member.logicalBindingKey != null &&
+                                members.any { family -> family.logicalMemberKey == member.logicalBindingKey } &&
+                                when (state.requirement) {
+                                    DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> false
+                                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
+                                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles
+                                    DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED,
+                                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                                    -> DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles
+                                    DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+                                    DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+                                    -> false
+                                }
                     }
-                    reachesState &&
-                            member.logicalBindingKey != null &&
-                            members.any { family -> family.logicalMemberKey == member.logicalBindingKey } &&
-                            when (state.requirement) {
-                                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE -> false
-                                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
-                                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles
-                                DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
-                                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles
-                                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
-                                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in member.roles
-                                DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
-                                DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
-                                -> false
-                            }
+                    val publishedPropertyAccessorKeys = properties.flatMap { property ->
+                        listOfNotNull(property.getterLogicalMemberKey, property.setterLogicalMemberKey)
+                    }.toSet()
+                    val expectedAccessorKind = when (operation) {
+                        DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                            DotNetGenericOwnerPropertyAccessorKind.GETTER
+                        DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                            DotNetGenericOwnerPropertyAccessorKind.SETTER
+                    }
+                    return candidates.singleOrNull { member ->
+                        member.logicalBindingKey in publishedPropertyAccessorKeys &&
+                                member.propertyAccessorKind == expectedAccessorKind
+                    } ?: candidates.single()
                 }
                 val physicalInitializers = state.initializers.mapNotNull { initializer ->
                     when (initializer.kind) {
@@ -4502,71 +4661,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 },
             )
         }
-        val properties = prototype.members.asSequence()
-            .filter { member ->
-                member.logicalBindingKey != null && member.propertyAccessorKind != null &&
-                        !member.isFakeOverride &&
-                        member.physicalVisibility != DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE
-            }
-            .groupBy { member -> checkNotNull(member.physicalPropertyName) }
-            .map { entry ->
-                val physicalPropertyName = entry.key
-                val accessors = entry.value
-                check(accessors.map { accessor -> accessor.propertyAccessorKind }.toSet().size == accessors.size) {
-                    "The OctoTree physical property '$physicalPropertyName' has duplicate accessor kinds"
-                }
-                val getter = accessors.singleOrNull { accessor ->
-                    accessor.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
-                }
-                val setter = accessors.singleOrNull { accessor ->
-                    accessor.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
-                }
-                fun typedMethod(
-                    accessor: DotNetGenericOwnerPrototypeMemberSnapshot?,
-                ): Pair<String, DotNetGenericOwnerPhysicalMethodIdentityRecord>? {
-                    accessor ?: return null
-                    val logicalKey = checkNotNull(accessor.logicalBindingKey)
-                    val slot = members.single { member -> member.logicalMemberKey == logicalKey }
-                        .slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY }
-                    return logicalKey to DotNetGenericOwnerPhysicalMethodIdentityRecord(
-                        physicalOwnerPath = slot.physicalOwnerPath,
-                        physicalMethodName = slot.physicalMethodName,
-                        signature = slot.signature,
-                    )
-                }
-                val getterBinding = typedMethod(getter)
-                val setterBinding = typedMethod(setter)
-                val propertyType = getterBinding?.second?.signature?.let { signature ->
-                    check(signature.parameterSlots.isEmpty()) {
-                        "The first PropertyDef proof only admits ordinary non-indexed getters"
-                    }
-                    signature.returnSlot.type
-                } ?: setterBinding?.second?.signature?.let { signature ->
-                    check(signature.parameterSlots.size == 1) {
-                        "The first PropertyDef proof only admits ordinary non-indexed setters"
-                    }
-                    signature.parameterSlots.single().type
-                } ?: error("The OctoTree physical property '$physicalPropertyName' has no accessor")
-                val propertyNullableReferenceFlags = getterBinding?.second?.signature?.returnSlot
-                    ?.nullableReferenceFlags
-                    ?: setterBinding?.second?.signature?.parameterSlots?.single()?.nullableReferenceFlags
-                    ?: error("The OctoTree physical property '$physicalPropertyName' has no nullable contract")
-                check(setterBinding == null || setterBinding.second.signature.parameterSlots.singleOrNull()?.type ==
-                        propertyType && setterBinding.second.signature.parameterSlots.single().nullableReferenceFlags ==
-                        propertyNullableReferenceFlags) {
-                    "The OctoTree physical property '$physicalPropertyName' has mismatched accessor types"
-                }
-                DotNetGenericOwnerPhysicalPropertyRecord(
-                    physicalPropertyName = physicalPropertyName,
-                    physicalType = propertyType,
-                    nullableReferenceFlags = propertyNullableReferenceFlags,
-                    getterLogicalMemberKey = getterBinding?.first,
-                    getterPhysicalMethod = getterBinding?.second,
-                    setterLogicalMemberKey = setterBinding?.first,
-                    setterPhysicalMethod = setterBinding?.second,
-                )
-            }
-            .sortedBy { property -> property.physicalPropertyName }
+        val properties = genericOwnerPhysicalProperties(prototype, members, "The OctoTree")
         val implementationMethods = prototype.members.mapNotNull { member ->
             if (member.logicalBindingKey != null ||
                     member.physicalVisibility != DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE ||
@@ -5048,6 +5143,18 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             artifact.targetProfile,
         )
     }
+    val unknownPropertyRouteArtifact = encoded.lineSequence().joinToString("\n", postfix = "\n") { line ->
+        val fields = line.split('\t').toMutableList()
+        if (fields.firstOrNull() == "W") fields[12] = "UNKNOWN_PROPERTY_ROUTE"
+        fields.joinToString("\t")
+    }
+    expectRejected("an unknown property semantic route") {
+        DotNetGenericOwnerPhysicalFamilyCodec.decode(
+            unknownPropertyRouteArtifact,
+            artifact.producerFingerprint,
+            artifact.targetProfile,
+        )
+    }
     expectRejected("a truncated owner family") {
         DotNetGenericOwnerPhysicalFamilyCodec.decode(
             encoded.trimEnd('\r', '\n').lines().dropLast(1).joinToString("\n", postfix = "\n")
@@ -5091,8 +5198,44 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             }
         })
     }
+    val broadPropertyOwner = decoded.owners.single { owner ->
+        owner.physicalOwnerPath.last() == "HostileUnsafeStore"
+    }
+    val broadProperty = broadPropertyOwner.properties.single { property ->
+        property.physicalPropertyName == "exposed"
+    }
+    val broadPropertyState = broadPropertyOwner.states.single { state ->
+        state.logicalFieldName == "stored"
+    }
+    check(broadProperty.getterRoute == DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK &&
+            broadProperty.setterRoute ==
+            DotNetGenericOwnerPhysicalPropertySetterRoute.COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK &&
+            broadProperty.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
+            broadPropertyState.physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+            broadPropertyState.accessPaths.all { access ->
+                access.logicalMemberKey == when (access.operation) {
+                    DotNetGenericOwnerPhysicalStateAccessOperation.READ -> broadProperty.getterLogicalMemberKey
+                    DotNetGenericOwnerPhysicalStateAccessOperation.WRITE -> broadProperty.setterLogicalMemberKey
+                }
+            }) {
+        "The broad property lost its typed surface, semantic routes, or one-state join: " +
+                "$broadProperty / $broadPropertyState"
+    }
+    expectRejected("a broad getter routed through its typed accessor") {
+        broadPropertyOwner.copy(properties = listOf(broadProperty.copy(
+            getterRoute = DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY,
+        )))
+    }
+    expectRejected("a broad setter routed unconditionally through its typed accessor") {
+        broadPropertyOwner.copy(properties = listOf(broadProperty.copy(
+            setterRoute = DotNetGenericOwnerPhysicalPropertySetterRoute.TYPED_ENTRY,
+        )))
+    }
     val member = artifact.owners.first().members.first { candidate ->
-        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in candidate.roles
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in candidate.roles &&
+                candidate.slots.any { slot -> slot.signature.parameterSlots.any { parameter ->
+                    parameter.domain == DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+                } }
     }
     expectRejected("an incomplete member role family") {
         member.copy(slots = member.slots.filterNot { slot ->
@@ -5809,6 +5952,14 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val owner = prototypes.single { prototype -> prototype.hasSimpleName("HostileUnsafeStore") }
     val write = owner.members.single { member -> member.sourceName == "writeUnsafe" }
     val read = owner.members.single { member -> member.sourceName == "read" }
+    val exposedGetter = owner.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.GETTER
+    }
+    val exposedSetter = owner.members.single { member ->
+        member.physicalPropertyName == "exposed" &&
+                member.propertyAccessorKind == DotNetGenericOwnerPropertyAccessorKind.SETTER
+    }
     val echo = owner.members.single { member -> member.sourceName == "echo" }
     val relay = owner.members.single { member -> member.sourceName == "relay" }
     val label = owner.members.single { member -> member.sourceName == "label" }
@@ -5834,6 +5985,31 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val readTypedName = physicalName(read, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val readSemanticName = physicalName(read, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
     val readCapabilityName = physicalName(read, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+    val exposedPropertyName = checkNotNull(exposedGetter.physicalPropertyName)
+    val exposedGetterTypedName = physicalName(
+        exposedGetter,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val exposedSetterTypedName = physicalName(
+        exposedSetter,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val exposedGetterSemanticName = physicalName(
+        exposedGetter,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+    )
+    val exposedGetterCapabilityName = physicalName(
+        exposedGetter,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+    val exposedSetterSemanticName = physicalName(
+        exposedSetter,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+    )
+    val exposedSetterCapabilityName = physicalName(
+        exposedSetter,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
     val echoTypedName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val echoSemanticName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
     val echoCapabilityName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
@@ -5956,6 +6132,34 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         }
         """.trimIndent()
     } else ""
+    val broadProperty = """
+        public virtual T $exposedPropertyName
+        {
+            get { return (T)stored; }
+            set { stored = value; }
+        }
+
+        protected virtual object $exposedGetterSemanticName()
+        {
+            return stored;
+        }
+
+        protected virtual void $exposedSetterSemanticName(object value)
+        {
+            stored = value;
+        }
+
+        object IHostileUnsafeStoreSemantic.$exposedGetterCapabilityName()
+        {
+            return $exposedGetterSemanticName();
+        }
+
+        void IHostileUnsafeStoreSemantic.$exposedSetterCapabilityName(object value)
+        {
+            if (IsCompatible(value)) $exposedPropertyName = (T)value;
+            else $exposedSetterSemanticName(value);
+        }
+    """.trimIndent()
     val typedEcho = if (hasRole(echo, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)) {
         """
         public virtual Array $echoTypedName(Array values)
@@ -6001,6 +6205,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 {
                     object $readCapabilityName();
                     void $writeCapabilityName(object next);
+                    object $exposedGetterCapabilityName();
+                    void $exposedSetterCapabilityName(object value);
                     Array $echoCapabilityName(Array values);
                 }
 
@@ -6107,6 +6313,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
 
                     $readDispatcher
 
+                    $broadProperty
+
                     $typedEcho
 
                     $semanticEcho
@@ -6192,6 +6400,22 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 protected override object $readSemanticName()
                 {
                     return 43;
+                }
+            }
+
+            public sealed class BroadPropertyConsumer : HostileUnsafeStore<int>
+            {
+                public BroadPropertyConsumer() : base(1) {}
+
+                public override int $exposedPropertyName
+                {
+                    get { return base.$exposedPropertyName + 100; }
+                    set { base.$exposedPropertyName = value + 1; }
+                }
+
+                protected override void $exposedSetterSemanticName(object value)
+                {
+                    base.$exposedSetterSemanticName("semantic:" + value);
                 }
             }
 
@@ -6307,6 +6531,26 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     if (paired.$readTypedName() != 43 ||
                         !object.Equals(((IHostileUnsafeStoreSemantic)paired).$readCapabilityName(), 43)) return 6;
 
+                    BroadPropertyConsumer property = new BroadPropertyConsumer();
+                    IHostileUnsafeStoreSemantic propertySemantic = property;
+                    propertySemantic.$exposedSetterCapabilityName(41);
+                    if (property.$exposedPropertyName != 142 ||
+                        !object.Equals(propertySemantic.$exposedGetterCapabilityName(), 42)) return 33;
+                    propertySemantic.$exposedSetterCapabilityName("wrong");
+                    if (!object.Equals(
+                        propertySemantic.$exposedGetterCapabilityName(), "semantic:wrong")) return 34;
+                    try
+                    {
+                        int impossible = property.$exposedPropertyName;
+                        return 35;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    propertySemantic.$exposedSetterCapabilityName(4);
+                    if (property.$exposedPropertyName != 105 ||
+                        !object.Equals(propertySemantic.$exposedGetterCapabilityName(), 5)) return 36;
+
                     Type definition = typeof(HostileUnsafeStore<>);
                     if (!definition.IsGenericTypeDefinition || definition.GetGenericArguments().Length != 1) return 7;
                     Type ownerParameter = definition.GetGenericArguments()[0];
@@ -6343,13 +6587,15 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     if (fields.Length != 1 || fields[0].FieldType != typeof(object)) return 8;
                     System.Reflection.InterfaceMapping map =
                         typeof(HostileUnsafeStore<int>).GetInterfaceMap(typeof(IHostileUnsafeStoreSemantic));
-                    if (map.TargetMethods.Length != 3) return 9;
+                    if (map.TargetMethods.Length != 5) return 9;
                     for (int index = 0; index < map.TargetMethods.Length; index++)
                     {
                         System.Reflection.MethodInfo method = map.TargetMethods[index];
                         if (!method.IsPrivate || !method.IsVirtual || !method.IsFinal) return 10;
                     }
                     bool foundExactEchoDispatcher = false;
+                    bool foundPropertyGetterDispatcher = false;
+                    bool foundPropertySetterDispatcher = false;
                     for (int index = 0; index < map.InterfaceMethods.Length; index++)
                     {
                         if (map.InterfaceMethods[index].Name == "$echoCapabilityName")
@@ -6358,8 +6604,28 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                                 map.TargetMethods[index].Name ==
                                 "KotlinSnapshotPrototype.IHostileUnsafeStoreSemantic.$echoCapabilityName";
                         }
+                        if (map.InterfaceMethods[index].Name == "$exposedGetterCapabilityName")
+                        {
+                            foundPropertyGetterDispatcher =
+                                map.TargetMethods[index].Name ==
+                                "KotlinSnapshotPrototype.IHostileUnsafeStoreSemantic.$exposedGetterCapabilityName";
+                        }
+                        if (map.InterfaceMethods[index].Name == "$exposedSetterCapabilityName")
+                        {
+                            foundPropertySetterDispatcher =
+                                map.TargetMethods[index].Name ==
+                                "KotlinSnapshotPrototype.IHostileUnsafeStoreSemantic.$exposedSetterCapabilityName";
+                        }
                     }
-                    if (!foundExactEchoDispatcher) return 15;
+                    if (!foundExactEchoDispatcher || !foundPropertyGetterDispatcher ||
+                        !foundPropertySetterDispatcher) return 15;
+                    System.Reflection.PropertyInfo broadProperty = definition.GetProperty("$exposedPropertyName");
+                    if (broadProperty == null || broadProperty.PropertyType != ownerParameter ||
+                        !broadProperty.CanRead || !broadProperty.CanWrite ||
+                        broadProperty.GetMethod == null || !broadProperty.GetMethod.IsVirtual ||
+                        broadProperty.GetMethod.Name != "$exposedGetterTypedName" ||
+                        broadProperty.SetMethod == null || !broadProperty.SetMethod.IsVirtual ||
+                        broadProperty.SetMethod.Name != "$exposedSetterTypedName") return 37;
 
                     HostileTypedStore<int> typedState = new HostileTypedStore<int>(1);
                     typedState.$typedStorageWriteTypedName(2);
@@ -6440,7 +6706,14 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
             val compiler = checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
                 ".NET Framework C# compiler is required for the generic-owner snapshot physicalizer"
             }
-            compileFrameworkSnapshotCSharp(compiler, producerSource, producer, references = emptyList(), executable = false)
+            compileFrameworkSnapshotCSharp(
+                compiler,
+                producerSource,
+                producer,
+                references = emptyList(),
+                executable = false,
+                warningsAsErrors = true,
+            )
                 .also { result -> check(result.exitCode == 0) { result.output } }
             compileFrameworkSnapshotCSharp(compiler, consumerSource, consumer, references = listOf(producer), executable = true)
         }
@@ -6448,7 +6721,14 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
             val toolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
                 "Modern C# compiler is required for the generic-owner snapshot physicalizer"
             }
-            compileModernSnapshotCSharp(toolchain, producerSource, producer, references = emptyList(), executable = false)
+            compileModernSnapshotCSharp(
+                toolchain,
+                producerSource,
+                producer,
+                references = emptyList(),
+                executable = false,
+                warningsAsErrors = true,
+            )
                 .also { result -> check(result.exitCode == 0) { result.output } }
             compileModernSnapshotCSharp(toolchain, consumerSource, consumer, references = listOf(producer), executable = true)
         }
@@ -6528,8 +6808,8 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 13,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 4,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 14,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 7,
         DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY to 1,
     )) {
         "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
@@ -6546,6 +6826,13 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER,
     ))) {
         "The separate hostile corpus did not exercise every external call route: $resolvedCallRoutes"
+    }
+    check(resolvedCallRoutes.filter { route -> route.calleeName.contains("exposed") }
+        .groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 1,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
+    )) {
+        "The broad property calls did not split exact and widened routes correctly: $resolvedCallRoutes"
     }
     check(resolvedCallRoutes.singleOrNull { route ->
         route.callerName.endsWith("consumerLabelStarUnsafeStore") && route.calleeName == "label"

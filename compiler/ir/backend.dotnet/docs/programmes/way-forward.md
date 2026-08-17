@@ -1004,6 +1004,26 @@ the collision/overload matrix, broad property semantics, or the atomic public
 owner migration. Continue with the next complete hostile condition. See
 [`../archive/generic-owner-nullable-surface-2026-08-17.md`](../archive/generic-owner-nullable-surface-2026-08-17.md).
 
+The broad direct-property condition is now closed at physical-family schema
+17. A covariant `var exposed: @UnsafeVariance T` deliberately permits a
+widened Kotlin view to place an incompatible value into the owner's one
+semantic `object` field. C# still receives the natural virtual `T` property,
+but the producer record now separately states the complete semantic routing:
+a compatible capability write invokes the typed property and observes its C#
+override; an incompatible write invokes the protected semantic hook without
+narrowing; widened read invokes the paired raw hook; and typed read performs
+the delayed checked cast/unbox. An external C# subclass overrides both sides
+on Framework 4.8 and .NET 10. No shadow state, wrapper, early rejection, or
+invented fallback result is admitted. Getter/setter route enums are joined to
+the recorded member roles, PropertyDef accessors, and state access paths;
+wrong or unknown routes fail closed. The Kotlin source corpus proves the same
+hazardous sequence on today's erased backend, while the external route census
+adds one exact and three semantic calls with no new missing capability. This
+closes broad property semantics, not overload/name collisions, base/interface
+nullable transforms, or the atomic public owner migration. Continue with the
+next complete hostile condition. See
+[`../archive/generic-owner-broad-property-routing-2026-08-17.md`](../archive/generic-owner-broad-property-routing-2026-08-17.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

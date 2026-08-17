@@ -2072,9 +2072,27 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
  *
  * Getter/setter logical keys remain the KLIB authority. The physical methods and property name
  * are producer-selected metadata identities; a consumer must never reconstruct either from the
- * Kotlin source spelling. Semantic hooks and capability dispatchers deliberately cannot be
- * attached to the ordinary C# property surface.
+ * Kotlin source spelling. Semantic hooks and capability dispatchers remain separate MethodDefs;
+ * the routes below state when widened access must use those entries instead of the C# accessor.
  */
+enum class DotNetGenericOwnerPhysicalPropertyGetterRoute {
+    /** The ordinary typed accessor is also the complete semantic read path. */
+    TYPED_ENTRY,
+
+    /** Widened reads require the paired semantic hook's raw physical result. */
+    SEMANTIC_HOOK,
+}
+
+enum class DotNetGenericOwnerPhysicalPropertySetterRoute {
+    ABSENT,
+
+    /** Every admitted input narrows to and dispatches through the typed accessor. */
+    TYPED_ENTRY,
+
+    /** Compatible inputs dispatch typed; incompatible inputs retain the semantic hook body. */
+    COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK,
+}
+
 data class DotNetGenericOwnerPhysicalPropertyRecord(
     val physicalPropertyName: String,
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
@@ -2084,6 +2102,14 @@ data class DotNetGenericOwnerPhysicalPropertyRecord(
     val getterPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
     val setterLogicalMemberKey: String?,
     val setterPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
+    val getterRoute: DotNetGenericOwnerPhysicalPropertyGetterRoute =
+        DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY,
+    val setterRoute: DotNetGenericOwnerPhysicalPropertySetterRoute =
+        if (setterPhysicalMethod == null) {
+            DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT
+        } else {
+            DotNetGenericOwnerPhysicalPropertySetterRoute.TYPED_ENTRY
+        },
 ) {
     init {
         physicalType.requiresNullableReferenceFlags(
@@ -2104,6 +2130,10 @@ data class DotNetGenericOwnerPhysicalPropertyRecord(
         }
         require(getterLogicalMemberKey != setterLogicalMemberKey) {
             "generic-owner property '$physicalPropertyName' cannot bind both accessors to one logical member"
+        }
+        require((setterPhysicalMethod == null) ==
+                (setterRoute == DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT)) {
+            "generic-owner property '$physicalPropertyName' has an inconsistent semantic setter route"
         }
         getterPhysicalMethod.let { getter ->
             require(getter.signature.isInstance && getter.signature.genericArity == 0 &&
@@ -2417,6 +2447,43 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                     matchesTypedEntry(property.setterLogicalMemberKey, property.setterPhysicalMethod)
         }) {
             "generic-owner physical family '$logicalOwnerKey' has a property outside its visible typed entries"
+        }
+        require(properties.all { property ->
+            val getterFamily = membersByLogicalKey.getValue(checkNotNull(property.getterLogicalMemberKey))
+            val getterRouteIsComplete = when (property.getterRoute) {
+                DotNetGenericOwnerPhysicalPropertyGetterRoute.TYPED_ENTRY ->
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in getterFamily.roles
+                DotNetGenericOwnerPhysicalPropertyGetterRoute.SEMANTIC_HOOK ->
+                    getterFamily.roles.containsAll(setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    )) && getterFamily.semanticHookReasons.any { reason ->
+                        reason == DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE ||
+                                reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
+                    }
+            }
+            val setterRouteIsComplete = when (property.setterRoute) {
+                DotNetGenericOwnerPhysicalPropertySetterRoute.ABSENT ->
+                    property.setterLogicalMemberKey == null
+                DotNetGenericOwnerPhysicalPropertySetterRoute.TYPED_ENTRY ->
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in
+                            membersByLogicalKey.getValue(checkNotNull(property.setterLogicalMemberKey)).roles
+                DotNetGenericOwnerPhysicalPropertySetterRoute.COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK -> {
+                    val setterFamily = membersByLogicalKey.getValue(checkNotNull(property.setterLogicalMemberKey))
+                    setterFamily.roles.containsAll(setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    )) && setterFamily.semanticHookReasons.any { reason ->
+                        reason == DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY ||
+                                reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
+                    }
+                }
+            }
+            getterRouteIsComplete && setterRouteIsComplete
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has an incomplete property semantic route"
         }
         require(reflection.callables.map { callable -> callable.logicalMemberKey }.toSet() ==
                 membersByLogicalKey.keys) {
@@ -2965,7 +3032,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 16
+    const val SCHEMA_VERSION = 17
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -3200,6 +3267,8 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         setter?.physicalOwnerPath?.joinToString("\u0000")?.encoded() ?: "-",
                         setter?.physicalMethodName?.encoded() ?: "-",
                         setter?.signature?.serialized()?.encoded() ?: "-",
+                        property.getterRoute.name,
+                        property.setterRoute.name,
                     ).joinToString("\t")
                 )
             }
@@ -3598,7 +3667,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val properties = List(propertyCount) {
-                val propertyFields = read("W", 12)
+                val propertyFields = read("W", 14)
                 fun accessorOrNull(keyIndex: Int, ownerIndex: Int): DotNetGenericOwnerPhysicalMethodIdentityRecord? {
                     val logicalKey = propertyFields[keyIndex].takeUnless { value -> value == "-" }
                     val owner = propertyFields[ownerIndex].takeUnless { value -> value == "-" }
@@ -3624,6 +3693,16 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     getterPhysicalMethod = accessorOrNull(4, 5),
                     setterLogicalMemberKey = propertyFields[8].takeUnless { value -> value == "-" }?.decoded(),
                     setterPhysicalMethod = accessorOrNull(8, 9),
+                    getterRoute = enumValue(
+                        propertyFields[12],
+                        DotNetGenericOwnerPhysicalPropertyGetterRoute.entries.toTypedArray(),
+                        "property getter route",
+                    ),
+                    setterRoute = enumValue(
+                        propertyFields[13],
+                        DotNetGenericOwnerPhysicalPropertySetterRoute.entries.toTypedArray(),
+                        "property setter route",
+                    ),
                 )
             }
             val implementationMethods = List(implementationMethodCount) {

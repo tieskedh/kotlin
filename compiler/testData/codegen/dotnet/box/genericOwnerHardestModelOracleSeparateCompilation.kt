@@ -77,6 +77,12 @@ public open class HostileMixed<in I, out O> {
 public open class HostileUnsafeStore<out T>(initial: T) {
     private var stored: T = initial
 
+    public open var exposed: @UnsafeVariance T
+        get() = stored
+        set(value) {
+            installUnchecked(value)
+        }
+
     public constructor(initial: T, marker: Int) : this(initial)
 
     @Suppress("UNCHECKED_CAST")
@@ -274,6 +280,14 @@ fun box(): String {
     if (exactUnsafeStore.read() != 2) {
         return fail("cross-library semantic state recovery")
     }
+    widenedUnsafeStore.exposed = "property-widened"
+    if (widenedUnsafeStore.exposed != "property-widened") {
+        return fail("cross-library widened property semantic state")
+    }
+    if (runCatching { exactUnsafeStore.exposed }.exceptionOrNull() !is ClassCastException) {
+        return fail("cross-library widened property delayed typed failure")
+    }
+    widenedUnsafeStore.exposed = 2
     val exactNested = arrayOf(2, 3)
     val semanticNested = arrayOf<Any?>("nested", null)
     if (exactUnsafeStore.echo(exactNested) !== exactNested ||

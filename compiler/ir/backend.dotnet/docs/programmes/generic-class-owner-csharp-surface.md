@@ -372,6 +372,31 @@ CLR `T?`. Base/interface nullability and the remaining acceptance matrix stay
 open. See
 [`../archive/generic-owner-nullable-surface-2026-08-17.md`](../archive/generic-owner-nullable-surface-2026-08-17.md).
 
+Physical-family schema 17 now closes the corresponding broad-property
+condition. The hostile source adds a covariant
+`var exposed: @UnsafeVariance T` over semantic object state. Its ordinary C#
+surface is still the natural virtual `T exposed { get; set; }`, but the family
+record also fixes the widened route for each accessor. Getter routing is either
+the typed entry or a paired raw semantic hook. Setter routing is absent, typed,
+or compatible-typed-else-semantic. A broad setter must use the last form:
+compatible objects reach the virtual C# property; incompatible objects reach
+the protected Kotlin semantic hook without a cast. Once semantic state holds
+an incompatible value, widened read returns that exact object and typed
+property read throws at its checked cast/unbox boundary.
+
+The separate C# consumer overrides the typed property and the protected
+semantic setter. It proves both override paths, recovery after an incompatible
+write, one private `object` field, the exact property accessor MethodDef names,
+and the five-entry explicit capability map on Framework 4.8 and .NET 10. The
+Kotlin corpus executes the same widened-write/delayed-read-failure sequence on
+the current erased backend. The static cross-library census attributes one
+exact and three semantic property calls without a missing capability. Schema
+validation rejects typed-only routing for either broad accessor, unknown route
+names, and property/state disagreement. This supplies the paired semantic-
+output hook required above without making C# users build an adapter or own a
+second state object. See
+[`../archive/generic-owner-broad-property-routing-2026-08-17.md`](../archive/generic-owner-broad-property-routing-2026-08-17.md).
+
 The first repository application census sharpens that distinction. ArrayCopy
 executes 5,664 local owner calls and every one has exact-entry provenance, but
 its source-authored unchecked object-array initialization still requires

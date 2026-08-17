@@ -27,7 +27,33 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed generic-owner migration condition: physical-family schema 16
+- Last completed generic-owner migration condition: physical-family schema 17
+  now records complete semantic routing for direct CLR properties whose Kotlin
+  domain is broader than their natural C# type. The hostile covariant
+  `HostileUnsafeStore<out T>.exposed` remains one `object` state carrier:
+  ordinary C# sees virtual `T exposed { get; set; }`; a compatible capability
+  write dispatches through that property and therefore observes an external
+  C# override; an incompatible widened write dispatches through the protected
+  semantic setter without narrowing; widened read uses the paired raw semantic
+  getter; and the next typed property read fails at its actual checked-cast/
+  unbox boundary. An external C# subclass overrides both the typed property and
+  semantic setter on Framework 4.8 and .NET 10. Schema 17 stores getter routing
+  (`TYPED_ENTRY` or `SEMANTIC_HOOK`) and setter routing (`ABSENT`,
+  `TYPED_ENTRY`, or `COMPATIBLE_TYPED_ELSE_SEMANTIC_HOOK`) beside the existing
+  typed PropertyDef accessor identities. Family validation joins those routes
+  to the exact semantic/capability member roles and the same physical state;
+  unknown routes, typed-only routing of a broad accessor, partial accessors,
+  and broken state joins fail closed. The hostile static census now attributes
+  one exact and three semantic property calls without creating a missing-
+  capability route. The focused ordinary/separate/recursive PSI/LightTree x
+  profile matrix covers 12 products with zero failures, errors, or skips.
+  Production Kotlin-owned generic owners remain erased; overload/name
+  collisions, base/interface nullable transforms, and the atomic ABI migration
+  remain open. The final strict aggregate exited successfully; the direct XML
+  audit covers 187 suites and 2,107 tests with zero failures, errors, or skips.
+  See
+  [`docs/archive/generic-owner-broad-property-routing-2026-08-17.md`](docs/archive/generic-owner-broad-property-routing-2026-08-17.md).
+- The preceding generic-owner migration condition: physical-family schema 16
   now preserves Roslyn nullable-reference transforms at every direct generic-
   owner value position. Nullability is attached to each use, not folded into
   the physical type identity: the same `object` carrier may be non-null,
@@ -3001,8 +3027,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    CoreCLR. The owner-dependent volatile state uses one reference-safe object
    field while its ordinary sibling remains true `T` storage; no shadow/copy
    state, wrapper identity, or representation-dependent synchronization is
-   admitted. Continue only with the next complete hostile migration condition,
-   not a per-owner rollout or small performance variant.
+   admitted. Schema 15 then binds ordinary typed accessors to real PropertyDef
+   rows, schema 16 preserves per-use nullable-reference transforms, and schema
+   17 closes broad property routing: compatible capability writes observe the
+   typed C# property override, incompatible writes retain the semantic hook,
+   raw reads retain semantic state, and a later typed read checks at its true
+   use boundary. Continue only with the next complete hostile migration
+   condition, not a per-owner rollout or small performance variant.
    Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
    direct paths and never replace the open-world capability. Do not emit a
    production `C<T>` TypeDef or roll out an easy owner before the hostile
