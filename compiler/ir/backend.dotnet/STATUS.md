@@ -27,7 +27,30 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed product slice: schema 12 now closes whole-family metadata
+- Last completed product slice: schema 13 closes the ordinary state/helper/body
+  graph of the decoded OctoTree candidate. The compiler now projects every
+  direct generic-owner field while restricting generic semantic taint to
+  owner-parameter-dependent carriers. Declaration-independent fields retain
+  their exact non-owner type, initializer, access paths, and init-only flag;
+  `Tree.depth` is readonly `int`, while mutable `Tree.actual` is real `bool`
+  state with an explicit default-zero recipe and transitive `Tree.set` write.
+  A real private non-KLIB helper has no logical binding or capability role and
+  is instead recorded as an exact private-final implementation MethodDef hidden
+  from reflection. The record-driven C# producer now implements the complete
+  recursive Tree/Branch algorithms rather than scenario substitutes. A
+  separately compiled consumer reflects the real fields, proves set resets
+  `actual`, executes 512 checkerboard writes/reads, and proves eight unique
+  depth-one writes collapse a Branch to a Leaf. The exhaustive metadata model
+  now covers eight family TypeDefs, four GenericParams, four InterfaceImpls,
+  eight MethodImpls, five fields, and 37 MethodDefs. The focused matrix covers
+  8 tests and the combined hostile-plus-OctoTree matrix covers 16, both with
+  zero failures, errors, or skips. Production owners/emission, DLL/KLIB,
+  Runtime, Common semantics, and the public C# surface remain unchanged. The
+  final coherent post-restart strict aggregate completed in 1,895.0 seconds;
+  direct audit covers 190 XML files and 2,238 tests with zero failures, errors,
+  or skips. See
+  [`docs/archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](docs/archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
+- The preceding product slice: schema 12 closes whole-family metadata
   and reflection normalization for the decoded OctoTree candidate. KLIB first
   selects the logical classifier; within that context every exact typed,
   capability-interface, and dispatcher MethodDef maps to one logical callable.
@@ -1286,15 +1309,17 @@ known absence, unknown logical members, and malformed family/catalog joins are
 separate rejected states. Both frontends and both CLR profiles execute that
 record in the eight hostile lanes.
 
-The current schema-12 family also contains the compiler-proven typed-state
+The current schema-13 family also contains the compiler-proven typed-state
 control. Codec and reflection oracles require the private field plus exact read
 and write signatures to use the owner GenericParam, and require both exact
 state paths to be identity operations. Direct C# execution proves the explicit
 capability dispatchers remain private/virtual/final and reject an incompatible
 write before mutation. Int, non-trivial struct, and nullable exact/capability
 routes execute with identical paired checksums on Framework 4.8 and .NET 10
-JIT, ReadyToRun, full trim, and NativeAOT. The production emitter still ignores
-the artifact and emits the accepted erased owner.
+JIT, ReadyToRun, full trim, and NativeAOT. Declaration-independent fields and
+private ordinary helpers now complete the representative OctoTree body graph
+without widening the generic semantic-state rules. The production emitter still
+ignores the artifact and emits the accepted erased owner.
 
 Before that aggregate, the final ordinary hostile matrix was explicitly
 rerun without the measurement property: PSI/LightTree × Framework/CoreCLR ×
