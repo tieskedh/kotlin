@@ -27,6 +27,19 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+- Latest completed Common collection feature: all four eager generated
+  `Iterable.windowed`/`chunked` variants and the exact Common
+  `List(size, init)`/`MutableList(size, init)` prerequisite are published on
+  `Kotlin.Collections.CollectionsKt`. Common retains both its RandomAccess and
+  iterator/RingBuffer algorithms, snapshot versus reused-transform-view
+  behavior, traversal/failure timing, and validation messages. Direct,
+  installed, and portable products execute on Framework CLR 4 and .NET 10.
+  The final full target aggregate exited successfully. Its direct audit covers
+  190 XML suites and 2,242 tests with zero failures, errors, or skips: the 187
+  FIR suites and two integration suites were freshly written, while the
+  unchanged six-test `dotnet.ir` unit suite remained up-to-date from its prior
+  green checkpoint. See
+  [`docs/archive/common-eager-iterable-windowing-2026-08-18.md`](docs/archive/common-eager-iterable-windowing-2026-08-18.md).
 - Atomic generic-owner public migration checkpoint: **no-go for now**. The
   schema-20 hostile and OctoTree candidates prove the CLR representation, but
   they remain generated C# physicalizations rather than complete Kotlin-
@@ -2627,6 +2640,19 @@ generic value result may be recovered from its physical upper-bound reference
 view only at a frontend-proven implicit-cast boundary; explicit and safe cast
 semantics remain unchanged.
 
+The complete eager generated `Iterable.windowed`/`chunked` classifier family
+is now published from its four exact Common templates. Their first compile
+identified the exact upstream `List(size, init)` and delegated
+`MutableList(size, init)` declarations as the one missing source prerequisite;
+both are now generated from Common rather than replaced by a target factory.
+The RandomAccess fast path retains Common snapshots and moving sublist views,
+while hostile Iterables retain the shared `windowedIterator`/RingBuffer path.
+Callback/view reuse, traversal and failure timing, partial/gapped windows,
+validation messages, physical `CollectionsKt` methods, installed calls, and
+one portable netstandard product are green on Framework CLR 4 and .NET 10.
+This does not select CharSequence/array windowing, Random, unsigned, reified, or
+BCL enumeration/export families.
+
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
@@ -3163,11 +3189,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    production `C<T>` TypeDef or roll out an easy owner before the hostile
    prototype and real-app measurement checkpoint select the one atomic
    cutover.
-2. Recompute the remaining Common generator/source dependency graph after the
-   completed Sequence builder/window, Grouping, open-nullable-array, and signed-
-   sorting closures. Choose one complete next family only after separating
-   Random and entropy, unsigned value-class/range representation, and still
-   dependency-blocked reified variants. Do not
+2. The dependency recomputation after Sequence builders selected and completed
+   the exact four-member eager `Iterable.windowed`/`chunked` family plus its
+   exact sized-list factory prerequisite. Recompute again before the next
+   tranche and choose one complete dependency-homogeneous classifier family;
+   in particular, audit Sequence-valued eager `flatMap*` and Sequence-operand
+   plus/minus together before deciding whether they form one closure. Keep
+   comparison/all-equality, Random and entropy, unsigned value-class/range
+   representation, CharSequence/array variants, and still dependency-blocked
+   reified variants separate unless the authoritative dependency graph proves
+   otherwise. Do not
    infer that signed sorting authorizes unsigned overloads, binary search,
    shuffle, or a target-authored one-function approximation.
 3. Continue the generated catalog only by complete classifier families, not by

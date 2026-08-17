@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`common-eager-iterable-windowing-2026-08-18.md`](common-eager-iterable-windowing-2026-08-18.md)
+  records the exact four-member eager Iterable window/chunk family, its Common
+  sized-list factory prerequisite, both execution routes, and the final
+  2,242-test Framework/CoreCLR proof.
 - [`generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md)
   records schema-13 declaration-independent fields, private non-KLIB
   implementation MethodDefs, the complete OctoTree algorithms, and executable
