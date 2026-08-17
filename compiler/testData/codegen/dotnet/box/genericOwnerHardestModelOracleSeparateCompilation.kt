@@ -98,6 +98,14 @@ public open class HostileUnsafeStore<out T>(initial: T) {
 
     public open fun echo(values: Array<out @UnsafeVariance T>): Array<out T> = values
 
+    // The typed overloads remain distinct while both semantic hook parameters erase to object.
+    // Separate consumers must bind the producer-recorded family names, never reconstruct them.
+    public open fun collide(value: HostileTypedStore<@UnsafeVariance T>): String =
+        "typed:${value.read()}"
+
+    public open fun collide(value: HostileAbstractPropertyStorage<@UnsafeVariance T>): String =
+        "abstract:${value.exposed}"
+
     public open fun <R> relay(values: Array<R>): Array<R> = values
 
     public open fun label(prefix: String = "default"): String = prefix
@@ -321,6 +329,13 @@ fun box(): String {
         widenedUnsafeStore.echo(semanticNested) !== semanticNested
     ) {
         return fail("cross-library nested typed and semantic array carriers")
+    }
+    if (exactUnsafeStore.collide(HostileTypedStore(3)) != "typed:3" ||
+        exactUnsafeStore.collide(HostileAbstractPropertyStorage(4)) != "abstract:4" ||
+        widenedUnsafeStore.collide(HostileTypedStore("wide")) != "typed:wide" ||
+        widenedUnsafeStore.collide(HostileAbstractPropertyStorage("semantic")) != "abstract:semantic"
+    ) {
+        return fail("cross-library overloaded broad semantic families")
     }
     val methodNested = arrayOf("method")
     if (exactUnsafeStore.relay(methodNested) !== methodNested) {

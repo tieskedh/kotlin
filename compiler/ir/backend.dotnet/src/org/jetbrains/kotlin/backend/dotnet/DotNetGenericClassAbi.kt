@@ -93,6 +93,48 @@ enum class DotNetGenericOwnerMemberFamilyRole {
     CAPABILITY_DISPATCHER,
 }
 
+/**
+ * Selects the stable MethodDef name for one role of a future CLR-generic owner member.
+ *
+ * Typed entries retain their ordinary C# name. Compiler-generated semantic and capability
+ * members are always disambiguated by the complete logical override family, rather than only
+ * after a physical collision is observed. Consequently adding a later overload cannot rename an
+ * already published generated slot, and every override derives the same name as its root.
+ */
+fun dotNetGenericOwnerPhysicalMemberName(
+    typedBaseName: String,
+    overrideRootLogicalMemberKeys: List<String>,
+    role: DotNetGenericOwnerMemberFamilyRole,
+): String {
+    require(typedBaseName.isNotEmpty()) { "a generic-owner physical member requires a typed base name" }
+    require(overrideRootLogicalMemberKeys.isNotEmpty() &&
+            overrideRootLogicalMemberKeys.all(String::isNotEmpty) &&
+            overrideRootLogicalMemberKeys == overrideRootLogicalMemberKeys.distinct().sorted()) {
+        "a generic-owner physical member name requires sorted unique override roots"
+    }
+    if (role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) return typedBaseName
+    val familyId = DotNetLibraryAbiCodec.logicalIdentityDigest(
+        overrideRootLogicalMemberKeys.joinToString("\u0000"),
+    )
+    val roleLabel = when (role) {
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY -> error("typed entry returned above")
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK -> "Semantic"
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER -> "Capability"
+    }
+    return "${typedBaseName}__Kotlin${roleLabel}__$familyId"
+}
+
+/** Stable name of the masked default dispatcher belonging to one logical declaration. */
+fun dotNetGenericOwnerPhysicalDefaultDispatcherName(
+    typedMethodName: String,
+    logicalMemberKey: String,
+): String {
+    require(typedMethodName.isNotEmpty() && logicalMemberKey.isNotEmpty()) {
+        "a generic-owner default dispatcher requires typed and logical identities"
+    }
+    return "${typedMethodName}__KotlinDefault__${DotNetLibraryAbiCodec.logicalIdentityDigest(logicalMemberKey)}"
+}
+
 /** The source accessor which gives one detached physical prototype member its PropertyDef role. */
 enum class DotNetGenericOwnerPropertyAccessorKind {
     GETTER,
@@ -2054,6 +2096,43 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
                 "generic-owner semantic member family '$logicalMemberKey' lacks its capability dispatcher"
             }
         }
+        val typedSlot = slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+        }
+        slots.singleOrNull { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+        }?.let { semanticSlot ->
+            require(semanticSlot.physicalMethodName == dotNetGenericOwnerPhysicalMemberName(
+                typedSlot.physicalMethodName,
+                overrideRootLogicalMemberKeys,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            )) {
+                "generic-owner semantic family '$logicalMemberKey' has a reconstructed or unstable physical name"
+            }
+        }
+        slots.singleOrNull { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+        }?.let { dispatcherSlot ->
+            val capabilitySlot = checkNotNull(dispatcherSlot.capabilitySlot)
+            val expectedName = dotNetGenericOwnerPhysicalMemberName(
+                typedSlot.physicalMethodName,
+                overrideRootLogicalMemberKeys,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            )
+            require(capabilitySlot.physicalMethodName == expectedName &&
+                    dispatcherSlot.physicalMethodName ==
+                    "${capabilitySlot.physicalOwnerPath.joinToString(".")}.$expectedName") {
+                "generic-owner capability family '$logicalMemberKey' has a reconstructed or unstable physical name"
+            }
+        }
+        defaultDispatcher?.let { dispatcher ->
+            require(dispatcher.physicalMethodName == dotNetGenericOwnerPhysicalDefaultDispatcherName(
+                typedSlot.physicalMethodName,
+                logicalMemberKey,
+            )) {
+                "generic-owner default family '$logicalMemberKey' has a reconstructed or unstable physical name"
+            }
+        }
         if (DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION in semanticHookReasons) {
             require(slots.single { slot ->
                 slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
@@ -2319,6 +2398,13 @@ data class DotNetGenericOwnerPhysicalStateRecord(
     }
 }
 
+private data class DotNetGenericOwnerCSharpMethodIdentity(
+    val physicalOwnerPath: List<String>,
+    val physicalMethodName: String,
+    val genericArity: Int,
+    val parameterTypes: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
+)
+
 /**
  * Versioned cross-assembly prototype record for one future CLR-generic owner.
  *
@@ -2428,6 +2514,29 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                 producerPrivateStateMethods
         require(physicalMethodDefinitions.toSet().size == physicalMethodDefinitions.size) {
             "generic-owner physical family '$logicalOwnerKey' has colliding physical MethodDefs"
+        }
+        val csharpMethodDefinitions = physicalMethodDefinitions.map { method ->
+            DotNetGenericOwnerCSharpMethodIdentity(
+                physicalOwnerPath = method.physicalOwnerPath,
+                physicalMethodName = method.physicalMethodName,
+                genericArity = method.signature.genericArity,
+                parameterTypes = method.signature.parameterSlots.map { parameter -> parameter.type },
+            )
+        }
+        require(csharpMethodDefinitions.toSet().size == csharpMethodDefinitions.size) {
+            "generic-owner physical family '$logicalOwnerKey' has a C# method collision hidden by return, " +
+                    "instance, or nullable metadata"
+        }
+        val csharpNonMethodNames = properties.map { property ->
+            physicalOwnerPath to property.physicalPropertyName
+        } + states.map { state ->
+            physicalOwnerPath to state.physicalFieldName
+        }
+        require(csharpNonMethodNames.toSet().size == csharpNonMethodNames.size &&
+                physicalMethodDefinitions.none { method ->
+                    method.physicalOwnerPath to method.physicalMethodName in csharpNonMethodNames
+                }) {
+            "generic-owner physical family '$logicalOwnerKey' has a C# method/property/field name collision"
         }
         val membersByLogicalKey = members.associateBy { member -> member.logicalMemberKey }
         val propertyAccessorMethods = properties.flatMap { property ->
@@ -3058,7 +3167,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 18
+    const val SCHEMA_VERSION = 19
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()

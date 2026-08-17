@@ -105,6 +105,15 @@ private open class HostileUnsafeStore<out T>(initial: T) {
 
     open fun echo(values: Array<out @UnsafeVariance T>): Array<out T> = values
 
+    // Both typed entries can keep the natural overload name because their CLR parameter types
+    // differ. Their widened semantic parameters both become object, so generated hook names must
+    // be derived from the logical override family instead of only from this shared source name.
+    open fun collide(value: HostileTypedStore<@UnsafeVariance T>): String =
+        "typed:${value.read()}"
+
+    open fun collide(value: HostileAbstractPropertyStorage<@UnsafeVariance T>): String =
+        "abstract:${value.exposed}"
+
     open fun <R> relay(values: Array<R>): Array<R> = values
 
     open fun label(prefix: String = "default"): String = prefix
@@ -311,6 +320,13 @@ fun box(): String {
         widenedUnsafeStore.echo(semanticNested) !== semanticNested
     ) {
         return fail("nested typed and semantic array carriers")
+    }
+    if (exactUnsafeStore.collide(HostileTypedStore(3)) != "typed:3" ||
+        exactUnsafeStore.collide(HostileAbstractPropertyStorage(4)) != "abstract:4" ||
+        widenedUnsafeStore.collide(HostileTypedStore("wide")) != "typed:wide" ||
+        widenedUnsafeStore.collide(HostileAbstractPropertyStorage("semantic")) != "abstract:semantic"
+    ) {
+        return fail("overloaded broad semantic families")
     }
     val methodNested = arrayOf("method")
     if (exactUnsafeStore.relay(methodNested) !== methodNested) {

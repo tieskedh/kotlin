@@ -18,7 +18,7 @@ $countsFileName = 'generic-owner-call-route-counts.tsv'
 $traceFileName = 'generic-owner-call-route-trace.properties'
 $expectedFiles = @($countsFileName, $routeFileName, $traceFileName) | Sort-Object
 $corpusDefinition = if ($Corpus -eq 'hostile') {
-    $siteIndices = @(0, 1, 2, 3, 4, 5, 6, 7) + @(14..43) + @(46, 48, 49, 50)
+    $siteIndices = @(0..7) + @(14..38) + @(40..43) + @(45..58) + @(61, 63, 64, 65)
     $siteCounts = @{}
     foreach ($siteIndex in $siteIndices) {
         $siteCounts[$siteIndex] =
@@ -30,19 +30,19 @@ $corpusDefinition = if ($Corpus -eq 'hostile') {
         SiteCounts = $siteCounts
         StaticRequirementCounts = @{
             PRODUCER_ERASED_OWNER = 24
-            EXACT_TYPED_ENTRY = 13
-            SEMANTIC_CAPABILITY = 4
+            EXACT_TYPED_ENTRY = 18
+            SEMANTIC_CAPABILITY = 12
             MISSING_CAPABILITY = 1
         }
         DynamicRequirementCounts = @{
             PRODUCER_ERASED_OWNER = 24L
-            EXACT_TYPED_ENTRY = 13L
-            SEMANTIC_CAPABILITY = 4L
+            EXACT_TYPED_ENTRY = 18L
+            SEMANTIC_CAPABILITY = 12L
             MISSING_CAPABILITY = 1L
         }
-        AllEventCount = 51L
-        ProducerEventCount = 42L
-        UnrelatedEventCount = 9L
+        AllEventCount = 66L
+        ProducerEventCount = 55L
+        UnrelatedEventCount = 11L
     }
 } elseif ($Corpus -eq 'array-copy') {
     [pscustomobject]@{

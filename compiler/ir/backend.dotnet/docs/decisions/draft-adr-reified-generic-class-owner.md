@@ -322,6 +322,24 @@ uses one `object` field rather than a prematurely approved `!T` field. This is
 still production-inert architecture evidence and does not admit the public
 generic owner ABI.
 
+Physical-family schema 19 closes the generated-name collision exposed by
+overloads. Two Kotlin declarations may truthfully share one natural C# name
+because their typed CLR parameter types differ, while their semantic hooks
+both erase that parameter to `object`. Semantic-hook and capability names are
+now derived unconditionally from the complete sorted logical override-root
+set, and default-dispatcher names from the logical declaration key. Allocation
+therefore does not depend on which overload happens to be present today, and a
+separate consumer binds producer-recorded identities rather than reconstructing
+suffixes.
+
+The physical family also validates C# source identity separately from CLR
+MethodDef identity. Return type, instance/static distinction, and nullable
+metadata cannot distinguish a C# overload; methods, properties, and fields
+cannot collide by source name. The hostile producer and separate C# subclass
+execute both the natural typed overload and the matching semantic override on
+Framework 4.8 and .NET 10. This internal deterministic allocation is not a
+public source naming annotation and still does not admit production `C<T>`.
+
 The backend now also contains a production-inert, fail-closed architecture
 planner immediately before the existing erased generic-owner/interface work.
 For each local Kotlin-owned generic class it records member authority, explicit

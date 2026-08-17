@@ -100,6 +100,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalDefaultDispatcherName
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilyRoute
 import org.jetbrains.kotlin.backend.dotnet.requirePhysicalFamily
@@ -3748,6 +3750,40 @@ private fun validateGenericOwnerHardestModelPrototype(
                 storagePropertyAccessors
     }
 
+    val collidingOverloads = unsafeStore.members.filter { member -> member.sourceName == "collide" }
+    val collisionSignatures = collidingOverloads.map { member -> member.exactPathUnboundSignatures }
+    val collisionSignatureShapeIsComplete = when {
+        collisionSignatures.all { signatures -> signatures == null } -> true
+        collisionSignatures.any { signatures -> signatures == null } -> false
+        else -> {
+            val typedCollisionParameters = collisionSignatures.map { signatures ->
+                checkNotNull(signatures)
+                    .getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                    .parameterSlots.single().type
+            }
+            val semanticCollisionParameters = collisionSignatures.map { signatures ->
+                checkNotNull(signatures)
+                    .getValue(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                    .parameterSlots.single().type
+            }
+            typedCollisionParameters.toSet().size == 2 && typedCollisionParameters.all { type ->
+                type.kind == DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER
+            } && semanticCollisionParameters == listOf(
+                DotNetGenericOwnerPrototypeTypeSnapshot.objectType(),
+                DotNetGenericOwnerPrototypeTypeSnapshot.objectType(),
+            )
+        }
+    }
+    check(collidingOverloads.size == 2 && collidingOverloads.map { member -> member.physicalBaseName }
+        .distinct() == listOf("collide") && collidingOverloads.all { member -> member.roles == setOf(
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+        ) } && collisionSignatureShapeIsComplete) {
+        "HostileUnsafeStore.collide did not retain distinct typed overloads and one erased semantic shape: " +
+                collidingOverloads
+    }
+
     val echo = unsafeStore.members.single { member -> member.sourceName == "echo" }
     check(echo.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
             echo.parameterSlotDomains == listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)) {
@@ -3852,11 +3888,12 @@ private fun genericOwnerErasedCSharpAssemblyFile(target: DotNetTarget): String =
 private fun genericOwnerPrototypePhysicalMethodName(
     member: DotNetGenericOwnerPrototypeMemberSnapshot,
     role: DotNetGenericOwnerMemberFamilyRole,
-): String = when (role) {
-    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY -> member.physicalBaseName
-    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK -> "${member.physicalBaseName}__KotlinSemantic"
-    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER -> "${member.physicalBaseName}__KotlinCapability"
-}
+    overrideRootLogicalMemberKeys: List<String>,
+): String = dotNetGenericOwnerPhysicalMemberName(
+    member.physicalBaseName,
+    overrideRootLogicalMemberKeys,
+    role,
+)
 
 private fun genericOwnerPhysicalReflectionCallables(
     members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
@@ -4129,14 +4166,15 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
         }
         val members = prototype.members.mapNotNull { member ->
             val logicalMemberKey = member.logicalBindingKey ?: return@mapNotNull null
+            val memberOverrideRoots = overrideRoots(member).sorted()
             DotNetGenericOwnerPhysicalMemberFamilyRecord(
                 logicalMemberKey = logicalMemberKey,
-                overrideRootLogicalMemberKeys = overrideRoots(member).sorted(),
+                overrideRootLogicalMemberKeys = memberOverrideRoots,
                 policy = member.policy,
                 roles = member.roles,
                 semanticHookReasons = member.semanticHookReasons,
                 slots = member.roles.map { role ->
-                    val methodName = genericOwnerPrototypePhysicalMethodName(member, role)
+                    val methodName = genericOwnerPrototypePhysicalMethodName(member, role, memberOverrideRoots)
                     val signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                         "The hostile physical family requires a compiler-derived signature for ${member.sourceName}/$role"
                     }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
@@ -4182,6 +4220,9 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     member.roles.filter { role ->
                         role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
                     }.map { role ->
+                        val targetMember = checkNotNull(membersByLogicalKey[logicalTargetKey]) {
+                            "The separate hostile producer requires a recorded direct-super member"
+                        }
                         DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
                             role = role,
                             logicalTargetMemberKey = logicalTargetKey,
@@ -4189,7 +4230,11 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                                 "KotlinSnapshotPrototype",
                                 call.superQualifierName.substringAfterLast('.'),
                             ),
-                            physicalMethodName = genericOwnerPrototypePhysicalMethodName(member, role),
+                            physicalMethodName = genericOwnerPrototypePhysicalMethodName(
+                                targetMember,
+                                role,
+                                overrideRoots(targetMember).sorted(),
+                            ),
                             signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                                 "The hostile physical family requires a compiler-derived direct-super signature"
                             }.bindProducerTypes(physicalOwnerPathsByLogicalKey),
@@ -4202,7 +4247,14 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                     }
                     DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
                         physicalOwnerPath = listOf("KotlinSnapshotPrototype", simpleName),
-                        physicalMethodName = "${genericOwnerPrototypePhysicalMethodName(member, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)}Default",
+                        physicalMethodName = dotNetGenericOwnerPhysicalDefaultDispatcherName(
+                            genericOwnerPrototypePhysicalMethodName(
+                                member,
+                                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                                memberOverrideRoots,
+                            ),
+                            logicalMemberKey,
+                        ),
                         signature = dispatcher.physicalSignature(
                             ownerPath,
                             prototype.genericArity,
@@ -4630,9 +4682,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
         }
         val members = prototype.members.mapNotNull { member ->
             val logicalMemberKey = member.logicalBindingKey ?: return@mapNotNull null
+            val memberOverrideRoots = overrideRoots(member).sorted()
             DotNetGenericOwnerPhysicalMemberFamilyRecord(
                 logicalMemberKey = logicalMemberKey,
-                overrideRootLogicalMemberKeys = overrideRoots(member).sorted(),
+                overrideRootLogicalMemberKeys = memberOverrideRoots,
                 policy = member.policy,
                 roles = member.roles,
                 semanticHookReasons = member.semanticHookReasons,
@@ -4641,7 +4694,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                         "The OctoTree physical family lacks ${member.sourceName}/$role signature evidence"
                     }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
                     val isCapability = role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
-                    val methodName = genericOwnerPrototypePhysicalMethodName(member, role)
+                    val methodName = genericOwnerPrototypePhysicalMethodName(member, role, memberOverrideRoots)
                     DotNetGenericOwnerPhysicalMemberSlotRecord(
                         role = role,
                         visibility = when (role) {
@@ -4693,7 +4746,11 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                             physicalOwnerPath = physicalOwnerPathsByLogicalKey.getValue(
                                 checkNotNull(targetPrototype.logicalBindingKey),
                             ),
-                            physicalMethodName = genericOwnerPrototypePhysicalMethodName(targetMember, role),
+                            physicalMethodName = genericOwnerPrototypePhysicalMethodName(
+                                targetMember,
+                                role,
+                                overrideRoots(targetMember).sorted(),
+                            ),
                             signature = checkNotNull(targetMember.exactPathUnboundSignatures?.get(role)) {
                                 "The OctoTree direct-super target lacks its exact role signature"
                             }.bindProducerTypes(physicalOwnerPathsByLogicalKey),
@@ -4703,10 +4760,14 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 defaultDispatcher = member.exactMaskedDefaultDispatcher?.let { dispatcher ->
                     DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
                         physicalOwnerPath = ownerPath,
-                        physicalMethodName = "${genericOwnerPrototypePhysicalMethodName(
-                            member,
-                            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
-                        )}Default",
+                        physicalMethodName = dotNetGenericOwnerPhysicalDefaultDispatcherName(
+                            genericOwnerPrototypePhysicalMethodName(
+                                member,
+                                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                                memberOverrideRoots,
+                            ),
+                            logicalMemberKey,
+                        ),
                         signature = dispatcher.physicalSignature(
                             ownerPath,
                             prototype.genericArity,
@@ -4737,10 +4798,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             DotNetGenericOwnerPhysicalImplementationMethodRecord(
                 physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
                     physicalOwnerPath = ownerPath,
-                    physicalMethodName = genericOwnerPrototypePhysicalMethodName(
-                        member,
-                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
-                    ),
+                    physicalMethodName = member.physicalBaseName,
                     signature = signature,
                 ),
                 visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
@@ -5399,6 +5457,93 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                     }
                 })
             }
+        })
+    }
+    val overloadFamilies = broadPropertyOwner.members.filter { family ->
+        family.slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+        }.physicalMethodName == "collide"
+    }
+    val overloadSemanticNames = overloadFamilies.map { family ->
+        family.slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+        }.physicalMethodName
+    }
+    val overloadCapabilityNames = overloadFamilies.map { family ->
+        checkNotNull(family.slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+        }.capabilitySlot).physicalMethodName
+    }
+    check(overloadFamilies.size == 2 && overloadSemanticNames.toSet().size == 2 &&
+            overloadCapabilityNames.toSet().size == 2 && overloadFamilies.all { family ->
+                val typedName = family.slots.single { slot ->
+                    slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                }.physicalMethodName
+                family.slots.single { slot ->
+                    slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+                }.physicalMethodName == dotNetGenericOwnerPhysicalMemberName(
+                    typedName,
+                    family.overrideRootLogicalMemberKeys,
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                ) && checkNotNull(family.slots.single { slot ->
+                    slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+                }.capabilitySlot).physicalMethodName == dotNetGenericOwnerPhysicalMemberName(
+                    typedName,
+                    family.overrideRootLogicalMemberKeys,
+                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                )
+            }) {
+        "The broad overloads lost their natural typed name or distinct generated family names: " +
+                overloadFamilies
+    }
+    expectRejected("a reconstructed non-family semantic hook name") {
+        overloadFamilies.first().copy(slots = overloadFamilies.first().slots.map { slot ->
+            if (slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) {
+                slot.copy(physicalMethodName = "collide__KotlinSemantic")
+            } else {
+                slot
+            }
+        })
+    }
+    val defaultFamily = broadPropertyOwner.members.single { family -> family.defaultDispatcher != null }
+    expectRejected("a reconstructed non-logical default dispatcher name") {
+        defaultFamily.copy(defaultDispatcher = checkNotNull(defaultFamily.defaultDispatcher).copy(
+            physicalMethodName = "${defaultFamily.slots.single { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            }.physicalMethodName}Default",
+        ))
+    }
+    val overloadTypedSlot = overloadFamilies.first().slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+    }
+    val returnOnlyCollision = DotNetGenericOwnerPhysicalImplementationMethodRecord(
+        physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+            physicalOwnerPath = overloadTypedSlot.physicalOwnerPath,
+            physicalMethodName = overloadTypedSlot.physicalMethodName,
+            signature = overloadTypedSlot.signature.copy(
+                returnSlot = overloadTypedSlot.signature.returnSlot.copy(
+                    type = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                ),
+            ),
+        ),
+        visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+        dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+    )
+    expectRejected("a C# overload collision hidden only by its return type") {
+        broadPropertyOwner.copy(
+            implementationMethods = broadPropertyOwner.implementationMethods + returnOnlyCollision,
+        )
+    }
+    expectRejected("a CLR-valid C# method/property source-name collision") {
+        broadPropertyOwner.copy(properties = broadPropertyOwner.properties.map { property ->
+            if (property != broadProperty) property else property.copy(
+                physicalPropertyName = overloadTypedSlot.physicalMethodName,
+            )
+        })
+    }
+    expectRejected("a CLR-valid C# property/field source-name collision") {
+        broadPropertyOwner.copy(states = broadPropertyOwner.states.map { state ->
+            state.copy(physicalFieldName = broadProperty.physicalPropertyName)
         })
     }
     val member = artifact.owners.first().members.first { candidate ->
@@ -6123,6 +6268,38 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         erasedOutput,
         directory.resolve(GENERIC_OWNER_ERASED_PRODUCER_FILE),
     )
+    val membersByLogicalKey = prototypes.flatMap { prototype -> prototype.members }
+        .mapNotNull { member -> member.logicalBindingKey?.let { logicalKey -> logicalKey to member } }
+        .toMap()
+    fun overrideRoots(
+        member: DotNetGenericOwnerPrototypeMemberSnapshot,
+        visiting: Set<String> = emptySet(),
+    ): List<String> {
+        val declaringPrototype = prototypes.single { prototype ->
+            prototype.members.any { candidate -> candidate === member }
+        }
+        val memberKey = member.logicalBindingKey
+            ?: "private:${declaringPrototype.ownerName}:${member.sourceIndex}:${member.physicalBaseName}"
+        check(memberKey !in visiting) {
+            "Generic-owner physicalizer override-family roots contain a cycle at '$memberKey'"
+        }
+        val overriddenMembers = member.overrideBindings.mapNotNull { binding ->
+            binding.overriddenLogicalBindingKey?.let(membersByLogicalKey::get)
+                ?: prototypes.singleOrNull { prototype ->
+                    prototype.ownerName == binding.overriddenOwnerName
+                }?.members?.singleOrNull { overridden ->
+                    overridden.sourceName == binding.overriddenSourceName &&
+                            overridden.propertyAccessorKind == member.propertyAccessorKind
+                }
+        }
+        return if (overriddenMembers.isEmpty()) {
+            listOf(memberKey)
+        } else {
+            overriddenMembers.flatMap { overridden ->
+                overrideRoots(overridden, visiting + memberKey)
+            }.distinct().sorted()
+        }
+    }
     val owner = prototypes.single { prototype -> prototype.hasSimpleName("HostileUnsafeStore") }
     val write = owner.members.single { member -> member.sourceName == "writeUnsafe" }
     val read = owner.members.single { member -> member.sourceName == "read" }
@@ -6168,6 +6345,25 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val typedStorageRead = typedStorageOwner.members.single { member -> member.sourceName == "read" }
     val volatileStorageWrite = typedStorageOwner.members.single { member -> member.sourceName == "publish" }
     val volatileStorageRead = typedStorageOwner.members.single { member -> member.sourceName == "observe" }
+    val collisionMembers = owner.members.filter { member -> member.sourceName == "collide" }
+    fun collisionParameterClassifierKey(
+        member: DotNetGenericOwnerPrototypeMemberSnapshot,
+    ): String? = member.exactPathUnboundSignatures
+        ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+        ?.parameterSlots
+        ?.singleOrNull()
+        ?.type
+        ?.logicalClassifierKey
+    val orderedCollisionMembers = collisionMembers.sortedBy { member -> member.sourceIndex }
+    val typedStoreCollision = collisionMembers.singleOrNull { member ->
+        collisionParameterClassifierKey(member) == typedStorageOwner.logicalBindingKey
+    } ?: orderedCollisionMembers.first()
+    val abstractStorageCollision = collisionMembers.singleOrNull { member ->
+        collisionParameterClassifierKey(member) == abstractPropertyStorageOwner.logicalBindingKey
+    } ?: orderedCollisionMembers.last()
+    check(orderedCollisionMembers.size == 2 && typedStoreCollision != abstractStorageCollision) {
+        "The hostile overload physicalizer could not distinguish both source families: $collisionMembers"
+    }
     fun hasRole(
         member: DotNetGenericOwnerPrototypeMemberSnapshot,
         role: DotNetGenericOwnerMemberFamilyRole,
@@ -6175,7 +6371,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     fun physicalName(
         member: DotNetGenericOwnerPrototypeMemberSnapshot,
         role: DotNetGenericOwnerMemberFamilyRole,
-    ): String = genericOwnerPrototypePhysicalMethodName(member, role)
+    ): String = genericOwnerPrototypePhysicalMethodName(member, role, overrideRoots(member))
     val writeTypedName = physicalName(write, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val writeSemanticName = physicalName(write, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
     val writeCapabilityName = physicalName(write, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
@@ -6235,9 +6431,36 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
     val echoTypedName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val echoSemanticName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
     val echoCapabilityName = physicalName(echo, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+    val typedStoreCollisionTypedName = physicalName(
+        typedStoreCollision,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val typedStoreCollisionSemanticName = physicalName(
+        typedStoreCollision,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+    )
+    val typedStoreCollisionCapabilityName = physicalName(
+        typedStoreCollision,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
+    val abstractStorageCollisionTypedName = physicalName(
+        abstractStorageCollision,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val abstractStorageCollisionSemanticName = physicalName(
+        abstractStorageCollision,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+    )
+    val abstractStorageCollisionCapabilityName = physicalName(
+        abstractStorageCollision,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    )
     val relayTypedName = physicalName(relay, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
     val labelTypedName = physicalName(label, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
-    val labelDefaultName = "${labelTypedName}Default"
+    val labelDefaultName = dotNetGenericOwnerPhysicalDefaultDispatcherName(
+        labelTypedName,
+        label.logicalBindingKey ?: overrideRoots(label).single(),
+    )
     val typedStorageWriteTypedName = physicalName(
         typedStorageWrite,
         DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
@@ -6442,6 +6665,18 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         """.trimIndent()
     } else ""
 
+    check(collisionMembers.size == 2 && typedStoreCollisionTypedName == abstractStorageCollisionTypedName &&
+            typedStoreCollisionSemanticName != abstractStorageCollisionSemanticName &&
+            typedStoreCollisionCapabilityName != abstractStorageCollisionCapabilityName &&
+            collisionMembers.all { member -> member.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) }) {
+        "The hostile overload physicalizer requires one natural typed overload name and distinct generated " +
+                "semantic/capability family names: $collisionMembers"
+    }
+
     val producerSource = directory.resolve("SnapshotProducer.cs").apply {
         writeText(
             """
@@ -6456,6 +6691,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     object $exposedGetterCapabilityName();
                     void $exposedSetterCapabilityName(object value);
                     Array $echoCapabilityName(Array values);
+                    string $typedStoreCollisionCapabilityName(object value);
+                    string $abstractStorageCollisionCapabilityName(object value);
                 }
 
                 public interface IHostileAbstractPropertySemantic
@@ -6629,6 +6866,44 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
 
                     $echoDispatcher
 
+                    public virtual string $typedStoreCollisionTypedName(HostileTypedStore<T> value)
+                    {
+                        return "typed:" + value.$typedStorageReadTypedName();
+                    }
+
+                    protected virtual string $typedStoreCollisionSemanticName(object value)
+                    {
+                        return "typed:" +
+                            ((IHostileTypedStoreSemantic)value).$typedStorageReadCapabilityName();
+                    }
+
+                    string IHostileUnsafeStoreSemantic.$typedStoreCollisionCapabilityName(object value)
+                    {
+                        HostileTypedStore<T> typed = value as HostileTypedStore<T>;
+                        return typed != null ? $typedStoreCollisionTypedName(typed) :
+                            $typedStoreCollisionSemanticName(value);
+                    }
+
+                    public virtual string $abstractStorageCollisionTypedName(
+                        HostileAbstractPropertyStorage<T> value)
+                    {
+                        return "abstract:" + value.$abstractPropertyName;
+                    }
+
+                    protected virtual string $abstractStorageCollisionSemanticName(object value)
+                    {
+                        return "abstract:" +
+                            ((IHostileAbstractPropertySemantic)value).$abstractGetterCapabilityName();
+                    }
+
+                    string IHostileUnsafeStoreSemantic.$abstractStorageCollisionCapabilityName(object value)
+                    {
+                        HostileAbstractPropertyStorage<T> typed =
+                            value as HostileAbstractPropertyStorage<T>;
+                        return typed != null ? $abstractStorageCollisionTypedName(typed) :
+                            $abstractStorageCollisionSemanticName(value);
+                    }
+
                     $typedRelay
                 }
 
@@ -6708,6 +6983,21 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                 protected override object $readSemanticName()
                 {
                     return 43;
+                }
+            }
+
+            public sealed class OverloadConsumer : HostileUnsafeStore<int>
+            {
+                public OverloadConsumer() : base(1) {}
+
+                public override string $typedStoreCollisionTypedName(HostileTypedStore<int> value)
+                {
+                    return "typed-override:" + base.$typedStoreCollisionTypedName(value);
+                }
+
+                protected override string $typedStoreCollisionSemanticName(object value)
+                {
+                    return "semantic-override:" + base.$typedStoreCollisionSemanticName(value);
                 }
             }
 
@@ -6852,6 +7142,22 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     string[] semanticArray = new string[] { "nested" };
                     if (!object.ReferenceEquals(semantic.$echoCapabilityName(semanticArray), semanticArray)) return 12;
 
+                    if (value.$typedStoreCollisionTypedName(new HostileTypedStore<int>(3)) != "typed:3" ||
+                        value.$abstractStorageCollisionTypedName(
+                            new HostileAbstractPropertyStorage<int>(4)) != "abstract:4" ||
+                        semantic.$typedStoreCollisionCapabilityName(
+                            new HostileTypedStore<string>("wide")) != "typed:wide" ||
+                        semantic.$abstractStorageCollisionCapabilityName(
+                            new HostileAbstractPropertyStorage<string>("semantic")) !=
+                            "abstract:semantic") return 74;
+                    OverloadConsumer overloadConsumer = new OverloadConsumer();
+                    IHostileUnsafeStoreSemantic overloadSemantic = overloadConsumer;
+                    if (overloadSemantic.$typedStoreCollisionCapabilityName(
+                            new HostileTypedStore<int>(5)) != "typed-override:typed:5" ||
+                        overloadSemantic.$typedStoreCollisionCapabilityName(
+                            new HostileTypedStore<string>("x")) !=
+                            "semantic-override:typed:x") return 75;
+
                     TypedWriteConsumer typed = new TypedWriteConsumer();
                     ((IHostileUnsafeStoreSemantic)typed).$writeCapabilityName(4);
                     if (typed.$readTypedName() != 5) return 4;
@@ -6943,6 +7249,33 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                         capabilityEchoMethod.ReturnType != typeof(Array) ||
                         capabilityEchoMethod.GetParameters().Length != 1 ||
                         capabilityEchoMethod.GetParameters()[0].ParameterType != typeof(Array)) return 14;
+                    Type openTypedStore = typeof(HostileTypedStore<>).MakeGenericType(ownerParameter);
+                    Type openAbstractStorage =
+                        typeof(HostileAbstractPropertyStorage<>).MakeGenericType(ownerParameter);
+                    System.Reflection.MethodInfo typedStoreOverload = definition.GetMethod(
+                        "$typedStoreCollisionTypedName", new Type[] { openTypedStore });
+                    System.Reflection.MethodInfo abstractStorageOverload = definition.GetMethod(
+                        "$abstractStorageCollisionTypedName", new Type[] { openAbstractStorage });
+                    System.Reflection.MethodInfo typedStoreSemanticOverload = definition.GetMethod(
+                        "$typedStoreCollisionSemanticName",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.DeclaredOnly,
+                        null, new Type[] { typeof(object) }, null);
+                    System.Reflection.MethodInfo abstractStorageSemanticOverload = definition.GetMethod(
+                        "$abstractStorageCollisionSemanticName",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.DeclaredOnly,
+                        null, new Type[] { typeof(object) }, null);
+                    if (typedStoreOverload == null || abstractStorageOverload == null ||
+                        typedStoreOverload.Name != abstractStorageOverload.Name ||
+                        typedStoreSemanticOverload == null || abstractStorageSemanticOverload == null ||
+                        typedStoreSemanticOverload.Name == abstractStorageSemanticOverload.Name ||
+                        typeof(IHostileUnsafeStoreSemantic).GetMethod(
+                            "$typedStoreCollisionCapabilityName") == null ||
+                        typeof(IHostileUnsafeStoreSemantic).GetMethod(
+                            "$abstractStorageCollisionCapabilityName") == null) return 76;
                     System.Reflection.MethodInfo relayMethod = definition.GetMethod("$relayTypedName");
                     if (relayMethod == null || !relayMethod.IsGenericMethodDefinition ||
                         relayMethod.GetGenericArguments().Length != 1) return 16;
@@ -6958,7 +7291,7 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     if (fields.Length != 1 || fields[0].FieldType != typeof(object)) return 8;
                     System.Reflection.InterfaceMapping map =
                         typeof(HostileUnsafeStore<int>).GetInterfaceMap(typeof(IHostileUnsafeStoreSemantic));
-                    if (map.TargetMethods.Length != 5) return 9;
+                    if (map.TargetMethods.Length != 7) return 9;
                     for (int index = 0; index < map.TargetMethods.Length; index++)
                     {
                         System.Reflection.MethodInfo method = map.TargetMethods[index];
@@ -6967,6 +7300,8 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                     bool foundExactEchoDispatcher = false;
                     bool foundPropertyGetterDispatcher = false;
                     bool foundPropertySetterDispatcher = false;
+                    bool foundTypedStoreCollisionDispatcher = false;
+                    bool foundAbstractStorageCollisionDispatcher = false;
                     for (int index = 0; index < map.InterfaceMethods.Length; index++)
                     {
                         if (map.InterfaceMethods[index].Name == "$echoCapabilityName")
@@ -6987,9 +7322,24 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
                                 map.TargetMethods[index].Name ==
                                 "KotlinSnapshotPrototype.IHostileUnsafeStoreSemantic.$exposedSetterCapabilityName";
                         }
+                        if (map.InterfaceMethods[index].Name == "$typedStoreCollisionCapabilityName")
+                        {
+                            foundTypedStoreCollisionDispatcher =
+                                map.TargetMethods[index].Name ==
+                                "KotlinSnapshotPrototype.IHostileUnsafeStoreSemantic." +
+                                "$typedStoreCollisionCapabilityName";
+                        }
+                        if (map.InterfaceMethods[index].Name == "$abstractStorageCollisionCapabilityName")
+                        {
+                            foundAbstractStorageCollisionDispatcher =
+                                map.TargetMethods[index].Name ==
+                                "KotlinSnapshotPrototype.IHostileUnsafeStoreSemantic." +
+                                "$abstractStorageCollisionCapabilityName";
+                        }
                     }
                     if (!foundExactEchoDispatcher || !foundPropertyGetterDispatcher ||
-                        !foundPropertySetterDispatcher) return 15;
+                        !foundPropertySetterDispatcher || !foundTypedStoreCollisionDispatcher ||
+                        !foundAbstractStorageCollisionDispatcher) return 15;
                     System.Reflection.PropertyInfo broadProperty = definition.GetProperty("$exposedPropertyName");
                     if (broadProperty == null || broadProperty.PropertyType != ownerParameter ||
                         !broadProperty.CanRead || !broadProperty.CanWrite ||
@@ -7288,8 +7638,8 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 16,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 10,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 18,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 12,
         DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY to 1,
     )) {
         "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
@@ -7326,6 +7676,14 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     )) {
         "The abstract broad-property calls did not split exact and widened routes correctly: " +
                 resolvedCallRoutes
+    }
+    check(resolvedCallRoutes.filter { route ->
+        route.calleeOwnerName.endsWith("HostileUnsafeStore") && route.calleeName == "collide"
+    }.groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 2,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 2,
+    )) {
+        "The broad overload calls did not retain distinct exact and semantic routes: $resolvedCallRoutes"
     }
     check(resolvedCallRoutes.singleOrNull { route ->
         route.callerName.endsWith("consumerLabelStarUnsafeStore") && route.calleeName == "label"

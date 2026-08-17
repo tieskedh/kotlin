@@ -495,11 +495,11 @@ default helper supplies its receiver-independent signature tail and masks.
 Anything outside that grammar remains without a physical proof; `Unit` in a
 parameter, a star/unsupported projection or classifier/carrier, or an unexpected
 default-helper shape cannot be repaired by guessing `object`. Uniform role
-suffixes extend the compiler-selected base MethodDef name. State routes are
-joined through recorded transitive field reads/writes, not source member names.
-The artifact rejects any physical MethodDef collision, including a user name
-which occupies a generated role identity; a later name allocator may improve
-that rejection but may never publish ambiguous metadata.
+families extend the compiler-selected base MethodDef name with a stable digest
+of their logical override roots. Masked-default helpers use their declaration
+key. State routes are joined through recorded transitive field reads/writes,
+not source member names. The artifact rejects both physical MethodDef and C#
+source collisions and never allocates a name only after a collision appears.
 When external binding changes a consumer's roles or domains, its pre-binding
 local signatures are invalidated and the producer artifact remains sole
 physical authority. A hostile regression sentinel rewrites every diagnostic
@@ -1049,6 +1049,31 @@ serialized obligation. This closes abstract broad properties, not overload/
 generated-name collisions, base/interface nullable transforms, or the atomic
 public owner migration. See
 [`../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md`](../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md).
+
+The overload/generated-name condition is now closed at physical-family schema
+19. Two valid Kotlin overloads retain the same natural C# name and distinct
+typed CLR parameter types, while their semantic hooks deliberately erase those
+parameters to the same `object` signature. Compiler-generated semantic and
+capability names are therefore derived unconditionally from a digest of the
+complete sorted logical override-root set. A later overload cannot rename an
+already published slot, and an override in another assembly derives the same
+family identity. Masked-default helpers use the logical declaration key for
+the same reason. The producer record remains the sole physical binding
+authority; consumers do not reconstruct suffixes.
+
+Schema validation now applies both CLR MethodDef uniqueness and C# source
+overload rules. Return type, instance/static distinction, and nullable
+metadata cannot rescue otherwise identical C# methods, while methods,
+properties, and fields cannot occupy one source name on the same owner. A
+separate C# subclass overrides one natural typed overload and its corresponding
+protected semantic hook; exact Kotlin calls observe the typed override and an
+incompatible constructed owner observes the semantic override on Framework
+4.8 and .NET 10. Raw metadata, reflection, and interface-map oracles pin both
+natural overloads and all distinct hidden slots. This is compiler-owned ABI
+allocation, not a public `DotNetName` annotation: explicit user-facing export
+naming remains a separate proposal. Base/interface nullable transforms and the
+atomic public owner migration remain open. See
+[`../archive/generic-owner-overload-family-names-2026-08-17.md`](../archive/generic-owner-overload-family-names-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

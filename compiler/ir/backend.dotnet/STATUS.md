@@ -27,7 +27,39 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed generic-owner migration condition: physical-family schema 18
+- Last completed generic-owner migration condition: physical-family schema 19
+  now closes overload/generated-name collisions without sacrificing natural C#
+  overloads. Two hostile Kotlin `collide` declarations have distinct typed CLR
+  parameter types but identical semantic `object` parameter types. Typed
+  entries retain `collide`; semantic hooks and capability slots receive an
+  unconditional digest of the complete sorted logical override-root set, while
+  masked-default helpers use the logical declaration key. Adding an overload
+  therefore cannot rename an existing generated slot, and a separately
+  compiled override shares the producer's family identity. The artifact is the
+  sole binding authority; consumers reject the old reconstructible suffixes.
+  Validation now applies C# overload identity as well as CLR MethodDef identity:
+  return type, static/instance distinction, and nullable metadata cannot hide a
+  duplicate method, and methods/properties/fields cannot collide by source
+  name. A generated producer and external C# subclass exercise both the natural
+  typed overload and its protected semantic hook; raw metadata, reflection,
+  interface maps, ordinary Kotlin, and separate Kotlin consumers pin every
+  role on Framework 4.8 and .NET 10. The closed route corpus now contains 24
+  erased-owner, 18 exact-entry, 12 semantic-capability, and one missing route.
+  Its four-lane PSI/LightTree x profile dynamic verifier observes exactly 55
+  producer events plus 11 unrelated events with identical sparse manifests.
+  The closed application verifier regenerated PSI/LightTree bundles for both
+  profiles, proved their executable/KLIB equivalence, and executed the
+  candidate, erased Kotlin, and erased C# products. The focused ordinary,
+  separate, and recursive matrix covers four suites and 12 products with zero
+  failures, errors, or skips.
+  This compiler-owned ABI allocation intentionally does not invent a public
+  `DotNetName`; explicit export naming remains a separate design. Production
+  Kotlin-owned generic owners remain erased; base/interface nullable transforms
+  and the atomic ABI migration remain open. The final strict aggregate exited
+  successfully; all 187 result suites were freshly written, and their 2,107
+  tests contain zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-overload-family-names-2026-08-17.md`](docs/archive/generic-owner-overload-family-names-2026-08-17.md).
+- The preceding generic-owner migration condition: physical-family schema 18
   now closes abstract broad-property obligations across Kotlin and foreign C#
   subclasses. A new hostile `HostileAbstractProperty<out T>.exposed` has no
   body or state from which the old planner could infer a raw getter. Its
@@ -3062,7 +3094,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    use boundary. Schema 18 then closes the abstract form: both typed accessors
    and protected semantic hooks remain obligations, and inherited logical
    semantic reachability selects one object state before physical storage is
-   chosen. Continue only with the next complete hostile migration condition,
+   chosen. Schema 19 closes overload-family naming: natural typed overloads
+   remain idiomatic C#, generated semantic/capability/default members receive
+   stable logical-family identities, and CLR-valid but C#-invalid collisions
+   fail closed. Continue with base/interface nullable transforms as the next
+   complete hostile migration condition,
    not a per-owner rollout or small performance variant.
    Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
    direct paths and never replace the open-world capability. Do not emit a

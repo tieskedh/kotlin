@@ -419,6 +419,27 @@ private-final interface map, and the one-field concrete implementations on
 Framework 4.8 and .NET 10. See
 [`../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md`](../archive/generic-owner-abstract-broad-property-obligation-2026-08-17.md).
 
+Physical-family schema 19 closes the generated-name half of the overload
+surface. Kotlin overloads keep one natural C# method name whenever their typed
+CLR parameter lists are distinct. Their hidden semantic hooks and explicit
+capability slots can erase to identical `object` signatures, so those compiler
+members receive an unconditional digest of the complete sorted logical
+override-root set. The name is consequently stable before any collision is
+observed, stable when another overload is added later, and shared by a
+separately compiled override. A masked-default helper similarly uses the
+logical declaration key. Consumers bind the producer record rather than
+reconstructing either name.
+
+The record validates C# source identity in addition to CLR metadata identity:
+return type, static/instance shape, and nullable annotations do not distinguish
+C# overloads, and a method/property/field name collision is rejected. A
+record-driven producer, external C# subclass, Kotlin consumers, raw metadata,
+reflection, and interface maps prove the two-overload shape on Framework 4.8
+and .NET 10. These generated names are internal ABI and intentionally do not
+create a public `DotNetName` annotation; user-selected export names still need
+their own proposal. See
+[`../archive/generic-owner-overload-family-names-2026-08-17.md`](../archive/generic-owner-overload-family-names-2026-08-17.md).
+
 The first repository application census sharpens that distinction. ArrayCopy
 executes 5,664 local owner calls and every one has exact-entry provenance, but
 its source-authored unchecked object-array initialization still requires

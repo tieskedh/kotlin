@@ -663,7 +663,7 @@ See the
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
   channel has one versioned, producer-fingerprinted physical-family artifact,
-  currently schema 18,
+  currently schema 19,
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
@@ -678,7 +678,17 @@ See the
   truncated, duplicate, incomplete, missing-member, or wrong-producer input.
   Typed entries may override typed entries and semantic hooks may override
   semantic hooks; a recorded final capability dispatcher is never an override
-  target. An abstract broad property has no body or state from which to infer
+  target. Typed entries retain their natural C# name. Every compiler-generated
+  semantic hook and capability slot is named unconditionally from its complete
+  sorted logical override-root set; a masked-default helper is named from its
+  logical declaration key. Do not allocate those names only after observing a
+  collision, reconstruct them in a consumer, or expose them as a user-selected
+  `DotNetName`: the producer record is the only binding authority. Validate
+  C# source collisions separately from CLR MethodDef identity. Return type,
+  instance/static distinction, and nullable-reference metadata cannot
+  distinguish C# overloads, and a method, property, or field cannot share one
+  C# source member name on the same owner. An abstract broad property has no
+  body or state from which to infer
   its paired raw output. When its abstract setter admits a wider Kotlin domain,
   record the abstract getter's semantic obligation explicitly. The typed
   property accessors and protected semantic hooks must remain abstract or
