@@ -812,6 +812,51 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchState = branch.states.single { state -> state.logicalFieldName == "nodes" }
     val branchInitializer = branchState.initializers.single()
     val branchElementType = branchState.physicalType.arguments.singleOrNull()
+    fun physicalMember(
+        owner: DotNetGenericOwnerPhysicalFamilyRecord,
+        prototype: DotNetGenericOwnerPrototypeSnapshot,
+        sourceName: String,
+    ): DotNetGenericOwnerPhysicalMemberFamilyRecord {
+        val logicalKey = checkNotNull(prototype.members.single { member ->
+            member.sourceName == sourceName
+        }.logicalBindingKey)
+        return owner.members.single { member -> member.logicalMemberKey == logicalKey }
+    }
+    fun typedSlot(member: DotNetGenericOwnerPhysicalMemberFamilyRecord): DotNetGenericOwnerPhysicalMemberSlotRecord =
+        member.slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY }
+    fun stateAccessSlot(
+        owner: DotNetGenericOwnerPhysicalFamilyRecord,
+        state: DotNetGenericOwnerPhysicalStateRecord,
+        operation: DotNetGenericOwnerPhysicalStateAccessOperation,
+    ): DotNetGenericOwnerPhysicalMemberSlotRecord {
+        val access = state.accessPaths.single { candidate -> candidate.operation == operation }
+        check(access.bindingKind == DotNetGenericOwnerPhysicalStateAccessBindingKind.LOGICAL_MEMBER_FAMILY &&
+                access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
+            "The OctoTree candidate state access is not a typed logical identity path: $access"
+        }
+        return owner.members.flatMap { member -> member.slots }.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                    slot.physicalOwnerPath == access.physicalMethod.physicalOwnerPath &&
+                    slot.physicalMethodName == access.physicalMethod.physicalMethodName &&
+                    slot.signature == access.physicalMethod.signature
+        }
+    }
+    val nodeSetMember = physicalMember(node, nodePrototype, "set")
+    val leafSetMember = physicalMember(leaf, leafPrototype, "set")
+    val branchSetMember = physicalMember(branch, branchPrototype, "set")
+    val nodeSetSlot = typedSlot(nodeSetMember)
+    val leafSetSlot = typedSlot(leafSetMember)
+    val branchSetSlot = typedSlot(branchSetMember)
+    val leafReadSlot = stateAccessSlot(
+        leaf, leafState, DotNetGenericOwnerPhysicalStateAccessOperation.READ,
+    )
+    val leafWriteSlot = stateAccessSlot(
+        leaf, leafState, DotNetGenericOwnerPhysicalStateAccessOperation.WRITE,
+    )
+    val branchReadSlot = stateAccessSlot(
+        branch, branchState, DotNetGenericOwnerPhysicalStateAccessOperation.READ,
+    )
     val nodeTypeParameters = List(node.genericArity) { index -> "T$index" }
     val leafTypeParameters = List(leaf.genericArity) { index -> "T$index" }
     val branchTypeParameters = List(branch.genericArity) { index -> "T$index" }
@@ -873,13 +918,52 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             branchElementType.arguments == listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0))) {
         "The OctoTree Branch vector is not the recorded recursive Node<T>[] carrier: $branchState"
     }
+    val expectedSetParameterTypes = listOf(
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
+    )
+    check(nodeSetSlot.physicalOwnerPath == node.physicalOwnerPath &&
+            leafSetSlot.physicalOwnerPath == leaf.physicalOwnerPath &&
+            branchSetSlot.physicalOwnerPath == branch.physicalOwnerPath &&
+            nodeSetSlot.physicalMethodName == leafSetSlot.physicalMethodName &&
+            nodeSetSlot.physicalMethodName == branchSetSlot.physicalMethodName &&
+            nodeSetSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+            leafSetSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+            branchSetSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+            nodeSetSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT &&
+            leafSetSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
+            branchSetSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
+            nodeSetSlot.signature == leafSetSlot.signature &&
+            nodeSetSlot.signature == branchSetSlot.signature &&
+            nodeSetSlot.signature.parameterSlots.map { slot -> slot.type } == expectedSetParameterTypes &&
+            nodeSetSlot.signature.returnSlot.type ==
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
+            nodeSetMember.overrideRootLogicalMemberKeys == listOf(nodeSetMember.logicalMemberKey) &&
+            leafSetMember.overrideRootLogicalMemberKeys == listOf(nodeSetMember.logicalMemberKey) &&
+            branchSetMember.overrideRootLogicalMemberKeys == listOf(nodeSetMember.logicalMemberKey)) {
+        "The OctoTree Node.set typed override family is not one exact recorded CLR slot"
+    }
+    check(leafReadSlot.signature.parameterSlots.isEmpty() &&
+            leafReadSlot.signature.returnSlot.type == leafState.physicalType &&
+            leafWriteSlot.signature.parameterSlots.singleOrNull()?.type == leafState.physicalType &&
+            leafWriteSlot.signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
+            branchReadSlot.signature.parameterSlots.isEmpty() &&
+            branchReadSlot.signature.returnSlot.type == branchState.physicalType) {
+        "The OctoTree candidate state accessors lost their exact recorded carriers"
+    }
     check(node.physicalOwnerPath.dropLast(1) == leaf.physicalOwnerPath.dropLast(1) &&
             node.physicalOwnerPath.dropLast(1) == branch.physicalOwnerPath.dropLast(1) &&
             node.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
             leaf.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
             branch.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
             leafState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
-            branchState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) {
+            branchState.physicalFieldName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
+            listOf(nodeSetSlot, leafReadSlot, leafWriteSlot, branchReadSlot).all { slot ->
+                slot.physicalMethodName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))
+            }) {
         "The bounded OctoTree candidate requires C#-representable physical identities"
     }
     check(leafParameterIndex in leafConstructor.physicalConstructor.signature.parameterSlots.indices &&
@@ -896,6 +980,17 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY_OR_ASSEMBLY -> "protected internal"
         DotNetGenericOwnerPhysicalConstructorVisibility.PRIVATE -> "private"
     }
+    fun DotNetGenericOwnerPhysicalMemberVisibility.renderVisibility(): String = when (this) {
+        DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC -> "public"
+        DotNetGenericOwnerPhysicalMemberVisibility.FAMILY -> "protected"
+        DotNetGenericOwnerPhysicalMemberVisibility.ASSEMBLY -> "internal"
+        DotNetGenericOwnerPhysicalMemberVisibility.FAMILY_OR_ASSEMBLY -> "protected internal"
+        DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE -> "private"
+    }
+    fun DotNetGenericOwnerPhysicalMemberSlotRecord.renderParameters(ownerArguments: List<String>): String =
+        signature.parameterSlots.mapIndexed { index, slot ->
+            "${slot.type.renderSnapshotCSharpType(ownerArguments)} value$index"
+        }.joinToString(", ")
     fun String.asCSharpStringLiteral(): String = "\"" +
             replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
 
@@ -924,6 +1019,11 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchElementTypeName = checkNotNull(branchElementType).renderSnapshotCSharpType(branchTypeParameters)
     val branchLeafType = leafConstructor.constructedOwnerType.renderSnapshotCSharpType(branchTypeParameters)
     val branchElementCount = checkNotNull(branchInitializer.fixedElementCount)
+    val nodeSetReturnType = nodeSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(nodeTypeParameters)
+    val leafSetReturnType = leafSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(leafTypeParameters)
+    val branchSetReturnType = branchSetSlot.signature.returnSlot.type.renderSnapshotCSharpType(branchTypeParameters)
+    val leafReadReturnType = leafReadSlot.signature.returnSlot.type.renderSnapshotCSharpType(leafTypeParameters)
+    val branchReadReturnType = branchReadSlot.signature.returnSlot.type.renderSnapshotCSharpType(branchTypeParameters)
     val producerSource = directory.resolve("OctoTreeCandidateProducer.cs")
     val positiveConsumerSource = directory.resolve("OctoTreeCandidatePositiveConsumer.cs")
     val negativeConsumerSource = directory.resolve("OctoTreeCandidateNegativeSubclass.cs")
@@ -943,6 +1043,10 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 ${nodeConstructor.visibility.renderVisibility()} $nodeSimpleName()
                 {
                 }
+
+                ${nodeSetSlot.visibility.renderVisibility()} abstract $nodeSetReturnType ${nodeSetSlot.physicalMethodName}(
+                    ${nodeSetSlot.renderParameters(nodeTypeParameters)}
+                );
             }
 
             public sealed class $leafSimpleName<${leafTypeParameters.joinToString(", ")}> : $leafBaseType
@@ -952,6 +1056,25 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 ${leafConstructor.visibility.renderVisibility()} $leafSimpleName($leafParameters) : base()
                 {
                     this.${leafState.physicalFieldName} = value$leafParameterIndex;
+                }
+
+                ${leafReadSlot.visibility.renderVisibility()} $leafReadReturnType ${leafReadSlot.physicalMethodName}()
+                {
+                    return this.${leafState.physicalFieldName};
+                }
+
+                ${leafWriteSlot.visibility.renderVisibility()} void ${leafWriteSlot.physicalMethodName}(
+                    ${leafWriteSlot.renderParameters(leafTypeParameters)}
+                )
+                {
+                    this.${leafState.physicalFieldName} = value0;
+                }
+
+                ${leafSetSlot.visibility.renderVisibility()} override $leafSetReturnType ${leafSetSlot.physicalMethodName}(
+                    ${leafSetSlot.renderParameters(leafTypeParameters)}
+                )
+                {
+                    throw new System.InvalidOperationException("set on Leaf element");
                 }
             }
 
@@ -973,6 +1096,19 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                             this.${branchState.physicalFieldName}[index] = new $branchLeafType(value0);
                         }
                     }
+                }
+
+                ${branchReadSlot.visibility.renderVisibility()} $branchReadReturnType ${branchReadSlot.physicalMethodName}()
+                {
+                    return this.${branchState.physicalFieldName};
+                }
+
+                ${branchSetSlot.visibility.renderVisibility()} override $branchSetReturnType ${branchSetSlot.physicalMethodName}(
+                    ${branchSetSlot.renderParameters(branchTypeParameters)}
+                )
+                {
+                    this.${branchState.physicalFieldName}[0] = new $branchLeafType(value3);
+                    return value4 == 0;
                 }
             }
         }
@@ -1052,6 +1188,29 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     else if (node == null || node.GetType() != leaf.GetType() ||
                             !object.Equals(closedValueField.GetValue(node), 7)) return 12;
                 }
+
+                leaf.${leafWriteSlot.physicalMethodName}(43);
+                if (leaf.${leafReadSlot.physicalMethodName}() != 43) return 13;
+                Array getterNodes = filledBranch.${branchReadSlot.physicalMethodName}();
+                if (!object.ReferenceEquals(getterNodes, filledNodes)) return 14;
+
+                ${node.physicalOwnerPath.joinToString(".")}<int> typedNode = filledBranch;
+                if (!typedNode.${nodeSetSlot.physicalMethodName}(0, 0, 0, 19, 0)) return 15;
+                object replacedNode = filledNodes.GetValue(0);
+                if (replacedNode == null || replacedNode.GetType() != leaf.GetType() ||
+                        !object.Equals(closedValueField.GetValue(replacedNode), 19)) return 16;
+
+                bool leafThrew = false;
+                try
+                {
+                    typedNode = leaf;
+                    typedNode.${nodeSetSlot.physicalMethodName}(0, 0, 0, 23, 0);
+                }
+                catch (InvalidOperationException)
+                {
+                    leafThrew = true;
+                }
+                if (!leafThrew) return 17;
                 return 0;
             }
         }
@@ -1063,6 +1222,13 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         {
             public IllegalOctoTreeNode() : base()
             {
+            }
+
+            public override $nodeSetReturnType ${nodeSetSlot.physicalMethodName}(
+                ${nodeSetSlot.renderParameters(listOf("T"))}
+            )
+            {
+                return false;
             }
         }
         """.trimIndent()

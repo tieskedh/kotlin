@@ -28,6 +28,25 @@ verification, and work state.
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Last completed product slice: the schema-12 decoded OctoTree candidate now
+  materializes the public abstract `Node.set(int, int, int, !T, int): bool`
+  typed MethodDef and the exact Leaf/Branch overrides. The final child TypeDefs
+  close inheritance, while their recorded override slots correctly remain
+  non-final virtual (`OVERRIDABLE`), so the C# product uses `override`, not an
+  inferred `sealed override`. Recorded typed identity state paths also become
+  real `Leaf.value` `!T` read/write and `Branch.nodes` `Node<T>[]` read methods
+  over the same private fields. Separately compiled C# mutates `Leaf<int>`,
+  observes getter/reflection field identity, dispatches through a `Node<int>`
+  base reference to Branch's most-derived body and true typed state, and
+  observes Leaf's throwing override. The negative external subclass now
+  implements the exact abstract slot and still fails only at the sealed-base
+  constructor boundary. The focused hostile-plus-OctoTree PSI/LightTree x
+  Framework 4.8/.NET 10 same/separate-compilation matrix covers 16 tests with
+  zero failures, errors, or skips. Production owners/emission, DLL/KLIB,
+  Runtime, Common semantics, and the public C# surface remain unchanged. The
+  final warm-cache strict aggregate completed in 628.4 seconds; direct audit
+  covers 190 XML files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](docs/archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
+- The preceding product slice: the schema-12 decoded OctoTree candidate now
   physicalizes final `Branch<T> : Node<T>` with its two exact public
   constructors, true private `Node<T>[]` field, and fixed zeroed eight-element
   initializer on only the base-delegating constructor root. The secondary
@@ -2676,8 +2695,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    recursive graph plus exact `Leaf.value: !T` constructor initialization.
    Its Node/Leaf sealed construction and true-`T` state plus Branch's exact
    base/this constructors and private `Node<T>[8]` state are now record-driven
-   and executable. Next, add the Node/Leaf/Branch callable and state-access
-   families, then extend the same product over Tree's semantic root, actual
+   and executable. Their exact abstract/override typed MethodDefs and identity
+   state accessors are also executable through direct C# base dispatch. Next,
+   add the strict non-generic capability interface and object-to-`!T`
+   dispatchers, then extend the same product over Tree's semantic root, actual
    calls, and the complete direct C# surface rather than starting a second
    representation. Include
    actual call mixes,

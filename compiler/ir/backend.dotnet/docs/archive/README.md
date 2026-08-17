@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-octo-tree-typed-callables-2026-08-17.md`](generic-owner-octo-tree-typed-callables-2026-08-17.md)
+  records the decoded abstract/override Node.set typed family, exact Leaf/
+  Branch identity accessors, direct base-reference C# dispatch, and retained
+  non-final virtual slots on final TypeDefs.
 - [`generic-owner-octo-tree-branch-product-2026-08-17.md`](generic-owner-octo-tree-branch-product-2026-08-17.md)
   records the decoded Branch `Node<T>[]` field, fixed eight-element base-root
   initializer, exact base/this constructors, and direct Framework/.NET C#
