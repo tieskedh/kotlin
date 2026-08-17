@@ -884,16 +884,24 @@ from clusterization wins on JIT/NativeAOT. Rendering is explicitly
 lowering-confounded because the candidate is generated C#, not a complete
 Kotlin product, so this checkpoint does not select the public owner ABI.
 
-The next hardest-first gate is the material classification defect exposed by
-that attribution. The private `root: Node<T>? = null` is currently poisoned to
-semantic object state because the write-provenance analyzer classifies the
-initializer through its `Nothing?` expression type. Admit null as a
-representation-neutral write only when the target field has a proven reference
-carrier such as `Node<T>?`; never extend that rule to bare unconstrained `T?`.
-Then require the entire non-null producer/access graph, physicalize the root as
-`Node<T>`, retain an object capability only where open-world semantics require
-it, and rerun the same five-lane aggregate and route products before drawing an
-ABI conclusion.
+That material classification defect is now closed. A null literal is
+representation-neutral only for a proven local non-value generic-class
+reference carrier with exact invariant arguments; bare unconstrained `T?`,
+`C<T?>`, external/projected/unresolved classifiers, and missing producer keys
+remain semantic. Every non-null constructor/write still requires physically
+typed provenance. The separate OctoTree therefore stores its private root as
+`Node<T>` and uses private typed identity access internally, while the
+non-generic semantic export remains on the same object graph. The exact
+five-lane rerun changes aggregate candidate/erased ratios from
+2.41/1.05/1.29/1.23/1.06x to 1.62/0.80/0.95/0.77/0.71x across
+Framework/JIT/ReadyToRun/trimmed/NativeAOT and changes allocation from
+23.0%-27.3% more to 5.2%-11.3% less. This strongly supports typed physical
+state and direct internal calls, but does not hide Framework's remaining cost
+or authorize the production cutover. The next bounded step is a large-impact
+audit of the remaining capability/Framework paths. If no avoidable compiler
+crossing exists, close the one-state concurrency/memory-model migration
+condition rather than adding an easy-owner pilot or micro-optimizing the
+benchmark.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -924,6 +932,8 @@ The schema-13 ordinary-body closure is recorded in
 [`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
 The paired schema-3 measurement and route attribution are recorded in
 [`../archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md`](../archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md).
+The typed private-root proof and five-lane remeasurement are recorded in
+[`../archive/generic-owner-octo-tree-typed-private-root-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-private-root-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

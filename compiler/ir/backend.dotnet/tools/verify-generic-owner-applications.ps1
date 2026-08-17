@@ -300,7 +300,8 @@ function Assert-ApplicationBundle([string]$Directory) {
             }
         }
         foreach ($requiredPhysicalShape in @(
-                'public class OctoTree<T0>', 'private object root;', 'private T0 value;',
+                'public class OctoTree<T0>',
+                'private KotlinRepresentativeCandidate.OctoTreeNode<T0> root;', 'private T0 value;',
                 'private readonly KotlinRepresentativeCandidate.OctoTreeNode<T0>[] nodes;'
             )) {
             if ($candidateProducerSource -notmatch [Regex]::Escape($requiredPhysicalShape)) {
