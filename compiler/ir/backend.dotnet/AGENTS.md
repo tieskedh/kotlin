@@ -811,6 +811,22 @@ See the
   left-biased `Any.equals`, and conflicting `IEquatable<T>`/`object.Equals`
   behavior on both profiles and every deployment lane. Record aggregate and route results, including regressions;
   do not select an owner from one favorable route.
+  The first atomic public-owner checkpoint records no-go for now. Schema 20
+  proves the intended CLR representation, but the candidate remains generated
+  C# rather than a complete Kotlin-emitted self-describing product. A temporary
+  global natural-arity probe made erased Runtime/Stdlib bodies, bridges,
+  statics, open-nullable carriers, and classifier tests disagree with their
+  constructed owners. A bounded `Box<T>` probe reached the existing
+  erased-contract covariant-return bridge and failed when concrete
+  `int32`/`string` results were converted to open owner `!0`. Neither probe was
+  committed. Retain erased production owners and do not add a per-owner switch,
+  source annotation, or emitter-only arity path. Reopen only for one complete
+  Kotlin-emitter plus physical-binding epoch cutover and exact inverse rollback
+  rehearsal covering Runtime, Stdlib, hostile and representative applications,
+  both profiles, and every deployment lane. Continue ordinary target breadth
+  without adding a new assumption that Kotlin generic owners can never become
+  `C<T>`. See
+  [`docs/archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md`](docs/archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md).
   Version 5 adds the reflection join
   without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
