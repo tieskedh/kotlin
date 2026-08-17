@@ -663,13 +663,20 @@ See the
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
   channel has one versioned, producer-fingerprinted physical-family artifact,
-  currently schema 19,
+  currently schema 20,
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
   neutral structural method/type expressions, declaration-independent state,
   init-only flags, per-state plain/volatile memory semantics, constructor-input
-  conversions, and producer-private ordinary implementation MethodDefs. A
+  conversions, producer-private ordinary implementation MethodDefs, and every
+  exact `TypeDef.BaseType`/direct `InterfaceImpl` construction with its
+  physical nullable-reference transform. Producer-owned generic interface
+  TypeDefs participate in the same catalog. A base-delegating constructor must
+  target the recorded base; only the TypeDef which owns semantic capability
+  dispatchers directly implements that capability. A bare unconstrained `T?`
+  ancestry remains a recorded metadata-fixed exclusion, while a nullable known
+  reference classifier has one exact physical edge. A
   capability dispatcher must
   name the exact non-generic interface MethodDef it implements and carry the
   same signature; nested `!T`/`!!T`, named generic instances, and SZ arrays are
