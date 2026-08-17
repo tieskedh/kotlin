@@ -663,14 +663,21 @@ Leaf/Branch overrides and exact typed identity accessors. Direct C# proves
 base-reference dispatch and same-field mutation. The non-generic strict
 capability interfaces and private-final object-to-`!T` dispatchers now prove
 inherited and owner-specific routes reach the same most-derived typed override,
-while incompatible input fails before mutation. State-access capabilities and
-outer Tree semantic routes remain required before this is a complete candidate.
+while incompatible input fails before mutation. The recorded Leaf state
+capability now reads/writes the same true `T` field through its non-generic
+`object` boundary, and the Branch state capability returns the same
+`Node<T>[]` reference through `System.Array`. Direct C# proves value boxing at
+only the Leaf capability boundary, incompatible pre-mutation failure, array
+identity, and private/final interface-map targets. Outer Tree semantic routes
+remain required before this is a complete candidate.
 See
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
 The strict capability checkpoint is recorded in
 [`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
+The state-access capability checkpoint is recorded in
+[`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
