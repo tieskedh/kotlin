@@ -27,7 +27,43 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed generic-owner migration condition: physical-family schema 19
+- Last completed generic-owner migration condition: physical-family schema 20
+  now closes exact `TypeDef.BaseType`/`InterfaceImpl` ancestry and its nullable-
+  reference metadata. Live IR contributes the complete logical supertype tree.
+  The bound producer artifact records one exact physical base and every direct
+  interface, resolves class and generic-interface TypeDefs from the producer
+  catalog, and requires base-delegating constructors to target that same row.
+  Capability interfaces appear directly only on the TypeDef which owns their
+  dispatchers; inherited dispatchers do not duplicate `InterfaceImpl`, and
+  method-free owners receive no empty capability. The hostile exact case emits
+  `ReferenceBase<TypedStore<T>?>` plus
+  `Marker<AbstractPropertyStorage<T>?>`. Its Kotlin-logical nullable vector is
+  `1,2,1`, while raw Roslyn ancestry metadata truthfully uses the physical root
+  sentinel `0,2,1`; schema 20 preserves that layer boundary instead of
+  flattening either edge. The counterexample `Base<T?>` remains deterministically
+  erased-only because one unconstrained CLR `T` cannot select a single fixed
+  nullable base for both value and reference substitutions. Its classification
+  records the exact blocked classifier and owner-parameter index.
+  A record-driven C# producer and raw `System.Reflection.Metadata` consumer
+  verify both constructed signatures, nullable blobs, the generic marker
+  TypeDef, constructor/base agreement, and non-duplicated capabilities on .NET
+  10 and Framework 4.8. The general recursive metadata inspector now consumes
+  the recorded ancestry as well. Schema-negative tests reject missing bases,
+  mismatched constructor targets, invalid root flags, missing/colliding generic
+  interfaces, unknown supertype flags, capability duplication/omission, and
+  invalid conditional blockers. The PSI/LightTree x profile ordinary/separate
+  hostile matrix covers four suites and eight products with zero failures,
+  errors, or skips. The regenerated closed-application bundles are equivalent
+  across PSI/LightTree on both profiles and execute every candidate/erased/C#
+  product. The four-lane dynamic trace remains exactly 18 exact, 12 semantic-
+  capability, 24 erased-owner, and one intentional missing route: 55 producer
+  plus 11 unrelated events. Production Kotlin-owned owners remain erased. The
+  remaining gate is the one atomic public-owner migration checkpoint, not
+  another per-owner rollout. The final strict aggregate and explicit freshness
+  rerun cover 190 freshly written XML suites and 2,238 tests with zero
+  failures, errors, or skips. See
+  [`docs/archive/generic-owner-direct-supertype-metadata-2026-08-17.md`](docs/archive/generic-owner-direct-supertype-metadata-2026-08-17.md).
+- The preceding generic-owner migration condition: physical-family schema 19
   now closes overload/generated-name collisions without sacrificing natural C#
   overloads. Two hostile Kotlin `collide` declarations have distinct typed CLR
   parameter types but identical semantic `object` parameter types. Typed
@@ -3097,9 +3133,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    chosen. Schema 19 closes overload-family naming: natural typed overloads
    remain idiomatic C#, generated semantic/capability/default members receive
    stable logical-family identities, and CLR-valid but C#-invalid collisions
-   fail closed. Continue with base/interface nullable transforms as the next
-   complete hostile migration condition,
-   not a per-owner rollout or small performance variant.
+   fail closed. Schema 20 closes the remaining direct-supertype condition:
+   exact `BaseType` and `InterfaceImpl` constructions, generic interface
+   TypeDefs, constructor delegation, capability ownership, and their physical
+   nullable blobs are producer facts, while bare `T?` ancestry remains an
+   explicit deterministic exclusion. Continue with the one atomic public-owner
+   migration checkpoint across the entire hostile family and representative
+   application evidence, not a per-owner rollout or small performance variant.
    Kotlin/Native VTA and Swift SIL remain optional proof engines for private/
    direct paths and never replace the open-world capability. Do not emit a
    production `C<T>` TypeDef or roll out an easy owner before the hostile
