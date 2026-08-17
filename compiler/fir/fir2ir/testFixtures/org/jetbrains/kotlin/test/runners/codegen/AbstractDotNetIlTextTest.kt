@@ -2172,8 +2172,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         if (leaf != null)
                         {
                             ${branchTypeParameters.single()} oldValue = leaf.${leafReadSlot.physicalMethodName}();
-                            if (System.Collections.Generic.EqualityComparer<${branchTypeParameters.single()}>.Default.Equals(
-                                    oldValue, value3))
+                            if (Kotlin.Runtime.Internal.Intrinsics.AreEqual(oldValue, value3))
                             {
                                 return false;
                             }
@@ -2209,7 +2208,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     {
                         $branchLeafType leaf = this.${branchState.physicalFieldName}[index] as $branchLeafType;
                         if (leaf == null ||
-                                !System.Collections.Generic.EqualityComparer<${branchTypeParameters.single()}>.Default.Equals(
+                                !Kotlin.Runtime.Internal.Intrinsics.AreEqual(
                                     value0, leaf.${leafReadSlot.physicalMethodName}()))
                         {
                             return false;
@@ -2429,6 +2428,21 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         clusteredRoot.GetType() != typeof(${leaf.physicalOwnerPath.joinToString(".")}<int>) ||
                         !object.Equals(clusteredTree.${treeGetSlot.physicalMethodName}(0, 0, 0), 91) ||
                         !object.Equals(clusteredTree.${treeGetSlot.physicalMethodName}(1, 1, 1), 91)) return 65;
+
+                var doubleSignedZeroBranch =
+                    new ${branch.physicalOwnerPath.joinToString(".")}<double>(-0.0d, 0);
+                if (doubleSignedZeroBranch.${branchSetSlot.physicalMethodName}(
+                        0, 0, 0, +0.0d, 0)) return 66;
+                double firstNaN = BitConverter.Int64BitsToDouble(0x7ff8000000000001L);
+                double secondNaN = BitConverter.Int64BitsToDouble(0x7ff8000000000042L);
+                var doubleNaNBranch =
+                    new ${branch.physicalOwnerPath.joinToString(".")}<double>(firstNaN, 0);
+                if (!doubleNaNBranch.${branchSetSlot.physicalMethodName}(
+                        0, 0, 0, secondNaN, 0)) return 67;
+                var floatSignedZeroBranch =
+                    new ${branch.physicalOwnerPath.joinToString(".")}<float>(-0.0f, 0);
+                if (floatSignedZeroBranch.${branchSetSlot.physicalMethodName}(
+                        0, 0, 0, +0.0f, 0)) return 68;
 
                 var leaf = new ${leaf.physicalOwnerPath.joinToString(".")}<int>(42);
                 Type nodeDefinition = typeof($nodeOpenType);
@@ -2660,14 +2674,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 ".NET Framework C# compiler is required for the OctoTree candidate"
             }
             producerCompilation = compileFrameworkSnapshotCSharp(
-                compiler, producerSource, producer, references = emptyList(), executable = false,
+                compiler, producerSource, producer, references = listOf(runtime), executable = false,
             )
             check(producerCompilation.exitCode == 0) { producerCompilation.output }
             candidateMeasurementCompilation = compileFrameworkSnapshotCSharp(
                 compiler,
                 candidateMeasurementSource,
                 candidateMeasurement,
-                references = listOf(producer),
+                references = listOf(producer, runtime),
                 executable = true,
             )
             erasedMeasurementCompilation = compileFrameworkSnapshotCSharp(
@@ -2678,10 +2692,18 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 executable = true,
             )
             positiveCompilation = compileFrameworkSnapshotCSharp(
-                compiler, positiveConsumerSource, positiveConsumer, references = listOf(producer), executable = true,
+                compiler,
+                positiveConsumerSource,
+                positiveConsumer,
+                references = listOf(producer, runtime),
+                executable = true,
             )
             negativeCompilation = compileFrameworkSnapshotCSharp(
-                compiler, negativeConsumerSource, negativeConsumer, references = listOf(producer), executable = false,
+                compiler,
+                negativeConsumerSource,
+                negativeConsumer,
+                references = listOf(producer, runtime),
+                executable = false,
             )
         }
         DotNetTarget.NET10_0 -> {
@@ -2689,14 +2711,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 "Modern C# compiler is required for the OctoTree candidate"
             }
             producerCompilation = compileModernSnapshotCSharp(
-                toolchain, producerSource, producer, references = emptyList(), executable = false,
+                toolchain, producerSource, producer, references = listOf(runtime), executable = false,
             )
             check(producerCompilation.exitCode == 0) { producerCompilation.output }
             candidateMeasurementCompilation = compileModernSnapshotCSharp(
                 toolchain,
                 candidateMeasurementSource,
                 candidateMeasurement,
-                references = listOf(producer),
+                references = listOf(producer, runtime),
                 executable = true,
             )
             erasedMeasurementCompilation = compileModernSnapshotCSharp(
@@ -2707,10 +2729,18 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 executable = true,
             )
             positiveCompilation = compileModernSnapshotCSharp(
-                toolchain, positiveConsumerSource, positiveConsumer, references = listOf(producer), executable = true,
+                toolchain,
+                positiveConsumerSource,
+                positiveConsumer,
+                references = listOf(producer, runtime),
+                executable = true,
             )
             negativeCompilation = compileModernSnapshotCSharp(
-                toolchain, negativeConsumerSource, negativeConsumer, references = listOf(producer), executable = false,
+                toolchain,
+                negativeConsumerSource,
+                negativeConsumer,
+                references = listOf(producer, runtime),
+                executable = false,
             )
         }
         DotNetTarget.NETSTANDARD_2_0 -> error("The OctoTree candidate cannot target netstandard2.0")

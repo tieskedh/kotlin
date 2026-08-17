@@ -302,11 +302,15 @@ function Assert-ApplicationBundle([string]$Directory) {
         foreach ($requiredPhysicalShape in @(
                 'public class OctoTree<T0>',
                 'private KotlinRepresentativeCandidate.OctoTreeNode<T0> root;', 'private T0 value;',
-                'private readonly KotlinRepresentativeCandidate.OctoTreeNode<T0>[] nodes;'
+                'private readonly KotlinRepresentativeCandidate.OctoTreeNode<T0>[] nodes;',
+                'Kotlin.Runtime.Internal.Intrinsics.AreEqual'
             )) {
             if ($candidateProducerSource -notmatch [Regex]::Escape($requiredPhysicalShape)) {
                 throw "The OctoTree candidate lost required physical shape '$requiredPhysicalShape'"
             }
+        }
+        if ($candidateProducerSource -match 'EqualityComparer\s*<') {
+            throw 'The OctoTree candidate replaced Kotlin generic equality with a CLR comparer'
         }
         foreach ($sourceText in @($candidateSource, $erasedCSharpSource)) {
             foreach ($requiredShape in @(

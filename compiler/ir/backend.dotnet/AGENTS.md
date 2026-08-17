@@ -766,7 +766,13 @@ See the
   hostile schema-2 verification. A generated C# candidate is not a complete
   Kotlin product: published byte size is non-comparable, and an ordinary-body
   lowering difference such as C# rendering versus Common `joinToString` cannot
-  decide the ABI. Record aggregate and route results, including regressions;
+  decide the ABI. Every other measured ordinary body must use the actual
+  Kotlin lowering. In particular, open-`T` structural equality calls Runtime
+  `AreEqual(object, object)`; `EqualityComparer<T>.Default`, CLR operator
+  equality, and C# record equality are not substitutes. Any lower-boxing
+  generic helper must be production-used and prove signed-zero, NaN, null,
+  left-biased `Any.equals`, and conflicting `IEquatable<T>`/`object.Equals`
+  behavior on both profiles and every deployment lane. Record aggregate and route results, including regressions;
   do not select an owner from one favorable route.
   Version 5 adds the reflection join
   without duplicating Kotlin

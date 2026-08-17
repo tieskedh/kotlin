@@ -882,7 +882,9 @@ ReadyToRun, 1.23x trimmed, and 1.06x NativeAOT, with 23.0%-27.3% more
 allocation. Route attribution separates expensive typed/capability crossings
 from clusterization wins on JIT/NativeAOT. Rendering is explicitly
 lowering-confounded because the candidate is generated C#, not a complete
-Kotlin product, so this checkpoint does not select the public owner ABI.
+Kotlin product. A later audit also found that its generic equality used CLR
+`EqualityComparer<T>.Default` instead of Kotlin Runtime equality, so these
+performance values are superseded and cannot select the public owner ABI.
 
 That material classification defect is now closed. A null literal is
 representation-neutral only for a proven local non-value generic-class
@@ -892,16 +894,21 @@ remain semantic. Every non-null constructor/write still requires physically
 typed provenance. The separate OctoTree therefore stores its private root as
 `Node<T>` and uses private typed identity access internally, while the
 non-generic semantic export remains on the same object graph. The exact
-five-lane rerun changes aggregate candidate/erased ratios from
-2.41/1.05/1.29/1.23/1.06x to 1.62/0.80/0.95/0.77/0.71x across
-Framework/JIT/ReadyToRun/trimmed/NativeAOT and changes allocation from
-23.0%-27.3% more to 5.2%-11.3% less. This strongly supports typed physical
-state and direct internal calls, but does not hide Framework's remaining cost
-or authorize the production cutover. The next bounded step is a large-impact
-audit of the remaining capability/Framework paths. If no avoidable compiler
-crossing exists, close the one-state concurrency/memory-model migration
-condition rather than adding an easy-owner pilot or micro-optimizing the
-benchmark.
+five-lane rerun initially appeared strongly favorable, but the large-only
+audit found that generated C# had replaced Kotlin open-`T` equality with CLR
+`EqualityComparer<T>.Default`. The corrected product now calls the same
+Runtime `AreEqual(object, object)` as production Kotlin and pins signed-zero
+and NaN behavior. Its aggregate candidate/erased ratios are 1.68x Framework,
+0.91x JIT, 1.10x ReadyToRun, 0.92x trimmed, and 0.89x NativeAOT, with
+72.3%-76.6% more allocation. Typed storage/direct calls remain structurally
+valid, but ordinary generic equality boxing is now the dominant measured
+candidate cost. The next bounded foundation must prove or reject a
+production-used generic Runtime equality helper with fewer boxes while
+retaining Kotlin signed-zero, NaN, null, left-biased equality, and conflicting
+custom/foreign `IEquatable<T>` versus `object.Equals` behavior. A CLR comparer
+or candidate-only shortcut is not admissible. If that exact optimization is
+impossible, keep the cost and close the one-state concurrency/memory-model
+migration condition rather than adding an easy-owner pilot.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
@@ -934,6 +941,9 @@ The paired schema-3 measurement and route attribution are recorded in
 [`../archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md`](../archive/generic-owner-octo-tree-paired-measurement-2026-08-17.md).
 The typed private-root proof and five-lane remeasurement are recorded in
 [`../archive/generic-owner-octo-tree-typed-private-root-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-private-root-2026-08-17.md).
+The Kotlin-equality correction and superseding five-lane measurement are
+recorded in
+[`../archive/generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md`](../archive/generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

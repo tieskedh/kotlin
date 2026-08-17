@@ -27,7 +27,25 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed product slice: the separate-compilation OctoTree candidate
+- Last completed product correction: the large-only audit found that the
+  generated OctoTree candidate used CLR `EqualityComparer<T>.Default` for
+  ordinary generic Kotlin `==`, while the real backend boxes open `T` and
+  calls `Kotlin.Runtime.Internal.Intrinsics.AreEqual(object, object)`. The old
+  lowering was semantically wrong for signed zero and made the typed-root
+  timing/allocation result invalid. The candidate now calls the real Runtime
+  helper, deploys Runtime in every lane, and is guarded by generic Float/Double
+  signed-zero plus distinct-NaN-payload oracles; the corpus rejects any CLR
+  comparer. The corrected aggregate candidate/erased ratios are 1.68x
+  Framework, 0.91x JIT, 1.10x ReadyToRun, 0.92x trimmed, and 0.89x NativeAOT,
+  with 72.3%-76.6% more allocation. Typed/capability/cluster routes expose
+  243%-343% excess allocation from ordinary equality boxing; rendering remains
+  separately lowering-confounded. The structural private `Node<T>` root proof
+  remains valid, but all preceding OctoTree performance evidence is superseded
+  for owner selection. Production generic owners and ordinary Kotlin emission
+  remain unchanged. The final strict aggregate direct audit covers 190 XML
+  files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md`](docs/archive/generic-owner-octo-tree-kotlin-equality-measurement-2026-08-17.md).
+- The preceding product slice: the separate-compilation OctoTree candidate
   now stores its private `root: Node<T>?` as a real `OctoTreeNode<T>` CLR
   reference and keeps the non-generic semantic capability only at the
   open-world boundary. Null supplies typed write evidence only for a proven
@@ -39,12 +57,11 @@ verification, and work state.
   logical reflection. The regenerated PSI/LightTree x Framework 4.8/.NET 10
   schema-3 corpus retains 21 exact plus nine semantic static sites and proves
   open/closed root fields and private accessors use `Node<T>`/`Node<int>`.
-  At 200,000 iterations and five throughput runs the aggregate
-  candidate/erased ratios improve from 2.41/1.05/1.29/1.23/1.06x to
-  1.62/0.80/0.95/0.77/0.71x across Framework/JIT/ReadyToRun/trimmed/NativeAOT;
-  allocation changes from 23.0%-27.3% more to 5.2%-11.3% less. Typed and
-  cluster routes now have zero internal semantic calls/checks; the external
-  capability still pays its required boundary and Framework remains slower.
+  Its first five-lane measurement reported broad speed/allocation wins, but
+  that evidence used a non-Kotlin CLR equality lowering and is superseded by
+  the corrected measurement above. Typed and cluster owner routes still have
+  zero internal semantic calls/checks; the external capability retains its
+  required boundary.
   Production owners/emission, DLL/KLIB, Runtime, Common semantics, and public
   C# ABI remain unchanged. The final strict aggregate direct audit covers 190
   XML files and 2,238 tests with zero failures, errors, or skips. See
@@ -65,7 +82,9 @@ verification, and work state.
   attribution shows typed/capability costs of 1.38x-1.83x on modern lanes and
   5.14x/5.59x on Framework, while clusterization reaches 0.73x JIT and 0.77x
   NativeAOT. Rendering is faster but remains lowering-confounded because the
-  candidate is generated C#, not a complete Kotlin product. The large-only
+  candidate is generated C#, not a complete Kotlin product. These performance
+  values are also superseded because the same candidate used non-Kotlin CLR
+  generic equality. The large-only
   audit found one material next proof: the private `Node<T>?` root's null
   initializer is currently classified from `Nothing?` as semantic object,
   even though null is representation-neutral for that proven reference
@@ -2869,10 +2888,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    semantic capability. The five-lane paired rerun is faster than erased on
    every modern lane and allocates less everywhere; Framework remains 1.62x
    slower. Perform only a large-impact audit of the remaining capability and
-   Framework costs. If it exposes no avoidable compiler crossing or other
-   material defect, advance the still-open one-state concurrency/memory-model
-   migration condition instead of tuning microbenchmarks or selecting an easy
-   owner. Kotlin/Native VTA and Swift SIL
+   Framework costs. That audit found a material ordinary-body defect: the C#
+   candidate used `EqualityComparer<T>.Default` instead of Runtime
+   `AreEqual(object, object)`. The corrected candidate is now semantically
+   aligned and exposes 72.3%-76.6% excess aggregate allocation. Next, prove or
+   reject one production-used generic Runtime equality helper which reduces
+   boxing while retaining Kotlin signed-zero, NaN, null, left-biased equality,
+   and custom/foreign struct behavior on all five lanes. A CLR comparer or
+   candidate-only shortcut is not admissible. If exact lower-boxing equality
+   is impossible, retain this measured cost and advance the one-state
+   concurrency/memory-model migration condition. Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll
    out an easy owner before the hostile prototype and real-app measurement

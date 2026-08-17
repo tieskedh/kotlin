@@ -347,7 +347,7 @@ function Write-MeasurementProject([string]$Representation, [string]$Bundle, [str
         'ErasedGenericOwnerApplication'
     }
     $references = if ($isCandidate) {
-        @('SnapshotProducer.dll')
+        @('SnapshotProducer.dll', 'Kotlin.Runtime.dll')
     } else {
         @('lib.dll', 'Kotlin.Runtime.dll', 'Kotlin.Stdlib.dll')
     }
