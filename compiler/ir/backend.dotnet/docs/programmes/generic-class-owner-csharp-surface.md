@@ -348,6 +348,30 @@ property migration condition, not nullability annotations, collision policy,
 or the complete acceptance matrix. See
 [`../archive/generic-owner-direct-property-surface-2026-08-17.md`](../archive/generic-owner-direct-property-surface-2026-08-17.md).
 
+Physical-family schema 16 now closes the nullable-reference part of that
+direct surface. Every MethodDef value slot, property, and physical state carries
+the exact Roslyn preorder transform captured from the original IR type while
+that type is still available. The transforms deliberately do not live on the
+physical type identity: a semantic `object` carrier for open `T` must admit a
+nullable substitution, while an exact `T` position is encoded non-null without
+adding a CLR type-parameter constraint. The recursive product distinguishes
+`Node<T>?` as `[2,1]` and `Node<T>?[]` as `[1,2,1]`; its exact `T` field/property
+is `[1]`, and its widened nullable `object` result is `[2]`. Property accessors
+and identity state accessors must carry the identical transform, and schema
+decoding fails on unknown flags or the wrong structural length.
+
+The generated producer uses `#nullable enable` and warnings-as-errors. Its raw
+metadata oracle reads `NullableAttribute` scalar/vector blobs plus effective
+`NullableContextAttribute` fallback directly from ECMA-335 rows on both
+Framework 4.8 and .NET 10. This also fixed the older direct-export treatment of
+an unmarked CLR type parameter from oblivious flag `0` to Roslyn's non-null flag
+`1`; nullable substitutions remain legal because the signature gains metadata,
+not a `class`/`notnull` CLR constraint. Open `T?` remains `object?`, since the
+current bounded representation cannot truthfully encode it as unconstrained
+CLR `T?`. Base/interface nullability and the remaining acceptance matrix stay
+open. See
+[`../archive/generic-owner-nullable-surface-2026-08-17.md`](../archive/generic-owner-nullable-surface-2026-08-17.md).
+
 The first repository application census sharpens that distinction. ArrayCopy
 executes 5,664 local owner calls and every one has exact-entry provenance, but
 its source-authored unchecked object-array initialization still requires
