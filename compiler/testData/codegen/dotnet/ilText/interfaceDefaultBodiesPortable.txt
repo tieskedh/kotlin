@@ -160,10 +160,8 @@
       ldarg.0
       callvirt instance object 'GenericBody'::'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'()
       unbox.any !!0
-      box !!0
       ldarg.1
-      box !!0
-      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqualGeneric'<!!0>(!!0, !!0)
       ret
     }
   }
