@@ -27,7 +27,31 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed product slice: the schema-12 decoded OctoTree candidate now
+- Last completed product slice: schema 12 now closes whole-family metadata
+  and reflection normalization for the decoded OctoTree candidate. KLIB first
+  selects the logical classifier; within that context every exact typed,
+  capability-interface, and dispatcher MethodDef maps to one logical callable.
+  Capability TypeDefs and producer-private state methods remain hidden. The
+  classifier context is necessary: the hostile derived owner legally shares
+  its base capability TypeDef and inherited dispatcher while retaining a
+  distinct logical override declaration. A separate net10
+  `System.Reflection.Metadata` executable reads each Framework 4.8 or .NET 10
+  candidate PE and requires the exact exhaustive TypeDef, GenericParam,
+  InterfaceImpl, MethodImpl, field, method, signature, and flag rows without
+  textual IL or ILAsm. Assembly TypeDefs are profile-exact, including only
+  Framework Roslyn's two required embedded support attributes beyond the
+  family. That audit found that recorded Leaf/Branch `ToString`
+  slots were absent from the prior C# product while inherited Object rendering
+  let execution pass; both overrides now materialize. Runtime execution still
+  independently proves the same one-object graph on Framework CLR 4 and
+  CoreCLR. The focused matrix covers 8 tests and the combined hostile-plus-
+  OctoTree matrix covers 16, both with zero failures, errors, or skips.
+  Production owners/emission, DLL/KLIB, Runtime, Common semantics, and the
+  public C# surface remain unchanged. The final warm-cache strict aggregate
+  completed in 636.5 seconds; direct audit covers 190 XML files and
+  2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](docs/archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
+- The preceding product slice: the schema-12 decoded OctoTree candidate now
   materializes its outer open `OctoTree<T>` owner, public constructor and
   typed member slots over the recorded private semantic `object` root. Its
   non-generic get/set interface uses truthful object carriers, and the set

@@ -811,8 +811,14 @@ interface-map targets. The outer open Tree now materializes its public
 constructor/members over the semantic object root. Its three state-to-child
 calls are joined to the compiler census as semantic-capability routes, and
 direct C# proves typed/capability state identity plus inherited dispatchers on
-an external subclass. The next gate closes whole-family metadata and
-reflection normalization.
+an external subclass. Whole-family metadata/reflection normalization is now
+closed by a classifier-contextual inverse MethodDef join and an exhaustive raw
+ECMA-335 reader over each separately compiled candidate. Context is required
+because the hostile derived owner shares its base capability TypeDef and
+dispatcher. The reader found and closed previously omitted Leaf/Branch
+rendering MethodDefs which execution alone had hidden behind Object rendering.
+The next gate composes this generic-owner family with the complete ordinary
+declaration/body closure before any representative timing.
 See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 
@@ -862,8 +868,12 @@ input carrier. The matching Leaf/Branch state-access dispatchers now preserve
 one true generic state while exposing the recorded `object`/`System.Array`
 capability carriers. The outer Tree now consumes that family through its
 recorded semantic object root, exact member/capability slots, and compiler-
-census call routes. The next gate binds exact whole-family metadata/reflection
-rather than selecting another owner.
+census call routes. Exact raw TypeDef/GenericParam/InterfaceImpl/MethodImpl/
+field/method rows and classifier-contextual callable normalization now close
+the whole-family metadata/reflection gate. The next gate does not select
+another owner: it must eliminate bounded scenario-body substitutes by
+composing private non-KLIB helpers, declaration-independent state, and the
+complete original OctoTree algorithms with this same decoded family.
 See
 [`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
 The initializer proof is recorded in
