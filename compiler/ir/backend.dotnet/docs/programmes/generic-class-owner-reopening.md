@@ -441,9 +441,12 @@ closed vector carriers plus empty/populated constructor behavior. The next
 slice now emits the exact abstract `Node.set` typed slot, its ordinary virtual
 Leaf/Branch overrides, and the typed Leaf/Branch identity accessors. Direct C#
 proves base-reference dispatch and same-field mutation; final child TypeDefs do
-not cause an invented final MethodDef flag. Next, emit the strict non-generic
-capability interface/object dispatcher, followed by the outer Tree semantic/
-member routes and complete direct C# surface. See
+not cause an invented final MethodDef flag. The strict non-generic capability
+interfaces and private-final object-to-`!T` dispatchers now prove inherited and
+owner-specific routes reach the most-derived typed override; incompatible input
+fails before mutation. Next, emit the Leaf/Branch state-access capability
+slots, followed by the outer Tree semantic/member routes and complete direct
+C# surface. See
 [`../archive/generic-owner-structural-state-carrier-2026-08-15.md`](../archive/generic-owner-structural-state-carrier-2026-08-15.md).
 The sealed-construction checkpoint is recorded in
 [`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
@@ -451,6 +454,8 @@ The recursive Branch product is recorded in
 [`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
 The typed callable product is recorded in
 [`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
+The strict capability product is recorded in
+[`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
 
 The physical callable grammar now observes the same no-guessing rule. Open
 nullable `T?` cannot be a fixed CLR `!T`: value substitutions need a nullable

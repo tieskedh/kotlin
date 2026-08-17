@@ -28,6 +28,24 @@ verification, and work state.
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Last completed product slice: the schema-12 decoded OctoTree candidate now
+  completes the strict `Node.set` family with each owner's recorded
+  non-generic capability interface and private-final explicit dispatcher. The
+  capability signature uses `object` only for the strict owner input; each
+  dispatcher casts/unboxes to its typed `!T` slot and invokes virtual dispatch.
+  Separately compiled C# proves that an inherited Node capability on Branch and
+  Branch's owner-specific capability both reach Branch's most-derived typed
+  override and the same true `Node<int>[]` state. An incompatible string throws
+  before mutation, while Leaf's compatible capability reaches its throwing
+  typed override. Interface maps prove private/virtual/final targets with the
+  inherited Node dispatcher declared on `Node<int>` and the Branch dispatcher
+  on `Branch<int>`. The focused hostile-plus-OctoTree PSI/LightTree x Framework
+  4.8/.NET 10 same/separate-compilation matrix covers 16 tests with zero
+  failures, errors, or skips. Production owners/emission, DLL/KLIB, Runtime,
+  Common semantics, and the public C# surface remain unchanged. The final
+  warm-cache strict aggregate completed in 641.5 seconds; direct audit covers
+  190 XML files and 2,238 tests with zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](docs/archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
+- The preceding product slice: the schema-12 decoded OctoTree candidate now
   materializes the public abstract `Node.set(int, int, int, !T, int): bool`
   typed MethodDef and the exact Leaf/Branch overrides. The final child TypeDefs
   close inheritance, while their recorded override slots correctly remain
@@ -2696,11 +2714,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    Its Node/Leaf sealed construction and true-`T` state plus Branch's exact
    base/this constructors and private `Node<T>[8]` state are now record-driven
    and executable. Their exact abstract/override typed MethodDefs and identity
-   state accessors are also executable through direct C# base dispatch. Next,
-   add the strict non-generic capability interface and object-to-`!T`
-   dispatchers, then extend the same product over Tree's semantic root, actual
-   calls, and the complete direct C# surface rather than starting a second
-   representation. Include
+   state accessors are also executable through direct C# base dispatch. The
+   strict set capability interfaces and private-final object-to-`!T`
+   dispatchers now preserve that most-derived override path and fail before
+   incompatible mutation. Next, add the Leaf/Branch state-access capabilities,
+   then extend the same product over Tree's semantic root, actual calls, and
+   the complete direct C# surface rather than starting a second representation.
+   Include
    actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
