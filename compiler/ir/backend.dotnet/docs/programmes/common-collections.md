@@ -124,8 +124,8 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 `HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
 generic interface as Kotlin identity.
 
-The Kotlin-owned Sequence, Grouping, and signed primitive/object-array sorting
-closures are completed separately below. Unsigned arrays/ranges, random,
+The Kotlin-owned Sequence, eager Iterable window/chunk, Grouping, and signed
+primitive/object-array sorting closures are completed separately below. Unsigned arrays/ranges, random,
 dependency-blocked reified variants, concurrency, and BCL adapters remain
 separate closures. The formerly parked open-nullable boundary is complete under
 [`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
@@ -193,6 +193,28 @@ host and .NET 10; both PSI and LightTree also execute direct profile products.
 Roslyn implements the erased Sequence interface and calls a public Common
 facade method, without implying an idiomatic typed C# export. See the
 [`Sequence` foundation ADR](../decisions/sequence-foundation.md).
+
+### Completed eager Iterable windowing closure
+
+The completed eager tranche publishes all four generated Iterable classifier
+members: ordinary and transforming `windowed`, plus ordinary and transforming
+`chunked`. Their exact Common bodies compose the already selected
+`SlidingWindow.kt` machinery. The first complete compile exposed Common's
+`List(size, init)` declaration and its delegated `MutableList(size, init)` as
+the one missing prerequisite, so the owning generator projects that exact
+factory pair into the same `CollectionsKt` product rather than inventing a
+.NET factory or loop.
+
+List/RandomAccess receivers retain Common's indexed fast path, snapshot
+windows, and ephemeral moving-sublist transform view. Other Iterables retain
+the shared `windowedIterator` and RingBuffer path. Tests pin overlap, gaps,
+partial windows, empty input, transform-view reuse, traversal counts, callback
+exception identity and stopping point, and the exact invalid-size/step message.
+The KLIB declarations and physical `CollectionsKt` MethodDefs are consumed both
+from an installed Kotlin library and from one portable netstandard stdlib on
+the real Framework CLR 4 and .NET 10 hosts. No `IEnumerable<T>`, LINQ, or BCL
+window implementation is introduced. CharSequence/array windowing, Random,
+unsigned, reified, and idiomatic C# export remain separate selections.
 
 ### Completed Kotlin-owned Grouping foundation
 
@@ -313,7 +335,7 @@ variant whose dependency closure consists only of the already published read-onl
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
 closure above. Ordinary signed ranges, complete Sequence builders, Grouping,
-and signed-array sorting have since landed as complete independent
+eager Iterable windowing, and signed-array sorting have since landed as complete independent
 foundations. Random, dependency-blocked reified variants, reflection, and
 unsigned families remain excluded when they introduce an independent
 dependency rather than being approximated or copied.
@@ -1184,8 +1206,10 @@ second loop or collection-specific type-token path was added.
    windows, and every generated Sequence member outside the remaining Random/unsigned partition.
 9. **Completed:** publish the complete Common Grouping aggregate source and all four generated
    factories over admitted carriers without adding BCL grouping/enumeration identity.
-10. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-11. Remove the bootstrap allowlist when the complete generated product is supportable.
+10. **Completed:** publish all four eager generated Iterable window/chunk variants with the exact
+    Common sized-list factory pair and both RandomAccess and iterator/RingBuffer routes.
+11. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+12. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

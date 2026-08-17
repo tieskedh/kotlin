@@ -712,6 +712,10 @@ fun main(args: Array<String>) {
         Generators.f_plus_array selectedFor setOf(Family.Iterables, Family.Collections),
         Generators.f_plus_iterable selectedFor setOf(Family.Iterables, Family.Collections),
         Generators.f_plusElement selectedFor setOf(Family.Iterables, Family.Collections),
+        Generators.f_chunked selectedFor setOf(Family.Iterables),
+        Generators.f_chunked_transform selectedFor setOf(Family.Iterables),
+        Generators.f_windowed selectedFor setOf(Family.Iterables),
+        Generators.f_windowed_transform selectedFor setOf(Family.Iterables),
         Generators.f_zip selectedFor setOf(Family.Iterables),
         Generators.f_zip_array selectedFor setOf(Family.Iterables),
         Generators.f_zip_array_transform selectedFor setOf(Family.Iterables),
@@ -1609,6 +1613,14 @@ fun main(args: Array<String>) {
                 extractCommonDeclaration(
                     commonCollectionsFile,
                     "public inline fun <T> listOf(): List<T>",
+                ),
+                extractCommonDeclaration(
+                    commonCollectionsFile,
+                    "public inline fun <T> List(size: Int, init: (index: Int) -> T): List<T>",
+                ),
+                extractCommonDeclaration(
+                    commonCollectionsFile,
+                    "public inline fun <T> MutableList(size: Int, init: (index: Int) -> T): MutableList<T>",
                 ),
                 extractCommonDeclaration(
                     commonCollectionsFile,
