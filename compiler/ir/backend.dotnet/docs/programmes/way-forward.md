@@ -1217,7 +1217,7 @@ fallbacks remain directly callable from C# through the truthful erased
 conversion. Keep selector-result `minOf`/`maxOf`, comparator,
 Map/CharSequence, Random, and unsigned families separate until their complete
 graphs are selected; the selector-result family is closed by the separately
-recorded tranche below.
+recorded tranche below and the comparator family by the tranche after it.
 
 The selector-result generated `minOf`/`maxOf` family is now complete as the
 next independent 120-declaration release. It contains generic Comparable,
@@ -1234,6 +1234,20 @@ collisions without introducing a public `DotNetName`. Installed Kotlin inlines
 all `@InlineOnly` bodies, and their assembly-visible fallbacks are deliberately
 not a direct C# API. This release does not migrate Sequence or any generic
 owner to a constructed CLR TypeDef.
+
+The remaining comparator min/max closure is now complete. The already
+published eight Iterable declarations are joined by 72 object-/primitive-array
+declarations, yielding `minWith`, `maxWith`, their nullable forms, and the four
+selector-result `minOfWith`/`maxOfWith` forms over all ten supported receivers.
+They consume only the completed Kotlin-owned Comparator, iterator, array, and
+inline foundations. Empty/singleton call counts, first ties, callback stopping,
+nullable selector results, contravariant comparator input, and explicit
+Float/Double comparison are exact on Framework CLR 4 and .NET 10. No collision
+mapper or public naming annotation is required. Ordinary element-selection
+fallbacks remain directly callable from C# through an implemented erased
+`Kotlin.Comparator`; the selector-result methods are `@InlineOnly` and remain
+assembly-visible only. This is truthful current interop, not an implicit
+delegate/`IComparer<T>` conversion or a generic-owner cutover.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin

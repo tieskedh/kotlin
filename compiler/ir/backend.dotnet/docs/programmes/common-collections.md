@@ -354,7 +354,8 @@ generic Comparable, Float, and Double result forms for Iterable, generic object
 arrays, and all eight signed primitive-array wrappers. Boolean is required
 because the selector result rather than the receiver element supplies ordering.
 The corresponding Sequence declarations were already present; comparator,
-Map/CharSequence, Random, and unsigned families remain independent.
+Map/CharSequence, Random, and unsigned families remain independent. The
+comparator family is completed by the separately recorded closure below.
 
 The unmodified Common bodies pin throwing versus null for empty inputs, zero
 selector calls for empty inputs, exactly one call for a singleton, first-result
@@ -378,6 +379,34 @@ and executes all 120 declarations and inlines every `@InlineOnly` body, leaving
 no fallback calls. Those fallbacks are assembly-visible rather than public;
 Roslyn is explicitly rejected from calling them. This is an honest interop
 boundary, not a general `DotNetName` facility or a generic-owner migration.
+
+### Completed comparator min/max aggregate closure
+
+The remaining comparator-order selection is now complete for the supported
+collection classifiers. The eight existing Iterable declarations are joined by
+72 object-/primitive-array declarations. The final surface contains
+`minWith`, `maxWith`, `minWithOrNull`, `maxWithOrNull`, and the four matching
+selector-result `minOfWith`/`maxOfWith` forms over Iterable, generic object
+arrays, and all eight signed primitive-array wrappers. Map, CharSequence, and
+unsigned variants remain independent classifier families.
+
+The closure uses only the already admitted Kotlin-owned Comparator, iteration,
+array indexing, and inline foundations. The hostile oracle pins throwing versus
+null for empty inputs, zero comparisons for singleton element selection, one
+selector call and zero comparisons for singleton result selection, first
+identity for comparison-equal elements/results, and exact comparator/selector
+failure order. It also covers nullable selector results, a contravariant
+`Comparator<Any?>`, every receiver, and explicit Float NaN and Double signed-
+zero behavior under the supplied comparator.
+
+No CLR return-only collision or physical-name mapping exists in this family.
+Raw metadata contains ten MethodDefs for each of the eight source names.
+Installed Kotlin calls all 40 ordinary element-selection fallbacks and inlines
+all 40 `@InlineOnly` selector-result bodies. Roslyn implements the erased
+`Kotlin.Comparator` slot and directly calls signed IntArray `minWith` and
+`maxWithOrNull`; it is rejected from the assembly-visible `minOfWith` fallback.
+This does not claim implicit C# delegate/`IComparer<T>` conversion and does not
+change Kotlin Comparator or generic-owner identity.
 
 ### Completed Kotlin-owned Grouping foundation
 
@@ -1394,8 +1423,11 @@ second loop or collection-specific type-token path was added.
     `minOf`/`maxOf` throwing and nullable forms over Iterable, object arrays,
     and all eight signed primitive arrays, including nullable generic-result
     substitution recovery.
-17. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-18. Remove the bootstrap allowlist when the complete generated product is supportable.
+17. **Completed:** publish the remaining 72 object-/primitive-array comparator
+    declarations, completing all eight `minWith`/`maxWith` and
+    `minOfWith`/`maxOfWith` forms over the ten supported receivers.
+18. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+19. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 
