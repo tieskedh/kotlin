@@ -52,6 +52,7 @@ data class DotNetBackendPipelineArtifact(
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+    val genericOwnerRehearsal: Boolean,
 ) : PipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetBackendPipelineArtifact =

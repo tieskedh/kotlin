@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_B
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ENUM_ENTRY_CONSTRUCTOR
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
@@ -97,6 +98,7 @@ internal class DotNetIlMethodCodegen(
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
     private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
     private val genericOwnerCallRouteTraceHook: DotNetGenericOwnerCallRouteTraceHook? = null,
+    private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -156,6 +158,7 @@ internal class DotNetIlMethodCodegen(
                     }
                 }
             },
+            genericOwnerCapabilitySlots,
         )
 
     /**
@@ -277,6 +280,8 @@ internal class DotNetIlMethodCodegen(
                 appendGenericInterfaceTypedBridgeOverride()
             } else if (function.origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
                 appendCovariantReturnBridgeOverride()
+            } else if (function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER) {
+                appendGenericOwnerCapabilityOverride()
             } else {
                 appendRenamedErasedInterfaceSlotOverrides()
             }
@@ -568,6 +573,37 @@ internal class DotNetIlMethodCodegen(
                         typeMapper.genericInterfaceTypedMethodName(overridden),
                         ownerToken,
                         bridge.typeParameters.size,
+                    )
+        )
+    }
+
+    /** Binds one private generic-owner selector to its non-generic semantic interface slot. */
+    private fun StringBuilder.appendGenericOwnerCapabilityOverride() {
+        val dispatcher = function as? IrSimpleFunction
+            ?: error("Internal .NET backend error: a generic-owner capability dispatcher is not a simple function")
+        val slot = dispatcher.overriddenSymbols.singleOrNull()?.owner
+            ?: error("Internal .NET backend error: a generic-owner capability dispatcher has no unique slot")
+        val slotOwner = (slot.parent as? IrClass)?.takeIf(IrClass::isInterface)
+            ?: error("Internal .NET backend error: a generic-owner capability slot has no interface owner")
+        val overrideInfo = availableFunctions[slot]
+            ?: typeMapper.referencedFunctionInfoOrNull(slot)
+            ?: dotNetUnsupported("generic-owner capability slot is unavailable")
+        check(overrideInfo.owner.typeParameterCount == 0 && slotOwner.typeParameters.isEmpty()) {
+            "Internal .NET backend error: a generic-owner semantic capability must be non-generic"
+        }
+        check(overrideInfo.signature.hasThis && signature.hasThis &&
+                overrideInfo.signature.returnType == signature.returnType &&
+                overrideInfo.signature.renderParameterTypes() == signature.renderParameterTypes()
+        ) {
+            "Internal .NET backend error: a generic-owner capability dispatcher changed its slot signature"
+        }
+        val physicalMethodName = overrideInfo.physicalMethodName ?: slot.dotNetIlMethodName()
+        appendLine(
+            "    .override method " +
+                    overrideInfo.renderOverrideMethodReference(
+                        physicalMethodName,
+                        overrideInfo.owner.ilTypeRef,
+                        dispatcher.typeParameters.size,
                     )
         )
     }

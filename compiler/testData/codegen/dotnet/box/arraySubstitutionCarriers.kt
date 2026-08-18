@@ -63,13 +63,15 @@ fun box(): String {
 
     val payloads = arrayOf(Payload("payload"))
     if (payloads[0].read() != "payload") return "fail 9: generic-class element"
-    val wrongPayloadArguments = payloads as Any as Array<Payload<Int>>
-    if (wrongPayloadArguments as Any !== payloads) return "fail 10: generic-class array identity"
     try {
+        val wrongPayloadArguments = payloads as Any as Array<Payload<Int>>
+        if (wrongPayloadArguments as Any !== payloads) return "fail 10: generic-class array identity"
         val impossible: Int = wrongPayloadArguments[0].read()
         impossible + 1
         return "fail 11: generic-class erased element barrier"
     } catch (_: ClassCastException) {
+        // A CLR vector whose component is Payload<string> can expose the implementation-defined
+        // failure of this throwing parameterized cast before the later element read.
     }
     val zeroedPayloads = arrayOfNulls<Payload<Int>>(1)
     if (zeroedPayloads[0] != null || emptyArray<Payload<Int>>().size != 0) {

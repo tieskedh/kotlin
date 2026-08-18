@@ -14,11 +14,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCovariantReturnBridge
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetStringType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetVirtual
 import org.jetbrains.kotlin.backend.dotnet.isSupportedDotNetPrimitiveArray
+import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
@@ -58,6 +60,7 @@ import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassPare
 import org.jetbrains.kotlin.ir.util.defaultType as classDefaultType
 import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.getAllSubstitutedSupertypes
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isSubclassOf
@@ -97,6 +100,16 @@ internal class DotNetCovariantReturnBridgeLowering(
 ) : ModuleLoweringPass {
     private val externalDeclarations =
         DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+
+    private fun IrClass.isErasedKotlinGenericOwner(): Boolean {
+        if (!isDotNetGenericClassDeclaration) return false
+        if (externalDeclarations.hasClass(this)) {
+            return externalDeclarations.hasGenericClass(this)
+        }
+        return !context.configuration.dotNetGenericOwnerRehearsal ||
+                context.genericOwnerArchitecturePlans[this]
+                    ?.isReifiedByGenericOwnerRehearsal != true
+    }
 
     override fun lower(irModule: IrModuleFragment) {
         val classes = mutableListOf<IrClass>()
@@ -249,7 +262,8 @@ internal class DotNetCovariantReturnBridgeLowering(
         val slotOwner = slot.parent as? IrClass ?: return
         val keepsErasedSlotOwnerParameters =
             !slotOwner.isInterface &&
-                    (slotOwner.isDotNetGenericClassDeclaration || externalDeclarations.hasGenericClass(slotOwner))
+                    (slotOwner.isErasedKotlinGenericOwner() ||
+                            externalDeclarations.hasGenericClass(slotOwner))
         val slotReturnType = slot.typeIn(
             slot.returnType,
             owner,
@@ -313,16 +327,32 @@ internal class DotNetCovariantReturnBridgeLowering(
         keepOwnerTypeParameters: Boolean,
     ): IrType {
         val declarationOwner = parent as? IrClass ?: return type
-        val ownerSubstitutor = declarationOwner.takeIf { it != owner && !keepOwnerTypeParameters }?.let { declaringClass ->
-            AbstractIrTypeSubstitutor.forSuperClass(declaringClass.symbol, owner.symbol.defaultType)
-        }
-        val ownerSubstituted = ownerSubstitutor?.substitute(type) ?: type
+        val ownerSubstituted = if (declarationOwner != owner && !keepOwnerTypeParameters) {
+            type.substituteClassOwnerParameters(declarationOwner, owner)
+        } else type
         if (typeParameters.isEmpty()) return ownerSubstituted
         val methodSubstitution = typeParameters.zip(methodParameters).associate { pair ->
             pair.first.symbol to pair.second.symbol.defaultType
         }
         return IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
             .substitute(ownerSubstituted)
+    }
+
+    /** Substitutes a class slot through the concrete class-supertype chain retained by IR/KLIB. */
+    private fun IrType.substituteClassOwnerParameters(
+        declarationOwner: IrClass,
+        useSiteOwner: IrClass,
+    ): IrType {
+        val ownerView = getAllSubstitutedSupertypes(useSiteOwner).singleOrNull { superType ->
+            superType.classOrNull?.owner == declarationOwner
+        } ?: return this
+        if (ownerView.arguments.size != declarationOwner.typeParameters.size) return this
+        val substitutions = declarationOwner.typeParameters.zip(ownerView.arguments).mapNotNull { pair ->
+            val projection = pair.second as? IrTypeProjection ?: return@mapNotNull null
+            pair.first.symbol to projection.type
+        }
+        if (substitutions.size != declarationOwner.typeParameters.size) return this
+        return IrTypeSubstitutor(substitutions.toMap(), allowEmptySubstitution = true).substitute(this)
     }
 
     private fun IrSimpleFunction.hasSameImportedClrSignatureAs(
@@ -515,7 +545,8 @@ internal class DotNetCovariantReturnBridgeLowering(
             ?: error("Internal .NET backend error: physical override slot has no class owner")
         val keepsErasedClassOwnerParameters =
             !slotOwner.isInterface &&
-                    (slotOwner.isDotNetGenericClassDeclaration || externalDeclarations.hasGenericClass(slotOwner))
+                    (slotOwner.isErasedKotlinGenericOwner() ||
+                            externalDeclarations.hasGenericClass(slotOwner))
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         if (targetParameters.size != slotParameters.size) {
@@ -537,9 +568,6 @@ internal class DotNetCovariantReturnBridgeLowering(
             overriddenSymbols = listOf(slot.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
             val bridgeTypeParameters = copyTypeParametersFrom(slot)
-            val slotOwnerSubstitutor = slotOwner.takeIf { it != owner }?.let { declaringClass ->
-                AbstractIrTypeSubstitutor.forSuperClass(declaringClass.symbol, owner.symbol.defaultType)
-            }
             val slotMethodSubstitution = slot.typeParameters.zip(bridgeTypeParameters).associate { pair ->
                 pair.first.symbol to pair.second.symbol.defaultType
             }
@@ -552,7 +580,7 @@ internal class DotNetCovariantReturnBridgeLowering(
                 val ownerSubstituted = if (keepsErasedClassOwnerParameters) {
                     type
                 } else {
-                    slotOwnerSubstitutor?.substitute(type) ?: type
+                    type.substituteClassOwnerParameters(slotOwner, owner)
                 }
                 return slotMethodSubstitutor.substitute(ownerSubstituted)
             }
@@ -601,9 +629,6 @@ internal class DotNetCovariantReturnBridgeLowering(
             body = context.createIrBuilder(symbol).irBlockBody {
                 val targetOwner = target.parent as? IrClass
                     ?: error("Internal .NET backend error: covariant-return target has no class owner")
-                val targetOwnerSubstitutor = targetOwner.takeIf { it != owner }?.let { declaringClass ->
-                    AbstractIrTypeSubstitutor.forSuperClass(declaringClass.symbol, owner.symbol.defaultType)
-                }
                 val targetMethodSubstitution = target.typeParameters.zip(bridgeTypeParameters)
                     .associate { pair ->
                         pair.first.symbol to pair.second.symbol.defaultType
@@ -611,7 +636,8 @@ internal class DotNetCovariantReturnBridgeLowering(
                 val targetMethodSubstitutor =
                     IrTypeSubstitutor(targetMethodSubstitution, allowEmptySubstitution = true)
                 fun targetType(type: IrType): IrType {
-                    val ownerSubstituted = targetOwnerSubstitutor?.substitute(type) ?: type
+                    val ownerSubstituted = if (targetOwner == owner) type
+                    else type.substituteClassOwnerParameters(targetOwner, owner)
                     return targetMethodSubstitutor.substitute(ownerSubstituted)
                 }
 
@@ -693,7 +719,8 @@ internal class DotNetCovariantReturnBridgeLowering(
         val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner ?: return null
         val parameterOwner = parameter.parent as? IrClass ?: return null
         if (parameterOwner.isInterface ||
-            (!parameterOwner.isDotNetGenericClassDeclaration && !externalDeclarations.hasGenericClass(parameterOwner))
+            (!parameterOwner.isErasedKotlinGenericOwner() &&
+                    !externalDeclarations.hasGenericClass(parameterOwner))
         ) {
             return null
         }
