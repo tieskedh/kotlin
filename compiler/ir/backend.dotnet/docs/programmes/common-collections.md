@@ -346,6 +346,39 @@ all 40, while Roslyn implements the truthful erased `Kotlin.Function1`
 capability and directly calls the signed IntArray fallbacks. No Runtime surface,
 ABI schema, physical-name mapping, or lambda/delegate export claim was added.
 
+### Completed selector-result min/max aggregate closure
+
+The following selector-result tranche publishes exactly 120 additional Common
+declarations. `minOf`, `maxOf`, `minOfOrNull`, and `maxOfOrNull` each have
+generic Comparable, Float, and Double result forms for Iterable, generic object
+arrays, and all eight signed primitive-array wrappers. Boolean is required
+because the selector result rather than the receiver element supplies ordering.
+The corresponding Sequence declarations were already present; comparator,
+Map/CharSequence, Random, and unsigned families remain independent.
+
+The unmodified Common bodies pin throwing versus null for empty inputs, zero
+selector calls for empty inputs, exactly one call for a singleton, first-result
+identity for equal Comparable keys, and immediate callback-failure propagation.
+The Float/Double-specialized result forms preserve Kotlin NaN propagation and
+signed-zero ordering on Framework CLR 4 and .NET 10.
+
+This family also closes a backend result-representation gap. A substituted
+generic nullable result can be physically returned through its reference-
+shaped Comparable upper bound. For a concrete value result such as `R = Int`,
+that boundary contains boxed Int or null. A frontend-proven `IMPLICIT_CAST`
+now uses `unbox.any Nullable<Int>` to recover both cases. The rule is limited
+to supported nullable scalars and does not change explicit `as` or `as?`
+semantics.
+
+CLR cannot overload the generic, Float, and Double forms by return type alone,
+so the exact compiler-owned projection uses twelve bounded names: the four
+logical generic names plus `...Float` and `...Double` variants. Raw metadata
+contains ten MethodDefs under every physical name. Installed Kotlin compiles
+and executes all 120 declarations and inlines every `@InlineOnly` body, leaving
+no fallback calls. Those fallbacks are assembly-visible rather than public;
+Roslyn is explicitly rejected from calling them. This is an honest interop
+boundary, not a general `DotNetName` facility or a generic-owner migration.
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
@@ -1357,8 +1390,12 @@ second loop or collection-specific type-token path was added.
 15. **Completed:** publish `minBy`/`maxBy` throwing and nullable forms over
     Iterable, object arrays, and all eight signed primitive arrays, including
     the loop-entry stack-baseline fix required by their inlined local returns.
-16. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-17. Remove the bootstrap allowlist when the complete generated product is supportable.
+16. **Completed:** publish all 120 generic/Float/Double selector-result
+    `minOf`/`maxOf` throwing and nullable forms over Iterable, object arrays,
+    and all eight signed primitive arrays, including nullable generic-result
+    substitution recovery.
+17. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+18. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

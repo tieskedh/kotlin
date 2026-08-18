@@ -29045,6 +29045,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         return Kotlin.Collections.CollectionsKt.sumOfDouble<int>(values, selector);
                     }
+
+                    public static int MinOf(
+                        Kotlin.Collections.Iterable values,
+                        Kotlin.Function1 selector)
+                    {
+                        return Kotlin.Collections.CollectionsKt.minOf<int, int>(values, selector);
+                    }
                 }
                 """.trimIndent()
             )
@@ -29070,6 +29077,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("sumOfDouble" in forbiddenInlineOnlyResult.output) {
             "Expected C# accessibility diagnostic for @InlineOnly sumOfDouble:\n" +
+                    forbiddenInlineOnlyResult.output
+        }
+        assertTrue("minOf" in forbiddenInlineOnlyResult.output) {
+            "Expected C# accessibility diagnostic for @InlineOnly minOf:\n" +
                     forbiddenInlineOnlyResult.output
         }
     }
@@ -35191,6 +35202,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         for (name in selectorMinMaxNames) {
             assertEquals(10, selectorMinMaxMethods.count { method -> method.name == name }, name)
         }
+        val selectorResultMinMaxMethodCounts = mapOf(
+            "maxOf" to 10,
+            "maxOfDouble" to 10,
+            "maxOfFloat" to 10,
+            "maxOfOrNull" to 10,
+            "maxOfOrNullDouble" to 10,
+            "maxOfOrNullFloat" to 10,
+            "minOf" to 10,
+            "minOfDouble" to 10,
+            "minOfFloat" to 10,
+            "minOfOrNull" to 10,
+            "minOfOrNullDouble" to 10,
+            "minOfOrNullFloat" to 10,
+        )
+        val selectorResultMinMaxMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle && method.name in selectorResultMinMaxMethodCounts
+        }
+        assertEquals(120, selectorResultMinMaxMethods.size)
+        assertEquals(
+            selectorResultMinMaxMethodCounts,
+            selectorResultMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
+        )
         val naturalMinMaxMethodCounts = mapOf(
             "max" to 7,
             "maxOrNull" to 9,
@@ -35765,6 +35798,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "max" to 7,
             "maxBy" to 10,
             "maxByOrNull" to 10,
+            "maxOf" to 10,
+            "maxOfDouble" to 10,
+            "maxOfFloat" to 10,
+            "maxOfOrNull" to 10,
+            "maxOfOrNullDouble" to 10,
+            "maxOfOrNullFloat" to 10,
             "maxOrNull" to 9,
             "maxOrNullOfDouble" to 2,
             "maxOrNullOfFloat" to 2,
@@ -35782,6 +35821,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "min" to 7,
             "minBy" to 10,
             "minByOrNull" to 10,
+            "minOf" to 10,
+            "minOfDouble" to 10,
+            "minOfFloat" to 10,
+            "minOfOrNull" to 10,
+            "minOfOrNullDouble" to 10,
+            "minOfOrNullFloat" to 10,
             "minOrNull" to 9,
             "minOrNullOfDouble" to 2,
             "minOrNullOfFloat" to 2,
@@ -38017,6 +38062,178 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         booleanArrayOf(true, false).minByOrNull { if (it) 1 else 0 } == false &&
                         booleanArrayOf(false, true).maxByOrNull { if (it) 1 else 0 } == true
 
+                private fun installedIterableSelectorResultMinMax(): Boolean {
+                    val values: Iterable<Int> = listOf(2, 1)
+                    return values.minOf { it } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedObjectArraySelectorResultMinMax(): Boolean {
+                    val values = arrayOf(2, 1)
+                    return values.minOf { it } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedByteArraySelectorResultMinMax(): Boolean {
+                    val values = byteArrayOf(2, 1)
+                    return values.minOf { it.toInt() } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it.toInt() } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it.toInt() } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it.toInt() } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedShortArraySelectorResultMinMax(): Boolean {
+                    val values = shortArrayOf(2, 1)
+                    return values.minOf { it.toInt() } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it.toInt() } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it.toInt() } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it.toInt() } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedIntArraySelectorResultMinMax(): Boolean {
+                    val values = intArrayOf(2, 1)
+                    return values.minOf { it } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedLongArraySelectorResultMinMax(): Boolean {
+                    val values = longArrayOf(2L, 1L)
+                    return values.minOf { it.toInt() } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it.toInt() } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it.toInt() } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it.toInt() } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedFloatArraySelectorResultMinMax(): Boolean {
+                    val values = floatArrayOf(2.0f, 1.0f)
+                    return values.minOf { it.toInt() } == 1 &&
+                        values.minOf { it } == 1.0f &&
+                        values.minOf { it.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it.toInt() } == 1 &&
+                        values.minOfOrNull { it } == 1.0f &&
+                        values.minOfOrNull { it.toDouble() } == 1.0 &&
+                        values.maxOf { it.toInt() } == 2 &&
+                        values.maxOf { it } == 2.0f &&
+                        values.maxOf { it.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it.toInt() } == 2 &&
+                        values.maxOfOrNull { it } == 2.0f &&
+                        values.maxOfOrNull { it.toDouble() } == 2.0
+                }
+
+                private fun installedDoubleArraySelectorResultMinMax(): Boolean {
+                    val values = doubleArrayOf(2.0, 1.0)
+                    return values.minOf { it.toInt() } == 1 &&
+                        values.minOf { it.toFloat() } == 1.0f &&
+                        values.minOf { it } == 1.0 &&
+                        values.minOfOrNull { it.toInt() } == 1 &&
+                        values.minOfOrNull { it.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it } == 1.0 &&
+                        values.maxOf { it.toInt() } == 2 &&
+                        values.maxOf { it.toFloat() } == 2.0f &&
+                        values.maxOf { it } == 2.0 &&
+                        values.maxOfOrNull { it.toInt() } == 2 &&
+                        values.maxOfOrNull { it.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it } == 2.0
+                }
+
+                private fun installedCharArraySelectorResultMinMax(): Boolean {
+                    val values = charArrayOf('b', 'a')
+                    return values.minOf { it.code } == 'a'.code &&
+                        values.minOf { it.code.toFloat() } == 'a'.code.toFloat() &&
+                        values.minOf { it.code.toDouble() } == 'a'.code.toDouble() &&
+                        values.minOfOrNull { it.code } == 'a'.code &&
+                        values.minOfOrNull { it.code.toFloat() } == 'a'.code.toFloat() &&
+                        values.minOfOrNull { it.code.toDouble() } == 'a'.code.toDouble() &&
+                        values.maxOf { it.code } == 'b'.code &&
+                        values.maxOf { it.code.toFloat() } == 'b'.code.toFloat() &&
+                        values.maxOf { it.code.toDouble() } == 'b'.code.toDouble() &&
+                        values.maxOfOrNull { it.code } == 'b'.code &&
+                        values.maxOfOrNull { it.code.toFloat() } == 'b'.code.toFloat() &&
+                        values.maxOfOrNull { it.code.toDouble() } == 'b'.code.toDouble()
+                }
+
+                private fun installedBooleanArraySelectorResultMinMax(): Boolean {
+                    val values = booleanArrayOf(true, false)
+                    return values.minOf { if (it) 2 else 1 } == 1 &&
+                        values.minOf { if (it) 2.0f else 1.0f } == 1.0f &&
+                        values.minOf { if (it) 2.0 else 1.0 } == 1.0 &&
+                        values.minOfOrNull { if (it) 2 else 1 } == 1 &&
+                        values.minOfOrNull { if (it) 2.0f else 1.0f } == 1.0f &&
+                        values.minOfOrNull { if (it) 2.0 else 1.0 } == 1.0 &&
+                        values.maxOf { if (it) 2 else 1 } == 2 &&
+                        values.maxOf { if (it) 2.0f else 1.0f } == 2.0f &&
+                        values.maxOf { if (it) 2.0 else 1.0 } == 2.0 &&
+                        values.maxOfOrNull { if (it) 2 else 1 } == 2 &&
+                        values.maxOfOrNull { if (it) 2.0f else 1.0f } == 2.0f &&
+                        values.maxOfOrNull { if (it) 2.0 else 1.0 } == 2.0
+                }
+
+                public fun installedSelectorResultMinMaxMatrix(): Boolean =
+                    installedIterableSelectorResultMinMax() &&
+                        installedObjectArraySelectorResultMinMax() &&
+                        installedByteArraySelectorResultMinMax() &&
+                        installedShortArraySelectorResultMinMax() &&
+                        installedIntArraySelectorResultMinMax() &&
+                        installedLongArraySelectorResultMinMax() &&
+                        installedFloatArraySelectorResultMinMax() &&
+                        installedDoubleArraySelectorResultMinMax() &&
+                        installedCharArraySelectorResultMinMax() &&
+                        installedBooleanArraySelectorResultMinMax()
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38252,7 +38469,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedAllDistinctMatrix() &&
                             installedAllDistinctByMatrix() &&
                             installedNaturalMinMaxMatrix() &&
-                            installedSelectorMinMaxMatrix()
+                            installedSelectorMinMaxMatrix() &&
+                            installedSelectorResultMinMaxMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38662,6 +38880,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         for (methodName in listOf("minBy", "minByOrNull", "maxBy", "maxByOrNull")) {
             assertTrue("::'$methodName'<" !in il) {
                 "The installed consumer must inline every Common $methodName body:\n$il"
+            }
+        }
+        for (methodName in listOf(
+            "minOf",
+            "minOfFloat",
+            "minOfDouble",
+            "minOfOrNull",
+            "minOfOrNullFloat",
+            "minOfOrNullDouble",
+            "maxOf",
+            "maxOfFloat",
+            "maxOfDouble",
+            "maxOfOrNull",
+            "maxOfOrNullFloat",
+            "maxOfOrNullDouble",
+        )) {
+            assertTrue("::'$methodName'<" !in il) {
+                "The installed consumer must inline every Common selector-result $methodName body:\n$il"
             }
         }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)

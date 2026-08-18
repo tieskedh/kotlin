@@ -27,7 +27,29 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: the selector-generated
+- Latest completed Common collection feature: the selector-result
+  `minOf`/`maxOf` family now publishes all 120 generic/Float/Double throwing
+  and nullable declarations over Iterable, generic object arrays, and all
+  eight signed primitive-array wrappers, in addition to the previously
+  completed Sequence forms. Boolean is included because the selector result
+  supplies ordering. Exact Common empty/singleton selector counts, first-result
+  identity for comparison ties, callback failure timing, every receiver, and
+  Float/Double NaN/signed-zero ordering are pinned. The first compile exposed
+  the missing nullable counterpart of generic substitution recovery: an
+  upper-bound reference carrying boxed `R` or null can now recover a FIR-proven
+  concrete nullable scalar through `unbox.any Nullable<R>`. This is confined
+  to `IMPLICIT_CAST` and does not broaden explicit `as`/`as?` semantics. Raw
+  metadata contains ten MethodDefs for each of the twelve bounded physical
+  names; installed Kotlin inlines all 120 `@InlineOnly` bodies, and Roslyn is
+  explicitly rejected from calling their assembly-visible fallbacks. The
+  generated collections source is byte-stable at
+  `9FE8BA48CEB95AEF50DE72F631CDC97F0432F8040F81D88B233DBDACBAFFF907`.
+  The final aggregate plus explicit model-suite freshness rerun wrote all
+  three roots: 190 XML suites and 2,266 tests with zero failures, errors, or
+  skips. This does not change the erased physical Sequence/generic-owner
+  model. See
+  [`docs/archive/common-selector-result-min-max-family-2026-08-18.md`](docs/archive/common-selector-result-min-max-family-2026-08-18.md).
+- Preceding completed Common collection feature: the selector-generated
   `minBy`/`maxBy` family now publishes all 40 throwing/nullable declarations
   over Iterable, generic object arrays, and all eight signed primitive-array
   wrappers, in addition to the previously completed Sequence forms. Boolean
@@ -1651,7 +1673,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The selector-generated `minBy`/`maxBy` head passed every constituent of
+The selector-result `minOf`/`maxOf` head passed every constituent of
 the strict target gate. The normal aggregate command remains:
 
 ```text
@@ -1662,10 +1684,10 @@ The latest aggregate plus explicit model-suite freshness rerun completed
 successfully on 2026-08-18. Backend, FIR2IR, stdlib product,
 Framework/CoreCLR, Roslyn, and integration inputs were executed for the final
 semantic head. Direct audit of all three freshly written result roots covers
-190 XML files and 2,262 tests:
+190 XML files and 2,266 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,131 FIR, IL-text, and box tests
+- 2,135 FIR, IL-text, and box tests
 - 125 generated CLI and library-integration tests
 - zero failures, errors, or skips
 
@@ -3344,10 +3366,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    complete supported-classifier `allEqual`/`allEqualBy` and
    `allDistinct`/`allDistinctBy` closures. The next recomputation selected and
    completed the full 52-declaration natural `min`/`max` family and the
-   40-declaration selector `minBy`/`maxBy` family. Recompute again before the
-   next tranche and choose one complete dependency-homogeneous classifier
-   family. Keep `minOf`/`maxOf`, remaining comparator selection, Random and
-   entropy, unsigned value-class/range
+   40-declaration selector `minBy`/`maxBy` family. The following recomputation
+   selected and completed the full 120-declaration selector-result
+   `minOf`/`maxOf` family. Recompute again before the next tranche and choose
+   one complete dependency-homogeneous classifier family. Keep remaining
+   comparator selection, Random and entropy, unsigned value-class/range
    representation, CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not

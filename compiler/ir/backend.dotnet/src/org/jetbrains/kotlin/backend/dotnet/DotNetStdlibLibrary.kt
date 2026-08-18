@@ -582,6 +582,7 @@ internal object DotNetStdlibLibrary {
         rangePlatformMethodNameOrNull(function)?.let { return it }
         collectionSequenceTransformPlatformMethodNameOrNull(function)?.let { return it }
         collectionComparableElementPlatformMethodNameOrNull(function)?.let { return it }
+        collectionSelectorResultPlatformMethodNameOrNull(function)?.let { return it }
         sequencePlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
@@ -708,10 +709,59 @@ internal object DotNetStdlibLibrary {
             ?: dotNetUnsupported(
                 "Common collection $logicalName receiver '${receiverType.render()}' has no exact element type"
             )
-        val elementKey = elementType.classFqName?.asString() ?: SEQUENCE_GENERIC_TYPE_KEY
+        val elementKey = elementType.classFqName?.asString() ?: GENERIC_TYPE_KEY
         return names[elementKey]
             ?: dotNetUnsupported(
                 "Common collection $logicalName element '${elementType.render()}' has no pinned CLR method name"
+            )
+    }
+
+    /** Pins Function-erased Common minOf/maxOf siblings from their logical selector result. */
+    private fun collectionSelectorResultPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        if (implementationFunctionFacadeIlName(function) != COLLECTIONS_FACADE_IL_NAME) return null
+        val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
+        if (!functionFqName.startsWith("kotlin.collections.")) return null
+        val logicalName = functionFqName.substringAfterLast('.')
+        val names = minMaxSelectorResultPlatformNames[logicalName] ?: return null
+        val receiverType = function.parameters
+            .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+            ?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common collection $logicalName has no single simple extension receiver: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        val receiverFqName = receiverType.classFqName?.asString()
+        if (receiverFqName !in minMaxSelectorCollectionReceiverFqNames) {
+            dotNetUnsupported("Common collection $logicalName has unexpected receiver '${receiverType.render()}'")
+        }
+        val selectorType = function.parameters
+            .singleOrNull { parameter ->
+                parameter.kind == IrParameterKind.Regular &&
+                        parameter.type.classFqName?.asString() == "kotlin.Function1"
+            }
+            ?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common collection $logicalName has no single Function1 selector: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        val selectorResultType = (selectorType.arguments.lastOrNull() as? IrTypeProjection)?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common collection $logicalName selector '${selectorType.render()}' has no exact result type"
+            )
+        val selectorResultKey = selectorResultType.classFqName?.asString()
+            ?: GENERIC_TYPE_KEY.takeIf { selectorResultType.classifier is IrTypeParameterSymbol }
+            ?: dotNetUnsupported(
+                "Common collection $logicalName selector result '${selectorResultType.render()}' " +
+                        "has no pinned CLR type key"
+            )
+        return names[selectorResultKey]
+            ?: dotNetUnsupported(
+                "Common collection $logicalName selector result '${selectorResultType.render()}' " +
+                        "has no pinned CLR method name"
             )
     }
 
@@ -758,7 +808,7 @@ internal object DotNetStdlibLibrary {
         comparableElementPlatformNames[logicalName]?.let { names ->
             val elementFqName = elementType.classFqName?.asString()
             return names[elementFqName]
-                ?: names[SEQUENCE_GENERIC_TYPE_KEY]
+                ?: names[GENERIC_TYPE_KEY]
                     ?.takeIf { elementType.classifier is IrTypeParameterSymbol }
                 ?: dotNetUnsupported(
                     "Common Sequence.$logicalName element '${elementType.render()}' has no pinned CLR method name"
@@ -794,7 +844,7 @@ internal object DotNetStdlibLibrary {
         sequenceSelectorPlatformNames[logicalName]?.let { names ->
             val selectorResultFqName = selectorResultType.classFqName?.asString()
             return names[selectorResultFqName]
-                ?: names[SEQUENCE_GENERIC_TYPE_KEY]
+                ?: names[GENERIC_TYPE_KEY]
                     ?.takeIf { selectorResultType.classifier is IrTypeParameterSymbol }
                 ?: dotNetUnsupported(
                     "Common Sequence.$logicalName selector result '${selectorResultType.render()}' " +
@@ -999,7 +1049,7 @@ internal object DotNetStdlibLibrary {
             "kotlin.Long" to "sumOfLong",
         ),
     )
-    private const val SEQUENCE_GENERIC_TYPE_KEY = "<generic>"
+    private const val GENERIC_TYPE_KEY = "<generic>"
     private val sequenceElementPlatformNames = mapOf(
         "average" to mapOf(
             "kotlin.Byte" to "averageOfByte",
@@ -1022,50 +1072,64 @@ internal object DotNetStdlibLibrary {
         "max" to mapOf(
             "kotlin.Double" to "maxOrThrowOfDouble",
             "kotlin.Float" to "maxOrThrowOfFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "maxOrThrow",
+            GENERIC_TYPE_KEY to "maxOrThrow",
         ),
         "maxOrNull" to mapOf(
             "kotlin.Double" to "maxOrNullOfDouble",
             "kotlin.Float" to "maxOrNullOfFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "maxOrNull",
+            GENERIC_TYPE_KEY to "maxOrNull",
         ),
         "min" to mapOf(
             "kotlin.Double" to "minOrThrowOfDouble",
             "kotlin.Float" to "minOrThrowOfFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "minOrThrow",
+            GENERIC_TYPE_KEY to "minOrThrow",
         ),
         "minOrNull" to mapOf(
             "kotlin.Double" to "minOrNullOfDouble",
             "kotlin.Float" to "minOrNullOfFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "minOrNull",
+            GENERIC_TYPE_KEY to "minOrNull",
         ),
     )
-    private val sequenceSelectorPlatformNames = mapOf(
+    private val minMaxSelectorResultPlatformNames = mapOf(
         "maxOf" to mapOf(
             "kotlin.Double" to "maxOfDouble",
             "kotlin.Float" to "maxOfFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "maxOf",
+            GENERIC_TYPE_KEY to "maxOf",
         ),
         "maxOfOrNull" to mapOf(
             "kotlin.Double" to "maxOfOrNullDouble",
             "kotlin.Float" to "maxOfOrNullFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "maxOfOrNull",
+            GENERIC_TYPE_KEY to "maxOfOrNull",
         ),
         "minOf" to mapOf(
             "kotlin.Double" to "minOfDouble",
             "kotlin.Float" to "minOfFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "minOf",
+            GENERIC_TYPE_KEY to "minOf",
         ),
         "minOfOrNull" to mapOf(
             "kotlin.Double" to "minOfOrNullDouble",
             "kotlin.Float" to "minOfOrNullFloat",
-            SEQUENCE_GENERIC_TYPE_KEY to "minOfOrNull",
+            GENERIC_TYPE_KEY to "minOfOrNull",
         ),
+    )
+    private val sequenceSelectorPlatformNames = minMaxSelectorResultPlatformNames + mapOf(
         "sumOf" to mapOf(
             "kotlin.Double" to "sumOfDouble",
             "kotlin.Int" to "sumOfInt",
             "kotlin.Long" to "sumOfLong",
         ),
+    )
+    private val minMaxSelectorCollectionReceiverFqNames = setOf(
+        "kotlin.collections.Iterable",
+        "kotlin.Array",
+        "kotlin.ByteArray",
+        "kotlin.ShortArray",
+        "kotlin.IntArray",
+        "kotlin.LongArray",
+        "kotlin.FloatArray",
+        "kotlin.DoubleArray",
+        "kotlin.CharArray",
+        "kotlin.BooleanArray",
     )
     private val sequenceFlatMapPlatformNames = mapOf(
         "flatMap" to mapOf(
