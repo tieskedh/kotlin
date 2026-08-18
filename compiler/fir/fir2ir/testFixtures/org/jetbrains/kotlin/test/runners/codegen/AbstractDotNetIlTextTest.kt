@@ -468,6 +468,13 @@ private class BackendCliDotNetFacade(
             loweredInput.configuration.dotNetTarget,
             completedOutput.output,
         )
+        validateGenericOwnerForeignCSharpOverride(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-foreign-override"),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4090,6 +4097,8 @@ private const val GENERIC_OWNER_REHEARSAL_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsal"
 private const val GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsalDir"
+private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -4099,6 +4108,122 @@ private const val GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE =
     "generic-owner-call-route-trace.properties"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_COUNTER_PROTOCOL = "FINAL_FLUSH"
 private val genericOwnerCallRouteTraceManifests = ConcurrentHashMap<String, String>()
+
+/**
+ * Proves against the actual Kotlin rehearsal product that the natural typed MethodDef remains
+ * the complete C# override obligation. A Kotlin widened call must dispatch through that ordinary
+ * C# override rather than bypassing it through the protected compiler semantic hook.
+ */
+private fun validateGenericOwnerForeignCSharpOverride(
+    genericOwnerRehearsal: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal || GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER !in testDataFile.readText()) return
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The generic-owner foreign override probe requires an executable target"
+    }
+    directory.mkdirs()
+    val source = directory.resolve("RehearsalForeignOverrideConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+
+            public sealed class RehearsalCSharpOverrideStore : RehearsalForeignOverrideStore<string>
+            {
+                public RehearsalCSharpOverrideStore() : base("kotlin-base") {}
+
+                public override string read()
+                {
+                    return "csharp-override";
+                }
+            }
+
+            public sealed class RehearsalCSharpAfterKotlinOverrideStore : RehearsalKotlinOverrideStore<string>
+            {
+                public RehearsalCSharpAfterKotlinOverrideStore() : base("kotlin-layer") {}
+
+                public override string read()
+                {
+                    return "csharp-after-kotlin";
+                }
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    RehearsalCSharpOverrideStore store = new RehearsalCSharpOverrideStore();
+                    if (store.read() != "csharp-override")
+                        throw new InvalidOperationException("direct typed C# override was not invoked");
+                    object widened = genericOwnerRehearsalStateCarriersKt.rehearsalWidenedRead(store);
+                    if (!object.Equals(widened, "csharp-override"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the natural typed C# override: " + widened);
+                    RehearsalCSharpAfterKotlinOverrideStore layered =
+                        new RehearsalCSharpAfterKotlinOverrideStore();
+                    if (layered.read() != "csharp-after-kotlin" ||
+                            !object.Equals(
+                                genericOwnerRehearsalStateCarriersKt.rehearsalWidenedRead(layered),
+                                "csharp-after-kotlin"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed a C# override after a Kotlin override");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The generic-owner foreign override probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RehearsalForeignOverrideConsumer.exe"
+        else "RehearsalForeignOverrideConsumer.dll"
+    )
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the generic-owner foreign override probe"
+            },
+            source,
+            consumer,
+            references = listOf(producer, runtime, stdlib),
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern C# compiler is required for the generic-owner foreign override probe"
+            },
+            source,
+            consumer,
+            references = listOf(producer, runtime, stdlib),
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("netstandard2.0 has no executable override probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(
+        producer to "${testDataFile.nameWithoutExtension}.dll",
+        runtime to runtime.name,
+        stdlib to stdlib.name,
+    ).forEach { dependencyEntry ->
+        val dependency = dependencyEntry.first
+        val assemblyFileName = dependencyEntry.second
+        val staged = directory.resolve(assemblyFileName)
+        if (dependency.canonicalFile != staged.canonicalFile) dependency.copyTo(staged, overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
 
 private fun genericOwnerCallRouteTraceKey(directory: File): String =
     directory.absoluteFile.normalize().path

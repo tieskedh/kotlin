@@ -1,6 +1,7 @@
 // Rehearsal oracle for the one-state CLR-generic owner memory-model boundary.
 // The ordinary field must become true !T storage, while the volatile sibling must use the
 // same owner's single object-domain field so every closed value/reference construction is legal.
+// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE
 
 private class RehearsalStateCarriers<T>(initial: T) {
     private var typed: T = initial
@@ -51,6 +52,26 @@ private class RehearsalCustomGetter<T>(initial: T) {
     fun readCount(): Int = reads
 }
 
+// A foreign subclass must only override this natural typed entry. Kotlin calls through a widened
+// view must still observe that override; the protected semantic hook is compiler ABI and cannot be
+// an additional obligation imposed on C# source.
+public open class RehearsalForeignOverrideStore<out T>(initial: T) {
+    private var value: T = initial
+
+    public open fun read(): T = value
+
+    public fun write(value: @UnsafeVariance T) {
+        this.value = value
+    }
+}
+
+public open class RehearsalKotlinOverrideStore<out T>(initial: T) :
+    RehearsalForeignOverrideStore<T>(initial) {
+    public override fun read(): T = super.read()
+}
+
+public fun rehearsalWidenedRead(store: RehearsalForeignOverrideStore<Any?>): Any? = store.read()
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -67,6 +88,19 @@ fun box(): String {
 
     val customGetter = RehearsalCustomGetter("custom")
     if (customGetter.read() != "custom" || customGetter.readCount() != 1) return "fail: custom getter"
+
+    val exactStore = RehearsalForeignOverrideStore(11)
+    val widenedStore: RehearsalForeignOverrideStore<Any?> = exactStore
+    widenedStore.write("semantic")
+    if (rehearsalWidenedRead(widenedStore) != "semantic") return "fail: raw widened read"
+    try {
+        exactStore.read() + 1
+        return "fail: typed incompatible read"
+    } catch (_: ClassCastException) {
+        // The exact typed use is the real checked boundary.
+    }
+    widenedStore.write(19)
+    if (exactStore.read() != 19) return "fail: compatible recovery"
 
     return "OK"
 }

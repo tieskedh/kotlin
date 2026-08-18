@@ -70,11 +70,21 @@ verification, and work state.
   carrier. Custom/overridable accessors, setters, semantic state, and widened
   receivers are unchanged. This removes the `AbstractList.SubList`,
   `AbstractMutableList.SubList`, and `ArrayList` owner cascade and reduces the
-  rehearsal diagnostics from 216 to 92. The next hostile proof must establish
-  that Kotlin capability dispatch through a widened view reaches an ordinary
-  C# typed virtual override without requiring C# to override the protected
-  semantic hook. This remains a rehearsal slice, not evidence for a per-owner
-  rollout. The final normal target aggregate covers 190 XML suites and 2,282
+  rehearsal diagnostics from 216 to 92. The first foreign-subclass dispatch
+  condition is now closed for concrete no-input owner-dependent outputs. A
+  widened Kotlin call observes the natural typed C# override without C#
+  overriding the protected semantic hook, including C# after an intervening
+  Kotlin override. Each open Kotlin declaration emits one protected virtual
+  last-Kotlin probe; allocation-free `ldvirtftn`/`ldftn` comparison detects a
+  later foreign typed override, while the unchanged path invokes the raw
+  semantic hook. Consequently an `@UnsafeVariance` widened write/read still
+  returns its incompatible object and fails only at a later real typed use.
+  PSI/LightTree on Framework 4.8 and .NET 10 execute the actual Kotlin producer
+  plus a separately compiled warnings-as-errors C# consumer. ABI-36 does not
+  yet serialize/bind the probe for a Kotlin override compiled in a later DLL;
+  that is the next bounded interop condition, followed by NativeAOT validation.
+  This remains a rehearsal slice, not evidence for a per-owner rollout. The
+  final normal target aggregate covers 190 XML suites and 2,282
   tests with zero failures, errors, or skips; FIR and integration roots were
   freshly written, while the unchanged six-test `dotnet.ir` root remained
   up-to-date from its prior green checkpoint.
