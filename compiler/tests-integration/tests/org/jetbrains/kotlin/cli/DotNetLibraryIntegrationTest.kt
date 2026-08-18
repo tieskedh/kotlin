@@ -34888,6 +34888,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (Kotlin.Collections.CollectionsKt.allEqual(
                                 new Kotlin.IntArray(new int[] { 7, 8 })))
                             return 19;
+                        if (!Kotlin.Collections.CollectionsKt.allDistinct(
+                                new Kotlin.IntArray(new int[] { 7, 8 })))
+                            return 20;
+                        if (Kotlin.Collections.CollectionsKt.allDistinct(
+                                new Kotlin.IntArray(new int[] { 7, 7 })))
+                            return 21;
                         return 0;
                     }
 
@@ -35071,6 +35077,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val sequencesFacadeType = implementationType("Kotlin.Sequences", "SequencesKt")
         val groupingType = implementationType("Kotlin.Collections", "Grouping")
         val groupingFacadeType = implementationType("Kotlin.Collections", "GroupingKt")
+        val byteDomainValueSetType = implementationType("kotlin.collections", "ByteDomainValueSet")
+        assertEquals(DotNetClrTypeVisibility.NOT_PUBLIC, byteDomainValueSetType.visibility)
+        assertTrue(implementationMetadata.typeDefinitions.none { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "UByte"
+        }) {
+            "The internal signed-Byte allDistinct path must not publish the unsigned scalar surface"
+        }
         assertTrue(implementationMetadata.typeDefinitions.none { type ->
             type.namespaceName == "Kotlin" && type.metadataName == "Enum"
         }) {
@@ -35143,6 +35156,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(10, allEqualMethods.count { method -> method.name == "allEqual" })
         assertEquals(10, allEqualMethods.count { method -> method.name == "allEqualBy" })
+        val allDistinctMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle &&
+                    method.name in setOf("allDistinct", "allDistinctBy")
+        }
+        assertEquals(10, allDistinctMethods.count { method -> method.name == "allDistinct" })
+        assertEquals(10, allDistinctMethods.count { method -> method.name == "allDistinctBy" })
         val sequenceMethodNames = implementationMetadata.methodDefinitions
             .filter { method -> method.declaringType == sequencesFacadeType.handle }
             .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
@@ -35662,6 +35681,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         })
         val bulkCollectionFunctionCounts = mapOf(
             "addAll" to 3,
+            "allDistinct" to 10,
+            "allDistinctBy" to 10,
             "allEqual" to 10,
             "allEqualBy" to 10,
             "convertToListIfNotCollection" to 1,
@@ -36504,6 +36525,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/HashSet.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/LinkedHashMap.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/LinkedHashSet.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/ByteDomainValueSet.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/Effect.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/Comparator.kt").absoluteFile
@@ -37804,6 +37826,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         booleanArrayOf(true, false).allEqualBy { 0 } &&
                         charArrayOf('a', 'c').allEqualBy { it.code and 1 }
 
+                public fun installedAllDistinctMatrix(): Boolean =
+                    listOf(1, 2).allDistinct() &&
+                        arrayOf("x", "y").allDistinct() &&
+                        byteArrayOf(Byte.MIN_VALUE, Byte.MAX_VALUE).allDistinct() &&
+                        shortArrayOf(1, 2).allDistinct() &&
+                        intArrayOf(3, 4).allDistinct() &&
+                        longArrayOf(4L, 5L).allDistinct() &&
+                        floatArrayOf(-0.0f, 0.0f).allDistinct() &&
+                        doubleArrayOf(-0.0, 0.0).allDistinct() &&
+                        booleanArrayOf(true, false).allDistinct() &&
+                        charArrayOf('k', 'l').allDistinct()
+
+                public fun installedAllDistinctByMatrix(): Boolean =
+                    listOf(1, 2).allDistinctBy { it and 1 } &&
+                        arrayOf("a", "bb").allDistinctBy { it.length } &&
+                        byteArrayOf(1, 2).allDistinctBy { it.toInt() and 1 } &&
+                        shortArrayOf(2, 3).allDistinctBy { it.toInt() and 1 } &&
+                        intArrayOf(3, 4).allDistinctBy { it and 1 } &&
+                        longArrayOf(4L, 5L).allDistinctBy { it and 1L } &&
+                        floatArrayOf(1.25f, 2.25f).allDistinctBy { it.toInt() } &&
+                        doubleArrayOf(2.25, 3.25).allDistinctBy { it.toInt() } &&
+                        booleanArrayOf(true, false).allDistinctBy { it } &&
+                        charArrayOf('a', 'b').allDistinctBy { it.code and 1 }
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38035,7 +38081,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedCollectionPlus == listOf(1, 2, 3, 4) &&
                             installedIterableMinus == listOf(1, 3, 5) &&
                             installedAllEqualMatrix() &&
-                            installedAllEqualByMatrix()
+                            installedAllEqualByMatrix() &&
+                            installedAllDistinctMatrix() &&
+                            installedAllDistinctByMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38408,6 +38456,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue("::'allEqualBy'<" !in il) {
             "The installed consumer must inline every Common allEqualBy body:\n$il"
+        }
+        assertEquals(
+            10,
+            il.split("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'allDistinct'").size - 1,
+            "The installed consumer must call all ten ordinary allDistinct fallbacks",
+        )
+        assertTrue("::'allDistinctBy'<" !in il) {
+            "The installed consumer must inline every Common allDistinctBy body:\n$il"
         }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)

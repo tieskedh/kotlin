@@ -1184,10 +1184,13 @@ currently supported classifier: `allEqual` and `allEqualBy` over Iterable,
 generic object arrays, all eight signed primitive-array wrappers, and the
 already completed Sequence variants. Common's selector-count, short-circuit,
 nullable-key, exception, and floating equality rules remain exact on both
-runtime profiles. Do not fold `allDistinct` into this result: upstream's signed
-ByteArray fast path reaches `UByteValueSet` and `Byte.toUByte()`. That family
-remains wholly excluded until a bounded exact unsigned helper substrate is
-selected; neither omitting Byte nor substituting a target HashSet is valid.
+runtime profiles. The matching `allDistinct`/`allDistinctBy` family is also
+complete. Its shared 256-bit byte-domain helper now accepts normalized Int
+indices instead of a public UByte carrier, preserving both signed and upstream
+unsigned algorithms while allowing .NET to publish no unsigned scalar, array,
+or range surface. Keep duplicate short-circuit, singleton selector elision,
+nullable-key, exception, and floating equality behavior exact; neither a
+partial classifier family nor a target HashSet substitute is valid.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
