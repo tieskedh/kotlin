@@ -33,6 +33,9 @@ object DotNetBackendConfigurationKeys {
     /** Test-owned IR declarations invoked by explicit generic-owner route tracing. No CLI option exposes these hooks. */
     val GENERIC_OWNER_CALL_ROUTE_TRACE_HOOKS: CompilerConfigurationKey<DotNetGenericOwnerCallRouteTraceHooks> =
         CompilerConfigurationKey.create("test-only generic-owner call-route trace hooks")
+    /** Whole-module architecture rehearsal. Intentionally has no CLI spelling or per-owner selector. */
+    val GENERIC_OWNER_REHEARSAL: CompilerConfigurationKey<Boolean> =
+        CompilerConfigurationKey.create("test-only atomic CLR-generic owner rehearsal")
 }
 
 data class DotNetGenericOwnerCallRouteTraceHooks(
@@ -295,4 +298,16 @@ var CompilerConfiguration.dotNetGenericOwnerCallRouteTraceHooks: DotNetGenericOw
     get() = get(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_HOOKS)
     set(value) {
         if (value != null) put(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_HOOKS, value)
+    }
+
+/**
+ * Enables the temporary all-owner CLR-generic epoch used by compiler integration tests.
+ *
+ * This is deliberately an internal compiler-configuration seam rather than a language option:
+ * one compilation either rehearses the complete owner model or keeps the accepted erased epoch.
+ */
+var CompilerConfiguration.dotNetGenericOwnerRehearsal: Boolean
+    get() = get(DotNetBackendConfigurationKeys.GENERIC_OWNER_REHEARSAL, false)
+    set(value) {
+        put(DotNetBackendConfigurationKeys.GENERIC_OWNER_REHEARSAL, value)
     }

@@ -37,6 +37,7 @@ import org.jetbrains.kotlin.ir.declarations.IrFactory
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
@@ -175,6 +176,28 @@ internal class DotNetBackendContext(
     val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
     /** Static call-site evidence only; codegen must never consume these route requirements. */
     val genericOwnerCallRoutes: MutableList<DotNetGenericOwnerCallRoutePlan> = mutableListOf()
+    /** Rehearsal-only logical owner to its materialized non-generic semantic capability interface. */
+    val genericOwnerCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
+    /** Private producer-only capability used by generated reflection thunks for private members. */
+    val genericOwnerReflectionCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
+    /** Rehearsal-only logical member to its producer-owned capability Interface MethodDef. */
+    val genericOwnerCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Rehearsal-only logical member to its instance capability slot for masked defaults. */
+    val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */
+    val genericOwnerSemanticHooks: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Synthetic external slot stubs to their producer-recorded physical families. */
+    val externalGenericOwnerPhysicalSlots:
+        MutableMap<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = linkedMapOf()
+    /** Rehearsal-only exact call sites whose physical MethodRef targets a capability slot. */
+    val genericOwnerCapabilityCallTargets: MutableMap<IrCall, IrSimpleFunction> =
+        java.util.IdentityHashMap()
+    /** Rehearsal-only value/field/function slots whose proven Kotlin view is wider than one C<T>. */
+    val genericOwnerCapabilityDeclarations: MutableSet<IrDeclaration> =
+        java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+    /** Generated reflection values whose physical carrier is the private reflection capability. */
+    val genericOwnerReflectionCapabilityDeclarations: MutableSet<IrDeclaration> =
+        java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
     /** Logical classifier to its stable, producer-recorded static-initialization entry. */
     val staticInitializations:
         MutableMap<IrClass, DotNetLoweredStaticInitialization> = linkedMapOf()

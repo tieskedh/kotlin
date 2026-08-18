@@ -1,5 +1,6 @@
-// Kotlin-owned generic classes use one erased CLR owner. These checks pin the corresponding
-// classifier-only casts, same-object mutation, member narrowing, and virtual dispatch.
+// Kotlin generic-owner checks pin classifier-only runtime tests/safe casts, same-object behavior,
+// member narrowing, and virtual dispatch. An explicitly unchecked throwing cast may either fail
+// at its CLR-reified cast point or later at typed use, as permitted by Kotlin.
 
 class Box<T>(private var value: T) {
     fun get(): T = value
@@ -189,10 +190,10 @@ fun box(): String {
     } catch (_: NullPointerException) {
     }
 
-    @Suppress("UNCHECKED_CAST")
-    val wrongArguments = erased as Any as ErasedBase<Int>
-    if (wrongArguments as Any !== erased) return "fail 28: unchecked cast changed identity"
     try {
+        @Suppress("UNCHECKED_CAST")
+        val wrongArguments = erased as Any as ErasedBase<Int>
+        if (wrongArguments as Any !== erased) return "fail 28: unchecked cast changed identity"
         val impossible: Int = wrongArguments.read()
         impossible + 1
         return "fail 29: erased member result did not enforce logical type"
@@ -222,9 +223,9 @@ fun box(): String {
     }
     if (guardedVirtualRead(OverridingIntBase(38)) != 39) return "fail 38: guarded virtual override"
 
-    @Suppress("UNCHECKED_CAST")
-    val mismatchedBox = Box("mismatch") as Any as Box<Int>
     try {
+        @Suppress("UNCHECKED_CAST")
+        val mismatchedBox = Box("mismatch") as Any as Box<Int>
         guardedRead(mismatchedBox)
         return "fail 39: mismatched erased view did not fail at result use"
     } catch (_: ClassCastException) {
@@ -232,36 +233,40 @@ fun box(): String {
 
     val mutableString = Box("before")
     @Suppress("UNCHECKED_CAST")
-    val mutableAsInt = mutableString as Any as Box<Int>
-    try {
-        mutableAsInt.put(40)
+    val mutableAsInt = try {
+        mutableString as Any as Box<Int>
     } catch (_: ClassCastException) {
-        return "fail 40: erased mutation failed before later String use"
+        null
     }
-    val mutableStar: Box<*> = mutableString
-    if (mutableStar.get() != 40) return "fail 41: erased mutation did not update shared storage"
-    try {
-        val impossible: String = mutableString.get()
-        impossible.length
-        return "fail 42: erased mutation did not fail at later String use"
-    } catch (_: ClassCastException) {
+    if (mutableAsInt != null) {
+        mutableAsInt.put(40)
+        val mutableStar: Box<*> = mutableString
+        if (mutableStar.get() != 40) return "fail 41: erased mutation did not update shared storage"
+        try {
+            val impossible: String = mutableString.get()
+            impossible.length
+            return "fail 42: erased mutation did not fail at later String use"
+        } catch (_: ClassCastException) {
+        }
     }
 
     val mutableInt = Box(43)
     @Suppress("UNCHECKED_CAST")
-    val mutableAsString = mutableInt as Any as Box<String>
-    try {
-        mutableAsString.put("after")
+    val mutableAsString = try {
+        mutableInt as Any as Box<String>
     } catch (_: ClassCastException) {
-        return "fail 43: inverse erased mutation failed before later Int use"
+        null
     }
-    val inverseStar: Box<*> = mutableInt
-    if (inverseStar.get() != "after") return "fail 44: inverse mutation did not update shared storage"
-    try {
-        val impossible: Int = mutableInt.get()
-        impossible + 1
-        return "fail 45: inverse mutation did not fail at later Int use"
-    } catch (_: ClassCastException) {
+    if (mutableAsString != null) {
+        mutableAsString.put("after")
+        val inverseStar: Box<*> = mutableInt
+        if (inverseStar.get() != "after") return "fail 44: inverse mutation did not update shared storage"
+        try {
+            val impossible: Int = mutableInt.get()
+            impossible + 1
+            return "fail 45: inverse mutation did not fail at later Int use"
+        } catch (_: ClassCastException) {
+        }
     }
 
     val widenedProbe: WidenedProbe<Any?> = WidenedProbe(46)

@@ -264,11 +264,10 @@ fun box(): String {
         return "fail 23: owner parameter graph"
     }
     val box = GenericBox(1)
-    if (echo.call(box, 42) != 42) return "fail 24: erased generic owner invocation"
+    if (echo.call(box, 42) != 42) return "fail 24: generic owner invocation"
     val item = genericMembers.named("item").single() as KMutableProperty1<GenericBox<Any?>, Any?>
-    val erasedBox = box as GenericBox<Any?>
-    item.set(erasedBox, "changed")
-    if (item.get(erasedBox) != "changed") return "fail 25: erased generic owner mutation"
+    item.setter.call(box, 42)
+    if (item.getter.call(box) != 42) return "fail 25: generic owner mutation"
 
     val bounded = genericMembers.named("bounded").single()
     val boundedParameter = bounded.typeParameters.single()

@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetCallableObject
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
@@ -53,6 +54,12 @@ internal data class DotNetGenericClassInfo(
  * erased until the complete admission algorithm and one atomic ABI migration are accepted.
  */
 enum class DotNetGenericOwnerCandidateDisposition {
+    /** Generic value classes retain their dedicated unboxed/boxed value-class ABI. */
+    RETAINED_VALUE_CLASS_ABI,
+
+    /** Local/compiler-generated owners may be CLR-generic but publish no semantic owner ABI. */
+    RETAINED_NON_ABI_IMPLEMENTATION_OWNER,
+
     BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
     BLOCKED_OPEN_OUTPUT_STATE_COHERENCE,
     REQUIRES_SEMANTIC_STATE_PROOF,
@@ -147,6 +154,8 @@ enum class DotNetGenericOwnerSemanticHookReason {
     PAIRED_OPEN_OUTPUT_STATE,
     ABSTRACT_BROAD_PROPERTY_OBLIGATION,
     INHERITED_SEMANTIC_OVERRIDE,
+    INTERNAL_SEMANTIC_REACHABILITY,
+    OWNER_RELATIVE_METHOD_BOUND,
 }
 
 enum class DotNetGenericOwnerOverrideTargetKind {
@@ -4960,6 +4969,7 @@ internal data class DotNetGenericOwnerStateCarrierPlan(
 internal data class DotNetGenericOwnerArchitecturePlan(
     val owner: IrClass,
     val logicalBindingKey: String?,
+    val logicalDirectSupertypes: List<IrType>,
     val disposition: DotNetGenericOwnerCandidateDisposition,
     val constructors: List<DotNetGenericOwnerConstructorPlan>,
     val memberPolicies: Map<IrSimpleFunction, DotNetGenericOwnerMemberPolicy>,
@@ -4974,6 +4984,35 @@ internal data class DotNetGenericOwnerArchitecturePlan(
     val stateCarriers: Map<IrField, DotNetGenericOwnerStateCarrierPlan>,
     val openOwnerOutputs: Set<IrSimpleFunction>,
 )
+
+/**
+ * Whether the rehearsal may replace this declaration's ordinary erased class ABI with `C<T>`.
+ * Value classes are a different representation domain, while a metadata-fixed conditional
+ * supertype is the one ordinary-owner exclusion. A local/compiler-generated implementation may
+ * still require CLR GenericParams to carry a captured T; its disposition only withholds the
+ * published semantic capability/ABI family. A compiler singleton carrier is different: its
+ * static INSTANCE field denotes one Kotlin object, while a static field on C<T> is one field per
+ * constructed CLR type. Keep that implementation owner erased until it has an identity-neutral
+ * allocation route instead of silently multiplying the singleton.
+ */
+internal val DotNetGenericOwnerArchitecturePlan.isReifiedByGenericOwnerRehearsal: Boolean
+    get() = disposition !in setOf(
+            DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI,
+            DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
+        ) && !owner.isCachedCallableSingletonCarrier()
+
+/**
+ * A non-capturing callable implementation is the sole generic-owner shape whose late synthetic
+ * static field carries Kotlin identity. Ordinary companion/static state has already moved to a
+ * non-generic holder before architecture planning, so excluding every owner which later acquires
+ * any static field would split the rehearsal ABI epoch and leave normal stdlib owners erased.
+ */
+private fun IrClass.isCachedCallableSingletonCarrier(): Boolean =
+    isDotNetCallableObject && declarations.any { declaration ->
+        declaration is IrField &&
+                declaration.isStatic &&
+                declaration.origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE
+    }
 
 private fun IrSimpleFunction.genericOwnerPhysicalVisibility(): DotNetGenericOwnerPhysicalMemberVisibility =
     when (visibility) {
@@ -5406,8 +5445,8 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
             Modality.SEALED -> DotNetGenericOwnerPhysicalTypeDispatch.SEALED
         },
         isInner = owner.isInner,
-        directSupertypeCount = owner.superTypes.size,
-        directSupertypes = owner.superTypes.map { supertype ->
+        directSupertypeCount = logicalDirectSupertypes.size,
+        directSupertypes = logicalDirectSupertypes.map { supertype ->
             supertype.genericOwnerPrototypeSupertypeSnapshot(owner, preLoweringDeclarationKeys)
         },
         directFieldCount = owner.declarations.count { declaration -> declaration is IrField },

@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
@@ -17,7 +18,9 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
+import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.util.isAnnotationClass
 import org.jetbrains.kotlin.ir.util.isFakeOverride
@@ -235,6 +238,15 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     val isErasedCallableInvoke = isDotNetErasedCallableInvoke()
     val isErasedCallableCall = isDotNetKCallableInvocation()
     val isErasedPropertyAccess = isDotNetErasedPropertyAccess()
+    // A generic Kotlin value class deliberately retains one non-generic nominal box owner. Its
+    // instance slots therefore cannot mention the source owner's !T parameters: those slots do
+    // not exist on the CLR TypeDef. An owner-dependent value (including invariant C<T>) crosses
+    // that nominal boundary as object and is recovered only at an exact unboxed/helper boundary.
+    val hasThis = parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver
+    val valueClassOwner = (parent as? IrClass)?.takeIf { owner ->
+        @OptIn(ValueClassBackendAgnosticApi::class)
+        owner.isInlineClass(treatCompatibleFullValueClassesAsInline = true)
+    }
     val typedGenericInterfaceSlot = dotNetValueClassGenericBoundarySlotOrNull()
     val typedGenericInterfaceOwner = typedGenericInterfaceSlot?.parent as? IrClass
     val boxesTypedGenericInterfaceReturn = typedGenericInterfaceOwner != null &&
@@ -245,24 +257,22 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
             typeMapper.toDotNetIlBoxedValueClassType(returnType)
                 ?: dotNetUnsupported("value-class generic boundary has no nominal owner")
         )
+    } else if (valueClassOwner != null && returnType.referencesTypeParameterOf(valueClassOwner)
+    ) {
+        DotNetIlReturnType.Value(DotNetIlValueType.Object)
     } else if (
         isErasedCallableInvoke || isErasedCallableCall ||
         (isErasedPropertyAccess && name.asString() == "get")
     ) {
         DotNetIlReturnType.Value(DotNetIlValueType.Object)
     } else {
-        typeMapper.toDotNetIlReturnType(returnType)
+        typeMapper.toDotNetIlReturnType(this)
             ?: dotNetUnsupported("return type ${returnType.render()} is not supported")
     }
     // A member function's dispatch receiver is parameters[0]; its type (the owning user class)
     // stays in the mapped parameter list so argument zipping and call-site pop counts stay
     // uniform, while `hasThis` makes signature rendering and slot numbering treat it as the
     // implicit CLR argument 0 (see DotNetIlMethodSignature).
-    val hasThis = parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver
-    val valueClassInstanceOwner = (parent as? IrClass)?.takeIf { owner ->
-        @OptIn(ValueClassBackendAgnosticApi::class)
-        owner.isInlineClass(treatCompatibleFullValueClassesAsInline = true)
-    }
     val parameterTypes = if (origin == DOTNET_VALUE_CLASS_UNBOX_HELPER) {
         parameters.map { parameter ->
             typeMapper.toDotNetIlBoxedValueClassType(parameter.type)
@@ -297,13 +307,15 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
                 DotNetIlValueType.Object
             }
         }
-    } else if (hasThis && valueClassInstanceOwner != null) {
+    } else if (hasThis && valueClassOwner != null) {
         parameters.map { parameter ->
             if (parameter.kind == IrParameterKind.DispatchReceiver) {
                 typeMapper.toDotNetIlBoxedValueClassType(parameter.type)
                     ?: dotNetUnsupported(
                         "value-class dispatch receiver '${parameter.name.asString()}' has no box owner"
                     )
+            } else if (parameter.type.referencesTypeParameterOf(valueClassOwner)) {
+                DotNetIlValueType.Object
             } else {
                 typeMapper.toDotNetIlParameterType(parameter)
                     ?: dotNetUnsupported(
@@ -687,9 +699,23 @@ internal class DotNetIlTypeMapper private constructor(
     private val stdlibClasses: MutableMap<IrClass, DotNetIlClassInfo>,
     private val stdlibGenericClasses: MutableMap<IrClass, DotNetGenericClassInfo>,
     private val stdlibClassLinksInProgress: MutableSet<IrClass>,
+    private val genericOwnerObjectStateFields: Set<IrField>,
+    private val genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
+    private val genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo>,
+    private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction>,
+    private val genericOwnerCapabilityDeclarations: Set<IrDeclaration>,
+    private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration>,
+    private val externalGenericOwnerPhysicalSlots:
+            Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot>,
+    private val erasedValueClassMethodParameters: Set<IrTypeParameter>,
     val stdlibAssemblyName: String?,
     private val assemblyReferenceSink: (String) -> Unit,
 ) {
+    private val genericOwnerCanonicalTypeRefByCapabilityTypeRef =
+        genericOwnerCapabilities.mapNotNull { entry ->
+            availableClasses[entry.key]?.let { canonical -> entry.value.ilTypeRef to canonical.ilTypeRef }
+        }.toMap(mutableMapOf())
+
     constructor(
         availableClasses: Map<IrClass, DotNetIlClassInfo>,
         localClasses: Set<IrClass> = availableClasses.keys,
@@ -697,6 +723,15 @@ internal class DotNetIlTypeMapper private constructor(
         externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
         genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
+        genericOwnerObjectStateFields: Set<IrField> = emptySet(),
+        genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
+        genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
+        genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
+        genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+        genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+        externalGenericOwnerPhysicalSlots:
+                Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
+        erasedValueClassMethodParameters: Set<IrTypeParameter> = emptySet(),
         stdlibAssemblyName: String? = DotNetStdlibLibrary.ASSEMBLY_NAME,
         assemblyReferenceSink: (String) -> Unit = {},
         foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit = {},
@@ -717,6 +752,14 @@ internal class DotNetIlTypeMapper private constructor(
         mutableMapOf(),
         mutableMapOf(),
         mutableSetOf(),
+        genericOwnerObjectStateFields,
+        genericOwnerCapabilities,
+        genericOwnerReflectionCapabilities,
+        genericOwnerCapabilityCallTargets,
+        genericOwnerCapabilityDeclarations,
+        genericOwnerReflectionCapabilityDeclarations,
+        externalGenericOwnerPhysicalSlots,
+        erasedValueClassMethodParameters,
         stdlibAssemblyName,
         assemblyReferenceSink,
     )
@@ -736,9 +779,68 @@ internal class DotNetIlTypeMapper private constructor(
             stdlibClasses,
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
+            genericOwnerObjectStateFields,
+            genericOwnerCapabilities,
+            genericOwnerReflectionCapabilities,
+            genericOwnerCapabilityCallTargets,
+            genericOwnerCapabilityDeclarations,
+            genericOwnerReflectionCapabilityDeclarations,
+            externalGenericOwnerPhysicalSlots,
+            erasedValueClassMethodParameters,
             stdlibAssemblyName,
             assemblyReferenceSink,
         )
+
+    /**
+     * Common copies a generic value-class owner's T parameters onto its static implementations.
+     * The nominal box owner deliberately remains non-generic, so those copied parameters are
+     * logical method arity only in the current value-class ABI: their value carriers must stay
+     * declaration-independent. This prevents an actual invariant C<int> stored in the box from
+     * being fabricated as C<object>. Ordinary method parameters declared by the source function
+     * are not in this set and remain genuine CLR method generics.
+     */
+    fun erasedGenericValueClassImplementationView(function: IrSimpleFunction): DotNetIlTypeMapper {
+        val valueClass = function.parent as? IrClass ?: return this
+        @OptIn(ValueClassBackendAgnosticApi::class)
+        if (!valueClass.isInlineClass(treatCompatibleFullValueClassesAsInline = true) ||
+            valueClass.typeParameters.isEmpty()
+        ) {
+            return this
+        }
+        val isCompilerImplementation =
+            function.origin == DOTNET_VALUE_CLASS_BOX_HELPER ||
+                    function.origin == DOTNET_VALUE_CLASS_UNBOX_HELPER ||
+                    function.dotNetValueClassImplementationSourceOrNull() != null ||
+                    function.dotNetValueClassConstructorImplementationSourceOrNull() != null
+        if (!isCompilerImplementation) return this
+        val copiedParameters = function.typeParameters.take(valueClass.typeParameters.size)
+        if (copiedParameters.size != valueClass.typeParameters.size) return this
+        return DotNetIlTypeMapper(
+            availableClasses,
+            localClasses,
+            coreLibrary,
+            externalDeclarations,
+            importedClrDeclarations,
+            genericInterfaces,
+            genericClasses,
+            comparableInterfaceInfo,
+            genericInterfaceMapping,
+            classifierInfoCache,
+            stdlibClasses,
+            stdlibGenericClasses,
+            stdlibClassLinksInProgress,
+            genericOwnerObjectStateFields,
+            genericOwnerCapabilities,
+            genericOwnerReflectionCapabilities,
+            genericOwnerCapabilityCallTargets,
+            genericOwnerCapabilityDeclarations,
+            genericOwnerReflectionCapabilityDeclarations,
+            externalGenericOwnerPhysicalSlots,
+            erasedValueClassMethodParameters + copiedParameters,
+            stdlibAssemblyName,
+            assemblyReferenceSink,
+        )
+    }
 
     internal fun classifierInfo(irClass: IrClass): DotNetClassifierInfo = classifierInfoCache[irClass]
 
@@ -811,11 +913,19 @@ internal class DotNetIlTypeMapper private constructor(
                 DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass, classifierInfo(irClass)) ||
                 externalDeclarations.hasGenericInterface(irClass))
 
-    fun isErasedGenericClass(irClass: IrClass): Boolean =
-        genericClasses.containsKey(irClass) ||
+    fun isErasedGenericClass(irClass: IrClass): Boolean {
+        // Bootstrap stdlib declarations also have historical reconstruction entries. A local
+        // class already admitted as C<T> is authoritative for this emission and must not be
+        // rediscovered as its old arity-zero fallback, or member owners and receiver types come
+        // from different ABI epochs in the same method.
+        if (irClass in localClasses && (availableClasses[irClass]?.typeParameterCount ?: 0) > 0) {
+            return false
+        }
+        return genericClasses.containsKey(irClass) ||
                 DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass, classifierInfo(irClass)) != null ||
                 stdlibGenericClassInfoOrNull(irClass) != null ||
                 externalDeclarations.hasGenericClass(irClass)
+    }
 
     fun isErasedGenericClassType(type: IrType): Boolean {
         val simpleType = type as? IrSimpleType ?: return false
@@ -840,18 +950,31 @@ internal class DotNetIlTypeMapper private constructor(
     fun permitsErasedGenericArrayElementWrite(type: IrType): Boolean {
         val simpleType = type as? IrSimpleType ?: return false
         val projection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
-        return projection.variance == Variance.INVARIANT &&
-                type.referencesErasedOwnerParameterForCurrentView()
+        if (projection.variance != Variance.INVARIANT) return false
+        if (type.referencesErasedOwnerParameterForCurrentView()) return true
+        val elementParameter = (projection.type as? IrSimpleType)
+            ?.takeIf(IrSimpleType::isMarkedNullable)
+            ?.classifier as? IrTypeParameterSymbol ?: return false
+        val parameterOwner = elementParameter.owner.parent as? IrClass ?: return false
+        // In a rehearsal C<T>, invariant Array<T?> is physically System.Array because CLR has
+        // no single value/reference component spelling for open nullable T. Kotlin nevertheless
+        // has an exact write contract: only T or null reaches SetValue, and the original vector
+        // retains its own component/store checks.
+        return parameterOwner.isDotNetGenericClassDeclaration && !isErasedGenericClass(parameterOwner)
     }
 
     fun genericClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? =
-        (genericClasses[irClass]
-            ?: DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass, classifierInfo(irClass))
-            // A loaded library's recorded physical ABI is authoritative for owner paths, method
-            // names, and graph links. The stdlib reconstruction exists only for same-module
-            // bootstrap sources, where no external physical record can exist yet.
-            ?: externalDeclarations.genericClassInfoOrNull(irClass, this)
-            ?: stdlibGenericClassInfoOrNull(irClass))
+        (if (irClass in localClasses && (availableClasses[irClass]?.typeParameterCount ?: 0) > 0) {
+            null
+        } else {
+            genericClasses[irClass]
+                ?: DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass, classifierInfo(irClass))
+                // A loaded library's recorded physical ABI is authoritative for owner paths,
+                // method names, and graph links. The stdlib reconstruction exists only for
+                // same-module bootstrap sources, where no external physical record can exist.
+                ?: externalDeclarations.genericClassInfoOrNull(irClass, this)
+                ?: stdlibGenericClassInfoOrNull(irClass)
+        })
             ?.also(::recordAssemblyReferences)
 
     /** Same-module bootstrap lookup for one erased stdlib generic-class owner. */
@@ -1052,6 +1175,9 @@ internal class DotNetIlTypeMapper private constructor(
             ?: comparableFunctionInfoOrNull(function)
             ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
             ?: externalDeclarations.valueClassCompilerAbiFunctionInfoOrNull(function, this)
+            ?: externalGenericOwnerPhysicalSlots[function]?.let { binding ->
+                externalDeclarations.genericOwnerPhysicalFunctionInfo(function, binding, this)
+            }
             ?: libraryFunction
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
@@ -1080,6 +1206,16 @@ internal class DotNetIlTypeMapper private constructor(
         return DotNetIlReturnType.Value(toDotNetIlValueType(type) ?: return null)
     }
 
+    fun toDotNetIlReturnType(function: IrSimpleFunction): DotNetIlReturnType? {
+        return genericOwnerCapabilityTypeOrNull(function, function.returnType)
+            ?.let(DotNetIlReturnType::Value)
+            ?: toDotNetIlReturnType(function.returnType)
+    }
+
+    fun toDotNetIlValueDeclarationType(declaration: IrValueDeclaration): DotNetIlValueType? =
+        genericOwnerCapabilityTypeOrNull(declaration, declaration.type)
+            ?: toDotNetIlValueType(declaration.type)
+
     /**
      * Maps one logical Kotlin parameter to its authoritative physical CLR parameter type.
      *
@@ -1094,6 +1230,7 @@ internal class DotNetIlTypeMapper private constructor(
      * parameter continues to use its read-only `System.Array` view.
      */
     fun toDotNetIlParameterType(parameter: IrValueParameter): DotNetIlValueType? {
+        genericOwnerCapabilityTypeOrNull(parameter, parameter.type)?.let { return it }
         val varargElementType = parameter.varargElementType
         if (varargElementType == null || !parameter.type.isDotNetGenericArray()) {
             return toDotNetIlValueType(parameter.type)
@@ -1125,6 +1262,70 @@ internal class DotNetIlTypeMapper private constructor(
         mapDotNetIlValueType(type).also { valueType ->
             valueType?.let(::recordAssemblyReferences)
         }
+
+    /** Physical state may deliberately be wider than its logical Kotlin field type in the rehearsal epoch. */
+    fun toDotNetIlFieldType(field: IrField): DotNetIlValueType? =
+        if (field in genericOwnerObjectStateFields) DotNetIlValueType.Object
+        else toDotNetIlValueType(field.type)
+
+    fun isGenericOwnerObjectStateField(field: IrField): Boolean =
+        field in genericOwnerObjectStateFields
+
+    fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
+        declaration in genericOwnerCapabilityDeclarations
+
+    /**
+     * The declaration-erased classifier used by Kotlin runtime type tests for a rehearsal
+     * generic owner. The constructed CLR owner remains the value carrier for exact calls, but
+     * `is C<...>` must not make Kotlin type arguments part of classifier identity. Every
+     * admitted owner capability is implemented by the same physical object, so this preserves
+     * identity while keeping the runtime check independent of its constructed arguments.
+     */
+    fun genericOwnerRuntimeClassifierTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
+        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        return genericOwnerCapabilityInfoOrNull(owner)?.let(DotNetIlValueType::UserClass)
+    }
+
+    private fun genericOwnerCapabilityTypeOrNull(
+        declaration: IrDeclaration,
+        type: IrType,
+    ): DotNetIlValueType.UserClass? {
+        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        if (declaration in genericOwnerReflectionCapabilityDeclarations) {
+            return genericOwnerReflectionCapabilities[owner]?.let(DotNetIlValueType::UserClass)
+        }
+        if (declaration !in genericOwnerCapabilityDeclarations) return null
+        return genericOwnerCapabilityInfoOrNull(owner)?.let(DotNetIlValueType::UserClass)
+    }
+
+    private fun genericOwnerCapabilityInfoOrNull(owner: IrClass): DotNetIlClassInfo? {
+        val capability = genericOwnerCapabilities[owner]
+            ?: externalDeclarations.genericOwnerCapabilityInfoOrNull(owner)
+            ?: return null
+        recordAssemblyReference(capability)
+        classInfoOrNull(owner)?.let { canonical ->
+            genericOwnerCanonicalTypeRefByCapabilityTypeRef[capability.ilTypeRef] = canonical.ilTypeRef
+        }
+        return capability
+    }
+
+    fun genericOwnerCapabilityCallTarget(call: IrCall): IrSimpleFunction? =
+        genericOwnerCapabilityCallTargets[call]
+
+    /**
+     * Whether a logical exact generic-owner result is physically returned through that owner's
+     * non-generic semantic capability. The Kotlin signature still proves the exact construction
+     * at the use site, so codegen may recover it with one checked CLR reference cast.
+     */
+    fun isGenericOwnerCapabilityViewOf(
+        capabilityType: DotNetIlValueType,
+        logicalType: DotNetIlValueType,
+    ): Boolean {
+        val producedCapability = capabilityType as? DotNetIlValueType.UserClass ?: return false
+        val expectedOwner = logicalType as? DotNetIlValueType.GenericInstance ?: return false
+        return genericOwnerCanonicalTypeRefByCapabilityTypeRef[producedCapability.classInfo.ilTypeRef] ==
+                expectedOwner.classInfo.ilTypeRef
+    }
 
     /**
      * Maps a declared interface supertype to the CLR interface a generated type implements.
@@ -1208,7 +1409,10 @@ internal class DotNetIlTypeMapper private constructor(
             ) {
                 // A reified carrier such as Holder<T> or T? has no single closed CLR
                 // instantiation once T belongs to a canonical non-generic interface. Object is
-                // the only identity-preserving universal carrier at this boundary.
+                // the only identity-preserving universal carrier at this boundary. In
+                // particular, invariant C<T> must never be fabricated as C<object>: an erased
+                // value-class box may store the actual C<T> as object and recover its concrete
+                // construction, but CLR invariance forbids changing the construction itself.
                 return DotNetIlValueType.Object
             }
         }
@@ -1303,6 +1507,18 @@ internal class DotNetIlTypeMapper private constructor(
         }
         val elementIrType = projection.type
         if (elementIrType.isOpenNullableTypeParameter()) {
+            val parameterOwner = ((elementIrType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)
+                ?.owner?.parent as? IrClass
+            if (parameterOwner?.isDotNetGenericClassDeclaration == true &&
+                !isErasedGenericClass(parameterOwner)
+            ) {
+                // A true CLR-generic owner still cannot spell one invariant vector component
+                // for open T?: value substitutions require Nullable<T>, while reference
+                // substitutions require T. Preserve the actual vector identity through the
+                // classified System.Array carrier. Direct Array<T> remains !T[] and a
+                // constructed reference element such as Node<T>? remains Node<T>[].
+                return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
+            }
             dotNetUnsupported(
                 "generic array type ${type.render()} contains open nullable type parameter " +
                         "'${elementIrType.render()}'; only a read-only output projection or a " +
@@ -1425,6 +1641,20 @@ internal class DotNetIlTypeMapper private constructor(
             return DotNetIlValueType.UserClass(classInfo)
         }
         if (type.arguments.size != classInfo.typeParameterCount) return null
+        val capability = genericOwnerCapabilityInfoOrNull(irClass)
+        if (capability != null && type.arguments.any { argument ->
+                val projection = argument as? IrTypeProjection
+                if (projection == null || projection.variance != Variance.INVARIANT) return@any true
+                if (!projection.type.isOpenNullableTypeParameter()) return@any false
+                val parameterOwner = ((projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)
+                    ?.owner?.parent as? IrClass
+                // A deterministically erased schema-20 owner has one fixed C<object> base edge;
+                // unlike an open function result, it must not be redirected to C's capability.
+                parameterOwner?.let(::isErasedGenericClass) != true
+            }
+        ) {
+            return DotNetIlValueType.UserClass(capability)
+        }
         val arguments = (0 until classInfo.typeParameterCount).map { index ->
             val argument = type.arguments[index]
             val projection = argument as? IrTypeProjection
@@ -1439,10 +1669,18 @@ internal class DotNetIlTypeMapper private constructor(
                 )
             }
             if (projection.type.isOpenNullableTypeParameter()) {
+                val parameterOwner = ((projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)
+                    ?.owner?.parent as? IrClass
+                if (parameterOwner?.let(::isErasedGenericClass) == true) {
+                    // A schema-20 erased-only declaration still needs one fixed edge to a
+                    // reified base. Its own T? is already object-domain, so C<object> is the
+                    // single legal CLR construction and retains one C<T> TypeDef identity.
+                    return@map DotNetIlValueType.Object
+                }
                 dotNetUnsupported(
                     "generic type '${type.render()}' contains open nullable type parameter " +
                             "'${projection.type.render()}'; the boxed-or-null carrier is supported " +
-                            "only as a direct value slot until nested invariant-carrier adapters are defined"
+                            "only for a deterministically erased owner until construction routing is defined"
                 )
             }
             toDotNetIlGenericArgumentType(projection.type) ?: return null
@@ -1468,6 +1706,14 @@ internal class DotNetIlTypeMapper private constructor(
         val typeParameter = (type.classifier as? IrTypeParameterSymbol)?.owner ?: return null
         if (type.isMarkedNullable()) {
             return DotNetIlValueType.Object
+        }
+        if (typeParameter in erasedValueClassMethodParameters) {
+            val erasedUpperBound = type.erasedUpperBound
+            return if (erasedUpperBound.defaultType == type) {
+                DotNetIlValueType.Object
+            } else {
+                toDotNetIlValueType(erasedUpperBound.defaultType) ?: DotNetIlValueType.Object
+            }
         }
         val parentGenericInterface = (typeParameter.parent as? IrClass)
             ?.takeIf(::isErasedGenericInterface)
@@ -1524,7 +1770,9 @@ internal class DotNetIlTypeMapper private constructor(
 
     private fun IrType.referencesErasedOwnerParameterForCurrentView(): Boolean {
         val simpleType = this as? IrSimpleType ?: return false
-        val parameterOwner = (simpleType.classifier as? IrTypeParameterSymbol)?.owner?.parent as? IrClass
+        val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+        if (parameter in erasedValueClassMethodParameters) return true
+        val parameterOwner = parameter?.parent as? IrClass
         if (parameterOwner != null) {
             if (isErasedGenericClass(parameterOwner)) return true
             if (

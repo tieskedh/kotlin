@@ -259,20 +259,12 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // capability, such as IComparable<T>, may receive an additional bridge without changing
     // Kotlin object identity.
     // Imported CLR interfaces never enter this lowering and retain their native variance rules.
-    // First record fail-closed candidate evidence for the eventual CLR-generic class-owner ABI.
-    // This analysis has no admitted/reified result and is not consumed by physical emission.
-    ::DotNetGenericOwnerArchitecturePlanningLowering,
-    ::DotNetGenericInterfaceBridgeLowering,
-    // CLR method-slot identity includes the return type on every supported profile. Preserve
-    // Kotlin covariant overrides with one exact virtual implementation plus private final
-    // MethodImpl adapters for each wider ordinary class/interface slot. Erased generic-interface
-    // slots and explicit mapped host capabilities remain owned by the preceding lowering.
-    ::DotNetCovariantReturnBridgeLowering,
-    // Follow the common/JVM inner-class pipeline before initializer merging: first make a generic
-    // outer's implicit type arguments explicit on the independent CLR nested type, then add the
-    // outer field/constructor argument, rewrite outer-this reads into field chains, and move
-    // constructor-call dispatch receivers into the new leading argument. The CLR accepts the
-    // common pre-base-call outer-field store unchanged (innerprobe_s1/s2, genericinner_s1-s3).
+    // First complete the common/JVM inner-class pipeline and make a generic outer's implicit type
+    // arguments explicit on its independent CLR nested TypeDef. The generic-owner planner and
+    // every bridge substitutor must see the same complete physical parameter list: a source
+    // `inner class Plain` under Outer<T> is itself Plain<T> on the CLR even though it declares no
+    // source parameter. Rewriting outer-this to an explicit field also gives the planner a real,
+    // precisely typed producer instead of a lexical receiver which no longer exists in CLR IR.
     ::DotNetInnerClassTypeParametersLowering,
     ::DotNetInnerClassesLowering,
     ::DotNetInnerClassesMemberBodyLowering,
@@ -281,6 +273,14 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // are now explicit CLR members/slots, so stop general IR substitution from counting both the
     // physical copies and the original enclosing type-constructor parameters.
     ::DotNetInnerClassPhysicalizationLowering,
+    // Then record fail-closed candidate evidence for the CLR-generic class-owner ABI.
+    ::DotNetGenericOwnerArchitecturePlanningLowering,
+    ::DotNetGenericInterfaceBridgeLowering,
+    // CLR method-slot identity includes the return type on every supported profile. Preserve
+    // Kotlin covariant overrides with one exact virtual implementation plus private final
+    // MethodImpl adapters for each wider ordinary class/interface slot. Erased generic-interface
+    // slots and explicit mapped host capabilities remain owned by the preceding lowering.
+    ::DotNetCovariantReturnBridgeLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: the shared ForLoopsLowering is a body pass, so a `for` loop inside an `init {}`
     // block must already have been inlined into a constructor before the loop rewrite runs.

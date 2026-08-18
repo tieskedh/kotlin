@@ -106,6 +106,17 @@ data class DotNetValueClassAbi(
     }
 }
 
+/** Producer-owned non-generic classifier identity implemented by every constructed `C<T>`. */
+data class DotNetGenericOwnerAbi(
+    val capabilityOwnerPath: List<String>,
+) {
+    init {
+        require(capabilityOwnerPath.isNotEmpty()) {
+            "a CLR-generic Kotlin owner requires a semantic capability TypeDef"
+        }
+    }
+}
+
 enum class DotNetInterfaceDefaultPromotionView {
     CANONICAL,
     DECLARED,
@@ -125,16 +136,28 @@ sealed interface DotNetPhysicalDeclaration {
     /**
      * One logical Kotlin classifier and its single physical CLR runtime owner.
      *
-     * KLIB alone retains logical type parameters for Kotlin-owned generic classes and interfaces.
-     * Typed foreign-language exports are separate artifacts and are never alternate owner paths
-     * in this runtime index.
+     * KLIB retains the logical type graph and Kotlin variance. The physical owner is either the
+     * accepted arity-zero epoch or one exact full-arity CLR TypeDef; it is never reconstructed
+     * from the metadata-name backtick suffix and never has an alternate implementation path.
      */
     data class Class(
         override val ownerPath: List<String>,
+        /** Exact GenericParam arity of this physical TypeDef; zero is the erased owner epoch. */
+        val physicalTypeParameterCount: Int = 0,
         val staticInitialization: DotNetStaticInitialization? = null,
         val objectInstance: DotNetObjectInstance? = null,
         val valueClassAbi: DotNetValueClassAbi? = null,
-    ) : DotNetPhysicalDeclaration
+        val genericOwnerAbi: DotNetGenericOwnerAbi? = null,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(physicalTypeParameterCount >= 0) {
+                "a physical CLR class cannot have negative generic arity"
+            }
+            require(genericOwnerAbi == null || physicalTypeParameterCount > 0) {
+                "an erased or non-generic physical class cannot publish a generic-owner capability"
+            }
+        }
+    }
 
     data class Function(
         override val ownerPath: List<String>,
@@ -298,6 +321,39 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /** Producer-recorded non-generic capability slot and optional semantic hook for one `C<T>` member. */
+    data class GenericOwnerMemberFamily(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val logicalMemberKey: String,
+        val capabilityMethodName: String,
+        val defaultCapabilityMethodName: String?,
+        val semanticHookOwnerPath: List<String>?,
+        val semanticHookMethodName: String?,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "a generic-owner member capability requires a CLR owner" }
+            require(ownerLogicalKey.isNotEmpty() && logicalMemberKey.isNotEmpty()) {
+                "a generic-owner member family requires owner and member logical identities"
+            }
+            require(capabilityMethodName.isNotEmpty()) {
+                "a generic-owner member family requires a capability MethodDef"
+            }
+            require(defaultCapabilityMethodName == null || defaultCapabilityMethodName.isNotEmpty()) {
+                "a generic-owner default capability requires a MethodDef name"
+            }
+            require((semanticHookOwnerPath == null) == (semanticHookMethodName == null)) {
+                "a generic-owner semantic hook requires both owner and MethodDef identities"
+            }
+            require(semanticHookOwnerPath == null || semanticHookOwnerPath.isNotEmpty()) {
+                "a generic-owner semantic hook requires a CLR owner"
+            }
+            require(semanticHookMethodName == null || semanticHookMethodName.isNotEmpty()) {
+                "a generic-owner semantic hook requires a MethodDef name"
+            }
+        }
+    }
+
 }
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
@@ -315,6 +371,9 @@ internal fun DotNetPhysicalDeclaration.CovariantReturnBridge.indexKey(): String 
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.indexKey(): String =
     "W:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerMemberFamily.indexKey(): String =
+    "G:$logicalMemberKey"
 
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
 data class DotNetPortablePhysicalAbiDifference(
@@ -376,7 +435,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "35"
+    const val ABI_VERSION = "36"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -430,6 +489,7 @@ object DotNetLibraryAbiCodec {
                     error("Typed generic-interface intersection slots were removed in ABI 19")
                 is DotNetPhysicalDeclaration.CovariantReturnBridge -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerMemberFamily -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
@@ -451,6 +511,7 @@ object DotNetLibraryAbiCodec {
                 )
                 "R" -> decodeCovariantReturnBridge(fields, logicalKey)
                 "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
+                "G" -> decodeGenericOwnerMemberFamily(fields, logicalKey)
                 "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
                 "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
                 else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
@@ -889,6 +950,55 @@ object DotNetLibraryAbiCodec {
             ownerPath.size.toString(),
         ) + ownerPath
 
+    private fun DotNetPhysicalDeclaration.GenericOwnerMemberFamily.encodeFields(): List<String> {
+        val semanticOwnerPath = semanticHookOwnerPath.orEmpty()
+        return listOf(
+            "G",
+            ownerLogicalKey,
+            logicalMemberKey,
+            capabilityMethodName,
+            defaultCapabilityMethodName.orEmpty(),
+            semanticHookMethodName.orEmpty(),
+            ownerPath.size.toString(),
+            semanticOwnerPath.size.toString(),
+        ) + ownerPath + semanticOwnerPath
+    }
+
+    private fun decodeGenericOwnerMemberFamily(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerMemberFamily {
+        require(fields.size >= 9) {
+            "generic-owner member family '$logicalKey' has an incomplete CLR identity"
+        }
+        val capabilityOwnerSize = fields[6].toIntOrNull()
+        val semanticOwnerSize = fields[7].toIntOrNull()
+        require(capabilityOwnerSize != null && capabilityOwnerSize > 0 &&
+                semanticOwnerSize != null && semanticOwnerSize >= 0 &&
+                fields.size == 8 + capabilityOwnerSize + semanticOwnerSize
+        ) {
+            "generic-owner member family '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        require((semanticOwnerSize == 0) == fields[5].isEmpty()) {
+            "generic-owner member family '$logicalKey' has an inconsistent semantic-hook identity"
+        }
+        val family = DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
+            ownerPath = fields.subList(8, 8 + capabilityOwnerSize)
+                .requireOwnerPath(logicalKey, "generic-owner capability"),
+            ownerLogicalKey = fields[1],
+            logicalMemberKey = fields[2],
+            capabilityMethodName = fields[3].requireMethodName(logicalKey, "generic-owner capability"),
+            defaultCapabilityMethodName = fields[4].takeIf(String::isNotEmpty),
+            semanticHookOwnerPath = if (semanticOwnerSize == 0) null else fields.drop(8 + capabilityOwnerSize)
+                .requireOwnerPath(logicalKey, "generic-owner semantic hook"),
+            semanticHookMethodName = fields[5].takeIf(String::isNotEmpty),
+        )
+        require(family.indexKey() == logicalKey) {
+            "generic-owner member family '$logicalKey' is inconsistent with its structured identity"
+        }
+        return family
+    }
+
     private fun decodeInterfaceDefaultClassForwarder(
         fields: List<String>,
         logicalKey: String,
@@ -927,9 +1037,11 @@ object DotNetLibraryAbiCodec {
     private fun DotNetPhysicalDeclaration.Class.encodeFields(): List<String> {
         val initializationPath = staticInitialization?.ownerPath.orEmpty()
         val objectInstancePath = objectInstance?.ownerPath.orEmpty()
+        val genericOwnerCapabilityPath = genericOwnerAbi?.capabilityOwnerPath.orEmpty()
         return listOf(
             "C",
             ownerPath.size.toString(),
+            physicalTypeParameterCount.toString(),
             initializationPath.size.toString(),
             staticInitialization?.methodName.orEmpty(),
             objectInstancePath.size.toString(),
@@ -937,7 +1049,8 @@ object DotNetLibraryAbiCodec {
             valueClassAbi?.primaryConstructorMethodName.orEmpty(),
             valueClassAbi?.boxMethodName.orEmpty(),
             valueClassAbi?.unboxMethodName.orEmpty(),
-        ) + ownerPath + initializationPath + objectInstancePath
+            genericOwnerCapabilityPath.size.toString(),
+        ) + ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath
     }
 
     private fun DotNetPhysicalDeclaration.EnumEntry.encodeFields(): List<String> =
@@ -964,7 +1077,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.Class {
-        require(fields.size >= 10) {
+        require(fields.size >= 12) {
             "class declaration '$logicalKey' has an incomplete CLR identity"
         }
         fun pathSize(fieldIndex: Int, view: String, allowAbsent: Boolean = false): Int {
@@ -976,22 +1089,27 @@ object DotNetLibraryAbiCodec {
         }
 
         val ownerSize = pathSize(1, "runtime")
-        val initializationSize = pathSize(2, "static-initialization", allowAbsent = true)
-        val objectInstanceSize = pathSize(4, "object-instance", allowAbsent = true)
-        val expectedSize = 9 + ownerSize + initializationSize + objectInstanceSize
+        val physicalTypeParameterCount = fields[2].toIntOrNull()
+        require(physicalTypeParameterCount != null && physicalTypeParameterCount >= 0) {
+            "class declaration '$logicalKey' has invalid physical generic arity '${fields[2]}'"
+        }
+        val initializationSize = pathSize(3, "static-initialization", allowAbsent = true)
+        val objectInstanceSize = pathSize(5, "object-instance", allowAbsent = true)
+        val genericOwnerCapabilitySize = pathSize(10, "generic-owner capability", allowAbsent = true)
+        val expectedSize = 11 + ownerSize + initializationSize + objectInstanceSize + genericOwnerCapabilitySize
         require(fields.size == expectedSize) {
             "class declaration '$logicalKey' has an inconsistent CLR owner-path payload"
         }
-        require((initializationSize == 0) == fields[3].isEmpty()) {
+        require((initializationSize == 0) == fields[4].isEmpty()) {
             "class declaration '$logicalKey' has an inconsistent static-initialization identity"
         }
-        require((objectInstanceSize == 0) == fields[5].isEmpty()) {
+        require((objectInstanceSize == 0) == fields[6].isEmpty()) {
             "class declaration '$logicalKey' has an inconsistent object-instance identity"
         }
-        require(fields[6].isEmpty() == fields[7].isEmpty() && fields[7].isEmpty() == fields[8].isEmpty()) {
+        require(fields[7].isEmpty() == fields[8].isEmpty() && fields[8].isEmpty() == fields[9].isEmpty()) {
             "class declaration '$logicalKey' has an incomplete value-class compiler ABI"
         }
-        var offset = 9
+        var offset = 11
         fun takePath(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
         val ownerPath = takePath(ownerSize).requireOwnerPath(logicalKey, "runtime")
         val initialization = if (initializationSize == 0) {
@@ -999,7 +1117,7 @@ object DotNetLibraryAbiCodec {
         } else {
             DotNetStaticInitialization(
                 ownerPath = takePath(initializationSize).requireOwnerPath(logicalKey, "static-initialization"),
-                methodName = fields[3].requireMethodName(logicalKey, "static-initialization"),
+                methodName = fields[4].requireMethodName(logicalKey, "static-initialization"),
             )
         }
         val objectInstance = if (objectInstanceSize == 0) {
@@ -1007,20 +1125,29 @@ object DotNetLibraryAbiCodec {
         } else {
             DotNetObjectInstance(
                 ownerPath = takePath(objectInstanceSize).requireOwnerPath(logicalKey, "object-instance"),
-                fieldName = fields[5].requireFieldName(logicalKey, "object-instance"),
+                fieldName = fields[6].requireFieldName(logicalKey, "object-instance"),
+            )
+        }
+        val genericOwnerAbi = if (genericOwnerCapabilitySize == 0) {
+            null
+        } else {
+            DotNetGenericOwnerAbi(
+                takePath(genericOwnerCapabilitySize).requireOwnerPath(logicalKey, "generic-owner capability")
             )
         }
         return DotNetPhysicalDeclaration.Class(
             ownerPath = ownerPath,
+            physicalTypeParameterCount = physicalTypeParameterCount,
             staticInitialization = initialization,
             objectInstance = objectInstance,
-            valueClassAbi = fields[6].takeIf(String::isNotEmpty)?.let { primaryConstructorMethodName ->
+            valueClassAbi = fields[7].takeIf(String::isNotEmpty)?.let { primaryConstructorMethodName ->
                 DotNetValueClassAbi(
                     primaryConstructorMethodName = primaryConstructorMethodName,
-                    boxMethodName = fields[7],
-                    unboxMethodName = fields[8],
+                    boxMethodName = fields[8],
+                    unboxMethodName = fields[9],
                 )
             },
+            genericOwnerAbi = genericOwnerAbi,
         )
     }
 
@@ -1327,6 +1454,27 @@ internal data class DotNetBoundInterfaceDefaultClassForwarder(
     val forwarder: DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder,
 )
 
+internal data class DotNetBoundGenericOwnerMemberFamily(
+    val library: DotNetExternalLibrary,
+    val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
+)
+
+internal data class DotNetBoundGenericOwnerPhysicalSlot(
+    val library: DotNetExternalLibrary,
+    val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
+    val ownerPath: List<String>,
+    val physicalMethodName: String,
+) {
+    init {
+        require(ownerPath.isNotEmpty()) {
+            "a bound generic-owner physical slot requires a CLR owner"
+        }
+        require(physicalMethodName.isNotEmpty()) {
+            "a bound generic-owner physical slot requires a MethodDef name"
+        }
+    }
+}
+
 /**
  * Resolves metadata-deserialized declarations through the bound physical identities of their
  * companion assemblies. Only declarations present in the index become physical CLR references.
@@ -1351,18 +1499,35 @@ internal class DotNetExternalDeclarations(
         }
     }
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
+    private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val declaredClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val exactClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val classLinksInProgress = hashSetOf<String>()
     private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
     private val logicalKeys = DotNetLibraryAbiKeyCache()
+    private val genericOwnerMemberFamiliesByLogicalKey:
+        Map<String, DotNetBoundGenericOwnerMemberFamily> = buildMap {
+            libraries.forEach { library ->
+                library.declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+                    .forEach { family ->
+                        require(put(
+                            family.logicalMemberKey,
+                            DotNetBoundGenericOwnerMemberFamily(library, family),
+                        ) == null) {
+                            "duplicate external Kotlin/.NET generic-owner member family " +
+                                    "'${family.logicalMemberKey}'"
+                        }
+                    }
+            }
+        }
 
     /**
      * Whether [irClass] has a producer-recorded physical CLR class in a bound library.
      *
      * Shape gates that merely authorize an external base or interface test declaration
      * membership here. They must not infer an optional host capability from the Kotlin
-     * declaration: Kotlin-owned generic classes and interfaces both record one erased owner.
+     * declaration. A class record may select either an erased or full-arity physical owner;
+     * generic interfaces remain on their accepted arity-zero owner epoch.
      */
     fun hasClass(irClass: IrClass): Boolean {
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
@@ -1373,14 +1538,18 @@ internal class DotNetExternalDeclarations(
     fun hasGenericClass(irClass: IrClass): Boolean {
         if (irClass.isInterface || irClass.typeParameters.isEmpty()) return false
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
-        return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
+        val declaration = declarations[logicalKey]?.declaration as? DotNetPhysicalDeclaration.Class
+            ?: return false
+        return declaration.physicalTypeParameterCount == 0
     }
 
     /** Whether KLIB kind plus the producer index select an erased Kotlin-owned generic interface. */
     fun hasGenericInterface(irClass: IrClass): Boolean {
         if (!irClass.isInterface || irClass.typeParameters.isEmpty()) return false
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
-        return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
+        val declaration = declarations[logicalKey]?.declaration as? DotNetPhysicalDeclaration.Class
+            ?: return false
+        return declaration.physicalTypeParameterCount == 0
     }
 
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
@@ -1388,11 +1557,16 @@ internal class DotNetExternalDeclarations(
         canonicalClassInfoByLogicalKey[logicalKey]?.let { return it }
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
-        val canonicalVariances = if (irClass.typeParameters.isNotEmpty()) {
-            emptyList()
-        } else {
-            irClass.typeParameters.map { it.variance }
+        require(declaration.physicalTypeParameterCount == 0 ||
+                declaration.physicalTypeParameterCount == irClass.typeParameters.size
+        ) {
+            "external Kotlin/.NET class '$logicalKey' records physical arity " +
+                    "${declaration.physicalTypeParameterCount}; expected erased arity 0 or complete logical arity " +
+                    irClass.typeParameters.size
         }
+        // CLR class GenericParams are invariant even when Kotlin declaration-site variance is
+        // represented by the semantic capability. The list carries both exact arity and flags.
+        val canonicalVariances = List(declaration.physicalTypeParameterCount) { Variance.INVARIANT }
         val classInfo = buildClassInfo(
             bound.library.artifact.assemblyName,
             declaration.ownerPath,
@@ -1411,8 +1585,16 @@ internal class DotNetExternalDeclarations(
                 } else {
                     irClass.dotNetBaseSuperTypeOrNull()?.let(typeMapper::toDotNetIlBaseClassType)
                 }
-                classInfo.interfaces = irClass.dotNetDirectInterfaceTypes()
-                    .mapNotNull(typeMapper::toDotNetIlImplementedInterfaceType)
+                classInfo.interfaces = buildList {
+                    addAll(irClass.dotNetDirectInterfaceTypes()
+                        .mapNotNull(typeMapper::toDotNetIlImplementedInterfaceType))
+                    // The semantic capability is a physical InterfaceImpl, not a second logical
+                    // KLIB supertype. Reconstruct it solely from the producer ABI so ordinary
+                    // constructed C<T> values are assignable to projected/star consumer slots.
+                    genericOwnerCapabilityInfoOrNull(irClass)?.let { capability ->
+                        add(DotNetIlValueType.UserClass(capability))
+                    }
+                }
             } finally {
                 classLinksInProgress.remove(logicalKey)
             }
@@ -1420,10 +1602,54 @@ internal class DotNetExternalDeclarations(
         return classInfo
     }
 
+    /** Producer-recorded non-generic Kotlin semantic/classifier capability for external `C<T>`. */
+    fun genericOwnerCapabilityInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
+        if (irClass.isInterface || irClass.typeParameters.isEmpty()) return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
+        genericOwnerCapabilityInfoByLogicalKey[logicalKey]?.let { return it }
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
+        val genericOwnerAbi = declaration.genericOwnerAbi ?: return null
+        require(declaration.physicalTypeParameterCount == irClass.typeParameters.size) {
+            "external Kotlin/.NET class '$logicalKey' publishes a generic-owner capability " +
+                    "without the complete CLR owner arity"
+        }
+        return buildClassInfo(
+            bound.library.artifact.assemblyName,
+            genericOwnerAbi.capabilityOwnerPath,
+            emptyList(),
+        ).also { genericOwnerCapabilityInfoByLogicalKey[logicalKey] = it }
+    }
+
+    fun genericOwnerMemberFamilyOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerMemberFamily? {
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        return genericOwnerMemberFamiliesByLogicalKey[logicalKey]
+    }
+
+    fun genericOwnerPhysicalFunctionInfo(
+        function: IrSimpleFunction,
+        binding: DotNetBoundGenericOwnerPhysicalSlot,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "generic-owner capability binding belongs to an unbound external library"
+        }
+        val owner = buildClassInfo(
+            binding.library.artifact.assemblyName,
+            binding.ownerPath,
+            List((function.parent as? IrClass)?.typeParameters?.size ?: 0) { Variance.INVARIANT }
+                .takeIf { binding.ownerPath != binding.family.ownerPath }
+                .orEmpty(),
+        )
+        val signature = function.dotNetSignature(typeMapper)
+        require(signature.hasThis) { "a generic-owner physical slot must be an instance method" }
+        return DotNetIlFunctionInfo(owner, signature, binding.physicalMethodName)
+    }
+
     /** Kotlin-owned runtime classifiers do not have an alternate typed CLR owner. */
     fun declaredClassInfoOrNull(@Suppress("UNUSED_PARAMETER") irClass: IrClass): DotNetIlClassInfo? = null
 
-    /** The single erased owner recorded for an ordinary Kotlin generic class. */
+    /** The arity-zero owner recorded for a Kotlin generic class that remains in the erased epoch. */
     fun genericClassInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetGenericClassInfo? {
         if (irClass.isInterface || irClass.typeParameters.isEmpty()) return null
         if (!hasGenericClass(irClass)) return null
@@ -1467,9 +1693,10 @@ internal class DotNetExternalDeclarations(
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
         val valueClassAbi = declaration.valueClassAbi ?: return null
         val owner = classInfoOrNull(irClass, typeMapper) ?: return null
+        val physicalTypeMapper = typeMapper.erasedGenericValueClassImplementationView(function)
         return DotNetIlFunctionInfo(
             owner = owner,
-            signature = function.dotNetSignature(typeMapper),
+            signature = function.dotNetSignature(physicalTypeMapper),
             physicalMethodName = methodSelector(valueClassAbi),
         )
     }
@@ -1523,7 +1750,9 @@ internal class DotNetExternalDeclarations(
                 buildClassInfo(bound.library.artifact.assemblyName, declaration.ownerPath, emptyList())
             }
         }
-        val signature = function.dotNetSignature(typeMapper)
+        val signature = function.dotNetSignature(
+            typeMapper.erasedGenericValueClassImplementationView(function)
+        )
         require(signature.hasThis == declaration.isInstance) {
             "external function '$logicalKey' has a CLR dispatch shape inconsistent with its metadata"
         }
@@ -1710,6 +1939,10 @@ internal fun collectDotNetLibraryDeclarations(
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
     genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
+    genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
+    genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
     interfaceDefaultImplementations: Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
     defaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -1762,6 +1995,17 @@ internal fun collectDotNetLibraryDeclarations(
         val logicalKey = preLoweringDeclarationKeys[irClass] ?: continue
         val genericInterface = genericInterfaces[irClass]
         val genericClass = genericClasses[irClass]
+        val genericOwnerAbi = genericOwnerCapabilityInterfaces[irClass]?.let { capability ->
+            val capabilityInfo = availableClasses[capability]
+                ?: error(
+                    "Internal .NET backend error: generic-owner capability for " +
+                            "'${irClass.render()}' did not survive physical emission"
+                )
+            require(capabilityInfo.typeParameterCount == 0) {
+                "generic-owner capability for '${irClass.render()}' must be a non-generic CLR TypeDef"
+            }
+            DotNetGenericOwnerAbi(capabilityInfo.physicalPathComponents())
+        }
         val staticInitialization = staticInitializations[irClass]?.let { lowered ->
             val entryInfo = availableFunctions[lowered.entry]
                 ?: error(
@@ -1810,6 +2054,12 @@ internal fun collectDotNetLibraryDeclarations(
             )
         }
         if (genericInterface == null) {
+            require(classInfo.typeParameterCount == 0 ||
+                    classInfo.typeParameterCount == irClass.typeParameters.size
+            ) {
+                "generic class '${irClass.render()}' has partial physical arity " +
+                        "${classInfo.typeParameterCount}; expected 0 or ${irClass.typeParameters.size}"
+            }
             genericClass?.let { erasedClass ->
                 require(erasedClass.classInfo.physicalPathComponents() == classInfo.physicalPathComponents()) {
                     "generic class '${irClass.render()}' has an erased CLR owner inconsistent with its class index"
@@ -1819,13 +2069,18 @@ internal fun collectDotNetLibraryDeclarations(
                 logicalKey,
                 DotNetPhysicalDeclaration.Class(
                     ownerPath = classInfo.physicalPathComponents(),
+                    physicalTypeParameterCount = classInfo.typeParameterCount,
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
                     valueClassAbi = valueClassAbi,
+                    genericOwnerAbi = genericOwnerAbi,
                 )
             )
         } else {
             val canonicalOwnerPath = genericInterface.canonicalClassInfo.physicalPathComponents()
+            require(genericInterface.canonicalClassInfo.typeParameterCount == 0) {
+                "generic interface '${irClass.render()}' cannot publish a CLR-generic canonical owner"
+            }
             require(canonicalOwnerPath == classInfo.physicalPathComponents()) {
                 "generic interface '${irClass.render()}' has a canonical CLR owner inconsistent with its class index"
             }
@@ -1833,9 +2088,11 @@ internal fun collectDotNetLibraryDeclarations(
                 logicalKey,
                 DotNetPhysicalDeclaration.Class(
                     ownerPath = canonicalOwnerPath,
+                    physicalTypeParameterCount = genericInterface.canonicalClassInfo.typeParameterCount,
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
                     valueClassAbi = valueClassAbi,
+                    genericOwnerAbi = null,
                 )
             )
         }
@@ -1904,6 +2161,49 @@ internal fun collectDotNetLibraryDeclarations(
                 defaultArgumentDispatcher = defaultArgumentDispatcher,
             )
         )
+    }
+    for ([source, slot] in genericOwnerCapabilitySlots) {
+        if (source.fileOrNull !in files || source.isFakeOverride) continue
+        val logicalMemberKey = preLoweringDeclarationKeys[source] ?: continue
+        val owner = source.parent as? IrClass
+            ?: error("Internal .NET backend error: generic-owner member has no class owner")
+        val ownerLogicalKey = preLoweringDeclarationKeys[owner]
+            ?: error("Internal .NET backend error: published generic-owner member has no owner identity")
+        val slotInfo = availableFunctions[slot]
+            ?: error(
+                "Internal .NET backend error: generic-owner capability slot for " +
+                        "'${source.render()}' did not survive physical emission"
+            )
+        val semanticHook = genericOwnerSemanticHooks[source]
+        val semanticHookInfo = semanticHook?.let { hook ->
+            availableFunctions[hook]
+                ?: error(
+                    "Internal .NET backend error: generic-owner semantic hook for " +
+                            "'${source.render()}' did not survive physical emission"
+                )
+        }
+        val defaultCapabilityMethodName = genericOwnerDefaultCapabilitySlots[source]?.let { defaultSlot ->
+            val defaultSlotInfo = availableFunctions[defaultSlot]
+                ?: error(
+                    "Internal .NET backend error: generic-owner default capability slot for " +
+                            "'${source.render()}' did not survive physical emission"
+                )
+            require(defaultSlotInfo.owner.physicalPathComponents() == slotInfo.owner.physicalPathComponents()) {
+                "generic-owner member and default capability slots have inconsistent CLR owners"
+            }
+            defaultSlotInfo.physicalMethodName ?: defaultSlot.dotNetIlMethodName()
+        }
+        val family = DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
+            ownerPath = slotInfo.owner.physicalPathComponents(),
+            ownerLogicalKey = ownerLogicalKey,
+            logicalMemberKey = logicalMemberKey,
+            capabilityMethodName = slotInfo.physicalMethodName ?: slot.dotNetIlMethodName(),
+            defaultCapabilityMethodName = defaultCapabilityMethodName,
+            semanticHookOwnerPath = semanticHookInfo?.owner?.physicalPathComponents(),
+            semanticHookMethodName = semanticHookInfo?.physicalMethodName
+                ?: semanticHook?.dotNetIlMethodName(),
+        )
+        put(family.indexKey(), family)
     }
     for (promotion in interfaceDefaultPromotions) {
         val ownerInfo = availableClasses[promotion.owner] ?: continue

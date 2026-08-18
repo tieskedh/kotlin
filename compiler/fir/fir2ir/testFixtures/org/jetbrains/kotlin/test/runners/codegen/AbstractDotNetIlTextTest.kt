@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
@@ -393,6 +394,10 @@ private class BackendCliDotNetFacade(
         }
         val input = cliArtifact.withNewDiagnosticCollector(DiagnosticsCollectorImpl())
         val loweredInput = DotNetKlibInliningPipelinePhase.executePhase(input)
+        val genericOwnerRehearsal = System.getProperty(GENERIC_OWNER_REHEARSAL_PROPERTY) == "true"
+        if (genericOwnerRehearsal) {
+            loweredInput.configuration.dotNetGenericOwnerRehearsal = true
+        }
         val callRouteTraceExportPath = System.getProperty(GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY)
         if (callRouteTraceExportPath != null && !loweredInput.configuration.dotNetProducesLibrary) {
             check(callRouteTraceExportPath.isNotBlank()) {
@@ -418,6 +423,9 @@ private class BackendCliDotNetFacade(
             loweredInput
         }
         val backendOutput = DotNetBackendPipelinePhase.executePhase(metadataInput)
+        check(backendOutput.genericOwnerRehearsal == genericOwnerRehearsal) {
+            "The generic-owner rehearsal epoch was not propagated through the backend product"
+        }
         val completedOutput = if (loweredInput.configuration.dotNetProducesLibrary) {
             DotNetLibraryMetadataFinalizationPipelinePhase.executePhase(backendOutput)
         } else {
@@ -429,6 +437,22 @@ private class BackendCliDotNetFacade(
                 ?.joinToString("\n")
                 .orEmpty()
             "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
+        }
+        System.getProperty(GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY)?.let { exportPath ->
+            check(genericOwnerRehearsal) {
+                "A generic-owner rehearsal product can only be exported from the rehearsal epoch"
+            }
+            val exportDirectory = File(exportPath).apply { mkdirs() }
+            completedOutput.output.copyTo(
+                exportDirectory.resolve(completedOutput.output.name),
+                overwrite = true,
+            )
+            completedOutput.output.resolveSibling("${completedOutput.output.nameWithoutExtension}.il")
+                .takeIf(File::isFile)
+                ?.copyTo(
+                    exportDirectory.resolve("${completedOutput.output.nameWithoutExtension}.il"),
+                    overwrite = true,
+                )
         }
         validateGenericOwnerHardestModelPrototype(
             completedOutput.genericOwnerPrototypes,
@@ -451,6 +475,7 @@ private class BackendCliDotNetFacade(
             completedOutput.output,
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-octo-tree-candidate"),
+            compilerOutputUsesReifiedOwners = genericOwnerRehearsal,
         )
         validateGenericOwnerOpenNullableArraySignaturePrototype(completedOutput.genericOwnerPrototypes)
         physicalizeGenericOwnerHardestModelPrototype(
@@ -1058,6 +1083,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     erasedProducerOutput: File,
     applicationSource: File,
     directory: File,
+    compilerOutputUsesReifiedOwners: Boolean,
 ) {
     val treePrototype = prototypes.singleOrNull { prototype -> prototype.ownerName == "OctoTree" }
         ?: return
@@ -1208,6 +1234,10 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchToStringSlot = typedSlot(branchToStringMember)
     val treeGetCapability = capabilitySlot(treeGetMember)
     val treeSetCapability = capabilitySlot(treeSetMember)
+    val treeDepthCapability = capabilitySlot(treeDepthMember)
+    val treeToStringCapability = capabilitySlot(treeToStringMember)
+    val leafToStringCapability = capabilitySlot(leafToStringMember)
+    val branchToStringCapability = capabilitySlot(branchToStringMember)
     val nodeSetSlot = typedSlot(nodeSetMember)
     val leafSetSlot = typedSlot(leafSetMember)
     val branchSetSlot = typedSlot(branchSetMember)
@@ -1309,12 +1339,16 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
         DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
     )
-    check(treeDepthMember.roles == setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) &&
+    check(treeDepthMember.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) &&
             treeDepthSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
             treeDepthSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
             treeDepthSlot.signature.parameterSlots.isEmpty() &&
             treeDepthSlot.signature.returnSlot.type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type() &&
+            treeDepthCapability.signature == treeDepthSlot.signature &&
             treeGetMember.roles == setOf(
                 DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
                 DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
@@ -1338,23 +1372,42 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             treeIndependentIntParameters + DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
             treeSetCapability.signature.returnSlot.type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
-            treeToStringMember.roles == setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) &&
+            treeToStringMember.roles == setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            ) &&
             treeToStringSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
             treeToStringSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
             treeToStringSlot.signature.parameterSlots.isEmpty() &&
             treeToStringSlot.signature.returnSlot.type ==
-            DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()) {
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType() &&
+            treeToStringCapability.signature == treeToStringSlot.signature) {
         "The OctoTree root member families lost their exact recorded MethodDef slots"
     }
-    check(listOf(leafToStringSlot, branchToStringSlot).all { slot ->
-        slot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+    check(listOf(
+        leafToStringMember to leafToStringCapability,
+        branchToStringMember to branchToStringCapability,
+    ).all { pair ->
+        val member = pair.first
+        val capability = pair.second
+        val slot = typedSlot(member)
+        member.roles == setOf(
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+        ) && capability.signature == slot.signature &&
+                slot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
                 slot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
                 slot.signature.parameterSlots.isEmpty() &&
                 slot.signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
     }) {
         "The OctoTree Leaf/Branch rendering overrides lost their exact recorded MethodDef slots"
     }
-    check(listOf(treeGetCapability, treeSetCapability).all { slot ->
+    check(listOf(
+        treeDepthCapability,
+        treeGetCapability,
+        treeSetCapability,
+        treeToStringCapability,
+    ).all { slot ->
         val interfaceSlot = slot.capabilitySlot
         slot.physicalOwnerPath == tree.physicalOwnerPath &&
                 slot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
@@ -1566,14 +1619,18 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             } && listOf(rootReadAccess, rootWriteAccess).all { access ->
                 access.physicalMethod.physicalMethodName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))
             } && listOf(
+                treeDepthCapability,
                 treeGetCapability,
                 treeSetCapability,
+                treeToStringCapability,
                 nodeSetCapability,
                 leafSetCapability,
                 branchSetCapability,
                 leafReadCapability,
                 leafWriteCapability,
                 branchReadCapability,
+                leafToStringCapability,
+                branchToStringCapability,
             ).all { slot ->
                 checkNotNull(slot.capabilitySlot).let { interfaceSlot ->
                     interfaceSlot.physicalOwnerPath.last().matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
@@ -1731,12 +1788,16 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     }
     val treeGetCapabilityIdentity = checkNotNull(treeGetCapability.capabilitySlot)
     val treeSetCapabilityIdentity = checkNotNull(treeSetCapability.capabilitySlot)
+    val treeDepthCapabilityIdentity = checkNotNull(treeDepthCapability.capabilitySlot)
+    val treeToStringCapabilityIdentity = checkNotNull(treeToStringCapability.capabilitySlot)
     val nodeSetCapabilityIdentity = checkNotNull(nodeSetCapability.capabilitySlot)
     val leafSetCapabilityIdentity = checkNotNull(leafSetCapability.capabilitySlot)
     val branchSetCapabilityIdentity = checkNotNull(branchSetCapability.capabilitySlot)
     val leafReadCapabilityIdentity = checkNotNull(leafReadCapability.capabilitySlot)
     val leafWriteCapabilityIdentity = checkNotNull(leafWriteCapability.capabilitySlot)
     val branchReadCapabilityIdentity = checkNotNull(branchReadCapability.capabilitySlot)
+    val leafToStringCapabilityIdentity = checkNotNull(leafToStringCapability.capabilitySlot)
+    val branchToStringCapabilityIdentity = checkNotNull(branchToStringCapability.capabilitySlot)
     val treeCapabilityType = treeGetCapabilityIdentity.physicalOwnerPath.joinToString(".")
     val nodeCapabilityType = nodeSetCapabilityIdentity.physicalOwnerPath.joinToString(".")
     val leafCapabilityType = leafSetCapabilityIdentity.physicalOwnerPath.joinToString(".")
@@ -1747,6 +1808,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchCapabilitySimpleName = branchSetCapabilityIdentity.physicalOwnerPath.last()
     val treeGetCapabilityReturnType =
         treeGetCapability.signature.returnSlot.let { slot ->
+            slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
+        }
+    val treeDepthCapabilityReturnType =
+        treeDepthCapability.signature.returnSlot.let { slot ->
+            slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
+        }
+    val treeToStringCapabilityReturnType =
+        treeToStringCapability.signature.returnSlot.let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val nodeCapabilityReturnType =
@@ -1767,6 +1836,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         }
     val branchReadCapabilityReturnType =
         branchReadCapability.signature.returnSlot.let { slot ->
+            slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
+        }
+    val leafToStringCapabilityReturnType =
+        leafToStringCapability.signature.returnSlot.let { slot ->
+            slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
+        }
+    val branchToStringCapabilityReturnType =
+        branchToStringCapability.signature.returnSlot.let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     fun erasedMemberName(sourceName: String): String = treePrototype.members.single { member ->
@@ -2108,6 +2185,48 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             }
         """.trimIndent()
     }
+
+    fun compilerRehearsalConsumerSource(): String {
+        check(erasedTreeDepthMethod.startsWith("get_")) {
+            "The rehearsal OctoTree depth accessor lost its CLR property getter: $erasedTreeDepthMethod"
+        }
+        val treeType = "$erasedTreeType<int>"
+        val depthProperty = erasedTreeDepthMethod.removePrefix("get_")
+        return """
+            using System;
+
+            public sealed class DirectCSharpOctoTree : $treeType
+            {
+                public DirectCSharpOctoTree(int depth) : base(depth) {}
+            }
+
+            public static class Program
+            {
+                private static void Verify($treeType tree)
+                {
+                    tree.$erasedTreeSetMethod(0, 0, 0, 17);
+                    tree.$erasedTreeSetMethod(7, 7, 7, 23);
+                    if ((int)tree.$erasedTreeGetMethod(0, 0, 0) != 17 ||
+                            (int)tree.$erasedTreeGetMethod(7, 7, 7) != 23 ||
+                            tree.$depthProperty != 2 || tree.ToString().Length == 0)
+                        throw new InvalidOperationException("direct generic Kotlin owner");
+                }
+
+                public static int Main()
+                {
+                    Verify(new $treeType(2));
+                    Verify(new DirectCSharpOctoTree(2));
+                    Type open = typeof($erasedTreeType<>);
+                    Type closed = typeof($treeType);
+                    if (!open.IsGenericTypeDefinition || open.GetGenericArguments().Length != 1 ||
+                            !closed.IsConstructedGenericType || closed.GetGenericArguments()[0] != typeof(int) ||
+                            closed.GetConstructor(new Type[] { typeof(int) }) == null)
+                        return 1;
+                    return 0;
+                }
+            }
+        """.trimIndent()
+    }
     val producerSource = directory.resolve("OctoTreeCandidateProducer.cs")
     val positiveConsumerSource = directory.resolve("OctoTreeCandidatePositiveConsumer.cs")
     val negativeConsumerSource = directory.resolve("OctoTreeCandidateNegativeSubclass.cs")
@@ -2146,6 +2265,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         {
             public interface $treeCapabilitySimpleName
             {
+                $treeDepthCapabilityReturnType ${treeDepthCapabilityIdentity.physicalMethodName}();
+
                 $treeGetCapabilityReturnType ${treeGetCapabilityIdentity.physicalMethodName}(
                     ${treeGetCapability.renderParameters(emptyList())}
                 );
@@ -2153,6 +2274,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 void ${treeSetCapabilityIdentity.physicalMethodName}(
                     ${treeSetCapability.renderParameters(emptyList())}
                 );
+
+                $treeToStringCapabilityReturnType ${treeToStringCapabilityIdentity.physicalMethodName}();
             }
 
             public interface $nodeCapabilitySimpleName
@@ -2175,6 +2298,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 void ${leafWriteCapabilityIdentity.physicalMethodName}(
                     ${leafWriteCapability.renderParameters(emptyList())}
                 );
+
+                $leafToStringCapabilityReturnType ${leafToStringCapabilityIdentity.physicalMethodName}();
             }
 
             public interface $branchCapabilitySimpleName
@@ -2186,6 +2311,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 $branchReadCapabilityReturnType ${branchReadCapabilityIdentity.physicalMethodName}(
                     ${branchReadCapability.renderParameters(emptyList())}
                 );
+
+                $branchToStringCapabilityReturnType ${branchToStringCapabilityIdentity.physicalMethodName}();
             }
 
             public class $treeSimpleName<${treeTypeParameters.joinToString(", ")}> : $treeCapabilityType
@@ -2214,6 +2341,11 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 ${treeDepthSlot.visibility.renderVisibility()} $treeDepthReturnType ${treeDepthProperty.physicalPropertyName}
                 {
                     get { return this.${depthState.physicalFieldName}; }
+                }
+
+                $treeDepthCapabilityReturnType $treeCapabilityType.${treeDepthCapabilityIdentity.physicalMethodName}()
+                {
+                    return this.${treeDepthProperty.physicalPropertyName};
                 }
 
                 ${treeGetSlot.visibility.renderVisibility()} $treeGetReturnType ${treeGetSlot.physicalMethodName}(
@@ -2265,6 +2397,11 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 {
                     $rootStateType value = this.${rootReadAccess.physicalMethod.physicalMethodName}();
                     return value == null ? "null" : value.ToString() ?? "null";
+                }
+
+                $treeToStringCapabilityReturnType $treeCapabilityType.${treeToStringCapabilityIdentity.physicalMethodName}()
+                {
+                    return this.${treeToStringSlot.physicalMethodName}();
                 }
 
                 $treeGetCapabilityReturnType $treeCapabilityType.${treeGetCapabilityIdentity.physicalMethodName}(
@@ -2366,6 +2503,11 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 {
                     object? value = this.${leafState.physicalFieldName};
                     return "L{" + (value == null ? "null" : value.ToString()) + "}";
+                }
+
+                $leafToStringCapabilityReturnType $leafCapabilityType.${leafToStringCapabilityIdentity.physicalMethodName}()
+                {
+                    return this.${leafToStringSlot.physicalMethodName}();
                 }
             }
 
@@ -2492,12 +2634,20 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                     }
                     return result + "]";
                 }
+
+                $branchToStringCapabilityReturnType $branchCapabilityType.${branchToStringCapabilityIdentity.physicalMethodName}()
+                {
+                    return this.${branchToStringSlot.physicalMethodName}();
+                }
             }
         }
         """.trimIndent()
     )
     candidateMeasurementSource.writeText(octoTreeMeasurementSource(candidate = true))
-    erasedMeasurementSource.writeText(octoTreeMeasurementSource(candidate = false))
+    erasedMeasurementSource.writeText(
+        if (compilerOutputUsesReifiedOwners) compilerRehearsalConsumerSource()
+        else octoTreeMeasurementSource(candidate = false)
+    )
     positiveConsumerSource.writeText(
         """
         using System;
@@ -3074,6 +3224,9 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     executeSnapshotConsumer(target, candidateMeasurement, directory)
     executeSnapshotConsumer(target, erasedMeasurement, directory)
     System.getProperty(GENERIC_OWNER_APPLICATION_EXPORT_PROPERTY)?.let { exportPath ->
+        check(!compilerOutputUsesReifiedOwners) {
+            "The paired erased/candidate OctoTree corpus cannot be exported from a rehearsal product"
+        }
         check(exportPath.isNotBlank()) { "Generic-owner application export path must not be blank" }
         prepareGenericOwnerOctoTreeApplicationBundle(
             directory = directory,
@@ -3391,7 +3544,7 @@ private fun validateGenericOwnerHardestModelPrototype(
                 DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW,
                 DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED,
             ),
-            DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY,
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
         )
     }
 
@@ -3921,6 +4074,10 @@ private const val GENERIC_OWNER_APPLICATION_MANIFEST_FILE = "generic-owner-appli
 private const val GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE = "generic-owner-call-routes.tsv"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerCallRouteTraceDir"
+private const val GENERIC_OWNER_REHEARSAL_PROPERTY =
+    "kotlin.dotnet.genericOwnerRehearsal"
+private const val GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY =
+    "kotlin.dotnet.genericOwnerRehearsalDir"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -4205,7 +4362,8 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             else -> simpleName
         })
         val hasCapabilityFamily = prototype.members.any { member ->
-            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in member.roles
+            member.logicalBindingKey != null &&
+                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in member.roles
         }
         val capabilityOwnerPath = if (hasCapabilityFamily) {
             listOf(
@@ -6588,10 +6746,17 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     }) {
         "The generic-owner artifact did not retain its projected System.Array carriers"
     }
-    val relay = artifact.owners.first().members.single { candidate ->
+    val relayFamily = artifact.owners.first().members.single { candidate ->
         candidate.slots.any { slot -> slot.signature.genericArity == 1 }
-    }.slots.single()
+    }
+    val relay = relayFamily.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+    }
+    val relayCapability = relayFamily.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }
     check(relay.signature.genericArity == 1 &&
+            relayCapability.signature == relay.signature &&
             relay.signature.returnSlot.type.arguments.single().kind ==
             DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER &&
             relay.signature.returnSlot.type.arguments.single().parameterIndex == 0) {
@@ -8052,8 +8217,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
         DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 18,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 12,
-        DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY to 1,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 13,
     )) {
         "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
     }
@@ -8065,7 +8229,6 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     check(resolvedCallRoutes.map { route -> route.routeRequirement }.toSet().containsAll(setOf(
         DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
-        DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY,
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER,
     ))) {
         "The separate hostile corpus did not exercise every external call route: $resolvedCallRoutes"
@@ -8102,9 +8265,9 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         route.callerName.endsWith("consumerLabelStarUnsafeStore") && route.calleeName == "label"
     }?.let { route ->
         route.receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW &&
-                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.MISSING_CAPABILITY
+                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
     } == true) {
-        "The external star/default-helper call did not preserve its missing-capability obligation: $resolvedCallRoutes"
+        "The external star/default-helper call did not select its semantic capability: $resolvedCallRoutes"
     }
     check(producerCallRoutes.map { route ->
         route.copy(callerName = "diagnostic-caller", calleeOwnerName = "diagnostic-owner", calleeName = "diagnostic-member")

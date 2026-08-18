@@ -386,7 +386,7 @@ internal class DotNetIlMethodContext(
                 ?: dotNetUnsupported("local '${variable.name.asString()}' shadows a parameter")
         }
 
-        val type = physicalTypeOverride ?: typeMapper.toDotNetIlValueType(variable.type)
+        val type = physicalTypeOverride ?: typeMapper.toDotNetIlValueDeclarationType(variable)
             ?: dotNetUnsupported("local '${variable.name.asString()}' has unsupported type ${variable.type.render()}")
         val slot = DotNetIlSlot.Local(
             index = localSlots.size,

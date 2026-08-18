@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.ir.IrElement
@@ -99,6 +100,7 @@ internal class DotNetIlExpressionCodegen(
     private val facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
     private val currentOwner: DotNetIlClassInfo,
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
+    private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
 ) {
     internal val coreLibraryProfile: DotNetCoreLibraryProfile
         get() = typeMapper.coreLibrary
@@ -175,12 +177,78 @@ internal class DotNetIlExpressionCodegen(
      * object, but their logical IR result remains authoritative for the call-specific cast/unbox
      * performed by codegen.
      */
-    private fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
+    fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
+        if (expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.REINTERPRET_CAST) {
+            val valueClass = expression.typeOperand.dotNetValueClassOrNull()
+            if (valueClass != null &&
+                expression.typeOperand.referencesTypeParameterOf(valueClass) &&
+                mappedNaturalType(expression.argument) == DotNetIlValueType.Object
+            ) {
+                // Common's nominal generic-value-class getter reinterprets its backing value as
+                // the logical value class. That owner intentionally has no CLR GenericParams,
+                // so an invariant underlying C<T> is stored as object, never as fabricated
+                // C<object>. A concrete IC<Int> or a helper-owned !!T does not reference the
+                // value-class declaration parameter and therefore keeps its exact C<int>/C<!!T>
+                // carrier through the ordinary path.
+                return DotNetIlValueType.Object
+            }
+        }
+        if (expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.SAFE_CAST) {
+            typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)?.let { return it }
+        }
+        if (expression is IrTypeOperatorCall &&
+            (expression.operator == IrTypeOperator.IMPLICIT_CAST ||
+                    expression.operator == IrTypeOperator.IMPLICIT_NOTNULL)
+        ) {
+            val operandType = mappedNaturalType(expression.argument)
+            val logicalResultType = typeMapper.toDotNetIlValueType(expression.typeOperand)
+            if (operandType != null && logicalResultType != null &&
+                typeMapper.isGenericOwnerCapabilityViewOf(operandType, logicalResultType)
+            ) {
+                // FIR smartcasts and `!!` refine the logical C<T> view, but a value produced by
+                // a semantic hook remains the same non-generic capability until an exact typed
+                // boundary is actually required. This keeps a following semantic member call
+                // on that capability rather than inventing a constructed C<T> carrier.
+                return operandType
+            }
+        }
+        // A provenance-selected local/parameter carrier is the value actually loaded by ldloc /
+        // ldarg. This used to be consulted only for array overrides; generic-owner capability
+        // slots require the same general rule or an enclosing FIR IMPLICIT_CAST reconstructs the
+        // logical C<X> and emits an invalid cast from the physical semantic interface.
+        if (expression is IrGetValue && typeMapper.isGenericOwnerCapabilityDeclaration(expression.symbol.owner)) {
+            return methodContext.reference(expression.symbol).type
+        }
         if (expression is IrGetValue && expression.type.isDotNetGenericArray()) {
             val slotType = methodContext.reference(expression.symbol).type
             if (slotType is DotNetIlValueType.GenericArray ||
                 slotType is DotNetIlValueType.ErasedGenericArray
             ) return slotType
+        }
+        if (expression is IrGetField) {
+            val semanticGetter = expression.symbol.owner.correspondingPropertySymbol?.owner?.getter
+                ?.let(genericOwnerCapabilitySlots::get)
+            val semanticReceiver = expression.receiver?.let(::genericOwnerCapabilityNaturalTypeOrNull)
+            if (semanticGetter != null && semanticReceiver != null) {
+                val returnType = availableFunctions[semanticGetter]?.signature?.returnType
+                if (returnType is DotNetIlReturnType.Value) return returnType.type
+            }
+        }
+        // Generic-owner state may deliberately use an object carrier while its Kotlin field
+        // remains typed as T. The field token, not the logical IrGetField type, is what `ldfld`
+        // actually produces; typed callers perform their checked recovery at the member-entry
+        // boundary, whereas an object-domain semantic body must be able to return it unchanged.
+        if (expression is IrGetField && typeMapper.isGenericOwnerObjectStateField(expression.symbol.owner)) {
+            return typeMapper.toDotNetIlFieldType(expression.symbol.owner)
+        }
+        if (expression is IrGetField) {
+            val physicalFieldType = typeMapper.toDotNetIlFieldType(expression.symbol.owner)
+            if (physicalFieldType is DotNetIlValueType.TypeParameter) {
+                // A semantic hook rewrites the logical occurrence T to Any?, but the producer's
+                // proven state is still a true !T field. Report what ldfld actually pushes so
+                // the ordinary widening layer boxes it at this object-domain use site.
+                return physicalFieldType
+            }
         }
         if (expression is IrCall) {
             val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
@@ -196,6 +264,15 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         return typeMapper.toDotNetIlValueType(expression.type)
+    }
+
+    /** The physical semantic capability only when it is the view of this logical C<T> result. */
+    fun genericOwnerCapabilityNaturalTypeOrNull(expression: IrExpression): DotNetIlValueType? {
+        val naturalType = mappedNaturalType(expression) ?: return null
+        val runtimeClassifier = typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.type)
+        if (naturalType == runtimeClassifier) return naturalType
+        val logicalType = typeMapper.toDotNetIlValueType(expression.type) ?: return null
+        return naturalType.takeIf { typeMapper.isGenericOwnerCapabilityViewOf(it, logicalType) }
     }
 
     fun nextLabel(prefix: String): String = methodContext.nextLabel(prefix)
@@ -597,6 +674,26 @@ internal class DotNetIlExpressionCodegen(
                 kind = DotNetKClassClassifierKind.EXACT,
             )
         }
+        if (typeMapper.genericOwnerRuntimeClassifierTypeOrNull(classType) != null) {
+            val canonicalOwner = typeMapper.classInfoOrNull(irClass)
+                ?: dotNetUnsupported(
+                    "reified generic-owner class literal lost its canonical CLR TypeDef: ${classType.render()}"
+                )
+            require(canonicalOwner.typeParameterCount == irClass.typeParameters.size) {
+                "reified generic-owner class literal for '${irClass.render()}' has CLR arity " +
+                        "${canonicalOwner.typeParameterCount}; expected ${irClass.typeParameters.size}"
+            }
+            // A Kotlin `C::class` denotes the classifier, not one use-site projection. Keep the
+            // non-generic semantic capability for runtime `is`/cast checks, but give KClass the
+            // canonical open C<T> TypeDef so producer-owned annotations/member factories remain
+            // discoverable across separate compilation.
+            return StaticKClassClassifier(
+                clrTypeRef = canonicalOwner.ilTypeRef,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.OPEN_GENERIC,
+            )
+        }
         if (irClass.dotNetImportedClrSourceOrNull() != null) {
             val importedClass = typeMapper.classInfoOrNull(irClass)
                 ?: dotNetUnsupported(
@@ -969,17 +1066,63 @@ internal class DotNetIlExpressionCodegen(
                 (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL &&
                         expression.argument.type.dotNetValueClassOrNull() != null &&
                         expression.argument.type.dotNetUnboxedValueClassTypeOrNull() == null)
-        val castType = if (valueClassRuntimeOperator && boxedValueClassCastType != null) {
+        val erasedValueClassOwnerCarrierReinterpret =
+            expression.operator == IrTypeOperator.REINTERPRET_CAST &&
+                    expression.typeOperand.dotNetValueClassOrNull()?.let { valueClass ->
+                        expression.typeOperand.referencesTypeParameterOf(valueClass)
+                    } == true &&
+                    operandType == DotNetIlValueType.Object
+        val castType = if (erasedValueClassOwnerCarrierReinterpret) {
+            DotNetIlValueType.Object
+        } else if (valueClassRuntimeOperator && boxedValueClassCastType != null) {
             boxedValueClassCastType
         } else {
             typeMapper.toDotNetIlValueType(expression.typeOperand)
         }
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+            expectedType.isDotNetReferenceShaped() &&
+            typeMapper.isGenericOwnerCapabilityViewOf(expectedType, castType)
+        ) {
+            // A frontend smartcast following `candidate is C<*>` may still spell its logical
+            // result as C<T>. In a semantic body the proven physical fact is only C's
+            // classifier capability. Materialize precisely that proof instead of inventing the
+            // current hook construction C<!T>.
+            emitExpression(expression.argument, DotNetIlValueType.Object)
+            if (methodContext.isTerminated) return
+            if (expectedType != DotNetIlValueType.Object) {
+                methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
+            }
+            return
+        }
+        if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+            operandType == expectedType &&
+            typeMapper.isGenericOwnerCapabilityViewOf(operandType, castType)
+        ) {
+            // FIR may expose the closed logical C<X> view of an open generic result even when
+            // its only stable physical carrier is C's semantic capability (notably `<T> C<T?>`).
+            // Keep that capability end-to-end. Casting C<object> to C<Nullable<int>> would be an
+            // invalid attempt to reconstruct a CLR instantiation which the producer never made.
+            emitExpression(expression.argument, operandType)
+            return
+        }
+        if (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL &&
+            operandType == expectedType &&
+            typeMapper.isGenericOwnerCapabilityViewOf(operandType, castType)
+        ) {
+            // `!!` changes nullability, not the physical generic-owner view. Preserve the
+            // semantic capability and perform the ordinary Kotlin reference null check.
+            emitExpression(expression.argument, operandType)
+            if (methodContext.isTerminated) return
+            emitReferenceNotNullOrThrowNpe()
+            return
+        }
         if (expression.operator == IrTypeOperator.REINTERPRET_CAST) {
             if (operandType != castType || castType != expectedType) {
                 dotNetUnsupported(
                     "reinterpret cast changes physical carrier from ${operandType.nameInSignature} " +
-                            "to ${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                            "to ${castType.nameInSignature} where ${expectedType.nameInSignature} is expected " +
+                            "(${expression.argument.type.render()} as ${expression.typeOperand.render()})"
                 )
             }
             // Shared value-class declaration lowering uses REINTERPRET_CAST only to change the
@@ -1022,6 +1165,13 @@ internal class DotNetIlExpressionCodegen(
                 emitExpression(expression.argument, DotNetIlValueType.Object)
                 if (methodContext.isTerminated) return
                 methodContext.emit("unbox.any ${castType.nameInSignature}", pops = 1, pushes = 1)
+                if (!expression.typeOperand.isNullable()) {
+                    // `unbox.any !T` correctly recovers both value and reference substitutions,
+                    // but a reference substitution still accepts null. Kotlin's non-null T
+                    // contract is additional evidence that CLR GenericParam metadata cannot
+                    // express, so probe the recovered value without changing its carrier.
+                    emitTypeParameterNotNullOrThrowNpe(castType)
+                }
                 emitCastResultCoercion(castType, expectedType, "generic cast")
                 return
             }
@@ -1050,6 +1200,26 @@ internal class DotNetIlExpressionCodegen(
                     methodContext.emit("isinst ${erasedBoundType.nameInSignature}", pops = 1, pushes = 1)
                 }
                 return
+            }
+            if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                val runtimeClassifier =
+                    typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)
+                if (runtimeClassifier != null) {
+                    if (!runtimeClassifier.isDotNetAssignableTo(expectedType)) {
+                        dotNetUnsupported(
+                            "safe generic-owner cast produces ${runtimeClassifier.nameInSignature} " +
+                                    "where ${expectedType.nameInSignature} is expected"
+                        )
+                    }
+                    emitExpression(expression.argument, DotNetIlValueType.Object)
+                    if (methodContext.isTerminated) return
+                    methodContext.emit(
+                        "isinst ${runtimeClassifier.nameInSignature}",
+                        pops = 1,
+                        pushes = 1,
+                    )
+                    return
+                }
             }
             val bigFunctionArity = expression.typeOperand.dotNetBigCallableArityOrNull()
             if (bigFunctionArity != null) {
@@ -1205,6 +1375,11 @@ internal class DotNetIlExpressionCodegen(
                 is DotNetIlValueType.PrimitiveArray,
                 is DotNetIlValueType.GenericArray,
                     -> true
+                // A throwing parameterized `as` may use Kotlin's implementation-defined
+                // failure point. For a rehearsal owner, CLR castclass against the constructed
+                // C<T> is therefore the truthful early check. Safe casts and `is` deliberately
+                // stay on the declaration-erased semantic capability instead.
+                is DotNetIlValueType.GenericInstance -> expression.operator == IrTypeOperator.CAST
                 else -> false
             }
             if (!isErasedGenericInterfaceCast && !isPhysicallyExactReferenceCast) {
@@ -1234,7 +1409,12 @@ internal class DotNetIlExpressionCodegen(
                     "runtime type test against ${castType.nameInSignature} is not supported"
                 )
             }
-            emitRuntimeTypeTest(expression, castType)
+            // A rehearsal C<T> is a truthful exact value carrier, but Kotlin `is C<...>` keeps
+            // classifier-erased generic semantics. Test the non-generic semantic capability
+            // implemented by the same object rather than CLR's constructed C<T> identity.
+            val runtimeClassifierType =
+                typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand) ?: castType
+            emitRuntimeTypeTest(expression, runtimeClassifierType)
             return
         }
         if (expression.operator != IrTypeOperator.IMPLICIT_CAST && expression.operator != IrTypeOperator.IMPLICIT_NOTNULL) {
@@ -1909,7 +2089,9 @@ internal class DotNetIlExpressionCodegen(
         // abstract member is inherited from several unrelated super-interfaces at once, any of
         // them is a correct operand: the implementing class's single member fills every
         // same-signature interface slot (probe-verified, ifaceprobe_s9).
-        val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
+        val genericOwnerCallTarget = typeMapper.genericOwnerCapabilityCallTarget(call)
+        val callee = genericOwnerCallTarget
+            ?: call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
             ?: dotNetUnsupported(
@@ -1940,7 +2122,8 @@ internal class DotNetIlExpressionCodegen(
         val receiverType = if (info.isInstance) {
             val receiver = call.arguments.firstOrNull()
                 ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
-            typeMapper.toDotNetIlValueType(receiver.type)
+            if (genericOwnerCallTarget != null) mappedNaturalType(receiver)
+            else typeMapper.toDotNetIlValueType(receiver.type)
                 ?: dotNetUnsupported(
                     "call to '$calleeName' through a receiver of unsupported type ${receiver.type.render()}"
                 )
@@ -1956,21 +2139,22 @@ internal class DotNetIlExpressionCodegen(
         if (info.isInstance && info.owner.typeParameterCount > 0) {
             val ownerView = receiverType!!.dotNetViewAsGenericOwner(info.owner)
                 ?: dotNetUnsupported(
-                    "call to '$calleeName' through a receiver that is not an instantiation of its declaring class"
+                    "call to '$calleeName' through ${receiverType.nameInSignature} is not an " +
+                            "instantiation of declaring class ${info.owner.ilTypeRef}`${info.owner.typeParameterCount}"
                 )
             ownerToken = ownerView.nameInSignature
             classInstantiation = ownerView.arguments
         } else if (
             !info.isInstance &&
             info.owner.typeParameterCount > 0 &&
-            callee.isOriginallyLocalDeclaration &&
             callee.parent is IrClass
         ) {
-            // A lifted local function is static even when its metadata owner is a generic class.
-            // CLR member references must still instantiate that owner (`Owner<!0>::local`), or
-            // the runtime rejects the call as an open containing type. Prefer an explicit
-            // captured-owner argument; a direct call from another method of the same owner uses
-            // the owner's open `!n` instantiation (localfunprobe_s2).
+            // A lifted local function and a JVM-shaped `$default` helper are static even when
+            // their metadata owner is a generic class. CLR member references must still
+            // instantiate that owner (`Owner<!0>::helper`), or the runtime rejects the call as
+            // an open containing type. Prefer an explicit owner-shaped argument (the moved
+            // receiver of a default helper is authoritative); a direct call from another method
+            // of the same owner uses the owner's open `!n` instantiation (localfunprobe_s2).
             val capturedOwnerView = call.arguments.asSequence()
                 .filterNotNull()
                 .mapNotNull { argument -> typeMapper.toDotNetIlValueType(argument.type) }
@@ -1986,7 +2170,7 @@ internal class DotNetIlExpressionCodegen(
             } else {
                 null
             } ?: dotNetUnsupported(
-                "call to lifted local function '$calleeName' cannot determine the generic owner instantiation"
+                "call to static function '$calleeName' cannot determine the generic owner instantiation"
             )
             ownerToken = ownerView.nameInSignature
             classInstantiation = ownerView.arguments
@@ -2100,8 +2284,18 @@ internal class DotNetIlExpressionCodegen(
             argument ?: dotNetUnsupported("call to $calleeDescription relies on default argument values")
         }
         if (actualArguments.none { it.containsTryExpression() }) {
-            for ([argument, parameterType] in actualArguments.zip(parameterTypes)) {
-                emitExpression(argument, parameterType)
+            for (indexedArgument in actualArguments.zip(parameterTypes).withIndex()) {
+                val index = indexedArgument.index
+                val argument = indexedArgument.value.first
+                val parameterType = indexedArgument.value.second
+                try {
+                    emitExpression(argument, parameterType)
+                } catch (failure: DotNetIlUnsupportedException) {
+                    dotNetUnsupported(
+                        "argument $index of $calleeDescription (${argument.type.render()} -> " +
+                                "${parameterType.nameInSignature}) is not supported: ${failure.reason}"
+                    )
+                }
             }
             return
         }
@@ -2324,6 +2518,39 @@ internal class DotNetIlExpressionCodegen(
             emitExpression(literal, expectedType)
             return
         }
+        val semanticReceiver = expression.receiver?.let(::genericOwnerCapabilityNaturalTypeOrNull)
+        val semanticGetter = field.correspondingPropertySymbol?.owner?.getter
+            ?.let(genericOwnerCapabilitySlots::get)
+        if (semanticReceiver is DotNetIlValueType.UserClass && semanticGetter != null) {
+            val getterInfo = availableFunctions[semanticGetter]
+                ?: dotNetUnsupported(
+                    "generic-owner semantic field read '${field.name.asString()}' lost its capability getter"
+                )
+            val receiver = checkNotNull(expression.receiver)
+            emitExpression(receiver, semanticReceiver)
+            methodContext.emit(
+                getterInfo.renderCallInstruction(
+                    getterInfo.physicalMethodName ?: semanticGetter.dotNetIlMethodName(),
+                    virtual = true,
+                ),
+                pops = getterInfo.signature.parameterTypes.size,
+                pushes = 1,
+            )
+            val producedType = (getterInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+                ?: dotNetUnsupported(
+                    "generic-owner semantic getter for '${field.name.asString()}' has no value result"
+                )
+            if (!producedType.isDotNetAssignableTo(expectedType)) {
+                if (producedType != DotNetIlValueType.Object) {
+                    dotNetUnsupported(
+                        "generic-owner semantic getter for '${field.name.asString()}' produces " +
+                                "${producedType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitErasedCarrierAs(expectedType, "semantic field '${field.name.asString()}'")
+            }
+            return
+        }
         val [classInfo, declaredFieldType, isStatic] = resolveFieldAccess(field)
         if (classInfo.typeParameterCount > 0) {
             // A field on a genuinely generic CLR owner keeps its declared open field type while
@@ -2332,10 +2559,21 @@ internal class DotNetIlExpressionCodegen(
             val [ownerView, receiver, receiverType] = resolveGenericFieldOwner(expression.receiver, field, isStatic)
             val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
             if (!fieldType.isDotNetAssignableTo(expectedType)) {
-                dotNetUnsupported(
-                    "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
-                            "where ${expectedType.nameInSignature} is expected"
+                if (declaredFieldType != DotNetIlValueType.Object) {
+                    dotNetUnsupported(
+                        "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(receiver, receiverType)
+                emitVolatilePrefix(field, declaredFieldType)
+                methodContext.emit(
+                    "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
+                    pops = 1,
+                    pushes = 1,
                 )
+                emitErasedCarrierAs(expectedType, "field '${field.name.asString()}'")
+                return
             }
             emitExpression(receiver, receiverType)
             emitVolatilePrefix(field, fieldType)
@@ -2510,7 +2748,7 @@ internal class DotNetIlExpressionCodegen(
             }
             else -> dotNetUnsupported("access to non-member field '$fieldName' is not supported")
         }
-        val fieldType = typeMapper.toDotNetIlValueType(field.type)
+        val fieldType = typeMapper.toDotNetIlFieldType(field)
             ?: dotNetUnsupported("field '$fieldName' has unsupported type ${field.type.render()}")
         return Triple(classInfo, fieldType, isStatic)
     }
@@ -2530,10 +2768,19 @@ internal class DotNetIlExpressionCodegen(
         if (
             producedType != null &&
             !producedType.isDotNetAssignableTo(expectedType) &&
-            (call.symbol.owner.isDotNetErasedObjectResult() ||
+            emitGenericOwnerValueClassResultUnboxOrNull(call, producedType, expectedType)
+        ) {
+            return
+        }
+        if (
+            producedType != null &&
+            !producedType.isDotNetAssignableTo(expectedType) &&
+            (typeMapper.genericOwnerCapabilityCallTarget(call) != null ||
+                    call.symbol.owner.isDotNetErasedObjectResult() ||
                     call.symbol.owner.isErasedGenericInterfaceMember() ||
                     call.symbol.owner.isErasedGenericClassMember() ||
-                    call.symbol.owner.hasErasedNullableTypeParameterResult())
+                    call.symbol.owner.hasErasedNullableTypeParameterResult() ||
+                    call.symbol.owner.returnType.isDotNetInvariantOpenNullableGenericArray())
         ) {
             // The stable physical carrier of an erased Kotlin type parameter is usually
             // object, but an upper bound such as `T : Marked` deliberately uses Marked.
@@ -2563,6 +2810,70 @@ internal class DotNetIlExpressionCodegen(
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
+    }
+
+    /**
+     * Recovers the ordinary carrier of a value class returned through a reified owner parameter.
+     * `BoxT<Str?>.boxed` physically returns the nominal `Str` box (the truthful CLR generic
+     * argument), while Kotlin immediately observes the nullable String carrier. Keep null
+     * unchanged and invoke the compiler-owned unbox ABI only for a non-null nominal value.
+     */
+    private fun emitGenericOwnerValueClassResultUnboxOrNull(
+        call: IrCall,
+        producedType: DotNetIlValueType,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val valueClass = call.type.dotNetValueClassOrNull() ?: return false
+        val boxedType = typeMapper.toDotNetIlBoxedValueClassType(call.type) ?: return false
+        if (producedType != boxedType || typeMapper.toDotNetIlValueType(call.type) != expectedType) return false
+        val helper = valueClass.declarations.filterIsInstance<IrSimpleFunction>()
+            .singleOrNull { function -> function.origin == DOTNET_VALUE_CLASS_UNBOX_HELPER }
+            ?: return false
+        val helperInfo = availableFunctions[helper] ?: typeMapper.referencedFunctionInfoOrNull(helper)
+            ?: return false
+        if (helperInfo.signature.parameterTypes.singleOrNull() != producedType ||
+            helperInfo.signature.returnType != DotNetIlReturnType.Value(expectedType)
+        ) {
+            return false
+        }
+        val simpleType = call.type as? IrSimpleType ?: return false
+        val methodInstantiation = if (helper.typeParameters.isEmpty()) {
+            emptyList()
+        } else {
+            if (simpleType.arguments.size != helper.typeParameters.size) return false
+            simpleType.arguments.map { argument ->
+                val projection = argument as? IrTypeProjection ?: return false
+                if (projection.variance != org.jetbrains.kotlin.types.Variance.INVARIANT) return false
+                typeMapper.toDotNetIlGenericArgumentType(projection.type) ?: return false
+            }
+        }
+        helperInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
+        val emitUnboxCall = {
+            methodContext.emit(
+                helperInfo.renderCallInstruction(
+                    helperInfo.physicalMethodName ?: helper.dotNetIlMethodName(),
+                    methodInstantiation = methodInstantiation,
+                ),
+                pops = 1,
+                pushes = 1,
+            )
+        }
+        if (!simpleType.isMarkedNullable()) {
+            emitUnboxCall()
+            return true
+        }
+        if (!expectedType.isDotNetReferenceShaped()) return false
+        val nonNullLabel = methodContext.nextLabel("genericOwnerValueClassNonNull")
+        val doneLabel = methodContext.nextLabel("genericOwnerValueClassDone")
+        methodContext.emit("dup", pops = 1, pushes = 2)
+        methodContext.emitBranch("brtrue", nonNullLabel, pops = 1)
+        methodContext.emit("pop", pops = 1)
+        methodContext.emit("ldnull", pushes = 1)
+        methodContext.emitGoto(doneLabel)
+        methodContext.emitLabel(nonNullLabel)
+        emitUnboxCall()
+        methodContext.emitLabel(doneLabel)
+        return true
     }
 
     private fun IrSimpleFunction.isErasedGenericInterfaceMember(): Boolean =

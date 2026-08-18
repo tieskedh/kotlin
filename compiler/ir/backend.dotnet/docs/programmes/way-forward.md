@@ -1131,6 +1131,19 @@ profiles, and prove the exact inverse rollback. Do not select another
 erased-owner leaf family or an easy Sequence/Map owner switch before this
 rehearsal reaches its next go/no-go result.
 
+The first incremental checkpoint of that coherent rehearsal is now Kotlin-
+emitted rather than C#-physicalized. Behind one test-only epoch flag, admitted
+ordinary owners become real `C<T>` TypeDefs, producer-proven ordinary state is
+stored as `!T`, object-domain semantic state remains on the same owner, and
+typed/semantic/capability member families, inner-owner parameters, generic
+value-class carriers, reflection, and ABI-36 separate-library bindings compose
+on bounded hostile products. Production emission remains erased. The next
+slice is not another owner selection: it must close the complete source-built
+Runtime/Stdlib graph, whose remaining failures are later canonical/capability
+joins, covariant-return adapters, and intrinsic field-shape requirements. Only
+then do the representative products and exact inverse rollback advance the
+atomic go/no-go checkpoint.
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

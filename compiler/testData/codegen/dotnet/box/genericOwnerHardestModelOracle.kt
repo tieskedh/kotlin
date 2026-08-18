@@ -264,6 +264,7 @@ fun box(): String {
     if (runCatching { broadPropertyOwner.exposed }.exceptionOrNull() !is ClassCastException) {
         return fail("widened property delayed typed failure")
     }
+    broadPropertyView.exposed = 11
 
     val abstractPropertyOwner = HostileAbstractPropertyStorage(17)
     val abstractPropertyView: HostileAbstractProperty<Any?> = abstractPropertyOwner
@@ -319,7 +320,8 @@ fun box(): String {
         val impossible = exactUnsafeStore.read() + 1
         return fail("exact use accepted widened incompatible state: $impossible")
     } catch (_: ClassCastException) {
-        // Kotlin/JVM-style erasure accepts the legal widened write and fails at this exact use.
+        // @UnsafeVariance is not a backend semantic waiver. The widened body and object state
+        // remain authoritative; only the later exact use requires the physical T conversion.
     }
     widenedUnsafeStore.writeUnsafe(2)
     if (exactUnsafeStore.read() != 2) {
