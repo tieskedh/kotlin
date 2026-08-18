@@ -6,16 +6,15 @@
 package kotlin.collections
 
 /**
- * A set of `UByte` values, backed by a 256-bit mask stored in four [Long]s.
+ * A set of byte-domain indices, backed by a 256-bit mask stored in four [Long]s.
  *
- * Used to detect duplicates in byte-domain arrays without allocating a hash-based set.
+ * Used to detect duplicates in signed and unsigned byte arrays without allocating a hash-based set.
  */
-internal class UByteValueSet {
+internal class ByteDomainValueSet {
     private val words = LongArray(4)
 
-    /** Adds [value] to this set; returns `false` if it was already present. */
-    fun add(value: UByte): Boolean {
-        val index = value.toInt()
+    /** Adds [index], which must be in `0..255`; returns `false` if it was already present. */
+    fun add(index: Int): Boolean {
         val mask = 1L shl (index and 0x3F)
         val wordIndex = index shr 6
         if (words[wordIndex] and mask != 0L) return false

@@ -249,7 +249,7 @@ C# adapter/export; the canonical owner can change only through the atomic
 generic-interface cutover with primitive covariance, iterator/state, casts,
 reflection, overrides, and separate compilation proved together.
 
-### Completed allEqual aggregate closure
+### Completed equality aggregate closures
 
 The completed generated equality tranche publishes exactly 20 new Common
 declarations: `allEqual` and `allEqualBy` for Iterable, generic object arrays,
@@ -268,11 +268,23 @@ fallbacks and inlines all ten selector bodies; Roslyn calls the signed
 `IntArray` overload directly. The portable netstandard product executes on
 both Framework CLR 4 and .NET 10.
 
-This does not select `allDistinct`. Upstream's signed ByteArray body uses the
-internal `UByteValueSet` fast path and `Byte.toUByte()`, so that sibling remains
-wholly blocked pending a bounded exact unsigned-helper substrate. Omitting
-Byte, copying a target HashSet implementation, or inferring authority for the
-public unsigned array/range surface would break the complete-family rule.
+The subsequent `allDistinct`/`allDistinctBy` tranche publishes the same 20-
+declaration supported-classifier matrix. Common's allocation-free signed-
+ByteArray fast path is retained by making its shared 256-bit set consume a
+normalized Int index: signed Byte uses `toInt() and 0xFF`, while the upstream
+UByte caller uses `toInt()`. This removes an accidental public unsigned-scalar
+dependency from the internal helper without changing either algorithm. The
+.NET stdlib emits the helper as one non-public type and emits no `Kotlin.UByte`
+TypeDef; public unsigned arrays and ranges remain unselected.
+
+The hostile evidence additionally pins singleton selector elision, first-
+duplicate short circuit, complete and oversized Byte-domain behavior,
+nullable selector keys, callback exception stopping, and Float/Double NaN and
+signed-zero distinctness for primitive and boxed values. Raw metadata again
+contains ten ordinary and ten selector MethodDefs. Installed Kotlin calls all
+ten ordinary fallbacks and inlines every selector body, while Roslyn calls the
+signed IntArray overload directly on Framework CLR 4 and .NET 10. No target
+HashSet algorithm or partial classifier family was introduced.
 
 ### Completed Kotlin-owned Grouping foundation
 
@@ -994,10 +1006,10 @@ The audit deliberately excludes the rest of the nearby generator frontier:
   landed in the completed foundation above;
   the Comparator foundation itself is recorded in
   [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md);
-- the complete supported-classifier `allEqual`/`allEqualBy` family has since
-  landed as the independent closure above, while `allDistinct` remains wholly
-  blocked because its signed ByteArray fast path reaches `UByteValueSet` and
-  `Byte.toUByte()`;
+- the complete supported-classifier `allEqual`/`allEqualBy` and
+  `allDistinct`/`allDistinctBy` families have since landed as the independent
+  closures above, with the signed Byte fast path retaining the shared
+  carrier-neutral byte-domain bit set;
 - `onEach` reaches `apply` and the public contracts DSL; and
 - random, unsigned, array, Set, and Map variants retain their separate dependency and
   representation closures; Sequence variants subsequently landed in the completed foundation above.
@@ -1274,8 +1286,11 @@ second loop or collection-specific type-token path was added.
 12. **Completed:** publish `allEqual` and `allEqualBy` for every supported
     Iterable/object-array/signed-primitive-array classifier, with the exact
     selector and floating equality semantics and direct Kotlin/C# evidence.
-13. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-14. Remove the bootstrap allowlist when the complete generated product is supportable.
+13. **Completed:** publish `allDistinct` and `allDistinctBy` over the same
+    supported classifiers, after removing the internal byte-domain helper's
+    accidental public-UByte dependency without changing its algorithm.
+14. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+15. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

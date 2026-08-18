@@ -14322,9 +14322,9 @@ public fun ByteArray.allDistinct(): Boolean {
     if (size < 2) return true
     // more than 256 values force a duplicate
     if (size > (1 shl Byte.SIZE_BITS)) return false
-    val seen = UByteValueSet()
+    val seen = ByteDomainValueSet()
     for (element in this) {
-        if (!seen.add(element.toUByte())) return false
+        if (!seen.add(element.toInt() and 0xFF)) return false
     }
     return true
 }
