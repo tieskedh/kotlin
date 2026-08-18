@@ -408,6 +408,39 @@ all 40 `@InlineOnly` selector-result bodies. Roslyn implements the erased
 This does not claim implicit C# delegate/`IComparer<T>` conversion and does not
 change Kotlin Comparator or generic-owner identity.
 
+### Completed CharSequence min/max aggregate closure
+
+CharSequence now publishes its complete 28-declaration generated min/max
+family on the source-aligned `Kotlin.Text.StringsKt` façade. The closure
+contains natural min/max, selector element min/max, generic/Float/Double
+selector-result min/max, comparator element min/max, and comparator
+selector-result min/max, each with throwing and nullable forms. It remains
+separate from Map because the two families have different source files,
+façades, bodies, and fallback visibility.
+
+The first generated compile identified one exact missing prerequisite:
+Common's `CharSequence.lastIndex` extension property. The owning generator now
+projects that declaration into the same StringsKt product. CLR represents its
+extension receiver as one static getter MethodDef; KLIB retains the Kotlin
+property identity, and no false CLR PropertyDef is invented.
+
+The hostile oracle exercises both arms of the classified carrier: an unchanged
+`System.String` reference and a Kotlin object implementing the erased
+`Kotlin.CharSequence` capability. Empty/singleton evaluation, first
+selector-result identity, comparator/selector failure order, nullable results,
+Float/Double NaN and signed-zero behavior, and exact indexed custom dispatch
+execute on Framework CLR 4 and .NET 10.
+
+The generic, Float, and Double selector-result overloads collide physically by
+return type. The existing bounded mapping now keys admission by exact façade,
+function package, and receiver, admitting StringsKt/`kotlin.text`/
+`CharSequence` without exposing a general `DotNetName`. Raw metadata contains
+28 aggregate MethodDefs: twelve public fallback methods and sixteen
+assembly-visible `@InlineOnly` methods. Installed Kotlin calls eight ordinary
+fallbacks and inlines the other twenty bodies. Roslyn directly calls natural,
+selector, and comparator fallbacks using both a string and an explicitly
+implemented foreign CharSequence; inline-only methods remain inaccessible.
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
@@ -1426,8 +1459,11 @@ second loop or collection-specific type-token path was added.
 17. **Completed:** publish the remaining 72 object-/primitive-array comparator
     declarations, completing all eight `minWith`/`maxWith` and
     `minOfWith`/`maxOfWith` forms over the ten supported receivers.
-18. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-19. Remove the bootstrap allowlist when the complete generated product is supportable.
+18. **Completed:** publish all 28 CharSequence min/max aggregate forms plus the
+    exact Common `CharSequence.lastIndex` prerequisite on StringsKt, preserving
+    both String and custom-capability classifier arms.
+19. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+20. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

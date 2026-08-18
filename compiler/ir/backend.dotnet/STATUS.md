@@ -27,7 +27,29 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: the comparator aggregate
+- Latest completed Common collection feature: all 28 generated CharSequence
+  min/max aggregates are now published on `Kotlin.Text.StringsKt`, together
+  with the exact Common `CharSequence.lastIndex` prerequisite discovered by
+  the first compile. Natural, selector, generic/Float/Double selector-result,
+  element-comparator, and selector-result-comparator throwing/nullable forms
+  all retain their Common bodies. Empty/singleton evaluation, first-result
+  identity, callback stopping, nullable selector results, Float/Double NaN and
+  signed-zero ordering, real `System.String`, and a custom Kotlin
+  `CharSequence` capability are pinned on Framework CLR 4 and .NET 10. The
+  bounded selector-result physical-name router is now keyed by exact façade,
+  package, and receiver; no public `DotNetName` is introduced. Raw metadata
+  contains the 28 exact MethodDefs plus one static extension getter, with 12
+  public and 16 assembly-visible aggregate methods. Installed Kotlin calls the
+  eight ordinary fallbacks and inlines the other twenty. Roslyn calls natural,
+  selector, and comparator fallbacks on both classifier arms, while
+  `@InlineOnly` fallbacks remain inaccessible. The generated Strings source is
+  byte-stable at
+  `159B686D6BB9654A323C6FC200A6C26AB9A62DB7111B3756E51B1BE36F0706A0`.
+  The final aggregate plus explicit model-suite freshness rerun wrote all
+  three roots: 190 XML suites and 2,274 tests with zero failures, errors, or
+  skips. See
+  [`docs/archive/common-char-sequence-min-max-family-2026-08-18.md`](docs/archive/common-char-sequence-min-max-family-2026-08-18.md).
+- Preceding completed Common collection feature: the comparator aggregate
   `minWith`/`maxWith` and `minOfWith`/`maxOfWith` families now publish 72
   additional object-/primitive-array declarations, completing all eight
   throwing/nullable functions over Iterable, generic object arrays, and all
@@ -1693,7 +1715,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The comparator `minWith`/`maxWith` and `minOfWith`/`maxOfWith` head passed every constituent of
+The CharSequence min/max aggregate head passed every constituent of
 the strict target gate. The normal aggregate command remains:
 
 ```text
@@ -1704,10 +1726,10 @@ The latest aggregate plus explicit model-suite freshness rerun completed
 successfully on 2026-08-18. Backend, FIR2IR, stdlib product,
 Framework/CoreCLR, Roslyn, and integration inputs were executed for the final
 semantic head. Direct audit of all three freshly written result roots covers
-190 XML files and 2,270 tests:
+190 XML files and 2,274 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,139 FIR, IL-text, and box tests
+- 2,143 FIR, IL-text, and box tests
 - 125 generated CLI and library-integration tests
 - zero failures, errors, or skips
 
@@ -3389,10 +3411,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    40-declaration selector `minBy`/`maxBy` family. The following recomputation
    selected and completed the full 120-declaration selector-result
    `minOf`/`maxOf` family, then the remaining 72 array declarations completing
-   the 80-method comparator min/max closure. Recompute again before the next
-   tranche and choose one complete dependency-homogeneous classifier family.
-   Keep Random and entropy, unsigned value-class/range
-   representation, CharSequence/array variants, and still dependency-blocked
+   the 80-method comparator min/max closure. The next classifier recomputation
+   completed all 28 CharSequence min/max aggregates and their exact Common
+   `lastIndex` prerequisite. Recompute again before the next tranche and choose
+   one complete dependency-homogeneous classifier family. Keep the remaining
+   Map adapters, Random and entropy, unsigned value-class/range
+   representation, other CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not
    infer that signed sorting authorizes unsigned overloads, binary search,

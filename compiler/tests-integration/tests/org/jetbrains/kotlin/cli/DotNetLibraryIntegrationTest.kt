@@ -29061,6 +29061,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         return Kotlin.Collections.CollectionsKt.minOfWith<int, int>(
                             values, comparator, selector);
                     }
+
+                    public static int MinCharSequenceOf(
+                        object values,
+                        Kotlin.Function1 selector)
+                    {
+                        return Kotlin.Text.StringsKt.minOf<int>(values, selector);
+                    }
                 }
                 """.trimIndent()
             )
@@ -29094,6 +29101,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("minOfWith" in forbiddenInlineOnlyResult.output) {
             "Expected C# accessibility diagnostic for @InlineOnly minOfWith:\n" +
+                    forbiddenInlineOnlyResult.output
+        }
+        assertTrue(
+            "'Kotlin.Text.StringsKt' does not contain a definition for 'minOf'" in
+                    forbiddenInlineOnlyResult.output
+        ) {
+            "Expected C# accessibility diagnostic for @InlineOnly CharSequence minOf:\n" +
                     forbiddenInlineOnlyResult.output
         }
     }
@@ -34864,6 +34878,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                public sealed class ForeignCharComparator : Kotlin.Comparator
+                {
+                    public int $comparatorCompareMethod(object left, object right)
+                    {
+                        return ((char)left).CompareTo((char)right);
+                    }
+                }
+
+                public sealed class ForeignCharNegatingSelector : Kotlin.Function1
+                {
+                    public object Invoke(object value)
+                    {
+                        return -((char)value);
+                    }
+                }
+
+                public sealed class ForeignCharSequence : Kotlin.CharSequence
+                {
+                    private readonly string value;
+
+                    public ForeignCharSequence(string value) { this.value = value; }
+
+                    public int length { get { return value.Length; } }
+
+                    public char get(int index) { return value[index]; }
+
+                    public object subSequence(int startIndex, int endIndex)
+                    {
+                        return value.Substring(startIndex, endIndex - startIndex);
+                    }
+                }
+
                 public static class AppendableProbe
                 {
                     private static T AppendOne<T>(T destination) where T : Kotlin.Text.Appendable
@@ -34960,6 +35006,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (Kotlin.Collections.CollectionsKt.maxWithOrNull(
                                 new Kotlin.IntArray(new int[] { 3, -2, 1 }), comparator) != 3)
                             return 27;
+                        var charComparator = new ForeignCharComparator();
+                        if (Kotlin.Text.StringsKt.min("cab") != 'a')
+                            return 28;
+                        if (Kotlin.Text.StringsKt.maxWith(
+                                new ForeignCharSequence("cab"), charComparator) != 'c')
+                            return 29;
+                        if (Kotlin.Text.StringsKt.minBy<int>(
+                                "cab", new ForeignCharNegatingSelector()) != 'c')
+                            return 30;
                         return 0;
                     }
 
@@ -35138,6 +35193,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
         val collectionsFacadeType = implementationType("Kotlin.Collections", "CollectionsKt")
+        val stringsFacadeType = implementationType("Kotlin.Text", "StringsKt")
         val sequenceType = implementationType("Kotlin.Sequences", "Sequence")
         val sequenceScopeType = implementationType("Kotlin.Sequences", "SequenceScope")
         val sequencesFacadeType = implementationType("Kotlin.Sequences", "SequencesKt")
@@ -35257,6 +35313,56 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             selectorResultMinMaxMethodCounts,
             selectorResultMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
+        )
+        val charSequenceMinMaxMethodCounts = mapOf(
+            "max" to 1,
+            "maxBy" to 1,
+            "maxByOrNull" to 1,
+            "maxOf" to 1,
+            "maxOfDouble" to 1,
+            "maxOfFloat" to 1,
+            "maxOfOrNull" to 1,
+            "maxOfOrNullDouble" to 1,
+            "maxOfOrNullFloat" to 1,
+            "maxOfWith" to 1,
+            "maxOfWithOrNull" to 1,
+            "maxOrNull" to 1,
+            "maxWith" to 1,
+            "maxWithOrNull" to 1,
+            "min" to 1,
+            "minBy" to 1,
+            "minByOrNull" to 1,
+            "minOf" to 1,
+            "minOfDouble" to 1,
+            "minOfFloat" to 1,
+            "minOfOrNull" to 1,
+            "minOfOrNullDouble" to 1,
+            "minOfOrNullFloat" to 1,
+            "minOfWith" to 1,
+            "minOfWithOrNull" to 1,
+            "minOrNull" to 1,
+            "minWith" to 1,
+            "minWithOrNull" to 1,
+        )
+        val charSequenceMinMaxMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == stringsFacadeType.handle && method.name in charSequenceMinMaxMethodCounts
+        }
+        assertEquals(28, charSequenceMinMaxMethods.size)
+        assertEquals(
+            charSequenceMinMaxMethodCounts,
+            charSequenceMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
+        )
+        assertEquals(12, charSequenceMinMaxMethods.count { method ->
+            method.visibility == DotNetClrMethodVisibility.PUBLIC
+        })
+        assertEquals(16, charSequenceMinMaxMethods.count { method ->
+            method.visibility == DotNetClrMethodVisibility.ASSEMBLY
+        })
+        assertEquals(
+            1,
+            implementationMetadata.methodDefinitions.count { method ->
+                method.declaringType == stringsFacadeType.handle && method.name == "get_lastIndex"
+            },
         )
         val comparatorMinMaxNames = setOf(
             "maxOfWith",
@@ -38440,6 +38546,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         installedCharArrayComparatorMinMax() &&
                         installedBooleanArrayComparatorMinMax()
 
+                public fun installedCharSequenceMinMaxMatrix(): Boolean {
+                    val values: CharSequence = "ba"
+                    return values.min() == 'a' &&
+                        values.minOrNull() == 'a' &&
+                        values.max() == 'b' &&
+                        values.maxOrNull() == 'b' &&
+                        values.minBy { -it.code } == 'b' &&
+                        values.minByOrNull { it.code } == 'a' &&
+                        values.maxBy { -it.code } == 'a' &&
+                        values.maxByOrNull { it.code } == 'b' &&
+                        values.minOf { it.code } == 'a'.code &&
+                        values.minOf { it.code.toFloat() } == 'a'.code.toFloat() &&
+                        values.minOf { it.code.toDouble() } == 'a'.code.toDouble() &&
+                        values.minOfOrNull { it.code } == 'a'.code &&
+                        values.minOfOrNull { it.code.toFloat() } == 'a'.code.toFloat() &&
+                        values.minOfOrNull { it.code.toDouble() } == 'a'.code.toDouble() &&
+                        values.maxOf { it.code } == 'b'.code &&
+                        values.maxOf { it.code.toFloat() } == 'b'.code.toFloat() &&
+                        values.maxOf { it.code.toDouble() } == 'b'.code.toDouble() &&
+                        values.maxOfOrNull { it.code } == 'b'.code &&
+                        values.maxOfOrNull { it.code.toFloat() } == 'b'.code.toFloat() &&
+                        values.maxOfOrNull { it.code.toDouble() } == 'b'.code.toDouble() &&
+                        values.minWith(installedCharAggregateComparator) == 'a' &&
+                        values.minWithOrNull(installedCharAggregateComparator) == 'a' &&
+                        values.maxWith(installedCharAggregateComparator) == 'b' &&
+                        values.maxWithOrNull(installedCharAggregateComparator) == 'b' &&
+                        values.minOfWith(installedIntAggregateComparator) { it.code } == 'a'.code &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.code } == 'a'.code &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.code } == 'b'.code &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.code } == 'b'.code
+                }
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38677,7 +38815,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedNaturalMinMaxMatrix() &&
                             installedSelectorMinMaxMatrix() &&
                             installedSelectorResultMinMaxMatrix() &&
-                            installedComparatorMinMaxMatrix()
+                            installedComparatorMinMaxMatrix() &&
+                            installedCharSequenceMinMaxMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -39119,6 +39258,50 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "The installed consumer must inline every Common comparator-result $methodName body:\n$il"
             }
         }
+        val stringsFacadeCall = "[Kotlin.Stdlib]'Kotlin.Text.StringsKt'::"
+        for (methodName in listOf(
+            "min",
+            "minOrNull",
+            "max",
+            "maxOrNull",
+            "minWith",
+            "minWithOrNull",
+            "maxWith",
+            "maxWithOrNull",
+        )) {
+            assertEquals(
+                1,
+                il.split("$stringsFacadeCall'$methodName'").size - 1,
+                "The installed consumer must call the CharSequence fallback named $methodName",
+            )
+        }
+        for (methodName in listOf(
+            "minBy",
+            "minByOrNull",
+            "maxBy",
+            "maxByOrNull",
+            "minOf",
+            "minOfFloat",
+            "minOfDouble",
+            "minOfOrNull",
+            "minOfOrNullFloat",
+            "minOfOrNullDouble",
+            "maxOf",
+            "maxOfFloat",
+            "maxOfDouble",
+            "maxOfOrNull",
+            "maxOfOrNullFloat",
+            "maxOfOrNullDouble",
+            "minOfWith",
+            "minOfWithOrNull",
+            "maxOfWith",
+            "maxOfWithOrNull",
+        )) {
+            assertTrue("$stringsFacadeCall'$methodName'" !in il) {
+                "The installed consumer must inline the CharSequence $methodName body:\n$il"
+            }
+        }
+        assertTrue("$stringsFacadeCall'get_lastIndex'(object)" in il)
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
         assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'Add'(object)" in il)
