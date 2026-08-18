@@ -34818,6 +34818,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                public sealed class ForeignIntNegatingSelector : Kotlin.Function1
+                {
+                    public object Invoke(object value)
+                    {
+                        return -((int)value);
+                    }
+                }
+
                 public static class AppendableProbe
                 {
                     private static T AppendOne<T>(T destination) where T : Kotlin.Text.Appendable
@@ -34900,6 +34908,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (Kotlin.Collections.CollectionsKt.max(
                                 new Kotlin.IntArray(new int[] { 3, -2, 1 })) != 3)
                             return 23;
+                        var selector = new ForeignIntNegatingSelector();
+                        if (Kotlin.Collections.CollectionsKt.minBy<int>(
+                                new Kotlin.IntArray(new int[] { 3, -2, 1 }), selector) != 3)
+                            return 24;
+                        if (Kotlin.Collections.CollectionsKt.maxBy<int>(
+                                new Kotlin.IntArray(new int[] { 3, -2, 1 }), selector) != -2)
+                            return 25;
                         return 0;
                     }
 
@@ -35168,6 +35183,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(10, allDistinctMethods.count { method -> method.name == "allDistinct" })
         assertEquals(10, allDistinctMethods.count { method -> method.name == "allDistinctBy" })
+        val selectorMinMaxNames = setOf("minBy", "minByOrNull", "maxBy", "maxByOrNull")
+        val selectorMinMaxMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle && method.name in selectorMinMaxNames
+        }
+        assertEquals(40, selectorMinMaxMethods.size)
+        for (name in selectorMinMaxNames) {
+            assertEquals(10, selectorMinMaxMethods.count { method -> method.name == name }, name)
+        }
         val naturalMinMaxMethodCounts = mapOf(
             "max" to 7,
             "maxOrNull" to 9,
@@ -35740,6 +35763,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "flatten" to 1,
             "getOrElse" to 1,
             "max" to 7,
+            "maxBy" to 10,
+            "maxByOrNull" to 10,
             "maxOrNull" to 9,
             "maxOrNullOfDouble" to 2,
             "maxOrNullOfFloat" to 2,
@@ -35755,6 +35780,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "mapNotNullTo" to 1,
             "mapTo" to 1,
             "min" to 7,
+            "minBy" to 10,
+            "minByOrNull" to 10,
             "minOrNull" to 9,
             "minOrNullOfDouble" to 2,
             "minOrNullOfFloat" to 2,
@@ -37948,6 +37975,48 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         charArrayOf('b', 'a').minOrNull() == 'a' &&
                         charArrayOf('b', 'a').maxOrNull() == 'b'
 
+                public fun installedSelectorMinMaxMatrix(): Boolean =
+                    listOf(3, -2, 1).minBy { -it } == 3 &&
+                        listOf(3, -2, 1).maxBy { -it } == -2 &&
+                        listOf(3, -2, 1).minByOrNull { it } == -2 &&
+                        listOf(3, -2, 1).maxByOrNull { it } == 3 &&
+                        arrayOf(3, -2, 1).minBy { -it } == 3 &&
+                        arrayOf(3, -2, 1).maxBy { -it } == -2 &&
+                        arrayOf(3, -2, 1).minByOrNull { it } == -2 &&
+                        arrayOf(3, -2, 1).maxByOrNull { it } == 3 &&
+                        byteArrayOf(3, -2, 1).minBy { -it.toInt() } == 3.toByte() &&
+                        byteArrayOf(3, -2, 1).maxBy { -it.toInt() } == (-2).toByte() &&
+                        byteArrayOf(3, -2, 1).minByOrNull { it.toInt() } == (-2).toByte() &&
+                        byteArrayOf(3, -2, 1).maxByOrNull { it.toInt() } == 3.toByte() &&
+                        shortArrayOf(3, -2, 1).minBy { -it.toInt() } == 3.toShort() &&
+                        shortArrayOf(3, -2, 1).maxBy { -it.toInt() } == (-2).toShort() &&
+                        shortArrayOf(3, -2, 1).minByOrNull { it.toInt() } == (-2).toShort() &&
+                        shortArrayOf(3, -2, 1).maxByOrNull { it.toInt() } == 3.toShort() &&
+                        intArrayOf(3, -2, 1).minBy { -it } == 3 &&
+                        intArrayOf(3, -2, 1).maxBy { -it } == -2 &&
+                        intArrayOf(3, -2, 1).minByOrNull { it } == -2 &&
+                        intArrayOf(3, -2, 1).maxByOrNull { it } == 3 &&
+                        longArrayOf(3L, -2L, 1L).minBy { -it } == 3L &&
+                        longArrayOf(3L, -2L, 1L).maxBy { -it } == -2L &&
+                        longArrayOf(3L, -2L, 1L).minByOrNull { it } == -2L &&
+                        longArrayOf(3L, -2L, 1L).maxByOrNull { it } == 3L &&
+                        floatArrayOf(3.0f, -2.0f, 1.0f).minBy { -it } == 3.0f &&
+                        floatArrayOf(3.0f, -2.0f, 1.0f).maxBy { -it } == -2.0f &&
+                        floatArrayOf(3.0f, -2.0f, 1.0f).minByOrNull { it } == -2.0f &&
+                        floatArrayOf(3.0f, -2.0f, 1.0f).maxByOrNull { it } == 3.0f &&
+                        doubleArrayOf(3.0, -2.0, 1.0).minBy { -it } == 3.0 &&
+                        doubleArrayOf(3.0, -2.0, 1.0).maxBy { -it } == -2.0 &&
+                        doubleArrayOf(3.0, -2.0, 1.0).minByOrNull { it } == -2.0 &&
+                        doubleArrayOf(3.0, -2.0, 1.0).maxByOrNull { it } == 3.0 &&
+                        charArrayOf('c', 'a', 'b').minBy { -it.code } == 'c' &&
+                        charArrayOf('c', 'a', 'b').maxBy { -it.code } == 'a' &&
+                        charArrayOf('c', 'a', 'b').minByOrNull { it.code } == 'a' &&
+                        charArrayOf('c', 'a', 'b').maxByOrNull { it.code } == 'c' &&
+                        booleanArrayOf(true, false).minBy { if (it) 1 else 0 } == false &&
+                        booleanArrayOf(false, true).maxBy { if (it) 1 else 0 } == true &&
+                        booleanArrayOf(true, false).minByOrNull { if (it) 1 else 0 } == false &&
+                        booleanArrayOf(false, true).maxByOrNull { if (it) 1 else 0 } == true
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38182,7 +38251,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedAllEqualByMatrix() &&
                             installedAllDistinctMatrix() &&
                             installedAllDistinctByMatrix() &&
-                            installedNaturalMinMaxMatrix()
+                            installedNaturalMinMaxMatrix() &&
+                            installedSelectorMinMaxMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38588,6 +38658,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 il.split("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'$methodName'").size - 1,
                 "The installed consumer must call every natural min/max fallback named $methodName",
             )
+        }
+        for (methodName in listOf("minBy", "minByOrNull", "maxBy", "maxByOrNull")) {
+            assertTrue("::'$methodName'<" !in il) {
+                "The installed consumer must inline every Common $methodName body:\n$il"
+            }
         }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)

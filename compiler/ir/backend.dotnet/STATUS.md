@@ -27,7 +27,25 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: the natural generated
+- Latest completed Common collection feature: the selector-generated
+  `minBy`/`maxBy` family now publishes all 40 throwing/nullable declarations
+  over Iterable, generic object arrays, and all eight signed primitive-array
+  wrappers, in addition to the previously completed Sequence forms. Boolean
+  is included because ordering belongs to selector result `R`. Common empty/
+  singleton selector elision, first-tie identity, one selector call per visited
+  element otherwise, callback failure timing, and generic Comparable
+  Float/Double NaN/signed-zero total ordering are pinned. The first hostile
+  compile exposed and fixed a general CIL stack bug: an inlined local return
+  lowered to a synthetic loop break now preserves operands pending before loop
+  entry while discarding only loop-local values. Raw metadata contains ten
+  MethodDefs per name; installed Kotlin inlines all 40, while Roslyn directly
+  calls signed `IntArray` fallbacks through an erased `Kotlin.Function1` class.
+  The generated collections source is byte-stable at
+  `421E43BD3F42F377EA5AF2E615D9C135BAB532D26B9403977ECB658089E54A96`.
+  The final aggregate plus explicit model-suite freshness rerun wrote all three
+  roots: 190 XML suites and 2,262 tests with zero failures, errors, or skips. See
+  [`docs/archive/common-selector-min-max-family-2026-08-18.md`](docs/archive/common-selector-min-max-family-2026-08-18.md).
+- Preceding completed Common collection feature: the natural generated
   `min`/`max` family now publishes all 52 declarations over generic, Float,
   and Double Iterable/object-array receivers plus the seven naturally ordered
   signed primitive-array wrappers, with throwing and nullable forms together.
@@ -1633,7 +1651,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The natural generated `min`/`max` head passed every constituent of
+The selector-generated `minBy`/`maxBy` head passed every constituent of
 the strict target gate. The normal aggregate command remains:
 
 ```text
@@ -1644,10 +1662,10 @@ The latest aggregate plus explicit model-suite freshness rerun completed
 successfully on 2026-08-18. Backend, FIR2IR, stdlib product,
 Framework/CoreCLR, Roslyn, and integration inputs were executed for the final
 semantic head. Direct audit of all three freshly written result roots covers
-190 XML files and 2,258 tests:
+190 XML files and 2,262 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,127 FIR, IL-text, and box tests
+- 2,131 FIR, IL-text, and box tests
 - 125 generated CLI and library-integration tests
 - zero failures, errors, or skips
 
@@ -2769,6 +2787,22 @@ there is no general public naming annotation or partial generic-owner change.
 Raw metadata, all 52 installed calls, direct Roslyn signed-array calls, and
 both runtime profiles are pinned.
 
+The complete selector-generated `minBy`/`maxBy` family is now published as a
+40-declaration closure. Iterable, generic object arrays, and all eight signed
+primitive-array wrappers each contribute throwing/nullable minimum and maximum
+forms; Boolean is deliberately present because the selector result provides
+the Comparable domain. Common zero-selector behavior for empty/singleton
+inputs, first-tie identity, exact traversal/callback failure stopping, and
+generic Float/Double total ordering remain exact. All declarations retain
+ordinary public inline fallback MethodDefs: installed Kotlin consumers inline
+all 40, while direct C# implements the existing erased `Kotlin.Function1` and
+calls the signed IntArray fallbacks. The tranche also closes the general
+inline-control-flow defect it exposed: same-region break/continue preserves
+the loop-entry evaluation-stack prefix, so a synthetic inline-return loop used
+as a later arithmetic/call operand cannot discard already evaluated operands.
+No collection-specific rewrite, Runtime surface, naming router, or ABI schema
+was added.
+
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
@@ -3309,10 +3343,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    both the exact seven-declaration Iterable/Sequence-consumer closure and the
    complete supported-classifier `allEqual`/`allEqualBy` and
    `allDistinct`/`allDistinctBy` closures. The next recomputation selected and
-   completed the full 52-declaration natural `min`/`max` family. Recompute
-   again before the next tranche and choose one complete dependency-
-   homogeneous classifier family. Keep selector/comparator `minBy`/`maxBy`,
-   `minOf`/`maxOf`, remaining comparison, Random and entropy, unsigned value-class/range
+   completed the full 52-declaration natural `min`/`max` family and the
+   40-declaration selector `minBy`/`maxBy` family. Recompute again before the
+   next tranche and choose one complete dependency-homogeneous classifier
+   family. Keep `minOf`/`maxOf`, remaining comparator selection, Random and
+   entropy, unsigned value-class/range
    representation, CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not
