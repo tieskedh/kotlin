@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-foreign-override-deployment-2026-08-19.md`](generic-owner-foreign-override-deployment-2026-08-19.md)
+  records the closed self-producing Kotlin base/override plus ordinary C#
+  subclass deployment oracle, allocation-free probe audit, and successful JIT,
+  ReadyToRun, full-trimming, and real NativeAOT execution.
 - [`common-selector-min-max-family-2026-08-18.md`](common-selector-min-max-family-2026-08-18.md)
   records the complete 40-declaration selector min/max supported-classifier
   release, inline loop-entry stack-baseline correction, exact selector and

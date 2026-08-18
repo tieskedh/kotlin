@@ -90,8 +90,12 @@ verification, and work state.
   both facts. The consumer reconstructs only explicitly recorded capability
   slots and makes the Kotlin semantic hook and last-Kotlin probe override their
   producer MethodDefs; a still-later C# override changes only the natural typed
-  target. NativeAOT and the other deployment lanes are the next bounded
-  validation condition.
+  target. A self-producing closed verifier now audits that allocation-free IL,
+  publishes the actual Kotlin base/override plus ordinary C# subclass product,
+  and executes both probe outcomes on JIT, ReadyToRun, full trim, and a real
+  Windows x64 NativeAOT executable. All four modes return `OK`; the NativeAOT
+  link uses the signed Microsoft 14.44 linker. Broad inputs, abstract semantic
+  obligations, interfaces, and method-generic entries remain separate gates.
   This remains a rehearsal slice, not evidence for a per-owner rollout. The
   final normal target aggregate covers 190 XML suites and 2,286
   tests with zero failures, errors, or skips; FIR and integration roots were
