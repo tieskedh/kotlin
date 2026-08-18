@@ -582,7 +582,7 @@ internal object DotNetStdlibLibrary {
         rangePlatformMethodNameOrNull(function)?.let { return it }
         collectionSequenceTransformPlatformMethodNameOrNull(function)?.let { return it }
         collectionComparableElementPlatformMethodNameOrNull(function)?.let { return it }
-        collectionSelectorResultPlatformMethodNameOrNull(function)?.let { return it }
+        aggregateSelectorResultPlatformMethodNameOrNull(function)?.let { return it }
         sequencePlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
@@ -717,10 +717,11 @@ internal object DotNetStdlibLibrary {
     }
 
     /** Pins Function-erased Common minOf/maxOf siblings from their logical selector result. */
-    private fun collectionSelectorResultPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
-        if (implementationFunctionFacadeIlName(function) != COLLECTIONS_FACADE_IL_NAME) return null
+    private fun aggregateSelectorResultPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        val facadeIlName = implementationFunctionFacadeIlName(function) ?: return null
+        val functionFqNamePrefix = minMaxSelectorResultFunctionFqNamePrefixes[facadeIlName] ?: return null
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
-        if (!functionFqName.startsWith("kotlin.collections.")) return null
+        if (!functionFqName.startsWith(functionFqNamePrefix)) return null
         val logicalName = functionFqName.substringAfterLast('.')
         val names = minMaxSelectorResultPlatformNames[logicalName] ?: return null
         val receiverType = function.parameters
@@ -733,7 +734,8 @@ internal object DotNetStdlibLibrary {
                         }
             )
         val receiverFqName = receiverType.classFqName?.asString()
-        if (receiverFqName !in minMaxSelectorCollectionReceiverFqNames) {
+        val admittedReceivers = minMaxSelectorResultReceiverFqNames.getValue(facadeIlName)
+        if (receiverFqName !in admittedReceivers) {
             dotNetUnsupported("Common collection $logicalName has unexpected receiver '${receiverType.render()}'")
         }
         val selectorType = function.parameters
@@ -1119,17 +1121,24 @@ internal object DotNetStdlibLibrary {
             "kotlin.Long" to "sumOfLong",
         ),
     )
-    private val minMaxSelectorCollectionReceiverFqNames = setOf(
-        "kotlin.collections.Iterable",
-        "kotlin.Array",
-        "kotlin.ByteArray",
-        "kotlin.ShortArray",
-        "kotlin.IntArray",
-        "kotlin.LongArray",
-        "kotlin.FloatArray",
-        "kotlin.DoubleArray",
-        "kotlin.CharArray",
-        "kotlin.BooleanArray",
+    private val minMaxSelectorResultFunctionFqNamePrefixes = mapOf(
+        COLLECTIONS_FACADE_IL_NAME to "kotlin.collections.",
+        TEXT_FACADE_IL_NAME to "kotlin.text.",
+    )
+    private val minMaxSelectorResultReceiverFqNames = mapOf(
+        COLLECTIONS_FACADE_IL_NAME to setOf(
+            "kotlin.collections.Iterable",
+            "kotlin.Array",
+            "kotlin.ByteArray",
+            "kotlin.ShortArray",
+            "kotlin.IntArray",
+            "kotlin.LongArray",
+            "kotlin.FloatArray",
+            "kotlin.DoubleArray",
+            "kotlin.CharArray",
+            "kotlin.BooleanArray",
+        ),
+        TEXT_FACADE_IL_NAME to setOf("kotlin.CharSequence"),
     )
     private val sequenceFlatMapPlatformNames = mapOf(
         "flatMap" to mapOf(
