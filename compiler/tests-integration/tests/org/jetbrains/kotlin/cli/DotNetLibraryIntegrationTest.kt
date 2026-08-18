@@ -10244,6 +10244,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodName = "Increment",
                 isInstance = false,
             ),
+            "F:sample/consumeGenericOwner" to DotNetPhysicalDeclaration.Function(
+                ownerPath = listOf("sample.LibraryKt"),
+                methodName = "consumeGenericOwner",
+                isInstance = false,
+            ),
             "G:F:sample/GenericOwner/member" to
                     DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
                         ownerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
@@ -10253,6 +10258,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         defaultCapabilityMethodName = "memberDefault__KotlinCapability__1234",
                         semanticHookOwnerPath = listOf("sample.GenericOwner`2"),
                         semanticHookMethodName = "member__KotlinSemantic__1234",
+                        foreignOverrideProbeMethodName =
+                            "member__KotlinForeignOverrideProbe__1234",
+                    ),
+            "S:F:sample/consumeGenericOwner" to
+                    DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
+                        ownerPath = listOf("sample.LibraryKt"),
+                        logicalFunctionKey = "F:sample/consumeGenericOwner",
+                        carriesReturn = true,
+                        parameterIndices = listOf(0, 2),
                     ),
             "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),

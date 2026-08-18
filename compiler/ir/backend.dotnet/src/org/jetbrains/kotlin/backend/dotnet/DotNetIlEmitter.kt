@@ -1656,6 +1656,8 @@ internal class DotNetIlEmitter(
             genericOwnerDefaultCapabilitySlots =
                 if (genericOwnerRehearsal) genericOwnerDefaultCapabilitySlots else emptyMap(),
             genericOwnerSemanticHooks = if (genericOwnerRehearsal) genericOwnerSemanticHooks else emptyMap(),
+            genericOwnerForeignOverrideProbeTargets =
+                if (genericOwnerRehearsal) genericOwnerForeignOverrideProbeTargets else emptyMap(),
             preLoweringDeclarationKeys = preLoweringDeclarationKeys,
             interfaceDefaultImplementations = interfaceDefaultImplementations,
             defaultArgumentDispatchers = defaultArgumentDispatchers,
