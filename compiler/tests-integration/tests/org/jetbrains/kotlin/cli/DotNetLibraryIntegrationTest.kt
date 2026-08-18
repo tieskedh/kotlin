@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerAbi
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpErasedOwnerRelativeConstraint
@@ -10212,6 +10213,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "C:sample/Consumer" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Consumer"),
             ),
+            "C:sample/GenericOwner" to DotNetPhysicalDeclaration.Class(
+                ownerPath = listOf("sample.GenericOwner`2"),
+                physicalTypeParameterCount = 2,
+                genericOwnerAbi = DotNetGenericOwnerAbi(
+                    capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                ),
+            ),
             "C:sample/Box" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Box"),
                 valueClassAbi = DotNetValueClassAbi(
@@ -10236,6 +10244,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodName = "Increment",
                 isInstance = false,
             ),
+            "G:F:sample/GenericOwner/member" to
+                    DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
+                        ownerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                        ownerLogicalKey = "C:sample/GenericOwner",
+                        logicalMemberKey = "F:sample/GenericOwner/member",
+                        capabilityMethodName = "member__KotlinCapability__1234",
+                        defaultCapabilityMethodName = "memberDefault__KotlinCapability__1234",
+                        semanticHookOwnerPath = listOf("sample.GenericOwner`2"),
+                        semanticHookMethodName = "member__KotlinSemantic__1234",
+                    ),
             "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
                 methodName = "abstractWithDefaults",

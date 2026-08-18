@@ -22,9 +22,11 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
+import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetComparableClass
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
@@ -148,14 +150,26 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             "Internal .NET backend error: a Kotlin-owned generic class bypassed architecture planning"
         }
         context.erasedGenericInterfaces += genericInterfaces
-        context.erasedGenericClasses += genericClasses
+        context.erasedGenericClasses += if (context.configuration.dotNetGenericOwnerRehearsal) {
+            genericClasses.filterNotTo(linkedSetOf()) { owner ->
+                context.genericOwnerArchitecturePlans.getValue(owner)
+                    .isReifiedByGenericOwnerRehearsal
+            }
+        } else {
+            genericClasses
+        }
         fun isMappedKotlinGenericInterface(irClass: IrClass): Boolean =
             irClass in genericInterfaces ||
                     DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                     externalDeclarations.hasGenericInterface(irClass)
+        fun isErasedKotlinGenericClass(irClass: IrClass): Boolean =
+            irClass.isDotNetGenericClassDeclaration &&
+                    (!context.configuration.dotNetGenericOwnerRehearsal ||
+                            context.genericOwnerArchitecturePlans[irClass]
+                                ?.isReifiedByGenericOwnerRehearsal != true)
         fun isErasedKotlinCarrier(irClass: IrClass): Boolean =
             isMappedKotlinGenericInterface(irClass) ||
-                    irClass in genericClasses ||
+                    isErasedKotlinGenericClass(irClass) ||
                     externalDeclarations.hasGenericClass(irClass)
         for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
             addBridges(
@@ -248,7 +262,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 typedSubstitutor = typedSubstitutor,
                 typedViews = if (
                     interfaceClass.isDotNetComparableClass() &&
-                    !irClass.isDotNetGenericClassDeclaration
+                    !isErasedKotlinCarrier(irClass)
                 ) {
                     // Comparable is an explicit BCL mapping rather than an ordinary
                     // Kotlin-owned generic-interface sibling. A non-generic implementor can
@@ -396,8 +410,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             if (directParameter?.owner?.parent == plan.interfaceClass) return context.irBuiltIns.anyNType
             val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
             return if (
-                carrier?.let(isMappedKotlinGenericInterface) == true ||
-                carrier?.isDotNetGenericClassDeclaration == true
+                carrier?.let(isErasedKotlinCarrier) == true
             ) {
                 // Both carriers have one erased physical identity. Substitute the interface
                 // parameter out of the synthetic bridge IR while preserving the nested carrier;

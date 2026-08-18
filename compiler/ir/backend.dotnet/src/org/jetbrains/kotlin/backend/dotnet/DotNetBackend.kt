@@ -72,7 +72,13 @@ object DotNetBackend {
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
-            DotNetBackendOutput(file, declarations, genericOwnerPrototypes, genericOwnerCallRoutes)
+            DotNetBackendOutput(
+                file,
+                declarations,
+                genericOwnerPrototypes,
+                genericOwnerCallRoutes,
+                configuration.dotNetGenericOwnerRehearsal,
+            )
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
             val missing = expectedMetadataLinkageKeys - declarations.keys
             if (missing.isEmpty()) return true
@@ -212,6 +218,18 @@ object DotNetBackend {
                     valueClassBoxingHelpers = context.valueClassBoxingHelpers,
                     cSharpImplementationManifestTarget = target,
                     hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
+                    genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
+                    genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
+                    genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
+                    genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
+                    genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
+                    genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
+                    genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
+                    externalGenericOwnerPhysicalSlots = context.externalGenericOwnerPhysicalSlots,
+                    genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
+                    genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
+                    genericOwnerReflectionCapabilityDeclarations =
+                        context.genericOwnerReflectionCapabilityDeclarations,
                 ).emit(irModuleFragment) ?: return result(ilTarget)
             } else {
                 null
@@ -322,6 +340,18 @@ object DotNetBackend {
                 genericOwnerCallRouteTraceSiteCount = context.genericOwnerCallRoutes.size.takeIf {
                     configuration.dotNetGenericOwnerCallRouteTraceHooks != null
                 },
+                genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
+                genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
+                genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
+                genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
+                genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
+                genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
+                genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
+                externalGenericOwnerPhysicalSlots = context.externalGenericOwnerPhysicalSlots,
+                genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
+                genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
+                genericOwnerReflectionCapabilityDeclarations =
+                    context.genericOwnerReflectionCapabilityDeclarations,
             )
             val emission = emitter.emit(irModuleFragment)
             if (emission == null) {
@@ -526,4 +556,5 @@ data class DotNetBackendOutput(
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+    val genericOwnerRehearsal: Boolean,
 )
