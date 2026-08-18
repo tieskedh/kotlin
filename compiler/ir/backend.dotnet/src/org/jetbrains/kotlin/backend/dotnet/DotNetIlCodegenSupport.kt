@@ -1274,6 +1274,12 @@ internal class DotNetIlTypeMapper private constructor(
     fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerCapabilityDeclarations
 
+    /** Resolves a producer-recorded semantic carrier without inferring whether a slot selected it. */
+    fun genericOwnerSemanticCapabilityTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
+        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        return genericOwnerCapabilityInfoOrNull(owner)?.let(DotNetIlValueType::UserClass)
+    }
+
     /**
      * The declaration-erased classifier used by Kotlin runtime type tests for a rehearsal
      * generic owner. The constructed CLR owner remains the value carrier for exact calls, but

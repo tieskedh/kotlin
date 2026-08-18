@@ -1136,7 +1136,7 @@ emitted rather than C#-physicalized. Behind one test-only epoch flag, admitted
 ordinary owners become real `C<T>` TypeDefs, producer-proven ordinary state is
 stored as `!T`, object-domain semantic state remains on the same owner, and
 typed/semantic/capability member families, inner-owner parameters, generic
-value-class carriers, reflection, and ABI-36 separate-library bindings compose
+value-class carriers, reflection, and ABI-37 separate-library bindings compose
 on bounded hostile products. Production emission remains erased. The next
 slice is not another owner selection: it must close the complete source-built
 Runtime/Stdlib graph, whose remaining failures are later canonical/capability
@@ -1168,17 +1168,21 @@ separately compiled warnings-as-errors C# subclass, including C# after Kotlin,
 run through PSI/LightTree on Framework 4.8 and .NET 10.
 
 Do not generalize this proof to broad inputs or abstract semantic obligations.
-The actual Kotlin base DLL -> Kotlin override DLL -> C# subclass DLL gate is
-also closed without an ABI revision. ABI-36 already binds the semantic
-capability family. The later Kotlin DLL emits its own local probe and private
-dispatcher; the dispatcher calls that probe directly, so no producer probe
-slot identity crosses the assembly boundary. A raw incompatible widened value
-still uses the semantic hook, while a C# subclass after the Kotlin override
-changes only the typed target and is detected. The next bounded gate is to
-validate the allocation-free comparison under ReadyToRun, trimming, and
-NativeAOT before treating it as a migration-wide mechanism. C# must still
-never be required to author the protected compiler ABI merely to override a
-normal Kotlin method.
+The actual Kotlin base DLL -> Kotlin override DLL -> C# subclass DLL gate also
+establishes that both ordinary function carriers and hidden override-family
+slots are producer ABI. The first attempted proof used `-D` rather than the
+required Gradle `-P` property and therefore did not execute the rehearsal.
+The corrected run exposed two real gaps: the consumer reconstructed a
+producer-emitted capability parameter as `C<object>`, and the later Kotlin DLL
+created new semantic/probe slots instead of overriding the producer slots.
+ABI-37 records the producer-selected capability indices and the protected
+probe MethodDef. Consumers apply those records narrowly; exact `C<T>` slots
+remain typed. A raw incompatible widened value therefore uses the inherited
+semantic family, while a C# subclass after the Kotlin override changes only
+the typed target and is detected. The next bounded gate is to validate the
+allocation-free comparison under ReadyToRun, trimming, and NativeAOT before
+treating it as a migration-wide mechanism. C# must still never be required to
+author the protected compiler ABI merely to override a normal Kotlin method.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

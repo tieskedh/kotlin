@@ -145,15 +145,17 @@ allocation, state shadow, or C#-authored bridge is involved.
 
 The probe is compiler ABI rather than C# API: C# can technically see the
 protected method but neither calls nor overrides it. A Kotlin override emits
-the paired probe automatically. This remains coherent across separate Kotlin
-DLLs without serializing the probe identity: each later Kotlin declaration
-emits a local probe plus a private dispatcher which directly names it, while
-ABI-36 binds the inherited semantic capability family. A three-assembly
-Kotlin base -> Kotlin override -> C# subclass oracle proves both the raw
-semantic negative path and the later C# typed-override path. Broad-input and
-abstract semantic obligations remain separate; the concrete output proof must
-not be used to narrow them or to claim that every dual-domain family can be
-implemented by a typed-only C# declaration.
+the paired probe automatically. Across separate Kotlin DLLs, ABI-37 binds the
+producer semantic hook and probe MethodDefs so the later Kotlin declarations
+reuse those virtual slots rather than opening sibling slots. ABI-37 also
+records which otherwise ordinary function parameters/results were physically
+emitted as non-generic semantic capabilities; a consumer must not infer that
+choice merely from a widened Kotlin type. A three-assembly Kotlin base ->
+Kotlin override -> C# subclass oracle proves both the raw semantic negative
+path and the later C# typed-override path. Broad-input and abstract semantic
+obligations remain separate; the concrete output proof must not be used to
+narrow them or to claim that every dual-domain family can be implemented by a
+typed-only C# declaration.
 
 ## Cast and mutation policy
 

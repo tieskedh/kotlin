@@ -96,12 +96,17 @@ emitted IL additionally confirms that the base probe is `newslot virtual`, the
 Kotlin override reuses that slot, the capability dispatcher is private/final,
 and only open non-private output families receive a probe.
 
-## Remaining work
+## Separate-compilation correction
 
-The follow-up three-assembly proof establishes that Physical ABI 36 does not
-need to serialize this probe. A separately compiled Kotlin override emits its
-own local probe and private dispatcher. Raw widened state therefore retains
-the semantic path, while a subsequent C# subclass changes the typed target
-observed by that local probe. ReadyToRun, trimming, and NativeAOT must still
-validate the managed-function-pointer comparison before it is selected for
-the atomic production migration.
+The follow-up three-assembly proof initially appeared to establish that
+Physical ABI 36 did not need to serialize this probe. That run used a JVM
+system property (`-D`) rather than the Gradle project property (`-P`), so the
+rehearsal epoch was not active. The valid run disproved the conclusion.
+
+Physical ABI 37 now records the probe MethodDef and producer-selected
+capability slots in ordinary function signatures. A separately compiled
+Kotlin override reuses both the inherited semantic-hook and probe slots. Raw
+widened state therefore retains the semantic path, while a subsequent C#
+subclass changes the typed target observed by the most-derived Kotlin probe.
+ReadyToRun, trimming, and NativeAOT must still validate the managed-function-
+pointer comparison before it is selected for the atomic production migration.
