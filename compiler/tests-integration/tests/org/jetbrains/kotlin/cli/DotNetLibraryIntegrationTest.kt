@@ -29052,6 +29052,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         return Kotlin.Collections.CollectionsKt.minOf<int, int>(values, selector);
                     }
+
+                    public static int MinOfWith(
+                        Kotlin.Collections.Iterable values,
+                        Kotlin.Comparator comparator,
+                        Kotlin.Function1 selector)
+                    {
+                        return Kotlin.Collections.CollectionsKt.minOfWith<int, int>(
+                            values, comparator, selector);
+                    }
                 }
                 """.trimIndent()
             )
@@ -29081,6 +29090,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("minOf" in forbiddenInlineOnlyResult.output) {
             "Expected C# accessibility diagnostic for @InlineOnly minOf:\n" +
+                    forbiddenInlineOnlyResult.output
+        }
+        assertTrue("minOfWith" in forbiddenInlineOnlyResult.output) {
+            "Expected C# accessibility diagnostic for @InlineOnly minOfWith:\n" +
                     forbiddenInlineOnlyResult.output
         }
     }
@@ -34767,6 +34780,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val groupingKeyOfMethod = groupingMethods.single { method ->
             method.signature.parameterTypes.size == 1
         }.name
+        val comparatorType = stdlibMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "Comparator"
+        }
+        val comparatorCompareMethod = stdlibMetadata.methodDefinitions.single { method ->
+            method.declaringType == comparatorType.handle
+        }.name
         val directory = File(tmpdir, "net10-csharp-appendable").apply { mkdirs() }
         val source = directory.resolve("AppendableProbe.cs").apply {
             writeText(
@@ -34834,6 +34853,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public object Invoke(object value)
                     {
                         return -((int)value);
+                    }
+                }
+
+                public sealed class ForeignIntComparator : Kotlin.Comparator
+                {
+                    public int $comparatorCompareMethod(object left, object right)
+                    {
+                        return ((int)left).CompareTo((int)right);
                     }
                 }
 
@@ -34926,6 +34953,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (Kotlin.Collections.CollectionsKt.maxBy<int>(
                                 new Kotlin.IntArray(new int[] { 3, -2, 1 }), selector) != -2)
                             return 25;
+                        var comparator = new ForeignIntComparator();
+                        if (Kotlin.Collections.CollectionsKt.minWith(
+                                new Kotlin.IntArray(new int[] { 3, -2, 1 }), comparator) != -2)
+                            return 26;
+                        if (Kotlin.Collections.CollectionsKt.maxWithOrNull(
+                                new Kotlin.IntArray(new int[] { 3, -2, 1 }), comparator) != 3)
+                            return 27;
                         return 0;
                     }
 
@@ -35224,6 +35258,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             selectorResultMinMaxMethodCounts,
             selectorResultMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
         )
+        val comparatorMinMaxNames = setOf(
+            "maxOfWith",
+            "maxOfWithOrNull",
+            "maxWith",
+            "maxWithOrNull",
+            "minOfWith",
+            "minOfWithOrNull",
+            "minWith",
+            "minWithOrNull",
+        )
+        val comparatorMinMaxMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle && method.name in comparatorMinMaxNames
+        }
+        assertEquals(80, comparatorMinMaxMethods.size)
+        for (name in comparatorMinMaxNames) {
+            assertEquals(10, comparatorMinMaxMethods.count { method -> method.name == name }, name)
+        }
         val naturalMinMaxMethodCounts = mapOf(
             "max" to 7,
             "maxOrNull" to 9,
@@ -35804,12 +35855,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "maxOfOrNull" to 10,
             "maxOfOrNullDouble" to 10,
             "maxOfOrNullFloat" to 10,
+            "maxOfWith" to 10,
+            "maxOfWithOrNull" to 10,
             "maxOrNull" to 9,
             "maxOrNullOfDouble" to 2,
             "maxOrNullOfFloat" to 2,
             "maxOrThrow" to 2,
             "maxOrThrowOfDouble" to 2,
             "maxOrThrowOfFloat" to 2,
+            "maxWith" to 10,
+            "maxWithOrNull" to 10,
             "map" to 1,
             "mapIndexed" to 1,
             "mapIndexedNotNull" to 1,
@@ -35827,12 +35882,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "minOfOrNull" to 10,
             "minOfOrNullDouble" to 10,
             "minOfOrNullFloat" to 10,
+            "minOfWith" to 10,
+            "minOfWithOrNull" to 10,
             "minOrNull" to 9,
             "minOrNullOfDouble" to 2,
             "minOrNullOfFloat" to 2,
             "minOrThrow" to 2,
             "minOrThrowOfDouble" to 2,
             "minOrThrowOfFloat" to 2,
+            "minWith" to 10,
+            "minWithOrNull" to 10,
             "minus" to 4,
             "minusAssign" to 3,
             "minusElement" to 1,
@@ -38234,6 +38293,153 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         installedCharArraySelectorResultMinMax() &&
                         installedBooleanArraySelectorResultMinMax()
 
+                private val installedIntAggregateComparator = Comparator<Int> { a, b -> a.compareTo(b) }
+                private val installedByteAggregateComparator = Comparator<Byte> { a, b -> a.compareTo(b) }
+                private val installedShortAggregateComparator = Comparator<Short> { a, b -> a.compareTo(b) }
+                private val installedLongAggregateComparator = Comparator<Long> { a, b -> a.compareTo(b) }
+                private val installedFloatAggregateComparator = Comparator<Float> { a, b -> a.compareTo(b) }
+                private val installedDoubleAggregateComparator = Comparator<Double> { a, b -> a.compareTo(b) }
+                private val installedCharAggregateComparator = Comparator<Char> { a, b -> a.compareTo(b) }
+                private val installedBooleanAggregateComparator = Comparator<Boolean> { a, b ->
+                    when {
+                        a == b -> 0
+                        !a -> -1
+                        else -> 1
+                    }
+                }
+
+                private fun installedIterableComparatorMinMax(): Boolean {
+                    val values: Iterable<Int> = listOf(2, 1)
+                    return values.minWith(installedIntAggregateComparator) == 1 &&
+                        values.minWithOrNull(installedIntAggregateComparator) == 1 &&
+                        values.maxWith(installedIntAggregateComparator) == 2 &&
+                        values.maxWithOrNull(installedIntAggregateComparator) == 2 &&
+                        values.minOfWith(installedIntAggregateComparator) { it } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it } == 2
+                }
+
+                private fun installedObjectArrayComparatorMinMax(): Boolean {
+                    val values = arrayOf(2, 1)
+                    return values.minWith(installedIntAggregateComparator) == 1 &&
+                        values.minWithOrNull(installedIntAggregateComparator) == 1 &&
+                        values.maxWith(installedIntAggregateComparator) == 2 &&
+                        values.maxWithOrNull(installedIntAggregateComparator) == 2 &&
+                        values.minOfWith(installedIntAggregateComparator) { it } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it } == 2
+                }
+
+                private fun installedByteArrayComparatorMinMax(): Boolean {
+                    val values = byteArrayOf(2, 1)
+                    return values.minWith(installedByteAggregateComparator) == 1.toByte() &&
+                        values.minWithOrNull(installedByteAggregateComparator) == 1.toByte() &&
+                        values.maxWith(installedByteAggregateComparator) == 2.toByte() &&
+                        values.maxWithOrNull(installedByteAggregateComparator) == 2.toByte() &&
+                        values.minOfWith(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.toInt() } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 2
+                }
+
+                private fun installedShortArrayComparatorMinMax(): Boolean {
+                    val values = shortArrayOf(2, 1)
+                    return values.minWith(installedShortAggregateComparator) == 1.toShort() &&
+                        values.minWithOrNull(installedShortAggregateComparator) == 1.toShort() &&
+                        values.maxWith(installedShortAggregateComparator) == 2.toShort() &&
+                        values.maxWithOrNull(installedShortAggregateComparator) == 2.toShort() &&
+                        values.minOfWith(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.toInt() } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 2
+                }
+
+                private fun installedIntArrayComparatorMinMax(): Boolean {
+                    val values = intArrayOf(2, 1)
+                    return values.minWith(installedIntAggregateComparator) == 1 &&
+                        values.minWithOrNull(installedIntAggregateComparator) == 1 &&
+                        values.maxWith(installedIntAggregateComparator) == 2 &&
+                        values.maxWithOrNull(installedIntAggregateComparator) == 2 &&
+                        values.minOfWith(installedIntAggregateComparator) { it } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it } == 2
+                }
+
+                private fun installedLongArrayComparatorMinMax(): Boolean {
+                    val values = longArrayOf(2L, 1L)
+                    return values.minWith(installedLongAggregateComparator) == 1L &&
+                        values.minWithOrNull(installedLongAggregateComparator) == 1L &&
+                        values.maxWith(installedLongAggregateComparator) == 2L &&
+                        values.maxWithOrNull(installedLongAggregateComparator) == 2L &&
+                        values.minOfWith(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.toInt() } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 2
+                }
+
+                private fun installedFloatArrayComparatorMinMax(): Boolean {
+                    val values = floatArrayOf(2.0f, 1.0f)
+                    return values.minWith(installedFloatAggregateComparator) == 1.0f &&
+                        values.minWithOrNull(installedFloatAggregateComparator) == 1.0f &&
+                        values.maxWith(installedFloatAggregateComparator) == 2.0f &&
+                        values.maxWithOrNull(installedFloatAggregateComparator) == 2.0f &&
+                        values.minOfWith(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.toInt() } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 2
+                }
+
+                private fun installedDoubleArrayComparatorMinMax(): Boolean {
+                    val values = doubleArrayOf(2.0, 1.0)
+                    return values.minWith(installedDoubleAggregateComparator) == 1.0 &&
+                        values.minWithOrNull(installedDoubleAggregateComparator) == 1.0 &&
+                        values.maxWith(installedDoubleAggregateComparator) == 2.0 &&
+                        values.maxWithOrNull(installedDoubleAggregateComparator) == 2.0 &&
+                        values.minOfWith(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.toInt() } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.toInt() } == 2
+                }
+
+                private fun installedCharArrayComparatorMinMax(): Boolean {
+                    val values = charArrayOf('b', 'a')
+                    return values.minWith(installedCharAggregateComparator) == 'a' &&
+                        values.minWithOrNull(installedCharAggregateComparator) == 'a' &&
+                        values.maxWith(installedCharAggregateComparator) == 'b' &&
+                        values.maxWithOrNull(installedCharAggregateComparator) == 'b' &&
+                        values.minOfWith(installedIntAggregateComparator) { it.code } == 'a'.code &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.code } == 'a'.code &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.code } == 'b'.code &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.code } == 'b'.code
+                }
+
+                private fun installedBooleanArrayComparatorMinMax(): Boolean {
+                    val values = booleanArrayOf(true, false)
+                    return values.minWith(installedBooleanAggregateComparator) == false &&
+                        values.minWithOrNull(installedBooleanAggregateComparator) == false &&
+                        values.maxWith(installedBooleanAggregateComparator) == true &&
+                        values.maxWithOrNull(installedBooleanAggregateComparator) == true &&
+                        values.minOfWith(installedIntAggregateComparator) { if (it) 2 else 1 } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { if (it) 2 else 1 } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { if (it) 2 else 1 } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { if (it) 2 else 1 } == 2
+                }
+
+                public fun installedComparatorMinMaxMatrix(): Boolean =
+                    installedIterableComparatorMinMax() &&
+                        installedObjectArrayComparatorMinMax() &&
+                        installedByteArrayComparatorMinMax() &&
+                        installedShortArrayComparatorMinMax() &&
+                        installedIntArrayComparatorMinMax() &&
+                        installedLongArrayComparatorMinMax() &&
+                        installedFloatArrayComparatorMinMax() &&
+                        installedDoubleArrayComparatorMinMax() &&
+                        installedCharArrayComparatorMinMax() &&
+                        installedBooleanArrayComparatorMinMax()
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38470,7 +38676,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedAllDistinctByMatrix() &&
                             installedNaturalMinMaxMatrix() &&
                             installedSelectorMinMaxMatrix() &&
-                            installedSelectorResultMinMaxMatrix()
+                            installedSelectorResultMinMaxMatrix() &&
+                            installedComparatorMinMaxMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38898,6 +39105,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )) {
             assertTrue("::'$methodName'<" !in il) {
                 "The installed consumer must inline every Common selector-result $methodName body:\n$il"
+            }
+        }
+        for (methodName in listOf("minWith", "minWithOrNull", "maxWith", "maxWithOrNull")) {
+            assertEquals(
+                10,
+                il.split("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'$methodName'").size - 1,
+                "The installed consumer must call all ten comparator-element fallbacks named $methodName",
+            )
+        }
+        for (methodName in listOf("minOfWith", "minOfWithOrNull", "maxOfWith", "maxOfWithOrNull")) {
+            assertTrue("::'$methodName'<" !in il) {
+                "The installed consumer must inline every Common comparator-result $methodName body:\n$il"
             }
         }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
