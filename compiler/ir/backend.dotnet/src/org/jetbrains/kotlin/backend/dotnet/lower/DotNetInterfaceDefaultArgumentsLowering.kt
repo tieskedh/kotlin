@@ -21,7 +21,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassForwarder
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultPromotion
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberView
@@ -138,7 +137,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         } else {
             DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY
         }
-        val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+        val externalDeclarations = context.externalDeclarationsForLowering()
         val localGenericInterfaces = collected.interfaces.filterTo(hashSetOf()) {
             it.isDotNetGenericInterfaceDeclaration
         }
