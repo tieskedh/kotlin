@@ -131,6 +131,23 @@ fun dotNetGenericOwnerPhysicalMemberName(
     return "${typedBaseName}__Kotlin${roleLabel}__$familyId"
 }
 
+/** Stable protected probe name paired with one semantic output override family. */
+fun dotNetGenericOwnerPhysicalForeignOverrideProbeName(
+    typedBaseName: String,
+    overrideRootLogicalMemberKeys: List<String>,
+): String {
+    require(typedBaseName.isNotEmpty()) { "a generic-owner foreign override probe requires a typed base name" }
+    require(overrideRootLogicalMemberKeys.isNotEmpty() &&
+            overrideRootLogicalMemberKeys.all(String::isNotEmpty) &&
+            overrideRootLogicalMemberKeys == overrideRootLogicalMemberKeys.distinct().sorted()) {
+        "a generic-owner foreign override probe requires sorted unique override roots"
+    }
+    val familyId = DotNetLibraryAbiCodec.logicalIdentityDigest(
+        overrideRootLogicalMemberKeys.joinToString("\u0000"),
+    )
+    return "${typedBaseName}__KotlinForeignOverrideProbe__$familyId"
+}
+
 /** Stable name of the masked default dispatcher belonging to one logical declaration. */
 fun dotNetGenericOwnerPhysicalDefaultDispatcherName(
     typedMethodName: String,

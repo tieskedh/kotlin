@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ENUM_ENTRY_CONSTRUCTOR
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
@@ -99,6 +100,9 @@ internal class DotNetIlMethodCodegen(
     private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
     private val genericOwnerCallRouteTraceHook: DotNetGenericOwnerCallRouteTraceHook? = null,
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerDirectForeignOverrideDispatch:
+        DotNetGenericOwnerDirectForeignOverrideDispatch? = null,
+    private val genericOwnerForeignOverrideProbeTarget: IrSimpleFunction? = null,
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -177,7 +181,15 @@ internal class DotNetIlMethodCodegen(
         if (!isAbstractMember) {
             try {
                 if (genericOwnerCallRouteTraceHook == null) {
-                    emitBody()
+                    when {
+                        genericOwnerDirectForeignOverrideDispatch != null ->
+                            emitGenericOwnerDirectForeignOverrideDispatch(
+                                genericOwnerDirectForeignOverrideDispatch
+                            )
+                        genericOwnerForeignOverrideProbeTarget != null ->
+                            emitGenericOwnerForeignOverrideProbe(genericOwnerForeignOverrideProbeTarget)
+                        else -> emitBody()
+                    }
                 } else {
                     emitGenericOwnerCallRouteTraceHook(genericOwnerCallRouteTraceHook)
                 }
@@ -755,6 +767,129 @@ internal class DotNetIlMethodCodegen(
             else -> dotNetUnsupported("unsupported function body shape ${body.javaClass.simpleName}")
         }
         emitReturnJoinEpilogue()
+    }
+
+    /**
+     * Keeps raw Kotlin output semantics and the natural C# override slot coherent without
+     * reflection. On this exact Kotlin declaration both virtual targets are unchanged. A direct
+     * foreign subclass changes only the typed target; a Kotlin subclass changes both because the
+     * compiler emits its paired semantic hook as well.
+     */
+    private fun emitGenericOwnerDirectForeignOverrideDispatch(
+        dispatch: DotNetGenericOwnerDirectForeignOverrideDispatch,
+    ) {
+        check(function is IrSimpleFunction &&
+                function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER &&
+                signature.parameterTypes.size == 1 &&
+                signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
+            "Direct foreign override dispatch requires an object-returning no-input capability dispatcher"
+        }
+        val typedInfo = checkNotNull(availableFunctions[dispatch.typedEntry]) {
+            "Direct foreign override dispatch lacks its typed MethodDef"
+        }
+        val semanticInfo = checkNotNull(availableFunctions[dispatch.semanticHook]) {
+            "Direct foreign override dispatch lacks its semantic MethodDef"
+        }
+        check(typedInfo.owner == functionInfo.owner && semanticInfo.owner == functionInfo.owner &&
+                dispatch.typedEntry.typeParameters.isEmpty() && dispatch.semanticHook.typeParameters.isEmpty()) {
+            "Direct foreign override dispatch must compare one non-generic local owner family"
+        }
+        val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
+            functionInfo.owner.ilTypeRef
+        } else {
+            DotNetIlValueType.GenericInstance(
+                functionInfo.owner,
+                List(functionInfo.owner.typeParameterCount) { index ->
+                    DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                },
+            ).nameInSignature
+        }
+        fun DotNetIlFunctionInfo.reference(target: IrSimpleFunction): String = renderMethodReference(
+            physicalMethodName ?: target.dotNetIlMethodName(),
+            ownerToken = ownerToken,
+        )
+        val probeInfo = checkNotNull(availableFunctions[dispatch.foreignOverrideProbe]) {
+            "Direct foreign override dispatch lacks its virtual probe MethodDef"
+        }
+        val probeReference = probeInfo.reference(dispatch.foreignOverrideProbe)
+        val typedReturn = (typedInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        check(typedInfo.signature.parameterTypes.size == 1 && probeInfo.signature.parameterTypes.size == 1 &&
+                semanticInfo.signature.parameterTypes.size == 1 &&
+                typedReturn is DotNetIlValueType.TypeParameter &&
+                probeInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
+                semanticInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
+            "Direct foreign override dispatch requires paired () -> !T and () -> object slots"
+        }
+
+        // The virtual probe belongs to the most-derived Kotlin declaration. It reports whether a
+        // later ordinary foreign subclass changed only the natural typed slot.
+        methodContext.emit("ldarg.0", pushes = 1)
+        methodContext.emit("callvirt $probeReference", pops = 1, pushes = 1)
+        val semanticLabel = methodContext.nextLabel("semanticOutput")
+        methodContext.emitBranch("brfalse", semanticLabel, pops = 1)
+
+        methodContext.emit("ldarg.0", pushes = 1)
+        methodContext.emit(
+            typedInfo.renderCallInstruction(
+                typedInfo.physicalMethodName ?: dispatch.typedEntry.dotNetIlMethodName(),
+                virtual = true,
+                ownerToken = ownerToken,
+            ),
+            pops = 1,
+            pushes = 1,
+        )
+        methodContext.emit("box ${typedReturn.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emitReturn(pops = 1)
+
+        methodContext.emitLabel(semanticLabel)
+        methodContext.emit("ldarg.0", pushes = 1)
+        methodContext.emit(
+            semanticInfo.renderCallInstruction(
+                semanticInfo.physicalMethodName ?: dispatch.semanticHook.dotNetIlMethodName(),
+                virtual = true,
+                ownerToken = ownerToken,
+            ),
+            pops = 1,
+            pushes = 1,
+        )
+        methodContext.emitReturn(pops = 1)
+    }
+
+    private fun emitGenericOwnerForeignOverrideProbe(typedEntry: IrSimpleFunction) {
+        check(function is IrSimpleFunction &&
+                function.origin == DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE &&
+                signature.parameterTypes.size == 1 &&
+                signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Boolean)) {
+            "A generic-owner foreign override probe must be an instance () -> Boolean method"
+        }
+        val typedInfo = checkNotNull(availableFunctions[typedEntry]) {
+            "A generic-owner foreign override probe lacks its typed MethodDef"
+        }
+        check(typedInfo.owner == functionInfo.owner && typedEntry.typeParameters.isEmpty() &&
+                typedInfo.signature.parameterTypes.size == 1) {
+            "A generic-owner foreign override probe must target one no-input local member"
+        }
+        val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
+            functionInfo.owner.ilTypeRef
+        } else {
+            DotNetIlValueType.GenericInstance(
+                functionInfo.owner,
+                List(functionInfo.owner.typeParameterCount) { index ->
+                    DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                },
+            ).nameInSignature
+        }
+        val typedReference = typedInfo.renderMethodReference(
+            typedInfo.physicalMethodName ?: typedEntry.dotNetIlMethodName(),
+            ownerToken = ownerToken,
+        )
+        methodContext.emit("ldarg.0", pushes = 1)
+        methodContext.emit("ldvirtftn $typedReference", pops = 1, pushes = 1)
+        methodContext.emit("ldftn $typedReference", pushes = 1)
+        methodContext.emit("ceq", pops = 2, pushes = 1)
+        methodContext.emit("ldc.i4.0", pushes = 1)
+        methodContext.emit("ceq", pops = 2, pushes = 1)
+        methodContext.emitReturn(pops = 1)
     }
 
     private fun emitGenericOwnerCallRouteTraceHook(hook: DotNetGenericOwnerCallRouteTraceHook) {

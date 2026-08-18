@@ -1152,12 +1152,28 @@ execute on the exact newly constructed physical owner; this makes the recursive
 OctoTree constructor state read exact and removes the AbstractList/ArrayList
 failure cascade, reducing the source-built Stdlib diagnostics from 216 to 92.
 This rule does not cover custom or overridable accessors, setters, semantic
-object state, or projected/widened receivers. The next interop gate is foreign-
-subclass dispatch coherence: a Kotlin call through a semantic capability must
-reach an ordinary C# override of the natural typed virtual entry, and C# must
-never need to know or override the protected Kotlin semantic hook. Prove that
-hostile output-only case on Framework 4.8 and .NET 10 before treating hidden
-semantic helpers as source-compatible implementation detail.
+object state, or projected/widened receivers.
+
+The first foreign-subclass dispatch gate is now closed for a concrete
+no-input owner-dependent output. A Kotlin capability call reaches an ordinary
+C# override of the natural typed virtual entry without requiring C# to
+override the protected semantic hook. Every participating Kotlin override
+emits a protected virtual probe for its exact typed MethodDef; the most-derived
+Kotlin probe compares `ldvirtftn` with `ldftn`, so a still-later C# typed
+override is detected without reflection, allocation, or duplicate state. If
+no foreign override exists, the dispatcher retains the raw semantic hook: an
+incompatible `@UnsafeVariance` value remains observable through the widened
+view and fails only at a real typed use. The actual Kotlin product and a
+separately compiled warnings-as-errors C# subclass, including C# after Kotlin,
+run through PSI/LightTree on Framework 4.8 and .NET 10.
+
+Do not generalize this proof to broad inputs or abstract semantic obligations.
+The next bounded interop gate must add the probe identity to the physical
+binding epoch and prove Kotlin base DLL -> Kotlin override DLL -> C# subclass
+DLL. Then validate the allocation-free comparison under ReadyToRun/trimming/
+NativeAOT before treating it as a migration-wide mechanism. C# must still
+never be required to author the protected compiler ABI merely to override a
+normal Kotlin method.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

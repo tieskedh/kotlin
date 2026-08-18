@@ -66,6 +66,18 @@ internal data class DotNetLoweredInterfaceDefaultImplementation(
     val bodyPlacement: DotNetInterfaceDefaultBodyPlacement,
 )
 
+/**
+ * Rehearsal-only dispatcher split for a concrete no-input semantic output. The typed and semantic
+ * virtual slots normally move together for Kotlin subclasses. When only the typed slot changed,
+ * an ordinary foreign subclass supplied the natural C# override and capability dispatch must use
+ * it; otherwise the raw semantic hook remains authoritative.
+ */
+internal data class DotNetGenericOwnerDirectForeignOverrideDispatch(
+    val typedEntry: IrSimpleFunction,
+    val semanticHook: IrSimpleFunction,
+    val foreignOverrideProbe: IrSimpleFunction,
+)
+
 internal data class DotNetLoweredInterfaceDefaultPromotion(
     val owner: IrClass,
     val inheritedMember: IrSimpleFunction,
@@ -186,6 +198,11 @@ internal class DotNetBackendContext(
     val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */
     val genericOwnerSemanticHooks: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Concrete no-input capability dispatchers which preserve a direct foreign typed override. */
+    val genericOwnerDirectForeignOverrideDispatches:
+        MutableMap<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = linkedMapOf()
+    /** Generated virtual probe to the exact Kotlin typed declaration it represents. */
+    val genericOwnerForeignOverrideProbeTargets: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Synthetic external slot stubs to their producer-recorded physical families. */
     val externalGenericOwnerPhysicalSlots:
         MutableMap<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = linkedMapOf()
