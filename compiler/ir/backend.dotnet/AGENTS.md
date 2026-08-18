@@ -434,6 +434,17 @@ element-derived physical names shared with Sequence. This is compiler-owned
 stdlib implementation naming, not a general `@JvmName`, public `DotNetName`,
 or authority for a physical generic-owner cutover.
 
+Generated selector `minBy`/`maxBy` is the corresponding complete 40-member
+collection family: publish throwing and nullable forms together for Iterable,
+generic object arrays, and all eight signed primitive-array wrappers. Boolean
+is valid here because the selector result, not the element, supplies ordering.
+Preserve zero selector calls for empty/singleton inputs, first-tie identity,
+one selector call per visited element otherwise, callback failure timing, and
+generic Comparable Float/Double total ordering. These bodies are ordinary
+public inline fallbacks, not `@InlineOnly`; installed Kotlin consumers must
+inline them while C# may call the fallback with the truthful erased
+`Kotlin.Function1` capability.
+
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common
 aggregate/fold/reduce/count source remains authoritative. Admit the Iterable,
@@ -1633,12 +1644,15 @@ state-machine type or weakening source visibility.
 Explicit state machines stress general CIL control flow. A branch target
 immediately before a `.try` must remain outside the protected region and fall
 through through a real landing instruction; a literal-true loop uses an
-unconditional branch so the verifier sees no impossible fallthrough; and a
-`return`, `break`, or `continue` in value position drains only older evaluation
-stack operands before `ret`, `br`, or `leave`. A physical `void` call that is a
-logical Kotlin `Unit` expression materializes `Unit` only when the surrounding
-IR requires a value. Keep these as emitter invariants rather than coroutine-
-specific source rewrites.
+unconditional branch so the verifier sees no impossible fallthrough. A return
+in value position drains older outer operands before `ret`/`leave`. A same-
+region `break` or `continue` drains only values produced after its target loop
+entered and preserves any earlier pending operand prefix; this is required for
+inlined local returns lowered to synthetic loops inside a later call/arithmetic
+operand. A cross-region `leave` still requires an empty loop-entry stack. A
+physical `void` call that is a logical Kotlin `Unit` expression materializes
+`Unit` only when the surrounding IR requires a value. Keep these as emitter
+invariants rather than coroutine- or collection-specific source rewrites.
 
 ## Verification contract
 

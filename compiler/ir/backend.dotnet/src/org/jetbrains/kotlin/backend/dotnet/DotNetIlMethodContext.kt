@@ -124,7 +124,20 @@ internal class DotNetIlMethodContext(
      * result before invoking this drain.
      */
     fun drainEvaluationStack() {
-        while (stackDepth > 0) emit("pop", pops = 1)
+        drainEvaluationStackTo(0)
+    }
+
+    /**
+     * Discards values produced after a control-flow construct entered, retaining the operands
+     * which were already pending at [targetDepth]. Inline returns are lowered to synthetic loop
+     * breaks; when such a loop computes a later call/arithmetic operand, clearing the whole stack
+     * would incorrectly discard the earlier operands which remain live after the inline call.
+     */
+    fun drainEvaluationStackTo(targetDepth: Int) {
+        check(targetDepth in 0..stackDepth) {
+            "Internal .NET backend error: cannot drain evaluation stack from $stackDepth to $targetDepth"
+        }
+        while (stackDepth > targetDepth) emit("pop", pops = 1)
     }
 
     /**
@@ -439,11 +452,18 @@ private enum class EhRegion { TRY_BODY, FILTER_BODY, CATCH_HANDLER, FINALLY_BODY
 
 /**
  * Branch targets of a loop: `break` jumps to [breakLabel], `continue` to [continueLabel].
- * [ehDepth] is the exception-region depth at loop registration: a `break`/`continue` emitted at
- * a deeper depth crosses protected regions and must use `leave` instead of `br` (a single
- * `leave` legally crosses any number of nested regions in one hop, probe-verified).
+ * [ehDepth] and [stackDepth] are the exception-region and evaluation-stack depths at loop
+ * registration. A same-region transfer preserves the operands which predate the loop and drains
+ * only values produced inside it. A transfer from a deeper protected region uses `leave` instead
+ * of `br` (a single `leave` legally crosses any number of nested regions in one hop,
+ * probe-verified) and therefore requires an empty loop-entry stack.
  */
-internal class DotNetIlLoopLabels(val breakLabel: String, val continueLabel: String, val ehDepth: Int)
+internal class DotNetIlLoopLabels(
+    val breakLabel: String,
+    val continueLabel: String,
+    val ehDepth: Int,
+    val stackDepth: Int,
+)
 
 internal sealed class DotNetIlSlot {
     abstract val index: Int

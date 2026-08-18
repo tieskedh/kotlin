@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`common-selector-min-max-family-2026-08-18.md`](common-selector-min-max-family-2026-08-18.md)
+  records the complete 40-declaration selector min/max supported-classifier
+  release, inline loop-entry stack-baseline correction, exact selector and
+  floating semantics, direct Kotlin/C# evidence, and the final 2,262-test
+  proof.
 - [`common-natural-min-max-family-2026-08-18.md`](common-natural-min-max-family-2026-08-18.md)
   records the complete 52-declaration natural min/max supported-classifier
   release, bounded logical-element-derived physical naming, exact floating and

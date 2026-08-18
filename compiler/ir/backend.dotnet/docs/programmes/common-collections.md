@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — natural min/max supported-classifier closure complete**
+- Status: **Active — selector min/max supported-classifier closure complete**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -314,6 +314,38 @@ throwing/nullable behavior, tie identity and traversal, all seven primitive
 classifiers, generic object arrays, and Float/Double NaN/signed-zero behavior.
 One portable netstandard product executes on Framework CLR 4 and .NET 10.
 
+### Completed selector min/max aggregate closure
+
+The subsequent selector-order tranche publishes exactly 40 additional Common
+declarations: `minBy`, `maxBy`, `minByOrNull`, and `maxByOrNull` for Iterable,
+generic object arrays, and each of the eight signed primitive-array wrappers.
+Boolean is valid and required in this family because selector result `R`, not
+the receiver element, supplies the Comparable ordering. The corresponding
+Sequence declarations were already admitted by the complete Sequence
+foundation; Map and CharSequence variants remain separately classified.
+
+The exact Common bodies preserve `NoSuchElementException` versus null for an
+empty input and deliberately do not invoke the selector for empty or singleton
+inputs. Every later visited element is selected exactly once, comparison-equal
+keys retain the first element, and callback failure stops traversal at the
+failing element. Generic Comparable dispatch also retains Kotlin Float/Double
+NaN and signed-zero total ordering rather than a direct CLR numeric comparison.
+
+The first hostile compile exposed a general emitter defect rather than a
+collection-specific problem. The inliner represents a local return from these
+bodies as a break from a synthetic do-while loop. When the inline call was a
+later arithmetic operand, the break emitter discarded operands which predated
+loop entry. Loop registration now records the evaluation-stack baseline;
+same-region break/continue drains only values above it, while cross-region
+`leave` still requires an empty entry stack. The original inline expression
+now executes on Framework CLR 4 and .NET 10 without rewriting the Common body.
+
+Raw metadata contains ten MethodDefs for each logical name. These are ordinary
+public inline fallbacks, not `@InlineOnly`: installed Kotlin consumers inline
+all 40, while Roslyn implements the truthful erased `Kotlin.Function1`
+capability and directly calls the signed IntArray fallbacks. No Runtime surface,
+ABI schema, physical-name mapping, or lambda/delegate export claim was added.
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
@@ -433,8 +465,8 @@ variant whose dependency closure consists only of the already published read-onl
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
 closure above. Ordinary signed ranges, complete Sequence builders, Grouping,
-eager Iterable windowing and Sequence consumers, equality and natural min/max
-aggregates, and signed-array sorting have
+eager Iterable windowing and Sequence consumers, equality, natural min/max,
+selector min/max aggregates, and signed-array sorting have
 since landed as complete independent
 foundations. Random, dependency-blocked reified variants, reflection, and
 unsigned families remain excluded when they introduce an independent
@@ -1322,8 +1354,11 @@ second loop or collection-specific type-token path was added.
     Float, and Double Iterable/object-array receivers and all seven naturally
     ordered signed primitive-array wrappers, with deterministic bounded CLR
     names for return-only collisions.
-15. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-16. Remove the bootstrap allowlist when the complete generated product is supportable.
+15. **Completed:** publish `minBy`/`maxBy` throwing and nullable forms over
+    Iterable, object arrays, and all eight signed primitive arrays, including
+    the loop-entry stack-baseline fix required by their inlined local returns.
+16. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+17. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

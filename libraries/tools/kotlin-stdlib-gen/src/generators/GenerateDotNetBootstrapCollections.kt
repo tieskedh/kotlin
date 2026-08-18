@@ -817,6 +817,8 @@ fun main(args: Array<String>) {
         component selectedFor setOf(Family.Lists)
     } + Aggregates.f_minMax.map { member ->
         member selectedFor setOf(Family.Iterables, Family.ArraysOfObjects, Family.ArraysOfPrimitives)
+    } + Aggregates.f_minMaxBy.map { member ->
+        member selectedFor setOf(Family.Iterables, Family.ArraysOfObjects, Family.ArraysOfPrimitives)
     } + Aggregates.f_minMaxWith.map { member ->
         member selectedFor setOf(Family.Iterables)
     } + Aggregates.f_minMaxOfWith().map { member ->
