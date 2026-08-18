@@ -11,14 +11,12 @@ import org.jetbrains.kotlin.backend.common.lower.AbstractValueUsageTransformer
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnboxedValueClassTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassGenericBoundarySlotOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassConstructorImplementationSourceOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassImplementationSourceOrNull
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.isDotNetErasedObjectResult
 import org.jetbrains.kotlin.backend.dotnet.isDotNetErasedCallableInvoke
 import org.jetbrains.kotlin.backend.dotnet.isDotNetErasedPropertyAccess
@@ -296,7 +294,7 @@ internal fun DotNetBackendContext.getOrCreateDotNetValueClassBoxingHelpers(
 internal class DotNetValueClassAutoboxingLowering(
     private val context: DotNetBackendContext,
 ) : BodyLoweringPass {
-    private val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
 
     override fun lower(irBody: IrBody, container: IrDeclaration) {
         val builder = context.createIrBuilder(container.symbol)
