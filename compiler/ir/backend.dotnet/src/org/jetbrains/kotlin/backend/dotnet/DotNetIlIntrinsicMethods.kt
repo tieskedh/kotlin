@@ -3129,8 +3129,14 @@ private class DotNetIlEqualityIntrinsic(
             ?: dotNetUnsupported("missing left operand of an equality comparison")
         val right = call.arguments[1]
             ?: dotNetUnsupported("missing right operand of an equality comparison")
-        val leftType = codegen.toDotNetIlValueType(left.type)
-        val rightType = codegen.toDotNetIlValueType(right.type)
+        // Compare the values each expression physically produces. In the generic-owner
+        // rehearsal a property getter may return the declaration-erased semantic capability
+        // even though its logical Kotlin result is C<T>; `x == null` must retain that carrier
+        // rather than reconstructing a constructed CLR owner merely for the null check.
+        val leftType = codegen.genericOwnerCapabilityNaturalTypeOrNull(left)
+            ?: codegen.toDotNetIlValueType(left.type)
+        val rightType = codegen.genericOwnerCapabilityNaturalTypeOrNull(right)
+            ?: codegen.toDotNetIlValueType(right.type)
         // Structural equality between the exact same open T uses the runtime's cached generic
         // entry. It keeps reference/null and Kotlin floating behavior on the universal object
         // path, but uses constrained Object.Equals for other value-type instantiations so an
@@ -3567,6 +3573,12 @@ private fun DotNetIlValueType?.isDotNetPrimitiveValue(): Boolean = when (this) {
  * [DotNetMappedExceptions] registry mapping.
  */
 private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun naturalReturnType(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): DotNetIlValueType? = call.arguments.singleOrNull()
+        ?.let(codegen::genericOwnerCapabilityNaturalTypeOrNull)
+
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
@@ -3575,7 +3587,8 @@ private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
         if (call.arguments.size != 1) return false
         val argument = call.arguments.single()
             ?: dotNetUnsupported("missing operand of the '!!' operator")
-        val argumentType = codegen.toDotNetIlValueType(argument.type)
+        val argumentType = codegen.genericOwnerCapabilityNaturalTypeOrNull(argument)
+            ?: codegen.toDotNetIlValueType(argument.type)
             ?: dotNetUnsupported("'!!' on a value of unsupported type ${argument.type.render()}")
         when {
             argumentType is DotNetIlValueType.NullableValue -> {
@@ -4894,8 +4907,10 @@ private fun IrCall.dotNetMappedExceptionReceiver(
 private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen): DotNetIlValueType? {
     val left = arguments.getOrNull(0) ?: return null
     val right = arguments.getOrNull(1) ?: return null
-    val leftType = codegen.toDotNetIlValueType(left.type)
-    val rightType = codegen.toDotNetIlValueType(right.type)
+    val leftType = codegen.genericOwnerCapabilityNaturalTypeOrNull(left)
+        ?: codegen.toDotNetIlValueType(left.type)
+    val rightType = codegen.genericOwnerCapabilityNaturalTypeOrNull(right)
+        ?: codegen.toDotNetIlValueType(right.type)
     return when {
         leftType != null && leftType == rightType -> leftType
         // A `null` constant compared against a reference type (string, a user class, a primitive

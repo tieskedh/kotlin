@@ -6341,7 +6341,10 @@ $factoryCases
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"AreEqualGeneric".toIlIdentifier()}<${typeParameter.nameInSignature}>" +
-                "(${typeParameter.nameInSignature}, ${typeParameter.nameInSignature})"
+                // The MethodSpec argument closes T with the caller's !n/!!n. The MemberRef
+                // signature itself must still name AreEqualGeneric's own method slot !!0;
+                // repeating an owner !n here constructs a different, nonexistent signature.
+                "(!!0, !!0)"
 
     /** Kotlin object-boundary hash semantics, including Boolean, Char, and boxed Double differences. */
     val hashCodeCallInstruction: String =

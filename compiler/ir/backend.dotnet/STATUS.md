@@ -46,6 +46,28 @@ verification, and work state.
   major work is the complete Kotlin-emitter/inverse-rollback generic-owner
   rehearsal, not another leaf family or per-owner switch. See
   [`docs/archive/common-map-min-max-family-2026-08-18.md`](docs/archive/common-map-min-max-family-2026-08-18.md).
+- First Kotlin-emitted CLR-generic-owner rehearsal checkpoint: the test-only
+  `kotlin.dotnet.genericOwnerRehearsal` epoch now replaces admitted ordinary
+  Kotlin owners with real `C<T>` TypeDefs and maps producer-proven ordinary
+  state to `!T` fields. Volatile/open semantic state remains one object-domain
+  field on that same owner; no shadow or copied state is introduced. The
+  emitter consumes planner-owned typed/semantic/capability families, physical
+  inner-class parameters, constructed owner calls and fields, value-class
+  carriers, classifier-only Kotlin `is`/`as?` behavior, and the permitted
+  earlier failure of explicitly unchecked throwing parameterized casts.
+  Physical ABI 36 carries owner arity and capability/member-family bindings to
+  separate Kotlin consumers. The focused PSI/LightTree and Framework
+  4.8/.NET 10 matrix executes 36 products with zero failures, errors, or skips,
+  covering value/reference/nullable fields, inner classes, value classes whose
+  backing value is `C<T>`, reflection, C# construction/dispatch, and separate
+  compilation. Production remains on the unchanged erased epoch. The
+  source-built whole-Stdlib rehearsal still fails closed in later emission at
+  residual canonical/capability owner joins, covariant returns, and exact
+  runtime-intrinsic field requirements; it is the next slice, not evidence for
+  a per-owner rollout. The final normal target aggregate covers 190 XML suites
+  and 2,282 tests with zero failures, errors, or skips; FIR and integration
+  roots were freshly written, while the unchanged six-test `dotnet.ir` root
+  remained up-to-date from its prior green checkpoint.
 - Preceding completed Common collection feature: all 28 generated CharSequence
   min/max aggregates are now published on `Kotlin.Text.StringsKt`, together
   with the exact Common `CharSequence.lastIndex` prerequisite discovered by
@@ -3421,7 +3443,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    direct paths and never replace the open-world capability. Do not emit a
    production `C<T>` TypeDef or roll out an easy owner before the hostile
    prototype and real-app measurement checkpoint select the one atomic
-   cutover.
+   cutover. The first normal Kotlin-emitter checkpoint now emits real `C<T>`
+   owners, true `!T` ordinary state, semantic/capability families, physical
+   inner parameters, generic value-class carriers, and ABI-36 separate-library
+   bindings behind the test-only rehearsal epoch. Continue with the complete
+   Runtime/Stdlib owner graph and its residual canonical/capability joins,
+   covariant returns, and intrinsic state requirements, then execute the
+   representative products and exact inverse rollback before the next go/no-go
+   decision.
 2. The dependency recomputation after eager windowing selected and completed
    both the exact seven-declaration Iterable/Sequence-consumer closure and the
    complete supported-classifier `allEqual`/`allEqualBy` and

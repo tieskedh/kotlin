@@ -204,6 +204,12 @@ projectTests {
             providers.gradleProperty("kotlin.dotnet.genericOwnerCallRouteTraceDir").orNull?.let { exportDirectory ->
                 systemProperty("kotlin.dotnet.genericOwnerCallRouteTraceDir", exportDirectory)
             }
+            providers.gradleProperty("kotlin.dotnet.genericOwnerRehearsal").orNull?.let { enabled ->
+                systemProperty("kotlin.dotnet.genericOwnerRehearsal", enabled)
+            }
+            providers.gradleProperty("kotlin.dotnet.genericOwnerRehearsalDir").orNull?.let { exportDirectory ->
+                systemProperty("kotlin.dotnet.genericOwnerRehearsalDir", exportDirectory)
+            }
         }
     }
 
