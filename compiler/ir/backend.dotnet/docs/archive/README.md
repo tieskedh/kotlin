@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`common-all-distinct-family-2026-08-18.md`](common-all-distinct-family-2026-08-18.md)
+  records the complete 20-declaration supported-classifier distinct aggregate
+  release, carrier-neutral byte-domain helper, absence of public unsigned .NET
+  surface, direct Kotlin/C# evidence, and the final 2,254-test proof.
 - [`common-all-equal-family-2026-08-18.md`](common-all-equal-family-2026-08-18.md)
   records the complete 20-declaration supported-classifier equality aggregate
   release, exact selector/floating semantics, the `allDistinct` unsigned-helper

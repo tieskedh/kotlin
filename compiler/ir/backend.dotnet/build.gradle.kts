@@ -139,6 +139,7 @@ tasks.named<ProcessResources>("processResources") {
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/HashSet.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/LinkedHashMap.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/LinkedHashSet.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/ByteDomainValueSet.kt"),
     )) {
         into("kotlin-dotnet-stdlib/common/src/kotlin/collections")
     }

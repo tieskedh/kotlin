@@ -401,14 +401,14 @@ object Aggregates : TemplateGroupBase() {
                     return size == 2 && this[0] != this[1]
                     """
                 PrimitiveType.Byte, PrimitiveType.UByte -> {
-                    val key = if (primitive == PrimitiveType.Byte) "element.toUByte()" else "element"
+                    val index = if (primitive == PrimitiveType.Byte) "element.toInt() and 0xFF" else "element.toInt()"
                     """
                     if (size < 2) return true
                     // more than ${1 shl Byte.SIZE_BITS} values force a duplicate
                     if (size > (1 shl ${primitive!!.name}.SIZE_BITS)) return false
-                    val seen = UByteValueSet()
+                    val seen = ByteDomainValueSet()
                     for (element in this) {
-                        if (!seen.add($key)) return false
+                        if (!seen.add($index)) return false
                     }
                     return true
                     """

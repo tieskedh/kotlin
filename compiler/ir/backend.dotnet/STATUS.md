@@ -28,6 +28,23 @@ verification, and work state.
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Latest completed Common collection feature: the complete generated
+  `allDistinct`/`allDistinctBy` family now publishes 20 declarations over
+  Iterable, generic object arrays, and all eight signed primitive-array
+  wrappers, in addition to the previously completed Sequence variants. The
+  shared Common byte-domain bit set now accepts normalized Int indices, so
+  signed Byte retains its allocation-free 256-bit algorithm without depending
+  on public `UByte`; the same refactor remains exact for upstream unsigned
+  callers. The .NET product contains one non-public internal helper and no
+  `Kotlin.UByte` TypeDef. Exact Common singleton selector elision, first-
+  duplicate short circuit, nullable keys, callback failure timing, and
+  equals-consistent Float/Double NaN/signed-zero behavior are pinned. Raw
+  metadata contains ten ordinary and ten selector MethodDefs; installed Kotlin
+  calls ten ordinary fallbacks and inlines all selector bodies, while Roslyn
+  calls signed `IntArray` directly. The final aggregate freshly wrote all three
+  roots: 190 XML suites and 2,254 tests with zero failures, errors, or skips.
+  See
+  [`docs/archive/common-all-distinct-family-2026-08-18.md`](docs/archive/common-all-distinct-family-2026-08-18.md).
+- Preceding completed Common collection feature: the complete generated
   `allEqual`/`allEqualBy` family now publishes 20 declarations over Iterable,
   generic object arrays, and all eight signed primitive-array wrappers, in
   addition to the previously completed Sequence variants. The exact Common
@@ -36,15 +53,15 @@ verification, and work state.
   and equals-consistent Float/Double NaN and signed-zero behavior. Raw product
   metadata pins ten ordinary and ten selector MethodDefs; installed Kotlin
   emits ten public ordinary fallback calls and inlines all ten selector
-  bodies, while Roslyn calls the signed `IntArray` overload directly. The
-  sibling `allDistinct` family remains wholly excluded because upstream's
-  signed ByteArray body reaches `UByteValueSet` and `Byte.toUByte()`; no Byte
-  omission or target HashSet substitute is permitted. The final full target
+  bodies, while Roslyn calls the signed `IntArray` overload directly. At this
+  checkpoint the sibling `allDistinct` family remained deferred rather than
+  omitting Byte or adding a target HashSet substitute; the latest tranche above
+  resolves that exact shared dependency. The final full target
   aggregate covers 190 XML suites and 2,250 tests with zero failures, errors,
   or skips; FIR and integration were freshly written and the unchanged six-
   test `dotnet.ir` root remained up-to-date. See
   [`docs/archive/common-all-equal-family-2026-08-18.md`](docs/archive/common-all-equal-family-2026-08-18.md).
-- Preceding completed Common collection feature: the full seven-declaration eager
+- Earlier completed Common collection feature: the full seven-declaration eager
   Iterable/Sequence-consumer closure now publishes four Sequence-result
   `flatMap*` variants, `minus(Sequence)`, and both Iterable/Collection
   `plus(Sequence)` overloads. Existing Iterable-result flatMap physical names
@@ -2708,10 +2725,18 @@ completed Sequence foundation. Exact Common selector counts, first-mismatch
 short circuit, nullable selector-key state, exception propagation, and boxed
 and primitive Float/Double equality remain authoritative. Product metadata,
 installed Kotlin fallback/inlining shape, direct Roslyn signed-array calls,
-and both Framework CLR 4 and .NET 10 execution are pinned. `allDistinct`
-remains a separate whole-family blocker: its signed ByteArray template reaches
-Common `UByteValueSet` and `Byte.toUByte()`, so it cannot be partially admitted
-or replaced with a target HashSet loop.
+and both Framework CLR 4 and .NET 10 execution are pinned.
+
+The corresponding complete `allDistinct`/`allDistinctBy` supported-classifier
+family is now published as a second 20-declaration closure. Its only new source
+dependency is Common's exact allocation-free byte-domain bit set. That shared
+helper now consumes normalized Int indices rather than an unnecessary public
+UByte carrier, preserving both signed and upstream unsigned algorithms while
+allowing the .NET product to remain free of a `Kotlin.UByte` TypeDef. Empty and
+singleton behavior, first-duplicate short circuit, callback failure timing,
+nullable keys, primitive and boxed floating equality, the ten fallback/ten
+inline installed shapes, direct Roslyn signed-array calls, and both runtime
+profiles are pinned.
 
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
@@ -3251,11 +3276,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    cutover.
 2. The dependency recomputation after eager windowing selected and completed
    both the exact seven-declaration Iterable/Sequence-consumer closure and the
-   complete supported-classifier `allEqual`/`allEqualBy` closure. Recompute
-   again before the next tranche and choose one complete dependency-homogeneous
-   classifier family. Keep `allDistinct` blocked as a whole while signed
-   ByteArray reaches `UByteValueSet`/`Byte.toUByte()`, and keep remaining
-   comparison, min/max, Random and entropy, unsigned value-class/range
+   complete supported-classifier `allEqual`/`allEqualBy` and
+   `allDistinct`/`allDistinctBy` closures. Recompute again before the next
+   tranche and choose one complete dependency-homogeneous classifier family.
+   Keep remaining comparison, min/max, Random and entropy, unsigned value-class/range
    representation, CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not

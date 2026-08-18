@@ -574,6 +574,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "ByteDomainValueSet.kt",
+        "common/src/kotlin/collections/ByteDomainValueSet.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "Range.kt",
         "src/kotlin/ranges/Range.kt",
         isCommon = true,
