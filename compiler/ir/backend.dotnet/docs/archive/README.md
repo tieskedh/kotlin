@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`common-natural-min-max-family-2026-08-18.md`](common-natural-min-max-family-2026-08-18.md)
+  records the complete 52-declaration natural min/max supported-classifier
+  release, bounded logical-element-derived physical naming, exact floating and
+  empty/tie semantics, direct Kotlin/C# evidence, and the final 2,258-test
+  proof.
 - [`common-all-distinct-family-2026-08-18.md`](common-all-distinct-family-2026-08-18.md)
   records the complete 20-declaration supported-classifier distinct aggregate
   release, carrier-neutral byte-domain helper, absence of public unsigned .NET

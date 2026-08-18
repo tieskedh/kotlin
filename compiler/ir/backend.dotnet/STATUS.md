@@ -27,7 +27,23 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: the complete generated
+- Latest completed Common collection feature: the natural generated
+  `min`/`max` family now publishes all 52 declarations over generic, Float,
+  and Double Iterable/object-array receivers plus the seven naturally ordered
+  signed primitive-array wrappers, with throwing and nullable forms together.
+  Boolean remains absent exactly as in the upstream templates; the Sequence
+  forms were already complete. Empty-input failure/nullability, first-tie
+  identity, single traversal, and Kotlin Float/Double NaN and signed-zero
+  ordering are pinned. Iterable/object-array return-only collisions reuse the
+  bounded logical-element-derived physical names already proven for Sequence;
+  this adds no public `DotNetName` policy. Raw metadata and installed Kotlin
+  calls account for all 52 MethodDefs, while Roslyn calls signed `IntArray`
+  overloads directly. The generated collections source is byte-stable at
+  `A17BCD007BE004F4B780E1FB5ADBDB52A43AFE857F13227EF65D2D68D7516BC3`.
+  The final aggregate plus explicit model-suite freshness rerun wrote all three
+  roots: 190 XML suites and 2,258 tests with zero failures, errors, or skips. See
+  [`docs/archive/common-natural-min-max-family-2026-08-18.md`](docs/archive/common-natural-min-max-family-2026-08-18.md).
+- Preceding completed Common collection feature: the complete generated
   `allDistinct`/`allDistinctBy` family now publishes 20 declarations over
   Iterable, generic object arrays, and all eight signed primitive-array
   wrappers, in addition to the previously completed Sequence variants. The
@@ -1617,26 +1633,27 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The profile-specialized generic-array-fill head passed every constituent of
+The natural generated `min`/`max` head passed every constituent of
 the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed successfully on 2026-08-15. Backend, FIR2IR,
-stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the final semantic head. Direct audit of all three result roots covers 190
-XML files and 2,216 tests:
+The latest aggregate plus explicit model-suite freshness rerun completed
+successfully on 2026-08-18. Backend, FIR2IR, stdlib product,
+Framework/CoreCLR, Roslyn, and integration inputs were executed for the final
+semantic head. Direct audit of all three freshly written result roots covers
+190 XML files and 2,258 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,085 FIR, IL-text, and box tests
-- 21 generated CLI tests
-- 104 library-integration tests
+- 2,127 FIR, IL-text, and box tests
+- 125 generated CLI and library-integration tests
 - zero failures, errors, or skips
 
-The aggregate and explicit model constituent exited successfully. The final
-head additionally proves all eight exact scalar fill carriers, nullable/null/
+The earlier profile-specialized generic-array-fill aggregate and explicit
+model constituent exited successfully. That historical head additionally
+proves all eight exact scalar fill carriers, nullable/null/
 reference/open substitutions, empty/partial/full ranges, ordered evaluation,
 both range-failure categories, Framework typed stores, CoreCLR generic BCL
 execution, retained erased-owner fallback, and unchanged generic-copy,
@@ -2738,6 +2755,20 @@ nullable keys, primitive and boxed floating equality, the ten fallback/ten
 inline installed shapes, direct Roslyn signed-array calls, and both runtime
 profiles are pinned.
 
+The complete natural generated `min`/`max` family is now published as one
+52-declaration closure. Iterable and object arrays each contribute generic,
+Float, and Double throwing/nullable min/max variants; Byte, Short, Int, Long,
+Float, Double, and Char arrays contribute all four forms. Upstream supplies no
+natural Boolean-array template, so none is fabricated. Common empty behavior,
+first-tie identity, traversal, NaN propagation, and signed-zero total ordering
+remain exact. Because Iterable and object-array erasure makes their logical
+return-only siblings collide, the physical facade reuses Sequence's bounded
+logical-element-derived `...OrThrow[OfFloat|OfDouble]` and
+`...OrNull[OfFloat|OfDouble]` names. KLIB keeps every logical Kotlin name;
+there is no general public naming annotation or partial generic-owner change.
+Raw metadata, all 52 installed calls, direct Roslyn signed-array calls, and
+both runtime profiles are pinned.
+
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
@@ -3277,9 +3308,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 2. The dependency recomputation after eager windowing selected and completed
    both the exact seven-declaration Iterable/Sequence-consumer closure and the
    complete supported-classifier `allEqual`/`allEqualBy` and
-   `allDistinct`/`allDistinctBy` closures. Recompute again before the next
-   tranche and choose one complete dependency-homogeneous classifier family.
-   Keep remaining comparison, min/max, Random and entropy, unsigned value-class/range
+   `allDistinct`/`allDistinctBy` closures. The next recomputation selected and
+   completed the full 52-declaration natural `min`/`max` family. Recompute
+   again before the next tranche and choose one complete dependency-
+   homogeneous classifier family. Keep selector/comparator `minBy`/`maxBy`,
+   `minOf`/`maxOf`, remaining comparison, Random and entropy, unsigned value-class/range
    representation, CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not

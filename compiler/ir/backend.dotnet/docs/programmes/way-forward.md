@@ -1192,6 +1192,17 @@ or range surface. Keep duplicate short-circuit, singleton selector elision,
 nullable-key, exception, and floating equality behavior exact; neither a
 partial classifier family nor a target HashSet substitute is valid.
 
+The natural generated `min`/`max` family is now complete as its own
+dependency-homogeneous release. It contains all 52 generic/Float/Double
+Iterable and object-array throwing/nullable variants plus the same four forms
+for the seven upstream naturally ordered signed primitive arrays; Boolean is
+absent by source authority. Iterable/object-array return-only collisions reuse
+the bounded logical-element-derived physical naming already proven for
+Sequence, while KLIB retains the ordinary Kotlin names. This is not a general
+`@JvmName`/`DotNetName` policy and does not reopen the physical Sequence or
+generic-owner ABI. Keep selector/comparator min/max, Random, unsigned, and
+other dependency families independent until their complete graphs are proven.
+
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
 interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.

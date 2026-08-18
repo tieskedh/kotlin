@@ -422,6 +422,18 @@ duplicate short circuit, singleton selector elision, nullable keys, and
 Float/Double equals-consistent NaN/signed-zero behavior; do not substitute a
 target HashSet algorithm.
 
+Generated natural `min`/`max` is one complete ordered supported-classifier
+family: publish throwing and nullable forms together for generic, Float, and
+Double Iterable/object-array receivers and for the seven naturally ordered
+signed primitive-array wrappers. Boolean has no upstream natural-order
+template and must not be invented. Preserve empty-input failure/nullability,
+first equal-element identity, single traversal, and Kotlin Float/Double NaN
+and signed-zero behavior. Iterable and object-array erasure collapses the
+generic, Float, and Double return-only overloads; use the bounded logical-
+element-derived physical names shared with Sequence. This is compiler-owned
+stdlib implementation naming, not a general `@JvmName`, public `DotNetName`,
+or authority for a physical generic-owner cutover.
+
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common
 aggregate/fold/reduce/count source remains authoritative. Admit the Iterable,

@@ -4527,6 +4527,285 @@ public inline fun <T, R, C : MutableCollection<in R>> Iterable<T>.mapTo(destinat
 }
 
 /**
+ * Returns the largest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Iterable<Double>.max(): Double {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Iterable<Float>.max(): Float {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If there are multiple equal maximal elements, this function returns the first of those elements.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun <T : Comparable<T>> Iterable<T>.max(): T {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Array<out Double>.max(): Double {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Array<out Float>.max(): Float {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If there are multiple equal maximal elements, this function returns the first of those elements.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun <T : Comparable<T>> Array<out T>.max(): T {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun ByteArray.max(): Byte {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun ShortArray.max(): Short {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun IntArray.max(): Int {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun LongArray.max(): Long {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun FloatArray.max(): Float {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun DoubleArray.max(): Double {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun CharArray.max(): Char {
+    if (isEmpty()) throw NoSuchElementException()
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
  * Returns the largest value according to the provided [comparator]
  * among all values produced by [selector] function applied to each element in the collection.
  *
@@ -4579,6 +4858,233 @@ public inline fun <T, R> Iterable<T>.maxOfWithOrNull(comparator: Comparator<in R
 }
 
 /**
+ * Returns the largest element or `null` if the collection is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Iterable<Double>.maxOrNull(): Double? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the collection is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Iterable<Float>.maxOrNull(): Float? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the collection is empty.
+ *
+ * If there are multiple equal maximal elements, this function returns the first of those elements.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.4")
+public fun <T : Comparable<T>> Iterable<T>.maxOrNull(): T? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Array<out Double>.maxOrNull(): Double? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Array<out Float>.maxOrNull(): Float? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * If there are multiple equal maximal elements, this function returns the first of those elements.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.4")
+public fun <T : Comparable<T>> Array<out T>.maxOrNull(): T? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun ByteArray.maxOrNull(): Byte? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun ShortArray.maxOrNull(): Short? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun IntArray.maxOrNull(): Int? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun LongArray.maxOrNull(): Long? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun FloatArray.maxOrNull(): Float? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun DoubleArray.maxOrNull(): Double? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        max = maxOf(max, e)
+    }
+    return max
+}
+
+/**
+ * Returns the largest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun CharArray.maxOrNull(): Char? {
+    if (isEmpty()) return null
+    var max = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (max < e) max = e
+    }
+    return max
+}
+
+/**
  * Returns the first element having the largest value according to the provided [comparator].
  *
  * @throws NoSuchElementException if the collection is empty.
@@ -4610,6 +5116,285 @@ public fun <T> Iterable<T>.maxWithOrNull(comparator: Comparator<in T>): T? {
         if (comparator.compare(max, e) < 0) max = e
     }
     return max
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Iterable<Double>.min(): Double {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Iterable<Float>.min(): Float {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If there are multiple equal minimal elements, this function returns the first of those elements.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun <T : Comparable<T>> Iterable<T>.min(): T {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Array<out Double>.min(): Double {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun Array<out Float>.min(): Float {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If there are multiple equal minimal elements, this function returns the first of those elements.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun <T : Comparable<T>> Array<out T>.min(): T {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun ByteArray.min(): Byte {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun ShortArray.min(): Short {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun IntArray.min(): Int {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun LongArray.min(): Long {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun FloatArray.min(): Float {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun DoubleArray.min(): Double {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element.
+ *
+ * @throws NoSuchElementException if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun CharArray.min(): Char {
+    if (isEmpty()) throw NoSuchElementException()
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
 }
 
 /**
@@ -4662,6 +5447,233 @@ public inline fun <T, R> Iterable<T>.minOfWithOrNull(comparator: Comparator<in R
         }
     }
     return minValue
+}
+
+/**
+ * Returns the smallest element or `null` if the collection is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Iterable<Double>.minOrNull(): Double? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the collection is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Iterable<Float>.minOrNull(): Float? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the collection is empty.
+ *
+ * If there are multiple equal minimal elements, this function returns the first of those elements.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.4")
+public fun <T : Comparable<T>> Iterable<T>.minOrNull(): T? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Array<out Double>.minOrNull(): Double? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun Array<out Float>.minOrNull(): Float? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * If there are multiple equal minimal elements, this function returns the first of those elements.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinGeneric
+ */
+@SinceKotlin("1.4")
+public fun <T : Comparable<T>> Array<out T>.minOrNull(): T? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun ByteArray.minOrNull(): Byte? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun ShortArray.minOrNull(): Short? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun IntArray.minOrNull(): Int? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun LongArray.minOrNull(): Long? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun FloatArray.minOrNull(): Float? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * If any of elements is `NaN`, this function returns `NaN`.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinFloating
+ */
+@SinceKotlin("1.4")
+public fun DoubleArray.minOrNull(): Double? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        min = minOf(min, e)
+    }
+    return min
+}
+
+/**
+ * Returns the smallest element or `null` if the array is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxMinPrimitive
+ */
+@SinceKotlin("1.4")
+public fun CharArray.minOrNull(): Char? {
+    if (isEmpty()) return null
+    var min = this[0]
+    for (i in 1..lastIndex) {
+        val e = this[i]
+        if (min > e) min = e
+    }
+    return min
 }
 
 /**
