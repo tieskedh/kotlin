@@ -406,6 +406,16 @@ generic in KLIB. Their use does not authorize changing the canonical erased
 physical `Sequence` owner before an atomic generic-interface cutover, nor does
 it block an independently selected additive typed C# adapter/export.
 
+Generated `allEqual`/`allEqualBy` is one complete supported-classifier family:
+publish Iterable, generic object-array, and all eight signed primitive-array
+variants together, in addition to the already published Sequence variants.
+Keep Common's zero selector calls for empty/singleton inputs, first-mismatch
+short circuit, nullable selector-key state, and Float/Double equals-consistent
+NaN/signed-zero behavior. The sibling `allDistinct` family remains whole and
+excluded while its signed ByteArray body requires Common `UByteValueSet` and
+`Byte.toUByte()`; do not omit Byte, copy a HashSet fallback, or infer that an
+internal unsigned dependency authorizes public unsigned arrays/ranges.
+
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common
 aggregate/fold/reduce/count source remains authoritative. Admit the Iterable,

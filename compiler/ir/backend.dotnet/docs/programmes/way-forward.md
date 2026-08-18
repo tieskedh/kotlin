@@ -1179,6 +1179,16 @@ logically generic. The physical erased `Sequence` owner must still wait for the
 atomic generic-interface cutover, while a typed C# adapter/export may be
 selected independently and additively.
 
+The complete generated equality aggregate family is now published for every
+currently supported classifier: `allEqual` and `allEqualBy` over Iterable,
+generic object arrays, all eight signed primitive-array wrappers, and the
+already completed Sequence variants. Common's selector-count, short-circuit,
+nullable-key, exception, and floating equality rules remain exact on both
+runtime profiles. Do not fold `allDistinct` into this result: upstream's signed
+ByteArray fast path reaches `UByteValueSet` and `Byte.toUByte()`. That family
+remains wholly excluded until a bounded exact unsigned helper substrate is
+selected; neither omitting Byte nor substituting a target HashSet is valid.
+
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
 interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.
