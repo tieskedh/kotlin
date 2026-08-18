@@ -55,8 +55,10 @@ verification, and work state.
   inner-class parameters, constructed owner calls and fields, value-class
   carriers, classifier-only Kotlin `is`/`as?` behavior, and the permitted
   earlier failure of explicitly unchecked throwing parameterized casts.
-  Physical ABI 36 carries owner arity and capability/member-family bindings to
-  separate Kotlin consumers. The focused PSI/LightTree and Framework
+  Physical ABI 37 carries owner arity, capability/member-family bindings,
+  producer-selected capability slots in ordinary function signatures, and
+  foreign-override probe identities to separate Kotlin consumers. The focused
+  PSI/LightTree and Framework
   4.8/.NET 10 matrix executes 36 products with zero failures, errors, or skips,
   covering value/reference/nullable fields, inner classes, value classes whose
   backing value is `C<T>`, reflection, C# construction/dispatch, and separate
@@ -81,11 +83,15 @@ verification, and work state.
   returns its incompatible object and fails only at a later real typed use.
   PSI/LightTree on Framework 4.8 and .NET 10 execute both the direct Kotlin
   producer/C# consumer and the actual Kotlin base DLL -> Kotlin override DLL ->
-  warnings-as-errors C# subclass chain. The latter proves that ABI-36 needs no
-  probe identity: each Kotlin override emits a local probe and private
-  capability dispatcher, so raw widened state remains semantic while only a
-  still-later C# typed override changes that local probe result. NativeAOT and
-  the other deployment lanes are the next bounded validation condition.
+  warnings-as-errors C# subclass chain. The correct `-P` rehearsal disproved
+  the earlier ABI-36 conclusion. An ordinary external function first lost its
+  producer-selected capability parameter, and the intervening Kotlin override
+  then failed to reuse the inherited semantic-hook/probe slots. ABI-37 records
+  both facts. The consumer reconstructs only explicitly recorded capability
+  slots and makes the Kotlin semantic hook and last-Kotlin probe override their
+  producer MethodDefs; a still-later C# override changes only the natural typed
+  target. NativeAOT and the other deployment lanes are the next bounded
+  validation condition.
   This remains a rehearsal slice, not evidence for a per-owner rollout. The
   final normal target aggregate covers 190 XML suites and 2,286
   tests with zero failures, errors, or skips; FIR and integration roots were
@@ -3468,7 +3474,7 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    prototype and real-app measurement checkpoint select the one atomic
    cutover. The first normal Kotlin-emitter checkpoint now emits real `C<T>`
    owners, true `!T` ordinary state, semantic/capability families, physical
-   inner parameters, generic value-class carriers, and ABI-36 separate-library
+   inner parameters, generic value-class carriers, and ABI-37 separate-library
    bindings behind the test-only rehearsal epoch. Continue with the complete
    Runtime/Stdlib owner graph and its residual canonical/capability joins,
    covariant returns, and intrinsic state requirements, then execute the

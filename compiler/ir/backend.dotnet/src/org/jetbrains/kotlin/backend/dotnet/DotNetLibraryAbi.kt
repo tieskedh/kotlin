@@ -186,6 +186,32 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /** Producer-selected semantic-capability carriers in one otherwise ordinary function ABI. */
+    data class GenericOwnerFunctionCarrier(
+        override val ownerPath: List<String>,
+        val logicalFunctionKey: String,
+        val carriesReturn: Boolean,
+        val parameterIndices: List<Int>,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) {
+                "a generic-owner function carrier requires a CLR owner"
+            }
+            require(logicalFunctionKey.isNotEmpty()) {
+                "a generic-owner function carrier requires a logical function identity"
+            }
+            require(carriesReturn || parameterIndices.isNotEmpty()) {
+                "a generic-owner function carrier must select at least one signature slot"
+            }
+            require(
+                parameterIndices.all { index -> index >= 0 } &&
+                        parameterIndices == parameterIndices.distinct().sorted()
+            ) {
+                "generic-owner function carrier parameter indices must be sorted, unique, and non-negative"
+            }
+        }
+    }
+
     /** The public static singleton field carrying one logical Kotlin enum entry. */
     data class EnumEntry(
         override val ownerPath: List<String>,
@@ -330,6 +356,7 @@ sealed interface DotNetPhysicalDeclaration {
         val defaultCapabilityMethodName: String?,
         val semanticHookOwnerPath: List<String>?,
         val semanticHookMethodName: String?,
+        val foreignOverrideProbeMethodName: String?,
     ) : DotNetPhysicalDeclaration {
         init {
             require(ownerPath.isNotEmpty()) { "a generic-owner member capability requires a CLR owner" }
@@ -350,6 +377,12 @@ sealed interface DotNetPhysicalDeclaration {
             }
             require(semanticHookMethodName == null || semanticHookMethodName.isNotEmpty()) {
                 "a generic-owner semantic hook requires a MethodDef name"
+            }
+            require(foreignOverrideProbeMethodName == null || semanticHookMethodName != null) {
+                "a generic-owner foreign-override probe requires a semantic hook"
+            }
+            require(foreignOverrideProbeMethodName == null || foreignOverrideProbeMethodName.isNotEmpty()) {
+                "a generic-owner foreign-override probe requires a MethodDef name"
             }
         }
     }
@@ -374,6 +407,9 @@ internal fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.indexKey()
 
 internal fun DotNetPhysicalDeclaration.GenericOwnerMemberFamily.indexKey(): String =
     "G:$logicalMemberKey"
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier.indexKey(): String =
+    "S:$logicalFunctionKey"
 
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
 data class DotNetPortablePhysicalAbiDifference(
@@ -435,7 +471,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "36"
+    const val ABI_VERSION = "37"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -482,6 +518,7 @@ object DotNetLibraryAbiCodec {
             val fields = when (declaration) {
                 is DotNetPhysicalDeclaration.Class -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.EnumEntry -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultPromotion -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericInterfaceViewBridge -> declaration.encodeFields()
@@ -502,6 +539,7 @@ object DotNetLibraryAbiCodec {
             val declaration = when (fields.firstOrNull()) {
                 "C" -> decodeClass(fields, logicalKey)
                 "F" -> decodeFunction(fields, logicalKey)
+                "S" -> decodeGenericOwnerFunctionCarrier(fields, logicalKey)
                 "E" -> decodeEnumEntry(fields, logicalKey)
                 "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
                 "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
@@ -623,6 +661,56 @@ object DotNetLibraryAbiCodec {
             methodName = fields[2].requireMethodName(logicalKey),
             isInstance = fields[1].decodeDispatch(logicalKey),
         )
+    }
+
+    private fun DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier.encodeFields(): List<String> =
+        listOf(
+            "S",
+            logicalFunctionKey,
+            if (carriesReturn) "1" else "0",
+            parameterIndices.joinToString(","),
+            ownerPath.size.toString(),
+        ) + ownerPath
+
+    private fun decodeGenericOwnerFunctionCarrier(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier {
+        require(fields.size >= 6) {
+            "generic-owner function carrier '$logicalKey' has an incomplete CLR identity"
+        }
+        val ownerSize = fields[4].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 5 + ownerSize) {
+            "generic-owner function carrier '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        val carriesReturn = when (fields[2]) {
+            "0" -> false
+            "1" -> true
+            else -> throw IllegalArgumentException(
+                "generic-owner function carrier '$logicalKey' has invalid return flag '${fields[2]}'"
+            )
+        }
+        val parameterIndices = if (fields[3].isEmpty()) {
+            emptyList()
+        } else {
+            fields[3].split(',').map { encodedIndex ->
+                encodedIndex.toIntOrNull()
+                    ?: throw IllegalArgumentException(
+                        "generic-owner function carrier '$logicalKey' has invalid parameter index " +
+                                "'$encodedIndex'"
+                    )
+            }
+        }
+        return DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
+            ownerPath = fields.drop(5).requireOwnerPath(logicalKey, "generic-owner function carrier"),
+            logicalFunctionKey = fields[1],
+            carriesReturn = carriesReturn,
+            parameterIndices = parameterIndices,
+        ).also { carrier ->
+            require(carrier.indexKey() == logicalKey) {
+                "generic-owner function carrier '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
     }
 
     private fun decodeInterfaceDefaultFunction(
@@ -959,6 +1047,7 @@ object DotNetLibraryAbiCodec {
             capabilityMethodName,
             defaultCapabilityMethodName.orEmpty(),
             semanticHookMethodName.orEmpty(),
+            foreignOverrideProbeMethodName.orEmpty(),
             ownerPath.size.toString(),
             semanticOwnerPath.size.toString(),
         ) + ownerPath + semanticOwnerPath
@@ -968,14 +1057,14 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.GenericOwnerMemberFamily {
-        require(fields.size >= 9) {
+        require(fields.size >= 10) {
             "generic-owner member family '$logicalKey' has an incomplete CLR identity"
         }
-        val capabilityOwnerSize = fields[6].toIntOrNull()
-        val semanticOwnerSize = fields[7].toIntOrNull()
+        val capabilityOwnerSize = fields[7].toIntOrNull()
+        val semanticOwnerSize = fields[8].toIntOrNull()
         require(capabilityOwnerSize != null && capabilityOwnerSize > 0 &&
                 semanticOwnerSize != null && semanticOwnerSize >= 0 &&
-                fields.size == 8 + capabilityOwnerSize + semanticOwnerSize
+                fields.size == 9 + capabilityOwnerSize + semanticOwnerSize
         ) {
             "generic-owner member family '$logicalKey' has an invalid CLR owner-path payload"
         }
@@ -983,15 +1072,16 @@ object DotNetLibraryAbiCodec {
             "generic-owner member family '$logicalKey' has an inconsistent semantic-hook identity"
         }
         val family = DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
-            ownerPath = fields.subList(8, 8 + capabilityOwnerSize)
+            ownerPath = fields.subList(9, 9 + capabilityOwnerSize)
                 .requireOwnerPath(logicalKey, "generic-owner capability"),
             ownerLogicalKey = fields[1],
             logicalMemberKey = fields[2],
             capabilityMethodName = fields[3].requireMethodName(logicalKey, "generic-owner capability"),
             defaultCapabilityMethodName = fields[4].takeIf(String::isNotEmpty),
-            semanticHookOwnerPath = if (semanticOwnerSize == 0) null else fields.drop(8 + capabilityOwnerSize)
+            semanticHookOwnerPath = if (semanticOwnerSize == 0) null else fields.drop(9 + capabilityOwnerSize)
                 .requireOwnerPath(logicalKey, "generic-owner semantic hook"),
             semanticHookMethodName = fields[5].takeIf(String::isNotEmpty),
+            foreignOverrideProbeMethodName = fields[6].takeIf(String::isNotEmpty),
         )
         require(family.indexKey() == logicalKey) {
             "generic-owner member family '$logicalKey' is inconsistent with its structured identity"
@@ -1459,6 +1549,11 @@ internal data class DotNetBoundGenericOwnerMemberFamily(
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
 )
 
+internal data class DotNetBoundGenericOwnerFunctionCarrier(
+    val library: DotNetExternalLibrary,
+    val carrier: DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier,
+)
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -1516,6 +1611,22 @@ internal class DotNetExternalDeclarations(
                         ) == null) {
                             "duplicate external Kotlin/.NET generic-owner member family " +
                                     "'${family.logicalMemberKey}'"
+                        }
+                    }
+            }
+        }
+    private val genericOwnerFunctionCarriersByLogicalKey:
+        Map<String, DotNetBoundGenericOwnerFunctionCarrier> = buildMap {
+            libraries.forEach { library ->
+                library.declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier>()
+                    .forEach { carrier ->
+                        require(put(
+                            carrier.logicalFunctionKey,
+                            DotNetBoundGenericOwnerFunctionCarrier(library, carrier),
+                        ) == null) {
+                            "duplicate external Kotlin/.NET generic-owner function carrier " +
+                                    "'${carrier.logicalFunctionKey}'"
                         }
                     }
             }
@@ -1750,13 +1861,62 @@ internal class DotNetExternalDeclarations(
                 buildClassInfo(bound.library.artifact.assemblyName, declaration.ownerPath, emptyList())
             }
         }
-        val signature = function.dotNetSignature(
+        val logicalSignature = function.dotNetSignature(
             typeMapper.erasedGenericValueClassImplementationView(function)
         )
+        val carrier = genericOwnerFunctionCarriersByLogicalKey[logicalKey]
+        val signature = carrier?.let { binding ->
+            require(binding.library == bound.library) {
+                "external function '$logicalKey' and its generic-owner carrier belong to different libraries"
+            }
+            require(binding.carrier.ownerPath == declaration.ownerPath) {
+                "external function '$logicalKey' has a generic-owner carrier on a different CLR owner"
+            }
+            logicalSignature.withGenericOwnerFunctionCarrier(function, binding.carrier, typeMapper)
+        } ?: logicalSignature
         require(signature.hasThis == declaration.isInstance) {
             "external function '$logicalKey' has a CLR dispatch shape inconsistent with its metadata"
         }
         return DotNetIlFunctionInfo(owner, signature, declaration.methodName)
+    }
+
+    private fun DotNetIlMethodSignature.withGenericOwnerFunctionCarrier(
+        function: IrSimpleFunction,
+        carrier: DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlMethodSignature {
+        val physicalParameters = parameterTypes.toMutableList()
+        carrier.parameterIndices.forEach { index ->
+            val parameter = function.parameters.getOrNull(index)
+                ?: error(
+                    "external function '${carrier.logicalFunctionKey}' records missing generic-owner " +
+                            "parameter index $index"
+                )
+            if (index !in physicalParameters.indices) {
+                error(
+                    "external function '${carrier.logicalFunctionKey}' has no physical parameter " +
+                            "at recorded index $index"
+                )
+            }
+            physicalParameters[index] =
+                typeMapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type)
+                ?: error(
+                    "external function '${carrier.logicalFunctionKey}' records parameter $index as a " +
+                            "generic-owner capability without a producer capability"
+                )
+        }
+        val physicalReturn = if (carrier.carriesReturn) {
+            DotNetIlReturnType.Value(
+                typeMapper.genericOwnerSemanticCapabilityTypeOrNull(function.returnType)
+                    ?: error(
+                        "external function '${carrier.logicalFunctionKey}' records its return as a " +
+                                "generic-owner capability without a producer capability"
+                    )
+            )
+        } else {
+            returnType
+        }
+        return copy(returnType = physicalReturn, parameterTypes = physicalParameters)
     }
 
     fun interfaceDefaultImplementationOrNull(
@@ -1943,6 +2103,7 @@ internal fun collectDotNetLibraryDeclarations(
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    genericOwnerForeignOverrideProbeTargets: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
     interfaceDefaultImplementations: Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
     defaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -1971,6 +2132,13 @@ internal fun collectDotNetLibraryDeclarations(
             add(helpers.unbox)
         }
         valueClassConstructorImplementations.values.toCollection(this)
+    }
+    val genericOwnerForeignOverrideProbesBySource = buildMap {
+        genericOwnerForeignOverrideProbeTargets.forEach { entry ->
+            require(put(entry.value, entry.key) == null) {
+                "one generic-owner source member produced multiple foreign-override probes"
+            }
+        }
     }
     val genericInterfaceViewBridgeFunctions =
         genericInterfaceViewBridges.mapTo(hashSetOf()) { it.implementation }
@@ -2161,6 +2329,27 @@ internal fun collectDotNetLibraryDeclarations(
                 defaultArgumentDispatcher = defaultArgumentDispatcher,
             )
         )
+        typeMapper?.let { mapper ->
+            val capabilityReturn = mapper.genericOwnerSemanticCapabilityTypeOrNull(function.returnType)
+            val carriesReturn = mapper.isGenericOwnerCapabilityDeclaration(function) &&
+                    functionInfo.signature.returnType == capabilityReturn?.let(DotNetIlReturnType::Value)
+            val capabilityParameterIndices = function.parameters.mapIndexedNotNull { index, parameter ->
+                val capability = mapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type)
+                index.takeIf {
+                    mapper.isGenericOwnerCapabilityDeclaration(parameter) &&
+                            functionInfo.signature.parameterTypes.getOrNull(index) == capability
+                }
+            }
+            if (carriesReturn || capabilityParameterIndices.isNotEmpty()) {
+                val carrier = DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
+                    ownerPath = functionInfo.owner.physicalPathComponents(),
+                    logicalFunctionKey = logicalKey,
+                    carriesReturn = carriesReturn,
+                    parameterIndices = capabilityParameterIndices,
+                )
+                put(carrier.indexKey(), carrier)
+            }
+        }
     }
     for ([source, slot] in genericOwnerCapabilitySlots) {
         if (source.fileOrNull !in files || source.isFakeOverride) continue
@@ -2182,6 +2371,20 @@ internal fun collectDotNetLibraryDeclarations(
                             "'${source.render()}' did not survive physical emission"
                 )
         }
+        val foreignOverrideProbe = genericOwnerForeignOverrideProbesBySource[source]
+        val foreignOverrideProbeInfo = foreignOverrideProbe?.let { probe ->
+            availableFunctions[probe]
+                ?: error(
+                    "Internal .NET backend error: generic-owner foreign-override probe for " +
+                            "'${source.render()}' did not survive physical emission"
+                )
+        }
+        require(foreignOverrideProbeInfo == null ||
+                foreignOverrideProbeInfo.owner.physicalPathComponents() ==
+                semanticHookInfo?.owner?.physicalPathComponents()
+        ) {
+            "generic-owner semantic hook and foreign-override probe have inconsistent CLR owners"
+        }
         val defaultCapabilityMethodName = genericOwnerDefaultCapabilitySlots[source]?.let { defaultSlot ->
             val defaultSlotInfo = availableFunctions[defaultSlot]
                 ?: error(
@@ -2202,6 +2405,8 @@ internal fun collectDotNetLibraryDeclarations(
             semanticHookOwnerPath = semanticHookInfo?.owner?.physicalPathComponents(),
             semanticHookMethodName = semanticHookInfo?.physicalMethodName
                 ?: semanticHook?.dotNetIlMethodName(),
+            foreignOverrideProbeMethodName = foreignOverrideProbeInfo?.physicalMethodName
+                ?: foreignOverrideProbe?.dotNetIlMethodName(),
         )
         put(family.indexKey(), family)
     }
