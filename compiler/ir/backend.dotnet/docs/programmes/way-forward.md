@@ -1179,10 +1179,14 @@ ABI-37 records the producer-selected capability indices and the protected
 probe MethodDef. Consumers apply those records narrowly; exact `C<T>` slots
 remain typed. A raw incompatible widened value therefore uses the inherited
 semantic family, while a C# subclass after the Kotlin override changes only
-the typed target and is detected. The next bounded gate is to validate the
-allocation-free comparison under ReadyToRun, trimming, and NativeAOT before
-treating it as a migration-wide mechanism. C# must still never be required to
-author the protected compiler ABI merely to override a normal Kotlin method.
+the typed target and is detected. A closed self-producing verifier now audits
+the allocation-free comparison and executes both its unchanged-Kotlin and
+later-C# outcomes under JIT, ReadyToRun, full trimming, and a real Windows x64
+NativeAOT link/run. The deployment gate for this concrete no-input output
+family is closed. Broad inputs, abstract semantic obligations, interfaces, and
+method-generic entries still need their own proofs before this can become a
+migration-wide mechanism. C# must never be required to author the protected
+compiler ABI merely to override a normal Kotlin method.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

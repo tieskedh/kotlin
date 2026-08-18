@@ -157,6 +157,14 @@ obligations remain separate; the concrete output proof must not be used to
 narrow them or to claim that every dual-domain family can be implemented by a
 typed-only C# declaration.
 
+A closed verifier additionally audits the emitted probe IL and publishes that
+actual Kotlin base/override plus ordinary C# subclass product under JIT,
+ReadyToRun, full trimming, and NativeAOT. Both the unchanged-Kotlin semantic
+path and the later-C# typed path execute successfully in every mode, including
+a real Windows x64 NativeAOT link/run. This closes deployment only for the
+admitted concrete no-input output family; it supplies no evidence for the
+separate broad-input or abstract-family gates.
+
 ## Cast and mutation policy
 
 Kotlin diagnoses the generic-argument part of `value as C<X>` as unchecked.
