@@ -20,7 +20,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassFor
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
@@ -120,7 +119,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         val bridgeOwners = mutableListOf<IrClass>()
         val genericInterfaces = hashSetOf<IrClass>()
         val genericClasses = hashSetOf<IrClass>()
-        val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+        val externalDeclarations = context.externalDeclarationsForLowering()
         irModule.acceptVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
                 element.acceptChildrenVoid(this)

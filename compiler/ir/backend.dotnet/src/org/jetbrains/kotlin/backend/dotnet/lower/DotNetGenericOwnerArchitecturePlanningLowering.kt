@@ -38,13 +38,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantic
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerMemberFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalForeignOverrideProbeName
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
@@ -170,8 +168,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
     private val specialBridgeMethods = SpecialBridgeMethods(context)
-    private val externalDeclarations =
-        DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
     private val externalSemanticPrototypesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
     private val externalForeignOverrideProbesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
 
