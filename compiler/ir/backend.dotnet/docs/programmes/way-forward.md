@@ -1214,8 +1214,26 @@ baseline required when an inlined local return becomes a synthetic loop break
 inside a later expression operand. Installed Kotlin inlines all bodies; public
 fallbacks remain directly callable from C# through the truthful erased
 `Kotlin.Function1` interface. This does not claim implicit C# lambda/delegate
-conversion. Keep `minOf`/`maxOf`, comparator, Map/CharSequence, Random, and
-unsigned families separate until their complete graphs are selected.
+conversion. Keep selector-result `minOf`/`maxOf`, comparator,
+Map/CharSequence, Random, and unsigned families separate until their complete
+graphs are selected; the selector-result family is closed by the separately
+recorded tranche below.
+
+The selector-result generated `minOf`/`maxOf` family is now complete as the
+next independent 120-declaration release. It contains generic Comparable,
+Float, and Double result overloads for throwing and nullable min/max over
+Iterable, object arrays, and all eight signed primitive arrays. Boolean is
+present because only the result is ordered. Empty/singleton selector counts,
+first-result identity, callback stopping, nullable value results, and Kotlin
+Float/Double NaN/signed-zero ordering are exact on Framework CLR 4 and .NET
+10. A FIR-proven generic result physically exposed through a reference upper
+bound may now recover its concrete nullable scalar representation from boxed
+`R` or null; this is an implicit substitution rule and does not alter explicit
+cast semantics. The twelve bounded physical names solve CLR return-only
+collisions without introducing a public `DotNetName`. Installed Kotlin inlines
+all `@InlineOnly` bodies, and their assembly-visible fallbacks are deliberately
+not a direct C# API. This release does not migrate Sequence or any generic
+owner to a constructed CLR TypeDef.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
