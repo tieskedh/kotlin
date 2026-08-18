@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenanc
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
+import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerMemberFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
@@ -171,6 +172,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
     private val specialBridgeMethods = SpecialBridgeMethods(context)
     private val externalDeclarations =
         DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalSemanticPrototypesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
+    private val externalForeignOverrideProbesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
 
     override fun lower(irModule: IrModuleFragment) {
         check(context.genericOwnerArchitecturePlans.isEmpty()) {
@@ -485,6 +488,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             )
             hook.overriddenSymbols = prototype.overriddenSymbols.mapNotNull { overridden ->
                 semanticHooksByPrototype[overridden.owner]?.symbol
+                    ?: overridden.takeIf { symbol ->
+                        symbol.owner in externalSemanticPrototypesBySource.values
+                    }
             }.distinct()
         }
         val foreignOverrideProbesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
@@ -541,8 +547,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
                     ?.function
             )
+            val externalProbeBySemanticPrototype = externalSemanticPrototypesBySource.mapNotNull { entry ->
+                externalForeignOverrideProbesBySource[entry.key]?.let { probe -> entry.value to probe }
+            }.toMap()
             probe.overriddenSymbols = prototype.overriddenSymbols.mapNotNull { overridden ->
                 foreignOverrideProbesByPrototype[overridden.owner]?.symbol
+                    ?: externalProbeBySemanticPrototype[overridden.owner]?.symbol
             }.distinct()
         }
         semanticHooksBySource.entries.forEach { entry ->
@@ -1764,6 +1774,18 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
      */
     private fun linkDetachedOverrideFamilies() {
         val plans = context.genericOwnerArchitecturePlans
+        fun declaringOverride(function: IrSimpleFunction): IrSimpleFunction =
+            if (function.isFakeOverride) {
+                function.resolveFakeOverride()
+                    ?: function.resolveFakeOverrideMaybeAbstract()
+                    ?: error("generic-owner external fake override has no declaring Kotlin root")
+            } else {
+                function
+            }
+
+        fun externalFamily(function: IrSimpleFunction) =
+            externalDeclarations.genericOwnerMemberFamilyOrNull(declaringOverride(function))
+
         var changed: Boolean
         do {
             changed = false
@@ -1782,6 +1804,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     val family = families.getValue(source)
                     val inheritsSemanticHook = overriddenFamilies.any { overriddenFamily ->
                         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in overriddenFamily.roles
+                    } || source.overriddenSymbols.any { overridden ->
+                        externalFamily(overridden.owner)?.family?.semanticHookMethodName != null
                     }
                     val mergedParameterSlotDomains = overriddenFamilies.fold(family.parameterSlotDomains) {
                             domains, overriddenFamily ->
@@ -1878,6 +1902,71 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             plans[owner] = plan.copy(prototypeMembers = prototypes)
         }
 
+        fun externalSemanticPrototype(
+            source: IrSimpleFunction,
+            binding: DotNetBoundGenericOwnerMemberFamily,
+        ): IrSimpleFunction = externalSemanticPrototypesBySource.getOrPut(source) {
+            val owner = source.parent as? IrClass
+                ?: error("external generic-owner semantic member has no class owner")
+            val ownerPath = checkNotNull(binding.family.semanticHookOwnerPath) {
+                "external generic-owner semantic family lacks its hook owner"
+            }
+            val methodName = checkNotNull(binding.family.semanticHookMethodName) {
+                "external generic-owner semantic family lacks its hook MethodDef"
+            }
+            createDetachedPrototypeMember(
+                owner,
+                source,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                externalSemanticPrototypesBySource.size,
+            ).function.also { prototype ->
+                context.genericOwnerCapabilityDeclarations += prototype
+                context.genericOwnerCapabilityDeclarations += prototype.parameters.drop(1)
+                context.externalGenericOwnerPhysicalSlots[prototype] =
+                    DotNetBoundGenericOwnerPhysicalSlot(
+                        binding.library,
+                        binding.family,
+                        ownerPath,
+                        methodName,
+                    )
+            }
+        }
+
+        fun bindExternalForeignOverrideProbe(
+            source: IrSimpleFunction,
+            binding: DotNetBoundGenericOwnerMemberFamily,
+        ) {
+            val methodName = binding.family.foreignOverrideProbeMethodName ?: return
+            externalForeignOverrideProbesBySource.getOrPut(source) {
+                val owner = source.parent as? IrClass
+                    ?: error("external generic-owner foreign-override probe has no class owner")
+                val ownerPath = checkNotNull(binding.family.semanticHookOwnerPath) {
+                    "external generic-owner foreign-override probe lacks its CLR owner"
+                }
+                context.irFactory.buildFun {
+                    startOffset = source.startOffset
+                    endOffset = source.endOffset
+                    origin = DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER
+                    name = Name.special(
+                        "<ExternalGenericOwnerForeignOverrideProbe-${externalForeignOverrideProbesBySource.size}>"
+                    )
+                    visibility = DescriptorVisibilities.PROTECTED
+                    modality = Modality.OPEN
+                    returnType = context.irBuiltIns.booleanType
+                }.apply {
+                    parent = owner
+                    parameters += createDispatchReceiverParameterWithClassParent()
+                    context.externalGenericOwnerPhysicalSlots[this] =
+                        DotNetBoundGenericOwnerPhysicalSlot(
+                            binding.library,
+                            binding.family,
+                            ownerPath,
+                            methodName,
+                        )
+                }
+            }
+        }
+
         plans.entries.toList().forEach { planEntry ->
             val owner = planEntry.key
             val plan = plans.getValue(owner)
@@ -1911,13 +2000,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             )
                         }
                     } else {
-                        val declaringOverride = if (overridden.isFakeOverride) {
-                            overridden.resolveFakeOverride()
-                                ?: overridden.resolveFakeOverrideMaybeAbstract()
-                                ?: error("generic-owner external fake override has no declaring Kotlin root")
-                        } else {
-                            overridden
-                        }
+                        val declaringOverride = declaringOverride(overridden)
                         bindings.getOrPut(source) { mutableListOf() } += DotNetGenericOwnerOverrideBindingPlan(
                             source = source,
                             role = DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
@@ -1925,6 +2008,29 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             targetKind = DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED,
                             overriddenLogicalBindingKey = declaringOverride.dotNetLibraryAbiKeyOrNull("F"),
                         )
+                        val externalBinding = externalFamily(declaringOverride)
+                        if (DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles &&
+                            externalBinding?.family?.semanticHookMethodName != null
+                        ) {
+                            val sourcePrototype = checkNotNull(
+                                plan.prototypeMembers[source]
+                                    ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                            )
+                            val overriddenPrototype = externalSemanticPrototype(declaringOverride, externalBinding)
+                            sourcePrototype.function.overriddenSymbols =
+                                (sourcePrototype.function.overriddenSymbols + overriddenPrototype.symbol).distinct()
+                            bindings.getOrPut(source) { mutableListOf() } +=
+                                DotNetGenericOwnerOverrideBindingPlan(
+                                    source = source,
+                                    role = DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                                    overriddenSource = declaringOverride,
+                                    targetKind =
+                                        DotNetGenericOwnerOverrideTargetKind.EXTERNAL_PHYSICAL_FAMILY_RECORD,
+                                    overriddenLogicalBindingKey =
+                                        declaringOverride.dotNetLibraryAbiKeyOrNull("F"),
+                                )
+                            bindExternalForeignOverrideProbe(declaringOverride, externalBinding)
+                        }
                     }
                 }
             }
