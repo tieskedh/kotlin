@@ -815,6 +815,8 @@ fun main(args: Array<String>) {
         selectorSum selectedFor setOf(Family.Iterables)
     } + Elements.f_components.asSequence().map { component ->
         component selectedFor setOf(Family.Lists)
+    } + Aggregates.f_minMax.map { member ->
+        member selectedFor setOf(Family.Iterables, Family.ArraysOfObjects, Family.ArraysOfPrimitives)
     } + Aggregates.f_minMaxWith.map { member ->
         member selectedFor setOf(Family.Iterables)
     } + Aggregates.f_minMaxOfWith().map { member ->

@@ -34894,6 +34894,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (Kotlin.Collections.CollectionsKt.allDistinct(
                                 new Kotlin.IntArray(new int[] { 7, 7 })))
                             return 21;
+                        if (Kotlin.Collections.CollectionsKt.min(
+                                new Kotlin.IntArray(new int[] { 3, -2, 1 })) != -2)
+                            return 22;
+                        if (Kotlin.Collections.CollectionsKt.max(
+                                new Kotlin.IntArray(new int[] { 3, -2, 1 })) != 3)
+                            return 23;
                         return 0;
                     }
 
@@ -35162,6 +35168,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(10, allDistinctMethods.count { method -> method.name == "allDistinct" })
         assertEquals(10, allDistinctMethods.count { method -> method.name == "allDistinctBy" })
+        val naturalMinMaxMethodCounts = mapOf(
+            "max" to 7,
+            "maxOrNull" to 9,
+            "maxOrNullOfDouble" to 2,
+            "maxOrNullOfFloat" to 2,
+            "maxOrThrow" to 2,
+            "maxOrThrowOfDouble" to 2,
+            "maxOrThrowOfFloat" to 2,
+            "min" to 7,
+            "minOrNull" to 9,
+            "minOrNullOfDouble" to 2,
+            "minOrNullOfFloat" to 2,
+            "minOrThrow" to 2,
+            "minOrThrowOfDouble" to 2,
+            "minOrThrowOfFloat" to 2,
+        )
+        val naturalMinMaxMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle && method.name in naturalMinMaxMethodCounts
+        }
+        assertEquals(52, naturalMinMaxMethods.size)
+        assertEquals(
+            naturalMinMaxMethodCounts,
+            naturalMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
+        )
         val sequenceMethodNames = implementationMetadata.methodDefinitions
             .filter { method -> method.declaringType == sequencesFacadeType.handle }
             .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
@@ -35709,6 +35739,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "flatMapSequenceTo" to 1,
             "flatten" to 1,
             "getOrElse" to 1,
+            "max" to 7,
+            "maxOrNull" to 9,
+            "maxOrNullOfDouble" to 2,
+            "maxOrNullOfFloat" to 2,
+            "maxOrThrow" to 2,
+            "maxOrThrowOfDouble" to 2,
+            "maxOrThrowOfFloat" to 2,
             "map" to 1,
             "mapIndexed" to 1,
             "mapIndexedNotNull" to 1,
@@ -35717,6 +35754,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "mapNotNull" to 1,
             "mapNotNullTo" to 1,
             "mapTo" to 1,
+            "min" to 7,
+            "minOrNull" to 9,
+            "minOrNullOfDouble" to 2,
+            "minOrNullOfFloat" to 2,
+            "minOrThrow" to 2,
+            "minOrThrowOfDouble" to 2,
+            "minOrThrowOfFloat" to 2,
             "minus" to 4,
             "minusAssign" to 3,
             "minusElement" to 1,
@@ -37850,6 +37894,60 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         booleanArrayOf(true, false).allDistinctBy { it } &&
                         charArrayOf('a', 'b').allDistinctBy { it.code and 1 }
 
+                public fun installedNaturalMinMaxMatrix(): Boolean =
+                    listOf("b", "a").min() == "a" &&
+                        listOf("b", "a").max() == "b" &&
+                        listOf("b", "a").minOrNull() == "a" &&
+                        listOf("b", "a").maxOrNull() == "b" &&
+                        listOf(2.0f, 1.0f).min() == 1.0f &&
+                        listOf(2.0f, 1.0f).max() == 2.0f &&
+                        listOf(2.0f, 1.0f).minOrNull() == 1.0f &&
+                        listOf(2.0f, 1.0f).maxOrNull() == 2.0f &&
+                        listOf(2.0, 1.0).min() == 1.0 &&
+                        listOf(2.0, 1.0).max() == 2.0 &&
+                        listOf(2.0, 1.0).minOrNull() == 1.0 &&
+                        listOf(2.0, 1.0).maxOrNull() == 2.0 &&
+                        arrayOf("b", "a").min() == "a" &&
+                        arrayOf("b", "a").max() == "b" &&
+                        arrayOf("b", "a").minOrNull() == "a" &&
+                        arrayOf("b", "a").maxOrNull() == "b" &&
+                        arrayOf(2.0f, 1.0f).min() == 1.0f &&
+                        arrayOf(2.0f, 1.0f).max() == 2.0f &&
+                        arrayOf(2.0f, 1.0f).minOrNull() == 1.0f &&
+                        arrayOf(2.0f, 1.0f).maxOrNull() == 2.0f &&
+                        arrayOf(2.0, 1.0).min() == 1.0 &&
+                        arrayOf(2.0, 1.0).max() == 2.0 &&
+                        arrayOf(2.0, 1.0).minOrNull() == 1.0 &&
+                        arrayOf(2.0, 1.0).maxOrNull() == 2.0 &&
+                        byteArrayOf(2, 1).min() == 1.toByte() &&
+                        byteArrayOf(2, 1).max() == 2.toByte() &&
+                        byteArrayOf(2, 1).minOrNull() == 1.toByte() &&
+                        byteArrayOf(2, 1).maxOrNull() == 2.toByte() &&
+                        shortArrayOf(2, 1).min() == 1.toShort() &&
+                        shortArrayOf(2, 1).max() == 2.toShort() &&
+                        shortArrayOf(2, 1).minOrNull() == 1.toShort() &&
+                        shortArrayOf(2, 1).maxOrNull() == 2.toShort() &&
+                        intArrayOf(2, 1).min() == 1 &&
+                        intArrayOf(2, 1).max() == 2 &&
+                        intArrayOf(2, 1).minOrNull() == 1 &&
+                        intArrayOf(2, 1).maxOrNull() == 2 &&
+                        longArrayOf(2L, 1L).min() == 1L &&
+                        longArrayOf(2L, 1L).max() == 2L &&
+                        longArrayOf(2L, 1L).minOrNull() == 1L &&
+                        longArrayOf(2L, 1L).maxOrNull() == 2L &&
+                        floatArrayOf(2.0f, 1.0f).min() == 1.0f &&
+                        floatArrayOf(2.0f, 1.0f).max() == 2.0f &&
+                        floatArrayOf(2.0f, 1.0f).minOrNull() == 1.0f &&
+                        floatArrayOf(2.0f, 1.0f).maxOrNull() == 2.0f &&
+                        doubleArrayOf(2.0, 1.0).min() == 1.0 &&
+                        doubleArrayOf(2.0, 1.0).max() == 2.0 &&
+                        doubleArrayOf(2.0, 1.0).minOrNull() == 1.0 &&
+                        doubleArrayOf(2.0, 1.0).maxOrNull() == 2.0 &&
+                        charArrayOf('b', 'a').min() == 'a' &&
+                        charArrayOf('b', 'a').max() == 'b' &&
+                        charArrayOf('b', 'a').minOrNull() == 'a' &&
+                        charArrayOf('b', 'a').maxOrNull() == 'b'
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38083,7 +38181,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedAllEqualMatrix() &&
                             installedAllEqualByMatrix() &&
                             installedAllDistinctMatrix() &&
-                            installedAllDistinctByMatrix()
+                            installedAllDistinctByMatrix() &&
+                            installedNaturalMinMaxMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38464,6 +38563,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue("::'allDistinctBy'<" !in il) {
             "The installed consumer must inline every Common allDistinctBy body:\n$il"
+        }
+        val installedNaturalMinMaxMethodCounts = mapOf(
+            "max" to 7,
+            "maxOrNull" to 9,
+            "maxOrNullOfDouble" to 2,
+            "maxOrNullOfFloat" to 2,
+            "maxOrThrow" to 2,
+            "maxOrThrowOfDouble" to 2,
+            "maxOrThrowOfFloat" to 2,
+            "min" to 7,
+            "minOrNull" to 9,
+            "minOrNullOfDouble" to 2,
+            "minOrNullOfFloat" to 2,
+            "minOrThrow" to 2,
+            "minOrThrowOfDouble" to 2,
+            "minOrThrowOfFloat" to 2,
+        )
+        for (entry in installedNaturalMinMaxMethodCounts) {
+            val methodName = entry.key
+            val expectedCount = entry.value
+            assertEquals(
+                expectedCount,
+                il.split("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'$methodName'").size - 1,
+                "The installed consumer must call every natural min/max fallback named $methodName",
+            )
         }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
