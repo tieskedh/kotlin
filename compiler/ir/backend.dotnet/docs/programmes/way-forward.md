@@ -1249,6 +1249,20 @@ fallbacks remain directly callable from C# through an implemented erased
 assembly-visible only. This is truthful current interop, not an implicit
 delegate/`IComparer<T>` conversion or a generic-owner cutover.
 
+The complete 28-declaration CharSequence min/max classifier family is now
+published separately from Map. It includes natural, selector,
+generic/Float/Double selector-result, element-comparator, and comparator-result
+throwing/nullable forms. The first compile selected the exact Common
+`CharSequence.lastIndex` prerequisite rather than rewriting the indexed
+algorithms. Real `System.String` and Kotlin/foreign implementations of the
+erased `Kotlin.CharSequence` capability retain one classified identity and the
+same behavior on Framework CLR 4 and .NET 10. The bounded return-only collision
+mapper now admits exact façade/package/receiver triples for CollectionsKt and
+StringsKt; this remains compiler-owned stdlib naming, not `DotNetName`.
+Installed Kotlin preserves upstream inline visibility, and direct C# calls
+work on both classifier arms without wrapping strings. Map aggregates remain
+their own source-façade/delegation closure.
+
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
 interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.

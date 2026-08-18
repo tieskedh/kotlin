@@ -1386,6 +1386,26 @@ fun main(args: Array<String>) {
             .single { member -> member.family == Family.CharSequences }
             .build(this)
     }.toString().trimEnd()
+    val charSequenceMinMaxMembers = (
+            Aggregates.f_minMax +
+                    Aggregates.f_minMaxBy +
+                    Aggregates.f_minMaxOf() +
+                    Aggregates.f_minMaxWith +
+                    Aggregates.f_minMaxOfWith()
+            )
+        .flatMap { template ->
+            template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
+                member.family == Family.CharSequences
+            }
+        }
+        .sortedBy { member -> member.sortingSignature }
+        .toList()
+    check(charSequenceMinMaxMembers.size == 28) {
+        "Expected 28 CharSequence min/max aggregate members, found ${charSequenceMinMaxMembers.size}"
+    }
+    val charSequenceMinMaxSource = StringWriter().apply {
+        for (member in charSequenceMinMaxMembers) member.build(this)
+    }.toString().trimEnd()
     stringsOutputFile.writeText(
         buildProjectedSource(
             packageName = "kotlin.text",
@@ -1400,9 +1420,14 @@ fun main(args: Array<String>) {
                 ),
                 extractCommonDeclaration(
                     commonStringsFile,
+                    "public val CharSequence.lastIndex: Int",
+                ),
+                extractCommonDeclaration(
+                    commonStringsFile,
                     "public operator fun CharSequence.iterator(): CharIterator",
                 ),
                 charSequenceGroupingBySource,
+                charSequenceMinMaxSource,
             ),
         ),
         Charsets.UTF_8,
