@@ -1140,7 +1140,12 @@ internal class DotNetIlMethodCodegen(
         val conditionIsAlwaysTrue = loop.condition.isTrueConst()
         methodContext.registerLoop(
             loop,
-            DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel, ehDepth = methodContext.ehDepth),
+            DotNetIlLoopLabels(
+                breakLabel = endLabel,
+                continueLabel = conditionLabel,
+                ehDepth = methodContext.ehDepth,
+                stackDepth = methodContext.stackDepth,
+            ),
         )
 
         methodContext.emitLabel(conditionLabel)
@@ -1177,7 +1182,12 @@ internal class DotNetIlMethodCodegen(
         val conditionIsAlwaysTrue = loop.condition.isTrueConst()
         methodContext.registerLoop(
             loop,
-            DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel, ehDepth = methodContext.ehDepth),
+            DotNetIlLoopLabels(
+                breakLabel = endLabel,
+                continueLabel = conditionLabel,
+                ehDepth = methodContext.ehDepth,
+                stackDepth = methodContext.stackDepth,
+            ),
         )
 
         methodContext.emitLabel(bodyLabel)
@@ -1210,22 +1220,30 @@ internal class DotNetIlMethodCodegen(
                 "'$keyword${jump.label?.let { "@$it" }.orEmpty()}' targets a loop outside the function being compiled"
             )
         val targetLabel = if (jump is IrBreak) labels.breakLabel else labels.continueLabel
-        // A bottom-typed loop transfer can sit inside a larger expression after earlier call or
-        // arithmetic operands have already been evaluated. Kotlin abandons that entire
-        // expression; CIL branches and especially `leave` may not carry those values to the loop
-        // target. Normalize the physical stack before choosing the EH-aware transfer opcode.
-        methodContext.drainEvaluationStack()
         // A break/continue at a deeper exception-region depth than its loop crosses protected
         // regions and must exit via `leave` — legal toward any label of an enclosing scope,
         // forward or backward, crossing nested regions in one hop (probe-verified).
         when {
-            methodContext.ehDepth == labels.ehDepth -> methodContext.emitGoto(targetLabel)
+            methodContext.ehDepth == labels.ehDepth -> {
+                // A bottom-typed transfer abandons values produced inside the loop, but an
+                // inlined local return uses a synthetic loop while an earlier outer operand can
+                // already be pending. Preserve exactly that loop-entry stack prefix.
+                methodContext.drainEvaluationStackTo(labels.stackDepth)
+                methodContext.emitGoto(targetLabel)
+            }
             methodContext.ehDepth > labels.ehDepth -> {
                 // A `leave` may cross any number of `.try`/`catch` regions, but never a
-                // `finally` body: its only legal exit is `endfinally`.
+                // `finally` body: its only legal exit is `endfinally`. `leave` also clears the
+                // complete evaluation stack, so protected-region entry must already have caused
+                // any ambient operands to be spilled before this loop was registered.
                 if (methodContext.crossesFinallyRegion(labels.ehDepth)) {
                     dotNetUnsupported("'$keyword' crossing out of a 'finally' block is not supported")
                 }
+                check(labels.stackDepth == 0) {
+                    "Internal .NET backend error: '$keyword' crosses a protected region from a loop with " +
+                            "non-empty entry stack ${labels.stackDepth}"
+                }
+                methodContext.drainEvaluationStack()
                 methodContext.emitLeave(targetLabel)
             }
             else -> error("Internal .NET backend error: '$keyword' at a shallower exception-region depth than its loop")

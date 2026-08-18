@@ -1201,7 +1201,21 @@ the bounded logical-element-derived physical naming already proven for
 Sequence, while KLIB retains the ordinary Kotlin names. This is not a general
 `@JvmName`/`DotNetName` policy and does not reopen the physical Sequence or
 generic-owner ABI. Keep selector/comparator min/max, Random, unsigned, and
-other dependency families independent until their complete graphs are proven.
+other dependency families independent until their complete graphs are proven;
+the selector family is closed by the separately recorded tranche below.
+
+The selector-generated `minBy`/`maxBy` family is now complete as the next
+independent 40-declaration collection release: throwing and nullable forms over
+Iterable, object arrays, and all eight signed primitive arrays. Boolean belongs
+here because selector result `R` supplies ordering. Empty/singleton selector
+elision, first ties, callback stopping, and generic Float/Double Comparable
+ordering are exact. The tranche also fixed the general loop-entry stack
+baseline required when an inlined local return becomes a synthetic loop break
+inside a later expression operand. Installed Kotlin inlines all bodies; public
+fallbacks remain directly callable from C# through the truthful erased
+`Kotlin.Function1` interface. This does not claim implicit C# lambda/delegate
+conversion. Keep `minOf`/`maxOf`, comparator, Map/CharSequence, Random, and
+unsigned families separate until their complete graphs are selected.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
