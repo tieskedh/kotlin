@@ -29068,6 +29068,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         return Kotlin.Text.StringsKt.minOf<int>(values, selector);
                     }
+
+                    public static int MinMapOf(
+                        Kotlin.Collections.Map values,
+                        Kotlin.Function1 selector)
+                    {
+                        return Kotlin.Collections.MapsKt.minOf<object, object, int>(values, selector);
+                    }
                 }
                 """.trimIndent()
             )
@@ -29108,6 +29115,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     forbiddenInlineOnlyResult.output
         ) {
             "Expected C# accessibility diagnostic for @InlineOnly CharSequence minOf:\n" +
+                    forbiddenInlineOnlyResult.output
+        }
+        assertTrue(
+            "'Kotlin.Collections.MapsKt' does not contain a definition for 'minOf'" in
+                    forbiddenInlineOnlyResult.output
+        ) {
+            "Expected C# accessibility diagnostic for @InlineOnly Map minOf:\n" +
                     forbiddenInlineOnlyResult.output
         }
     }
@@ -35193,6 +35207,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
         val collectionsFacadeType = implementationType("Kotlin.Collections", "CollectionsKt")
+        val mapsFacadeType = implementationType("Kotlin.Collections", "MapsKt")
         val stringsFacadeType = implementationType("Kotlin.Text", "StringsKt")
         val sequenceType = implementationType("Kotlin.Sequences", "Sequence")
         val sequenceScopeType = implementationType("Kotlin.Sequences", "SequenceScope")
@@ -35314,6 +35329,43 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             selectorResultMinMaxMethodCounts,
             selectorResultMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
         )
+        val mapMinMaxMethodCounts = mapOf(
+            "maxBy" to 1,
+            "maxByOrNull" to 1,
+            "maxOf" to 1,
+            "maxOfDouble" to 1,
+            "maxOfFloat" to 1,
+            "maxOfOrNull" to 1,
+            "maxOfOrNullDouble" to 1,
+            "maxOfOrNullFloat" to 1,
+            "maxOfWith" to 1,
+            "maxOfWithOrNull" to 1,
+            "maxWith" to 1,
+            "maxWithOrNull" to 1,
+            "minBy" to 1,
+            "minByOrNull" to 1,
+            "minOf" to 1,
+            "minOfDouble" to 1,
+            "minOfFloat" to 1,
+            "minOfOrNull" to 1,
+            "minOfOrNullDouble" to 1,
+            "minOfOrNullFloat" to 1,
+            "minOfWith" to 1,
+            "minOfWithOrNull" to 1,
+            "minWith" to 1,
+            "minWithOrNull" to 1,
+        )
+        val mapMinMaxMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == mapsFacadeType.handle && method.name in mapMinMaxMethodCounts
+        }
+        assertEquals(24, mapMinMaxMethods.size)
+        assertEquals(
+            mapMinMaxMethodCounts,
+            mapMinMaxMethods.groupingBy(DotNetClrMethodDefinition::name).eachCount(),
+        )
+        assertTrue(mapMinMaxMethods.all { method ->
+            method.visibility == DotNetClrMethodVisibility.ASSEMBLY
+        })
         val charSequenceMinMaxMethodCounts = mapOf(
             "max" to 1,
             "maxBy" to 1,
@@ -38578,6 +38630,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         values.maxOfWithOrNull(installedIntAggregateComparator) { it.code } == 'b'.code
                 }
 
+                private val installedMapEntryComparator = Comparator<Map.Entry<String, Int>> { a, b ->
+                    a.value.compareTo(b.value)
+                }
+
+                public fun installedMapMinMaxMatrix(): Boolean {
+                    val values = linkedMapOf("b" to 2, "a" to 1)
+                    return values.minBy { it.value }.key == "a" &&
+                        values.minByOrNull { -it.value }?.key == "b" &&
+                        values.maxBy { -it.value }.key == "a" &&
+                        values.maxByOrNull { it.value }?.key == "b" &&
+                        values.minOf { it.value } == 1 &&
+                        values.minOf { it.value.toFloat() } == 1.0f &&
+                        values.minOf { it.value.toDouble() } == 1.0 &&
+                        values.minOfOrNull { it.value } == 1 &&
+                        values.minOfOrNull { it.value.toFloat() } == 1.0f &&
+                        values.minOfOrNull { it.value.toDouble() } == 1.0 &&
+                        values.maxOf { it.value } == 2 &&
+                        values.maxOf { it.value.toFloat() } == 2.0f &&
+                        values.maxOf { it.value.toDouble() } == 2.0 &&
+                        values.maxOfOrNull { it.value } == 2 &&
+                        values.maxOfOrNull { it.value.toFloat() } == 2.0f &&
+                        values.maxOfOrNull { it.value.toDouble() } == 2.0 &&
+                        values.minWith(installedMapEntryComparator).key == "a" &&
+                        values.minWithOrNull(installedMapEntryComparator)?.key == "a" &&
+                        values.maxWith(installedMapEntryComparator).key == "b" &&
+                        values.maxWithOrNull(installedMapEntryComparator)?.key == "b" &&
+                        values.minOfWith(installedIntAggregateComparator) { it.value } == 1 &&
+                        values.minOfWithOrNull(installedIntAggregateComparator) { it.value } == 1 &&
+                        values.maxOfWith(installedIntAggregateComparator) { it.value } == 2 &&
+                        values.maxOfWithOrNull(installedIntAggregateComparator) { it.value } == 2
+                }
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -38816,7 +38900,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedSelectorMinMaxMatrix() &&
                             installedSelectorResultMinMaxMatrix() &&
                             installedComparatorMinMaxMatrix() &&
-                            installedCharSequenceMinMaxMatrix()
+                            installedCharSequenceMinMaxMatrix() &&
+                            installedMapMinMaxMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -39248,9 +39333,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         for (methodName in listOf("minWith", "minWithOrNull", "maxWith", "maxWithOrNull")) {
             assertEquals(
-                10,
+                11,
                 il.split("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'$methodName'").size - 1,
-                "The installed consumer must call all ten comparator-element fallbacks named $methodName",
+                "The installed consumer must call the ten direct comparator-element fallbacks plus the inlined Map adapter named $methodName",
             )
         }
         for (methodName in listOf("minOfWith", "minOfWithOrNull", "maxOfWith", "maxOfWithOrNull")) {
@@ -39302,6 +39387,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         }
         assertTrue("$stringsFacadeCall'get_lastIndex'(object)" in il)
+        val mapsFacadeCall = "[Kotlin.Stdlib]'Kotlin.Collections.MapsKt'::"
+        for (methodName in listOf(
+            "minBy",
+            "minByOrNull",
+            "maxBy",
+            "maxByOrNull",
+            "minOf",
+            "minOfFloat",
+            "minOfDouble",
+            "minOfOrNull",
+            "minOfOrNullFloat",
+            "minOfOrNullDouble",
+            "maxOf",
+            "maxOfFloat",
+            "maxOfDouble",
+            "maxOfOrNull",
+            "maxOfOrNullFloat",
+            "maxOfOrNullDouble",
+            "minWith",
+            "minWithOrNull",
+            "maxWith",
+            "maxWithOrNull",
+            "minOfWith",
+            "minOfWithOrNull",
+            "maxOfWith",
+            "maxOfWithOrNull",
+        )) {
+            assertTrue("$mapsFacadeCall'$methodName'" !in il) {
+                "The installed consumer must inline the Map $methodName body:\n$il"
+            }
+        }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
         assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'Add'(object)" in il)

@@ -1096,11 +1096,30 @@ fun main(args: Array<String>) {
         Charsets.UTF_8,
     )
 
+    val mapMinMaxMembers = (
+            Aggregates.f_minMaxBy +
+                    Aggregates.f_minMaxOf() +
+                    Aggregates.f_minMaxWith +
+                    Aggregates.f_minMaxOfWith()
+            )
+        .flatMap { template ->
+            template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
+                member.family == Family.Maps
+            }
+        }
+        .sortedBy { member -> member.sortingSignature }
+        .toList()
+    check(mapMinMaxMembers.size == 24) {
+        "Expected 24 Map min/max aggregate members, found ${mapMinMaxMembers.size}"
+    }
+    val mapMinMaxSource = StringWriter().apply {
+        for (member in mapMinMaxMembers) member.build(this)
+    }.toString().trimEnd()
     mapsOutputFile.writeText(
         buildProjectedSource(
             packageName = "kotlin.collections",
             imports = listOf("kotlin.contracts.*"),
-            declarations = mapFactoryDeclarations,
+            declarations = mapFactoryDeclarations + mapMinMaxSource,
         ),
         Charsets.UTF_8,
     )

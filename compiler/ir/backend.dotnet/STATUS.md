@@ -27,7 +27,26 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: all 28 generated CharSequence
+- Latest completed Common collection feature: all 24 generated Map min/max
+  adapters are now published on `Kotlin.Collections.MapsKt`: selector element,
+  generic/Float/Double selector-result, element-comparator, and comparator-
+  result throwing/nullable forms. Every declaration is the exact Common
+  `@InlineOnly` adapter over `entries`; no target algorithm or BCL substitute
+  was added. Empty/singleton evaluation, first-tie/result identity, callback
+  stopping, nullable comparator results, and Float/Double NaN/signed-zero
+  ordering execute on Framework CLR 4 and .NET 10. The bounded return-only
+  collision router now admits only the exact MapsKt/package/Map triple. Raw
+  metadata contains 24 assembly-visible MethodDefs, installed Kotlin inlines
+  all adapters, and Roslyn is rejected from calling their non-public helpers.
+  The generated Maps source is byte-stable at
+  `FE0417C410404B28E6CE53F7027CCCC25966098FE0DE95D1B65CCF25042C5EF2`.
+  The final aggregate plus explicit model-suite freshness rerun wrote all
+  three roots: 190 XML suites and 2,278 tests with zero failures, errors, or
+  skips. This closes the selected erased-owner stdlib breadth interlude; next
+  major work is the complete Kotlin-emitter/inverse-rollback generic-owner
+  rehearsal, not another leaf family or per-owner switch. See
+  [`docs/archive/common-map-min-max-family-2026-08-18.md`](docs/archive/common-map-min-max-family-2026-08-18.md).
+- Preceding completed Common collection feature: all 28 generated CharSequence
   min/max aggregates are now published on `Kotlin.Text.StringsKt`, together
   with the exact Common `CharSequence.lastIndex` prerequisite discovered by
   the first compile. Natural, selector, generic/Float/Double selector-result,
@@ -3413,12 +3432,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    `minOf`/`maxOf` family, then the remaining 72 array declarations completing
    the 80-method comparator min/max closure. The next classifier recomputation
    completed all 28 CharSequence min/max aggregates and their exact Common
-   `lastIndex` prerequisite. Recompute again before the next tranche and choose
-   one complete dependency-homogeneous classifier family. Keep the remaining
-   Map adapters, Random and entropy, unsigned value-class/range
-   representation, other CharSequence/array variants, and still dependency-blocked
-   reified variants separate unless the authoritative dependency graph proves
-   otherwise. Do not
+   `lastIndex` prerequisite, then the separate complete 24-declaration Map
+   adapter family. Do not select another erased-owner stdlib tranche before
+   the complete Kotlin-emitter/inverse-rollback generic-owner rehearsal reaches
+   its next go/no-go checkpoint. Random and entropy, unsigned value-class/range
+   representation, other CharSequence/array variants, and still dependency-
+   blocked reified variants remain separate. Do not
    infer that signed sorting authorizes unsigned overloads, binary search,
    shuffle, or a target-authored one-function approximation.
 3. Continue the generated catalog only by complete classifier families, not by
