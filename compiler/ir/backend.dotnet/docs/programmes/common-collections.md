@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — open-nullable array/vararg filtering and Set closure complete**
+- Status: **Active — natural min/max supported-classifier closure complete**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -286,6 +286,34 @@ ten ordinary fallbacks and inlines every selector body, while Roslyn calls the
 signed IntArray overload directly on Framework CLR 4 and .NET 10. No target
 HashSet algorithm or partial classifier family was introduced.
 
+### Completed natural min/max aggregate closure
+
+The completed natural-order tranche publishes exactly 52 additional Common
+declarations. Iterable and generic object arrays each contribute `min`, `max`,
+`minOrNull`, and `maxOrNull` for generic Comparable elements and the dedicated
+Float and Double templates. ByteArray, ShortArray, IntArray, LongArray,
+FloatArray, DoubleArray, and CharArray each contribute the same four forms.
+The generator defines no natural-order BooleanArray variant, so none is
+invented. The corresponding Sequence inventory was already admitted by the
+complete Sequence foundation.
+
+The exact Common bodies preserve `NoSuchElementException` versus null for
+empty inputs, first identity for comparison-equal elements, one traversal per
+call, NaN propagation, and Kotlin total ordering for signed zero. Iterable and
+object-array erasure makes the logical generic, Float, and Double siblings
+differ only by return type in CLR metadata. Their physical names therefore use
+the same bounded logical-element-derived mapping as Sequence:
+`minOrThrow`, `minOrThrowOfFloat`, `minOrThrowOfDouble` and their max/nullable
+counterparts. KLIB retains the logical Kotlin overloads; this is neither a
+general public `DotNetName` facility nor a physical `Sequence<T>` migration.
+
+Raw metadata contains exactly 52 methods with the pinned physical-name
+distribution. Installed Kotlin calls every one, while Roslyn directly calls
+the IntArray `min` and `max` overloads. Hostile Kotlin evidence covers empty
+throwing/nullable behavior, tie identity and traversal, all seven primitive
+classifiers, generic object arrays, and Float/Double NaN/signed-zero behavior.
+One portable netstandard product executes on Framework CLR 4 and .NET 10.
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
@@ -405,7 +433,8 @@ variant whose dependency closure consists only of the already published read-onl
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
 closure above. Ordinary signed ranges, complete Sequence builders, Grouping,
-eager Iterable windowing and Sequence consumers, equality aggregates, and signed-array sorting have
+eager Iterable windowing and Sequence consumers, equality and natural min/max
+aggregates, and signed-array sorting have
 since landed as complete independent
 foundations. Random, dependency-blocked reified variants, reflection, and
 unsigned families remain excluded when they introduce an independent
@@ -1287,10 +1316,14 @@ second loop or collection-specific type-token path was added.
     Iterable/object-array/signed-primitive-array classifier, with the exact
     selector and floating equality semantics and direct Kotlin/C# evidence.
 13. **Completed:** publish `allDistinct` and `allDistinctBy` over the same
-    supported classifiers, after removing the internal byte-domain helper's
-    accidental public-UByte dependency without changing its algorithm.
-14. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-15. Remove the bootstrap allowlist when the complete generated product is supportable.
+     supported classifiers, after removing the internal byte-domain helper's
+     accidental public-UByte dependency without changing its algorithm.
+14. **Completed:** publish the complete natural `min`/`max` family over generic,
+    Float, and Double Iterable/object-array receivers and all seven naturally
+    ordered signed primitive-array wrappers, with deterministic bounded CLR
+    names for return-only collisions.
+15. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+16. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

@@ -581,6 +581,7 @@ internal object DotNetStdlibLibrary {
         stringBuilderPlatformMethodNameOrNull(function)?.let { return it }
         rangePlatformMethodNameOrNull(function)?.let { return it }
         collectionSequenceTransformPlatformMethodNameOrNull(function)?.let { return it }
+        collectionComparableElementPlatformMethodNameOrNull(function)?.let { return it }
         sequencePlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
@@ -685,6 +686,35 @@ internal object DotNetStdlibLibrary {
         }
     }
 
+    /** Pins return-type-only Common min/max siblings after Iterable and object-array erasure. */
+    private fun collectionComparableElementPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        if (implementationFunctionFacadeIlName(function) != COLLECTIONS_FACADE_IL_NAME) return null
+        val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
+        if (!functionFqName.startsWith("kotlin.collections.")) return null
+        val logicalName = functionFqName.substringAfterLast('.')
+        val names = comparableElementPlatformNames[logicalName] ?: return null
+        val receiverType = function.parameters
+            .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+            ?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common collection $logicalName has no single simple extension receiver: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        val receiverFqName = receiverType.classFqName?.asString()
+        if (receiverFqName !in setOf("kotlin.collections.Iterable", "kotlin.Array")) return null
+        val elementType = (receiverType.arguments.singleOrNull() as? IrTypeProjection)?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common collection $logicalName receiver '${receiverType.render()}' has no exact element type"
+            )
+        val elementKey = elementType.classFqName?.asString() ?: SEQUENCE_GENERIC_TYPE_KEY
+        return names[elementKey]
+            ?: dotNetUnsupported(
+                "Common collection $logicalName element '${elementType.render()}' has no pinned CLR method name"
+            )
+    }
+
     /**
      * Pins the physical names which the CLR needs after every `Sequence<T>` owner is erased to
      * the one Kotlin classifier. JVM descriptors can distinguish some of these declarations by
@@ -725,7 +755,7 @@ internal object DotNetStdlibLibrary {
                     "Common Sequence.$logicalName element '${elementType.render()}' has no pinned CLR method name"
                 )
         }
-        sequenceComparableElementPlatformNames[logicalName]?.let { names ->
+        comparableElementPlatformNames[logicalName]?.let { names ->
             val elementFqName = elementType.classFqName?.asString()
             return names[elementFqName]
                 ?: names[SEQUENCE_GENERIC_TYPE_KEY]
@@ -988,7 +1018,7 @@ internal object DotNetStdlibLibrary {
             "kotlin.Double" to "sumOfDouble",
         ),
     )
-    private val sequenceComparableElementPlatformNames = mapOf(
+    private val comparableElementPlatformNames = mapOf(
         "max" to mapOf(
             "kotlin.Double" to "maxOrThrowOfDouble",
             "kotlin.Float" to "maxOrThrowOfFloat",
@@ -1066,7 +1096,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.Iterable" to "flattenSequenceOfIterable",
     )
     private val sequencePlatformNamedFunctions =
-        sequenceElementPlatformNames.keys + sequenceComparableElementPlatformNames.keys +
+        sequenceElementPlatformNames.keys + comparableElementPlatformNames.keys +
                 sequenceSelectorPlatformNames.keys + sequenceFlatMapPlatformNames.keys + "flatten"
     private val rangeContainsPlatformNames = mapOf(
         "kotlin.Byte" to "byteRangeContains",
