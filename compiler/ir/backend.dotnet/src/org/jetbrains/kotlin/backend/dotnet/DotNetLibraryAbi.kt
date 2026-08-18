@@ -1570,19 +1570,16 @@ internal data class DotNetBoundGenericOwnerPhysicalSlot(
     }
 }
 
-/**
- * Resolves metadata-deserialized declarations through the bound physical identities of their
- * companion assemblies. Only declarations present in the index become physical CLR references.
- */
-internal class DotNetExternalDeclarations(
+/** Immutable library-side indexes shared by the lowering-local external-declaration resolvers. */
+internal class DotNetExternalDeclarationIndex(
     val libraries: List<DotNetExternalLibrary>,
 ) {
-    private data class BoundDeclaration(
+    internal data class BoundDeclaration(
         val library: DotNetExternalLibrary,
         val declaration: DotNetPhysicalDeclaration,
     )
 
-    private val declarations: Map<String, BoundDeclaration> = buildMap {
+    internal val declarations: Map<String, BoundDeclaration> = buildMap {
         for (library in libraries) {
             for (entry in library.declarations) {
                 val logicalKey = entry.key
@@ -1593,14 +1590,7 @@ internal class DotNetExternalDeclarations(
             }
         }
     }
-    private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
-    private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
-    private val declaredClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
-    private val exactClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
-    private val classLinksInProgress = hashSetOf<String>()
-    private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
-    private val logicalKeys = DotNetLibraryAbiKeyCache()
-    private val genericOwnerMemberFamiliesByLogicalKey:
+    internal val genericOwnerMemberFamiliesByLogicalKey:
         Map<String, DotNetBoundGenericOwnerMemberFamily> = buildMap {
             libraries.forEach { library ->
                 library.declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
@@ -1615,7 +1605,7 @@ internal class DotNetExternalDeclarations(
                     }
             }
         }
-    private val genericOwnerFunctionCarriersByLogicalKey:
+    internal val genericOwnerFunctionCarriersByLogicalKey:
         Map<String, DotNetBoundGenericOwnerFunctionCarrier> = buildMap {
             libraries.forEach { library ->
                 library.declarations.values
@@ -1631,6 +1621,30 @@ internal class DotNetExternalDeclarations(
                     }
             }
         }
+}
+
+/**
+ * Resolves metadata-deserialized declarations through the bound physical identities of their
+ * companion assemblies. Only declarations present in the index become physical CLR references.
+ *
+ * The immutable library index may be shared across sequential lowerings. The IR-key and emitted
+ * class-info caches deliberately remain resolver-local because a later lowering may have changed
+ * the local IR shape from which those values are derived.
+ */
+internal class DotNetExternalDeclarations(
+    private val index: DotNetExternalDeclarationIndex,
+) {
+    constructor(libraries: List<DotNetExternalLibrary>) : this(DotNetExternalDeclarationIndex(libraries))
+
+    val libraries: List<DotNetExternalLibrary> = index.libraries
+    private val declarations = index.declarations
+    private val genericOwnerMemberFamiliesByLogicalKey = index.genericOwnerMemberFamiliesByLogicalKey
+    private val genericOwnerFunctionCarriersByLogicalKey = index.genericOwnerFunctionCarriersByLogicalKey
+    private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
+    private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
+    private val classLinksInProgress = hashSetOf<String>()
+    private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
+    private val logicalKeys = DotNetLibraryAbiKeyCache()
 
     /**
      * Whether [irClass] has a producer-recorded physical CLR class in a bound library.

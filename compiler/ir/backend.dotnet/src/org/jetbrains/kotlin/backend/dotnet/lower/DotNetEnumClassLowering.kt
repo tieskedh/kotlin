@@ -12,9 +12,7 @@ import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeClassifierKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibLibrary
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -98,7 +96,7 @@ internal val DOTNET_ENUM_ENTRY_CONSTRUCTOR: IrDeclarationOrigin =
  * identity for Kotlin reference entries.
  */
 internal class DotNetEnumClassLowering(private val context: DotNetBackendContext) : ModuleLoweringPass {
-    private val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
     private val localEntryFields = linkedMapOf<IrEnumEntry, IrField>()
     private val externalEntryFields = hashMapOf<IrEnumEntry, IrField>()
 

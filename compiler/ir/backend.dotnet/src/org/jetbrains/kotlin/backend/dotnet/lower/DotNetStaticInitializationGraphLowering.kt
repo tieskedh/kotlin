@@ -8,9 +8,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredStaticInitialization
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -57,7 +55,7 @@ internal val DOTNET_STATIC_INITIALIZATION_ENTRY: IrDeclarationOrigin =
 internal class DotNetStaticInitializationGraphLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
-    private val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
     private val localClasses = linkedSetOf<IrClass>()
     private val processing = hashSetOf<IrClass>()
     private val processed = hashMapOf<IrClass, IrSimpleFunction?>()

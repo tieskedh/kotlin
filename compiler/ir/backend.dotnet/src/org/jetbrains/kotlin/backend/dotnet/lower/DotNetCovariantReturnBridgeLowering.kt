@@ -8,12 +8,10 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCovariantReturnBridge
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
@@ -98,8 +96,7 @@ internal val DOTNET_COVARIANT_RETURN_BRIDGE: IrDeclarationOrigin =
 internal class DotNetCovariantReturnBridgeLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
-    private val externalDeclarations =
-        DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
 
     private fun IrClass.isErasedKotlinGenericOwner(): Boolean {
         if (!isDotNetGenericClassDeclaration) return false

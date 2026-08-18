@@ -12,9 +12,7 @@ import org.jetbrains.kotlin.backend.common.lower.irIfThen
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeClassifierKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredStaticInitializationFailure
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
@@ -77,7 +75,7 @@ internal val DOTNET_STATIC_INITIALIZATION_FAILURE_STATE: IrDeclarationOrigin =
 internal class DotNetStaticInitializationFailureLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
-    private val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
     private val localObjectFields: Map<IrField, IrClass>
         get() = context.objectInstanceFields.entries.associate { mapEntry ->
             mapEntry.value to mapEntry.key

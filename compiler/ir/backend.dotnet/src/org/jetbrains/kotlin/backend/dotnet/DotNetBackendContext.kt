@@ -131,6 +131,16 @@ internal class DotNetBackendContext(
     override val irFactory: IrFactory = symbolTable.irFactory
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)
     override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns, irFactory, irModuleFragment)
+    private val externalDeclarationIndex =
+        DotNetExternalDeclarationIndex(configuration.dotNetExternalLibraries)
+
+    /**
+     * Gives one lowering a resolver with fresh IR-derived caches while reusing the immutable
+     * external-library indexes built once for this backend compilation.
+     */
+    fun externalDeclarationsForLowering(): DotNetExternalDeclarations =
+        DotNetExternalDeclarations(externalDeclarationIndex)
+
     val functionAdapterSymbols: DotNetFunctionAdapterSymbols = symbols.functionAdapterSymbols
     val exactCallableSymbols: DotNetExactCallableSymbols =
         DotNetExactCallableSymbols(irBuiltIns, irFactory, irModuleFragment)

@@ -27,6 +27,24 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+- Latest compiler-work audit: nine lowering-local external-declaration
+  resolvers rebuilt the same three immutable library indexes during every
+  ordinary backend compilation. `DotNetBackendContext` now builds one
+  compilation-local `DotNetExternalDeclarationIndex`; each lowering still
+  receives a fresh resolver and therefore retains its own IR-derived ABI-key
+  and class-info caches. This removes eight complete declaration/member-family/
+  function-carrier hash-index builds without sharing stale mutable-IR facts.
+  The emitter retains its separate index because bootstrap Stdlib and user
+  emission may consume different library sets. Two entirely unused class-info
+  maps were also removed from every resolver. The focused publication test and
+  final target aggregate are green. The aggregate covers 190 XML suites and
+  2,286 tests with zero failures, errors, or skips; FIR and integration roots
+  were freshly written and the unchanged six-test `dotnet.ir` root remained
+  up-to-date. The fresh 861-second FIR JFR contains 7,232 execution samples and
+  still attributes 32 self samples to the remaining shared/emitter index
+  construction. This establishes material compiler work but is not presented
+  as a wall-time percentage because the external-tool-heavy focused runs were
+  too noisy for a trustworthy before/after timing.
 - Latest completed Common collection feature: all 24 generated Map min/max
   adapters are now published on `Kotlin.Collections.MapsKt`: selector element,
   generic/Float/Double selector-result, element-comparator, and comparator-

@@ -8,8 +8,6 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundObjectInstance
-import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
-import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrElement
@@ -84,7 +82,7 @@ internal var IrField.isDotNetExternalObjectInstanceField: Boolean? by irAttribut
  * producer record without reconstructing a holder path.
  */
 internal class DotNetObjectClassLowering(private val context: DotNetBackendContext) : ModuleLoweringPass {
-    private val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
+    private val externalDeclarations = context.externalDeclarationsForLowering()
     private val externalSingletonFields = hashMapOf<IrClass, IrField>()
 
     override fun lower(irModule: IrModuleFragment) {
