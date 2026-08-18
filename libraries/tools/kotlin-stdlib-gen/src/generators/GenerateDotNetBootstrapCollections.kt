@@ -822,9 +822,9 @@ fun main(args: Array<String>) {
     } + Aggregates.f_minMaxOf().map { member ->
         member selectedFor setOf(Family.Iterables, Family.ArraysOfObjects, Family.ArraysOfPrimitives)
     } + Aggregates.f_minMaxWith.map { member ->
-        member selectedFor setOf(Family.Iterables)
+        member selectedFor setOf(Family.Iterables, Family.ArraysOfObjects, Family.ArraysOfPrimitives)
     } + Aggregates.f_minMaxOfWith().map { member ->
-        member selectedFor setOf(Family.Iterables)
+        member selectedFor setOf(Family.Iterables, Family.ArraysOfObjects, Family.ArraysOfPrimitives)
     }
     val signedArrayOrderingMembers = signedArrayOrderingSelections
         .asSequence()
