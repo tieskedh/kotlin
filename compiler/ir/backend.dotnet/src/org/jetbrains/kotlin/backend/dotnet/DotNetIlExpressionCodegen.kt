@@ -1353,6 +1353,23 @@ internal class DotNetIlExpressionCodegen(
                             if (methodContext.isTerminated) return
                             methodContext.emit(narrowing, pops = 1, pushes = 1)
                         }
+                        operandType.isDotNetReferenceShaped() &&
+                                castType is DotNetIlValueType.NullableValue &&
+                                castType.elementType.isSupportedPrimitiveArrayElement() -> {
+                            val narrowing = castType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                                ?: dotNetUnsupported(
+                                    "implicit cast from ${operandType.nameInSignature} to " +
+                                            "${castType.nameInSignature} is not supported"
+                                )
+                            // The nullable counterpart of the substituted-generic return above.
+                            // A generic `R?` is physically exposed through its reference-shaped
+                            // upper bound: for `R = Int`, the CLR boundary contains either a boxed
+                            // Int or null. FIR's IMPLICIT_CAST proves the substitution, and
+                            // `unbox.any Nullable<Int>` recovers both representations exactly.
+                            emitExpression(expression.argument, operandType)
+                            if (methodContext.isTerminated) return
+                            methodContext.emit(narrowing, pops = 1, pushes = 1)
+                        }
                         castType is DotNetIlValueType.TypeParameter &&
                                 castType.isConstrainedTo(operandType) -> {
                             // Shared inline bodies such as `C.onEach { ... }: C`, where
