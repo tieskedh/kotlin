@@ -125,8 +125,8 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 generic interface as Kotlin identity.
 
 The Kotlin-owned Sequence, eager Iterable window/chunk and Sequence-consumer,
-Grouping, and signed primitive/object-array sorting closures are completed
-separately below. Unsigned arrays/ranges, random,
+generated equality aggregates, Grouping, and signed primitive/object-array
+sorting closures are completed separately below. Unsigned arrays/ranges, random,
 dependency-blocked reified variants, concurrency, and BCL adapters remain
 separate closures. The formerly parked open-nullable boundary is complete under
 [`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
@@ -249,6 +249,31 @@ C# adapter/export; the canonical owner can change only through the atomic
 generic-interface cutover with primitive covariance, iterator/state, casts,
 reflection, overrides, and separate compilation proved together.
 
+### Completed allEqual aggregate closure
+
+The completed generated equality tranche publishes exactly 20 new Common
+declarations: `allEqual` and `allEqualBy` for Iterable, generic object arrays,
+and each of the eight signed primitive-array wrappers. The same pair for
+Sequence was already admitted by the complete Sequence foundation. These are
+one supported-classifier family; no receiver is silently omitted and no target
+algorithm replaces a Common body.
+
+The direct tests pin zero selector invocations for empty and singleton inputs,
+first-mismatch short circuit, traversal and callback exception stopping,
+nullable selector keys, widened nullable/numeric values, and the exact
+equals-consistent NaN and signed-zero behavior for primitive and boxed Float
+and Double arrays. Raw product metadata contains ten ordinary and ten selector
+MethodDefs on `CollectionsKt`. Installed Kotlin calls all ten ordinary
+fallbacks and inlines all ten selector bodies; Roslyn calls the signed
+`IntArray` overload directly. The portable netstandard product executes on
+both Framework CLR 4 and .NET 10.
+
+This does not select `allDistinct`. Upstream's signed ByteArray body uses the
+internal `UByteValueSet` fast path and `Byte.toUByte()`, so that sibling remains
+wholly blocked pending a bounded exact unsigned-helper substrate. Omitting
+Byte, copying a target HashSet implementation, or inferring authority for the
+public unsigned array/range surface would break the complete-family rule.
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
@@ -368,7 +393,7 @@ variant whose dependency closure consists only of the already published read-onl
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
 closure above. Ordinary signed ranges, complete Sequence builders, Grouping,
-eager Iterable windowing and Sequence consumers, and signed-array sorting have
+eager Iterable windowing and Sequence consumers, equality aggregates, and signed-array sorting have
 since landed as complete independent
 foundations. Random, dependency-blocked reified variants, reflection, and
 unsigned families remain excluded when they introduce an independent
@@ -969,8 +994,10 @@ The audit deliberately excludes the rest of the nearby generator frontier:
   landed in the completed foundation above;
   the Comparator foundation itself is recorded in
   [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md);
-- `allEqual` publishes the now-admitted parameterless `ExperimentalStdlibApi` marker and can be
-  audited independently, while `allDistinct` additionally constructs `HashSet`;
+- the complete supported-classifier `allEqual`/`allEqualBy` family has since
+  landed as the independent closure above, while `allDistinct` remains wholly
+  blocked because its signed ByteArray fast path reaches `UByteValueSet` and
+  `Byte.toUByte()`;
 - `onEach` reaches `apply` and the public contracts DSL; and
 - random, unsigned, array, Set, and Map variants retain their separate dependency and
   representation closures; Sequence variants subsequently landed in the completed foundation above.
@@ -1244,8 +1271,11 @@ second loop or collection-specific type-token path was added.
     Common sized-list factory pair and both RandomAccess and iterator/RingBuffer routes.
 11. **Completed:** publish all seven eager Iterable/Sequence-consumer variants with stable
     logical-selector-derived collision names and direct Kotlin/C# product evidence.
-12. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-13. Remove the bootstrap allowlist when the complete generated product is supportable.
+12. **Completed:** publish `allEqual` and `allEqualBy` for every supported
+    Iterable/object-array/signed-primitive-array classifier, with the exact
+    selector and floating equality semantics and direct Kotlin/C# evidence.
+13. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+14. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

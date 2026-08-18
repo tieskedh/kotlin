@@ -27,7 +27,24 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest completed Common collection feature: the full seven-declaration eager
+- Latest completed Common collection feature: the complete generated
+  `allEqual`/`allEqualBy` family now publishes 20 declarations over Iterable,
+  generic object arrays, and all eight signed primitive-array wrappers, in
+  addition to the previously completed Sequence variants. The exact Common
+  bodies preserve zero selector calls for empty/singleton inputs, first-
+  mismatch short circuit, nullable selector keys, callback exception timing,
+  and equals-consistent Float/Double NaN and signed-zero behavior. Raw product
+  metadata pins ten ordinary and ten selector MethodDefs; installed Kotlin
+  emits ten public ordinary fallback calls and inlines all ten selector
+  bodies, while Roslyn calls the signed `IntArray` overload directly. The
+  sibling `allDistinct` family remains wholly excluded because upstream's
+  signed ByteArray body reaches `UByteValueSet` and `Byte.toUByte()`; no Byte
+  omission or target HashSet substitute is permitted. The final full target
+  aggregate covers 190 XML suites and 2,250 tests with zero failures, errors,
+  or skips; FIR and integration were freshly written and the unchanged six-
+  test `dotnet.ir` root remained up-to-date. See
+  [`docs/archive/common-all-equal-family-2026-08-18.md`](docs/archive/common-all-equal-family-2026-08-18.md).
+- Preceding completed Common collection feature: the full seven-declaration eager
   Iterable/Sequence-consumer closure now publishes four Sequence-result
   `flatMap*` variants, `minus(Sequence)`, and both Iterable/Collection
   `plus(Sequence)` overloads. Existing Iterable-result flatMap physical names
@@ -44,7 +61,7 @@ verification, and work state.
   FIR and integration were freshly written and the unchanged six-test
   `dotnet.ir` root remained up-to-date. See
   [`docs/archive/common-eager-iterable-sequence-consumers-2026-08-18.md`](docs/archive/common-eager-iterable-sequence-consumers-2026-08-18.md).
-- Preceding completed Common collection feature: all four eager generated
+- Earlier completed Common collection feature: all four eager generated
   `Iterable.windowed`/`chunked` variants and the exact Common
   `List(size, init)`/`MutableList(size, init)` prerequisite are published on
   `Kotlin.Collections.CollectionsKt`. Common retains both its RandomAccess and
@@ -2683,6 +2700,19 @@ implements the erased Kotlin Sequence contract and calls both plus receiver
 forms and minus. This is no general `@JvmName`/`DotNetName` policy and no
 authority for a separate physical `Sequence<T>` migration.
 
+The complete generated equality aggregate family is now published for every
+currently supported classifier. Its 20 new declarations cover `allEqual` and
+`allEqualBy` over Iterable, generic object arrays, and all eight signed
+primitive-array wrappers; the Sequence pair was already present in the
+completed Sequence foundation. Exact Common selector counts, first-mismatch
+short circuit, nullable selector-key state, exception propagation, and boxed
+and primitive Float/Double equality remain authoritative. Product metadata,
+installed Kotlin fallback/inlining shape, direct Roslyn signed-array calls,
+and both Framework CLR 4 and .NET 10 execution are pinned. `allDistinct`
+remains a separate whole-family blocker: its signed ByteArray template reaches
+Common `UByteValueSet` and `Byte.toUByte()`, so it cannot be partially admitted
+or replaced with a target HashSet loop.
+
 No implementation slice is half-landed. The exact Common `Comparator<T>` fun
 interface, complete Common comparison combinators, six comparator scalar
 selection functions, eight Iterable comparator selection functions, and five
@@ -3220,11 +3250,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    prototype and real-app measurement checkpoint select the one atomic
    cutover.
 2. The dependency recomputation after eager windowing selected and completed
-   the exact seven-declaration Iterable/Sequence-consumer closure: all four
-   Sequence-result `flatMap*` variants, `minus(Sequence)`, and both
-   `plus(Sequence)` receiver variants. Recompute again before the next tranche
-   and choose one complete dependency-homogeneous classifier family. Keep
-   comparison/all-equality, min/max, Random and entropy, unsigned value-class/range
+   both the exact seven-declaration Iterable/Sequence-consumer closure and the
+   complete supported-classifier `allEqual`/`allEqualBy` closure. Recompute
+   again before the next tranche and choose one complete dependency-homogeneous
+   classifier family. Keep `allDistinct` blocked as a whole while signed
+   ByteArray reaches `UByteValueSet`/`Byte.toUByte()`, and keep remaining
+   comparison, min/max, Random and entropy, unsigned value-class/range
    representation, CharSequence/array variants, and still dependency-blocked
    reified variants separate unless the authoritative dependency graph proves
    otherwise. Do not

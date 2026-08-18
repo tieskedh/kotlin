@@ -624,6 +624,12 @@ fun main(args: Array<String>) {
     )
     val selectedTemplates = sequenceOf(
         Aggregates.f_all selectedFor setOf(Family.Iterables),
+        Aggregates.f_allEqual selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        (Aggregates.f_allEqual selectedFor setOf(Family.ArraysOfPrimitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
+        Aggregates.f_allEqualBy selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        (Aggregates.f_allEqualBy selectedFor setOf(Family.ArraysOfPrimitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
         Aggregates.f_any selectedFor setOf(Family.Iterables),
         Aggregates.f_any_predicate selectedFor setOf(Family.Iterables),
         Aggregates.f_count selectedFor setOf(Family.Iterables, Family.Collections),

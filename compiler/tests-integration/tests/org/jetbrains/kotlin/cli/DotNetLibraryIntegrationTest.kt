@@ -34882,6 +34882,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             return 16;
                         if (!(bool)setContains.Invoke(set, new object[] { 42 }))
                             return 17;
+                        if (!Kotlin.Collections.CollectionsKt.allEqual(
+                                new Kotlin.IntArray(new int[] { 7, 7 })))
+                            return 18;
+                        if (Kotlin.Collections.CollectionsKt.allEqual(
+                                new Kotlin.IntArray(new int[] { 7, 8 })))
+                            return 19;
                         return 0;
                     }
 
@@ -35131,6 +35137,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             eagerSequenceTransformMethodNames,
         )
+        val allEqualMethods = implementationMetadata.methodDefinitions.filter { method ->
+            method.declaringType == collectionsFacadeType.handle &&
+                    method.name in setOf("allEqual", "allEqualBy")
+        }
+        assertEquals(10, allEqualMethods.count { method -> method.name == "allEqual" })
+        assertEquals(10, allEqualMethods.count { method -> method.name == "allEqualBy" })
         val sequenceMethodNames = implementationMetadata.methodDefinitions
             .filter { method -> method.declaringType == sequencesFacadeType.handle }
             .mapTo(linkedSetOf(), DotNetClrMethodDefinition::name)
@@ -35650,6 +35662,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         })
         val bulkCollectionFunctionCounts = mapOf(
             "addAll" to 3,
+            "allEqual" to 10,
+            "allEqualBy" to 10,
             "convertToListIfNotCollection" to 1,
             "drop" to 1,
             "dropLast" to 1,
@@ -37344,7 +37358,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val consumerSource = File(tmpdir, "installed-consumer-$target.kt").apply {
             writeText(
                 """
-                @file:OptIn(kotlin.contracts.ExperimentalContracts::class)
+                @file:OptIn(
+                    kotlin.contracts.ExperimentalContracts::class,
+                    kotlin.ExperimentalStdlibApi::class,
+                )
 
                 package consumer
 
@@ -37763,6 +37780,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> installedIterableMinusSequence(values: Iterable<T>, removed: Sequence<T>): List<T> =
                     values - removed
 
+                public fun installedAllEqualMatrix(): Boolean =
+                    listOf(1, 1).allEqual() &&
+                        arrayOf("x", "x").allEqual() &&
+                        byteArrayOf(1, 1).allEqual() &&
+                        shortArrayOf(2, 2).allEqual() &&
+                        intArrayOf(3, 3).allEqual() &&
+                        longArrayOf(4L, 4L).allEqual() &&
+                        floatArrayOf(Float.NaN, Float.NaN).allEqual() &&
+                        doubleArrayOf(Double.NaN, Double.NaN).allEqual() &&
+                        booleanArrayOf(true, true).allEqual() &&
+                        charArrayOf('k', 'k').allEqual()
+
+                public fun installedAllEqualByMatrix(): Boolean =
+                    listOf(1, 3).allEqualBy { it and 1 } &&
+                        arrayOf("a", "b").allEqualBy { it.length } &&
+                        byteArrayOf(1, 3).allEqualBy { it.toInt() and 1 } &&
+                        shortArrayOf(2, 4).allEqualBy { it.toInt() and 1 } &&
+                        intArrayOf(3, 5).allEqualBy { it and 1 } &&
+                        longArrayOf(4L, 6L).allEqualBy { it and 1L } &&
+                        floatArrayOf(1.25f, 1.75f).allEqualBy { it.toInt() } &&
+                        doubleArrayOf(2.25, 2.75).allEqualBy { it.toInt() } &&
+                        booleanArrayOf(true, false).allEqualBy { 0 } &&
+                        charArrayOf('a', 'c').allEqualBy { it.code and 1 }
+
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
                 public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
@@ -37992,7 +38033,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedIndexedDestination == listOf(98, 1, 3, 5, 7, 9) &&
                             installedIterablePlus == listOf(1, 2, 3, 4, 5, 6, 7) &&
                             installedCollectionPlus == listOf(1, 2, 3, 4) &&
-                            installedIterableMinus == listOf(1, 3, 5)
+                            installedIterableMinus == listOf(1, 3, 5) &&
+                            installedAllEqualMatrix() &&
+                            installedAllEqualByMatrix()
                     val rangesOk =
                         installedSignedRangeTotal(1, 4) == 10 &&
                             installedMaterializedRange(1, 3) == IntRange(1, 3) &&
@@ -38358,6 +38401,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'minus'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class " +
                     "[Kotlin.Stdlib]'Kotlin.Sequences.Sequence')" in il
         )
+        assertEquals(
+            10,
+            il.split("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'allEqual'").size - 1,
+            "The installed consumer must call all ten ordinary allEqual fallbacks",
+        )
+        assertTrue("::'allEqualBy'<" !in il) {
+            "The installed consumer must inline every Common allEqualBy body:\n$il"
+        }
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
         assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'Add'(object)" in il)

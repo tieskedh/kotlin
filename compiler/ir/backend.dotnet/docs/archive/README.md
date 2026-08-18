@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`common-all-equal-family-2026-08-18.md`](common-all-equal-family-2026-08-18.md)
+  records the complete 20-declaration supported-classifier equality aggregate
+  release, exact selector/floating semantics, the `allDistinct` unsigned-helper
+  blocker, direct Kotlin/C# evidence, and the final 2,250-test proof.
 - [`common-eager-iterable-sequence-consumers-2026-08-18.md`](common-eager-iterable-sequence-consumers-2026-08-18.md)
   records the exact seven-declaration eager Sequence-consumer release, stable
   logical-selector physical names, direct Kotlin/C# evidence, the physical
