@@ -63,11 +63,21 @@ verification, and work state.
   compilation. Production remains on the unchanged erased epoch. The
   source-built whole-Stdlib rehearsal still fails closed in later emission at
   residual canonical/capability owner joins, covariant returns, and exact
-  runtime-intrinsic field requirements; it is the next slice, not evidence for
-  a per-owner rollout. The final normal target aggregate covers 190 XML suites
-  and 2,282 tests with zero failures, errors, or skips; FIR and integration
-  roots were freshly written, while the unchanged six-test `dotnet.ir` root
-  remained up-to-date from its prior green checkpoint.
+  runtime-intrinsic field requirements. The first whole-Stdlib composition
+  correction establishes `PROVEN_TYPED > semantic fallback`: anonymous/field
+  initializers own an exact newly constructed receiver, and a private final
+  default accessor over producer-proven typed state retains its natural CLR
+  carrier. Custom/overridable accessors, setters, semantic state, and widened
+  receivers are unchanged. This removes the `AbstractList.SubList`,
+  `AbstractMutableList.SubList`, and `ArrayList` owner cascade and reduces the
+  rehearsal diagnostics from 216 to 92. The next hostile proof must establish
+  that Kotlin capability dispatch through a widened view reaches an ordinary
+  C# typed virtual override without requiring C# to override the protected
+  semantic hook. This remains a rehearsal slice, not evidence for a per-owner
+  rollout. The final normal target aggregate covers 190 XML suites and 2,282
+  tests with zero failures, errors, or skips; FIR and integration roots were
+  freshly written, while the unchanged six-test `dotnet.ir` root remained
+  up-to-date from its prior green checkpoint.
 - Preceding completed Common collection feature: all 28 generated CharSequence
   min/max aggregates are now published on `Kotlin.Text.StringsKt`, together
   with the exact Common `CharSequence.lastIndex` prerequisite discovered by

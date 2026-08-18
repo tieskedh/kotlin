@@ -204,6 +204,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 producerInitializers += ProducerInitializer(
                     label = "<initializer:${declaration.startOffset}>",
                     element = declaration.body,
+                    owner = declaration.parent as? IrClass,
                 )
                 declaration.acceptChildrenVoid(this)
             }
@@ -213,6 +214,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     producerInitializers += ProducerInitializer(
                         label = "<field-initializer:${declaration.name.asString()}>",
                         element = initializer,
+                        owner = declaration.parent as? IrClass,
                         implicitWrite = declaration,
                     )
                 }
@@ -486,6 +488,13 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             val hook = entry.value
             val owner = source.parent as IrClass
             hook.body = source.moveBodyTo(hook)?.also { body ->
+                fun IrExpression?.isCurrentHookReceiver(): Boolean = when (this) {
+                    is IrGetValue -> symbol.owner === hook.parameters[0]
+                    is IrTypeOperatorCall ->
+                        operator == IrTypeOperator.IMPLICIT_CAST && argument.isCurrentHookReceiver()
+                    else -> false
+                }
+
                 // The moved semantic body is declaration-erased, not merely its public
                 // signature. Remap every owner-dependent occurrence: generated equals bodies,
                 // private `value as T` helpers, nested C<T> applications and generic intrinsic
@@ -505,6 +514,36 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             // value occurrences cross into the semantic domain. Routing `this`
                             // through its own property capability would recurse back into this
                             // hook.
+                            return type
+                        }
+                        if (container is IrGetField) {
+                            val field = container.symbol.owner
+                            val fieldOwner = field.parent as? IrClass
+                            val state = fieldOwner
+                                ?.let(context.genericOwnerArchitecturePlans::get)
+                                ?.stateCarriers
+                                ?.get(field)
+                            if (fieldOwner === owner && container.receiver.isCurrentHookReceiver() &&
+                                state?.requirement ==
+                                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+                            ) {
+                                // Reading producer-proven C<!T>/!T state from this exact C<!T>
+                                // construction does not cross a semantic boundary. Retaining the
+                                // constructed carrier is required for nested owner graphs such as
+                                // ArraySubList<T>.root: ArrayList<T>; mapping that read to the
+                                // classifier capability would then make even element-independent
+                                // inherited members (for example modCount) unreachable.
+                                return type
+                            }
+                        }
+                        if (container is IrCall && container.dispatchReceiver.isCurrentHookReceiver() &&
+                            container.symbol.owner.parent === owner &&
+                            container.symbol.owner.producerProvenTypedStateGetterBackingFieldOrNull() != null
+                        ) {
+                            // Kotlin property access can retain an IrCall even for a private
+                            // backing field. It has the same exact carrier proof as IrGetField;
+                            // changing only the call result to a capability would split the two
+                            // physical views of one state read.
                             return type
                         }
                         @Suppress("UNCHECKED_CAST")
@@ -824,8 +863,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             val source = candidate.resolveFakeOverride()
                                 ?: candidate.resolveFakeOverrideMaybeAbstract()
                                 ?: candidate
-                            semanticHooksBySource[source]?.let { semanticHook ->
-                                context.genericOwnerCapabilityCallTargets[expression] = semanticHook
+                            if (source.producerProvenTypedStateGetterBackingFieldOrNull() == null) {
+                                semanticHooksBySource[source]?.let { semanticHook ->
+                                    context.genericOwnerCapabilityCallTargets[expression] = semanticHook
+                                }
                             }
                         }
                     }
@@ -2008,6 +2049,31 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
         }
 
+    private fun IrField.isProducerProvenTypedGenericOwnerState(): Boolean {
+        val owner = parent as? IrClass ?: return false
+        val plan = context.genericOwnerArchitecturePlans[owner]
+            ?.takeIf(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
+            ?: return false
+        return plan.stateCarriers[this]?.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+    }
+
+    private fun IrSimpleFunction.producerProvenTypedStateGetterBackingFieldOrNull(): IrField? {
+        val property = correspondingPropertySymbol?.owner ?: return null
+        if (property.getter !== this) return null
+        if (origin != IrDeclarationOrigin.DEFAULT_PROPERTY_ACCESSOR ||
+            modality != Modality.FINAL ||
+            !DescriptorVisibilities.isPrivate(visibility)
+        ) {
+            return null
+        }
+        val owner = parent as? IrClass ?: return null
+        if (property.parent !== owner) return null
+        return property.backingField?.takeIf { field ->
+            field.parent === owner && field.isProducerProvenTypedGenericOwnerState()
+        }
+    }
+
     /**
      * Computes static receiver evidence for every Kotlin-owned generic-class call in this module.
      * The result is deliberately more conservative than call lowering: it cannot alter IR and an
@@ -2167,6 +2233,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 emptyFlowIsExact: Boolean = false,
             ) {
                 if (!type.hasRelevantGenericOwnerInAncestry()) return
+                // Producer-proven typed state is stronger evidence than the general value-flow
+                // fallback below. The natural field/getter remains on its exact CLR carrier;
+                // widened receiver calls use separately materialized capability members.
+                if (declaration is IrField && declaration.isProducerProvenTypedGenericOwnerState()) return
+                if (declaration is IrSimpleFunction &&
+                    declaration.producerProvenTypedStateGetterBackingFieldOrNull() != null
+                ) {
+                    return
+                }
                 val candidates = origins[declaration].orEmpty()
                 val needsCapability = (candidates.isEmpty() && !emptyFlowIsExact) || candidates.any { origin ->
                     origin.kind == ReceiverOriginKind.UNRESOLVED ||
@@ -2204,6 +2279,16 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
 
         private fun seedBoundaries() {
+            producerInitializers.mapNotNull { initializer ->
+                initializer.owner
+                    ?.takeIf { owner -> owner.hasRelevantGenericOwnerInAncestry() }
+                    ?.thisReceiver
+            }.forEach { receiver ->
+                // Anonymous and field initializers execute on the newly constructed physical
+                // owner. Unlike an arbitrary value entering a function boundary, their `this`
+                // cannot be a projected/covariant view supplied by a caller.
+                addOrigin(receiver, exact(receiver.type))
+            }
             producerFunctions.forEach { function ->
                 function.parameters.forEach { parameter ->
                     when {
@@ -2799,6 +2884,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
     private data class ProducerInitializer(
         val label: String,
         val element: IrElement,
+        val owner: IrClass? = null,
         val implicitWrite: IrField? = null,
     )
 
