@@ -132,10 +132,25 @@ Object-carried state is necessary but may still be insufficient for an open
 typed C# override. After an incompatible semantic write, a widened Kotlin read
 must return the stored object while an exact `Read(): T` may fail converting
 it. One CLR typed override cannot implement both entries automatically. The
-prototype must either prove a coherent typed/semantic output override family
-which C# authors can implement explicitly, seal/narrow only a surface that is
-truthful, or leave the declaration unadmitted. It must not silently let a C#
-typed override affect exact calls but disappear from Kotlin widened calls.
+current rehearsal closes the concrete no-input output case without making the
+C# author implement compiler ABI. Each Kotlin declaration in the override
+family emits a protected virtual last-Kotlin probe paired with its exact typed
+MethodDef. The capability dispatcher invokes the most-derived probe. That
+probe compares the runtime typed target (`ldvirtftn`) with its own exact Kotlin
+entry (`ldftn`): a mismatch means a later foreign subclass overrode the natural
+typed member, so dispatch uses that member and widens its valid `T` result. A
+match keeps the raw semantic hook and therefore preserves an incompatible
+value installed through a widened `@UnsafeVariance` path. No reflection,
+allocation, state shadow, or C#-authored bridge is involved.
+
+The probe is compiler ABI rather than C# API: C# can technically see the
+protected method but neither calls nor overrides it. A Kotlin override emits
+the paired probe automatically, so C# after Kotlin is coherent in one producer
+family. The probe identity still has to enter the physical binding before a
+Kotlin override compiled in a later DLL can be claimed. Broad-input and
+abstract semantic obligations remain separate; the concrete output proof must
+not be used to narrow them or to claim that every dual-domain family can be
+implemented by a typed-only C# declaration.
 
 ## Cast and mutation policy
 

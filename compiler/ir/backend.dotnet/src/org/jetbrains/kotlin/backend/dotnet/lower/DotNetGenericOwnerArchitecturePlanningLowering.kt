@@ -45,6 +45,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalForeignOverrideProbeName
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
@@ -147,6 +148,9 @@ internal val DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER: IrDeclarationOrigin =
 
 internal val DOTNET_GENERIC_OWNER_SEMANTIC_HOOK: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_OWNER_SEMANTIC_HOOK")
+
+internal val DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE")
 
 private val DOTNET_GENERIC_OWNER_VOLATILE_FQ_NAME = FqName("kotlin.concurrent.Volatile")
 
@@ -483,6 +487,64 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 semanticHooksByPrototype[overridden.owner]?.symbol
             }.distinct()
         }
+        val foreignOverrideProbesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
+        val foreignOverrideProbesByPrototype = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
+        semanticHooksBySource.entries.forEach { entry ->
+            val source = entry.key
+            val owner = source.parent as IrClass
+            val plan = admittedPlansByOwner.getValue(owner)
+            val family = plan.memberFamilies.getValue(source)
+            if (owner.kind == ClassKind.INTERFACE || source.modality != Modality.OPEN ||
+                DescriptorVisibilities.isPrivate(source.visibility) ||
+                source.parameters.size != 1 || source.typeParameters.isNotEmpty() ||
+                family.parameterSlotDomains.isNotEmpty() ||
+                family.returnSlotDomain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
+            ) return@forEach
+            val prototype = checkNotNull(
+                plan.prototypeMembers[source]
+                    ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                    ?.function
+            )
+            val roots = overrideRoots(source)
+            val probe = owner.addFunction {
+                startOffset = source.startOffset
+                endOffset = source.endOffset
+                origin = DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE
+                name = Name.identifier(dotNetGenericOwnerPhysicalForeignOverrideProbeName(
+                    source.dotNetIlMethodName(),
+                    roots,
+                ))
+                visibility = DescriptorVisibilities.PROTECTED
+                modality = source.modality
+                returnType = context.irBuiltIns.booleanType
+            }.apply {
+                parameters += createDispatchReceiverParameterWithClassParent()
+                // The emitter owns the allocation-free ldvirtftn/ldftn comparison. Keep a valid
+                // placeholder body so every ordinary IR invariant remains satisfied meanwhile.
+                body = context.createIrBuilder(symbol).irBlockBody {
+                    +irReturn(irCall(context.irBuiltIns.eqeqeqSymbol).apply {
+                        arguments[0] = irGet(parameters[0])
+                        arguments[1] = irGet(parameters[0])
+                    })
+                }
+            }
+            foreignOverrideProbesBySource[source] = probe
+            foreignOverrideProbesByPrototype[prototype] = probe
+            context.genericOwnerForeignOverrideProbeTargets[probe] = source
+        }
+        foreignOverrideProbesBySource.entries.forEach { probeEntry ->
+            val source = probeEntry.key
+            val probe = probeEntry.value
+            val owner = source.parent as IrClass
+            val prototype = checkNotNull(
+                admittedPlansByOwner.getValue(owner).prototypeMembers[source]
+                    ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                    ?.function
+            )
+            probe.overriddenSymbols = prototype.overriddenSymbols.mapNotNull { overridden ->
+                foreignOverrideProbesByPrototype[overridden.owner]?.symbol
+            }.distinct()
+        }
         semanticHooksBySource.entries.forEach { entry ->
             val source = entry.key
             val hook = entry.value
@@ -715,6 +777,22 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 context.genericOwnerCapabilityDeclarations += dispatcher
                 context.genericOwnerCapabilityDeclarations += dispatcher.parameters.drop(1)
+                val semanticHook = semanticHooksBySource[source]
+                val foreignOverrideProbe = foreignOverrideProbesBySource[source]
+                if (semanticHook != null && foreignOverrideProbe != null) {
+                    // The object-domain result cannot in general pass through the typed wrapper:
+                    // an incompatible value installed through @UnsafeVariance must remain readable
+                    // from a widened Kotlin view. A direct C# subclass, however, overrides only the
+                    // natural typed slot. The emitter calls the most-derived Kotlin probe without
+                    // reflection or allocation; that probe identifies a still-later foreign typed
+                    // override, while the ordinary Kotlin/base path keeps the raw semantic hook.
+                    context.genericOwnerDirectForeignOverrideDispatches[dispatcher] =
+                        org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectForeignOverrideDispatch(
+                            typedEntry = source,
+                            semanticHook = semanticHook,
+                            foreignOverrideProbe = foreignOverrideProbe,
+                        )
+                }
 
                 family.maskedDefaultDispatcher?.let { helper ->
                     val movedReceiver = helper.parameters.singleOrNull { parameter ->
