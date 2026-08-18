@@ -140,6 +140,10 @@ internal class DotNetIlEmitter(
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerDirectForeignOverrideDispatches:
+            Map<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = emptyMap(),
+    private val genericOwnerForeignOverrideProbeTargets:
+            Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val externalGenericOwnerPhysicalSlots:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
@@ -2786,6 +2790,9 @@ internal class DotNetIlEmitter(
                     facadeClassInfoByFile = facadeClassInfoByFile,
                     covariantReturnImplementations = covariantReturnImplementations,
                     genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                    genericOwnerDirectForeignOverrideDispatch =
+                        genericOwnerDirectForeignOverrideDispatches[member],
+                    genericOwnerForeignOverrideProbeTarget = genericOwnerForeignOverrideProbeTargets[member],
                 ).render()
             } catch (failure: DotNetIlUnsupportedException) {
                 dotNetUnsupported("member '${member.name.asString()}' is not supported: ${failure.reason}")
