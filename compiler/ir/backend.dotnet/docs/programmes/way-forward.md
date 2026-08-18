@@ -1122,6 +1122,15 @@ measurement, and proves the exact inverse rollback. A per-owner switch or a
 `DotNetName`-style naming annotation cannot satisfy this boundary. See
 [`../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md`](../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md).
 
+The selected ordinary-stdlib breadth interlude is now closed by the complete
+Map min/max adapter family. The next major work is the one coherent rehearsal
+named by that checkpoint: replace the generated C# physicalizer with normal
+Kotlin lowering/CIL emission, migrate Runtime/Stdlib and self-describing
+bindings in the rehearsal epoch, execute representative products on both
+profiles, and prove the exact inverse rollback. Do not select another
+erased-owner leaf family or an easy Sequence/Map owner switch before this
+rehearsal reaches its next go/no-go result.
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
@@ -1261,7 +1270,18 @@ mapper now admits exact façade/package/receiver triples for CollectionsKt and
 StringsKt; this remains compiler-owned stdlib naming, not `DotNetName`.
 Installed Kotlin preserves upstream inline visibility, and direct C# calls
 work on both classifier arms without wrapping strings. Map aggregates remain
-their own source-façade/delegation closure.
+their own source-façade/delegation closure and are closed immediately below.
+
+The complete 24-declaration Map min/max adapter family is now published on
+`Kotlin.Collections.MapsKt`. Every selected declaration is the Common
+`@InlineOnly` adapter over `entries`; Map has no natural entry min/max family.
+Selector, generic/Float/Double result, comparator-element, and comparator-
+result throwing/nullable forms retain exact Common evaluation, tie, callback,
+nullable, NaN, and signed-zero behavior. The bounded return-only mapper admits
+only the exact MapsKt/package/Map triple. All 24 MethodDefs remain assembly-
+visible and installed Kotlin inlines them; direct C# access is rejected. This
+does not migrate the erased physical Map owner. It closes the current leaf-
+family interlude before the complete generic-owner emitter/rollback rehearsal.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin

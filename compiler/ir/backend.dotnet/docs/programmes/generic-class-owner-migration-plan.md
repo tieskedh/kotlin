@@ -1,6 +1,6 @@
 # Generic class owner migration and rollback plan
 
-- Status: **Checkpoint outcome: no-go for now — no production migration authorized**
+- Status: **Complete Kotlin-emitter/inverse-rollback rehearsal selected next; no production migration yet authorized**
 - Date: 2026-08-12
 - Programme:
   [`generic-class-owner-reopening.md`](generic-class-owner-reopening.md)
@@ -42,6 +42,13 @@ depend on the erased physical ABI. Migrating production now would choose a
 permanent construction and dispatch cost before the backend can measure real
 applications. The split keeps architectural direction early and ABI
 publication late.
+
+The selected ordinary-stdlib breadth interlude ended with the complete Map
+min/max adapter closure on 2026-08-18. The next major work is now one complete
+temporary-epoch rehearsal of the atomic cutover and its exact inverse rollback.
+This is not permission for a per-owner pilot or production ABI change: failure
+at any entry condition restores the erased epoch and records a new no-go
+checkpoint.
 
 The first implementation follows that split. A normal backend lowering now
 builds fail-closed architecture plans for local Kotlin generic classes, but

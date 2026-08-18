@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — selector min/max supported-classifier closure complete**
+- Status: **Active — Map min/max adapter closure complete; next leaf tranche paused for generic-owner rehearsal**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -440,6 +440,35 @@ assembly-visible `@InlineOnly` methods. Installed Kotlin calls eight ordinary
 fallbacks and inlines the other twenty bodies. Roslyn directly calls natural,
 selector, and comparator fallbacks using both a string and an explicitly
 implemented foreign CharSequence; inline-only methods remain inaccessible.
+
+### Completed Map min/max aggregate closure
+
+Map now publishes its complete 24-declaration generated min/max adapter family
+on the source-aligned `Kotlin.Collections.MapsKt` façade. It contains selector
+element min/max, generic/Float/Double selector-result min/max, comparator
+element min/max, and comparator selector-result min/max, each with throwing
+and nullable forms. Map has no natural entry min/max family.
+
+Every declaration is the authoritative Common `@InlineOnly` adapter over the
+receiver's `entries` view. The hostile oracle proves empty/singleton selector
+counts, first ties and result identity, nullable comparator results, callback
+stopping, and Float/Double NaN/signed-zero behavior on Framework CLR 4 and
+.NET 10. No target algorithm, eager entry copy, or BCL map operation exists.
+
+The generic, Float, and Double result overloads require the same bounded
+return-only physical naming as the completed collection and CharSequence
+families. Admission is exact by MapsKt façade, `kotlin.collections` package,
+and `Map` receiver; no general `DotNetName` policy is introduced. Raw metadata
+contains 24 assembly-visible MethodDefs. Installed Kotlin inlines every Map
+adapter; comparator-element bodies then call the source-prescribed public
+CollectionsKt entries fallback. C# is rejected from calling the inline-only
+Map helpers directly.
+
+This closure retains logical `Map<K, V>` KLIB types over today's erased
+physical Map owner and adds no fields. It is expected to recompile against the
+future atomic CLR-generic owner model. No further erased-owner leaf tranche is
+selected before the complete Kotlin-emitter/inverse-rollback rehearsal reaches
+its next go/no-go checkpoint.
 
 ### Completed Kotlin-owned Grouping foundation
 
@@ -1462,8 +1491,11 @@ second loop or collection-specific type-token path was added.
 18. **Completed:** publish all 28 CharSequence min/max aggregate forms plus the
     exact Common `CharSequence.lastIndex` prerequisite on StringsKt, preserving
     both String and custom-capability classifier arms.
-19. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-20. Remove the bootstrap allowlist when the complete generated product is supportable.
+19. **Completed:** publish all 24 Map min/max adapters on MapsKt, retaining
+    Common inline-only visibility and exact delegation through `entries`.
+20. After the generic-owner rehearsal checkpoint, add explicitly selected BCL
+    adapters and C# conveniences without changing Kotlin identity.
+21. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

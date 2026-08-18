@@ -1,6 +1,6 @@
 # Programme: true CLR-generic Kotlin class owners where semantically sound
 
-- Status: **Reopened for architecture design — current erased implementation remains binding**
+- Status: **Active — complete Kotlin-emitter/rollback rehearsal next; current erased implementation remains binding**
 - Current authority: [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md)
 - Candidate model: [`../decisions/draft-adr-reified-generic-class-owner.md`](../decisions/draft-adr-reified-generic-class-owner.md)
 - Carrier and member admission matrix:
@@ -676,3 +676,12 @@ across compiler, runtime, stdlib, KLIB/physical metadata, reflection,
 export/import tooling, tests, and documentation. There is no easy-owner pilot
 ABI and no mixed compatibility period for one logical owner on this pre-ABI
 branch.
+
+The hostile representation, schema-20 family, application corpus, deployment
+measurements, and selected ordinary-stdlib breadth are now recorded. The next
+major task is therefore the complete rehearsal itself, not another detached
+physicalizer variant or erased leaf API. It must materialize the compiler-
+derived typed/semantic/capability families into normal Kotlin-emitted products,
+switch Runtime/Stdlib and binding epochs together on the rehearsal branch, run
+the complete gates, and execute the exact inverse rollback. This scheduling
+does not authorize a production `C<T>` TypeDef before the rehearsal passes.

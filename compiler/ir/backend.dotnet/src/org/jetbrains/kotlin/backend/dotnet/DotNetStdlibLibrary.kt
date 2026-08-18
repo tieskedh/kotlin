@@ -1123,6 +1123,7 @@ internal object DotNetStdlibLibrary {
     )
     private val minMaxSelectorResultFunctionFqNamePrefixes = mapOf(
         COLLECTIONS_FACADE_IL_NAME to "kotlin.collections.",
+        MAPS_FACADE_IL_NAME to "kotlin.collections.",
         TEXT_FACADE_IL_NAME to "kotlin.text.",
     )
     private val minMaxSelectorResultReceiverFqNames = mapOf(
@@ -1138,6 +1139,7 @@ internal object DotNetStdlibLibrary {
             "kotlin.CharArray",
             "kotlin.BooleanArray",
         ),
+        MAPS_FACADE_IL_NAME to setOf("kotlin.collections.Map"),
         TEXT_FACADE_IL_NAME to setOf("kotlin.CharSequence"),
     )
     private val sequenceFlatMapPlatformNames = mapOf(
