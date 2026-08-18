@@ -1058,12 +1058,24 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         }
     }
     val routeCounts = callRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
+    check(callRoutes.any { route ->
+        route.callerName == "OctoTree.Node.Branch.<init>" &&
+                route.calleeOwnerName == "OctoTree.Node.Branch" &&
+                route.calleeName == "<get-nodes>" &&
+                route.receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION &&
+                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY
+    }) {
+        "The recursive OctoTree constructor lost its exact newly-constructed receiver route"
+    }
     check(routeCounts == mapOf(
-        // The same-compilation driver contributes four exact calls. A published producer owns
-        // only the unchanged OctoTree source; its separately compiled consumer owns those calls.
+        // The same-compilation driver contributes four exact calls. The Branch constructor's
+        // read of producer-proven `nodes` is also exact: its receiver is the newly constructed
+        // physical owner, never a projected value supplied through a Kotlin call boundary. A
+        // published producer owns only the unchanged OctoTree source; its separately compiled
+        // consumer owns the four driver calls.
         DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to
-                if (tree.logicalBindingKey == null) 25 else 21,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 9,
+                if (tree.logicalBindingKey == null) 26 else 22,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 8,
         DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED to 9,
     )) {
         "The representative OctoTree static call-route census changed: $routeCounts"
