@@ -411,10 +411,16 @@ publish Iterable, generic object-array, and all eight signed primitive-array
 variants together, in addition to the already published Sequence variants.
 Keep Common's zero selector calls for empty/singleton inputs, first-mismatch
 short circuit, nullable selector-key state, and Float/Double equals-consistent
-NaN/signed-zero behavior. The sibling `allDistinct` family remains whole and
-excluded while its signed ByteArray body requires Common `UByteValueSet` and
-`Byte.toUByte()`; do not omit Byte, copy a HashSet fallback, or infer that an
-internal unsigned dependency authorizes public unsigned arrays/ranges.
+NaN/signed-zero behavior.
+
+Generated `allDistinct`/`allDistinctBy` follows the same complete supported-
+classifier rule. Common's byte-domain bit set accepts only normalized Int
+indices: signed Byte uses `toInt() and 0xFF`, while upstream unsigned callers
+use `toInt()`. The .NET stdlib may compile that exact internal helper without
+publishing `UByte`, unsigned arrays, or unsigned ranges. Preserve first-
+duplicate short circuit, singleton selector elision, nullable keys, and
+Float/Double equals-consistent NaN/signed-zero behavior; do not substitute a
+target HashSet algorithm.
 
 `Grouping<T, out K>` is likewise Kotlin-owned: one non-generic erased CLR
 interface owns only `sourceIterator` and `keyOf`, while the complete Common

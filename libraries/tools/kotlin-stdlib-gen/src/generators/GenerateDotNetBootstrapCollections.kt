@@ -630,6 +630,12 @@ fun main(args: Array<String>) {
         Aggregates.f_allEqualBy selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         (Aggregates.f_allEqualBy selectedFor setOf(Family.ArraysOfPrimitives))
             .limitedTo(PrimitiveType.defaultPrimitives),
+        Aggregates.f_allDistinct selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        (Aggregates.f_allDistinct selectedFor setOf(Family.ArraysOfPrimitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
+        Aggregates.f_allDistinctBy selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        (Aggregates.f_allDistinctBy selectedFor setOf(Family.ArraysOfPrimitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
         Aggregates.f_any selectedFor setOf(Family.Iterables),
         Aggregates.f_any_predicate selectedFor setOf(Family.Iterables),
         Aggregates.f_count selectedFor setOf(Family.Iterables, Family.Collections),

@@ -1167,6 +1167,7 @@ internal object DotNetStdlibLibrary {
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
         "PrimitiveIterators.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "ByteDomainValueSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "Range.kt" to ImplementationSource(packageFqName = "kotlin.ranges"),
         "Ranges.kt" to ImplementationSource(
             packageFqName = "kotlin.ranges",
