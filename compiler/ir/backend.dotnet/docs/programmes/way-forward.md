@@ -1144,6 +1144,21 @@ joins, covariant-return adapters, and intrinsic field-shape requirements. Only
 then do the representative products and exact inverse rollback advance the
 atomic go/no-go checkpoint.
 
+The first whole-Stdlib composition correction makes typed proof precedence an
+explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
+producer-proven typed field or its private final default accessor without new
+evidence that invalidates the proof. Anonymous and field initializers likewise
+execute on the exact newly constructed physical owner; this makes the recursive
+OctoTree constructor state read exact and removes the AbstractList/ArrayList
+failure cascade, reducing the source-built Stdlib diagnostics from 216 to 92.
+This rule does not cover custom or overridable accessors, setters, semantic
+object state, or projected/widened receivers. The next interop gate is foreign-
+subclass dispatch coherence: a Kotlin call through a semantic capability must
+reach an ordinary C# override of the natural typed virtual entry, and C# must
+never need to know or override the protected Kotlin semantic hook. Prove that
+hostile output-only case on Framework 4.8 and .NET 10 before treating hidden
+semantic helpers as source-compatible implementation detail.
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
