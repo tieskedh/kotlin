@@ -1168,9 +1168,14 @@ separately compiled warnings-as-errors C# subclass, including C# after Kotlin,
 run through PSI/LightTree on Framework 4.8 and .NET 10.
 
 Do not generalize this proof to broad inputs or abstract semantic obligations.
-The next bounded interop gate must add the probe identity to the physical
-binding epoch and prove Kotlin base DLL -> Kotlin override DLL -> C# subclass
-DLL. Then validate the allocation-free comparison under ReadyToRun/trimming/
+The actual Kotlin base DLL -> Kotlin override DLL -> C# subclass DLL gate is
+also closed without an ABI revision. ABI-36 already binds the semantic
+capability family. The later Kotlin DLL emits its own local probe and private
+dispatcher; the dispatcher calls that probe directly, so no producer probe
+slot identity crosses the assembly boundary. A raw incompatible widened value
+still uses the semantic hook, while a C# subclass after the Kotlin override
+changes only the typed target and is detected. The next bounded gate is to
+validate the allocation-free comparison under ReadyToRun, trimming, and
 NativeAOT before treating it as a migration-wide mechanism. C# must still
 never be required to author the protected compiler ABI merely to override a
 normal Kotlin method.

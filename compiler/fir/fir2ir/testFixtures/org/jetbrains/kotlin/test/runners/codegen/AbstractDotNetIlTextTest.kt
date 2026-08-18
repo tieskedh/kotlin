@@ -470,6 +470,7 @@ private class BackendCliDotNetFacade(
         )
         validateGenericOwnerForeignCSharpOverride(
             genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
             target = loweredInput.configuration.dotNetTarget,
             producer = completedOutput.output,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
@@ -4099,6 +4100,8 @@ private const val GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsalDir"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
+private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -4116,19 +4119,60 @@ private val genericOwnerCallRouteTraceManifests = ConcurrentHashMap<String, Stri
  */
 private fun validateGenericOwnerForeignCSharpOverride(
     genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
     target: DotNetTarget,
     producer: File,
     testDataFile: File,
     directory: File,
 ) {
-    if (!genericOwnerRehearsal || GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) return
+    val testSource = testDataFile.readText()
+    val isDirectProbe = GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER in testSource
+    val isSeparateProbe = GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER in testSource
+    if (!isDirectProbe && !isSeparateProbe) return
+    check(isDirectProbe xor isSeparateProbe) {
+        "A generic-owner foreign override oracle must select exactly one compilation shape"
+    }
     check(target != DotNetTarget.NETSTANDARD_2_0) {
         "The generic-owner foreign override probe requires an executable target"
     }
     directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (isSeparateProbe && producesLibrary) return
     val source = directory.resolve("RehearsalForeignOverrideConsumer.cs").apply {
         writeText(
-            """
+            if (isSeparateProbe) """
+            using System;
+
+            public sealed class RehearsalSeparateCSharpOverrideStore :
+                RehearsalSeparateKotlinOverrideStore<string>
+            {
+                public RehearsalSeparateCSharpOverrideStore() : base("kotlin-middle") {}
+
+                public override string read()
+                {
+                    return "csharp-after-separate-kotlin";
+                }
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    RehearsalSeparateCSharpOverrideStore store =
+                        new RehearsalSeparateCSharpOverrideStore();
+                    if (store.read() != "csharp-after-separate-kotlin")
+                        throw new InvalidOperationException(
+                            "direct separate C# override was not invoked");
+                    object widened = new RehearsalSeparateReader().read(store);
+                    if (!object.Equals(widened, "csharp-after-separate-kotlin"))
+                        throw new InvalidOperationException(
+                            "separate Kotlin semantic dispatch bypassed the natural typed C# override: " +
+                            widened);
+                    return 0;
+                }
+            }
+            """.trimIndent() else """
             using System;
 
             public sealed class RehearsalCSharpOverrideStore : RehearsalForeignOverrideStore<string>
@@ -4188,6 +4232,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
         if (target == DotNetTarget.NET48) "RehearsalForeignOverrideConsumer.exe"
         else "RehearsalForeignOverrideConsumer.dll"
     )
+    val producerReferences = if (isSeparateProbe) {
+        listOf(directory.resolve("lib.dll"), directory.resolve("middle.dll"))
+            .onEach { dependency ->
+                check(dependency.isFile) {
+                    "The separate generic-owner foreign override probe lacks ${dependency.name}"
+                }
+            }
+    } else {
+        listOf(producer)
+    }
     val compilation = when (target) {
         DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
             checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
@@ -4195,7 +4249,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
             },
             source,
             consumer,
-            references = listOf(producer, runtime, stdlib),
+            references = producerReferences + listOf(runtime, stdlib),
             executable = true,
             warningsAsErrors = true,
         )
@@ -4205,18 +4259,19 @@ private fun validateGenericOwnerForeignCSharpOverride(
             },
             source,
             consumer,
-            references = listOf(producer, runtime, stdlib),
+            references = producerReferences + listOf(runtime, stdlib),
             executable = true,
             warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("netstandard2.0 has no executable override probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
-    listOf(
-        producer to "${testDataFile.nameWithoutExtension}.dll",
-        runtime to runtime.name,
-        stdlib to stdlib.name,
-    ).forEach { dependencyEntry ->
+    val stagedDependencies = if (isSeparateProbe) {
+        producerReferences.map { dependency -> dependency to dependency.name }
+    } else {
+        listOf(producer to "${testDataFile.nameWithoutExtension}.dll")
+    }
+    (stagedDependencies + listOf(runtime to runtime.name, stdlib to stdlib.name)).forEach { dependencyEntry ->
         val dependency = dependencyEntry.first
         val assemblyFileName = dependencyEntry.second
         val staged = directory.resolve(assemblyFileName)

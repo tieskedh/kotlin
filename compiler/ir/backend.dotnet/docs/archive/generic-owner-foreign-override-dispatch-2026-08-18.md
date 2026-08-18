@@ -98,9 +98,10 @@ and only open non-private output families receive a probe.
 
 ## Remaining work
 
-Physical ABI 36 records typed entries, semantic hooks, and capability slots but
-not this new probe. The next gate must version and serialize the probe identity,
-bind a separately compiled Kotlin override to the producer slot, and then
-compile a C# subclass against that second DLL. ReadyToRun, trimming, and
-NativeAOT must also validate the managed-function-pointer comparison before it
-is selected for the atomic production migration.
+The follow-up three-assembly proof establishes that Physical ABI 36 does not
+need to serialize this probe. A separately compiled Kotlin override emits its
+own local probe and private dispatcher. Raw widened state therefore retains
+the semantic path, while a subsequent C# subclass changes the typed target
+observed by that local probe. ReadyToRun, trimming, and NativeAOT must still
+validate the managed-function-pointer comparison before it is selected for
+the atomic production migration.

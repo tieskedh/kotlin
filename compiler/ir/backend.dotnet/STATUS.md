@@ -79,12 +79,15 @@ verification, and work state.
   later foreign typed override, while the unchanged path invokes the raw
   semantic hook. Consequently an `@UnsafeVariance` widened write/read still
   returns its incompatible object and fails only at a later real typed use.
-  PSI/LightTree on Framework 4.8 and .NET 10 execute the actual Kotlin producer
-  plus a separately compiled warnings-as-errors C# consumer. ABI-36 does not
-  yet serialize/bind the probe for a Kotlin override compiled in a later DLL;
-  that is the next bounded interop condition, followed by NativeAOT validation.
+  PSI/LightTree on Framework 4.8 and .NET 10 execute both the direct Kotlin
+  producer/C# consumer and the actual Kotlin base DLL -> Kotlin override DLL ->
+  warnings-as-errors C# subclass chain. The latter proves that ABI-36 needs no
+  probe identity: each Kotlin override emits a local probe and private
+  capability dispatcher, so raw widened state remains semantic while only a
+  still-later C# typed override changes that local probe result. NativeAOT and
+  the other deployment lanes are the next bounded validation condition.
   This remains a rehearsal slice, not evidence for a per-owner rollout. The
-  final normal target aggregate covers 190 XML suites and 2,282
+  final normal target aggregate covers 190 XML suites and 2,286
   tests with zero failures, errors, or skips; FIR and integration roots were
   freshly written, while the unchanged six-test `dotnet.ir` root remained
   up-to-date from its prior green checkpoint.
