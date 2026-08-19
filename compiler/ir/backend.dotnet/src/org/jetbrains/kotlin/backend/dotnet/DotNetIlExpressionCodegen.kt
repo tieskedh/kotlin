@@ -225,6 +225,15 @@ internal class DotNetIlExpressionCodegen(
                 slotType is DotNetIlValueType.ErasedGenericArray
             ) return slotType
         }
+        if (expression is IrGetField &&
+            typeMapper.isGenericOwnerCapabilityDeclaration(expression.symbol.owner)
+        ) {
+            // Star/projected producer storage may carry either a Kotlin capability or an
+            // ordinary foreign I<T> object. The field token records that common physical
+            // carrier; reconstructing the logical semantic interface here would insert an
+            // invalid cast before the two-level dispatcher gets a chance to inspect it.
+            return typeMapper.toDotNetIlFieldType(expression.symbol.owner)
+        }
         if (expression is IrGetField) {
             val semanticGetter = expression.symbol.owner.correspondingPropertySymbol?.owner?.getter
                 ?.let(genericOwnerCapabilitySlots::get)
@@ -2062,7 +2071,8 @@ internal class DotNetIlExpressionCodegen(
     /** Uses an optional typed capability in statement position, then discards any produced value. */
     fun tryEmitCapabilityCallForDiscard(call: IrCall): Boolean {
         val logicalResultType = if (call.type.isUnit()) null else typeMapper.toDotNetIlValueType(call.type) ?: return false
-        val emitted = emitGenericInterfaceCapabilityCallOrNull(call, logicalResultType) ||
+        val emitted = emitReifiedGenericInterfaceForeignDispatchCallOrNull(call, logicalResultType) ||
+                emitGenericInterfaceCapabilityCallOrNull(call, logicalResultType) ||
                 (logicalResultType != null && emitCallableCapabilityCallOrNull(call, logicalResultType))
         if (!emitted) return false
         if (logicalResultType != null) methodContext.emit("pop", pops = 1)
@@ -2761,6 +2771,7 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
+        if (emitReifiedGenericInterfaceForeignDispatchCallOrNull(call, expectedType)) return
         if (emitGenericInterfaceCapabilityCallOrNull(call, expectedType)) return
         if (emitCallableCapabilityCallOrNull(call, expectedType)) return
         val returnType = emitCall(call)
@@ -2896,6 +2907,92 @@ internal class DotNetIlExpressionCodegen(
         }
         if (returnType.isNullableTypeParameter()) return true
         return allOverridden().any { overridden -> overridden.returnType.isNullableTypeParameter() }
+    }
+
+    /**
+     * Keeps the direct semantic capability as the fast path while admitting an ordinary foreign
+     * implementation of the natural `I<T>`. The first proof is deliberately limited to the
+     * admitted no-input producer family and an object result. The runtime selects exactly one
+     * constructed natural interface or rejects an ambiguous multi-construction object.
+     */
+    private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
+        call: IrCall,
+        expectedType: DotNetIlValueType?,
+    ): Boolean {
+        val semanticSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call) ?: return false
+        if (expectedType != DotNetIlValueType.Object || call.arguments.size != 1) return false
+        val source = call.symbol.owner.let {
+            it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
+        }
+        val semanticInfo = availableFunctions[semanticSlot]
+            ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
+            ?: return false
+        val naturalInfo = availableFunctions[source]
+            ?: typeMapper.referencedFunctionInfoOrNull(source)
+            ?: return false
+        if (semanticInfo.owner.typeParameterCount != 0 ||
+            naturalInfo.owner.typeParameterCount != 1 ||
+            semanticInfo.signature.parameterTypes.size != 1 ||
+            semanticInfo.signature.returnType != DotNetIlReturnType.Value(DotNetIlValueType.Object)
+        ) {
+            return false
+        }
+        semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
+        naturalInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
+        val receiver = call.arguments.single()
+            ?: return false
+        emitExpression(receiver, DotNetIlValueType.Object)
+        val receiverSlot = spillToSyntheticLocal(
+            DotNetIlValueType.Object,
+            "<reifiedGenericInterfaceForeignReceiver>",
+        )
+        val capabilityType = DotNetIlValueType.UserClass(semanticInfo.owner)
+        val capabilitySlot = methodContext.declareSyntheticLocal(
+            capabilityType,
+            "<reifiedGenericInterfaceCapability>",
+        )
+        val resultSlot = methodContext.declareSyntheticLocal(
+            DotNetIlValueType.Object,
+            "<reifiedGenericInterfaceForeignResult>",
+        )
+        val foreignLabel = methodContext.nextLabel("reifiedGenericInterfaceForeign")
+        val joinLabel = methodContext.nextLabel("reifiedGenericInterfaceJoin")
+
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        methodContext.emit("isinst ${capabilityType.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emit(storeLocalInstruction(capabilitySlot.index), pops = 1)
+        methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        methodContext.emitBranch("brfalse", foreignLabel, pops = 1)
+        methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        methodContext.emit(
+            semanticInfo.renderCallInstruction(
+                semanticInfo.physicalMethodName ?: semanticSlot.dotNetIlMethodName(),
+                virtual = true,
+                ownerToken = semanticInfo.owner.ilTypeRef,
+            ),
+            pops = 1,
+            pushes = 1,
+        )
+        methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+        methodContext.emitGoto(joinLabel)
+
+        methodContext.emitLabel(foreignLabel)
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        emitSystemTypeOrNull(naturalInfo.owner.ilTypeRef)
+        methodContext.emit(
+            "ldstr ${(naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()).toIlStringLiteral()}",
+            pushes = 1,
+        )
+        methodContext.emit(
+            DotNetGenericInterfaceRuntime.invokeUniqueProducerCallInstruction(coreLibraryReference),
+            pops = 3,
+            pushes = 1,
+        )
+        methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+
+        methodContext.emitLabel(joinLabel)
+        methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+        return true
     }
 
     /**

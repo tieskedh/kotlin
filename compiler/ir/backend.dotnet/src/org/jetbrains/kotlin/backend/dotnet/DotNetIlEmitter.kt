@@ -150,7 +150,9 @@ internal class DotNetIlEmitter(
     private val externalGenericOwnerPhysicalSlots:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+    private val genericOwnerForeignDispatchDeclarations: Set<IrDeclaration> = emptySet(),
     private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
 ) {
     private val covariantReturnImplementations: Set<IrSimpleFunction> =
@@ -605,7 +607,9 @@ internal class DotNetIlEmitter(
                 availableClasses[entry.value]?.let { entry.key to it }
             }.toMap(),
             genericOwnerCapabilityCallTargets = genericOwnerCapabilityCallTargets,
+            genericOwnerForeignDispatchCallTargets = genericOwnerForeignDispatchCallTargets,
             genericOwnerCapabilityDeclarations = genericOwnerCapabilityDeclarations,
+            genericOwnerForeignDispatchDeclarations = genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations = genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots = boundExternalGenericOwnerPhysicalSlots,
             stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {

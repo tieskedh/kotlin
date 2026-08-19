@@ -225,8 +225,14 @@ internal class DotNetBackendContext(
     /** Rehearsal-only exact call sites whose physical MethodRef targets a capability slot. */
     val genericOwnerCapabilityCallTargets: MutableMap<IrCall, IrSimpleFunction> =
         java.util.IdentityHashMap()
+    /** Reified producer calls whose object carrier needs capability-or-foreign dispatch. */
+    val genericOwnerForeignDispatchCallTargets: MutableMap<IrCall, IrSimpleFunction> =
+        java.util.IdentityHashMap()
     /** Rehearsal-only value/field/function slots whose proven Kotlin view is wider than one C<T>. */
     val genericOwnerCapabilityDeclarations: MutableSet<IrDeclaration> =
+        java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+    /** Semantic producer views which admit an ordinary foreign `I<T>` object carrier. */
+    val genericOwnerForeignDispatchDeclarations: MutableSet<IrDeclaration> =
         java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
     /** Generated reflection values whose physical carrier is the private reflection capability. */
     val genericOwnerReflectionCapabilityDeclarations: MutableSet<IrDeclaration> =

@@ -703,7 +703,9 @@ internal class DotNetIlTypeMapper private constructor(
     private val genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction>,
+    private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction>,
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration>,
+    private val genericOwnerForeignDispatchDeclarations: Set<IrDeclaration>,
     private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration>,
     private val externalGenericOwnerPhysicalSlots:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot>,
@@ -727,7 +729,9 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
+        genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
         genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+        genericOwnerForeignDispatchDeclarations: Set<IrDeclaration> = emptySet(),
         genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
         externalGenericOwnerPhysicalSlots:
                 Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
@@ -756,7 +760,9 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerCapabilities,
         genericOwnerReflectionCapabilities,
         genericOwnerCapabilityCallTargets,
+        genericOwnerForeignDispatchCallTargets,
         genericOwnerCapabilityDeclarations,
+        genericOwnerForeignDispatchDeclarations,
         genericOwnerReflectionCapabilityDeclarations,
         externalGenericOwnerPhysicalSlots,
         erasedValueClassMethodParameters,
@@ -783,7 +789,9 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerCapabilities,
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
+            genericOwnerForeignDispatchCallTargets,
             genericOwnerCapabilityDeclarations,
+            genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
             erasedValueClassMethodParameters,
@@ -833,7 +841,9 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerCapabilities,
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
+            genericOwnerForeignDispatchCallTargets,
             genericOwnerCapabilityDeclarations,
+            genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
             erasedValueClassMethodParameters + copiedParameters,
@@ -1266,13 +1276,17 @@ internal class DotNetIlTypeMapper private constructor(
     /** Physical state may deliberately be wider than its logical Kotlin field type in the rehearsal epoch. */
     fun toDotNetIlFieldType(field: IrField): DotNetIlValueType? =
         if (field in genericOwnerObjectStateFields) DotNetIlValueType.Object
-        else toDotNetIlValueType(field.type)
+        else genericOwnerCapabilityTypeOrNull(field, field.type)
+            ?: toDotNetIlValueType(field.type)
 
     fun isGenericOwnerObjectStateField(field: IrField): Boolean =
         field in genericOwnerObjectStateFields
 
     fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerCapabilityDeclarations
+
+    fun genericOwnerForeignDispatchCallTarget(call: IrCall): IrSimpleFunction? =
+        genericOwnerForeignDispatchCallTargets[call]
 
     /** Resolves a producer-recorded semantic carrier without inferring whether a slot selected it. */
     fun genericOwnerSemanticCapabilityTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
@@ -1295,8 +1309,11 @@ internal class DotNetIlTypeMapper private constructor(
     private fun genericOwnerCapabilityTypeOrNull(
         declaration: IrDeclaration,
         type: IrType,
-    ): DotNetIlValueType.UserClass? {
+    ): DotNetIlValueType? {
         val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        if (declaration in genericOwnerForeignDispatchDeclarations) {
+            return DotNetIlValueType.Object
+        }
         if (declaration in genericOwnerReflectionCapabilityDeclarations) {
             return genericOwnerReflectionCapabilities[owner]?.let(DotNetIlValueType::UserClass)
         }
