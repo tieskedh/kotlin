@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-classifier-input-boundary-2026-08-19.md`](reified-generic-interface-classifier-input-boundary-2026-08-19.md)
+  records ABI 40's paired compiler-owned object-input MethodDef, retained
+  natural Kotlin/C# entry, `CHECK_NOT_NULL` and immutable-local provenance,
+  separate MethodRef binding, and delayed typed-result failure on both runtime
+  profiles.
 - [`reified-generic-interface-classifier-result-boundary-2026-08-19.md`](reified-generic-interface-classifier-result-boundary-2026-08-19.md)
   records ABI 39's distinct capability/object function carriers, a
   classifier-derived safe-cast view crossing separate compilation without a

@@ -223,6 +223,30 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /** Alternate compiler ABI for a classifier-derived object input of a natural function. */
+    data class GenericOwnerFunctionInputEntry(
+        override val ownerPath: List<String>,
+        val logicalFunctionKey: String,
+        val methodName: String,
+        val isInstance: Boolean,
+        val objectParameterIndices: Set<Int>,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) {
+                "a generic-owner function input entry requires a CLR owner"
+            }
+            require(logicalFunctionKey.isNotEmpty()) {
+                "a generic-owner function input entry requires a logical function identity"
+            }
+            require(methodName.isNotEmpty()) {
+                "a generic-owner function input entry requires a CLR MethodDef name"
+            }
+            require(objectParameterIndices.isNotEmpty() && objectParameterIndices.all { index -> index >= 0 }) {
+                "a generic-owner function input entry requires non-negative object parameter indices"
+            }
+        }
+    }
+
     /** The public static singleton field carrying one logical Kotlin enum entry. */
     data class EnumEntry(
         override val ownerPath: List<String>,
@@ -422,6 +446,9 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerMemberFamily.indexKey(): Stri
 internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier.indexKey(): String =
     "S:$logicalFunctionKey"
 
+internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry.indexKey(): String =
+    "Q:$logicalFunctionKey"
+
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
 data class DotNetPortablePhysicalAbiDifference(
     val logicalKey: String,
@@ -482,7 +509,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "39"
+    const val ABI_VERSION = "40"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -530,6 +557,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.Class -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.EnumEntry -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultPromotion -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericInterfaceViewBridge -> declaration.encodeFields()
@@ -551,6 +579,7 @@ object DotNetLibraryAbiCodec {
                 "C" -> decodeClass(fields, logicalKey)
                 "F" -> decodeFunction(fields, logicalKey)
                 "S" -> decodeGenericOwnerFunctionCarrier(fields, logicalKey)
+                "Q" -> decodeGenericOwnerFunctionInputEntry(fields, logicalKey)
                 "E" -> decodeEnumEntry(fields, logicalKey)
                 "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
                 "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
@@ -685,6 +714,16 @@ object DotNetLibraryAbiCodec {
             ownerPath.size.toString(),
         ) + ownerPath
 
+    private fun DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry.encodeFields(): List<String> =
+        listOf(
+            "Q",
+            logicalFunctionKey,
+            if (isInstance) "1" else "0",
+            methodName,
+            objectParameterIndices.sorted().joinToString(","),
+            ownerPath.size.toString(),
+        ) + ownerPath
+
     private fun DotNetGenericOwnerFunctionCarrierKind?.encodeCarrierKind(): String = when (this) {
         null -> "N"
         DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY -> "C"
@@ -750,6 +789,37 @@ object DotNetLibraryAbiCodec {
         ).also { carrier ->
             require(carrier.indexKey() == logicalKey) {
                 "generic-owner function carrier '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
+    private fun decodeGenericOwnerFunctionInputEntry(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry {
+        require(fields.size >= 7) {
+            "generic-owner function input entry '$logicalKey' has an incomplete CLR identity"
+        }
+        val ownerSize = fields[5].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 6 + ownerSize) {
+            "generic-owner function input entry '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        val parameterIndices = fields[4].split(',').mapTo(linkedSetOf()) { encodedIndex ->
+            encodedIndex.toIntOrNull()
+                ?: throw IllegalArgumentException(
+                    "generic-owner function input entry '$logicalKey' has invalid parameter index " +
+                            "'$encodedIndex'"
+                )
+        }
+        return DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry(
+            ownerPath = fields.drop(6).requireOwnerPath(logicalKey, "generic-owner function input entry"),
+            logicalFunctionKey = fields[1],
+            methodName = fields[3].requireMethodName(logicalKey, "classifier-input entry"),
+            isInstance = fields[2].decodeDispatch(logicalKey),
+            objectParameterIndices = parameterIndices,
+        ).also { entry ->
+            require(entry.indexKey() == logicalKey) {
+                "generic-owner function input entry '$logicalKey' is inconsistent with its structured identity"
             }
         }
     }
@@ -1601,6 +1671,11 @@ internal data class DotNetBoundGenericOwnerFunctionCarrier(
     val carrier: DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier,
 )
 
+internal data class DotNetBoundGenericOwnerFunctionInputEntry(
+    val library: DotNetExternalLibrary,
+    val entry: DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry,
+)
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -1668,6 +1743,22 @@ internal class DotNetExternalDeclarationIndex(
                     }
             }
         }
+    internal val genericOwnerFunctionInputEntriesByLogicalKey:
+        Map<String, DotNetBoundGenericOwnerFunctionInputEntry> = buildMap {
+            libraries.forEach { library ->
+                library.declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry>()
+                    .forEach { entry ->
+                        require(put(
+                            entry.logicalFunctionKey,
+                            DotNetBoundGenericOwnerFunctionInputEntry(library, entry),
+                        ) == null) {
+                            "duplicate external Kotlin/.NET generic-owner function input entry " +
+                                    "'${entry.logicalFunctionKey}'"
+                        }
+                    }
+            }
+        }
 }
 
 /**
@@ -1687,6 +1778,8 @@ internal class DotNetExternalDeclarations(
     private val declarations = index.declarations
     private val genericOwnerMemberFamiliesByLogicalKey = index.genericOwnerMemberFamiliesByLogicalKey
     private val genericOwnerFunctionCarriersByLogicalKey = index.genericOwnerFunctionCarriersByLogicalKey
+    private val genericOwnerFunctionInputEntriesByLogicalKey =
+        index.genericOwnerFunctionInputEntriesByLogicalKey
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val classLinksInProgress = hashSetOf<String>()
@@ -1827,6 +1920,47 @@ internal class DotNetExternalDeclarations(
     fun genericOwnerFunctionCarrierOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerFunctionCarrier? {
         val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
         return genericOwnerFunctionCarriersByLogicalKey[logicalKey]
+    }
+
+    fun genericOwnerFunctionInputEntryOrNull(
+        function: IrSimpleFunction,
+    ): DotNetBoundGenericOwnerFunctionInputEntry? {
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        return genericOwnerFunctionInputEntriesByLogicalKey[logicalKey]
+    }
+
+    fun genericOwnerFunctionInputEntryInfo(
+        function: IrSimpleFunction,
+        binding: DotNetBoundGenericOwnerFunctionInputEntry,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "generic-owner function input entry belongs to an unbound external library"
+        }
+        val entry = binding.entry
+        val containingClass = (function.parent as? IrClass)?.let { classInfoOrNull(it, typeMapper) }
+        val owner = if (containingClass?.physicalPathComponents() == entry.ownerPath) {
+            containingClass
+        } else {
+            require(!entry.isInstance) {
+                "external generic-owner function input entry is outside its containing CLR class"
+            }
+            facadeInfoByPhysicalIdentity.getOrPut(
+                binding.library.artifact.assemblyName to entry.ownerPath
+            ) {
+                buildClassInfo(binding.library.artifact.assemblyName, entry.ownerPath, emptyList())
+            }
+        }
+        val signature = function.dotNetSignature(typeMapper)
+        require(signature.hasThis == entry.isInstance) {
+            "external generic-owner function input entry has inconsistent CLR dispatch"
+        }
+        require(entry.objectParameterIndices.all { index ->
+            signature.parameterTypes.getOrNull(index) == DotNetIlValueType.Object
+        }) {
+            "external generic-owner function input entry did not reconstruct its object parameters"
+        }
+        return DotNetIlFunctionInfo(owner, signature, entry.methodName)
     }
 
     fun genericOwnerPhysicalFunctionInfo(
@@ -2213,6 +2347,7 @@ internal fun collectDotNetLibraryDeclarations(
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerForeignOverrideProbeTargets: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
     interfaceDefaultImplementations: Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
@@ -2241,6 +2376,7 @@ internal fun collectDotNetLibraryDeclarations(
             add(helpers.box)
             add(helpers.unbox)
         }
+        genericOwnerFunctionInputEntries.values.toCollection(this)
         valueClassConstructorImplementations.values.toCollection(this)
     }
     val genericOwnerForeignOverrideProbesBySource = buildMap {
@@ -2471,6 +2607,32 @@ internal fun collectDotNetLibraryDeclarations(
                 put(carrier.indexKey(), carrier)
             }
         }
+    }
+    for ([source, inputEntry] in genericOwnerFunctionInputEntries) {
+        if (source.fileOrNull !in files || source.isFakeOverride) continue
+        val logicalFunctionKey = preLoweringDeclarationKeys[source] ?: continue
+        val inputEntryInfo = availableFunctions[inputEntry]
+            ?: error(
+                "Internal .NET backend error: generic-owner function input entry for " +
+                        "'${source.render()}' did not survive physical emission"
+            )
+        val mapper = checkNotNull(typeMapper) {
+            "Internal .NET backend error: generic-owner function input entry requires a type mapper"
+        }
+        val objectParameterIndices = inputEntry.parameters.mapIndexedNotNull { index, parameter ->
+            index.takeIf {
+                mapper.isGenericOwnerForeignDispatchDeclaration(parameter) &&
+                        inputEntryInfo.signature.parameterTypes.getOrNull(index) == DotNetIlValueType.Object
+            }
+        }.toSet()
+        val physicalEntry = DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry(
+            ownerPath = inputEntryInfo.owner.physicalPathComponents(),
+            logicalFunctionKey = logicalFunctionKey,
+            methodName = inputEntryInfo.physicalMethodName ?: inputEntry.dotNetIlMethodName(),
+            isInstance = inputEntryInfo.isInstance,
+            objectParameterIndices = objectParameterIndices,
+        )
+        put(physicalEntry.indexKey(), physicalEntry)
     }
     for ([source, slot] in genericOwnerCapabilitySlots) {
         if (source.fileOrNull !in files || source.isFakeOverride) continue

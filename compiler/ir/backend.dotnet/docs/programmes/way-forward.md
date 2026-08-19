@@ -1270,11 +1270,44 @@ producer, and checks `String` only on the result. Alongside it,
 `Producer<string>` API. C# reflection and both Kotlin frontends prove this on
 Framework 4.8 and .NET 10. The bounded producer proof currently accepts one
 authoritative classifier-derived return; arbitrary control-flow results,
-fields, and input parameters remain fail-closed gates.
+fields, and unproven input graphs remain fail-closed gates.
+
+ABI 40 closes the paired final input boundary. A function declared as
+`same(Producer<String>, Any?)` or `read(Producer<String>)` retains its natural
+typed MethodDef and direct source body. The producer additionally publishes a
+stable compiler-owned MethodDef whose selected parameter is `object`; only a
+call carrying classifier-derived foreign provenance targets it. The ABI record
+contains the exact physical name and parameter index, so a separate consumer
+does not guess from the logical signature. FIR's carrier-neutral
+`CHECK_NOT_NULL` and one immutable alias preserve that provenance. Exact C#
+calls remain ordinary `Producer<string>` calls; a plain foreign
+`Producer<int>` crosses the alternate entry as the same object and is checked
+only when `read` consumes its result as `String`.
+
+The next hard storage gate is nested carrier substitution, not global owner
+erasure. Prove `Box<T>(var value: T)` with a legal
+`Producer<Int> -> Producer<Any?>` view materialized in
+`Box<Producer<Any?>>`, while `Box<Int>`, `Box<String>`, and
+`Box<Producer<String>>` retain true `!T` storage and no shadow state appears.
+The representation-instability must attach to the concrete nested construction
+or transition which needs it; it may not make every `Box<T>` or `List<T>` field
+`object`.
+
+That gate must also use one generic-owner classifier predicate for Kotlin
+`is`, `as`, and `as?`. Generic arguments are not allowed to make throwing `as`
+stricter than the corresponding `is`/`as?` check merely because CLR
+constructed identity is available. The predicate decides whether the logical
+classifier is present; the operators differ only in their specified result on
+mismatch (`false`, classified throw, or `null`). Successful operations preserve
+the original object and its semantic carrier. This selected rule supersedes
+using early constructed-generic failure as an architectural escape hatch; the
+accepted semantic-authority ADR and emitted cast proof must be updated together
+before the nested carrier is admitted.
 
 Continue with default, property, broader/multiple member, invariant, and
 mixed-variance gates, including derivability rules for ordinary foreign
-implementations, then close classifier-derived field/input boundaries and
+implementations, then close classifier-derived field and broader-input
+boundaries and
 deployment behavior before the Runtime/Stdlib graph. Keep the authoring
 generator as an optional fast path where it can add the semantic sibling, and
 as the required path only where no sound language-neutral adapter has yet been
@@ -1293,6 +1326,8 @@ The ordinary foreign producer classifier evidence is in
 [`../archive/reified-generic-interface-foreign-classifier-2026-08-19.md`](../archive/reified-generic-interface-foreign-classifier-2026-08-19.md).
 The separately compiled classifier-result evidence is in
 [`../archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md`](../archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md).
+The separately compiled classifier-input evidence is in
+[`../archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md`](../archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a

@@ -214,6 +214,8 @@ internal class DotNetBackendContext(
     val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */
     val genericOwnerSemanticHooks: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Natural function to its compiler-owned classifier-derived object-input entry. */
+    val genericOwnerFunctionInputEntries: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Concrete no-input capability dispatchers which preserve a direct foreign typed override. */
     val genericOwnerDirectForeignOverrideDispatches:
         MutableMap<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = linkedMapOf()
@@ -222,6 +224,9 @@ internal class DotNetBackendContext(
     /** Synthetic external slot stubs to their producer-recorded physical families. */
     val externalGenericOwnerPhysicalSlots:
         MutableMap<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = linkedMapOf()
+    /** Synthetic external input entries to their producer-recorded physical MethodDefs. */
+    val externalGenericOwnerFunctionInputEntries:
+        MutableMap<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry> = linkedMapOf()
     /** Rehearsal-only exact call sites whose physical MethodRef targets a capability slot. */
     val genericOwnerCapabilityCallTargets: MutableMap<IrCall, IrSimpleFunction> =
         java.util.IdentityHashMap()

@@ -10273,6 +10273,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             2 to DotNetGenericOwnerFunctionCarrierKind.OBJECT,
                         ),
                     ),
+            "Q:F:sample/consumeGenericOwner" to
+                    DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry(
+                        ownerPath = listOf("sample.LibraryKt"),
+                        logicalFunctionKey = "F:sample/consumeGenericOwner",
+                        methodName = "consumeGenericOwner__KotlinClassifierInput__1234",
+                        isInstance = false,
+                        objectParameterIndices = setOf(0, 2),
+                    ),
             "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
                 methodName = "abstractWithDefaults",

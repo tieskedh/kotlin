@@ -709,6 +709,8 @@ internal class DotNetIlTypeMapper private constructor(
     private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration>,
     private val externalGenericOwnerPhysicalSlots:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot>,
+    private val externalGenericOwnerFunctionInputEntries:
+            Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry>,
     private val erasedValueClassMethodParameters: Set<IrTypeParameter>,
     val stdlibAssemblyName: String?,
     private val assemblyReferenceSink: (String) -> Unit,
@@ -735,6 +737,8 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
         externalGenericOwnerPhysicalSlots:
                 Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
+        externalGenericOwnerFunctionInputEntries:
+                Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry> = emptyMap(),
         erasedValueClassMethodParameters: Set<IrTypeParameter> = emptySet(),
         stdlibAssemblyName: String? = DotNetStdlibLibrary.ASSEMBLY_NAME,
         assemblyReferenceSink: (String) -> Unit = {},
@@ -765,6 +769,7 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerForeignDispatchDeclarations,
         genericOwnerReflectionCapabilityDeclarations,
         externalGenericOwnerPhysicalSlots,
+        externalGenericOwnerFunctionInputEntries,
         erasedValueClassMethodParameters,
         stdlibAssemblyName,
         assemblyReferenceSink,
@@ -794,6 +799,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
+            externalGenericOwnerFunctionInputEntries,
             erasedValueClassMethodParameters,
             stdlibAssemblyName,
             assemblyReferenceSink,
@@ -846,6 +852,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
+            externalGenericOwnerFunctionInputEntries,
             erasedValueClassMethodParameters + copiedParameters,
             stdlibAssemblyName,
             assemblyReferenceSink,
@@ -1187,6 +1194,9 @@ internal class DotNetIlTypeMapper private constructor(
             ?: externalDeclarations.valueClassCompilerAbiFunctionInfoOrNull(function, this)
             ?: externalGenericOwnerPhysicalSlots[function]?.let { binding ->
                 externalDeclarations.genericOwnerPhysicalFunctionInfo(function, binding, this)
+            }
+            ?: externalGenericOwnerFunctionInputEntries[function]?.let { binding ->
+                externalDeclarations.genericOwnerFunctionInputEntryInfo(function, binding, this)
             }
             ?: libraryFunction
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
