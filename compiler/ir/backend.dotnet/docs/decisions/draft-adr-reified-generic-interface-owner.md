@@ -108,9 +108,13 @@ class arguments, and widened value-type views use the capability.
 Kotlin implementations and calls preserve exact results, required boxing, and
 same-object identity in one product and across a producer/implementation/
 consumer compilation chain. A transparent covariant subinterface declared in
-the same producer product, `Child<out T> : Source<T>`, is reified at a fixpoint
-and reuses the parent capability. It does not create a second semantic slot or
-fall back to an erased child TypeDef.
+the same producer product or in a separately compiled downstream product,
+`Child<out T> : Source<T>`, is reified at a fixpoint and reuses the parent
+capability. It does not create a second semantic slot or fall back to an erased
+child TypeDef. The downstream physical ABI records the capability TypeDef's
+producer assembly as well as its owner path; no local alias is inferred from a
+name. Selecting that downstream library without the recorded self-describing
+producer dependency fails before emission.
 
 A reified generic-interface MethodDef is again an ordinary physical slot for
 the covariant-return lowering. If an inherited class member returns a narrower
@@ -126,17 +130,17 @@ Kotlin widened calls reach the authored C# member on Framework 4.8 and .NET
 10. No default interface method, runtime proxy, reflection dispatch, wrapper,
 or declaration-name/stdlib exception participates.
 
-This remains production-inert and deliberately narrow. In particular, a child
-interface declared in another compilation product has not yet proved how its
-ABI identifies the external capability owner's assembly.
+This remains production-inert and deliberately narrow. An external child is
+currently transparent and member-free; adding new slots, combining unrelated
+interface families, or changing variance requires a separate complete proof.
 
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
 must cover:
 
-1. external-product interface inheritance and intersections without erasure or
-   duplicate semantic capabilities;
+1. external-product interface intersections and member-declaring children
+   without erasure or duplicate semantic capabilities;
 2. invariant, `in`, mixed, multi-parameter, and input-bearing interfaces;
 3. reference, nullable-value, open-nullable, bounded, and value-class
    substitutions;

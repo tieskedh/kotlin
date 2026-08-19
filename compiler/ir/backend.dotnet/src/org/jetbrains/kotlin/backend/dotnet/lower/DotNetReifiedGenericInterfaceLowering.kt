@@ -61,9 +61,9 @@ import org.jetbrains.kotlin.types.Variance
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant producer with one abstract no-input member returning its
- * owner parameter directly. Transparent covariant subinterfaces in the same product inherit that
- * physical family at a fixpoint. Other families retain the accepted erased production ABI until
- * their complete semantic surface has its own proof.
+ * owner parameter directly. Transparent covariant subinterfaces inherit that physical family at
+ * a fixpoint, including across a producer boundary. Other families retain the accepted erased
+ * production ABI until their complete semantic surface has its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
@@ -142,16 +142,26 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // arity-zero Child would have to name the already-reified Parent<T> without owning a CLR
         // T, which is impossible. Reusing the parent's one capability also avoids duplicate
         // semantic slots: Child<T> and Parent<T> remain two natural CLR identities over the same
-        // Kotlin declaration-semantic domain.
+        // Kotlin declaration-semantic domain. An external parent contributes only producer ABI;
+        // do not synthesize an alias capability in the child product.
         var changed: Boolean
         do {
             changed = false
             for (owner in genericInterfaces) {
                 if (owner in context.reifiedGenericInterfaces) continue
                 val parent = owner.transparentReifiedProducerParentOrNull() ?: continue
-                val capability = context.genericOwnerCapabilityInterfaces[parent] ?: continue
+                val localCapability = context.genericOwnerCapabilityInterfaces[parent]
+                if (localCapability != null) {
+                    context.reifiedGenericInterfaces += owner
+                    context.genericOwnerCapabilityInterfaces[owner] = localCapability
+                    changed = true
+                    continue
+                }
+                val externalProvider = context.externalReifiedGenericInterfaceCapabilityProviders[parent]
+                    ?: parent.takeIf(externalDeclarations::hasReifiedGenericInterface)
+                    ?: continue
                 context.reifiedGenericInterfaces += owner
-                context.genericOwnerCapabilityInterfaces[owner] = capability
+                context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProvider
                 changed = true
             }
         } while (changed)

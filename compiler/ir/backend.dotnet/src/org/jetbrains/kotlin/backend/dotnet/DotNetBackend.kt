@@ -220,7 +220,10 @@ object DotNetBackend {
                     hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
                     genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                     genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
+                    reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
+                    externalReifiedGenericInterfaceCapabilityProviders =
+                        context.externalReifiedGenericInterfaceCapabilityProviders,
                     genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
                     genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
                     genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
@@ -345,7 +348,10 @@ object DotNetBackend {
                 },
                 genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                 genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
+                reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
+                externalReifiedGenericInterfaceCapabilityProviders =
+                    context.externalReifiedGenericInterfaceCapabilityProviders,
                 genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
                 genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
                 genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,

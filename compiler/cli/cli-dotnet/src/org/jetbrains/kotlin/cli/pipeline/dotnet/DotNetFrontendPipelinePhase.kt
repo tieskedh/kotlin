@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
@@ -707,6 +708,22 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             declarations,
             friendAssemblies,
         )
+    }
+    val selectedAssemblyNames = libraries.mapTo(hashSetOf()) { library ->
+        library.artifact.assemblyName.lowercase()
+    }
+    for (library in libraries) {
+        val missingCapabilityAssembly = library.declarations.values.asSequence()
+            .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .mapNotNull { declaration -> declaration.genericOwnerAbi?.capabilityAssemblyName }
+            .firstOrNull { capabilityAssembly -> capabilityAssembly.lowercase() !in selectedAssemblyNames }
+            ?: continue
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET library '${library.assemblyFile.path}' records generic-owner capability assembly " +
+                    "'$missingCapabilityAssembly', but that self-describing dependency is not selected.",
+        )
+        return
     }
     dotNetExternalLibraries = libraries
 }

@@ -199,6 +199,8 @@ internal class DotNetBackendContext(
     val genericOwnerCallRoutes: MutableList<DotNetGenericOwnerCallRoutePlan> = mutableListOf()
     /** Rehearsal-only logical owner to its materialized non-generic semantic capability interface. */
     val genericOwnerCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
+    /** Local reified subinterface to the external logical ancestor whose capability it inherits. */
+    val externalReifiedGenericInterfaceCapabilityProviders: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Private producer-only capability used by generated reflection thunks for private members. */
     val genericOwnerReflectionCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Rehearsal-only logical member to its producer-owned capability Interface MethodDef. */

@@ -108,12 +108,20 @@ data class DotNetValueClassAbi(
 
 /** Producer-owned non-generic classifier identity implemented by every constructed `C<T>`. */
 data class DotNetGenericOwnerAbi(
+    val capabilityAssemblyName: String,
     val capabilityOwnerPath: List<String>,
 ) {
     init {
+        require(CLR_ASSEMBLY_NAME.matches(capabilityAssemblyName)) {
+            "'$capabilityAssemblyName' is not a supported CLR-generic owner capability assembly name"
+        }
         require(capabilityOwnerPath.isNotEmpty()) {
             "a CLR-generic Kotlin owner requires a semantic capability TypeDef"
         }
+    }
+
+    private companion object {
+        val CLR_ASSEMBLY_NAME = Regex("[A-Za-z_][A-Za-z0-9_.-]*")
     }
 }
 
@@ -471,7 +479,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "37"
+    const val ABI_VERSION = "38"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1139,6 +1147,7 @@ object DotNetLibraryAbiCodec {
             valueClassAbi?.primaryConstructorMethodName.orEmpty(),
             valueClassAbi?.boxMethodName.orEmpty(),
             valueClassAbi?.unboxMethodName.orEmpty(),
+            genericOwnerAbi?.capabilityAssemblyName.orEmpty(),
             genericOwnerCapabilityPath.size.toString(),
         ) + ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath
     }
@@ -1167,7 +1176,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.Class {
-        require(fields.size >= 12) {
+        require(fields.size >= 13) {
             "class declaration '$logicalKey' has an incomplete CLR identity"
         }
         fun pathSize(fieldIndex: Int, view: String, allowAbsent: Boolean = false): Int {
@@ -1185,8 +1194,8 @@ object DotNetLibraryAbiCodec {
         }
         val initializationSize = pathSize(3, "static-initialization", allowAbsent = true)
         val objectInstanceSize = pathSize(5, "object-instance", allowAbsent = true)
-        val genericOwnerCapabilitySize = pathSize(10, "generic-owner capability", allowAbsent = true)
-        val expectedSize = 11 + ownerSize + initializationSize + objectInstanceSize + genericOwnerCapabilitySize
+        val genericOwnerCapabilitySize = pathSize(11, "generic-owner capability", allowAbsent = true)
+        val expectedSize = 12 + ownerSize + initializationSize + objectInstanceSize + genericOwnerCapabilitySize
         require(fields.size == expectedSize) {
             "class declaration '$logicalKey' has an inconsistent CLR owner-path payload"
         }
@@ -1199,7 +1208,10 @@ object DotNetLibraryAbiCodec {
         require(fields[7].isEmpty() == fields[8].isEmpty() && fields[8].isEmpty() == fields[9].isEmpty()) {
             "class declaration '$logicalKey' has an incomplete value-class compiler ABI"
         }
-        var offset = 11
+        require((genericOwnerCapabilitySize == 0) == fields[10].isEmpty()) {
+            "class declaration '$logicalKey' has an inconsistent generic-owner capability assembly"
+        }
+        var offset = 12
         fun takePath(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
         val ownerPath = takePath(ownerSize).requireOwnerPath(logicalKey, "runtime")
         val initialization = if (initializationSize == 0) {
@@ -1222,7 +1234,9 @@ object DotNetLibraryAbiCodec {
             null
         } else {
             DotNetGenericOwnerAbi(
-                takePath(genericOwnerCapabilitySize).requireOwnerPath(logicalKey, "generic-owner capability")
+                capabilityAssemblyName = fields[10],
+                capabilityOwnerPath =
+                    takePath(genericOwnerCapabilitySize).requireOwnerPath(logicalKey, "generic-owner capability"),
             )
         }
         return DotNetPhysicalDeclaration.Class(
@@ -1755,7 +1769,7 @@ internal class DotNetExternalDeclarations(
                     "without the complete CLR owner arity"
         }
         return buildClassInfo(
-            bound.library.artifact.assemblyName,
+            genericOwnerAbi.capabilityAssemblyName,
             genericOwnerAbi.capabilityOwnerPath,
             emptyList(),
         ).also { genericOwnerCapabilityInfoByLogicalKey[logicalKey] = it }
@@ -2128,7 +2142,8 @@ internal fun collectDotNetLibraryDeclarations(
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
     genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
-    genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
+    currentAssemblyName: String,
+    genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -2192,16 +2207,14 @@ internal fun collectDotNetLibraryDeclarations(
         val logicalKey = preLoweringDeclarationKeys[irClass] ?: continue
         val genericInterface = genericInterfaces[irClass]
         val genericClass = genericClasses[irClass]
-        val genericOwnerAbi = genericOwnerCapabilityInterfaces[irClass]?.let { capability ->
-            val capabilityInfo = availableClasses[capability]
-                ?: error(
-                    "Internal .NET backend error: generic-owner capability for " +
-                            "'${irClass.render()}' did not survive physical emission"
-                )
+        val genericOwnerAbi = genericOwnerCapabilities[irClass]?.let { capabilityInfo ->
             require(capabilityInfo.typeParameterCount == 0) {
                 "generic-owner capability for '${irClass.render()}' must be a non-generic CLR TypeDef"
             }
-            DotNetGenericOwnerAbi(capabilityInfo.physicalPathComponents())
+            DotNetGenericOwnerAbi(
+                capabilityAssemblyName = capabilityInfo.assemblyName ?: currentAssemblyName,
+                capabilityOwnerPath = capabilityInfo.physicalPathComponents(),
+            )
         }
         val staticInitialization = staticInitializations[irClass]?.let { lowered ->
             val entryInfo = availableFunctions[lowered.entry]

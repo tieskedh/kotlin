@@ -4120,7 +4120,10 @@ private const val DOTNET_CSHARP_AUTHORING_TOOLING_PROPERTY =
     "kotlin.dotnet.test.csharpAuthoringTooling.path"
 
 /** Validates the real producer resource consumed by the supported C# source-authoring tool. */
-private fun validateReifiedGenericInterfaceCSharpManifest(producer: File) {
+private fun validateReifiedGenericInterfaceCSharpManifest(
+    producer: File,
+    expectedDeclaredOwner: String = "RehearsalSeparateProducer`1",
+) {
     val resource = checkNotNull(
         DotNetManagedResourceReader.read(
             producer,
@@ -4134,7 +4137,7 @@ private fun validateReifiedGenericInterfaceCSharpManifest(producer: File) {
     }
     val manifest = DotNetCSharpImplementationManifestCodec.decodeManagedResource(resource.content)
     val contract = manifest.interfaces.single { candidate ->
-        candidate.declaredOwnerPath?.lastOrNull() == "RehearsalSeparateProducer`1"
+        candidate.declaredOwnerPath?.lastOrNull() == expectedDeclaredOwner
     }
     check(contract.sourceAuthoringSupported && contract.unsupportedReasons.isEmpty()) {
         "The admitted reified generic interface is not supported for C# source authoring"
@@ -4145,6 +4148,13 @@ private fun validateReifiedGenericInterfaceCSharpManifest(producer: File) {
     check(contract.exactOwnerPath == null &&
             contract.canonicalOwnerPath != contract.declaredOwnerPath) {
         "The reified generic-interface manifest did not separate natural and semantic owners"
+    }
+    if (expectedDeclaredOwner == "RehearsalSeparateChildProducer`1") {
+        check(contract.members.isEmpty() &&
+                contract.canonicalOwnerPath.last().startsWith("IRehearsalSeparateProducerKotlinSemantic")) {
+            "The external-parent child did not reuse the producer assembly's semantic capability"
+        }
+        return
     }
     val member = contract.members.single { candidate -> candidate.sourceName == "produce" }
     check(member.authoringView == DotNetCSharpInterfaceView.DECLARED) {
@@ -4203,8 +4213,14 @@ private fun validateGenericOwnerForeignCSharpOverride(
     directory.mkdirs()
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
     if (isSeparateProbe && producesLibrary) {
-        if (producer.name.equals("lib.dll", ignoreCase = true)) {
-            validateReifiedGenericInterfaceCSharpManifest(producer)
+        when {
+            producer.name.equals("lib.dll", ignoreCase = true) ->
+                validateReifiedGenericInterfaceCSharpManifest(producer)
+            producer.name.equals("middle.dll", ignoreCase = true) ->
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateChildProducer`1",
+                )
         }
         return
     }
