@@ -1144,6 +1144,31 @@ joins, covariant-return adapters, and intrinsic field-shape requirements. Only
 then do the representative products and exact inverse rollback advance the
 atomic go/no-go checkpoint.
 
+That source-built Stdlib rehearsal has now reached the generic-interface
+boundary at `AbstractMap<K, V>.keys`. The natural owner wants a truthful
+`Set<K>`, while production still maps every Kotlin-owned `Set<T>` construction
+to the same non-generic TypeDef. Treating those identical physical carriers as
+a sufficient direct override would only make the old representation constraint
+permanent. The next rehearsal slice therefore reopens generic interfaces as a
+general compiler family, not as a collection exception: a natural CLR `I<T>`
+inherits one non-generic declaration-semantic capability used only when a
+projected, widened, value-variant, or classifier-only Kotlin view has no honest
+constructed CLR interface.
+
+The first bounded foreign-source proof for that family is green on Framework
+4.8 and .NET 10. A producer manifest records `Source<T>` and its semantic slot;
+the existing Roslyn generator adds the explicit capability implementation to a
+partial C# class whose authored source contains only `Read(): T`. Reference and
+value implementations preserve one object identity and agree through both the
+typed and semantic calls. This closes the automatic C# partial-source mechanism
+without relying on default interface methods, wrappers, proxies, or reflection.
+It is not yet a compiler-emission proof and cannot retrofit precompiled,
+non-partial, or other-language implementors. Continue with the emitter-owned
+interface family, projections and broad inputs, defaults and inheritance,
+separate assemblies, and Runtime/Stdlib before replacing the accepted erased
+interface ADR. See
+[`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md).
+
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
 producer-proven typed field or its private final default accessor without new
