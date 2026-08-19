@@ -99,6 +99,17 @@ construction fails as an invalid cast. A value implementing two distinct
 fails deterministically; interface enumeration order is never semantic
 evidence. Exact CLR calls to either construction remain ordinary typed calls.
 
+Classifier operations deliberately have a different admission rule from a
+member call. Kotlin `is Source<*>` and parameterized `as? Source<String>` test
+the declaration classifier and ignore the constructed CLR arguments. They
+therefore succeed when the object has the capability or any closed natural
+`Source<T>` construction, including more than one construction. A successful
+safe cast returns the original object on the broad `object` carrier. It does
+not select one construction, create an adapter, or fabricate
+`Source<string>`. A following member call still requires the capability or one
+unique natural construction, and a following concrete `String` use checks the
+member result at that typed-use boundary.
+
 This fallback changes no object identity and creates no proxy, wrapper, or
 third public canonical type. It is currently admitted only for the structural
 no-input covariant producer family, where the required call is derivable from
@@ -179,6 +190,16 @@ not reflection's wrapper, and an object implementing both `Source<int>` and
 interface method, runtime proxy, identity-changing wrapper, or declaration-
 name/stdlib exception participates.
 
+The same precompiled product now proves classifier-erased `is`, `!is`,
+nullable `is`, smart-cast use, and parameterized `as?`. An ordinary
+`Source<int>` passes `as? Source<String>` and preserves identity; its later
+`String` result use throws `InvalidCastException`. An ordinary capability-free
+multi-construction object passes the classifier and safe cast because the
+declaration classifier is present, while its member call remains
+deterministically ambiguous. The compiler caches the runtime type's interface
+vector once and uses no constructed-generic `isinst` for these Kotlin
+operations.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -198,12 +219,14 @@ must cover:
    compositions beyond the admitted one-input consumer root;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
-4. broad and `@UnsafeVariance` inputs, delayed typed-use failure, parameterized
-   `as`, and classifier-only `as?`;
+4. broad and `@UnsafeVariance` inputs, delayed typed-use failure beyond the
+   proven producer result, parameterized `as`, and classifier-derived views
+   crossing separately compiled exact-looking callable boundaries;
 5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and
    ordinary foreign implementations beyond the no-input covariant producer;
-6. same-object identity, runtime classifier tests/casts, and dispatch across
-   deeper separate Kotlin and C# assembly graphs;
+6. same-object identity and dispatch across deeper separate Kotlin and C#
+   assembly graphs, including classifier-derived fields, parameters, and
+   results;
 7. Runtime and Stdlib owners including collection special bridges without a
    collection-specific representation; and
 8. exact inverse rollback plus Framework 4.8, .NET 10, trimming, and NativeAOT
