@@ -18,15 +18,19 @@ verification, and work state.
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
 - Cross-cutting semantic boundary: Kotlin remains authoritative when CLR RTTI
-  is stronger. A stronger CLR check now requires an operation-specific Kotlin
-  specification permission; warnings, suppression, `@UnsafeVariance`, and
-  physical reification are not semantic waivers. Parameterized throwing `as`
-  may use its implementation-defined failure point, while parameterized `as?`
-  ignores generic arguments for subtyping and stays on the logical classifier/
-  capability path. The unchanged generic-class/interface cast oracles were
-  refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
-  eight tests, and zero failures, errors, or skips. See
-  [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+  is stronger, except for a deliberately accepted pre-ABI entry in the
+  breaking-change ledger. Warnings, suppression, `@UnsafeVariance`, and
+  physical reification are not general semantic waivers. BK-1 gives one narrow
+  exception: warning-bearing parameterized `as` and `as?` operations on an
+  admitted CLR-generic owner use the same recursive Kotlin-aware argument-
+  subtyping predicate. Covariant `Producer<Int> -> Producer<Any>` succeeds in
+  both forms and preserves identity even though CLR value-type variance cannot
+  name `Producer<object>`; unrelated `Producer<Int> -> Producer<String>`
+  throws or returns null respectively. `is Producer<*>`, ordinary variance,
+  stars, and projections remain classifier/semantic operations. See
+  [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md)
+  and
+  [`docs/decisions/breaking-kotlin-changes.md`](docs/decisions/breaking-kotlin-changes.md).
 - Latest generic-interface reopening proof: the test-only generic-owner epoch
   now emits the first structural Kotlin-owned CLR-generic interface family and
   propagates it across producer boundaries, independent interface
@@ -59,17 +63,20 @@ verification, and work state.
   fail deterministically as ambiguous. The ordinary foreign branch executes
   through PSI and LightTree on both Framework 4.8 and .NET 10: four focused
   tests and zero failures, errors, or skips. Classifier operations on that
-  ordinary foreign family are now declaration-erased without becoming
-  capability-only: `is Producer<*>`, `!is`, nullable `is`, smart-cast member
-  use, and parameterized `as? Producer<String>` accept the capability or any
-  natural closed construction. Safe casts retain the original object and do
-  not inspect generic arguments. Multiple constructions pass the classifier,
-  but a capability-free foreign object remains ambiguous at a member call; a
-  forged `Producer<String>` view over a natural `Producer<int>` fails at the
-  `String` result use. The runtime caches each runtime type's interface vector
-  and never emits constructed generic `isinst` for these operations. This also
-  executes in four focused PSI/LightTree, Framework 4.8/.NET 10 lanes with no
-  failures, errors, or skips.
+  ordinary foreign family remain declaration-erased without becoming
+  capability-only: `is Producer<*>`, `!is`, nullable `is`, and smart-cast
+  member use accept the capability or any natural closed construction.
+  Warning-bearing parameterized `as` and `as?` now additionally compare the
+  discovered construction with the requested one using Kotlin declaration-
+  site variance recursively. A natural `Producer<int>` therefore succeeds as
+  `Producer<Any>` in both forms with identical object identity, but fails as
+  `Producer<String>` at the cast boundary. Nested
+  `Producer<Producer<Int>> -> Producer<Producer<Any>>` succeeds by the same
+  rule. Multiple constructions may still pass a star/classifier check, while
+  a capability-free foreign object remains ambiguous at a broad member call.
+  The runtime caches each runtime type's interface vector and never fabricates
+  a constructed CLR view for a Kotlin-compatible value-type widening. Runtime
+  surface 39 owns the new public compiler-ABI compatibility predicate.
   The first exact-looking callable boundary is now closed as well. A function
   whose authoritative result is a classifier-derived `as? Producer<String>`
   keeps that logical KLIB result but publishes CLR `object`; an adjacent
@@ -79,22 +86,22 @@ verification, and work state.
   the semantic capability or `object`, rather than treating both as one kind
   of erasure. A separate Kotlin consumer propagates the producer-recorded
   object provenance through FIR's synthesized safe-call temporary, preserves
-  identity, dispatches the ordinary precompiled `Producer<int>` exactly once,
-  and checks only its result at the later `String` use. C# reflection verifies
-  both public signatures. ABI 40 now closes the matching exact-looking input
+  identity, and dispatches an ordinary compatible precompiled producer exactly
+  once. Incompatible warning-bearing views now fail at the cast boundary. C#
+  reflection verifies both public signatures. ABI 40 closes the matching exact-
+  looking input
   boundary without erasing that natural API. A final ordinary function keeps
   its `Producer<string>` MethodDef and direct body for exact Kotlin and C#
   calls, while one compiler-owned alternate MethodDef accepts `object` only
   when the argument carries classifier-derived foreign provenance. The
   producer records that MethodDef name and its object parameter index; a
   separate consumer reconstructs the exact MethodRef rather than inferring it.
-  A safe-cast result survives FIR's `CHECK_NOT_NULL` call and an immutable local
-  without losing provenance, reaches the alternate entry with identical object
-  identity, invokes a plain foreign `Producer<int>` once, and fails only when
-  its result is consumed as `String`. The same four PSI/LightTree and Framework
-  4.8/.NET 10 lanes pass; arbitrary control-flow returns, classifier-derived
-  fields, non-final/open inputs, and broader input graphs remain separate
-  gates. The final target aggregate covers
+  A successful safe-cast result survives FIR's `CHECK_NOT_NULL` call and an
+  immutable local without losing provenance, reaches the alternate entry with
+  identical object identity, and invokes a plain compatible foreign producer
+  once. Arbitrary control-flow returns, classifier-derived fields, non-final/
+  open inputs, and broader input graphs remain separate gates. The current full
+  target aggregate covers
   190 XML suites and 2,287 tests with zero failures, errors, or skips: the 187
   FIR suites/2,155 tests and two integration suites/126 tests were freshly
   written, while the unchanged six-test `dotnet.ir` root remained up-to-date.

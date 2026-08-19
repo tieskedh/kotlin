@@ -282,7 +282,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                 ?.carrier?.returnCarrier == DotNetGenericOwnerFunctionCarrierKind.OBJECT
                 }
             is IrTypeOperatorCall -> when (operator) {
-                IrTypeOperator.SAFE_CAST -> typeOperand.reifiedCovariantInterfaceOwnerOrNull()
+                IrTypeOperator.CAST,
+                IrTypeOperator.SAFE_CAST,
+                    -> typeOperand.reifiedCovariantInterfaceOwnerOrNull()
                 IrTypeOperator.IMPLICIT_CAST,
                 IrTypeOperator.IMPLICIT_NOTNULL,
                     -> argument.classifierErasedInterfaceOwnerOrNull()
@@ -378,7 +380,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetGenericOwnerFunctionCarrierKind.OBJECT)
             is IrTypeOperatorCall ->
                 argument.readsForeignDispatchDeclaration() ||
-                        (operator == IrTypeOperator.IMPLICIT_CAST &&
+                        ((operator == IrTypeOperator.CAST ||
+                                operator == IrTypeOperator.SAFE_CAST ||
+                                operator == IrTypeOperator.IMPLICIT_CAST) &&
                                 type.reifiedCovariantInterfaceOwnerOrNull() != null)
             else -> false
         }

@@ -174,6 +174,228 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
+    .method private hidebysig static bool 'IsKotlinGenericConstructionAssignable'(
+        $typeType 'source',
+        $typeType 'target') cil managed
+    {
+      .maxstack 4
+      .locals init (
+        [0] $typeType 'sourceDefinition',
+        [1] $typeType 'targetDefinition',
+        [2] $typeType[] 'sourceArguments',
+        [3] $typeType[] 'targetArguments',
+        [4] $typeType[] 'parameters',
+        [5] int32 'index',
+        [6] int32 'variance'
+      )
+      ldarg.0
+      ldarg.1
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse.s GIF_AssignableNominal
+      ldc.i4.1
+      ret
+    GIF_AssignableNominal:
+      ldarg.1
+      ldarg.0
+      callvirt instance bool ${coreLibraryReference}System.Type::IsAssignableFrom($typeType)
+      brfalse.s GIF_AssignableStructural
+      ldc.i4.1
+      ret
+    GIF_AssignableStructural:
+      ldarg.0
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse GIF_AssignableFalse
+      ldarg.1
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse GIF_AssignableFalse
+      ldarg.0
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      stloc.0
+      ldarg.1
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      stloc.1
+      ldloc.0
+      ldloc.1
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse GIF_AssignableFalse
+      ldarg.0
+      callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
+      stloc.2
+      ldarg.1
+      callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
+      stloc.3
+      ldloc.1
+      callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
+      stloc.s 4
+      ldloc.2
+      ldlen
+      conv.i4
+      ldloc.3
+      ldlen
+      conv.i4
+      bne.un GIF_AssignableFalse
+      ldloc.2
+      ldlen
+      conv.i4
+      ldloc.s 4
+      ldlen
+      conv.i4
+      bne.un GIF_AssignableFalse
+      ldc.i4.0
+      stloc.s 5
+    GIF_AssignableNext:
+      ldloc.s 5
+      ldloc.2
+      ldlen
+      conv.i4
+      bge.s GIF_AssignableTrue
+      ldloc.s 4
+      ldloc.s 5
+      ldelem.ref
+      callvirt instance valuetype ${coreLibraryReference}System.Reflection.GenericParameterAttributes ${coreLibraryReference}System.Type::get_GenericParameterAttributes()
+      conv.i4
+      ldc.i4.3
+      and
+      stloc.s 6
+      ldloc.s 6
+      ldc.i4.1
+      beq.s GIF_AssignableCovariant
+      ldloc.s 6
+      ldc.i4.2
+      beq.s GIF_AssignableContravariant
+      ldloc.2
+      ldloc.s 5
+      ldelem.ref
+      ldloc.3
+      ldloc.s 5
+      ldelem.ref
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse.s GIF_AssignableFalse
+      br.s GIF_AssignableContinue
+    GIF_AssignableCovariant:
+      ldloc.2
+      ldloc.s 5
+      ldelem.ref
+      ldloc.3
+      ldloc.s 5
+      ldelem.ref
+      call bool Kotlin.Runtime.Internal.GenericInterfaceDispatch::'IsKotlinGenericConstructionAssignable'($typeType, $typeType)
+      brfalse.s GIF_AssignableFalse
+      br.s GIF_AssignableContinue
+    GIF_AssignableContravariant:
+      ldloc.3
+      ldloc.s 5
+      ldelem.ref
+      ldloc.2
+      ldloc.s 5
+      ldelem.ref
+      call bool Kotlin.Runtime.Internal.GenericInterfaceDispatch::'IsKotlinGenericConstructionAssignable'($typeType, $typeType)
+      brfalse.s GIF_AssignableFalse
+    GIF_AssignableContinue:
+      ldloc.s 5
+      ldc.i4.1
+      add
+      stloc.s 5
+      br.s GIF_AssignableNext
+    GIF_AssignableTrue:
+      ldc.i4.1
+      ret
+    GIF_AssignableFalse:
+      ldc.i4.0
+      ret
+    }
+
+    .method public hidebysig static bool 'IsCompatibleGenericOwnerInstance'(
+        object 'instance',
+        $typeType 'requestedConstruction') cil managed
+    {
+      .maxstack 3
+      .locals init (
+        [0] $typeType[] 'interfaces',
+        [1] int32 'index',
+        [2] $typeType 'candidate',
+        [3] $typeType 'requestedDefinition',
+        [4] $typeType 'runtimeClass'
+      )
+      ldarg.0
+      brfalse GIF_CompatibleMiss
+      ldarg.1
+      brfalse GIF_CompatibleMiss
+      ldarg.1
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse GIF_CompatibleMiss
+      ldarg.1
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      stloc.3
+      ldarg.0
+      callvirt instance $typeType ${coreLibraryReference}System.Object::GetType()
+      stloc.s 4
+    GIF_CompatibleClassNext:
+      ldloc.s 4
+      brfalse GIF_CompatibleInterfaces
+      ldloc.s 4
+      stloc.2
+      ldloc.2
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse.s GIF_CompatibleClassContinue
+      ldloc.2
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      ldloc.3
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse.s GIF_CompatibleClassContinue
+      ldloc.2
+      ldarg.1
+      call bool Kotlin.Runtime.Internal.GenericInterfaceDispatch::'IsKotlinGenericConstructionAssignable'($typeType, $typeType)
+      brtrue GIF_CompatibleHit
+    GIF_CompatibleClassContinue:
+      ldloc.2
+      callvirt instance $typeType ${coreLibraryReference}System.Type::get_BaseType()
+      stloc.s 4
+      br GIF_CompatibleClassNext
+    GIF_CompatibleInterfaces:
+      ldarg.0
+      callvirt instance $typeType ${coreLibraryReference}System.Object::GetType()
+      call $stateType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'GetProducerState'($typeType)
+      ldfld $typeType[] Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'interfaces'
+      stloc.0
+      ldc.i4.0
+      stloc.1
+    GIF_CompatibleNext:
+      ldloc.1
+      ldloc.0
+      ldlen
+      conv.i4
+      bge GIF_CompatibleMiss
+      ldloc.0
+      ldloc.1
+      ldelem.ref
+      stloc.2
+      ldloc.2
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse.s GIF_CompatibleContinue
+      ldloc.2
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      ldloc.3
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse.s GIF_CompatibleContinue
+      ldloc.2
+      ldarg.1
+      call bool Kotlin.Runtime.Internal.GenericInterfaceDispatch::'IsKotlinGenericConstructionAssignable'($typeType, $typeType)
+      brfalse.s GIF_CompatibleContinue
+    GIF_CompatibleHit:
+      ldc.i4.1
+      ret
+    GIF_CompatibleContinue:
+      ldloc.1
+      ldc.i4.1
+      add
+      stloc.1
+      br GIF_CompatibleNext
+    GIF_CompatibleMiss:
+      ldc.i4.0
+      ret
+    }
+
     .method public hidebysig static object 'InvokeUniqueProducer'(
         object 'instance',
         $typeType 'openDefinition',
@@ -355,5 +577,11 @@ internal object DotNetGenericInterfaceRuntime {
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"IsOpenGenericInterfaceInstance".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type)"
+
+    fun isCompatibleGenericOwnerInstanceCallInstruction(coreLibraryReference: String): String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"IsCompatibleGenericOwnerInstance".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type)"
 }

@@ -4413,7 +4413,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         !classifier.isNotProducer(new object()) ||
                         classifier.isProducer(null) ||
                         !classifier.isNullableProducer(null) ||
-                        !classifier.safeSame(rawProducer) ||
+                        !classifier.safeStarSame(rawProducer) ||
+                        !classifier.checkedStarSame(rawProducer) ||
+                        classifier.safeSame(rawProducer) ||
+                        !classifier.safeAnySame(rawProducer) ||
+                        !classifier.checkedAnySame(rawProducer) ||
                         !object.Equals(classifier.smartRead(rawProducer), 83) ||
                         classifier.smartRead(new object()) != null)
                         throw new InvalidOperationException(
@@ -4423,6 +4427,13 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (classifier.safeRead(rawString) != "raw-string")
                         throw new InvalidOperationException(
                             "Kotlin safe cast did not dispatch the matching precompiled producer");
+                    RehearsalSeparateProducer<RehearsalSeparateProducer<int>> rawNested =
+                        new RehearsalSeparateProducerValue<RehearsalSeparateProducer<int>>(
+                            rawProducer);
+                    if (!classifier.safeNestedAnySame(rawNested) ||
+                        classifier.safeNestedStringSame(rawNested))
+                        throw new InvalidOperationException(
+                            "Kotlin generic-owner cast did not apply recursive variance");
                     if (typeof(RehearsalSeparateProducerClassifier)
                             .GetMethod("safeView").ReturnType != typeof(object))
                         throw new InvalidOperationException(
@@ -4435,10 +4446,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 typeof(RehearsalSeparateProducer<string>))
                         throw new InvalidOperationException(
                             "ordinary exact generic view lost its natural CLR signature");
-                    object safeView = classifier.safeView(rawProducer);
-                    if (!object.ReferenceEquals(safeView, rawProducer))
+                    if (classifier.safeView(rawProducer) != null)
                         throw new InvalidOperationException(
-                            "classifier-derived return boundary changed object identity");
+                            "parameterized safe cast ignored an incompatible type argument");
+                    object safeView = classifier.safeView(rawString);
+                    if (!object.ReferenceEquals(safeView, rawString))
+                        throw new InvalidOperationException(
+                            "compatible parameterized safe cast changed object identity");
+                    try
+                    {
+                        classifier.checkedStringView(rawProducer);
+                        throw new InvalidOperationException(
+                            "parameterized throwing cast ignored an incompatible type argument");
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
                     RehearsalSeparateProducer<string> exactView =
                         classifier.exactView(rawString);
                     if (!object.ReferenceEquals(exactView, rawString))
@@ -4460,54 +4483,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "ordinary C# calls lost the natural classifier input entry");
                     RehearsalSeparateClassifierBoundary classifierBoundary =
                         new RehearsalSeparateClassifierBoundary();
-                    if (!classifierBoundary.same(rawProducer))
+                    if (!classifierBoundary.same(rawString))
                         throw new InvalidOperationException(
                             "separate Kotlin consumer lost classifier-derived object identity");
-                    if (!classifierBoundary.sameThroughInput(rawProducer))
+                    if (!classifierBoundary.sameThroughInput(rawString))
                         throw new InvalidOperationException(
                             "classifier-derived input failed before identity observation");
-                    int callsBeforeBoundaryRead = rawProducer.Calls;
-                    try
-                    {
-                        classifierBoundary.read(rawProducer);
+                    if (classifierBoundary.read(rawString) != "raw-string")
                         throw new InvalidOperationException(
-                            "separate Kotlin consumer accepted an incompatible producer result");
-                    }
-                    catch (InvalidCastException)
-                    {
-                        // The separately compiled use, not safeView, checks String compatibility.
-                    }
-                    if (rawProducer.Calls != callsBeforeBoundaryRead + 1)
+                            "compatible classifier boundary lost the producer result");
+                    if (classifierBoundary.readThroughInput(rawString) != "raw-string")
                         throw new InvalidOperationException(
-                            "classifier-derived return failed before separate typed use");
-                    int callsBeforeInputRead = rawProducer.Calls;
-                    try
-                    {
-                        classifierBoundary.readThroughInput(rawProducer);
-                        throw new InvalidOperationException(
-                            "classifier-derived input accepted an incompatible producer result");
-                    }
-                    catch (InvalidCastException)
-                    {
-                        // The input entry preserves object provenance; read checks String later.
-                    }
-                    if (rawProducer.Calls != callsBeforeInputRead + 1)
-                        throw new InvalidOperationException(
-                            "classifier-derived input failed before the producer was invoked");
+                            "compatible classifier input lost the producer result");
                     int callsBeforeUnsafeSafeRead = rawProducer.Calls;
-                    try
-                    {
-                        classifier.safeRead(rawProducer);
+                    if (classifier.safeRead(rawProducer) != null)
                         throw new InvalidOperationException(
-                            "Kotlin safe cast inspected generic arguments before typed use");
-                    }
-                    catch (InvalidCastException)
-                    {
-                        // Generic arguments are ignored by as?; the String use checks the result.
-                    }
-                    if (rawProducer.Calls != callsBeforeUnsafeSafeRead + 1)
+                            "Kotlin safe cast accepted an incompatible producer");
+                    if (rawProducer.Calls != callsBeforeUnsafeSafeRead)
                         throw new InvalidOperationException(
-                            "Kotlin safe cast failed before the natural producer result was used");
+                            "Kotlin safe cast invoked an incompatible producer");
                     RehearsalSeparateRawCSharpAmbiguousProducer rawAmbiguous =
                         new RehearsalSeparateRawCSharpAmbiguousProducer();
                     if (!classifier.isProducer(rawAmbiguous) ||

@@ -83,12 +83,18 @@ The eventual design must decide and test at least:
 - null receivers and nullable cast targets; and
 - the exact physical exception and logical Kotlin classification.
 
-Parameterized `as?` does not inherit the throwing cast's platform freedom:
-generic arguments are not checked with respect to subtyping. It uses the
-logical open-owner/capability classifier, returns the same semantic object when
-that classifier matches, and otherwise returns `null`; it never leaks
-`InvalidCastException` or claims an exact constructed carrier merely because
-the CLR can test one.
+Pre-ABI breaking entry BK-1 deliberately supersedes that portable safe-cast
+rule for warning-bearing parameterized casts on an admitted reified generic
+owner. Throwing `as` and safe `as?` use the same Kotlin-aware argument-
+subtyping predicate; mismatch throws or returns null respectively. This is not
+constructed CLR equality: declaration-site variance must still make
+`Producer<Int> -> Producer<Any>` succeed with the same object when CLR value-
+type variance cannot name the view. The current implementation proves only the
+bounded covariant interface producer family. Extending the rule to a generic
+class remains part of this programme's hostile admission matrix. A successful
+CLR-unnameable view stays on a semantic/object carrier rather than claiming a
+fictitious constructed carrier. See the
+[breaking-change ledger](../decisions/breaking-kotlin-changes.md).
 
 ## What must never be rejected
 

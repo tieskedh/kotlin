@@ -1246,26 +1246,30 @@ select a view. A real `Producer<*>` field retains identity, and reflection's
 invocation wrapper is removed before an authored exception escapes. This proof
 executes on Framework 4.8 and .NET 10 JIT.
 
-The adjacent classifier gate is now closed for that same admitted producer
-family. Kotlin `is Producer<*>`, nullable and negated tests, smart-cast member
-use, and parameterized `as? Producer<String>` accept either the capability or
-any natural closed construction. The check ignores constructed arguments and
-preserves the original object. Multiple constructions pass the classifier, but
-a capability-free foreign object remains ambiguous when a broad member call
-must choose one; a forged `Producer<String>` view over `Producer<int>` fails
-only when its produced value is consumed as `String`. The interface vector is
-cached per runtime type, and the rule executes through PSI and LightTree on
-Framework 4.8 and .NET 10. It does not yet authorize foreign input/member
-families, trimming, or NativeAOT.
+The adjacent classifier and cast gate is now closed for that same admitted
+producer family. Kotlin `is Producer<*>`, nullable and negated tests, and
+smart-cast member use accept either the capability or any natural closed
+construction. They remain classifier-only. Warning-bearing parameterized
+`as` and `as?` instead share a recursive Kotlin-aware argument-subtyping
+predicate under breaking entry BK-1. Thus a natural `Producer<int>` succeeds
+as `Producer<Any>` in both forms, retains the same object even though CLR
+value-type variance cannot name `Producer<object>`, and fails as
+`Producer<String>` at the cast boundary. Nested covariant producer arguments
+follow the same rule. Multiple constructions still pass the star/classifier
+check, but a capability-free foreign object remains ambiguous when a broad
+member call must choose one. The interface vector is cached per runtime type,
+and no wrapper or fictitious constructed generic view is created. It does not
+yet authorize foreign input/member families, trimming, or NativeAOT.
 
 The first classifier-derived callable boundary is now closed without globally
 erasing exact-looking APIs. `safeView(Any?): Producer<String>?` retains its
-logical KLIB result but publishes CLR `object`, because the successful view may
-still be a plain foreign `Producer<int>`. ABI 39 extends the producer-owned
-function-carrier record with distinct semantic-capability and object kinds per
-signature slot. The separate consumer uses that record through FIR's
-synthetic safe-call local, retains object identity, invokes the unique natural
-producer, and checks `String` only on the result. Alongside it,
+logical KLIB result but conservatively publishes CLR `object`; the cast result
+carrier does not fabricate a constructed CLR identity. ABI 39 extends the
+producer-owned function-carrier record with distinct semantic-capability and
+object kinds per signature slot. The separate consumer uses that record
+through FIR's synthetic safe-call local, retains object identity, and invokes
+a compatible plain foreign producer. An incompatible foreign construction now
+returns null before that boundary. Alongside it,
 `exactView(Producer<String>): Producer<String>` remains a natural
 `Producer<string>` API. C# reflection and both Kotlin frontends prove this on
 Framework 4.8 and .NET 10. The bounded producer proof currently accepts one
@@ -1280,9 +1284,11 @@ call carrying classifier-derived foreign provenance targets it. The ABI record
 contains the exact physical name and parameter index, so a separate consumer
 does not guess from the logical signature. FIR's carrier-neutral
 `CHECK_NOT_NULL` and one immutable alias preserve that provenance. Exact C#
-calls remain ordinary `Producer<string>` calls; a plain foreign
-`Producer<int>` crosses the alternate entry as the same object and is checked
-only when `read` consumes its result as `String`.
+calls remain ordinary `Producer<string>` calls; a compatible plain foreign
+producer crosses the alternate entry as the same object. A future CLR-
+unnameable but Kotlin-compatible view, such as `Producer<int>` viewed as
+`Producer<Any>`, uses that object carrier rather than pretending to implement
+`Producer<object>`.
 
 The next hard storage gate is nested carrier substitution, not global owner
 erasure. Prove `Box<T>(var value: T)` with a legal
@@ -1293,16 +1299,16 @@ The representation-instability must attach to the concrete nested construction
 or transition which needs it; it may not make every `Box<T>` or `List<T>` field
 `object`.
 
-That gate must also use one generic-owner classifier predicate for Kotlin
-`is`, `as`, and `as?`. Generic arguments are not allowed to make throwing `as`
-stricter than the corresponding `is`/`as?` check merely because CLR
-constructed identity is available. The predicate decides whether the logical
-classifier is present; the operators differ only in their specified result on
-mismatch (`false`, classified throw, or `null`). Successful operations preserve
-the original object and its semantic carrier. This selected rule supersedes
-using early constructed-generic failure as an architectural escape hatch; the
-accepted semantic-authority ADR and emitted cast proof must be updated together
-before the nested carrier is admitted.
+That gate must preserve the now-explicit operation boundary. Star/classifier
+tests such as `is Producer<*>` ask only whether the logical classifier is
+present. Warning-bearing parameterized `as` and `as?` use one Kotlin-aware
+argument-subtyping predicate and differ only on mismatch: classified throw or
+null. `Producer<Int> -> Producer<Any>` therefore succeeds in both forms;
+`Producer<Int> -> Producer<String>` fails in both forms. Every success
+preserves the original object and its semantic carrier. The deliberate safe-
+cast incompatibility with the Kotlin specification is limited to BK-1 in the
+breaking-change ledger and must not leak into ordinary variance, projections,
+or warning-free operations.
 
 Continue with default, property, broader/multiple member, invariant, and
 mixed-variance gates, including derivability rules for ordinary foreign

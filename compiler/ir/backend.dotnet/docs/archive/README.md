@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-warning-checked-casts-2026-08-19.md`](generic-owner-warning-checked-casts-2026-08-19.md)
+  records BK-1's shared Kotlin-aware predicate for warning-bearing
+  parameterized `as`/`as?`, preserved `Int -> Any` covariance despite CLR
+  value-type variance, early unrelated mismatch, recursive nested evidence,
+  and Runtime surface 39 across Framework 4.8 and .NET 10.
 - [`reified-generic-interface-classifier-input-boundary-2026-08-19.md`](reified-generic-interface-classifier-input-boundary-2026-08-19.md)
   records ABI 40's paired compiler-owned object-input MethodDef, retained
   natural Kotlin/C# entry, `CHECK_NOT_NULL` and immutable-local provenance,
