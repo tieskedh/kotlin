@@ -600,8 +600,12 @@ internal class DotNetIlMethodCodegen(
         val overrideInfo = availableFunctions[slot]
             ?: typeMapper.referencedFunctionInfoOrNull(slot)
             ?: dotNetUnsupported("generic-owner capability slot is unavailable")
-        check(overrideInfo.owner.typeParameterCount == 0 && slotOwner.typeParameters.isEmpty()) {
-            "Internal .NET backend error: a generic-owner semantic capability must be non-generic"
+        // A local slot is parented by its synthetic non-generic IR interface. An un-emitted
+        // separate-consumer stub deliberately remains parented by the logical generic owner so
+        // KLIB identity and override discovery stay intact; its producer-bound MethodRef is still
+        // authoritative. The physical owner, not that stub parent, is the ABI invariant.
+        check(overrideInfo.owner.typeParameterCount == 0) {
+            "Internal .NET backend error: a generic-owner semantic capability has a generic physical owner"
         }
         check(overrideInfo.signature.hasThis && signature.hasThis &&
                 overrideInfo.signature.returnType == signature.returnType &&

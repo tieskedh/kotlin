@@ -188,13 +188,12 @@ internal class DotNetBackendContext(
     val enumEntryFields: MutableMap<IrEnumEntry, IrField> = linkedMapOf()
     /** Logical value class to its local definition or external physical box/unbox stubs. */
     val valueClassBoxingHelpers: MutableMap<IrClass, DotNetValueClassBoxingHelpers> = linkedMapOf()
-    /** Kotlin-owned generic classifiers whose authoritative member ABI erases owner parameters. */
+    /** Kotlin-owned generic classifiers whose selected physical ABI erases owner parameters. */
     val erasedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
     val erasedGenericClasses: MutableSet<IrClass> = hashSetOf()
-    /**
-     * Fail-closed evidence for a future CLR-generic class-owner ABI. The emitter does not consume
-     * these plans; every planned class continues to enter [erasedGenericClasses].
-     */
+    /** Rehearsal-only generic interfaces whose natural CLR owner is the truthful `I<T>` TypeDef. */
+    val reifiedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
+    /** Fail-closed evidence consumed only by the atomic CLR-generic rehearsal epoch. */
     val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
     /** Static call-site evidence only; codegen must never consume these route requirements. */
     val genericOwnerCallRoutes: MutableList<DotNetGenericOwnerCallRoutePlan> = mutableListOf()
@@ -204,6 +203,9 @@ internal class DotNetBackendContext(
     val genericOwnerReflectionCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Rehearsal-only logical member to its producer-owned capability Interface MethodDef. */
     val genericOwnerCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** External reified-interface member to its producer-bound, un-emitted semantic slot stub. */
+    val externalReifiedGenericInterfaceCapabilitySlots:
+        MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its instance capability slot for masked defaults. */
     val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */

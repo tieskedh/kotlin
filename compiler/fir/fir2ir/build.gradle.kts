@@ -130,6 +130,43 @@ dotNetTestPlatformTasks.zipWithNext().forEach { (earlier, later) ->
     later.configure { mustRunAfter(earlier) }
 }
 
+val dotNetCSharpAuthoringProjectDirectory = rootProject.file(
+    "compiler/ir/backend.dotnet/csharp-authoring/Kotlin.DotNet.CSharpAuthoring",
+)
+val dotNetCSharpAuthoringArtifacts = layout.buildDirectory.dir("dotnet-csharp-authoring/artifacts")
+val dotNetCSharpAuthoringAssembly = dotNetCSharpAuthoringArtifacts.map { artifacts ->
+    artifacts.file(
+        "bin/Kotlin.DotNet.CSharpAuthoring/release/Kotlin.DotNet.CSharpAuthoring.dll",
+    )
+}
+val dotNetCSharpAuthoringHost = listOfNotNull(
+    System.getenv("KOTLIN_DOTNET_ROOT")?.let(::File),
+    System.getenv("LOCALAPPDATA")?.let { File(it, "kotlinc-dotnet/toolchain") },
+).asSequence()
+    .flatMap { root -> sequenceOf(root.resolve("dotnet/dotnet.exe"), root.resolve("dotnet/dotnet")) }
+    .firstOrNull(File::isFile)
+    ?.absolutePath
+    ?: "dotnet"
+val buildDotNetCSharpAuthoringTooling = tasks.register<Exec>("buildDotNetCSharpAuthoringTooling") {
+    group = "verification"
+    description = "Builds the Roslyn tooling used by Kotlin/.NET C# authoring tests."
+    workingDir = rootDir
+
+    inputs.files(fileTree(dotNetCSharpAuthoringProjectDirectory) {
+        exclude("bin/**", "obj/**")
+    }).withPropertyName("dotNetCSharpAuthoringSources")
+    outputs.file(dotNetCSharpAuthoringAssembly)
+    commandLine(
+        dotNetCSharpAuthoringHost,
+        "build",
+        dotNetCSharpAuthoringProjectDirectory.resolve("Kotlin.DotNet.CSharpAuthoring.csproj").absolutePath,
+        "--configuration", "Release",
+        "-p:RestoreLockedMode=true",
+        "--artifacts-path", dotNetCSharpAuthoringArtifacts.get().asFile.absolutePath,
+        "--nologo",
+    )
+}
+
 projectTests {
     testData(project(":compiler").isolated, "testData/codegen")
     testData(project(":compiler").isolated, "testData/diagnostics")
@@ -175,6 +212,16 @@ projectTests {
     ) {
         configure {
             dependsOn(dotNetTestPlatformTasks)
+            val genericOwnerRehearsal = providers.gradleProperty(
+                "kotlin.dotnet.genericOwnerRehearsal",
+            ).orNull == "true"
+            if (genericOwnerRehearsal) {
+                dependsOn(buildDotNetCSharpAuthoringTooling)
+                systemProperty(
+                    "kotlin.dotnet.test.csharpAuthoringTooling.path",
+                    dotNetCSharpAuthoringAssembly.get().asFile.absolutePath,
+                )
+            }
             inputs.files(
                 rootProject.file(
                     "kotlin-native/performance/ring/src/commonMain/kotlin/org/jetbrains/ring/" +
