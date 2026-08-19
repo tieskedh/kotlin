@@ -56,6 +56,7 @@ import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
@@ -72,6 +73,7 @@ import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSuspendFunction
+import org.jetbrains.kotlin.ir.util.isSubtypeOf
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.render
@@ -597,6 +599,32 @@ internal class DotNetIlEmitter(
                     DotNetIlValueType.UserClass(providerInfo)
                 }.distinct()
             }
+        val genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean =
+            if (genericOwnerCapabilities.isEmpty()) {
+                { false }
+            } else {
+                val typeSystem = IrTypeSystemContextImpl(irBuiltIns)
+                val supportedValueTypes = listOf(
+                    irBuiltIns.booleanType,
+                    irBuiltIns.byteType,
+                    irBuiltIns.shortType,
+                    irBuiltIns.intType,
+                    irBuiltIns.longType,
+                    irBuiltIns.floatType,
+                    irBuiltIns.doubleType,
+                    irBuiltIns.charType,
+                )
+                val cache = mutableMapOf<IrType, Boolean>()
+                val predicate: (IrType) -> Boolean = { targetType ->
+                    cache.getOrPut(targetType) {
+                        supportedValueTypes.any { valueType ->
+                            valueType.isSubtypeOf(targetType, typeSystem) &&
+                                    !targetType.isSubtypeOf(valueType, typeSystem)
+                        }
+                    }
+                }
+                predicate
+            }
         val typeMapper = DotNetIlTypeMapper(
             availableClasses = availableClasses,
             localClasses = moduleClasses,
@@ -616,6 +644,7 @@ internal class DotNetIlEmitter(
             genericOwnerReflectionCapabilityDeclarations = genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots = boundExternalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries = externalGenericOwnerFunctionInputEntries,
+            genericArgumentHasProperClrValueSubtype = genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
                 null
             } else {
