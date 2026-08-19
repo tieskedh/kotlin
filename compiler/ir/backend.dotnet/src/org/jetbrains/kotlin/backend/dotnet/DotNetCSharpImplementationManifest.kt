@@ -901,7 +901,8 @@ internal fun collectDotNetCSharpImplementationManifest(
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
     interfaceDefaultImplementations:
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation>,
-    genericOwnerCapabilityInterfaces: Map<IrClass, IrClass>,
+    reifiedGenericInterfaces: Set<IrClass>,
+    genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
 ): DotNetCSharpImplementationManifest {
     fun IrClass.isCSharpSourceAuthorableInterface(): Boolean {
@@ -909,7 +910,7 @@ internal fun collectDotNetCSharpImplementationManifest(
         // Production-erased generic interfaces still need an explicit export. The atomic
         // rehearsal may instead make a structurally admitted interface's natural I<T> the public
         // owner and records its separate declaration-semantic capability below.
-        if (typeParameters.isNotEmpty() && this !in genericOwnerCapabilityInterfaces) return false
+        if (typeParameters.isNotEmpty() && this !in reifiedGenericInterfaces) return false
         var owner: IrClass? = this
         while (owner != null) {
             when (owner.visibility) {
@@ -954,9 +955,9 @@ internal fun collectDotNetCSharpImplementationManifest(
         .filter(IrClass::isCSharpSourceAuthorableInterface)
         .map { irClass ->
             val naturalClassInfo = availableClasses.getValue(irClass)
-            val semanticCapability = genericOwnerCapabilityInterfaces[irClass]
-            val semanticClassInfo = semanticCapability?.let(availableClasses::getValue)
-            val isReifiedGenericInterface = irClass.typeParameters.isNotEmpty() && semanticClassInfo != null
+            val semanticClassInfo = genericOwnerCapabilities[irClass]
+            val isReifiedGenericInterface = irClass.typeParameters.isNotEmpty() &&
+                    irClass in reifiedGenericInterfaces && semanticClassInfo != null
             val canonicalClassInfo = semanticClassInfo ?: naturalClassInfo
             val interfaceKey = checkNotNull(preLoweringDeclarationKeys[irClass]) {
                 "Source-authorable interface has no pre-lowering logical key"
