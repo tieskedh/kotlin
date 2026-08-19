@@ -194,7 +194,18 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         if (expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.SAFE_CAST) {
-            typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)?.let { return it }
+            typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand)
+                ?.let { return DotNetIlValueType.Object }
+        }
+        if (expression is IrTypeOperatorCall &&
+            expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+            expression.argument.readsGenericOwnerForeignDispatchDeclaration() &&
+            typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand) != null
+        ) {
+            // A classifier-derived I<X> view remains the original object. Reporting the logical
+            // GenericInstance here would make a safe-call null test reconstruct I<X> before the
+            // semantic member dispatcher can select the actual natural construction.
+            return DotNetIlValueType.Object
         }
         if (expression is IrTypeOperatorCall &&
             (expression.operator == IrTypeOperator.IMPLICIT_CAST ||
@@ -275,11 +286,20 @@ internal class DotNetIlExpressionCodegen(
         return typeMapper.toDotNetIlValueType(expression.type)
     }
 
-    /** The physical semantic capability only when it is the view of this logical C<T> result. */
+    /** The physical semantic carrier only when it is the view of this logical C<T> result. */
     fun genericOwnerCapabilityNaturalTypeOrNull(expression: IrExpression): DotNetIlValueType? {
         val naturalType = mappedNaturalType(expression) ?: return null
         val runtimeClassifier = typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.type)
         if (naturalType == runtimeClassifier) return naturalType
+        if (naturalType == DotNetIlValueType.Object &&
+            runtimeClassifier != null &&
+            expression.readsGenericOwnerForeignDispatchDeclaration()
+        ) {
+            // Classifier-derived safe-cast temporaries may hold an ordinary foreign I<X> which
+            // has no capability. Null/identity checks are type-agnostic and must observe that
+            // object directly rather than reconstructing the logical constructed interface.
+            return naturalType
+        }
         val logicalType = typeMapper.toDotNetIlValueType(expression.type) ?: return null
         return naturalType.takeIf { typeMapper.isGenericOwnerCapabilityViewOf(it, logicalType) }
     }
@@ -1090,6 +1110,17 @@ internal class DotNetIlExpressionCodegen(
         }
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
         if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+            expectedType == DotNetIlValueType.Object &&
+            expression.argument.readsGenericOwnerForeignDispatchDeclaration() &&
+            typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand) != null
+        ) {
+            // FIR's logical smartcast is used here only to test the safe-call receiver for null.
+            // The preceding classifier-erased as? already produced the original object, and a
+            // real member or typed ABI use performs its own semantic dispatch or checked recovery.
+            emitExpression(expression.argument, DotNetIlValueType.Object)
+            return
+        }
+        if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
             expectedType.isDotNetReferenceShaped() &&
             typeMapper.isGenericOwnerCapabilityViewOf(expectedType, castType)
         ) {
@@ -1211,22 +1242,36 @@ internal class DotNetIlExpressionCodegen(
                 return
             }
             if (expression.operator == IrTypeOperator.SAFE_CAST) {
-                val runtimeClassifier =
+                val capabilityType =
                     typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)
-                if (runtimeClassifier != null) {
-                    if (!runtimeClassifier.isDotNetAssignableTo(expectedType)) {
+                val naturalClassifier =
+                    typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand)
+                if (capabilityType != null && naturalClassifier != null) {
+                    if (expectedType != DotNetIlValueType.Object) {
                         dotNetUnsupported(
-                            "safe generic-owner cast produces ${runtimeClassifier.nameInSignature} " +
+                            "safe generic-owner cast produces object " +
                                     "where ${expectedType.nameInSignature} is expected"
                         )
                     }
                     emitExpression(expression.argument, DotNetIlValueType.Object)
                     if (methodContext.isTerminated) return
-                    methodContext.emit(
-                        "isinst ${runtimeClassifier.nameInSignature}",
-                        pops = 1,
-                        pushes = 1,
+                    val receiverSlot = spillToSyntheticLocal(
+                        DotNetIlValueType.Object,
+                        "<genericInterfaceSafeCastReceiver>",
                     )
+                    emitReifiedGenericInterfaceClassifierMatch(
+                        receiverSlot.index,
+                        capabilityType,
+                        naturalClassifier,
+                    )
+                    val failedLabel = methodContext.nextLabel("genericInterfaceSafeCastFailed")
+                    val joinLabel = methodContext.nextLabel("genericInterfaceSafeCastJoin")
+                    methodContext.emitBranch("brfalse", failedLabel, pops = 1)
+                    methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+                    methodContext.emitGoto(joinLabel)
+                    methodContext.emitLabel(failedLabel)
+                    methodContext.emit("ldnull", pushes = 1)
+                    methodContext.emitLabel(joinLabel)
                     return
                 }
             }
@@ -1418,11 +1463,19 @@ internal class DotNetIlExpressionCodegen(
                     "runtime type test against ${castType.nameInSignature} is not supported"
                 )
             }
-            // A rehearsal C<T> is a truthful exact value carrier, but Kotlin `is C<...>` keeps
-            // classifier-erased generic semantics. Test the non-generic semantic capability
-            // implemented by the same object rather than CLR's constructed C<T> identity.
-            val runtimeClassifierType =
-                typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand) ?: castType
+            val capabilityType =
+                typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)
+            val naturalClassifier =
+                typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand)
+            if (capabilityType != null && naturalClassifier != null) {
+                emitReifiedGenericInterfaceRuntimeTypeTest(
+                    expression,
+                    capabilityType,
+                    naturalClassifier,
+                )
+                return
+            }
+            val runtimeClassifierType = capabilityType ?: castType
             emitRuntimeTypeTest(expression, runtimeClassifierType)
             return
         }
@@ -1627,6 +1680,68 @@ internal class DotNetIlExpressionCodegen(
                     "where ${expectedType.nameInSignature} is expected"
         )
         emitWideningCoercion(outerCoercion)
+    }
+
+    /** Emits the declaration-erased classifier match for one already-spilled object. */
+    private fun emitReifiedGenericInterfaceClassifierMatch(
+        receiverLocalIndex: Int,
+        capabilityType: DotNetIlValueType.UserClass,
+        naturalClassifier: DotNetIlClassInfo,
+    ) {
+        naturalClassifier.assemblyName?.let(typeMapper::recordAssemblyReference)
+        val foreignLabel = methodContext.nextLabel("genericInterfaceClassifierForeign")
+        val joinLabel = methodContext.nextLabel("genericInterfaceClassifierJoin")
+        methodContext.emit(loadLocalInstruction(receiverLocalIndex), pushes = 1)
+        methodContext.emit("isinst ${capabilityType.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emitBranch("brfalse", foreignLabel, pops = 1)
+        methodContext.emit("ldc.i4.1", pushes = 1)
+        methodContext.emitGoto(joinLabel)
+        methodContext.emitLabel(foreignLabel)
+        methodContext.emit(loadLocalInstruction(receiverLocalIndex), pushes = 1)
+        emitSystemTypeOrNull(naturalClassifier.ilTypeRef)
+        methodContext.emit(
+            DotNetGenericInterfaceRuntime.isOpenGenericInterfaceInstanceCallInstruction(
+                coreLibraryReference,
+            ),
+            pops = 2,
+            pushes = 1,
+        )
+        methodContext.emitLabel(joinLabel)
+    }
+
+    private fun emitReifiedGenericInterfaceRuntimeTypeTest(
+        expression: IrTypeOperatorCall,
+        capabilityType: DotNetIlValueType.UserClass,
+        naturalClassifier: DotNetIlClassInfo,
+    ) {
+        emitExpression(expression.argument, DotNetIlValueType.Object)
+        if (methodContext.isTerminated) return
+        val receiverSlot = spillToSyntheticLocal(
+            DotNetIlValueType.Object,
+            "<genericInterfaceClassifierReceiver>",
+        )
+        val resultJoin = if (expression.typeOperand.isNullable()) {
+            val nonNullLabel = methodContext.nextLabel("nullableGenericInterfaceClassifierNonNull")
+            val joinLabel = methodContext.nextLabel("nullableGenericInterfaceClassifierJoin")
+            methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+            methodContext.emitBranch("brtrue", nonNullLabel, pops = 1)
+            methodContext.emit("ldc.i4.1", pushes = 1)
+            methodContext.emitGoto(joinLabel)
+            methodContext.emitLabel(nonNullLabel)
+            joinLabel
+        } else {
+            null
+        }
+        emitReifiedGenericInterfaceClassifierMatch(
+            receiverSlot.index,
+            capabilityType,
+            naturalClassifier,
+        )
+        resultJoin?.let(methodContext::emitLabel)
+        if (expression.operator == IrTypeOperator.NOT_INSTANCEOF) {
+            methodContext.emit("ldc.i4.0", pushes = 1)
+            methodContext.emit("ceq", pops = 2, pushes = 1)
+        }
     }
 
     private fun emitRuntimeTypeTest(
@@ -2920,7 +3035,12 @@ internal class DotNetIlExpressionCodegen(
         expectedType: DotNetIlValueType?,
     ): Boolean {
         val semanticSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call) ?: return false
-        if (expectedType != DotNetIlValueType.Object || call.arguments.size != 1) return false
+        if (expectedType == null || call.arguments.size != 1) return false
+        val resultNarrowing = when (expectedType) {
+            DotNetIlValueType.Object -> null
+            else -> expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                ?: return false
+        }
         val source = call.symbol.owner.let {
             it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
         }
@@ -2941,7 +3061,10 @@ internal class DotNetIlExpressionCodegen(
         naturalInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         val receiver = call.arguments.single()
             ?: return false
-        emitExpression(receiver, DotNetIlValueType.Object)
+        emitReifiedGenericInterfaceForeignReceiver(
+            receiver,
+            naturalInfo.owner,
+        )
         val receiverSlot = spillToSyntheticLocal(
             DotNetIlValueType.Object,
             "<reifiedGenericInterfaceForeignReceiver>",
@@ -2992,7 +3115,48 @@ internal class DotNetIlExpressionCodegen(
 
         methodContext.emitLabel(joinLabel)
         methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+        resultNarrowing?.let { instruction ->
+            methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
         return true
+    }
+
+    /**
+     * Preserves the original object carrier after a classifier-erased FIR smartcast. The call
+     * route is admitted only after the reified-interface lowering has proved that semantic
+     * dispatch may need an ordinary foreign I<T> implementation. Re-emitting FIR's logical
+     * `Any? -> I<*>` IMPLICIT_CAST here would reconstruct the hidden capability and reject that
+     * implementation before the capability-or-natural dispatcher can inspect it.
+     */
+    private fun emitReifiedGenericInterfaceForeignReceiver(
+        receiver: IrExpression,
+        naturalOwner: DotNetIlClassInfo,
+    ) {
+        val classifierSmartCastArgument = (receiver as? IrTypeOperatorCall)
+            ?.takeIf { expression ->
+                expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+                        typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(
+                            expression.typeOperand,
+                        )?.ilTypeRef == naturalOwner.ilTypeRef
+            }
+            ?.argument
+        emitExpression(
+            classifierSmartCastArgument ?: receiver,
+            DotNetIlValueType.Object,
+        )
+    }
+
+    private fun IrExpression.readsGenericOwnerForeignDispatchDeclaration(): Boolean = when (this) {
+        is IrGetValue -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
+        is IrGetField -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
+        is IrCall -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
+        is IrTypeOperatorCall -> when (operator) {
+            IrTypeOperator.IMPLICIT_CAST,
+            IrTypeOperator.IMPLICIT_NOTNULL,
+                -> argument.readsGenericOwnerForeignDispatchDeclaration()
+            else -> false
+        }
+        else -> false
     }
 
     /**

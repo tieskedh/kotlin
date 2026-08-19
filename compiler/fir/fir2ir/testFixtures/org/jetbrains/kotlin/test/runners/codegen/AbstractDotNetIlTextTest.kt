@@ -4405,6 +4405,55 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         !rawStarStore.same(rawProducer))
                         throw new InvalidOperationException(
                             "Kotlin star-projected storage did not preserve the precompiled C# object");
+                    RehearsalSeparateProducerClassifier classifier =
+                        new RehearsalSeparateProducerClassifier();
+                    if (!classifier.isProducer(rawProducer) ||
+                        classifier.isNotProducer(rawProducer) ||
+                        classifier.isProducer(new object()) ||
+                        !classifier.isNotProducer(new object()) ||
+                        classifier.isProducer(null) ||
+                        !classifier.isNullableProducer(null) ||
+                        !classifier.safeSame(rawProducer) ||
+                        !object.Equals(classifier.smartRead(rawProducer), 83) ||
+                        classifier.smartRead(new object()) != null)
+                        throw new InvalidOperationException(
+                            "Kotlin classifier operations rejected the precompiled C# producer");
+                    RehearsalSeparateRawCSharpStringProducer rawString =
+                        new RehearsalSeparateRawCSharpStringProducer();
+                    if (classifier.safeRead(rawString) != "raw-string")
+                        throw new InvalidOperationException(
+                            "Kotlin safe cast did not dispatch the matching precompiled producer");
+                    int callsBeforeUnsafeSafeRead = rawProducer.Calls;
+                    try
+                    {
+                        classifier.safeRead(rawProducer);
+                        throw new InvalidOperationException(
+                            "Kotlin safe cast inspected generic arguments before typed use");
+                    }
+                    catch (InvalidCastException)
+                    {
+                        // Generic arguments are ignored by as?; the String use checks the result.
+                    }
+                    if (rawProducer.Calls != callsBeforeUnsafeSafeRead + 1)
+                        throw new InvalidOperationException(
+                            "Kotlin safe cast failed before the natural producer result was used");
+                    RehearsalSeparateRawCSharpAmbiguousProducer rawAmbiguous =
+                        new RehearsalSeparateRawCSharpAmbiguousProducer();
+                    if (!classifier.isProducer(rawAmbiguous) ||
+                        !classifier.safeSame(rawAmbiguous))
+                        throw new InvalidOperationException(
+                            "Kotlin classifier operations rejected a matching ambiguous producer");
+                    try
+                    {
+                        classifier.safeRead(rawAmbiguous);
+                        throw new InvalidOperationException(
+                            "an ambiguous producer member call was not rejected");
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        if (!exception.Message.Contains("multiple CLR constructions"))
+                            throw;
+                    }
                     try
                     {
                         reader.read(new RehearsalSeparateRawCSharpThrowingProducer());
@@ -4615,8 +4664,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public sealed class RehearsalSeparateRawCSharpIntProducer :
                     RehearsalSeparateProducer<int>
                 {
+                    public int Calls { get; private set; }
+
                     public int produce()
                     {
+                        Calls++;
                         return 83;
                     }
                 }
@@ -4632,6 +4684,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     int RehearsalSeparateProducer<int>.produce()
                     {
                         return 87;
+                    }
+                }
+
+                public sealed class RehearsalSeparateRawCSharpStringProducer :
+                    RehearsalSeparateProducer<string>
+                {
+                    public string produce()
+                    {
+                        return "raw-string";
                     }
                 }
 

@@ -1151,9 +1151,10 @@ to the same non-generic TypeDef. Treating those identical physical carriers as
 a sufficient direct override would only make the old representation constraint
 permanent. The next rehearsal slice therefore reopens generic interfaces as a
 general compiler family, not as a collection exception: a natural CLR `I<T>`
-inherits one non-generic declaration-semantic capability used only when a
-projected, widened, value-variant, or classifier-only Kotlin view has no honest
-constructed CLR interface.
+and its non-generic declaration-semantic capability are sibling interfaces.
+The capability is used only when a projected, widened, value-variant, or
+classifier-only Kotlin view has no honest constructed CLR interface; ordinary
+foreign implementations need implement only `I<T>`.
 
 The first compiler-emitted tranche of that family is green on Framework 4.8
 and .NET 10. Under the one test-only generic-owner epoch, a structural public
@@ -1243,15 +1244,28 @@ construction. Zero constructions fail as a cast and multiple distinct
 constructions fail as ambiguous; neither enumeration order nor a wrapper may
 select a view. A real `Producer<*>` field retains identity, and reflection's
 invocation wrapper is removed before an authored exception escapes. This proof
-executes on Framework 4.8 and .NET 10 JIT. It does not yet authorize foreign
-input/member families, runtime classifier tests, trimming, or NativeAOT.
+executes on Framework 4.8 and .NET 10 JIT.
+
+The adjacent classifier gate is now closed for that same admitted producer
+family. Kotlin `is Producer<*>`, nullable and negated tests, smart-cast member
+use, and parameterized `as? Producer<String>` accept either the capability or
+any natural closed construction. The check ignores constructed arguments and
+preserves the original object. Multiple constructions pass the classifier, but
+a capability-free foreign object remains ambiguous when a broad member call
+must choose one; a forged `Producer<String>` view over `Producer<int>` fails
+only when its produced value is consumed as `String`. The interface vector is
+cached per runtime type, and the rule executes through PSI and LightTree on
+Framework 4.8 and .NET 10. It does not yet authorize foreign input/member
+families, classifier-derived views crossing exact-looking callable ABI
+boundaries, trimming, or NativeAOT.
 
 Continue with default, property, broader/multiple member, invariant, and
 mixed-variance gates, including derivability rules for ordinary foreign
-implementations, then close runtime classifier and deployment behavior before
-the Runtime/Stdlib graph. Keep the authoring generator as an optional fast path
-where it can add the semantic sibling, and as the required path only where no
-sound language-neutral adapter has yet been proven.
+implementations, then close classifier-derived callable boundaries and
+deployment behavior before the Runtime/Stdlib graph. Keep the authoring
+generator as an optional fast path where it can add the semantic sibling, and
+as the required path only where no sound language-neutral adapter has yet been
+proven.
 See
 [`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md)
 and the external-child, intersection, and child-owned-member evidence in
@@ -1262,6 +1276,8 @@ and
 [`../archive/reified-generic-interface-member-child-2026-08-19.md`](../archive/reified-generic-interface-member-child-2026-08-19.md).
 The input-bearing evidence is in
 [`../archive/reified-generic-interface-consumer-2026-08-19.md`](../archive/reified-generic-interface-consumer-2026-08-19.md).
+The ordinary foreign producer classifier evidence is in
+[`../archive/reified-generic-interface-foreign-classifier-2026-08-19.md`](../archive/reified-generic-interface-foreign-classifier-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
