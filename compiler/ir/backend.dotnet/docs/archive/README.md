@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-contravariant-construction-stability-2026-08-19.md`](generic-owner-contravariant-construction-stability-2026-08-19.md)
+  records construction-local `Consumer<object> -> Consumer<int>` instability,
+  retained reference-only CLR contravariance, typed natural interface
+  receivers, deterministic separate-consumer subtype proofs, and the
+  PSI/LightTree Framework 4.8/.NET 10 matrix.
 - [`generic-owner-warning-checked-casts-2026-08-19.md`](generic-owner-warning-checked-casts-2026-08-19.md)
   records BK-1's shared Kotlin-aware predicate for warning-bearing
   parameterized `as`/`as?`, preserved `Int -> Any` covariance despite CLR

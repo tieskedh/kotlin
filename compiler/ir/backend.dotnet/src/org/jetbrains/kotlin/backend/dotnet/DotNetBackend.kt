@@ -240,6 +240,8 @@ object DotNetBackend {
                     genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
                     genericOwnerForeignDispatchCallTargets = context.genericOwnerForeignDispatchCallTargets,
                     genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
+                    genericOwnerCapabilityBearingDeclarations =
+                        context.genericOwnerCapabilityBearingDeclarations,
                     genericOwnerForeignDispatchDeclarations = context.genericOwnerForeignDispatchDeclarations,
                     genericOwnerReflectionCapabilityDeclarations =
                         context.genericOwnerReflectionCapabilityDeclarations,
@@ -375,6 +377,8 @@ object DotNetBackend {
                 genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
                 genericOwnerForeignDispatchCallTargets = context.genericOwnerForeignDispatchCallTargets,
                 genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
+                genericOwnerCapabilityBearingDeclarations =
+                    context.genericOwnerCapabilityBearingDeclarations,
                 genericOwnerForeignDispatchDeclarations = context.genericOwnerForeignDispatchDeclarations,
                 genericOwnerReflectionCapabilityDeclarations =
                     context.genericOwnerReflectionCapabilityDeclarations,
