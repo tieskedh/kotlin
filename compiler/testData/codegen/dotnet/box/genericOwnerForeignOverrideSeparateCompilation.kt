@@ -74,6 +74,11 @@ public class RehearsalSeparateNestedBox<T>(initial: T) {
     }
 }
 
+public open class RehearsalSeparateNestedAnimal(public val label: String)
+
+public class RehearsalSeparateNestedCat(label: String) :
+    RehearsalSeparateNestedAnimal(label)
+
 public fun rehearsalSeparateBroadProducerBox(
     producer: RehearsalSeparateProducer<Any?>,
 ): RehearsalSeparateNestedBox<RehearsalSeparateProducer<Any?>> =
@@ -82,6 +87,16 @@ public fun rehearsalSeparateBroadProducerBox(
 public fun rehearsalSeparateExactProducerBox(
     producer: RehearsalSeparateProducer<String>,
 ): RehearsalSeparateNestedBox<RehearsalSeparateProducer<String>> =
+    RehearsalSeparateNestedBox(producer)
+
+public fun rehearsalSeparateComparableProducerBox(
+    producer: RehearsalSeparateProducer<Comparable<Int>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateProducer<Comparable<Int>>> =
+    RehearsalSeparateNestedBox(producer)
+
+public fun rehearsalSeparateAnimalProducerBox(
+    producer: RehearsalSeparateProducer<RehearsalSeparateNestedAnimal>,
+): RehearsalSeparateNestedBox<RehearsalSeparateProducer<RehearsalSeparateNestedAnimal>> =
     RehearsalSeparateNestedBox(producer)
 
 public class RehearsalSeparateStarProducerStore(
@@ -311,6 +326,22 @@ fun box(): String {
         exactProducerBox.read().produce() != "separate-nested"
     ) {
         return "fail: separate exact nested producer box"
+    }
+    val comparableProducer: RehearsalSeparateProducer<Comparable<Int>> = exactProducer
+    val comparableProducerBox = rehearsalSeparateComparableProducerBox(comparableProducer)
+    if (comparableProducerBox.read() !== exactProducer ||
+        RehearsalSeparateProducerReader().read(comparableProducerBox.read()) != 31
+    ) {
+        return "fail: separate comparable nested producer box"
+    }
+    val catProducer: RehearsalSeparateProducer<RehearsalSeparateNestedCat> =
+        RehearsalSeparateProducerValue(RehearsalSeparateNestedCat("separate-cat"))
+    val animalProducer: RehearsalSeparateProducer<RehearsalSeparateNestedAnimal> = catProducer
+    val animalProducerBox = rehearsalSeparateAnimalProducerBox(animalProducer)
+    if (animalProducerBox.read() !== catProducer ||
+        animalProducerBox.read().produce().label != "separate-cat"
+    ) {
+        return "fail: separate reference-only nested producer box"
     }
     val starProducerStore = RehearsalSeparateStarProducerStore(exactProducer)
     if (starProducerStore.read() != 31 || !starProducerStore.same(exactProducer)) {
