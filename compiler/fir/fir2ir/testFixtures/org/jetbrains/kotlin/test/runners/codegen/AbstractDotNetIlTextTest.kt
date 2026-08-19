@@ -4506,6 +4506,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             RehearsalSeparateProducer<RehearsalSeparateNestedAnimal>>))
                         throw new InvalidOperationException(
                             "the separate reference-only construction was unnecessarily widened");
+                    Type separateIntConsumerBoxReturn = typeof(libKt)
+                        .GetMethod("rehearsalSeparateIntConsumerBox").ReturnType;
+                    if (separateIntConsumerBoxReturn !=
+                            typeof(RehearsalSeparateNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "the separate value-type consumer selected a false natural argument");
+                    Type separateCatConsumerBoxReturn = typeof(libKt)
+                        .GetMethod("rehearsalSeparateCatConsumerBox").ReturnType;
+                    if (separateCatConsumerBoxReturn != typeof(RehearsalSeparateNestedBox<
+                            RehearsalSeparateConsumer<RehearsalSeparateNestedCat>>))
+                        throw new InvalidOperationException(
+                            "the separate reference-only consumer was unnecessarily widened");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4783,6 +4795,17 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             RehearsalProducer<RehearsalNestedAnimal>>))
                         throw new InvalidOperationException(
                             "reference-only covariance was unnecessarily widened to object");
+                    Type intConsumerBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalIntConsumerBox").ReturnType;
+                    if (intConsumerBoxReturn != typeof(RehearsalNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "a value-type contravariant consumer selected a false natural construction");
+                    Type catConsumerBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalCatConsumerBox").ReturnType;
+                    if (catConsumerBoxReturn != typeof(RehearsalNestedBox<
+                            RehearsalConsumer<RehearsalNestedCat>>))
+                        throw new InvalidOperationException(
+                            "reference-only contravariance was unnecessarily widened to object");
                     return 0;
                 }
             }
