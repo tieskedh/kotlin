@@ -66,11 +66,29 @@ verification, and work state.
   only their natural typed members; Kotlin widened dispatch reaches every body
   without source-visible compiler ABI. Admission contains no stdlib or
   declaration-name switch.
+  The first independent input-bearing root is now complete under the same
+  rule. A public top-level `Consumer<in T>` with one abstract `consume(T): Unit`
+  member becomes a natural contravariant CLR `Consumer<T>` plus one non-generic
+  capability whose slot is `void consume(object)`. Producer-proven exact
+  implementations and locals retain the natural interface, their state remains
+  one `!T` field, and ordinary reference contravariance such as
+  `Consumer<object> -> Consumer<string>` stays a direct CLR conversion. A
+  value-type construction cannot use CLR variance, so the legal Kotlin view
+  `Consumer<Any?> -> Consumer<Int>` retains the same object through the
+  capability and boxes only the call argument. This selection follows value
+  provenance: a later semantic pass cannot degrade an exact `Consumer<int>`
+  route merely because `Int` has another legal declaration-semantic source.
+  Same-module and separately compiled Kotlin implementations, generated
+  partial C# implementations of both `Consumer<object>` and `Consumer<int>`,
+  identity, and semantic dispatch execute on both profiles. The portable C#
+  source generator remains required for the hidden capability; precompiled,
+  non-partial, and other-language implementors are not claimed.
   Reified generic-interface slots also re-enter the ordinary covariant-return
   lowering: an inherited class body receives a typed MethodImpl only when its
   CLR return carrier actually differs, while exact signatures remain direct.
-  Production remains on the accepted erased interface ABI. Inputs, defaults,
-  properties, broader member shapes, mixed variance, Runtime/Stdlib closure,
+  Production remains on the accepted erased interface ABI. Defaults,
+  properties, broader/multiple member shapes, invariant and mixed variance,
+  Runtime/Stdlib closure,
   other CLR languages, and precompiled or non-partial implementors remain
   gates. The focused rehearsal and production-inverse matrix covers PSI
   and LightTree on .NET 10 and Framework 4.8: eight tests and zero failures,

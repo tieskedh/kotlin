@@ -1212,8 +1212,29 @@ Framework 4.8. The C# manifest records only the member declared by each
 interface, so the generator composes inherited contracts without duplicating
 their member families.
 
-Continue with independent input-bearing, default, property, broader member,
-and mixed-variance gates, then the Runtime/Stdlib graph. The authoring generator
+The first independent input-bearing gate is now closed without turning the
+capability into the normal path. A structural public
+`Consumer<in T> { fun consume(value: T) }` emits a natural CLR
+`Consumer<in T>.consume(!T)` and one semantic `consume(object)` slot. Exact
+Kotlin implementations store one `!T` field, exact `Consumer<int>` calls stay
+natural, and reference-only `Consumer<object> -> Consumer<string>` uses CLR
+contravariance directly. Because CLR variance does not convert value-type
+constructions, Kotlin's legal `Consumer<Any?> -> Consumer<Int>` view is carried
+by the same object's capability and boxes only the semantic argument. A small
+provenance check preserves the stronger exact source construction instead of
+classifying every `Consumer<Int>` declaration as semantic.
+
+The rule composes across a separate Kotlin implementation assembly and the
+producer-recorded input-slot family. The public authoring manifest retains
+`in` variance, natural `void consume(!0)`, and semantic
+`void consume(object)`. Generated partial C# implementations author only
+`consume(object)` or `consume(int)` on their selected natural construction;
+Kotlin semantic calls reach both bodies without changing identity on either
+profile. This remains a source-generation contract, not support for arbitrary
+precompiled or non-partial CLR implementors.
+
+Continue with default, property, broader/multiple member, invariant, and
+mixed-variance gates, then the Runtime/Stdlib graph. The authoring generator
 still cannot retrofit precompiled, non-partial, or other-language implementors.
 See
 [`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md)
@@ -1223,6 +1244,8 @@ and
 [`../archive/reified-generic-interface-intersection-2026-08-19.md`](../archive/reified-generic-interface-intersection-2026-08-19.md)
 and
 [`../archive/reified-generic-interface-member-child-2026-08-19.md`](../archive/reified-generic-interface-member-child-2026-08-19.md).
+The input-bearing evidence is in
+[`../archive/reified-generic-interface-consumer-2026-08-19.md`](../archive/reified-generic-interface-consumer-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
