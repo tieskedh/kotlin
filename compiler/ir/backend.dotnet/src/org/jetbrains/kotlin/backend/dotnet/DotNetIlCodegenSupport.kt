@@ -1168,8 +1168,33 @@ internal class DotNetIlTypeMapper private constructor(
      * positions, just as JVM generic positions use their wrapper: substituting the exact carrier
      * would make `G<V>` observe the underlying type as `T` and lose Kotlin's runtime identity.
      */
-    fun toDotNetIlGenericArgumentType(type: IrType): DotNetIlValueType? =
-        toDotNetIlBoxedValueClassType(type) ?: toDotNetIlValueType(type)
+    fun toDotNetIlGenericArgumentType(type: IrType): DotNetIlValueType? {
+        toDotNetIlBoxedValueClassType(type)?.let { return it }
+        val mapped = toDotNetIlValueType(type) ?: return null
+        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return mapped
+        genericOwnerCapabilityInfoOrNull(owner) ?: return mapped
+        if (mapped !is DotNetIlValueType.GenericInstance) {
+            // A projection, star, or open argument already selected the non-generic semantic
+            // capability as a value carrier. That capability is not a universal nested carrier:
+            // an ordinary non-partial CLR implementation has only the natural I<T>. Object is
+            // the one construction argument which preserves both implementations and identity.
+            return DotNetIlValueType.Object
+        }
+        val hasCovariantUniversalArgument = owner.typeParameters
+            .zip(mapped.arguments)
+            .any { pair ->
+                pair.first.variance == Variance.OUT_VARIANCE && pair.second == DotNetIlValueType.Object
+            }
+        if (hasCovariantUniversalArgument) {
+            // `Producer<Any?>` can physically be Producer<int>, Producer<string>, or an ordinary
+            // foreign implementation. Used as Box<T>'s T, no single Producer<object> construction
+            // contains that Kotlin view. Substitute object for this nested construction only;
+            // Box still owns one !T field, so Box<int>, Box<string>, and Box<Producer<string>>
+            // remain naturally typed while Box<Producer<Any?>> becomes Box<object>.
+            return DotNetIlValueType.Object
+        }
+        return mapped
+    }
 
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
         if (function.origin == DOTNET_STATIC_INITIALIZATION_ENTRY) {
