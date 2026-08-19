@@ -29,7 +29,8 @@ Kotlin Source<out T>
     public natural interface:       Source<out T>
     declaration-semantic capability: SourceSemantic
 
-Source<T> : SourceSemantic
+Kotlin/generated implementation: Source<T> + SourceSemantic
+ordinary foreign implementation:  Source<T>
 ```
 
 The natural interface owns truthful exact CLR calls and the C# surface. The
@@ -57,8 +58,11 @@ covariant, while Kotlin permits `Source<Int>` to be observed as
 `Source<Any?>`. Invariant interfaces, stars, projections, and classifier-only
 unchecked casts have the same absence of one universal constructed CLR type.
 
-The widened value therefore travels as `SourceSemantic`; it must never be
-fabricated as `Source<object>`. KLIB remains authoritative for the logical
+For a Kotlin-produced implementation the widened value therefore travels on
+the `SourceSemantic` fast path; it must never be fabricated as
+`Source<object>`. A broad public boundary which can also receive ordinary CLR
+implementations uses `object` as its physical carrier and selects the semantic
+capability at the call. KLIB remains authoritative for the logical
 construction, variance, projection, nullability, and later typed-use checks.
 
 ## Foreign C# implementation boundary
@@ -66,34 +70,43 @@ construction, variance, projection, nullability, and later typed-use checks.
 A direct C# implementation naturally supplies only the typed member:
 
 ```csharp
-public sealed partial class CsSource : Source<string>
+public sealed class CsSource : Source<string>
 {
     public string Read() => "hello";
 }
 ```
 
-Because `Source<T>` requires `SourceSemantic`, a concrete object must also
-provide its abstract semantic slots. ECMA-335 requires a concrete implementor
-to supply every abstract method of every required interface. A MethodImpl can
-select a body but cannot manufacture the object-to-`T` or `T`-to-object
-adapter body. A default interface body would supply that adapter on modern
-runtimes, but default interface implementations require .NET Core 3.0 or
-.NET 5+ and therefore cannot define the Framework 4.8 ABI.
+The natural `Source<T>` and the optional semantic capability are siblings.
+Making the capability a base interface would turn a Kotlin compiler detail
+into a mandatory CLR implementation contract and would make the ordinary class
+above fail C# compilation. Kotlin-emitted implementations name both siblings
+on the same object. The producer-recorded Roslyn generator may do the same for
+a partial C# type as an allocation-free fast path, but that tooling is an
+optimization rather than the admission requirement.
 
-The portable source-authoring rule is producer-recorded automatic bridge
-generation. The Kotlin DLL records the natural and semantic MethodDefs in its
-versioned C# implementation manifest. The existing Roslyn generator adds the
-semantic interface implementation to another partial declaration and forwards
-to the user's typed body, including required boxing, unboxing, barriers, and
-default-helper selection. The user neither names nor manually implements the
-compiler capability.
+At a broad producer call the compiler uses two-level dispatch:
 
-This is a supported C# source-authoring convenience, not a universal CLR
-mechanism. It cannot modify a precompiled type, a non-partial C# type, or a type
-owned by another CLR language. Such producers need an explicit implementation
-of the complete physical contract or a future language-neutral interop tool.
-The compiler must not conceal that limitation with reflection, runtime
-proxies, wrappers, or identity-changing adapters.
+1. if the object implements `SourceSemantic`, call that slot directly;
+2. otherwise inspect its CLR interfaces for the natural open `Source<>` and
+   invoke the member only when exactly one closed construction exists.
+
+The successful structural resolution is cached per runtime type, open
+interface, and member. Invocation occurs outside the cache lock. Reflection's
+`TargetInvocationException` is never observable: the original member
+exception is rethrown with its dispatch information. A value with no matching
+construction fails as an invalid cast. A value implementing two distinct
+`Source<T>` constructions is ambiguous at a star/projected semantic call and
+fails deterministically; interface enumeration order is never semantic
+evidence. Exact CLR calls to either construction remain ordinary typed calls.
+
+This fallback changes no object identity and creates no proxy, wrapper, or
+third public canonical type. It is currently admitted only for the structural
+no-input covariant producer family, where the required call is derivable from
+the open interface and declared member. Input-bearing, invariant, overloaded,
+defaulted, and otherwise non-derivable foreign implementations remain gates.
+Trimming and NativeAOT also remain separate gates: runtime interface metadata
+and reflective invocation must not be assumed retained merely because both JIT
+profiles execute the fallback.
 
 ## Compiler-emitted evidence
 
@@ -103,7 +116,8 @@ one abstract public no-input member returning that parameter directly publishes
 the natural `Source<out T>`, its non-generic semantic capability, and their
 complete member family. Exact final substitutions use the natural CLR
 interface. Stars, use-site projections, owner parameters, open class arguments,
-and widened value-type views use the capability.
+and widened value-type views use a broad object carrier; Kotlin/generated
+objects take the capability fast path from that carrier.
 
 A public top-level contravariant interface with one unbounded owner parameter
 and one abstract public `consume(T): Unit` member publishes natural
@@ -149,13 +163,21 @@ mapping; the semantic bridge does not become the normal typed route.
 The actual producer manifest is read back from the emitted DLL and consumed by
 the supported Roslyn generator. Partial C# implementations contain only their
 natural typed source members, including the child-owned and consumer members.
-Each manifest
-contract records only the member declared by that interface; inherited root
-contracts are composed rather than copied into the child family. Generated
-explicit implementations satisfy all semantic capabilities, and Kotlin
-widened calls reach every authored C# member on Framework 4.8 and .NET 10. No
-default interface method, runtime proxy, reflection dispatch, wrapper, or
-declaration-name/stdlib exception participates.
+Each manifest contract records only the member declared by that interface;
+inherited root contracts are composed rather than copied into the child family.
+Generated explicit implementations satisfy all semantic capabilities, and
+Kotlin widened calls reach every authored C# member on Framework 4.8 and
+.NET 10.
+
+The covariant producer proof also compiles a separate ordinary C# DLL without
+the authoring generator. Its non-partial `Source<int>` implementation has only
+the natural `int` member. Kotlin exact and broad calls, a real `Source<*>`
+field, and `===` all retain the original object. Repeated calls exercise the
+cached foreign path. A throwing implementation exposes its original exception,
+not reflection's wrapper, and an object implementing both `Source<int>` and
+`Source<string>` is rejected at the broad call as ambiguous. No default
+interface method, runtime proxy, identity-changing wrapper, or declaration-
+name/stdlib exception participates.
 
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
@@ -178,10 +200,10 @@ must cover:
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs, delayed typed-use failure, parameterized
    `as`, and classifier-only `as?`;
-5. Kotlin and generated C# properties, defaults, generic methods, and hostile
-   inheritance;
-6. same-object identity and dispatch across deeper separate Kotlin and C#
-   assembly graphs;
+5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and
+   ordinary foreign implementations beyond the no-input covariant producer;
+6. same-object identity, runtime classifier tests/casts, and dispatch across
+   deeper separate Kotlin and C# assembly graphs;
 7. Runtime and Stdlib owners including collection special bridges without a
    collection-specific representation; and
 8. exact inverse rollback plus Framework 4.8, .NET 10, trimming, and NativeAOT

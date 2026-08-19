@@ -235,7 +235,9 @@ object DotNetBackend {
                     genericOwnerForeignOverrideProbeTargets = context.genericOwnerForeignOverrideProbeTargets,
                     externalGenericOwnerPhysicalSlots = context.externalGenericOwnerPhysicalSlots,
                     genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
+                    genericOwnerForeignDispatchCallTargets = context.genericOwnerForeignDispatchCallTargets,
                     genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
+                    genericOwnerForeignDispatchDeclarations = context.genericOwnerForeignDispatchDeclarations,
                     genericOwnerReflectionCapabilityDeclarations =
                         context.genericOwnerReflectionCapabilityDeclarations,
                 ).emit(irModuleFragment) ?: return result(ilTarget)
@@ -365,7 +367,9 @@ object DotNetBackend {
                 genericOwnerForeignOverrideProbeTargets = context.genericOwnerForeignOverrideProbeTargets,
                 externalGenericOwnerPhysicalSlots = context.externalGenericOwnerPhysicalSlots,
                 genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
+                genericOwnerForeignDispatchCallTargets = context.genericOwnerForeignDispatchCallTargets,
                 genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
+                genericOwnerForeignDispatchDeclarations = context.genericOwnerForeignDispatchDeclarations,
                 genericOwnerReflectionCapabilityDeclarations =
                     context.genericOwnerReflectionCapabilityDeclarations,
             )

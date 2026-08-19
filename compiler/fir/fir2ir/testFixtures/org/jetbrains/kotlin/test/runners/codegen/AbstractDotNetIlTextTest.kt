@@ -4380,6 +4380,55 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!reader.same(producer, producer))
                         throw new InvalidOperationException(
                             "the generated C# interface bridge changed object identity");
+                    RehearsalSeparateRawCSharpIntProducer rawProducer =
+                        new RehearsalSeparateRawCSharpIntProducer();
+                    RehearsalSeparateProducer<int> rawExact = rawProducer;
+                    if (rawProducer.produce() != 83 || rawExact.produce() != 83)
+                        throw new InvalidOperationException(
+                            "direct precompiled C# generic-interface implementation was not invoked");
+                    object rawBroad = reader.read(rawProducer);
+                    if (!object.Equals(rawBroad, 83) ||
+                        !reader.same(rawProducer, rawProducer) ||
+                        !object.ReferenceEquals(rawProducer, rawProducer))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch did not preserve the precompiled C# object");
+                    RehearsalSeparateRawCSharpExplicitProducer rawExplicit =
+                        new RehearsalSeparateRawCSharpExplicitProducer();
+                    RehearsalSeparateProducer<int> rawExplicitExact = rawExplicit;
+                    if (rawExplicitExact.produce() != 87 ||
+                        !object.Equals(reader.read(rawExplicit), 87))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed an explicit precompiled C# MethodImpl");
+                    RehearsalSeparateStarProducerStore rawStarStore =
+                        new RehearsalSeparateStarProducerStore(rawProducer);
+                    if (!object.Equals(rawStarStore.read(), 83) ||
+                        !rawStarStore.same(rawProducer))
+                        throw new InvalidOperationException(
+                            "Kotlin star-projected storage did not preserve the precompiled C# object");
+                    try
+                    {
+                        reader.read(new RehearsalSeparateRawCSharpThrowingProducer());
+                        throw new InvalidOperationException(
+                            "the precompiled C# producer exception was not propagated");
+                    }
+                    catch (RehearsalSeparateRawCSharpProducerException)
+                    {
+                        // Reflection is an implementation detail and must not expose
+                        // TargetInvocationException to Kotlin or C# callers.
+                    }
+                    bool ambiguousRejected = false;
+                    try
+                    {
+                        reader.read(new RehearsalSeparateRawCSharpAmbiguousProducer());
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        ambiguousRejected = exception.Message.Contains(
+                            "multiple CLR constructions");
+                    }
+                    if (!ambiguousRejected)
+                        throw new InvalidOperationException(
+                            "a foreign producer with two CLR constructions was not rejected");
                     RehearsalSeparateConsumerReader consumerReader =
                         new RehearsalSeparateConsumerReader();
                     RehearsalSeparateCSharpObjectConsumer objectConsumer =
@@ -4559,6 +4608,90 @@ private fun validateGenericOwnerForeignCSharpOverride(
     val modernCSharp = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
         "Modern Roslyn is required for the generic-owner foreign override probe"
     }
+    val rawProducer = if (isSeparateProbe) {
+        val rawSource = directory.resolve("RehearsalPrecompiledForeignProducer.cs").apply {
+            writeText(
+                """
+                public sealed class RehearsalSeparateRawCSharpIntProducer :
+                    RehearsalSeparateProducer<int>
+                {
+                    public int produce()
+                    {
+                        return 83;
+                    }
+                }
+
+                public sealed class RehearsalSeparateRawCSharpProducerException :
+                    System.Exception
+                {
+                }
+
+                public sealed class RehearsalSeparateRawCSharpExplicitProducer :
+                    RehearsalSeparateProducer<int>
+                {
+                    int RehearsalSeparateProducer<int>.produce()
+                    {
+                        return 87;
+                    }
+                }
+
+                public sealed class RehearsalSeparateRawCSharpThrowingProducer :
+                    RehearsalSeparateProducer<string>
+                {
+                    public string produce()
+                    {
+                        throw new RehearsalSeparateRawCSharpProducerException();
+                    }
+                }
+
+                public sealed class RehearsalSeparateRawCSharpAmbiguousProducer :
+                    RehearsalSeparateProducer<int>,
+                    RehearsalSeparateProducer<string>
+                {
+                    int RehearsalSeparateProducer<int>.produce()
+                    {
+                        return 89;
+                    }
+
+                    string RehearsalSeparateProducer<string>.produce()
+                    {
+                        return "ambiguous";
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        directory.resolve("RehearsalPrecompiledForeignProducer.dll").also { output ->
+            val rawCompilation = when (target) {
+                DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+                    checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                        ".NET Framework C# compiler is required for the precompiled foreign producer probe"
+                    },
+                    rawSource,
+                    output,
+                    references = producerReferences + listOf(runtime, stdlib),
+                    executable = false,
+                    warningsAsErrors = true,
+                )
+                DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+                    modernCSharp,
+                    rawSource,
+                    output,
+                    references = producerReferences + listOf(runtime, stdlib),
+                    executable = false,
+                    warningsAsErrors = true,
+                )
+                DotNetTarget.NETSTANDARD_2_0 ->
+                    error("netstandard2.0 has no executable foreign producer probe")
+            }
+            check(rawCompilation.exitCode == 0) {
+                "The ordinary precompiled C# producer must not require Kotlin authoring tooling:\n" +
+                        rawCompilation.output
+            }
+        }
+    } else {
+        null
+    }
     val authoringTooling = genericOwnerCSharpAuthoringTooling()
     val generatedDirectory = directory.resolve("generated-${target.description}")
     val compilation = when (target) {
@@ -4568,7 +4701,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
             },
             source,
             consumer,
-            references = producerReferences + listOf(runtime, stdlib),
+            references = producerReferences + listOfNotNull(rawProducer) + listOf(runtime, stdlib),
             executable = true,
             warningsAsErrors = true,
             analyzers = listOf(authoringTooling),
@@ -4578,7 +4711,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
             modernCSharp,
             source,
             consumer,
-            references = producerReferences + listOf(runtime, stdlib),
+            references = producerReferences + listOfNotNull(rawProducer) + listOf(runtime, stdlib),
             executable = true,
             warningsAsErrors = true,
             analyzers = listOf(authoringTooling),

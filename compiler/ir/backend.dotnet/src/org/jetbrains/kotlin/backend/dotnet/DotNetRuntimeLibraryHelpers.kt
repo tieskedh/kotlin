@@ -111,6 +111,10 @@ internal object DotNetRuntimeLibraryHelpers {
             coreLibraryReference,
             compilerAbiTypeAttributesIl.replace("            |", ""),
         ).prependIndent("            |")
+        val genericInterfaceSupportTypeIl = DotNetGenericInterfaceRuntime.supportTypeIl(
+            coreLibraryReference,
+            compilerAbiTypeAttributesIl.replace("            |", ""),
+        ).prependIndent("            |")
         val propertyAccessorSupportTypesIl = propertyAccessorSupportTypesIl(coreLibraryReference)
             .prependIndent("            |")
         val memberReferenceSupportTypesIl = memberReferenceSupportTypesIl(
@@ -129,6 +133,8 @@ $primitiveArrayHelperTypeIl
 $throwableSupportTypesIl
             |
 $kClassSupportTypesIl
+            |
+$genericInterfaceSupportTypeIl
             |
             |  .class public auto ansi sealed beforefieldinit DefaultConstructorMarker
             |         extends ${coreLibraryReference}System.Object

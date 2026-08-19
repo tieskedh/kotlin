@@ -34,7 +34,8 @@ verification, and work state.
   producer roots, while a child in A or B combines both and may add one
   `T`-result member:
   `Child<out T> : Primary<T>, Secondary<T> { fun child(): T }`. Every logical
-  interface remains a natural CLR generic interface. A member-free
+  interface remains a natural CLR generic interface, and that natural
+  interface no longer inherits the compiler semantic capability. A member-free
   intersection has one memberless non-generic capability alias. A
   member-declaring child has one capability which inherits both root
   capabilities and owns exactly its new object-result semantic slot; it does
@@ -48,8 +49,17 @@ verification, and work state.
   `T`-result member becomes a natural covariant CLR `Producer<T>` plus one
   non-generic declaration-semantic capability. Exact final substitutions use
   the natural interface; stars, projections, type-parameter/open arguments,
-  and widened value-type views use the capability on the same object. A
-  member-free local or external `Child<out T> : Producer<T>` closes at a
+  and widened value-type views use a broad `object` carrier. Kotlin and
+  generator-authored objects take the semantic capability fast path from that
+  carrier. An ordinary precompiled/non-partial CLR implementation may supply
+  only the natural `Producer<T>` interface: the fallback resolves and caches
+  exactly one closed construction by runtime type/open owner/member, invokes
+  it without a wrapper, and preserves the original thrown exception. Zero
+  constructions fail as an invalid cast and multiple distinct constructions
+  fail deterministically as ambiguous. The ordinary foreign branch executes
+  through PSI and LightTree on both Framework 4.8 and .NET 10: four focused
+  tests and zero failures, errors, or skips. A member-free local or external
+  `Child<out T> : Producer<T>` closes at a
   fixpoint, remains a real CLR `Child<T>`, and reuses the inherited capability
   rather than adding another semantic representation. Multiple independent
   capabilities form the memberless alias above. If the child adds the admitted
@@ -81,15 +91,17 @@ verification, and work state.
   Same-module and separately compiled Kotlin implementations, generated
   partial C# implementations of both `Consumer<object>` and `Consumer<int>`,
   identity, and semantic dispatch execute on both profiles. The portable C#
-  source generator remains required for the hidden capability; precompiled,
-  non-partial, and other-language implementors are not claimed.
+  source generator remains required for the hidden input adapter;
+  precompiled, non-partial, and other-language consumer implementors are not
+  claimed.
   Reified generic-interface slots also re-enter the ordinary covariant-return
   lowering: an inherited class body receives a typed MethodImpl only when its
   CLR return carrier actually differs, while exact signatures remain direct.
   Production remains on the accepted erased interface ABI. Defaults,
   properties, broader/multiple member shapes, invariant and mixed variance,
   Runtime/Stdlib closure,
-  other CLR languages, and precompiled or non-partial implementors remain
+  other CLR languages, ordinary foreign implementations outside the admitted
+  covariant producer, runtime classifier tests, and deployment modes remain
   gates. The focused rehearsal and production-inverse matrix covers PSI
   and LightTree on .NET 10 and Framework 4.8: eight tests and zero failures,
   errors, or skips. The final inverse target aggregate covers 190 XML suites
@@ -108,6 +120,8 @@ verification, and work state.
   [`docs/archive/reified-generic-interface-intersection-2026-08-19.md`](docs/archive/reified-generic-interface-intersection-2026-08-19.md).
   The child-owned member proof is archived in
   [`docs/archive/reified-generic-interface-member-child-2026-08-19.md`](docs/archive/reified-generic-interface-member-child-2026-08-19.md).
+  The ordinary foreign producer evidence is archived in
+  [`docs/archive/reified-generic-interface-ordinary-foreign-producer-2026-08-19.md`](docs/archive/reified-generic-interface-ordinary-foreign-producer-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

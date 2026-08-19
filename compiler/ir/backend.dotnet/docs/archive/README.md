@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-ordinary-foreign-producer-2026-08-19.md`](reified-generic-interface-ordinary-foreign-producer-2026-08-19.md)
+  records the sibling natural/semantic interface correction, cached unique-
+  construction fallback for ordinary precompiled CLR producers, real star
+  storage and identity, exception transparency, and ambiguity rejection on
+  Framework 4.8 and .NET 10.
 - [`generic-owner-foreign-override-deployment-2026-08-19.md`](generic-owner-foreign-override-deployment-2026-08-19.md)
   records the closed self-producing Kotlin base/override plus ordinary C#
   subclass deployment oracle, allocation-free probe audit, and successful JIT,
