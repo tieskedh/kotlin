@@ -4124,6 +4124,11 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     producer: File,
     expectedDeclaredOwner: String = "RehearsalSeparateProducer`1",
     expectedMemberName: String = "produce",
+    expectedVariance: DotNetCSharpTypeParameterVariance = DotNetCSharpTypeParameterVariance.OUT,
+    expectedSemanticReturnType: String = "object",
+    expectedSemanticParameterTypes: List<String> = emptyList(),
+    expectedNaturalReturnType: String = "!0",
+    expectedNaturalParameterTypes: List<String> = emptyList(),
 ) {
     val resource = checkNotNull(
         DotNetManagedResourceReader.read(
@@ -4143,8 +4148,8 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     check(contract.sourceAuthoringSupported && contract.unsupportedReasons.isEmpty()) {
         "The admitted reified generic interface is not supported for C# source authoring"
     }
-    check(contract.typeParameters.single().variance == DotNetCSharpTypeParameterVariance.OUT) {
-        "The reified generic-interface manifest lost Kotlin declaration-site covariance"
+    check(contract.typeParameters.single().variance == expectedVariance) {
+        "The reified generic-interface manifest lost Kotlin declaration-site variance"
     }
     check(contract.exactOwnerPath == null &&
             contract.canonicalOwnerPath != contract.declaredOwnerPath) {
@@ -4170,12 +4175,14 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     val semantic = member.slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
     val natural = member.slots.single { slot -> slot.role == DotNetCSharpSlotRole.DECLARED }
     check(semantic.ownerPath == contract.canonicalOwnerPath &&
-            semantic.returnType == "object" && semantic.parameterTypes.isEmpty()) {
-        "The declaration-semantic producer slot is not the expected object-domain capability"
+            semantic.returnType == expectedSemanticReturnType &&
+            semantic.parameterTypes == expectedSemanticParameterTypes) {
+        "The declaration-semantic interface slot is not the expected object-domain capability"
     }
     check(natural.ownerPath == contract.declaredOwnerPath &&
-            natural.returnType == "!0" && natural.parameterTypes.isEmpty()) {
-        "The natural producer slot is not a true CLR owner-parameter return"
+            natural.returnType == expectedNaturalReturnType &&
+            natural.parameterTypes == expectedNaturalParameterTypes) {
+        "The natural generic-interface slot did not retain its CLR owner parameter"
     }
 }
 
@@ -4224,6 +4231,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedDeclaredOwner = "RehearsalSeparateSecondaryProducer`1",
                     expectedMemberName = "produceSecondary",
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateConsumer`1",
+                    expectedMemberName = "consume",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.IN,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                )
             }
             producer.name.equals("middle.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(
@@ -4251,6 +4268,28 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public string produce()
                 {
                     return "csharp-interface";
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpObjectConsumer :
+                RehearsalSeparateConsumer<object>
+            {
+                public object Value = "initial";
+
+                public void consume(object value)
+                {
+                    Value = value;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpIntConsumer :
+                RehearsalSeparateConsumer<int>
+            {
+                public int Value;
+
+                public void consume(int value)
+                {
+                    Value = value;
                 }
             }
 
@@ -4341,6 +4380,35 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!reader.same(producer, producer))
                         throw new InvalidOperationException(
                             "the generated C# interface bridge changed object identity");
+                    RehearsalSeparateConsumerReader consumerReader =
+                        new RehearsalSeparateConsumerReader();
+                    RehearsalSeparateCSharpObjectConsumer objectConsumer =
+                        new RehearsalSeparateCSharpObjectConsumer();
+                    RehearsalSeparateConsumer<string> referenceConsumer = objectConsumer;
+                    referenceConsumer.consume("reference-csharp");
+                    if (!object.Equals(objectConsumer.Value, "reference-csharp"))
+                        throw new InvalidOperationException(
+                            "natural CLR reference contravariance was not preserved");
+                    consumerReader.consume(objectConsumer, 71);
+                    if (!object.Equals(objectConsumer.Value, 71) ||
+                        !consumerReader.same(objectConsumer, objectConsumer) ||
+                        !object.ReferenceEquals(
+                            consumerReader.identity(objectConsumer), objectConsumer))
+                        throw new InvalidOperationException(
+                            "Kotlin contravariant dispatch bypassed the generated object consumer bridge");
+                    RehearsalSeparateCSharpIntConsumer intConsumer =
+                        new RehearsalSeparateCSharpIntConsumer();
+                    intConsumer.consume(72);
+                    if (intConsumer.Value != 72)
+                        throw new InvalidOperationException(
+                            "direct C# value-type consumer implementation was not invoked");
+                    consumerReader.consume(intConsumer, 73);
+                    if (intConsumer.Value != 73 ||
+                        !consumerReader.same(intConsumer, intConsumer) ||
+                        !object.ReferenceEquals(
+                            consumerReader.identity(intConsumer), intConsumer))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated value consumer bridge");
                     RehearsalSeparateCSharpChildProducer childProducer =
                         new RehearsalSeparateCSharpChildProducer();
                     if (childProducer.produce() != "csharp-child-interface")
