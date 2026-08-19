@@ -81,9 +81,20 @@ verification, and work state.
   object provenance through FIR's synthesized safe-call temporary, preserves
   identity, dispatches the ordinary precompiled `Producer<int>` exactly once,
   and checks only its result at the later `String` use. C# reflection verifies
-  both public signatures. The same four PSI/LightTree and Framework 4.8/.NET
-  10 lanes pass; arbitrary control-flow returns, classifier-derived fields and
-  input parameters remain separate gates. The final target aggregate covers
+  both public signatures. ABI 40 now closes the matching exact-looking input
+  boundary without erasing that natural API. A final ordinary function keeps
+  its `Producer<string>` MethodDef and direct body for exact Kotlin and C#
+  calls, while one compiler-owned alternate MethodDef accepts `object` only
+  when the argument carries classifier-derived foreign provenance. The
+  producer records that MethodDef name and its object parameter index; a
+  separate consumer reconstructs the exact MethodRef rather than inferring it.
+  A safe-cast result survives FIR's `CHECK_NOT_NULL` call and an immutable local
+  without losing provenance, reaches the alternate entry with identical object
+  identity, invokes a plain foreign `Producer<int>` once, and fails only when
+  its result is consumed as `String`. The same four PSI/LightTree and Framework
+  4.8/.NET 10 lanes pass; arbitrary control-flow returns, classifier-derived
+  fields, non-final/open inputs, and broader input graphs remain separate
+  gates. The final target aggregate covers
   190 XML suites and 2,287 tests with zero failures, errors, or skips: the 187
   FIR suites/2,155 tests and two integration suites/126 tests were freshly
   written, while the unchanged six-test `dotnet.ir` root remained up-to-date.
@@ -156,6 +167,8 @@ verification, and work state.
   [`docs/archive/reified-generic-interface-foreign-classifier-2026-08-19.md`](docs/archive/reified-generic-interface-foreign-classifier-2026-08-19.md).
   The separate callable-result carrier evidence is archived in
   [`docs/archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md`](docs/archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md).
+  The paired callable-input evidence is archived in
+  [`docs/archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md`](docs/archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
