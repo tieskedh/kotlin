@@ -1256,12 +1256,25 @@ must choose one; a forged `Producer<String>` view over `Producer<int>` fails
 only when its produced value is consumed as `String`. The interface vector is
 cached per runtime type, and the rule executes through PSI and LightTree on
 Framework 4.8 and .NET 10. It does not yet authorize foreign input/member
-families, classifier-derived views crossing exact-looking callable ABI
-boundaries, trimming, or NativeAOT.
+families, trimming, or NativeAOT.
+
+The first classifier-derived callable boundary is now closed without globally
+erasing exact-looking APIs. `safeView(Any?): Producer<String>?` retains its
+logical KLIB result but publishes CLR `object`, because the successful view may
+still be a plain foreign `Producer<int>`. ABI 39 extends the producer-owned
+function-carrier record with distinct semantic-capability and object kinds per
+signature slot. The separate consumer uses that record through FIR's
+synthetic safe-call local, retains object identity, invokes the unique natural
+producer, and checks `String` only on the result. Alongside it,
+`exactView(Producer<String>): Producer<String>` remains a natural
+`Producer<string>` API. C# reflection and both Kotlin frontends prove this on
+Framework 4.8 and .NET 10. The bounded producer proof currently accepts one
+authoritative classifier-derived return; arbitrary control-flow results,
+fields, and input parameters remain fail-closed gates.
 
 Continue with default, property, broader/multiple member, invariant, and
 mixed-variance gates, including derivability rules for ordinary foreign
-implementations, then close classifier-derived callable boundaries and
+implementations, then close classifier-derived field/input boundaries and
 deployment behavior before the Runtime/Stdlib graph. Keep the authoring
 generator as an optional fast path where it can add the semantic sibling, and
 as the required path only where no sound language-neutral adapter has yet been
@@ -1278,6 +1291,8 @@ The input-bearing evidence is in
 [`../archive/reified-generic-interface-consumer-2026-08-19.md`](../archive/reified-generic-interface-consumer-2026-08-19.md).
 The ordinary foreign producer classifier evidence is in
 [`../archive/reified-generic-interface-foreign-classifier-2026-08-19.md`](../archive/reified-generic-interface-foreign-classifier-2026-08-19.md).
+The separately compiled classifier-result evidence is in
+[`../archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md`](../archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
