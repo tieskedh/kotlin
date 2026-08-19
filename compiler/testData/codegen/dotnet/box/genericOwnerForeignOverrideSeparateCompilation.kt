@@ -91,6 +91,14 @@ public class RehearsalSeparateProducerClassifier {
     @Suppress("UNCHECKED_CAST")
     public fun safeRead(value: Any?): String? =
         (value as? RehearsalSeparateProducer<String>)?.produce()
+
+    @Suppress("UNCHECKED_CAST")
+    public fun safeView(value: Any?): RehearsalSeparateProducer<String>? =
+        value as? RehearsalSeparateProducer<String>
+
+    public fun exactView(
+        value: RehearsalSeparateProducer<String>,
+    ): RehearsalSeparateProducer<String> = value
 }
 
 public class RehearsalSeparateSecondaryProducerReader {
@@ -137,6 +145,14 @@ public class RehearsalSeparateMemberChildProducerReader {
 public class RehearsalSeparateProducerValue<T>(private val value: T) :
     RehearsalSeparateProducer<T> {
     public override fun produce(): T = value
+}
+
+public class RehearsalSeparateClassifierBoundary {
+    private val classifier = RehearsalSeparateProducerClassifier()
+
+    public fun same(value: Any?): Boolean = classifier.safeView(value) === value
+
+    public fun read(value: Any?): String? = classifier.safeView(value)?.produce()
 }
 
 public class RehearsalSeparateMiddleConsumerValue<T>(initial: T) :

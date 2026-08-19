@@ -70,6 +70,23 @@ verification, and work state.
   and never emits constructed generic `isinst` for these operations. This also
   executes in four focused PSI/LightTree, Framework 4.8/.NET 10 lanes with no
   failures, errors, or skips.
+  The first exact-looking callable boundary is now closed as well. A function
+  whose authoritative result is a classifier-derived `as? Producer<String>`
+  keeps that logical KLIB result but publishes CLR `object`; an adjacent
+  ordinary exact identity function still publishes and consumes the natural
+  `Producer<string>`. ABI 39 generalizes the existing generic-owner function-
+  carrier record so every selected return or parameter slot identifies either
+  the semantic capability or `object`, rather than treating both as one kind
+  of erasure. A separate Kotlin consumer propagates the producer-recorded
+  object provenance through FIR's synthesized safe-call temporary, preserves
+  identity, dispatches the ordinary precompiled `Producer<int>` exactly once,
+  and checks only its result at the later `String` use. C# reflection verifies
+  both public signatures. The same four PSI/LightTree and Framework 4.8/.NET
+  10 lanes pass; arbitrary control-flow returns, classifier-derived fields and
+  input parameters remain separate gates. The final target aggregate covers
+  190 XML suites and 2,287 tests with zero failures, errors, or skips: the 187
+  FIR suites/2,155 tests and two integration suites/126 tests were freshly
+  written, while the unchanged six-test `dotnet.ir` root remained up-to-date.
   A member-free local or external
   `Child<out T> : Producer<T>` closes at a
   fixpoint, remains a real CLR `Child<T>`, and reuses the inherited capability
@@ -113,8 +130,8 @@ verification, and work state.
   properties, broader/multiple member shapes, invariant and mixed variance,
   Runtime/Stdlib closure,
   other CLR languages, ordinary foreign implementations outside the admitted
-  covariant producer, classifier-derived views crossing exact-looking callable
-  ABI boundaries, and deployment modes remain gates. The focused rehearsal and
+  covariant producer, classifier-derived fields/input boundaries, and
+  deployment modes remain gates. The focused rehearsal and
   production-inverse matrix covers PSI
   and LightTree on .NET 10 and Framework 4.8: eight tests and zero failures,
   errors, or skips. The final inverse target aggregate covers 190 XML suites
@@ -137,6 +154,8 @@ verification, and work state.
   [`docs/archive/reified-generic-interface-ordinary-foreign-producer-2026-08-19.md`](docs/archive/reified-generic-interface-ordinary-foreign-producer-2026-08-19.md).
   The ordinary foreign classifier evidence is archived in
   [`docs/archive/reified-generic-interface-foreign-classifier-2026-08-19.md`](docs/archive/reified-generic-interface-foreign-classifier-2026-08-19.md).
+  The separate callable-result carrier evidence is archived in
+  [`docs/archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md`](docs/archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
