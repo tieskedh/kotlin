@@ -25,6 +25,34 @@ public interface RehearsalSeparateSecondaryProducer<out T> {
     public fun produceSecondary(): T
 }
 
+public interface RehearsalSeparateConsumer<in T> {
+    public fun consume(value: T)
+}
+
+public class RehearsalSeparateConsumerValue<T>(initial: T) :
+    RehearsalSeparateConsumer<T> {
+    private var value: T = initial
+
+    public override fun consume(value: T) {
+        this.value = value
+    }
+
+    public fun read(): T = value
+}
+
+public class RehearsalSeparateConsumerReader {
+    public fun consume(consumer: RehearsalSeparateConsumer<Int>, value: Int) {
+        consumer.consume(value)
+    }
+
+    public fun identity(
+        consumer: RehearsalSeparateConsumer<Int>,
+    ): RehearsalSeparateConsumer<Int> = consumer
+
+    public fun same(consumer: RehearsalSeparateConsumer<Int>, expected: Any?): Boolean =
+        consumer === expected
+}
+
 public interface RehearsalSeparateLocalIntersectionProducer<out T> :
     RehearsalSeparateProducer<T>,
     RehearsalSeparateSecondaryProducer<T>
@@ -82,6 +110,17 @@ public class RehearsalSeparateProducerValue<T>(private val value: T) :
     public override fun produce(): T = value
 }
 
+public class RehearsalSeparateMiddleConsumerValue<T>(initial: T) :
+    RehearsalSeparateConsumer<T> {
+    private var value: T = initial
+
+    public override fun consume(value: T) {
+        this.value = value
+    }
+
+    public fun read(): T = value
+}
+
 public class RehearsalSeparateChildProducerValue<T>(private val value: T) :
     RehearsalSeparateChildProducer<T> {
     public override fun produce(): T = value
@@ -129,6 +168,41 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+
+    val exactIntConsumerValue = RehearsalSeparateConsumerValue(61)
+    val exactIntConsumer: RehearsalSeparateConsumer<Int> = exactIntConsumerValue
+    val exactIntConsumerAlias: RehearsalSeparateConsumer<Int> = exactIntConsumer
+    exactIntConsumerAlias.consume(63)
+    if (exactIntConsumerValue.read() != 63) return "fail: separate exact consumer alias"
+
+    val anyConsumerValue = RehearsalSeparateConsumerValue<Any?>("initial")
+    val anyConsumer: RehearsalSeparateConsumer<Any?> = anyConsumerValue
+    val stringConsumer: RehearsalSeparateConsumer<String> = anyConsumer
+    stringConsumer.consume("reference")
+    if (anyConsumerValue.read() != "reference") return "fail: separate reference consumer"
+    val narrowIntConsumer: RehearsalSeparateConsumer<Int> = anyConsumer
+    narrowIntConsumer.consume(67)
+    if (anyConsumerValue.read() != 67) return "fail: separate narrow consumer"
+    val consumerReader = RehearsalSeparateConsumerReader()
+    val returnedNarrowConsumer = consumerReader.identity(narrowIntConsumer)
+    returnedNarrowConsumer.consume(69)
+    if (anyConsumerValue.read() != 69) return "fail: separate returned narrow consumer"
+    if (!consumerReader.same(returnedNarrowConsumer, anyConsumer)) {
+        return "fail: separate consumer identity"
+    }
+
+    val middleIntConsumerValue = RehearsalSeparateMiddleConsumerValue(71)
+    val middleIntConsumer: RehearsalSeparateConsumer<Int> = middleIntConsumerValue
+    middleIntConsumer.consume(73)
+    if (middleIntConsumerValue.read() != 73) return "fail: separate external exact consumer"
+    val middleAnyConsumerValue = RehearsalSeparateMiddleConsumerValue<Any?>("middle")
+    val middleAnyConsumer: RehearsalSeparateConsumer<Any?> = middleAnyConsumerValue
+    val middleNarrowConsumer: RehearsalSeparateConsumer<Int> = middleAnyConsumer
+    middleNarrowConsumer.consume(79)
+    if (middleAnyConsumerValue.read() != 79) return "fail: separate external narrow consumer"
+    if (!RehearsalSeparateConsumerReader().same(middleNarrowConsumer, middleAnyConsumer)) {
+        return "fail: separate external consumer identity"
+    }
 
     val exactChild: RehearsalSeparateChildProducer<Int> =
         RehearsalSeparateChildProducerValue(47)
