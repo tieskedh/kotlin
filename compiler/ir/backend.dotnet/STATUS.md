@@ -58,7 +58,19 @@ verification, and work state.
   constructions fail as an invalid cast and multiple distinct constructions
   fail deterministically as ambiguous. The ordinary foreign branch executes
   through PSI and LightTree on both Framework 4.8 and .NET 10: four focused
-  tests and zero failures, errors, or skips. A member-free local or external
+  tests and zero failures, errors, or skips. Classifier operations on that
+  ordinary foreign family are now declaration-erased without becoming
+  capability-only: `is Producer<*>`, `!is`, nullable `is`, smart-cast member
+  use, and parameterized `as? Producer<String>` accept the capability or any
+  natural closed construction. Safe casts retain the original object and do
+  not inspect generic arguments. Multiple constructions pass the classifier,
+  but a capability-free foreign object remains ambiguous at a member call; a
+  forged `Producer<String>` view over a natural `Producer<int>` fails at the
+  `String` result use. The runtime caches each runtime type's interface vector
+  and never emits constructed generic `isinst` for these operations. This also
+  executes in four focused PSI/LightTree, Framework 4.8/.NET 10 lanes with no
+  failures, errors, or skips.
+  A member-free local or external
   `Child<out T> : Producer<T>` closes at a
   fixpoint, remains a real CLR `Child<T>`, and reuses the inherited capability
   rather than adding another semantic representation. Multiple independent
@@ -101,8 +113,9 @@ verification, and work state.
   properties, broader/multiple member shapes, invariant and mixed variance,
   Runtime/Stdlib closure,
   other CLR languages, ordinary foreign implementations outside the admitted
-  covariant producer, runtime classifier tests, and deployment modes remain
-  gates. The focused rehearsal and production-inverse matrix covers PSI
+  covariant producer, classifier-derived views crossing exact-looking callable
+  ABI boundaries, and deployment modes remain gates. The focused rehearsal and
+  production-inverse matrix covers PSI
   and LightTree on .NET 10 and Framework 4.8: eight tests and zero failures,
   errors, or skips. The final inverse target aggregate covers 190 XML suites
   and 2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
@@ -122,6 +135,8 @@ verification, and work state.
   [`docs/archive/reified-generic-interface-member-child-2026-08-19.md`](docs/archive/reified-generic-interface-member-child-2026-08-19.md).
   The ordinary foreign producer evidence is archived in
   [`docs/archive/reified-generic-interface-ordinary-foreign-producer-2026-08-19.md`](docs/archive/reified-generic-interface-ordinary-foreign-producer-2026-08-19.md).
+  The ordinary foreign classifier evidence is archived in
+  [`docs/archive/reified-generic-interface-foreign-classifier-2026-08-19.md`](docs/archive/reified-generic-interface-foreign-classifier-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

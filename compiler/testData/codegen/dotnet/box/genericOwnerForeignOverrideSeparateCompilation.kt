@@ -72,6 +72,27 @@ public class RehearsalSeparateStarProducerStore(
     public fun same(expected: Any?): Boolean = producer === expected
 }
 
+public class RehearsalSeparateProducerClassifier {
+    public fun isProducer(value: Any?): Boolean = value is RehearsalSeparateProducer<*>
+
+    public fun isNotProducer(value: Any?): Boolean = value !is RehearsalSeparateProducer<*>
+
+    public fun isNullableProducer(value: Any?): Boolean = value is RehearsalSeparateProducer<*>?
+
+    public fun smartRead(value: Any?): Any? =
+        if (value is RehearsalSeparateProducer<*>) value.produce() else null
+
+    @Suppress("UNCHECKED_CAST")
+    public fun safeSame(value: Any?): Boolean {
+        val producer = value as? RehearsalSeparateProducer<String>
+        return producer === value
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    public fun safeRead(value: Any?): String? =
+        (value as? RehearsalSeparateProducer<String>)?.produce()
+}
+
 public class RehearsalSeparateSecondaryProducerReader {
     public fun read(producer: RehearsalSeparateSecondaryProducer<Any?>): Any? =
         producer.produceSecondary()
