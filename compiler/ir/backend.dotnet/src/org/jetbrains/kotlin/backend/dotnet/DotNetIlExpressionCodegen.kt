@@ -198,7 +198,8 @@ internal class DotNetIlExpressionCodegen(
                 ?.let { return DotNetIlValueType.Object }
         }
         if (expression is IrTypeOperatorCall &&
-            expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+            (expression.operator == IrTypeOperator.IMPLICIT_CAST ||
+                    expression.operator == IrTypeOperator.IMPLICIT_NOTNULL) &&
             expression.argument.readsGenericOwnerForeignDispatchDeclaration() &&
             typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand) != null
         ) {

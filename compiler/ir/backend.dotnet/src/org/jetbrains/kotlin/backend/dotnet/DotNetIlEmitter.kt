@@ -143,12 +143,15 @@ internal class DotNetIlEmitter(
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerDirectForeignOverrideDispatches:
             Map<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = emptyMap(),
     private val genericOwnerForeignOverrideProbeTargets:
             Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val externalGenericOwnerPhysicalSlots:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
+    private val externalGenericOwnerFunctionInputEntries:
+            Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry> = emptyMap(),
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
     private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
@@ -612,6 +615,7 @@ internal class DotNetIlEmitter(
             genericOwnerForeignDispatchDeclarations = genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations = genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots = boundExternalGenericOwnerPhysicalSlots,
+            externalGenericOwnerFunctionInputEntries = externalGenericOwnerFunctionInputEntries,
             stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
                 null
             } else {
@@ -1700,6 +1704,8 @@ internal class DotNetIlEmitter(
             genericOwnerDefaultCapabilitySlots =
                 if (genericOwnerRehearsal) genericOwnerDefaultCapabilitySlots else emptyMap(),
             genericOwnerSemanticHooks = if (genericOwnerRehearsal) genericOwnerSemanticHooks else emptyMap(),
+            genericOwnerFunctionInputEntries =
+                if (genericOwnerRehearsal) genericOwnerFunctionInputEntries else emptyMap(),
             genericOwnerForeignOverrideProbeTargets =
                 if (genericOwnerRehearsal) genericOwnerForeignOverrideProbeTargets else emptyMap(),
             preLoweringDeclarationKeys = preLoweringDeclarationKeys,

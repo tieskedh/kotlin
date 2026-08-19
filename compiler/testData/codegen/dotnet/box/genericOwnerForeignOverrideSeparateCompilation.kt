@@ -101,6 +101,16 @@ public class RehearsalSeparateProducerClassifier {
     ): RehearsalSeparateProducer<String> = value
 }
 
+public class RehearsalSeparateClassifierInput {
+    public fun same(
+        producer: RehearsalSeparateProducer<String>,
+        expected: Any?,
+    ): Boolean = producer === expected
+
+    public fun read(producer: RehearsalSeparateProducer<String>): String =
+        producer.produce()
+}
+
 public class RehearsalSeparateSecondaryProducerReader {
     public fun read(producer: RehearsalSeparateSecondaryProducer<Any?>): Any? =
         producer.produceSecondary()
@@ -149,10 +159,21 @@ public class RehearsalSeparateProducerValue<T>(private val value: T) :
 
 public class RehearsalSeparateClassifierBoundary {
     private val classifier = RehearsalSeparateProducerClassifier()
+    private val input = RehearsalSeparateClassifierInput()
 
     public fun same(value: Any?): Boolean = classifier.safeView(value) === value
 
     public fun read(value: Any?): String? = classifier.safeView(value)?.produce()
+
+    public fun sameThroughInput(value: Any?): Boolean {
+        val producer = classifier.safeView(value)!!
+        return input.same(producer, value)
+    }
+
+    public fun readThroughInput(value: Any?): String {
+        val producer = classifier.safeView(value)!!
+        return input.read(producer)
+    }
 }
 
 public class RehearsalSeparateMiddleConsumerValue<T>(initial: T) :

@@ -4444,11 +4444,28 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!object.ReferenceEquals(exactView, rawString))
                         throw new InvalidOperationException(
                             "ordinary exact return boundary changed object identity");
+                    if (typeof(RehearsalSeparateClassifierInput)
+                            .GetMethod("same").GetParameters()[0].ParameterType !=
+                                typeof(RehearsalSeparateProducer<string>) ||
+                        typeof(RehearsalSeparateClassifierInput)
+                            .GetMethod("read").GetParameters()[0].ParameterType !=
+                                typeof(RehearsalSeparateProducer<string>))
+                        throw new InvalidOperationException(
+                            "classifier input support erased the natural C# entry");
+                    RehearsalSeparateClassifierInput classifierInput =
+                        new RehearsalSeparateClassifierInput();
+                    if (!classifierInput.same(rawString, rawString) ||
+                        classifierInput.read(rawString) != "raw-string")
+                        throw new InvalidOperationException(
+                            "ordinary C# calls lost the natural classifier input entry");
                     RehearsalSeparateClassifierBoundary classifierBoundary =
                         new RehearsalSeparateClassifierBoundary();
                     if (!classifierBoundary.same(rawProducer))
                         throw new InvalidOperationException(
                             "separate Kotlin consumer lost classifier-derived object identity");
+                    if (!classifierBoundary.sameThroughInput(rawProducer))
+                        throw new InvalidOperationException(
+                            "classifier-derived input failed before identity observation");
                     int callsBeforeBoundaryRead = rawProducer.Calls;
                     try
                     {
@@ -4463,6 +4480,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (rawProducer.Calls != callsBeforeBoundaryRead + 1)
                         throw new InvalidOperationException(
                             "classifier-derived return failed before separate typed use");
+                    int callsBeforeInputRead = rawProducer.Calls;
+                    try
+                    {
+                        classifierBoundary.readThroughInput(rawProducer);
+                        throw new InvalidOperationException(
+                            "classifier-derived input accepted an incompatible producer result");
+                    }
+                    catch (InvalidCastException)
+                    {
+                        // The input entry preserves object provenance; read checks String later.
+                    }
+                    if (rawProducer.Calls != callsBeforeInputRead + 1)
+                        throw new InvalidOperationException(
+                            "classifier-derived input failed before the producer was invoked");
                     int callsBeforeUnsafeSafeRead = rawProducer.Calls;
                     try
                     {
