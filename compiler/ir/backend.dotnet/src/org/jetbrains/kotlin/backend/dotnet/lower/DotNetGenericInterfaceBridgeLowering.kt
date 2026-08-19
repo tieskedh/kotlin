@@ -148,7 +148,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         check(genericClasses.all(context.genericOwnerArchitecturePlans::containsKey)) {
             "Internal .NET backend error: a Kotlin-owned generic class bypassed architecture planning"
         }
-        context.erasedGenericInterfaces += genericInterfaces
+        context.erasedGenericInterfaces += genericInterfaces - context.reifiedGenericInterfaces
         context.erasedGenericClasses += if (context.configuration.dotNetGenericOwnerRehearsal) {
             genericClasses.filterNotTo(linkedSetOf()) { owner ->
                 context.genericOwnerArchitecturePlans.getValue(owner)
@@ -160,14 +160,17 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         fun isMappedKotlinGenericInterface(irClass: IrClass): Boolean =
             irClass in genericInterfaces ||
                     DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
-                    externalDeclarations.hasGenericInterface(irClass)
+                    externalDeclarations.hasGenericInterface(irClass) ||
+                    externalDeclarations.hasReifiedGenericInterface(irClass)
         fun isErasedKotlinGenericClass(irClass: IrClass): Boolean =
             irClass.isDotNetGenericClassDeclaration &&
                     (!context.configuration.dotNetGenericOwnerRehearsal ||
                             context.genericOwnerArchitecturePlans[irClass]
                                 ?.isReifiedByGenericOwnerRehearsal != true)
         fun isErasedKotlinCarrier(irClass: IrClass): Boolean =
-            isMappedKotlinGenericInterface(irClass) ||
+            (isMappedKotlinGenericInterface(irClass) &&
+                    irClass !in context.reifiedGenericInterfaces &&
+                    !externalDeclarations.hasReifiedGenericInterface(irClass)) ||
                     isErasedKotlinGenericClass(irClass) ||
                     externalDeclarations.hasGenericClass(irClass)
         for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
@@ -272,6 +275,29 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     emptyList()
                 },
             )
+            if (interfaceClass in context.reifiedGenericInterfaces ||
+                externalDeclarations.hasReifiedGenericInterface(interfaceClass)
+            ) {
+                val capabilitySlot = context.genericOwnerCapabilitySlots[slot]
+                    ?: materializeExternalReifiedGenericInterfaceCapabilitySlot(
+                        context,
+                        externalDeclarations,
+                        slot,
+                    )
+                if (!irClass.inheritsReifiedGenericInterfaceCapabilityBridge(capabilitySlot)) {
+                    createForwardingBridge(
+                        irClass = plan.implementingClass,
+                        slot = capabilitySlot,
+                        target = plan.target,
+                        origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
+                        bridgeName = "<ReifiedGenericInterfaceCapabilityBridge-${plan.interfaceIdentity}-" +
+                                "${plan.slot.name.asString()}-${plan.slotIdentity}>",
+                        bridgeTypeTransform = { it },
+                        ownerConstraintTypeTransform = { it },
+                    )
+                }
+                continue
+            }
             if (irClass.inheritsGenericInterfaceBridge(plan, externalDeclarations)) continue
             val canonicalBridge = createCanonicalBridge(
                 plan,
@@ -342,6 +368,24 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 }
             }
         }
+    }
+
+    private fun IrClass.inheritsReifiedGenericInterfaceCapabilityBridge(
+        capabilitySlot: IrSimpleFunction,
+    ): Boolean {
+        val visited = hashSetOf<IrClass>()
+        var current = dotNetBaseClassOrNull()
+        while (current != null && visited.add(current)) {
+            if (current.declarations.filterIsInstance<IrSimpleFunction>().any { function ->
+                    function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER &&
+                            function.overriddenSymbols.singleOrNull() == capabilitySlot.symbol
+                }
+            ) {
+                return true
+            }
+            current = current.dotNetBaseClassOrNull()
+        }
+        return false
     }
 
     /** An inherited complete bridge bundle remains valid because every adapter dispatches virtually. */

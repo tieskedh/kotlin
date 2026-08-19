@@ -17,12 +17,35 @@ public class RehearsalSeparateReader {
     public fun read(store: RehearsalSeparateStore<Any?>): Any? = store.read()
 }
 
+public interface RehearsalSeparateProducer<out T> {
+    public fun produce(): T
+}
+
+public interface RehearsalSeparateChildProducer<out T> : RehearsalSeparateProducer<T>
+
+public class RehearsalSeparateProducerReader {
+    public fun read(producer: RehearsalSeparateProducer<Any?>): Any? = producer.produce()
+
+    public fun same(producer: RehearsalSeparateProducer<Any?>, expected: Any?): Boolean =
+        producer === expected
+}
+
 // MODULE: middle(lib)
 // FILE: middle.kt
 
 public open class RehearsalSeparateKotlinOverrideStore<T>(initial: T) :
     RehearsalSeparateStore<T>(initial) {
     public override fun read(): T = super.read()
+}
+
+public class RehearsalSeparateProducerValue<T>(private val value: T) :
+    RehearsalSeparateProducer<T> {
+    public override fun produce(): T = value
+}
+
+public class RehearsalSeparateChildProducerValue<T>(private val value: T) :
+    RehearsalSeparateChildProducer<T> {
+    public override fun produce(): T = value
 }
 
 // MODULE: main(middle)
@@ -48,6 +71,23 @@ fun box(): String {
     }
     widened.write(19)
     if (exact.read() != 19) return "fail: separate compatible recovery"
+
+    val exactProducer: RehearsalSeparateProducer<Int> = RehearsalSeparateProducerValue(31)
+    if (exactProducer.produce() != 31) return "fail: separate exact producer"
+    val broadProducer: RehearsalSeparateProducer<Any?> = exactProducer
+    if (RehearsalSeparateProducerReader().read(broadProducer) != 31) {
+        return "fail: separate broad producer"
+    }
+    if (broadProducer !== exactProducer) return "fail: separate producer identity"
+
+    val exactChild: RehearsalSeparateChildProducer<Int> =
+        RehearsalSeparateChildProducerValue(47)
+    if (exactChild.produce() != 47) return "fail: separate exact child producer"
+    val broadChild: RehearsalSeparateChildProducer<Any?> = exactChild
+    if (RehearsalSeparateProducerReader().read(broadChild) != 47) {
+        return "fail: separate broad child producer"
+    }
+    if (broadChild !== exactChild) return "fail: separate child producer identity"
 
     return "OK"
 }

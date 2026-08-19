@@ -27,24 +27,36 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Latest generic-interface reopening proof: the true-CLR-generic class-owner
-  rehearsal invalidates the accepted erased-interface ADR's premise that a
-  Kotlin `Values<T>` cannot truthfully implement CLR `Source<T>`. A bounded,
-  production-inert integration test now proves the main foreign-source
-  boundary for the replacement hypothesis: `Source<out T>` inherits one
-  non-generic declaration-semantic capability, while C# authors only a partial
-  class with the natural `Read(): T` member. The existing versioned manifest
-  and Roslyn generator add the explicit semantic bridge without the source
-  naming it. Reference and value substitutions preserve same-object identity,
-  typed results, semantic results, and required boxing on Framework 4.8 and
-  .NET 10. This closes only automatic partial C# source authoring; compiler
-  emission, all projection/input/default/inheritance cases, other CLR
-  languages, and precompiled or non-partial implementors remain gates. The
-  accepted production interface ABI is still erased. The final target
-  aggregate covers 190 XML suites and 2,287 tests with zero failures, errors,
-  or skips; the 187-suite FIR and two-suite integration roots were freshly
-  written, while the unchanged six-test `dotnet.ir` root remained up-to-date.
-  See
+- Latest generic-interface reopening proof: the test-only generic-owner epoch
+  now emits the first structural Kotlin-owned CLR-generic interface family.
+  Any public top-level `Producer<out T>` shape with one abstract no-input
+  `T`-result member becomes a natural covariant CLR `Producer<T>` plus one
+  non-generic declaration-semantic capability. Exact final substitutions use
+  the natural interface; stars, projections, type-parameter/open arguments,
+  and widened value-type views use the capability on the same object. A
+  transparent same-product `Child<out T> : Producer<T>` closes at a fixpoint,
+  remains a real CLR `Child<T>`, and reuses the inherited capability rather
+  than adding another semantic representation. Same-module and separate-
+  compilation Kotlin implementations preserve exact calls, widened calls,
+  boxing, and identity on Framework 4.8 and .NET 10. The producer's public
+  versioned manifest drives the supported Roslyn generator, so partial C#
+  implementations of both the root and child author only natural `produce()`;
+  Kotlin widened dispatch reaches those bodies without source-visible
+  compiler ABI. Admission contains no stdlib or declaration-name switch.
+  Reified generic-interface slots also re-enter the ordinary covariant-return
+  lowering: an inherited class body receives a typed MethodImpl only when its
+  CLR return carrier actually differs, while exact signatures remain direct.
+  Production remains on the accepted erased interface ABI. Inputs, defaults,
+  properties, mixed variance, external-product child declarations, Runtime/
+  Stdlib closure, other CLR languages, and precompiled or non-partial
+  implementors remain gates. The final inverse target aggregate covers 190
+  XML suites and 2,287 tests with zero failures, errors, or skips: 187 FIR
+  suites/2,155 tests, two integration suites/126 tests, and the unchanged
+  six-test `dotnet.ir` root. A deliberate whole-corpus rehearsal audit is not
+  an all-green snapshot gate while the wider class-owner epoch remains
+  incomplete; it exposed the covariant composition gap above, while its
+  remaining failures retain production IL snapshots or already recorded
+  class-owner/Stdlib gates. See
   [`docs/decisions/draft-adr-reified-generic-interface-owner.md`](docs/decisions/draft-adr-reified-generic-interface-owner.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every

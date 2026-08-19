@@ -72,6 +72,19 @@ public open class RehearsalKotlinOverrideStore<out T>(initial: T) :
 
 public fun rehearsalWidenedRead(store: RehearsalForeignOverrideStore<Any?>): Any? = store.read()
 
+// The first generic-interface reopening tranche is structural rather than library- or name-
+// specific: one covariant no-input producer becomes a natural CLR I<T> plus a non-generic
+// declaration-semantic capability for Kotlin views which cannot name one CLR construction.
+public interface RehearsalProducer<out T> {
+    public fun produce(): T
+}
+
+private class RehearsalProducerValue<T>(private val value: T) : RehearsalProducer<T> {
+    override fun produce(): T = value
+}
+
+private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -101,6 +114,15 @@ fun box(): String {
     }
     widenedStore.write(19)
     if (exactStore.read() != 19) return "fail: compatible recovery"
+
+    val intProducer: RehearsalProducer<Int> = RehearsalProducerValue(41)
+    if (intProducer.produce() + 1 != 42) return "fail: exact value producer"
+    val broadProducer: RehearsalProducer<Any?> = intProducer
+    if (rehearsalBroadProduce(broadProducer) != 41) return "fail: broad value producer"
+    if (broadProducer !== intProducer) return "fail: producer identity"
+
+    val stringProducer: RehearsalProducer<String> = RehearsalProducerValue("typed")
+    if (stringProducer.produce() != "typed") return "fail: exact reference producer"
 
     return "OK"
 }
