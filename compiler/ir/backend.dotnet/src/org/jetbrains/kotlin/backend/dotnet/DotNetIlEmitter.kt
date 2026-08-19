@@ -480,7 +480,8 @@ internal class DotNetIlEmitter(
                         )).removeSuffix(logicalAritySuffix)
                 else -> irClass.fqNameWhenAvailable!!.asString()
             }
-            val isErasedGenericInterface = irClass.isDotNetGenericInterfaceDeclaration
+            val isErasedGenericInterface = irClass.isDotNetGenericInterfaceDeclaration &&
+                    irClass !in genericOwnerCapabilityInterfaces
             val isErasedGenericClass = irClass.isDotNetGenericClassDeclaration &&
                     (!genericOwnerRehearsal ||
                             genericOwnerArchitecturePlans[irClass]
@@ -497,8 +498,12 @@ internal class DotNetIlEmitter(
                 classInfo = DotNetIlClassInfo(
                     disambiguatedBaseName + canonicalAritySuffix,
                     enclosingClass = enclosingClassInfo,
-                    typeParameterVariances = if (isErasedGenericInterface || isErasedGenericClass) emptyList()
-                    else List(irClass.typeParameters.size) { Variance.INVARIANT },
+                    typeParameterVariances = when {
+                        isErasedGenericInterface || isErasedGenericClass -> emptyList()
+                        irClass.isInterface && irClass in genericOwnerCapabilityInterfaces ->
+                            irClass.typeParameters.map { it.variance }
+                        else -> List(irClass.typeParameters.size) { Variance.INVARIANT }
+                    },
                 )
                 declaredClassInfo = null
                 exactClassInfo = null
@@ -1685,6 +1690,16 @@ internal class DotNetIlEmitter(
                                 typeMapper = typeMapper,
                                 preLoweringDeclarationKeys = preLoweringDeclarationKeys,
                                 interfaceDefaultImplementations = interfaceDefaultImplementations,
+                                genericOwnerCapabilityInterfaces = if (genericOwnerRehearsal) {
+                                    genericOwnerCapabilityInterfaces
+                                } else {
+                                    emptyMap()
+                                },
+                                genericOwnerCapabilitySlots = if (genericOwnerRehearsal) {
+                                    genericOwnerCapabilitySlots
+                                } else {
+                                    emptyMap()
+                                },
                             )
                         )
             )

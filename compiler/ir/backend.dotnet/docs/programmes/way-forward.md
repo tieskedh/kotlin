@@ -1155,18 +1155,41 @@ inherits one non-generic declaration-semantic capability used only when a
 projected, widened, value-variant, or classifier-only Kotlin view has no honest
 constructed CLR interface.
 
-The first bounded foreign-source proof for that family is green on Framework
-4.8 and .NET 10. A producer manifest records `Source<T>` and its semantic slot;
-the existing Roslyn generator adds the explicit capability implementation to a
-partial C# class whose authored source contains only `Read(): T`. Reference and
-value implementations preserve one object identity and agree through both the
-typed and semantic calls. This closes the automatic C# partial-source mechanism
-without relying on default interface methods, wrappers, proxies, or reflection.
-It is not yet a compiler-emission proof and cannot retrofit precompiled,
-non-partial, or other-language implementors. Continue with the emitter-owned
-interface family, projections and broad inputs, defaults and inheritance,
-separate assemblies, and Runtime/Stdlib before replacing the accepted erased
-interface ADR. See
+The first compiler-emitted tranche of that family is green on Framework 4.8
+and .NET 10. Under the one test-only generic-owner epoch, a structural public
+top-level covariant producer with one abstract no-input `T` result emits the
+natural CLR `I<out T>` and one non-generic declaration-semantic capability.
+Exact final constructions stay natural; stars, projections, owner parameters,
+open arguments, and widened value-type views select the capability. Kotlin
+implementations, calls, boxing, and same-object identity compose across
+separate assemblies. The producer's real public authoring manifest drives the
+supported Roslyn generator, so partial C# implementations author only the
+natural member while Kotlin widened calls still reach that member on both
+profiles.
+
+The physical choice is also closed over a transparent same-product covariant
+subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
+reuses the parent's capability and member family; it does not acquire a second
+semantic interface. Both Kotlin and generated partial C# child implementations
+execute through exact child views and widened parent views without changing
+identity. This is one general shape rule and contains no Map, Set, Sequence,
+stdlib, package, or declaration-name exception.
+
+Reified generic-interface MethodDefs also re-enter the ordinary covariant-
+return lowering. A class member whose inherited result is narrower than the
+substituted natural slot receives one typed MethodImpl; equal signatures keep
+the direct natural route. The prior rule which excluded every Kotlin generic
+interface remains correct only for production-erased owners.
+
+Production remains erased. The next ABI gate is a child interface declared in
+a separately compiled product above an external reified parent. The current
+generic-owner ABI records a capability owner path but still assumes the
+current producer assembly when reconstructing that owner; the solution must
+retain producer assembly identity or publish a proven local semantic alias,
+not erase the child or duplicate state. After that, continue with independent
+input/default/property/mixed-variance gates and the Runtime/Stdlib graph. The
+authoring generator still cannot retrofit precompiled, non-partial, or other-
+language implementors. See
 [`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an

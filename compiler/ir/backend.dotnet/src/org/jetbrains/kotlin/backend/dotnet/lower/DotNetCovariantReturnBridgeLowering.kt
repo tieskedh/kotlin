@@ -235,6 +235,15 @@ internal class DotNetCovariantReturnBridgeLowering(
         if (slot.isFakeOverride) return false
         val slotOwner = slot.parent as? IrClass ?: return false
         if (!slotOwner.isDotNetGenericInterfaceDeclaration) return true
+        // The erased generic-interface lowering owns production Kotlin interface slots. A
+        // rehearsal-reified I<T> instead has a natural CLR MethodDef and therefore participates
+        // in the ordinary covariant-return rule: add a typed MethodImpl only when an inherited
+        // class body has a genuinely different return carrier. Exact signatures remain direct.
+        if (slotOwner in context.reifiedGenericInterfaces ||
+            externalDeclarations.hasReifiedGenericInterface(slotOwner)
+        ) {
+            return true
+        }
         // Resolution-only built-ins such as KProperty0 are logically generic, but their complete
         // physical owner is one dedicated non-generic Kotlin.Runtime interface rather than the
         // split generic-interface ABI. Its covariant accessor slots therefore belong to this
