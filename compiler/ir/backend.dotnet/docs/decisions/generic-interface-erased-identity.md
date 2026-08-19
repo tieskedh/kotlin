@@ -6,6 +6,13 @@
   inheritance, variance, casts, defaults, implementation, separate
   compilation, and the default CLR surface
 
+The true-CLR-generic class-owner rehearsal invalidates one premise of this
+decision for admitted implementation classes. A production-inert reopening is
+tracked in
+[`draft-adr-reified-generic-interface-owner.md`](draft-adr-reified-generic-interface-owner.md).
+This accepted erased ABI remains binding until that draft's complete atomic
+gate succeeds and replaces this decision explicitly.
+
 ## Decision
 
 A Kotlin-owned ordinary generic interface has one authoritative non-generic

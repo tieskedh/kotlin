@@ -11078,6 +11078,218 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testGenericInterfaceReopeningGeneratesForeignSemanticBridges() {
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCSharp != null,
+            ".NET Framework 4.8 reference assemblies are not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            ".NET Framework 4.8 execution host is not available",
+        )
+        val toolchain = checkNotNull(modernCSharp)
+        val tooling = buildCSharpAuthoringTooling(toolchain)
+        val directory = File(tmpdir, "generic-interface-reopening-foreign-bridge").apply { mkdirs() }
+
+        val interfaceContract = DotNetCSharpInterfaceContract(
+            logicalKey = "C:reopening/Source",
+            canonicalOwnerPath = listOf("reopening.SourceSemantic"),
+            declaredOwnerPath = listOf("reopening.Source`1"),
+            exactOwnerPath = null,
+            typeParameters = listOf(
+                DotNetCSharpTypeParameter("T", DotNetCSharpTypeParameterVariance.OUT)
+            ),
+            sourceAuthoringSupported = true,
+            unsupportedReasons = emptyList(),
+            members = listOf(
+                DotNetCSharpMemberContract(
+                    logicalKey = "F:reopening/Source.read",
+                    kind = DotNetCSharpMemberKind.METHOD,
+                    sourceName = "read",
+                    authoringView = DotNetCSharpInterfaceView.DECLARED,
+                    defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                    semanticBodyView = null,
+                    wrongShapePolicy = null,
+                    slots = listOf(
+                        DotNetCSharpMethodLocator(
+                            role = DotNetCSharpSlotRole.ERASED,
+                            ownerPath = listOf("reopening.SourceSemantic"),
+                            methodName = "ReadSemantic",
+                            propertyName = null,
+                            genericArity = 0,
+                            returnType = "object",
+                            parameterTypes = emptyList(),
+                        ),
+                        DotNetCSharpMethodLocator(
+                            role = DotNetCSharpSlotRole.DECLARED,
+                            ownerPath = listOf("reopening.Source`1"),
+                            methodName = "Read",
+                            propertyName = null,
+                            genericArity = 0,
+                            returnType = "!0",
+                            parameterTypes = emptyList(),
+                        ),
+                    ),
+                )
+            ),
+            intersections = emptyList(),
+        )
+
+        data class Profile(
+            val target: DotNetTarget,
+            val platformReferences: List<File>?,
+        )
+
+        val frameworkReferences = listOf("mscorlib.dll", "System.dll", "System.Core.dll").map { name ->
+            checkNotNull(frameworkCSharp).parentFile.resolve(name).also { reference ->
+                assertTrue(reference.isFile) { "Missing Framework reference assembly: $reference" }
+            }
+        }
+        val profiles = listOf(
+            Profile(DotNetTarget.NET48, frameworkReferences),
+            Profile(DotNetTarget.NET10_0, null),
+        )
+        profiles.forEach { profile ->
+            val profileDirectory = directory.resolve(profile.target.description).apply { mkdirs() }
+            val manifest = DotNetCSharpImplementationManifest(
+                schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
+                assemblyName = "GenericInterfaceReopening",
+                targetProfile = profile.target.description,
+                logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+                interfaces = listOf(interfaceContract),
+            )
+            val manifestResource = profileDirectory.resolve("GenericInterfaceReopening.manifest").apply {
+                writeBytes(DotNetCSharpImplementationManifestCodec.encodeManagedResource(manifest))
+            }
+            val producerSource = profileDirectory.resolve("producer.cs").apply {
+                writeText(
+                    """
+                    namespace reopening
+                    {
+                        public interface SourceSemantic
+                        {
+                            object ReadSemantic();
+                        }
+
+                        public interface Source<out T> : SourceSemantic
+                        {
+                            T Read();
+                        }
+
+                        public static class KotlinSemantic
+                        {
+                            public static object Read(object value)
+                            {
+                                return ((SourceSemantic)value).ReadSemantic();
+                            }
+
+                            public static bool RetainsIdentity(object value)
+                            {
+                                return object.ReferenceEquals(value, (SourceSemantic)value);
+                            }
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val producer = profileDirectory.resolve("GenericInterfaceReopening.dll")
+            val producerCompile = runModernCSharpCompiler(
+                toolchain,
+                producerSource,
+                producer,
+                resources = listOf(
+                    manifestResource to DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME
+                ),
+                platformReferences = profile.platformReferences,
+            )
+            assertEquals(0, producerCompile.exitCode, producerCompile.output)
+
+            val consumerSource = profileDirectory.resolve("consumer.cs").apply {
+                writeText(
+                    """
+                    public sealed partial class StringSource : reopening.Source<string>
+                    {
+                        public string Read() { return "foreign-reference"; }
+                    }
+
+                    public sealed partial class IntSource : reopening.Source<int>
+                    {
+                        public int Read() { return 42; }
+                    }
+
+                    public static class Program
+                    {
+                        public static int Main()
+                        {
+                            var strings = new StringSource();
+                            if (strings.Read() != "foreign-reference") return 1;
+                            if (!object.Equals(
+                                    reopening.KotlinSemantic.Read(strings),
+                                    "foreign-reference")) return 2;
+                            if (!reopening.KotlinSemantic.RetainsIdentity(strings)) return 3;
+
+                            var ints = new IntSource();
+                            if (ints.Read() != 42) return 4;
+                            if (!object.Equals(reopening.KotlinSemantic.Read(ints), 42)) return 5;
+                            if (!reopening.KotlinSemantic.RetainsIdentity(ints)) return 6;
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val generatedDirectory = profileDirectory.resolve("generated")
+            val consumer = profileDirectory.resolve(
+                if (profile.target == DotNetTarget.NET48) "Consumer.exe" else "Consumer.dll"
+            )
+            val consumerCompile = runModernCSharpCompiler(
+                toolchain,
+                consumerSource,
+                consumer,
+                producer,
+                target = "exe",
+                analyzers = listOf(tooling),
+                generatedFilesDirectory = generatedDirectory,
+                platformReferences = profile.platformReferences,
+            )
+            assertEquals(0, consumerCompile.exitCode, consumerCompile.output)
+            val generatedText = generatedDirectory.walkTopDown()
+                .filter { file -> file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs") }
+                .joinToString("\n", transform = File::readText)
+            assertTrue("SourceSemantic" in generatedText && "ReadSemantic" in generatedText) {
+                "The C# authoring tool did not generate the declaration-semantic bridge:\n$generatedText"
+            }
+            assertFalse("SourceSemantic" in consumerSource.readText()) {
+                "The authored C# implementation must not name the compiler semantic capability"
+            }
+
+            if (profile.target == DotNetTarget.NET48) {
+                val process = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), consumer))
+                    .directory(profileDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Framework semantic bridge execution failed:\n$output")
+            } else {
+                consumer.resolveSibling("Consumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+                runDotNet(
+                    toolchain.dotNetHost,
+                    consumer,
+                    profileDirectory,
+                    "CoreCLR semantic bridge execution failed",
+                )
+            }
+        }
+    }
+
+    @Test
     fun testCSharpAuthoringAnalyzerDiagnosesInvalidBaseListContracts() {
         val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(
@@ -43644,11 +43856,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         generatedFilesDirectory: File? = null,
         resources: List<Pair<File, String>> = emptyList(),
         additionalArguments: List<String> = emptyList(),
+        platformReferences: List<File>? = null,
     ): CSharpCompilerResult {
         output.delete()
-        val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
-            file.isFile && file.extension.equals("dll", ignoreCase = true)
-        }?.sortedBy(File::getName)
+        val selectedPlatformReferences = platformReferences
+            ?: toolchain.referenceDirectory.listFiles { file ->
+                file.isFile && file.extension.equals("dll", ignoreCase = true)
+            }?.sortedBy(File::getName)
             ?: error("Modern C# reference directory is unreadable: ${toolchain.referenceDirectory}")
         val arguments = buildList {
             add(toolchain.dotNetHost.path)
@@ -43660,7 +43874,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             add("/langversion:latest")
             add("/target:$target")
             add("/out:${output.path}")
-            frameworkReferences.forEach { add("/reference:${it.path}") }
+            selectedPlatformReferences.forEach { add("/reference:${it.path}") }
             references.forEach { reference ->
                 assertTrue(reference.isFile) { "Missing C# reference: $reference" }
                 add("/reference:${reference.path}")
