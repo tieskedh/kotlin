@@ -2902,6 +2902,7 @@ internal class DotNetIlExpressionCodegen(
             producedType != null &&
             !producedType.isDotNetAssignableTo(expectedType) &&
             (typeMapper.genericOwnerCapabilityCallTarget(call) != null ||
+                    typeMapper.isGenericOwnerForeignDispatchDeclaration(call.symbol.owner) ||
                     call.symbol.owner.isDotNetErasedObjectResult() ||
                     call.symbol.owner.isErasedGenericInterfaceMember() ||
                     call.symbol.owner.isErasedGenericClassMember() ||

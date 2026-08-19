@@ -200,6 +200,26 @@ deterministically ambiguous. The compiler caches the runtime type's interface
 vector once and uses no constructed-generic `isinst` for these Kotlin
 operations.
 
+A classifier-derived view may also cross a separately compiled callable
+result without becoming a false natural construction. For example,
+`safeView(Any?): Source<String>? = value as? Source<String>` keeps the logical
+KLIB result but publishes CLR `object`, because a successful call may return a
+plain foreign `Source<int>`. The producer records that physical selection in
+ABI 39. The existing generic-owner function-carrier record now identifies
+`SEMANTIC_CAPABILITY` and `OBJECT` independently for every selected result or
+parameter slot. A consumer obeys that producer record and propagates object
+provenance through aliases and FIR's safe-call temporary before routing a
+member call. It does not infer the carrier from the exact-looking logical type.
+
+This rule is producer-evidence based and does not erase an ordinary sibling
+such as `exactView(Source<String>): Source<String>`: that API retains natural
+`Source<string>` input and result signatures. The current proof admits a
+single authoritative classifier-derived return expression. Mixed or otherwise
+unproven control flow fails closed rather than publishing object by type alone.
+The separate Kotlin consumer and a C# reflection oracle prove both signatures,
+same-object return, one actual foreign member invocation, and the later
+`String` result check on Framework 4.8 and .NET 10 with both FIR parsers.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -219,14 +239,13 @@ must cover:
    compositions beyond the admitted one-input consumer root;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
-4. broad and `@UnsafeVariance` inputs, delayed typed-use failure beyond the
-   proven producer result, parameterized `as`, and classifier-derived views
-   crossing separately compiled exact-looking callable boundaries;
+4. broad and `@UnsafeVariance` inputs, parameterized throwing `as`, mixed-
+   control-flow classifier returns, and classifier-derived fields and input
+   parameters crossing separately compiled exact-looking boundaries;
 5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and
    ordinary foreign implementations beyond the no-input covariant producer;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
-   assembly graphs, including classifier-derived fields, parameters, and
-   results;
+   assembly graphs, including classifier-derived fields and parameters;
 7. Runtime and Stdlib owners including collection special bridges without a
    collection-specific representation; and
 8. exact inverse rollback plus Framework 4.8, .NET 10, trimming, and NativeAOT
