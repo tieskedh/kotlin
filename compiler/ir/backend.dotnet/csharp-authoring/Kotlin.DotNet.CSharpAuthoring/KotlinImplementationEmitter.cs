@@ -85,6 +85,27 @@ internal static class KotlinImplementationEmitter
         }
         foreach (BoundKotlinInterface bound in authoringContract.Interfaces)
         {
+            if (!bound.Contract.DeclaredOwnerPath.IsDefaultOrEmpty &&
+                !bound.Contract.CanonicalOwnerPath.IsDefaultOrEmpty &&
+                !bound.Contract.DeclaredOwnerPath.SequenceEqual(
+                    bound.Contract.CanonicalOwnerPath))
+            {
+                INamedTypeSymbol? semanticDefinition = ResolveType(
+                    bound.Reference.Assembly,
+                    bound.Contract.CanonicalOwnerPath);
+                if (semanticDefinition == null || semanticDefinition.Arity != 0)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.MalformedManifest,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        bound.Reference.Assembly.Identity.Name,
+                        $"semantic owner for '{bound.Contract.LogicalKey}' does not resolve uniquely"));
+                }
+                else
+                {
+                    additionalInterfaces.Add(semanticDefinition);
+                }
+            }
             if (bound.IsAuthoredRoot &&
                 !bound.Contract.ExactOwnerPath.IsDefaultOrEmpty)
             {

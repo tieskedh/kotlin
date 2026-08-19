@@ -64,6 +64,14 @@ public class RehearsalSeparateProducerReader {
         producer === expected
 }
 
+public class RehearsalSeparateStarProducerStore(
+    private val producer: RehearsalSeparateProducer<*>,
+) {
+    public fun read(): Any? = producer.produce()
+
+    public fun same(expected: Any?): Boolean = producer === expected
+}
+
 public class RehearsalSeparateSecondaryProducerReader {
     public fun read(producer: RehearsalSeparateSecondaryProducer<Any?>): Any? =
         producer.produceSecondary()
@@ -168,6 +176,10 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val starProducerStore = RehearsalSeparateStarProducerStore(exactProducer)
+    if (starProducerStore.read() != 31 || !starProducerStore.same(exactProducer)) {
+        return "fail: separate star producer storage"
+    }
 
     val exactIntConsumerValue = RehearsalSeparateConsumerValue(61)
     val exactIntConsumer: RehearsalSeparateConsumer<Int> = exactIntConsumerValue

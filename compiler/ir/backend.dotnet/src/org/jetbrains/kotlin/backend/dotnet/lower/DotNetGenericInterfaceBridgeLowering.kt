@@ -200,6 +200,27 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         isErasedKotlinCarrier: (IrClass) -> Boolean,
         externalDeclarations: DotNetExternalDeclarations,
     ) {
+        // The semantic interface is a property of the implemented owner view, not merely of a
+        // member which happens to declare a slot. In particular, a producer intersection can
+        // inherit all of its methods and still has its own semantic identity. Previously the
+        // natural interface's inheritance edge supplied that identity implicitly; now that
+        // foreign CLR source may implement I<T> alone, Kotlin implementations must state every
+        // directly implemented semantic owner explicitly.
+        if (!irClass.isInterface) {
+            irClass.superTypes
+                .mapNotNull { type -> (type as? IrSimpleType)?.classifier as? IrClassSymbol }
+                .map { symbol -> symbol.owner }
+                .filter { interfaceClass ->
+                    interfaceClass in context.reifiedGenericInterfaces ||
+                            externalDeclarations.hasReifiedGenericInterface(interfaceClass)
+                }
+                .forEach { interfaceClass ->
+                    irClass.addReifiedGenericInterfaceCapability(
+                        interfaceClass,
+                        externalDeclarations,
+                    )
+                }
+        }
         val implementationFunctions = irClass.declarations.flatMap { declaration ->
             when (declaration) {
                 is IrSimpleFunction -> listOf(declaration)
@@ -278,6 +299,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             if (interfaceClass in context.reifiedGenericInterfaces ||
                 externalDeclarations.hasReifiedGenericInterface(interfaceClass)
             ) {
+                if (irClass.isInterface) continue
+                irClass.addReifiedGenericInterfaceCapability(
+                    interfaceClass,
+                    externalDeclarations,
+                )
                 val capabilitySlot = context.genericOwnerCapabilitySlots[slot]
                     ?: materializeExternalReifiedGenericInterfaceCapabilitySlot(
                         context,
@@ -368,6 +394,35 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 }
             }
         }
+    }
+
+    /**
+     * A natural `I<T>` must remain independently implementable by foreign CLR source. Kotlin-
+     * emitted implementations still carry the optional semantic interface on the same object,
+     * but do so directly rather than inheriting that obligation through the public `I<T>`.
+     */
+    private fun IrClass.addReifiedGenericInterfaceCapability(
+        interfaceClass: IrClass,
+        externalDeclarations: DotNetExternalDeclarations,
+    ) {
+        context.genericOwnerCapabilityInterfaces[interfaceClass]?.let { capability ->
+            if (superTypes.none { type ->
+                    (type as? IrSimpleType)?.classifier == capability.symbol
+                }
+            ) {
+                superTypes += capability.symbol.defaultType
+            }
+            return
+        }
+        val provider = context.externalReifiedGenericInterfaceCapabilityProviders[interfaceClass]
+            ?: interfaceClass.takeIf(externalDeclarations::hasReifiedGenericInterface)
+            ?: error(
+                "Internal .NET backend error: reified interface '${interfaceClass.name}' " +
+                        "has no local or producer-recorded semantic capability"
+            )
+        context.externalGenericOwnerCapabilitySupertypeProviders[this] =
+            (context.externalGenericOwnerCapabilitySupertypeProviders[this].orEmpty() + provider)
+                .distinct()
     }
 
     private fun IrClass.inheritsReifiedGenericInterfaceCapabilityBridge(
