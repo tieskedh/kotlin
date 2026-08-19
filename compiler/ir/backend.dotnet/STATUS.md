@@ -29,15 +29,19 @@ verification, and work state.
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Latest generic-interface reopening proof: the test-only generic-owner epoch
   now emits the first structural Kotlin-owned CLR-generic interface family and
-  propagates it across producer boundaries and independent interface
-  intersections. Assembly A may declare two admitted producer roots, while a
-  transparent child in A or B combines both as
-  `Child<out T> : Primary<T>, Secondary<T>`. Every logical interface remains a
-  natural CLR generic interface. The child has one memberless non-generic
-  capability alias which inherits both root capabilities; it owns no slots,
-  bodies, fields, or copied state. ABI 38 publishes the child capability's
-  assembly-qualified physical identity, and library selection fails closed
-  before emission if a named self-describing capability assembly is absent.
+  propagates it across producer boundaries, independent interface
+  intersections, and a child-owned member. Assembly A may declare two admitted
+  producer roots, while a child in A or B combines both and may add one
+  `T`-result member:
+  `Child<out T> : Primary<T>, Secondary<T> { fun child(): T }`. Every logical
+  interface remains a natural CLR generic interface. A member-free
+  intersection has one memberless non-generic capability alias. A
+  member-declaring child has one capability which inherits both root
+  capabilities and owns exactly its new object-result semantic slot; it does
+  not copy inherited slots, bodies, fields, or state. ABI 38 publishes the
+  child capability's assembly-qualified physical identity, and library
+  selection fails closed before emission if a named self-describing capability
+  assembly is absent.
 
   The structural root rule remains unchanged.
   Any public top-level `Producer<out T>` shape with one abstract no-input
@@ -45,26 +49,30 @@ verification, and work state.
   non-generic declaration-semantic capability. Exact final substitutions use
   the natural interface; stars, projections, type-parameter/open arguments,
   and widened value-type views use the capability on the same object. A
-  transparent local or external `Child<out T> : Producer<T>` closes at a
+  member-free local or external `Child<out T> : Producer<T>` closes at a
   fixpoint, remains a real CLR `Child<T>`, and reuses the inherited capability
   rather than adding another semantic representation. Multiple independent
-  capabilities instead form the one memberless alias above. A later consumer
-  rebuilds that alias graph from logical KLIB supertypes plus producer-recorded
-  physical capability identities, without a schema addition or generated-name
-  inference. Same-module and separate-compilation Kotlin implementations
-  preserve exact calls, both widened root calls, boxing, and identity on
-  Framework 4.8 and .NET 10. The producer's public versioned manifest drives
-  the supported Roslyn generator, so partial C# implementations author only
-  the two natural typed members; Kotlin widened dispatch reaches both bodies
+  capabilities form the memberless alias above. If the child adds the admitted
+  no-input `T` result, it receives one child capability even over a single
+  parent because that declaration needs its own authoritative semantic slot.
+  A later consumer rebuilds the capability graph from logical KLIB supertypes
+  plus producer-recorded physical capability identities, without a schema
+  addition or generated-name inference. Same-module and separate-compilation
+  Kotlin implementations preserve exact calls, all widened root and child
+  calls, boxing, `!T` implementation state, and identity on Framework 4.8 and
+  .NET 10. The producer's public versioned manifest records only the child's
+  declared member, while inherited contracts stay with their roots. The
+  supported Roslyn generator therefore lets partial C# implementations author
+  only their natural typed members; Kotlin widened dispatch reaches every body
   without source-visible compiler ABI. Admission contains no stdlib or
   declaration-name switch.
   Reified generic-interface slots also re-enter the ordinary covariant-return
   lowering: an inherited class body receives a typed MethodImpl only when its
   CLR return carrier actually differs, while exact signatures remain direct.
   Production remains on the accepted erased interface ABI. Inputs, defaults,
-  properties, member-declaring children, mixed variance, Runtime/Stdlib
-  closure, other CLR languages, and precompiled or non-partial implementors
-  remain gates. The focused rehearsal and production-inverse matrix covers PSI
+  properties, broader member shapes, mixed variance, Runtime/Stdlib closure,
+  other CLR languages, and precompiled or non-partial implementors remain
+  gates. The focused rehearsal and production-inverse matrix covers PSI
   and LightTree on .NET 10 and Framework 4.8: eight tests and zero failures,
   errors, or skips. The final inverse target aggregate covers 190 XML suites
   and 2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
@@ -80,6 +88,8 @@ verification, and work state.
   [`docs/archive/reified-generic-interface-external-child-2026-08-19.md`](docs/archive/reified-generic-interface-external-child-2026-08-19.md)
   and
   [`docs/archive/reified-generic-interface-intersection-2026-08-19.md`](docs/archive/reified-generic-interface-intersection-2026-08-19.md).
+  The child-owned member proof is archived in
+  [`docs/archive/reified-generic-interface-member-child-2026-08-19.md`](docs/archive/reified-generic-interface-member-child-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

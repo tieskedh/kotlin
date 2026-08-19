@@ -4150,14 +4150,16 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
             contract.canonicalOwnerPath != contract.declaredOwnerPath) {
         "The reified generic-interface manifest did not separate natural and semantic owners"
     }
-    if (expectedDeclaredOwner == "RehearsalSeparateChildProducer`1") {
-        check(contract.members.isEmpty() &&
-                contract.canonicalOwnerPath.last().startsWith("IRehearsalSeparateChildProducerKotlinSemantic")) {
-            "The external-parent intersection did not publish one combined semantic capability"
+    if (expectedDeclaredOwner.endsWith("ChildProducer`1")) {
+        val capabilityPrefix = "I${expectedDeclaredOwner.removeSuffix("`1")}KotlinSemantic"
+        check(contract.canonicalOwnerPath.last().startsWith(capabilityPrefix)) {
+            "The member-declaring child did not publish its own semantic capability"
         }
-        return
     }
-    val member = contract.members.single { candidate -> candidate.sourceName == expectedMemberName }
+    val member = contract.members.singleOrNull()
+    check(member?.sourceName == expectedMemberName) {
+        "The reified generic-interface contract copied inherited members or lost its declared member"
+    }
     check(member.authoringView == DotNetCSharpInterfaceView.DECLARED) {
         "C# authoring must target the natural generic interface"
     }
@@ -4223,11 +4225,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedMemberName = "produceSecondary",
                 )
             }
-            producer.name.equals("middle.dll", ignoreCase = true) ->
+            producer.name.equals("middle.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
                     expectedDeclaredOwner = "RehearsalSeparateChildProducer`1",
+                    expectedMemberName = "produceChild",
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateMemberChildProducer`1",
+                    expectedMemberName = "produceMemberChild",
+                )
+            }
         }
         return
     }
@@ -4256,6 +4265,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public string produceSecondary()
                 {
                     return "csharp-secondary-child-interface";
+                }
+
+                public string produceChild()
+                {
+                    return "csharp-child-owned-interface";
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpMemberChildProducer :
+                RehearsalSeparateMemberChildProducer<string>
+            {
+                public string produce()
+                {
+                    return "csharp-member-child-root-interface";
+                }
+
+                public string produceMemberChild()
+                {
+                    return "csharp-member-child-owned-interface";
                 }
             }
 
@@ -4335,6 +4363,38 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed the generated secondary bridge: " +
                             broadSecondary);
+                    if (childProducer.produceChild() != "csharp-child-owned-interface")
+                        throw new InvalidOperationException(
+                            "direct C# child-owned generic-interface member was not invoked");
+                    object broadChildOwned =
+                        new RehearsalSeparateChildProducerReader().read(childProducer);
+                    if (!object.Equals(broadChildOwned, "csharp-child-owned-interface"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated child-owned bridge: " +
+                            broadChildOwned);
+                    RehearsalSeparateCSharpMemberChildProducer memberChildProducer =
+                        new RehearsalSeparateCSharpMemberChildProducer();
+                    if (memberChildProducer.produce() != "csharp-member-child-root-interface" ||
+                        memberChildProducer.produceMemberChild() !=
+                            "csharp-member-child-owned-interface")
+                        throw new InvalidOperationException(
+                            "direct C# member-child generic-interface members were not invoked");
+                    object broadMemberChildRoot =
+                        new RehearsalSeparateProducerReader().read(memberChildProducer);
+                    if (!object.Equals(
+                            broadMemberChildRoot,
+                            "csharp-member-child-root-interface"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated member-child root " +
+                            "bridge: " + broadMemberChildRoot);
+                    object broadMemberChildOwned =
+                        new RehearsalSeparateMemberChildProducerReader().read(memberChildProducer);
+                    if (!object.Equals(
+                            broadMemberChildOwned,
+                            "csharp-member-child-owned-interface"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated member-child-owned " +
+                            "bridge: " + broadMemberChildOwned);
                     RehearsalSeparateCSharpLocalIntersectionProducer localIntersection =
                         new RehearsalSeparateCSharpLocalIntersectionProducer();
                     if (localIntersection.produce() != "csharp-local-intersection" ||

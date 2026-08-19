@@ -111,14 +111,17 @@ consumer compilation chain. A transparent covariant subinterface declared in
 the same producer product or in a separately compiled downstream product,
 `Child<out T> : Source<T>`, is reified at a fixpoint and reuses the parent
 capability. It does not create a second semantic slot or fall back to an erased
-child TypeDef. A transparent child which intersects multiple independent
+child TypeDef. A member-free child which intersects multiple independent
 admitted roots instead receives one memberless non-generic capability alias.
 The alias inherits every root capability and carries widened child values; it
-does not own slots, bodies, state, or a fabricated generic construction. The
-downstream physical ABI records the capability TypeDef's producer assembly as
-well as its owner path; no alias is inferred from a name. Selecting that
-downstream library without the recorded self-describing producer dependency
-fails before emission.
+does not own slots, bodies, state, or a fabricated generic construction. If the
+child declares one abstract no-input member returning its own `T`, it receives
+a child capability even over one semantic domain. That capability inherits its
+parents and owns exactly the new member's object-result slot. Inherited member
+families remain owned by the roots. The downstream physical ABI records the
+capability TypeDef's producer assembly as well as its owner path; no alias is
+inferred from a name. Selecting that downstream library without the recorded
+self-describing producer dependency fails before emission.
 
 A reified generic-interface MethodDef is again an ordinary physical slot for
 the covariant-return lowering. If an inherited class member returns a narrower
@@ -127,24 +130,26 @@ one typed MethodImpl adapter. Equal signatures retain implicit/direct natural
 mapping; the semantic bridge does not become the normal typed route.
 
 The actual producer manifest is read back from the emitted DLL and consumed by
-the supported Roslyn generator. Partial C# implementations of both `Source`
-and `Child` contain only their natural `Read(): T` source member. Generated
-explicit implementations satisfy the inherited semantic capability, and
-Kotlin widened calls reach the authored C# member on Framework 4.8 and .NET
-10. No default interface method, runtime proxy, reflection dispatch, wrapper,
-or declaration-name/stdlib exception participates.
+the supported Roslyn generator. Partial C# implementations contain only their
+natural typed source members, including the child-owned member. Each manifest
+contract records only the member declared by that interface; inherited root
+contracts are composed rather than copied into the child family. Generated
+explicit implementations satisfy all semantic capabilities, and Kotlin
+widened calls reach every authored C# member on Framework 4.8 and .NET 10. No
+default interface method, runtime proxy, reflection dispatch, wrapper, or
+declaration-name/stdlib exception participates.
 
-This remains production-inert and deliberately narrow. A child is currently
-transparent and member-free; adding new slots or changing variance requires a
-separate complete proof.
+This remains production-inert and deliberately narrow. Only one child-owned
+member with the admitted producer-output shape is proven. Broader member
+surfaces or changed variance require separate complete proofs.
 
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
 must cover:
 
-1. member-declaring children without erasure or duplicate semantic member
-   families;
+1. general member-declaring children beyond one producer-output slot, including
+   multiple members, overloads, and deeper inheritance;
 2. invariant, `in`, mixed, multi-parameter, and input-bearing interfaces;
 3. reference, nullable-value, open-nullable, bounded, and value-class
    substitutions;

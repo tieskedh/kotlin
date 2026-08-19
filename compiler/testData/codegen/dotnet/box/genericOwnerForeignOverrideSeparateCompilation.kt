@@ -58,7 +58,24 @@ public open class RehearsalSeparateKotlinOverrideStore<T>(initial: T) :
 
 public interface RehearsalSeparateChildProducer<out T> :
     RehearsalSeparateProducer<T>,
-    RehearsalSeparateSecondaryProducer<T>
+    RehearsalSeparateSecondaryProducer<T> {
+    public fun produceChild(): T
+}
+
+public class RehearsalSeparateChildProducerReader {
+    public fun read(producer: RehearsalSeparateChildProducer<Any?>): Any? =
+        producer.produceChild()
+}
+
+public interface RehearsalSeparateMemberChildProducer<out T> :
+    RehearsalSeparateProducer<T> {
+    public fun produceMemberChild(): T
+}
+
+public class RehearsalSeparateMemberChildProducerReader {
+    public fun read(producer: RehearsalSeparateMemberChildProducer<Any?>): Any? =
+        producer.produceMemberChild()
+}
 
 public class RehearsalSeparateProducerValue<T>(private val value: T) :
     RehearsalSeparateProducer<T> {
@@ -70,6 +87,15 @@ public class RehearsalSeparateChildProducerValue<T>(private val value: T) :
     public override fun produce(): T = value
 
     public override fun produceSecondary(): T = value
+
+    public override fun produceChild(): T = value
+}
+
+public class RehearsalSeparateMemberChildProducerValue<T>(private val value: T) :
+    RehearsalSeparateMemberChildProducer<T> {
+    public override fun produce(): T = value
+
+    public override fun produceMemberChild(): T = value
 }
 
 // MODULE: main(middle)
@@ -110,6 +136,9 @@ fun box(): String {
     if (exactChild.produceSecondary() != 47) {
         return "fail: separate exact secondary child producer"
     }
+    if (exactChild.produceChild() != 47) {
+        return "fail: separate exact child-owned producer"
+    }
     val broadChild: RehearsalSeparateChildProducer<Any?> = exactChild
     if (RehearsalSeparateProducerReader().read(broadChild) != 47) {
         return "fail: separate broad child producer"
@@ -117,7 +146,29 @@ fun box(): String {
     if (RehearsalSeparateSecondaryProducerReader().read(broadChild) != 47) {
         return "fail: separate broad secondary child producer"
     }
+    if (RehearsalSeparateChildProducerReader().read(broadChild) != 47) {
+        return "fail: separate broad child-owned producer"
+    }
     if (broadChild !== exactChild) return "fail: separate child producer identity"
+
+    val exactMemberChild: RehearsalSeparateMemberChildProducer<Int> =
+        RehearsalSeparateMemberChildProducerValue(59)
+    if (exactMemberChild.produce() != 59) {
+        return "fail: separate exact member-child root producer"
+    }
+    if (exactMemberChild.produceMemberChild() != 59) {
+        return "fail: separate exact member-child-owned producer"
+    }
+    val broadMemberChild: RehearsalSeparateMemberChildProducer<Any?> = exactMemberChild
+    if (RehearsalSeparateProducerReader().read(broadMemberChild) != 59) {
+        return "fail: separate broad member-child root producer"
+    }
+    if (RehearsalSeparateMemberChildProducerReader().read(broadMemberChild) != 59) {
+        return "fail: separate broad member-child-owned producer"
+    }
+    if (broadMemberChild !== exactMemberChild) {
+        return "fail: separate member-child producer identity"
+    }
 
     val exactLocalIntersection: RehearsalSeparateLocalIntersectionProducer<Int> =
         RehearsalSeparateLocalIntersectionProducerValue(53)
