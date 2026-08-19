@@ -176,6 +176,24 @@ verification, and work state.
   [`docs/archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md`](docs/archive/reified-generic-interface-classifier-result-boundary-2026-08-19.md).
   The paired callable-input evidence is archived in
   [`docs/archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md`](docs/archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md).
+- The first nested-construction storage gate is now closed without changing
+  the open owner's field model. `RehearsalNestedBox<T>` still contains exactly
+  one physical `!T` field. Exact `Box<Int>`, `Box<String>`, and
+  `Box<Producer<String>>` constructions therefore retain `int`, `string`, and
+  `Producer<string>` arguments. Only the concrete logical
+  `Box<Producer<Any?>>` construction selects `Box<object>`: that slot may hold
+  the same Kotlin-widened `Producer<int>`, a `Producer<string>`, or an ordinary
+  capability-free CLR producer, while no truthful `Producer<object>` contains
+  all three. Reads remain `object` through identity/null consumers and enter
+  the generic-owner dispatcher only when a producer operation is requested;
+  they are never narrowed to a fabricated constructed interface. Same-module
+  and separate-KLIB mutation, dispatch, identity, open-field reflection, and
+  C# factory signatures execute under both frontends on Framework 4.8 and
+  .NET 10. The rule is structural and contains no `Box`, `List`, or `Producer`
+  name switch. It currently proves the universal covariant argument case;
+  other subtype roots, contravariant/mixed owners, and nested open arguments
+  remain separate gates. Evidence is archived in
+  [`docs/archive/generic-owner-nested-construction-carrier-2026-08-19.md`](docs/archive/generic-owner-nested-construction-carrier-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
