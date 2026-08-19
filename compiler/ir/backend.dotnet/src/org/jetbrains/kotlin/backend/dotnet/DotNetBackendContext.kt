@@ -201,6 +201,8 @@ internal class DotNetBackendContext(
     val genericOwnerCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Local reified subinterface to the external logical ancestor whose capability it inherits. */
     val externalReifiedGenericInterfaceCapabilityProviders: MutableMap<IrClass, IrClass> = linkedMapOf()
+    /** Local memberless capability alias to the external capability interfaces it intersects. */
+    val externalGenericOwnerCapabilitySupertypeProviders: MutableMap<IrClass, List<IrClass>> = linkedMapOf()
     /** Private producer-only capability used by generated reflection thunks for private members. */
     val genericOwnerReflectionCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Rehearsal-only logical member to its producer-owned capability Interface MethodDef. */
