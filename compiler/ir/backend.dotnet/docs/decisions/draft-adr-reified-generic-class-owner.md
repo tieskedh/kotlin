@@ -238,8 +238,27 @@ contrast, `Cat : Animal` is reference-only and ordinary CLR covariance keeps
 `Producer<Animal>` truthful. The rehearsal computes this with Kotlin IR
 subtyping over the eight admitted signed Common scalar carriers and caches the
 result per logical argument; it must not recognize `Number`, `Comparable`, or
-any stdlib declaration by name. Value classes, open arguments, and
-contravariant/mixed/multi-parameter owners remain separate stability gates.
+any stdlib declaration by name.
+
+The dual input-variant case follows the same construction-local rule. A
+physical `Consumer<object>` can be the legal Kotlin view `Consumer<Int>`, but
+CLR variance cannot construct `Consumer<int>` from it. Consequently the
+specific enclosing `Box<Consumer<Int>>` uses `Box<object>` and selects the
+same object's non-generic input capability only at `consume`. A physical
+`Consumer<Animal>` is naturally convertible to `Consumer<Cat>` under ordinary
+CLR reference contravariance, so `Box<Consumer<Cat>>` remains exact. The open
+`Box<T>` still owns one `!T` field in both cases. A natural `I<T>` MethodDef
+must retain its typed dispatch receiver; marking that receiver as semantic
+would silently turn the public CLR method into a capability member even when
+no capability call target was selected.
+
+Producer and separately compiled consumer must re-derive the same stability
+decision from the logical Kotlin type even when the consumer owns no local
+capability TypeDef. Therefore the cached supported-value-subtype predicate is
+available in every emitter rather than being conditional on local capability
+ownership. Epoch-off emitters do not build that type-system/cache. Value
+classes, open arguments, and invariant/mixed/multi-parameter owners remain
+separate stability gates.
 
 Cross-module Kotlin ABI cannot assume that a value with a closed logical type
 was born from a closed construction. A generic producer can return a value

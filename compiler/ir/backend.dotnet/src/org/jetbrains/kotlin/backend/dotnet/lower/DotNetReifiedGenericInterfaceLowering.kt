@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
@@ -113,12 +114,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
         val genericInterfaces = mutableListOf<IrClass>()
         val sourceFunctions = mutableListOf<IrSimpleFunction>()
+        val localClasses = linkedSetOf<IrClass>()
         irModule.acceptVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
                 element.acceptChildrenVoid(this)
             }
 
             override fun visitClass(declaration: IrClass) {
+                localClasses += declaration
                 if (declaration.isDotNetGenericInterfaceDeclaration) genericInterfaces += declaration
                 declaration.acceptChildrenVoid(this)
             }
@@ -229,23 +232,29 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     valueClassCarrier.isPrimitiveType(nullable = true)
         }
 
-        fun IrType.potentialSemanticInterfaceOwnerOrNull(): IrClass? {
-            val simpleType = this as? IrSimpleType ?: return null
-            val owner = (simpleType.classifier as? IrClassSymbol)?.owner
+        val hasProperClrValueSubtype =
+            dotNetGenericArgumentHasProperClrValueSubtype(context.irBuiltIns)
+
+        fun IrType.reifiedInterfaceOwnerOrNull(): IrClass? =
+            ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                 ?.takeIf { candidate ->
                     candidate in context.reifiedGenericInterfaces ||
                             externalDeclarations.hasReifiedGenericInterface(candidate)
                 }
-                ?: return null
+
+        fun IrType.potentialSemanticInterfaceOwnerOrNull(): IrClass? {
+            val simpleType = this as? IrSimpleType ?: return null
+            val owner = reifiedInterfaceOwnerOrNull() ?: return null
             val argument = simpleType.arguments.singleOrNull()
             val projection = argument as? IrTypeProjection ?: return owner
             if (projection.variance != Variance.INVARIANT) return owner
             val argumentClassifier = (projection.type as? IrSimpleType)?.classifier
             return when (owner.typeParameters.single().variance) {
-                Variance.OUT_VARIANCE -> when (argumentClassifier) {
-                    is IrTypeParameterSymbol -> owner
-                    is IrClassSymbol -> owner.takeUnless { argumentClassifier.owner.modality == Modality.FINAL }
-                    else -> owner
+                Variance.OUT_VARIANCE -> when {
+                    argumentClassifier is IrTypeParameterSymbol -> owner
+                    projection.type.hasClrValueGenericArgumentCarrier() -> owner
+                    hasProperClrValueSubtype(projection.type) -> owner
+                    else -> null
                 }
                 Variance.IN_VARIANCE -> when {
                     argumentClassifier is IrTypeParameterSymbol -> owner
@@ -257,12 +266,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
 
         fun IrType.reifiedCovariantInterfaceOwnerOrNull(): IrClass? {
-            val owner = ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
-                ?.takeIf { candidate ->
-                    candidate in context.reifiedGenericInterfaces ||
-                            externalDeclarations.hasReifiedGenericInterface(candidate)
-                }
-                ?: return null
+            val owner = reifiedInterfaceOwnerOrNull() ?: return null
             return owner.takeIf {
                 it.typeParameters.singleOrNull()?.variance == Variance.OUT_VARIANCE
             }
@@ -360,8 +364,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
             is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrGetField -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrCall -> checkNotNullArgumentOrNull()?.readsSemanticInterfaceDeclaration()
-                ?: (symbol.owner in context.genericOwnerCapabilityDeclarations ||
-                        symbol.owner.externalReturnCarrierOrNull() != null)
+                ?: when {
+                    symbol.owner.externalReturnCarrierOrNull() != null -> true
+                    (symbol.owner.parent as? IrClass)?.isDotNetGenericClassDeclaration == true ->
+                        this in context.genericOwnerCapabilityCallTargets
+                    else -> symbol.owner in context.genericOwnerCapabilityDeclarations
+                }
             is IrTypeOperatorCall -> when (operator) {
                 IrTypeOperator.IMPLICIT_CAST,
                 IrTypeOperator.IMPLICIT_NOTNULL,
@@ -392,13 +400,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // reference to a later semantic field could otherwise be stored as Consumer<int>. A
         // concrete class is independent evidence because the invariant InterfaceImpl edge is
         // fixed in its physical ancestry (after erased owners above have been normalized).
-        val exactInterfaceDeclarations = linkedSetOf<IrDeclaration>()
+        val exactInterfaceDeclarationTypes = linkedMapOf<IrDeclaration, IrType>()
+        val capabilityBearingExactInterfaceDeclarations = linkedSetOf<IrDeclaration>()
 
         fun IrExpression.provesExactPhysicalInterfaceView(expected: IrType): Boolean {
             if (readsSemanticInterfaceDeclaration()) return false
             when (this) {
-                is IrGetValue -> if (symbol.owner in exactInterfaceDeclarations) return true
-                is IrGetField -> if (symbol.owner in exactInterfaceDeclarations) return true
+                is IrGetValue -> exactInterfaceDeclarationTypes[symbol.owner]?.let { exactType ->
+                    return exactType.hasExactPhysicalInterfaceView(expected)
+                }
+                is IrGetField -> exactInterfaceDeclarationTypes[symbol.owner]?.let { exactType ->
+                    return exactType.hasExactPhysicalInterfaceView(expected)
+                }
                 is IrTypeOperatorCall -> if (operator == IrTypeOperator.IMPLICIT_CAST) {
                     return argument.provesExactPhysicalInterfaceView(expected)
                 }
@@ -408,20 +421,50 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return !producer.isInterface && type.hasExactPhysicalInterfaceView(expected)
         }
 
+        fun IrExpression.provesCapabilityBearingImplementation(): Boolean {
+            if (readsSemanticInterfaceDeclaration()) return true
+            when (this) {
+                is IrGetValue ->
+                    if (symbol.owner in capabilityBearingExactInterfaceDeclarations) return true
+                is IrGetField ->
+                    if (symbol.owner in capabilityBearingExactInterfaceDeclarations) return true
+                is IrTypeOperatorCall -> if (operator == IrTypeOperator.IMPLICIT_CAST) {
+                    return argument.provesCapabilityBearingImplementation()
+                }
+            }
+            val producerType = when (this) {
+                is IrGetValue -> symbol.owner.type
+                is IrGetField -> symbol.owner.type
+                else -> type
+            }
+            val producer = ((producerType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                ?: return false
+            // A class emitted in this module receives the semantic InterfaceImpl from this
+            // lowering. An arbitrary imported CLR class may implement only the natural I<T>, so
+            // its exact construction is deliberately not evidence for the sibling capability.
+            return !producer.isInterface && producer in localClasses
+        }
+
         fun recordSemanticDeclaration(
             declaration: IrDeclaration,
             type: IrType,
             exactProducer: IrExpression? = null,
         ) {
             val classifierErasedOwner = exactProducer?.classifierErasedInterfaceOwnerOrNull()
-            val semanticOwner = classifierErasedOwner
-                ?: type.potentialSemanticInterfaceOwnerOrNull()
-                ?: return
+            val declaredOwner = type.reifiedInterfaceOwnerOrNull()
             if (classifierErasedOwner == null &&
+                declaredOwner != null &&
                 exactProducer?.provesExactPhysicalInterfaceView(type) == true
             ) {
-                exactInterfaceDeclarations += declaration
+                exactInterfaceDeclarationTypes[declaration] = type
+                if (exactProducer.provesCapabilityBearingImplementation()) {
+                    capabilityBearingExactInterfaceDeclarations += declaration
+                    context.genericOwnerCapabilityBearingDeclarations += declaration
+                }
             } else {
+                val semanticOwner = classifierErasedOwner
+                    ?: type.potentialSemanticInterfaceOwnerOrNull()
+                    ?: return
                 context.genericOwnerCapabilityDeclarations += declaration
                 if (semanticOwner.typeParameters.single().variance == Variance.OUT_VARIANCE) {
                     context.genericOwnerForeignDispatchDeclarations += declaration
@@ -569,7 +612,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
 
             override fun visitValueParameter(declaration: IrValueParameter) {
-                recordSemanticDeclaration(declaration, declaration.type)
+                val sourceOwner = (declaration.parent as? IrSimpleFunction)?.parent as? IrClass
+                val isNaturalReifiedInterfaceReceiver =
+                    declaration.kind == IrParameterKind.DispatchReceiver &&
+                            sourceOwner?.isInterface == true &&
+                            (sourceOwner in context.reifiedGenericInterfaces ||
+                                    externalDeclarations.hasReifiedGenericInterface(sourceOwner))
+                if (!isNaturalReifiedInterfaceReceiver) {
+                    recordSemanticDeclaration(declaration, declaration.type)
+                }
                 declaration.acceptChildrenVoid(this)
             }
 
@@ -639,17 +690,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     null -> false
                     is IrGetValue -> receiver.symbol.owner in context.genericOwnerCapabilityDeclarations
                     is IrGetField -> receiver.symbol.owner in context.genericOwnerCapabilityDeclarations
-                    is IrCall -> receiver.readsSemanticInterfaceDeclaration()
-                    is IrTypeOperatorCall ->
-                        receiver.readsSemanticInterfaceDeclaration() ||
-                                (receiver.type.potentialSemanticInterfaceOwnerOrNull() != null &&
-                                        !receiver.provesExactPhysicalInterfaceView(receiver.type))
+                    is IrCall,
+                    is IrTypeOperatorCall,
+                        -> receiver.readsSemanticInterfaceDeclaration() ||
+                            (receiver.type.potentialSemanticInterfaceOwnerOrNull() != null &&
+                                    !receiver.provesExactPhysicalInterfaceView(receiver.type))
                     else -> receiver.type.potentialSemanticInterfaceOwnerOrNull() != null
                 }
-                if (slot != null && usesSemanticCarrier) {
-                    context.genericOwnerCapabilityCallTargets[expression] = slot
-                    if (receiver?.readsForeignDispatchDeclaration() == true) {
-                        context.genericOwnerForeignDispatchCallTargets[expression] = slot
+                if (slot != null) {
+                    if (usesSemanticCarrier) {
+                        context.genericOwnerCapabilityCallTargets[expression] = slot
+                        if (receiver?.readsForeignDispatchDeclaration() == true) {
+                            context.genericOwnerForeignDispatchCallTargets[expression] = slot
+                        }
+                    } else {
+                        // This representation-aware pass has more information than the generic
+                        // owner route planner: a stable CLR interface construction must not retain
+                        // an earlier conservative semantic fallback selected for a sibling call.
+                        context.genericOwnerCapabilityCallTargets.remove(expression)
+                        context.genericOwnerForeignDispatchCallTargets.remove(expression)
                     }
                 }
                 expression.acceptChildrenVoid(this)

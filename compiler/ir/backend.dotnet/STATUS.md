@@ -198,11 +198,27 @@ verification, and work state.
   `Box<Producer<Animal>>` construction. The predicate uses Kotlin IR subtyping
   over all eight admitted signed Common scalar carriers and is cached per
   logical argument type; it contains no `Number` or `Comparable` name check.
-  Value classes, contravariant/mixed owners, and nested open arguments remain
-  separate gates. Evidence is archived in
+  The dual contravariant construction is now closed as well. A physical
+  `Consumer<object>` may be the valid Kotlin view `Consumer<Int>`, but CLR
+  variance cannot convert it to `Consumer<int>`; only the enclosing
+  `Box<Consumer<Int>>` therefore selects `Box<object>`. A reference-only
+  `Consumer<Animal> -> Consumer<Cat>` view remains the exact
+  `Box<Consumer<Cat>>` construction. Natural interface MethodDefs retain their
+  typed `I<T>` receiver, and only the selected input-bearing operation crosses
+  the sibling capability. Every rehearsal producer and separate consumer now
+  runs the cached proper-value-subtype predicate even when the consumer owns no
+  local capability, so their physical signatures cannot diverge. Value classes,
+  mixed/multi-parameter owners, and nested open arguments remain separate
+  gates. Evidence is archived in
   [`docs/archive/generic-owner-nested-construction-carrier-2026-08-19.md`](docs/archive/generic-owner-nested-construction-carrier-2026-08-19.md).
   The proper-value-subtype extension is archived in
   [`docs/archive/generic-owner-value-subtype-construction-stability-2026-08-19.md`](docs/archive/generic-owner-value-subtype-construction-stability-2026-08-19.md).
+  The contravariant extension is archived in
+  [`docs/archive/generic-owner-contravariant-construction-stability-2026-08-19.md`](docs/archive/generic-owner-contravariant-construction-stability-2026-08-19.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

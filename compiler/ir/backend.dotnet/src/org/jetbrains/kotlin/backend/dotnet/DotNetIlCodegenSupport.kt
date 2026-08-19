@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetExternalObjectInstanceF
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
+import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
@@ -33,6 +34,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrStarProjection
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.types.Variance
@@ -56,6 +58,7 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.getInlineClassUnderlyingType
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isNullable
+import org.jetbrains.kotlin.ir.util.isSubtypeOf
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.name.StandardClassIds
@@ -93,6 +96,36 @@ internal fun IrType.isDotNetNumberType(): Boolean =
 /** Whether this declaration is Common Kotlin's abstract `Number` class. */
 internal fun IrClass.isDotNetNumberClass(): Boolean =
     fqNameWhenAvailable?.asString() == "kotlin.Number"
+
+/**
+ * Builds the cached proof shared by generic-owner routing and physical nested construction.
+ * Keeping this factory independent of local capability ownership makes producer and separately
+ * compiled consumer derive the same carrier from the logical Kotlin type.
+ */
+internal fun dotNetGenericArgumentHasProperClrValueSubtype(
+    irBuiltIns: IrBuiltIns,
+): (IrType) -> Boolean {
+    val typeSystem = IrTypeSystemContextImpl(irBuiltIns)
+    val supportedValueTypes = listOf(
+        irBuiltIns.booleanType,
+        irBuiltIns.byteType,
+        irBuiltIns.shortType,
+        irBuiltIns.intType,
+        irBuiltIns.longType,
+        irBuiltIns.floatType,
+        irBuiltIns.doubleType,
+        irBuiltIns.charType,
+    )
+    val cache = mutableMapOf<IrType, Boolean>()
+    return { targetType ->
+        cache.getOrPut(targetType) {
+            supportedValueTypes.any { valueType ->
+                valueType.isSubtypeOf(targetType, typeSystem) &&
+                        !targetType.isSubtypeOf(valueType, typeSystem)
+            }
+        }
+    }
+}
 
 /** Whether this declaration is Common Kotlin's contravariant `Comparable<T>` interface. */
 internal fun IrClass.isDotNetComparableClass(): Boolean =
@@ -700,11 +733,13 @@ internal class DotNetIlTypeMapper private constructor(
     private val stdlibGenericClasses: MutableMap<IrClass, DotNetGenericClassInfo>,
     private val stdlibClassLinksInProgress: MutableSet<IrClass>,
     private val genericOwnerObjectStateFields: Set<IrField>,
+    private val genericOwnerRehearsal: Boolean,
     private val genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction>,
     private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction>,
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration>,
+    private val genericOwnerCapabilityBearingDeclarations: Set<IrDeclaration>,
     private val genericOwnerForeignDispatchDeclarations: Set<IrDeclaration>,
     private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration>,
     private val externalGenericOwnerPhysicalSlots:
@@ -729,11 +764,13 @@ internal class DotNetIlTypeMapper private constructor(
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
         genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
         genericOwnerObjectStateFields: Set<IrField> = emptySet(),
+        genericOwnerRehearsal: Boolean = false,
         genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
         genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
         genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+        genericOwnerCapabilityBearingDeclarations: Set<IrDeclaration> = emptySet(),
         genericOwnerForeignDispatchDeclarations: Set<IrDeclaration> = emptySet(),
         genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
         externalGenericOwnerPhysicalSlots:
@@ -763,11 +800,13 @@ internal class DotNetIlTypeMapper private constructor(
         mutableMapOf(),
         mutableSetOf(),
         genericOwnerObjectStateFields,
+        genericOwnerRehearsal,
         genericOwnerCapabilities,
         genericOwnerReflectionCapabilities,
         genericOwnerCapabilityCallTargets,
         genericOwnerForeignDispatchCallTargets,
         genericOwnerCapabilityDeclarations,
+        genericOwnerCapabilityBearingDeclarations,
         genericOwnerForeignDispatchDeclarations,
         genericOwnerReflectionCapabilityDeclarations,
         externalGenericOwnerPhysicalSlots,
@@ -794,11 +833,13 @@ internal class DotNetIlTypeMapper private constructor(
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
             genericOwnerObjectStateFields,
+            genericOwnerRehearsal,
             genericOwnerCapabilities,
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets,
             genericOwnerCapabilityDeclarations,
+            genericOwnerCapabilityBearingDeclarations,
             genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
@@ -848,11 +889,13 @@ internal class DotNetIlTypeMapper private constructor(
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
             genericOwnerObjectStateFields,
+            genericOwnerRehearsal,
             genericOwnerCapabilities,
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets,
             genericOwnerCapabilityDeclarations,
+            genericOwnerCapabilityBearingDeclarations,
             genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
@@ -1186,18 +1229,28 @@ internal class DotNetIlTypeMapper private constructor(
             // the one construction argument which preserves both implementations and identity.
             return DotNetIlValueType.Object
         }
-        val hasCovariantUnstableArgument = owner.typeParameters.indices.any { index ->
-            owner.typeParameters[index].variance == Variance.OUT_VARIANCE &&
-                    (mapped.arguments[index] == DotNetIlValueType.Object ||
+        val hasVariantUnstableArgument = owner.typeParameters.indices.any { index ->
+            val mappedArgument = mapped.arguments[index]
+            when (owner.typeParameters[index].variance) {
+                Variance.OUT_VARIANCE ->
+                    mappedArgument == DotNetIlValueType.Object ||
                             (simpleType.arguments[index] as? IrTypeProjection)?.type
-                                ?.let(genericArgumentHasProperClrValueSubtype) == true)
+                                ?.let(genericArgumentHasProperClrValueSubtype) == true
+                Variance.IN_VARIANCE ->
+                    mappedArgument.isSupportedPrimitiveArrayElement() ||
+                            mappedArgument is DotNetIlValueType.NullableValue
+                Variance.INVARIANT -> false
+            }
         }
-        if (hasCovariantUnstableArgument) {
+        if (hasVariantUnstableArgument) {
             // `Producer<Any?>` can physically be Producer<int>, Producer<string>, or an ordinary
             // foreign implementation. The same mismatch occurs for a narrower reference target
             // such as `Producer<Comparable<Int>>`: Kotlin Int implements Comparable<Int>, while
             // CLR variance does not convert Producer<int> to Producer<IComparable<int>>. Used as
-            // Box<T>'s T, neither target construction contains every legal Kotlin value.
+            // Box<T>'s T, neither target construction contains every legal Kotlin value. Dually,
+            // Consumer<Int> may be the same Kotlin object as Consumer<Any?>, but CLR variance
+            // cannot convert Consumer<object> to Consumer<int>. Reference-only contravariance
+            // remains a stable natural construction.
             // Substitute object for this nested construction only; exact scalar, reference-only,
             // and stable nested constructions retain their natural generic argument.
             return DotNetIlValueType.Object
@@ -1328,6 +1381,11 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerCapabilityDeclarations
+
+    fun isGenericOwnerRehearsalEnabled(): Boolean = genericOwnerRehearsal
+
+    fun isGenericOwnerCapabilityBearingDeclaration(declaration: IrDeclaration): Boolean =
+        declaration in genericOwnerCapabilityBearingDeclarations
 
     fun isGenericOwnerForeignDispatchDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerForeignDispatchDeclarations

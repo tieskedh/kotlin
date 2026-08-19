@@ -236,6 +236,9 @@ internal class DotNetBackendContext(
     /** Rehearsal-only value/field/function slots whose proven Kotlin view is wider than one C<T>. */
     val genericOwnerCapabilityDeclarations: MutableSet<IrDeclaration> =
         java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+    /** Natural C<T> slots proven to contain a Kotlin object which also implements its capability. */
+    val genericOwnerCapabilityBearingDeclarations: MutableSet<IrDeclaration> =
+        java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
     /** Semantic producer views which admit an ordinary foreign `I<T>` object carrier. */
     val genericOwnerForeignDispatchDeclarations: MutableSet<IrDeclaration> =
         java.util.Collections.newSetFromMap(java.util.IdentityHashMap())

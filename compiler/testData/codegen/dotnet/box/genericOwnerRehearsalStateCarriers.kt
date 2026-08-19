@@ -79,8 +79,22 @@ public interface RehearsalProducer<out T> {
     public fun produce(): T
 }
 
+public interface RehearsalConsumer<in T> {
+    public fun consume(value: T)
+}
+
 private class RehearsalProducerValue<T>(private val value: T) : RehearsalProducer<T> {
     override fun produce(): T = value
+}
+
+private class RehearsalConsumerValue<T>(initial: T) : RehearsalConsumer<T> {
+    private var value: T = initial
+
+    override fun consume(value: T) {
+        this.value = value
+    }
+
+    fun read(): T = value
 }
 
 private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
@@ -123,6 +137,15 @@ public fun rehearsalAnimalProducerBox(
     producer: RehearsalProducer<RehearsalNestedAnimal>,
 ): RehearsalNestedBox<RehearsalProducer<RehearsalNestedAnimal>> =
     RehearsalNestedBox(producer)
+
+public fun rehearsalIntConsumerBox(
+    consumer: RehearsalConsumer<Int>,
+): RehearsalNestedBox<RehearsalConsumer<Int>> = RehearsalNestedBox(consumer)
+
+public fun rehearsalCatConsumerBox(
+    consumer: RehearsalConsumer<RehearsalNestedCat>,
+): RehearsalNestedBox<RehearsalConsumer<RehearsalNestedCat>> =
+    RehearsalNestedBox(consumer)
 
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
@@ -213,6 +236,30 @@ fun box(): String {
         animalProducerBox.read().produce().label != "cat"
     ) {
         return "fail: reference-only nested producer box"
+    }
+
+    val anyConsumerValue = RehearsalConsumerValue<Any?>("initial")
+    val anyConsumer: RehearsalConsumer<Any?> = anyConsumerValue
+    val intConsumer: RehearsalConsumer<Int> = anyConsumer
+    val intConsumerBox = rehearsalIntConsumerBox(intConsumer)
+    if (intConsumerBox.read() !== anyConsumer) {
+        return "fail: value-type nested consumer identity"
+    }
+    intConsumerBox.read().consume(71)
+    if (anyConsumerValue.read() != 71) return "fail: value-type nested consumer dispatch"
+
+    val animalConsumerValue = RehearsalConsumerValue<RehearsalNestedAnimal>(
+        RehearsalNestedAnimal("initial-animal"),
+    )
+    val animalConsumer: RehearsalConsumer<RehearsalNestedAnimal> = animalConsumerValue
+    val catConsumer: RehearsalConsumer<RehearsalNestedCat> = animalConsumer
+    val catConsumerBox = rehearsalCatConsumerBox(catConsumer)
+    if (catConsumerBox.read() !== animalConsumer) {
+        return "fail: reference-only nested consumer identity"
+    }
+    catConsumerBox.read().consume(RehearsalNestedCat("consumed-cat"))
+    if (animalConsumerValue.read().label != "consumed-cat") {
+        return "fail: reference-only nested consumer dispatch"
     }
 
     return "OK"

@@ -99,6 +99,16 @@ public fun rehearsalSeparateAnimalProducerBox(
 ): RehearsalSeparateNestedBox<RehearsalSeparateProducer<RehearsalSeparateNestedAnimal>> =
     RehearsalSeparateNestedBox(producer)
 
+public fun rehearsalSeparateIntConsumerBox(
+    consumer: RehearsalSeparateConsumer<Int>,
+): RehearsalSeparateNestedBox<RehearsalSeparateConsumer<Int>> =
+    RehearsalSeparateNestedBox(consumer)
+
+public fun rehearsalSeparateCatConsumerBox(
+    consumer: RehearsalSeparateConsumer<RehearsalSeparateNestedCat>,
+): RehearsalSeparateNestedBox<RehearsalSeparateConsumer<RehearsalSeparateNestedCat>> =
+    RehearsalSeparateNestedBox(consumer)
+
 public class RehearsalSeparateStarProducerStore(
     private val producer: RehearsalSeparateProducer<*>,
 ) {
@@ -362,6 +372,14 @@ fun box(): String {
     val narrowIntConsumer: RehearsalSeparateConsumer<Int> = anyConsumer
     narrowIntConsumer.consume(67)
     if (anyConsumerValue.read() != 67) return "fail: separate narrow consumer"
+    val narrowIntConsumerBox = rehearsalSeparateIntConsumerBox(narrowIntConsumer)
+    if (narrowIntConsumerBox.read() !== anyConsumer) {
+        return "fail: separate value-type nested consumer identity"
+    }
+    narrowIntConsumerBox.read().consume(68)
+    if (anyConsumerValue.read() != 68) {
+        return "fail: separate value-type nested consumer dispatch"
+    }
     val consumerReader = RehearsalSeparateConsumerReader()
     val returnedNarrowConsumer = consumerReader.identity(narrowIntConsumer)
     returnedNarrowConsumer.consume(69)
@@ -381,6 +399,21 @@ fun box(): String {
     if (middleAnyConsumerValue.read() != 79) return "fail: separate external narrow consumer"
     if (!RehearsalSeparateConsumerReader().same(middleNarrowConsumer, middleAnyConsumer)) {
         return "fail: separate external consumer identity"
+    }
+
+    val animalConsumerValue = RehearsalSeparateConsumerValue(
+        RehearsalSeparateNestedAnimal("separate-initial-animal"),
+    )
+    val animalConsumer: RehearsalSeparateConsumer<RehearsalSeparateNestedAnimal> =
+        animalConsumerValue
+    val catConsumer: RehearsalSeparateConsumer<RehearsalSeparateNestedCat> = animalConsumer
+    val catConsumerBox = rehearsalSeparateCatConsumerBox(catConsumer)
+    if (catConsumerBox.read() !== animalConsumer) {
+        return "fail: separate reference-only nested consumer identity"
+    }
+    catConsumerBox.read().consume(RehearsalSeparateNestedCat("separate-consumed-cat"))
+    if (animalConsumerValue.read().label != "separate-consumed-cat") {
+        return "fail: separate reference-only nested consumer dispatch"
     }
 
     val exactChild: RehearsalSeparateChildProducer<Int> =
