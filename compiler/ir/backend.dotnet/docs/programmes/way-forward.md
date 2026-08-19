@@ -1192,15 +1192,27 @@ assemblies reject the selected self-describing library graph before emission.
 Kotlin exact/widened calls and direct generated C# root/child implementations
 execute through A -> B -> C on PSI and LightTree, .NET 10 and Framework 4.8.
 
-This proof deliberately admits only member-free transparent children; a child
-which introduces a new member is not silently assigned the parent's member
-family. Continue with interface intersections and independent input/default/
-property/mixed-variance gates, then the Runtime/Stdlib graph. The authoring
-generator still cannot retrofit precompiled, non-partial, or other-language
-implementors. See
+The independent-interface intersection gate is now closed for the same
+transparent shape. `Child<out T> : Primary<T>, Secondary<T>` remains a natural
+CLR `Child<T>` and implements one memberless non-generic child capability which
+inherits both root capabilities. The roots and child may share one producer or
+the child may be compiled in B over roots from A. A consumer reconstructs the
+capability graph from logical KLIB supertypes and producer-recorded physical
+identities; no ABI schema addition, name inference, copied semantic slot, or
+state is introduced. Kotlin and generated partial C# implementations execute
+both exact and widened root routes on the same object on both profiles.
+
+This proof still admits only member-free transparent children; a child which
+introduces a new member is not silently assigned its parents' member families.
+Continue with member-declaring children and independent input/default/property/
+mixed-variance gates, then the Runtime/Stdlib graph. The authoring generator
+still cannot retrofit precompiled, non-partial, or other-language implementors.
+See
 [`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md)
+and the external-child and intersection evidence in
+[`../archive/reified-generic-interface-external-child-2026-08-19.md`](../archive/reified-generic-interface-external-child-2026-08-19.md)
 and
-[`../archive/reified-generic-interface-external-child-2026-08-19.md`](../archive/reified-generic-interface-external-child-2026-08-19.md).
+[`../archive/reified-generic-interface-intersection-2026-08-19.md`](../archive/reified-generic-interface-intersection-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a

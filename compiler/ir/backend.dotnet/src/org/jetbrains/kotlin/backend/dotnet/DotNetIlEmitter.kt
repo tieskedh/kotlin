@@ -138,6 +138,7 @@ internal class DotNetIlEmitter(
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
+    private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
     private val genericOwnerReflectionCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -579,6 +580,18 @@ internal class DotNetIlEmitter(
                 }
             }
         }
+        val externalGenericOwnerCapabilitySuperTypes =
+            externalGenericOwnerCapabilitySupertypeProviders.mapValues { entry ->
+                val capability = entry.key
+                entry.value.map { provider ->
+                    val providerInfo = externalDeclarations.genericOwnerCapabilityInfoOrNull(provider)
+                        ?: error(
+                            "Internal .NET backend error: combined capability '${capability.render()}' " +
+                                    "has no producer-recorded super-capability for '${provider.render()}'"
+                        )
+                    DotNetIlValueType.UserClass(providerInfo)
+                }.distinct()
+            }
         val typeMapper = DotNetIlTypeMapper(
             availableClasses = availableClasses,
             localClasses = moduleClasses,
@@ -655,7 +668,8 @@ internal class DotNetIlEmitter(
                 interfaceType is DotNetIlValueType.UserClass ||
                         interfaceType is DotNetIlValueType.GenericInstance
             }
-            classInfo.interfaces = canonicalInterfaces
+            classInfo.interfaces = (canonicalInterfaces +
+                    externalGenericOwnerCapabilitySuperTypes[irClass].orEmpty()).distinct()
         }
         // Populate the structural graph for every PHYSICAL view, not only the canonical one.
         // Codegen uses this graph for assignability and owner-view recovery; the IL renderer
@@ -1187,6 +1201,8 @@ internal class DotNetIlEmitter(
                         exactGenericTypeMapper = exactGenericTypeMapper,
                         genericInterfaces = genericInterfaces,
                         genericClasses = genericClasses,
+                        externalGenericOwnerCapabilitySuperTypes =
+                            externalGenericOwnerCapabilitySuperTypes,
                         facadeClassInfoByFile = facadeClassInfoByFile,
                         classSkipReasons = classSkipReasons,
                     )
@@ -2630,6 +2646,7 @@ internal class DotNetIlEmitter(
         exactGenericTypeMapper: DotNetIlTypeMapper,
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
         genericClasses: Map<IrClass, DotNetGenericClassInfo>,
+        externalGenericOwnerCapabilitySuperTypes: Map<IrClass, List<DotNetIlValueType.UserClass>>,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
         classSkipReasons: Map<IrClass, String>,
     ): RenderedClass {
@@ -2673,7 +2690,7 @@ internal class DotNetIlEmitter(
         // like the base class above: an evicted interface takes every implementing class and
         // every sub-interface down with it, each warned with a reason carrying the interface's
         // own reason (the interface arm of the inheritance cascade).
-        val interfaceTypes = irClass.dotNetDirectInterfaceTypes().mapNotNull { superInterfaceType ->
+        val interfaceTypes = (irClass.dotNetDirectInterfaceTypes().mapNotNull { superInterfaceType ->
             val superInterface = (superInterfaceType.classifier as IrClassSymbol).owner
             // SuspendFunctionN is a logical builtin, not a separately emitted CLR TypeDef. JVM
             // likewise maps it to the continuation-shaped FunctionN+1 carrier while retaining
@@ -2700,7 +2717,7 @@ internal class DotNetIlEmitter(
                     "its interface instantiation '${superInterfaceType.render()}' maps to a non-interface CLR carrier"
                 )
             }
-        }
+        } + externalGenericOwnerCapabilitySuperTypes[irClass].orEmpty()).distinct()
         val splitGenericInfo = genericInterfaces[irClass]
         val directTypedInterfaceTypes = if (splitGenericInfo == null) {
             irClass.dotNetDirectInterfaceTypes().mapNotNull { superInterfaceType ->
@@ -2876,6 +2893,8 @@ internal class DotNetIlEmitter(
                             exactGenericTypeMapper = exactGenericTypeMapper,
                             genericInterfaces = genericInterfaces,
                             genericClasses = genericClasses,
+                            externalGenericOwnerCapabilitySuperTypes =
+                                externalGenericOwnerCapabilitySuperTypes,
                             facadeClassInfoByFile = facadeClassInfoByFile,
                             classSkipReasons = classSkipReasons,
                         )
