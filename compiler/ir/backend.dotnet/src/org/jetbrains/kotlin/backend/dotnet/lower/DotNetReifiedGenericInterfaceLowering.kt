@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
@@ -61,14 +62,21 @@ import org.jetbrains.kotlin.types.Variance
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant producer with one abstract no-input member returning its
- * owner parameter directly. Transparent covariant subinterfaces inherit that physical family at
- * a fixpoint, including across a producer boundary. A transparent intersection of independent
- * admitted roots receives one memberless capability alias over those roots. Other families retain
- * the accepted erased production ABI until their complete semantic surface has its own proof.
+ * owner parameter directly. Covariant subinterfaces inherit that physical family at a fixpoint,
+ * including across a producer boundary. A child which adds the same producer member shape owns
+ * only its new semantic slot; inherited slots remain inherited. An intersection without new
+ * members receives one memberless capability alias over its independent roots. Other families
+ * retain the accepted erased production ABI until their complete semantic surface has its own
+ * proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
+    private data class ReifiedProducerChildShape(
+        val parents: List<IrClass>,
+        val declaredMembers: List<IrSimpleFunction>,
+    )
+
     override fun lower(irModule: IrModuleFragment) {
         if (!context.configuration.dotNetGenericOwnerRehearsal) return
         val externalDeclarations = context.externalDeclarationsForLowering()
@@ -100,45 +108,27 @@ internal class DotNetReifiedGenericInterfaceLowering(
             owner.superTypes += capability.symbol.defaultType
             context.reifiedGenericInterfaces += owner
             context.genericOwnerCapabilityInterfaces[owner] = capability
-
-            for (source in owner.declaredProducerMembers()) {
-                val logicalRoot = context.preLoweringDeclarationKeys[source]
-                    ?: "$identity.${source.name.asString()}"
-                val physicalName = dotNetGenericOwnerPhysicalMemberName(
-                    source.dotNetIlMethodName(),
-                    listOf(logicalRoot),
-                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
-                )
-                val slot = capability.addFunction {
-                    startOffset = source.startOffset
-                    endOffset = source.endOffset
-                    origin = DOTNET_GENERIC_OWNER_CAPABILITY_SLOT
-                    name = Name.identifier(physicalName)
-                    visibility = DescriptorVisibilities.PUBLIC
-                    modality = Modality.ABSTRACT
-                    returnType = context.irBuiltIns.anyNType
-                }.apply {
-                    parameters += createDispatchReceiverParameterWithClassParent()
-                }
-                slotsBySource[source] = slot
-                context.genericOwnerCapabilitySlots[source] = slot
-                context.genericOwnerCapabilityDeclarations += slot
-                context.genericOwnerCapabilityDeclarations += slot.parameters
-            }
+            materializeDeclaredProducerSlots(
+                capability,
+                identity,
+                owner.declaredProducerMembers(),
+                slotsBySource,
+            )
         }
 
-        // The physical choice is closed over transparent interface inheritance. Otherwise an
-        // arity-zero Child would have to name an already-reified Parent<T> without owning a CLR T,
-        // which is impossible. One parent reuses its capability. Multiple independent parents
-        // require one memberless child capability which inherits each semantic domain: this gives
-        // widened Child<T> one honest carrier without copying a slot, implementation, or state.
+        // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
+        // would have to name an already-reified Parent<T> without owning a CLR T, which is
+        // impossible. A memberless child in one semantic domain reuses that capability. A child
+        // which adds a producer member, or joins independent domains, receives one child capability
+        // inheriting the parent capabilities. It owns only its declared slot: no inherited slot,
+        // implementation, or state is copied.
         var changed: Boolean
         do {
             changed = false
             for (owner in genericInterfaces) {
                 if (owner in context.reifiedGenericInterfaces) continue
-                val parents = owner.transparentReifiedProducerParentsOrNull() ?: continue
-                if (parents.any { parent ->
+                val shape = owner.reifiedProducerChildShapeOrNull() ?: continue
+                if (shape.parents.any { parent ->
                         parent !in context.genericOwnerCapabilityInterfaces &&
                                 parent !in context.externalReifiedGenericInterfaceCapabilityProviders &&
                                 !externalDeclarations.hasReifiedGenericInterface(parent)
@@ -146,9 +136,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ) {
                     continue
                 }
-                val localCapabilities = parents.mapNotNull(context.genericOwnerCapabilityInterfaces::get)
+                val localCapabilities = shape.parents.mapNotNull(context.genericOwnerCapabilityInterfaces::get)
                     .distinct()
-                val externalProviders = parents.mapNotNull { parent ->
+                val externalProviders = shape.parents.mapNotNull { parent ->
                     context.externalReifiedGenericInterfaceCapabilityProviders[parent]
                         ?: parent.takeIf(externalDeclarations::hasReifiedGenericInterface)
                 }.distinctBy { provider ->
@@ -157,13 +147,17 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     )
                     capability.assemblyName to capability.physicalPathComponents()
                 }
-                if (localCapabilities.size == 1 && externalProviders.isEmpty()) {
+                if (shape.declaredMembers.isEmpty() &&
+                    localCapabilities.size == 1 && externalProviders.isEmpty()
+                ) {
                     context.reifiedGenericInterfaces += owner
                     context.genericOwnerCapabilityInterfaces[owner] = localCapabilities.single()
                     changed = true
                     continue
                 }
-                if (externalProviders.size == 1 && localCapabilities.isEmpty()) {
+                if (shape.declaredMembers.isEmpty() &&
+                    externalProviders.size == 1 && localCapabilities.isEmpty()
+                ) {
                     context.reifiedGenericInterfaces += owner
                     context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProviders.single()
                     changed = true
@@ -184,6 +178,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 if (externalProviders.isNotEmpty()) {
                     context.externalGenericOwnerCapabilitySupertypeProviders[capability] = externalProviders
                 }
+                materializeDeclaredProducerSlots(
+                    capability,
+                    identity,
+                    shape.declaredMembers,
+                    slotsBySource,
+                )
                 changed = true
             }
         } while (changed)
@@ -282,19 +282,49 @@ internal class DotNetReifiedGenericInterfaceLowering(
         createThisReceiverParameter()
     }
 
+    private fun materializeDeclaredProducerSlots(
+        capability: IrClass,
+        ownerIdentity: String,
+        sources: List<IrSimpleFunction>,
+        slotsBySource: MutableMap<IrSimpleFunction, IrSimpleFunction>,
+    ) {
+        for (source in sources) {
+            val logicalRoot = context.preLoweringDeclarationKeys[source]
+                ?: "$ownerIdentity.${source.name.asString()}"
+            val physicalName = dotNetGenericOwnerPhysicalMemberName(
+                source.dotNetIlMethodName(),
+                listOf(logicalRoot),
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            )
+            val slot = capability.addFunction {
+                startOffset = source.startOffset
+                endOffset = source.endOffset
+                origin = DOTNET_GENERIC_OWNER_CAPABILITY_SLOT
+                name = Name.identifier(physicalName)
+                visibility = DescriptorVisibilities.PUBLIC
+                modality = Modality.ABSTRACT
+                returnType = context.irBuiltIns.anyNType
+            }.apply {
+                parameters += createDispatchReceiverParameterWithClassParent()
+            }
+            slotsBySource[source] = slot
+            context.genericOwnerCapabilitySlots[source] = slot
+            context.genericOwnerCapabilityDeclarations += slot
+            context.genericOwnerCapabilityDeclarations += slot.parameters
+        }
+    }
+
     private fun IrClass.declaredProducerMembers(): List<IrSimpleFunction> =
         declarations.filterIsInstance<IrSimpleFunction>().filterNot(IrSimpleFunction::isFakeOverride)
 
-    private fun IrClass.transparentReifiedProducerParentsOrNull(): List<IrClass>? {
+    private fun IrClass.reifiedProducerChildShapeOrNull(): ReifiedProducerChildShape? {
         if (!hasFirstReifiedProducerOwnerShape()) return null
-        if (declarations.any { declaration -> declaration is IrProperty } ||
-            declaredProducerMembers().isNotEmpty()
-        ) {
-            return null
-        }
+        if (declarations.any { declaration -> declaration is IrProperty }) return null
         val parameter = typeParameters.single()
+        val members = declaredProducerMembers()
+        if (members.size > 1 || members.any { member -> !member.isDirectProducerMember(parameter) }) return null
         val parentTypes = dotNetDirectInterfaceTypes().takeIf { it.isNotEmpty() } ?: return null
-        return parentTypes.map { parentType ->
+        val parents = parentTypes.map { parentType ->
             val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
             val argument = parentType.arguments.singleOrNull() as? IrTypeProjection ?: return null
             val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
@@ -302,6 +332,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 argument.variance == Variance.INVARIANT && argumentParameter?.owner === parameter
             } ?: return null
         }
+        return ReifiedProducerChildShape(parents, members)
     }
 
     private fun IrClass.isFirstReifiedProducerCandidate(): Boolean {
@@ -311,13 +342,17 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val parameter = typeParameters.single()
         val members = declaredProducerMembers()
         val member = members.singleOrNull() ?: return false
-        if (member.visibility != DescriptorVisibilities.PUBLIC || member.modality != Modality.ABSTRACT ||
-            member.body != null || member.typeParameters.isNotEmpty() ||
-            member.parameters.singleOrNull()?.kind != IrParameterKind.DispatchReceiver
+        return member.isDirectProducerMember(parameter)
+    }
+
+    private fun IrSimpleFunction.isDirectProducerMember(parameter: IrTypeParameter): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
+            body != null || typeParameters.isNotEmpty() ||
+            parameters.singleOrNull()?.kind != IrParameterKind.DispatchReceiver
         ) {
             return false
         }
-        val resultParameter = (member.returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        val resultParameter = (returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
         return resultParameter?.owner === parameter
     }
 
