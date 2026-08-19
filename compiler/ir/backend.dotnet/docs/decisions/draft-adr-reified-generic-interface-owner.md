@@ -95,33 +95,57 @@ of the complete physical contract or a future language-neutral interop tool.
 The compiler must not conceal that limitation with reflection, runtime
 proxies, wrappers, or identity-changing adapters.
 
-## First executable evidence
+## First compiler-emitted evidence
 
-The bounded reopening proof constructs `Source<out T> : SourceSemantic` and a
-versioned authoring manifest, then compiles C# reference- and value-substituted
-implementors which contain only `Read(): T`. The existing source generator
-adds `ReadSemantic(): object`. Direct typed calls and semantic calls return the
-same reference or the correctly boxed value, and both views retain the exact
-same object identity on Framework 4.8 and .NET 10.
+The one test-only generic-owner epoch now admits a structural first family:
+a public top-level covariant interface with one unbounded owner parameter and
+one abstract public no-input member returning that parameter directly. The
+Kotlin emitter publishes the natural `Source<out T>`, its non-generic semantic
+capability, and their complete member family. Exact final substitutions use
+the natural CLR interface. Stars, use-site projections, owner parameters, open
+class arguments, and widened value-type views use the capability.
 
-This closes only the previously open foreign direct-source implementation
-mechanism. The proof is synthetic and production-inert: the Kotlin emitter
-does not yet publish the interface family or its manifest record.
+Kotlin implementations and calls preserve exact results, required boxing, and
+same-object identity in one product and across a producer/implementation/
+consumer compilation chain. A transparent covariant subinterface declared in
+the same producer product, `Child<out T> : Source<T>`, is reified at a fixpoint
+and reuses the parent capability. It does not create a second semantic slot or
+fall back to an erased child TypeDef.
+
+A reified generic-interface MethodDef is again an ordinary physical slot for
+the covariant-return lowering. If an inherited class member returns a narrower
+CLR carrier than the substituted natural interface member, the compiler emits
+one typed MethodImpl adapter. Equal signatures retain implicit/direct natural
+mapping; the semantic bridge does not become the normal typed route.
+
+The actual producer manifest is read back from the emitted DLL and consumed by
+the supported Roslyn generator. Partial C# implementations of both `Source`
+and `Child` contain only their natural `Read(): T` source member. Generated
+explicit implementations satisfy the inherited semantic capability, and
+Kotlin widened calls reach the authored C# member on Framework 4.8 and .NET
+10. No default interface method, runtime proxy, reflection dispatch, wrapper,
+or declaration-name/stdlib exception participates.
+
+This remains production-inert and deliberately narrow. In particular, a child
+interface declared in another compilation product has not yet proved how its
+ABI identifies the external capability owner's assembly.
 
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
 must cover:
 
-1. compiler-emitted natural and semantic interface TypeDefs and MethodDefs;
-2. invariant, `in`, `out`, mixed, star, and use-site-projected interfaces;
-3. reference, value, nullable-value, open-nullable, bounded, and value-class
+1. external-product interface inheritance and intersections without erasure or
+   duplicate semantic capabilities;
+2. invariant, `in`, mixed, multi-parameter, and input-bearing interfaces;
+3. reference, nullable-value, open-nullable, bounded, and value-class
    substitutions;
 4. broad and `@UnsafeVariance` inputs, delayed typed-use failure, parameterized
    `as`, and classifier-only `as?`;
-5. Kotlin and generated C# implementations, inheritance, intersections,
-   properties, defaults, and generic methods;
-6. same-object identity and dispatch across separate Kotlin and C# assemblies;
+5. Kotlin and generated C# properties, defaults, generic methods, and hostile
+   inheritance;
+6. same-object identity and dispatch across deeper separate Kotlin and C#
+   assembly graphs;
 7. Runtime and Stdlib owners including collection special bridges without a
    collection-specific representation; and
 8. exact inverse rollback plus Framework 4.8, .NET 10, trimming, and NativeAOT

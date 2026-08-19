@@ -57,6 +57,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReflectiveDefaultMaskLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetRenameFieldsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReifiedFunctionLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReifiedGenericInterfaceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSingleAbstractMethodLowering
@@ -275,6 +276,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInnerClassPhysicalizationLowering,
     // Then record fail-closed candidate evidence for the CLR-generic class-owner ABI.
     ::DotNetGenericOwnerArchitecturePlanningLowering,
+    // Reopen only the first structurally complete producer-interface family in the same atomic
+    // rehearsal. Its natural I<T> is the normal CLR path; a non-generic declaration-semantic
+    // capability is materialized only for physical slots which cannot name one honest I<X>.
+    ::DotNetReifiedGenericInterfaceLowering,
     ::DotNetGenericInterfaceBridgeLowering,
     // CLR method-slot identity includes the return type on every supported profile. Preserve
     // Kotlin covariant overrides with one exact virtual implementation plus private final

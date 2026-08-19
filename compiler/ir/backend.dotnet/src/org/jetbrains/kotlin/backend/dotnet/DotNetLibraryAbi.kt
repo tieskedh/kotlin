@@ -1651,8 +1651,8 @@ internal class DotNetExternalDeclarations(
      *
      * Shape gates that merely authorize an external base or interface test declaration
      * membership here. They must not infer an optional host capability from the Kotlin
-     * declaration. A class record may select either an erased or full-arity physical owner;
-     * generic interfaces remain on their accepted arity-zero owner epoch.
+     * declaration. A class or rehearsal-admitted interface record may select either an erased or
+     * full-arity physical owner; consumers must obey the producer-recorded arity.
      */
     fun hasClass(irClass: IrClass): Boolean {
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
@@ -1677,6 +1677,16 @@ internal class DotNetExternalDeclarations(
         return declaration.physicalTypeParameterCount == 0
     }
 
+    /** Whether producer ABI selected one natural CLR `I<T>` plus its semantic capability. */
+    fun hasReifiedGenericInterface(irClass: IrClass): Boolean {
+        if (!irClass.isInterface || irClass.typeParameters.isEmpty()) return false
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
+        val declaration = declarations[logicalKey]?.declaration as? DotNetPhysicalDeclaration.Class
+            ?: return false
+        return declaration.physicalTypeParameterCount == irClass.typeParameters.size &&
+                declaration.genericOwnerAbi != null
+    }
+
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
         canonicalClassInfoByLogicalKey[logicalKey]?.let { return it }
@@ -1689,9 +1699,14 @@ internal class DotNetExternalDeclarations(
                     "${declaration.physicalTypeParameterCount}; expected erased arity 0 or complete logical arity " +
                     irClass.typeParameters.size
         }
-        // CLR class GenericParams are invariant even when Kotlin declaration-site variance is
-        // represented by the semantic capability. The list carries both exact arity and flags.
-        val canonicalVariances = List(declaration.physicalTypeParameterCount) { Variance.INVARIANT }
+        // CLR class GenericParams remain invariant. A producer-recorded reified interface instead
+        // owns the same declaration-site variance as its natural I<T> metadata; its separate
+        // capability handles Kotlin views which cannot name one constructed interface.
+        val canonicalVariances = if (irClass.isInterface && declaration.genericOwnerAbi != null) {
+            irClass.typeParameters.map { parameter -> parameter.variance }
+        } else {
+            List(declaration.physicalTypeParameterCount) { Variance.INVARIANT }
+        }
         val classInfo = buildClassInfo(
             bound.library.artifact.assemblyName,
             declaration.ownerPath,
@@ -1729,7 +1744,7 @@ internal class DotNetExternalDeclarations(
 
     /** Producer-recorded non-generic Kotlin semantic/classifier capability for external `C<T>`. */
     fun genericOwnerCapabilityInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
-        if (irClass.isInterface || irClass.typeParameters.isEmpty()) return null
+        if (irClass.typeParameters.isEmpty()) return null
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
         genericOwnerCapabilityInfoByLogicalKey[logicalKey]?.let { return it }
         val bound = declarations[logicalKey] ?: return null

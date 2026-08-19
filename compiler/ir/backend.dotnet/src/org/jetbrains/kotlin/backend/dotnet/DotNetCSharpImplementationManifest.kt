@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isPublishedApi
+import org.jetbrains.kotlin.types.Variance
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.CharacterCodingException
@@ -579,24 +580,36 @@ object DotNetCSharpImplementationManifestCodec {
             require(contract.canonicalOwnerPath.isNotEmpty()) {
                 "C# implementation interface '${contract.logicalKey}' has an empty canonical owner"
             }
-            require(contract.typeParameters.isEmpty()) {
-                "Generic Kotlin interface '${contract.logicalKey}' requires an explicit .NET export"
-            }
-            require(contract.declaredOwnerPath == null && contract.exactOwnerPath == null) {
-                "C# implementation interface '${contract.logicalKey}' has an alternate runtime owner"
-            }
-            require(contract.members.all { member ->
-                member.authoringView == DotNetCSharpInterfaceView.CANONICAL &&
-                        member.slots.any { slot ->
-                            slot.role == DotNetCSharpSlotRole.CANONICAL
-                        } &&
-                        member.slots.none { slot ->
-                            slot.role == DotNetCSharpSlotRole.ERASED ||
-                                    slot.role == DotNetCSharpSlotRole.DECLARED ||
-                                    slot.role == DotNetCSharpSlotRole.EXACT
-                        }
-            }) {
-                "C# implementation interface '${contract.logicalKey}' has split member views"
+            if (contract.typeParameters.isEmpty()) {
+                require(contract.declaredOwnerPath == null && contract.exactOwnerPath == null) {
+                    "Non-generic C# implementation interface '${contract.logicalKey}' has an alternate runtime owner"
+                }
+                require(contract.members.all { member ->
+                    member.authoringView == DotNetCSharpInterfaceView.CANONICAL &&
+                            member.slots.any { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL } &&
+                            member.slots.none { slot ->
+                                slot.role == DotNetCSharpSlotRole.ERASED ||
+                                        slot.role == DotNetCSharpSlotRole.DECLARED ||
+                                        slot.role == DotNetCSharpSlotRole.EXACT
+                            }
+                }) {
+                    "Non-generic C# implementation interface '${contract.logicalKey}' has split member views"
+                }
+            } else {
+                require(contract.declaredOwnerPath?.isNotEmpty() == true && contract.exactOwnerPath == null) {
+                    "Reified generic C# implementation interface '${contract.logicalKey}' has no unique natural owner"
+                }
+                require(contract.members.all { member ->
+                    member.authoringView == DotNetCSharpInterfaceView.DECLARED &&
+                            member.slots.any { slot -> slot.role == DotNetCSharpSlotRole.ERASED } &&
+                            member.slots.any { slot -> slot.role == DotNetCSharpSlotRole.DECLARED } &&
+                            member.slots.none { slot ->
+                                slot.role == DotNetCSharpSlotRole.CANONICAL ||
+                                        slot.role == DotNetCSharpSlotRole.EXACT
+                            }
+                }) {
+                    "Reified generic C# implementation interface '${contract.logicalKey}' has an incomplete semantic family"
+                }
             }
             require(contract.sourceAuthoringSupported == contract.unsupportedReasons.isEmpty()) {
                 "C# implementation interface '${contract.logicalKey}' has inconsistent support status"
@@ -888,13 +901,15 @@ internal fun collectDotNetCSharpImplementationManifest(
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
     interfaceDefaultImplementations:
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation>,
+    genericOwnerCapabilityInterfaces: Map<IrClass, IrClass>,
+    genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
 ): DotNetCSharpImplementationManifest {
     fun IrClass.isCSharpSourceAuthorableInterface(): Boolean {
         if (!isInterface || fileOrNull !in files || this !in preLoweringDeclarationKeys) return false
-        // A Kotlin-owned generic interface has one erased implementation ABI. A typed C#
-        // authoring contract is an explicit export product and must not be inferred merely from
-        // a public Kotlin declaration.
-        if (typeParameters.isNotEmpty()) return false
+        // Production-erased generic interfaces still need an explicit export. The atomic
+        // rehearsal may instead make a structurally admitted interface's natural I<T> the public
+        // owner and records its separate declaration-semantic capability below.
+        if (typeParameters.isNotEmpty() && this !in genericOwnerCapabilityInterfaces) return false
         var owner: IrClass? = this
         while (owner != null) {
             when (owner.visibility) {
@@ -938,7 +953,11 @@ internal fun collectDotNetCSharpImplementationManifest(
         .asSequence()
         .filter(IrClass::isCSharpSourceAuthorableInterface)
         .map { irClass ->
-            val canonicalClassInfo = availableClasses.getValue(irClass)
+            val naturalClassInfo = availableClasses.getValue(irClass)
+            val semanticCapability = genericOwnerCapabilityInterfaces[irClass]
+            val semanticClassInfo = semanticCapability?.let(availableClasses::getValue)
+            val isReifiedGenericInterface = irClass.typeParameters.isNotEmpty() && semanticClassInfo != null
+            val canonicalClassInfo = semanticClassInfo ?: naturalClassInfo
             val interfaceKey = checkNotNull(preLoweringDeclarationKeys[irClass]) {
                 "Source-authorable interface has no pre-lowering logical key"
             }
@@ -1006,20 +1025,46 @@ internal fun collectDotNetCSharpImplementationManifest(
                 }
                 .map { source ->
                     val memberKey = checkNotNull(preLoweringDeclarationKeys[source])
-                    val authoringView = DotNetCSharpInterfaceView.CANONICAL
-                    val canonicalInfo = checkNotNull(availableFunctions[source]) {
+                    val authoringView = if (isReifiedGenericInterface) {
+                        DotNetCSharpInterfaceView.DECLARED
+                    } else {
+                        DotNetCSharpInterfaceView.CANONICAL
+                    }
+                    val naturalInfo = checkNotNull(availableFunctions[source]) {
                         "C# implementation manifest source member did not survive physical emission"
                     }
-                    val canonicalMethodName =
-                        canonicalInfo.physicalMethodName ?: source.dotNetIlMethodName()
+                    val naturalMethodName = naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()
                     val slots = buildList {
-                        add(locator(
-                            DotNetCSharpSlotRole.CANONICAL,
-                            source,
-                            canonicalInfo,
-                            canonicalMethodName,
-                            canonicalPropertyName(source, canonicalMethodName),
-                        ))
+                        if (isReifiedGenericInterface) {
+                            val semanticSlot = checkNotNull(genericOwnerCapabilitySlots[source]) {
+                                "Reified C# implementation member has no declaration-semantic slot"
+                            }
+                            val semanticInfo = checkNotNull(availableFunctions[semanticSlot]) {
+                                "Reified C# implementation semantic slot did not survive physical emission"
+                            }
+                            add(locator(
+                                DotNetCSharpSlotRole.ERASED,
+                                semanticSlot,
+                                semanticInfo,
+                                semanticInfo.physicalMethodName ?: semanticSlot.dotNetIlMethodName(),
+                                propertyName = null,
+                            ))
+                            add(locator(
+                                DotNetCSharpSlotRole.DECLARED,
+                                source,
+                                naturalInfo,
+                                naturalMethodName,
+                                canonicalPropertyName(source, naturalMethodName),
+                            ))
+                        } else {
+                            add(locator(
+                                DotNetCSharpSlotRole.CANONICAL,
+                                source,
+                                naturalInfo,
+                                naturalMethodName,
+                                canonicalPropertyName(source, naturalMethodName),
+                            ))
+                        }
                         interfaceDefaultImplementations[source]?.let { lowered ->
                             val helperInfo = checkNotNull(availableFunctions[lowered.helper]) {
                                 "C# implementation manifest default helper did not survive physical emission"
@@ -1066,9 +1111,23 @@ internal fun collectDotNetCSharpImplementationManifest(
             DotNetCSharpInterfaceContract(
                 logicalKey = interfaceKey,
                 canonicalOwnerPath = canonicalClassInfo.physicalPathComponents(),
-                declaredOwnerPath = null,
+                declaredOwnerPath = naturalClassInfo.physicalPathComponents()
+                    .takeIf { isReifiedGenericInterface },
                 exactOwnerPath = null,
-                typeParameters = emptyList(),
+                typeParameters = if (isReifiedGenericInterface) {
+                    irClass.typeParameters.map { parameter ->
+                        DotNetCSharpTypeParameter(
+                            parameter.name.asString(),
+                            when (parameter.variance) {
+                                Variance.INVARIANT -> DotNetCSharpTypeParameterVariance.INVARIANT
+                                Variance.IN_VARIANCE -> DotNetCSharpTypeParameterVariance.IN
+                                Variance.OUT_VARIANCE -> DotNetCSharpTypeParameterVariance.OUT
+                            },
+                        )
+                    }
+                } else {
+                    emptyList()
+                },
                 sourceAuthoringSupported = unsupportedReasons.isEmpty(),
                 unsupportedReasons = unsupportedReasons,
                 members = members,

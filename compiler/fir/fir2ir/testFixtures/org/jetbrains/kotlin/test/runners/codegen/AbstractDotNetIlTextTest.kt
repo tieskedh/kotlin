@@ -10,6 +10,10 @@ import org.jetbrains.kotlin.backend.dotnet.DOTNET_GENERIC_OWNER_CALL_ROUTE_TRACE
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceView
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
@@ -148,6 +152,7 @@ import org.jetbrains.kotlin.fir.moduleData
 import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
+import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import org.jetbrains.kotlin.platform.dotnet.isDotNet
 import org.jetbrains.kotlin.test.Constructor
@@ -4111,6 +4116,65 @@ private const val GENERIC_OWNER_CALL_ROUTE_TRACE_MANIFEST_FILE =
     "generic-owner-call-route-trace.properties"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_COUNTER_PROTOCOL = "FINAL_FLUSH"
 private val genericOwnerCallRouteTraceManifests = ConcurrentHashMap<String, String>()
+private const val DOTNET_CSHARP_AUTHORING_TOOLING_PROPERTY =
+    "kotlin.dotnet.test.csharpAuthoringTooling.path"
+
+/** Validates the real producer resource consumed by the supported C# source-authoring tool. */
+private fun validateReifiedGenericInterfaceCSharpManifest(producer: File) {
+    val resource = checkNotNull(
+        DotNetManagedResourceReader.read(
+            producer,
+            DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+        )
+    ) {
+        "The reified generic-interface producer has no C# implementation manifest"
+    }
+    check(resource.isPublic) {
+        "The reified generic-interface C# implementation manifest must remain publicly discoverable"
+    }
+    val manifest = DotNetCSharpImplementationManifestCodec.decodeManagedResource(resource.content)
+    val contract = manifest.interfaces.single { candidate ->
+        candidate.declaredOwnerPath?.lastOrNull() == "RehearsalSeparateProducer`1"
+    }
+    check(contract.sourceAuthoringSupported && contract.unsupportedReasons.isEmpty()) {
+        "The admitted reified generic interface is not supported for C# source authoring"
+    }
+    check(contract.typeParameters.single().variance == DotNetCSharpTypeParameterVariance.OUT) {
+        "The reified generic-interface manifest lost Kotlin declaration-site covariance"
+    }
+    check(contract.exactOwnerPath == null &&
+            contract.canonicalOwnerPath != contract.declaredOwnerPath) {
+        "The reified generic-interface manifest did not separate natural and semantic owners"
+    }
+    val member = contract.members.single { candidate -> candidate.sourceName == "produce" }
+    check(member.authoringView == DotNetCSharpInterfaceView.DECLARED) {
+        "C# authoring must target the natural generic interface"
+    }
+    check(member.slots.mapTo(linkedSetOf()) { slot -> slot.role } ==
+            linkedSetOf(DotNetCSharpSlotRole.ERASED, DotNetCSharpSlotRole.DECLARED)) {
+        "The reified generic-interface manifest has an incomplete physical member family"
+    }
+    val semantic = member.slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
+    val natural = member.slots.single { slot -> slot.role == DotNetCSharpSlotRole.DECLARED }
+    check(semantic.ownerPath == contract.canonicalOwnerPath &&
+            semantic.returnType == "object" && semantic.parameterTypes.isEmpty()) {
+        "The declaration-semantic producer slot is not the expected object-domain capability"
+    }
+    check(natural.ownerPath == contract.declaredOwnerPath &&
+            natural.returnType == "!0" && natural.parameterTypes.isEmpty()) {
+        "The natural producer slot is not a true CLR owner-parameter return"
+    }
+}
+
+/** Returns the Gradle-produced Roslyn tooling without mutating repository state inside a test. */
+private fun genericOwnerCSharpAuthoringTooling(): File =
+    System.getProperty(DOTNET_CSHARP_AUTHORING_TOOLING_PROPERTY)
+        ?.let(::File)
+        ?.takeIf(File::isFile)
+        ?: error(
+            "Missing Kotlin C# authoring tooling from system property " +
+                    "'$DOTNET_CSHARP_AUTHORING_TOOLING_PROPERTY'"
+        )
 
 /**
  * Proves against the actual Kotlin rehearsal product that the natural typed MethodDef remains
@@ -4138,11 +4202,34 @@ private fun validateGenericOwnerForeignCSharpOverride(
     }
     directory.mkdirs()
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
-    if (isSeparateProbe && producesLibrary) return
+    if (isSeparateProbe && producesLibrary) {
+        if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            validateReifiedGenericInterfaceCSharpManifest(producer)
+        }
+        return
+    }
     val source = directory.resolve("RehearsalForeignOverrideConsumer.cs").apply {
         writeText(
             if (isSeparateProbe) """
             using System;
+
+            public sealed partial class RehearsalSeparateCSharpProducer :
+                RehearsalSeparateProducer<string>
+            {
+                public string produce()
+                {
+                    return "csharp-interface";
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpChildProducer :
+                RehearsalSeparateChildProducer<string>
+            {
+                public string produce()
+                {
+                    return "csharp-child-interface";
+                }
+            }
 
             public sealed class RehearsalSeparateCSharpOverrideStore :
                 RehearsalSeparateKotlinOverrideStore<string>
@@ -4169,6 +4256,34 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "separate Kotlin semantic dispatch bypassed the natural typed C# override: " +
                             widened);
+                    RehearsalSeparateCSharpProducer producer =
+                        new RehearsalSeparateCSharpProducer();
+                    if (producer.produce() != "csharp-interface")
+                        throw new InvalidOperationException(
+                            "direct C# generic-interface implementation was not invoked");
+                    RehearsalSeparateProducerReader reader =
+                        new RehearsalSeparateProducerReader();
+                    object broad = reader.read(producer);
+                    if (!object.Equals(broad, "csharp-interface"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated C# interface bridge: " +
+                            broad);
+                    if (!reader.same(producer, producer))
+                        throw new InvalidOperationException(
+                            "the generated C# interface bridge changed object identity");
+                    RehearsalSeparateCSharpChildProducer childProducer =
+                        new RehearsalSeparateCSharpChildProducer();
+                    if (childProducer.produce() != "csharp-child-interface")
+                        throw new InvalidOperationException(
+                            "direct C# generic-subinterface implementation was not invoked");
+                    object broadChild = reader.read(childProducer);
+                    if (!object.Equals(broadChild, "csharp-child-interface"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated C# subinterface bridge: " +
+                            broadChild);
+                    if (!reader.same(childProducer, childProducer))
+                        throw new InvalidOperationException(
+                            "the generated C# subinterface bridge changed object identity");
                     return 0;
                 }
             }
@@ -4242,6 +4357,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
     } else {
         listOf(producer)
     }
+    val modernCSharp = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+        "Modern Roslyn is required for the generic-owner foreign override probe"
+    }
+    val authoringTooling = genericOwnerCSharpAuthoringTooling()
+    val generatedDirectory = directory.resolve("generated-${target.description}")
     val compilation = when (target) {
         DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
             checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
@@ -4252,20 +4372,38 @@ private fun validateGenericOwnerForeignCSharpOverride(
             references = producerReferences + listOf(runtime, stdlib),
             executable = true,
             warningsAsErrors = true,
+            analyzers = listOf(authoringTooling),
+            generatedFilesDirectory = generatedDirectory,
         )
         DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
-            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
-                "Modern C# compiler is required for the generic-owner foreign override probe"
-            },
+            modernCSharp,
             source,
             consumer,
             references = producerReferences + listOf(runtime, stdlib),
             executable = true,
             warningsAsErrors = true,
+            analyzers = listOf(authoringTooling),
+            generatedFilesDirectory = generatedDirectory,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("netstandard2.0 has no executable override probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
+    if (isSeparateProbe) {
+        val generated = generatedDirectory.walkTopDown()
+            .filter { file ->
+                file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+            }
+            .joinToString("\n", transform = File::readText)
+        check("RehearsalSeparateProducer" in generated) {
+            "The C# authoring tool did not generate the real Kotlin interface bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpChildProducer" in generated) {
+            "The C# authoring tool did not generate the foreign subinterface implementation bridge:\n$generated"
+        }
+        check("KotlinSemantic" !in source.readText()) {
+            "Authored C# source must not name the Kotlin semantic capability"
+        }
+    }
     val stagedDependencies = if (isSeparateProbe) {
         producerReferences.map { dependency -> dependency to dependency.name }
     } else {
@@ -12705,6 +12843,8 @@ private fun compileFrameworkSnapshotCSharp(
     references: List<File>,
     executable: Boolean,
     warningsAsErrors: Boolean = false,
+    analyzers: List<File> = emptyList(),
+    generatedFilesDirectory: File? = null,
 ): SnapshotCSharpCompilation {
     output.delete()
     val toolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
@@ -12727,6 +12867,11 @@ private fun compileFrameworkSnapshotCSharp(
         add("/out:${output.path}")
         frameworkReferences.forEach { reference -> add("/reference:${reference.path}") }
         references.forEach { reference -> add("/reference:${reference.path}") }
+        analyzers.forEach { analyzer -> add("/analyzer:${analyzer.path}") }
+        generatedFilesDirectory?.let { directory ->
+            directory.mkdirs()
+            add("/generatedfilesout:${directory.path}")
+        }
         add(source.path)
     }, output.parentFile)
 }
@@ -12738,6 +12883,8 @@ private fun compileModernSnapshotCSharp(
     references: List<File>,
     executable: Boolean,
     warningsAsErrors: Boolean = false,
+    analyzers: List<File> = emptyList(),
+    generatedFilesDirectory: File? = null,
 ): SnapshotCSharpCompilation {
     output.delete()
     val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
@@ -12755,6 +12902,11 @@ private fun compileModernSnapshotCSharp(
         add("/out:${output.path}")
         frameworkReferences.forEach { reference -> add("/reference:${reference.path}") }
         references.forEach { reference -> add("/reference:${reference.path}") }
+        analyzers.forEach { analyzer -> add("/analyzer:${analyzer.path}") }
+        generatedFilesDirectory?.let { directory ->
+            directory.mkdirs()
+            add("/generatedfilesout:${directory.path}")
+        }
         add(source.path)
     }, output.parentFile)
 }
