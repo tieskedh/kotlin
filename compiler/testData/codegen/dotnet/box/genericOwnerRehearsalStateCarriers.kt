@@ -98,6 +98,10 @@ public class RehearsalNestedBox<T>(initial: T) {
     }
 }
 
+public open class RehearsalNestedAnimal(public val label: String)
+
+public class RehearsalNestedCat(label: String) : RehearsalNestedAnimal(label)
+
 public fun rehearsalBroadProducerBox(
     producer: RehearsalProducer<Any?>,
 ): RehearsalNestedBox<RehearsalProducer<Any?>> = RehearsalNestedBox(producer)
@@ -105,6 +109,20 @@ public fun rehearsalBroadProducerBox(
 public fun rehearsalExactStringProducerBox(
     producer: RehearsalProducer<String>,
 ): RehearsalNestedBox<RehearsalProducer<String>> = RehearsalNestedBox(producer)
+
+public fun rehearsalNumberProducerBox(
+    producer: RehearsalProducer<Number>,
+): RehearsalNestedBox<RehearsalProducer<Number>> = RehearsalNestedBox(producer)
+
+public fun rehearsalComparableProducerBox(
+    producer: RehearsalProducer<Comparable<Int>>,
+): RehearsalNestedBox<RehearsalProducer<Comparable<Int>>> =
+    RehearsalNestedBox(producer)
+
+public fun rehearsalAnimalProducerBox(
+    producer: RehearsalProducer<RehearsalNestedAnimal>,
+): RehearsalNestedBox<RehearsalProducer<RehearsalNestedAnimal>> =
+    RehearsalNestedBox(producer)
 
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
@@ -170,6 +188,31 @@ fun box(): String {
         rehearsalBroadProduce(broadProducerBox.read()) != "typed"
     ) {
         return "fail: broad nested producer box write"
+    }
+
+    val numberProducer: RehearsalProducer<Number> = intProducer
+    val numberProducerBox = rehearsalNumberProducerBox(numberProducer)
+    if (numberProducerBox.read() !== intProducer ||
+        rehearsalBroadProduce(numberProducerBox.read()) != 41
+    ) {
+        return "fail: number nested producer box"
+    }
+    val comparableProducer: RehearsalProducer<Comparable<Int>> = intProducer
+    val comparableProducerBox = rehearsalComparableProducerBox(comparableProducer)
+    if (comparableProducerBox.read() !== intProducer ||
+        rehearsalBroadProduce(comparableProducerBox.read()) != 41
+    ) {
+        return "fail: comparable nested producer box"
+    }
+
+    val catProducer: RehearsalProducer<RehearsalNestedCat> =
+        RehearsalProducerValue(RehearsalNestedCat("cat"))
+    val animalProducer: RehearsalProducer<RehearsalNestedAnimal> = catProducer
+    val animalProducerBox = rehearsalAnimalProducerBox(animalProducer)
+    if (animalProducerBox.read() !== catProducer ||
+        animalProducerBox.read().produce().label != "cat"
+    ) {
+        return "fail: reference-only nested producer box"
     }
 
     return "OK"

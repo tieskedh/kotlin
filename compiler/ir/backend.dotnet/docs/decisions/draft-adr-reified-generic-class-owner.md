@@ -225,10 +225,21 @@ Reads from that slot remain object-carried through type-agnostic consumers and
 enter the generic-owner semantic dispatcher at an actual member operation.
 They must not reconstruct `Producer<object>`. This isolates instability in one
 closed outer construction; it does not erase the open `Box<T>` field, change
-all `List<T>` element storage, add shadow state, or wrap the value. The current
-proof is deliberately bounded to an admitted covariant owner whose universal
-argument maps to `object`; broader construction-stability inference remains a
-separate gate.
+all `List<T>` element storage, add shadow state, or wrap the value.
+
+The covariant stability test is not limited to a universal argument which
+already maps to object. A non-universal reference argument is also unstable
+when one of the target's admitted CLR value carriers is a proper Kotlin
+subtype. For example, `Int : Comparable<Int>` makes logical
+`Producer<Comparable<Int>>` capable of carrying physical `Producer<int>`, but
+CLR variance cannot convert that value-type construction to
+`Producer<IComparable<int>>`. The enclosing construction must use object. In
+contrast, `Cat : Animal` is reference-only and ordinary CLR covariance keeps
+`Producer<Animal>` truthful. The rehearsal computes this with Kotlin IR
+subtyping over the eight admitted signed Common scalar carriers and caches the
+result per logical argument; it must not recognize `Number`, `Comparable`, or
+any stdlib declaration by name. Value classes, open arguments, and
+contravariant/mixed/multi-parameter owners remain separate stability gates.
 
 Cross-module Kotlin ABI cannot assume that a value with a closed logical type
 was born from a closed construction. A generic producer can return a value

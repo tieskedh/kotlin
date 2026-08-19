@@ -1302,14 +1302,24 @@ wrapper or shadow state. The same shape is consumed from a separate KLIB and
 reflected from C# on both profiles. This is a structural admitted-owner rule,
 not a `Box`, `List`, or `Producer` name exception.
 
-The next nested-carrier gate must generalize the construction-stability proof
-beyond the universal covariant `Any?` argument. Cover a non-universal
-reference supertype with a legal value-type producer subtype, nested open
-arguments, and the dual contravariant case before admitting invariant, mixed,
-or multi-parameter owners. A stable reference-only covariance construction
-must remain a natural CLR generic argument; an unstable construction must
-widen only that enclosing instantiation, never the open owner's `!T` field or
-unrelated `List<T>` state.
+The construction-stability proof now extends beyond the universal covariant
+`Any?` argument. It asks whether any of the eight admitted signed Common CLR
+value carriers is a proper Kotlin subtype of the logical argument. Therefore
+`Producer<Int> -> Producer<Comparable<Int>>` selects `Box<object>` even though
+the target argument itself maps to the reference construction
+`IComparable<int>`. The paired `Producer<Cat> -> Producer<Animal>` control
+retains `Box<Producer<Animal>>`; reference-only CLR covariance is not
+unnecessarily erased. The predicate is Kotlin-type-system based and cached,
+not a `Number`/`Comparable` or declaration-name exception.
+
+The next nested-carrier gate is the dual contravariant construction plus a
+nested open argument. Prove when a physical `Consumer<Super>` may occupy a
+logical `Consumer<Sub>` slot that CLR value-type variance cannot name, while a
+reference-only contravariant construction remains exact. Then carry the same
+decision recursively through an open enclosing type parameter before
+admitting invariant, mixed, multi-parameter, or value-class owners. Any
+unstable construction must still widen only its enclosing instantiation,
+never the open owner's `!T` field or unrelated `List<T>` state.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1348,6 +1358,8 @@ The separately compiled classifier-input evidence is in
 [`../archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md`](../archive/reified-generic-interface-classifier-input-boundary-2026-08-19.md).
 The nested construction evidence is in
 [`../archive/generic-owner-nested-construction-carrier-2026-08-19.md`](../archive/generic-owner-nested-construction-carrier-2026-08-19.md).
+The proper-value-subtype extension is in
+[`../archive/generic-owner-value-subtype-construction-stability-2026-08-19.md`](../archive/generic-owner-value-subtype-construction-stability-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a

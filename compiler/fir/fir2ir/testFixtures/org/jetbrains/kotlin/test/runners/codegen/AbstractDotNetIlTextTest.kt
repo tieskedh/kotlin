@@ -4494,6 +4494,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             RehearsalSeparateProducer<string>>))
                         throw new InvalidOperationException(
                             "the separate exact nested construction lost its typed CLR argument");
+                    Type separateComparableBoxReturn = typeof(libKt)
+                        .GetMethod("rehearsalSeparateComparableProducerBox").ReturnType;
+                    if (separateComparableBoxReturn !=
+                            typeof(RehearsalSeparateNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "the separate Comparable construction selected a false natural argument");
+                    Type separateAnimalBoxReturn = typeof(libKt)
+                        .GetMethod("rehearsalSeparateAnimalProducerBox").ReturnType;
+                    if (separateAnimalBoxReturn != typeof(RehearsalSeparateNestedBox<
+                            RehearsalSeparateProducer<RehearsalSeparateNestedAnimal>>))
+                        throw new InvalidOperationException(
+                            "the separate reference-only construction was unnecessarily widened");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4755,6 +4767,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                     System.Reflection.BindingFlags.NonPublic).FieldType != typeof(string))
                         throw new InvalidOperationException(
                             "exact Box<T> constructions lost their natural typed field");
+                    Type numberBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalNumberProducerBox").ReturnType;
+                    if (numberBoxReturn != typeof(RehearsalNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "a value-type-compatible Number producer selected a false natural construction");
+                    Type comparableBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalComparableProducerBox").ReturnType;
+                    if (comparableBoxReturn != typeof(RehearsalNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "a value-type-compatible Comparable producer selected a false natural construction");
+                    Type animalBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalAnimalProducerBox").ReturnType;
+                    if (animalBoxReturn != typeof(RehearsalNestedBox<
+                            RehearsalProducer<RehearsalNestedAnimal>>))
+                        throw new InvalidOperationException(
+                            "reference-only covariance was unnecessarily widened to object");
                     return 0;
                 }
             }

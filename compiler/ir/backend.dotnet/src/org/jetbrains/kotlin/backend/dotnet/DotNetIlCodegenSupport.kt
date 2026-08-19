@@ -712,6 +712,7 @@ internal class DotNetIlTypeMapper private constructor(
     private val externalGenericOwnerFunctionInputEntries:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry>,
     private val erasedValueClassMethodParameters: Set<IrTypeParameter>,
+    private val genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean,
     val stdlibAssemblyName: String?,
     private val assemblyReferenceSink: (String) -> Unit,
 ) {
@@ -740,6 +741,7 @@ internal class DotNetIlTypeMapper private constructor(
         externalGenericOwnerFunctionInputEntries:
                 Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry> = emptyMap(),
         erasedValueClassMethodParameters: Set<IrTypeParameter> = emptySet(),
+        genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean = { false },
         stdlibAssemblyName: String? = DotNetStdlibLibrary.ASSEMBLY_NAME,
         assemblyReferenceSink: (String) -> Unit = {},
         foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit = {},
@@ -771,6 +773,7 @@ internal class DotNetIlTypeMapper private constructor(
         externalGenericOwnerPhysicalSlots,
         externalGenericOwnerFunctionInputEntries,
         erasedValueClassMethodParameters,
+        genericArgumentHasProperClrValueSubtype,
         stdlibAssemblyName,
         assemblyReferenceSink,
     )
@@ -801,6 +804,7 @@ internal class DotNetIlTypeMapper private constructor(
             externalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries,
             erasedValueClassMethodParameters,
+            genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName,
             assemblyReferenceSink,
         )
@@ -854,6 +858,7 @@ internal class DotNetIlTypeMapper private constructor(
             externalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries,
             erasedValueClassMethodParameters + copiedParameters,
+            genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName,
             assemblyReferenceSink,
         )
@@ -1171,7 +1176,8 @@ internal class DotNetIlTypeMapper private constructor(
     fun toDotNetIlGenericArgumentType(type: IrType): DotNetIlValueType? {
         toDotNetIlBoxedValueClassType(type)?.let { return it }
         val mapped = toDotNetIlValueType(type) ?: return null
-        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return mapped
+        val simpleType = type as? IrSimpleType ?: return mapped
+        val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return mapped
         genericOwnerCapabilityInfoOrNull(owner) ?: return mapped
         if (mapped !is DotNetIlValueType.GenericInstance) {
             // A projection, star, or open argument already selected the non-generic semantic
@@ -1180,17 +1186,20 @@ internal class DotNetIlTypeMapper private constructor(
             // the one construction argument which preserves both implementations and identity.
             return DotNetIlValueType.Object
         }
-        val hasCovariantUniversalArgument = owner.typeParameters
-            .zip(mapped.arguments)
-            .any { pair ->
-                pair.first.variance == Variance.OUT_VARIANCE && pair.second == DotNetIlValueType.Object
-            }
-        if (hasCovariantUniversalArgument) {
+        val hasCovariantUnstableArgument = owner.typeParameters.indices.any { index ->
+            owner.typeParameters[index].variance == Variance.OUT_VARIANCE &&
+                    (mapped.arguments[index] == DotNetIlValueType.Object ||
+                            (simpleType.arguments[index] as? IrTypeProjection)?.type
+                                ?.let(genericArgumentHasProperClrValueSubtype) == true)
+        }
+        if (hasCovariantUnstableArgument) {
             // `Producer<Any?>` can physically be Producer<int>, Producer<string>, or an ordinary
-            // foreign implementation. Used as Box<T>'s T, no single Producer<object> construction
-            // contains that Kotlin view. Substitute object for this nested construction only;
-            // Box still owns one !T field, so Box<int>, Box<string>, and Box<Producer<string>>
-            // remain naturally typed while Box<Producer<Any?>> becomes Box<object>.
+            // foreign implementation. The same mismatch occurs for a narrower reference target
+            // such as `Producer<Comparable<Int>>`: Kotlin Int implements Comparable<Int>, while
+            // CLR variance does not convert Producer<int> to Producer<IComparable<int>>. Used as
+            // Box<T>'s T, neither target construction contains every legal Kotlin value.
+            // Substitute object for this nested construction only; exact scalar, reference-only,
+            // and stable nested constructions retain their natural generic argument.
             return DotNetIlValueType.Object
         }
         return mapped

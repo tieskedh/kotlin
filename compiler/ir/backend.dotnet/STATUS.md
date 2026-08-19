@@ -190,10 +190,19 @@ verification, and work state.
   and separate-KLIB mutation, dispatch, identity, open-field reflection, and
   C# factory signatures execute under both frontends on Framework 4.8 and
   .NET 10. The rule is structural and contains no `Box`, `List`, or `Producer`
-  name switch. It currently proves the universal covariant argument case;
-  other subtype roots, contravariant/mixed owners, and nested open arguments
-  remain separate gates. Evidence is archived in
+  name switch. The construction-stability predicate now also finds a proper
+  supported CLR-value Kotlin subtype beneath a non-universal reference
+  argument. Thus `Producer<Int> -> Producer<Comparable<Int>>` makes only the
+  enclosing construction `Box<object>`, while the reference-only
+  `Producer<Cat> -> Producer<Animal>` keeps the exact
+  `Box<Producer<Animal>>` construction. The predicate uses Kotlin IR subtyping
+  over all eight admitted signed Common scalar carriers and is cached per
+  logical argument type; it contains no `Number` or `Comparable` name check.
+  Value classes, contravariant/mixed owners, and nested open arguments remain
+  separate gates. Evidence is archived in
   [`docs/archive/generic-owner-nested-construction-carrier-2026-08-19.md`](docs/archive/generic-owner-nested-construction-carrier-2026-08-19.md).
+  The proper-value-subtype extension is archived in
+  [`docs/archive/generic-owner-value-subtype-construction-stability-2026-08-19.md`](docs/archive/generic-owner-value-subtype-construction-stability-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
