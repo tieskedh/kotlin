@@ -28,15 +28,25 @@ verification, and work state.
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Latest generic-interface reopening proof: the test-only generic-owner epoch
-  now emits the first structural Kotlin-owned CLR-generic interface family.
+  now emits the first structural Kotlin-owned CLR-generic interface family and
+  propagates it across a producer boundary. Assembly A may declare the
+  admitted `Producer<out T>` and its one non-generic declaration-semantic
+  capability, while assembly B declares a transparent
+  `Child<out T> : Producer<T>`. The child remains a natural CLR `Child<T>` and
+  records the assembly-qualified capability from A; it is neither erased nor
+  given a duplicate/local alias capability. ABI 38 publishes that physical
+  identity, and library selection fails closed before emission if the named
+  self-describing capability assembly is absent.
+
+  The structural root rule remains unchanged.
   Any public top-level `Producer<out T>` shape with one abstract no-input
   `T`-result member becomes a natural covariant CLR `Producer<T>` plus one
   non-generic declaration-semantic capability. Exact final substitutions use
   the natural interface; stars, projections, type-parameter/open arguments,
   and widened value-type views use the capability on the same object. A
-  transparent same-product `Child<out T> : Producer<T>` closes at a fixpoint,
-  remains a real CLR `Child<T>`, and reuses the inherited capability rather
-  than adding another semantic representation. Same-module and separate-
+  transparent local or external `Child<out T> : Producer<T>` closes at a
+  fixpoint, remains a real CLR `Child<T>`, and reuses the inherited capability
+  rather than adding another semantic representation. Same-module and separate-
   compilation Kotlin implementations preserve exact calls, widened calls,
   boxing, and identity on Framework 4.8 and .NET 10. The producer's public
   versioned manifest drives the supported Roslyn generator, so partial C#
@@ -47,9 +57,11 @@ verification, and work state.
   lowering: an inherited class body receives a typed MethodImpl only when its
   CLR return carrier actually differs, while exact signatures remain direct.
   Production remains on the accepted erased interface ABI. Inputs, defaults,
-  properties, mixed variance, external-product child declarations, Runtime/
-  Stdlib closure, other CLR languages, and precompiled or non-partial
-  implementors remain gates. The final inverse target aggregate covers 190
+  properties, mixed variance, interface intersections, Runtime/Stdlib closure,
+  other CLR languages, and precompiled or non-partial implementors remain
+  gates. The focused external-child matrix covers PSI and LightTree on .NET 10
+  and Framework 4.8: four suites, four tests, and zero failures, errors, or
+  skips. The final inverse target aggregate covers 190
   XML suites and 2,287 tests with zero failures, errors, or skips: 187 FIR
   suites/2,155 tests, two integration suites/126 tests, and the unchanged
   six-test `dotnet.ir` root. A deliberate whole-corpus rehearsal audit is not
@@ -58,6 +70,8 @@ verification, and work state.
   remaining failures retain production IL snapshots or already recorded
   class-owner/Stdlib gates. See
   [`docs/decisions/draft-adr-reified-generic-interface-owner.md`](docs/decisions/draft-adr-reified-generic-interface-owner.md).
+  External-child ABI and IL evidence is archived in
+  [`docs/archive/reified-generic-interface-external-child-2026-08-19.md`](docs/archive/reified-generic-interface-external-child-2026-08-19.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
@@ -104,7 +118,8 @@ verification, and work state.
   inner-class parameters, constructed owner calls and fields, value-class
   carriers, classifier-only Kotlin `is`/`as?` behavior, and the permitted
   earlier failure of explicitly unchecked throwing parameterized casts.
-  Physical ABI 37 carries owner arity, capability/member-family bindings,
+  Physical ABI 38 carries owner arity, assembly-qualified capability/member-
+  family bindings,
   producer-selected capability slots in ordinary function signatures, and
   foreign-override probe identities to separate Kotlin consumers. The focused
   PSI/LightTree and Framework
