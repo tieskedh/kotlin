@@ -85,6 +85,27 @@ private class RehearsalProducerValue<T>(private val value: T) : RehearsalProduce
 
 private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
 
+// The owner itself always retains one !T field. A logical construction whose argument can carry
+// a CLR-unnameable semantic producer view substitutes object for this construction only; exact
+// scalar, reference, and nested-producer constructions retain their natural CLR argument.
+public class RehearsalNestedBox<T>(initial: T) {
+    private var value: T = initial
+
+    public fun read(): T = value
+
+    public fun write(value: T) {
+        this.value = value
+    }
+}
+
+public fun rehearsalBroadProducerBox(
+    producer: RehearsalProducer<Any?>,
+): RehearsalNestedBox<RehearsalProducer<Any?>> = RehearsalNestedBox(producer)
+
+public fun rehearsalExactStringProducerBox(
+    producer: RehearsalProducer<String>,
+): RehearsalNestedBox<RehearsalProducer<String>> = RehearsalNestedBox(producer)
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -123,6 +144,33 @@ fun box(): String {
 
     val stringProducer: RehearsalProducer<String> = RehearsalProducerValue("typed")
     if (stringProducer.produce() != "typed") return "fail: exact reference producer"
+
+    val intBox = RehearsalNestedBox(51)
+    intBox.write(53)
+    if (intBox.read() != 53) return "fail: exact value box"
+    val stringBox = RehearsalNestedBox("nested")
+    stringBox.write("typed-nested")
+    if (stringBox.read() != "typed-nested") return "fail: exact reference box"
+
+    val exactProducerBox = rehearsalExactStringProducerBox(stringProducer)
+    if (exactProducerBox.read() !== stringProducer ||
+        exactProducerBox.read().produce() != "typed"
+    ) {
+        return "fail: exact nested producer box"
+    }
+
+    val broadProducerBox = rehearsalBroadProducerBox(broadProducer)
+    if (broadProducerBox.read() !== intProducer ||
+        rehearsalBroadProduce(broadProducerBox.read()) != 41
+    ) {
+        return "fail: broad nested producer box"
+    }
+    broadProducerBox.write(stringProducer)
+    if (broadProducerBox.read() !== stringProducer ||
+        rehearsalBroadProduce(broadProducerBox.read()) != "typed"
+    ) {
+        return "fail: broad nested producer box write"
+    }
 
     return "OK"
 }

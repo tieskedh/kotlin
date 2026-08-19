@@ -208,6 +208,28 @@ Stars, projections, and a construction which has no uniform truthful CLR
 spelling use the same object's semantic capability. This is a carrier choice,
 not another Kotlin identity.
 
+When that logical generic-owner value itself becomes an argument of another
+CLR generic construction, its capability is not automatically a universal
+nested argument. Ordinary precompiled CLR implementations may implement only
+the natural `I<X>` and cannot be retrofitted with the Kotlin capability. The
+enclosing construction therefore substitutes `object` only when the concrete
+logical argument can denote multiple CLR-incompatible natural constructions.
+For the first proved case:
+
+- open `Box<T>` still has one `!T` field;
+- `Box<Int>`, `Box<String>`, and `Box<Producer<String>>` remain exact; and
+- logical `Box<Producer<Any?>>` is physical `Box<object>`, because its slot may
+  contain `Producer<int>`, `Producer<string>`, or an ordinary foreign producer.
+
+Reads from that slot remain object-carried through type-agnostic consumers and
+enter the generic-owner semantic dispatcher at an actual member operation.
+They must not reconstruct `Producer<object>`. This isolates instability in one
+closed outer construction; it does not erase the open `Box<T>` field, change
+all `List<T>` element storage, add shadow state, or wrap the value. The current
+proof is deliberately bounded to an admitted covariant owner whose universal
+argument maps to `object`; broader construction-stability inference remains a
+separate gate.
+
 Cross-module Kotlin ABI cannot assume that a value with a closed logical type
 was born from a closed construction. A generic producer can return a value
 whose physical construction was selected under an open type expression.

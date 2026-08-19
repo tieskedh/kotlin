@@ -64,6 +64,26 @@ public class RehearsalSeparateProducerReader {
         producer === expected
 }
 
+public class RehearsalSeparateNestedBox<T>(initial: T) {
+    private var value: T = initial
+
+    public fun read(): T = value
+
+    public fun write(value: T) {
+        this.value = value
+    }
+}
+
+public fun rehearsalSeparateBroadProducerBox(
+    producer: RehearsalSeparateProducer<Any?>,
+): RehearsalSeparateNestedBox<RehearsalSeparateProducer<Any?>> =
+    RehearsalSeparateNestedBox(producer)
+
+public fun rehearsalSeparateExactProducerBox(
+    producer: RehearsalSeparateProducer<String>,
+): RehearsalSeparateNestedBox<RehearsalSeparateProducer<String>> =
+    RehearsalSeparateNestedBox(producer)
+
 public class RehearsalSeparateStarProducerStore(
     private val producer: RehearsalSeparateProducer<*>,
 ) {
@@ -272,6 +292,26 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val broadProducerBox = rehearsalSeparateBroadProducerBox(broadProducer)
+    if (broadProducerBox.read() !== exactProducer ||
+        RehearsalSeparateProducerReader().read(broadProducerBox.read()) != 31
+    ) {
+        return "fail: separate broad nested producer box"
+    }
+    val exactStringProducer: RehearsalSeparateProducer<String> =
+        RehearsalSeparateProducerValue("separate-nested")
+    broadProducerBox.write(exactStringProducer)
+    if (broadProducerBox.read() !== exactStringProducer ||
+        RehearsalSeparateProducerReader().read(broadProducerBox.read()) != "separate-nested"
+    ) {
+        return "fail: separate broad nested producer box write"
+    }
+    val exactProducerBox = rehearsalSeparateExactProducerBox(exactStringProducer)
+    if (exactProducerBox.read() !== exactStringProducer ||
+        exactProducerBox.read().produce() != "separate-nested"
+    ) {
+        return "fail: separate exact nested producer box"
+    }
     val starProducerStore = RehearsalSeparateStarProducerStore(exactProducer)
     if (starProducerStore.read() != 31 || !starProducerStore.same(exactProducer)) {
         return "fail: separate star producer storage"
