@@ -62,8 +62,9 @@ import org.jetbrains.kotlin.types.Variance
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant producer with one abstract no-input member returning its
  * owner parameter directly. Transparent covariant subinterfaces inherit that physical family at
- * a fixpoint, including across a producer boundary. Other families retain the accepted erased
- * production ABI until their complete semantic surface has its own proof.
+ * a fixpoint, including across a producer boundary. A transparent intersection of independent
+ * admitted roots receives one memberless capability alias over those roots. Other families retain
+ * the accepted erased production ABI until their complete semantic surface has its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
@@ -94,19 +95,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ?: owner.fqNameWhenAvailable?.asString()
                 ?: owner.name.asString()
             val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
-            val capability = context.irFactory.buildClass {
-                startOffset = owner.startOffset
-                endOffset = owner.endOffset
-                origin = DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
-                name = Name.identifier("I${owner.name.asString()}KotlinSemantic$suffix")
-                kind = ClassKind.INTERFACE
-                modality = Modality.ABSTRACT
-                visibility = DescriptorVisibilities.PUBLIC
-            }.apply {
-                parent = file
-                superTypes = listOf(context.irBuiltIns.anyType)
-                createThisReceiverParameter()
-            }
+            val capability = buildSemanticCapability(owner, file, suffix, emptyList())
             file.declarations += capability
             owner.superTypes += capability.symbol.defaultType
             context.reifiedGenericInterfaces += owner
@@ -139,29 +128,62 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
 
         // The physical choice is closed over transparent interface inheritance. Otherwise an
-        // arity-zero Child would have to name the already-reified Parent<T> without owning a CLR
-        // T, which is impossible. Reusing the parent's one capability also avoids duplicate
-        // semantic slots: Child<T> and Parent<T> remain two natural CLR identities over the same
-        // Kotlin declaration-semantic domain. An external parent contributes only producer ABI;
-        // do not synthesize an alias capability in the child product.
+        // arity-zero Child would have to name an already-reified Parent<T> without owning a CLR T,
+        // which is impossible. One parent reuses its capability. Multiple independent parents
+        // require one memberless child capability which inherits each semantic domain: this gives
+        // widened Child<T> one honest carrier without copying a slot, implementation, or state.
         var changed: Boolean
         do {
             changed = false
             for (owner in genericInterfaces) {
                 if (owner in context.reifiedGenericInterfaces) continue
-                val parent = owner.transparentReifiedProducerParentOrNull() ?: continue
-                val localCapability = context.genericOwnerCapabilityInterfaces[parent]
-                if (localCapability != null) {
+                val parents = owner.transparentReifiedProducerParentsOrNull() ?: continue
+                if (parents.any { parent ->
+                        parent !in context.genericOwnerCapabilityInterfaces &&
+                                parent !in context.externalReifiedGenericInterfaceCapabilityProviders &&
+                                !externalDeclarations.hasReifiedGenericInterface(parent)
+                    }
+                ) {
+                    continue
+                }
+                val localCapabilities = parents.mapNotNull(context.genericOwnerCapabilityInterfaces::get)
+                    .distinct()
+                val externalProviders = parents.mapNotNull { parent ->
+                    context.externalReifiedGenericInterfaceCapabilityProviders[parent]
+                        ?: parent.takeIf(externalDeclarations::hasReifiedGenericInterface)
+                }.distinctBy { provider ->
+                    val capability = checkNotNull(
+                        externalDeclarations.genericOwnerCapabilityInfoOrNull(provider)
+                    )
+                    capability.assemblyName to capability.physicalPathComponents()
+                }
+                if (localCapabilities.size == 1 && externalProviders.isEmpty()) {
                     context.reifiedGenericInterfaces += owner
-                    context.genericOwnerCapabilityInterfaces[owner] = localCapability
+                    context.genericOwnerCapabilityInterfaces[owner] = localCapabilities.single()
                     changed = true
                     continue
                 }
-                val externalProvider = context.externalReifiedGenericInterfaceCapabilityProviders[parent]
-                    ?: parent.takeIf(externalDeclarations::hasReifiedGenericInterface)
-                    ?: continue
+                if (externalProviders.size == 1 && localCapabilities.isEmpty()) {
+                    context.reifiedGenericInterfaces += owner
+                    context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProviders.single()
+                    changed = true
+                    continue
+                }
+                val file = checkNotNull(owner.fileOrNull) {
+                    "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
+                }
+                val identity = context.preLoweringDeclarationKeys[owner]
+                    ?: owner.fqNameWhenAvailable?.asString()
+                    ?: owner.name.asString()
+                val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
+                val capability = buildSemanticCapability(owner, file, suffix, localCapabilities)
+                file.declarations += capability
+                owner.superTypes += capability.symbol.defaultType
                 context.reifiedGenericInterfaces += owner
-                context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProvider
+                context.genericOwnerCapabilityInterfaces[owner] = capability
+                if (externalProviders.isNotEmpty()) {
+                    context.externalGenericOwnerCapabilitySupertypeProviders[capability] = externalProviders
+                }
                 changed = true
             }
         } while (changed)
@@ -240,10 +262,30 @@ internal class DotNetReifiedGenericInterfaceLowering(
         })
     }
 
+    private fun buildSemanticCapability(
+        owner: IrClass,
+        file: IrFile,
+        suffix: String,
+        inheritedCapabilities: List<IrClass>,
+    ): IrClass = context.irFactory.buildClass {
+        startOffset = owner.startOffset
+        endOffset = owner.endOffset
+        origin = DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
+        name = Name.identifier("I${owner.name.asString()}KotlinSemantic$suffix")
+        kind = ClassKind.INTERFACE
+        modality = Modality.ABSTRACT
+        visibility = DescriptorVisibilities.PUBLIC
+    }.apply {
+        parent = file
+        superTypes = listOf(context.irBuiltIns.anyType) +
+                inheritedCapabilities.map { it.symbol.defaultType }
+        createThisReceiverParameter()
+    }
+
     private fun IrClass.declaredProducerMembers(): List<IrSimpleFunction> =
         declarations.filterIsInstance<IrSimpleFunction>().filterNot(IrSimpleFunction::isFakeOverride)
 
-    private fun IrClass.transparentReifiedProducerParentOrNull(): IrClass? {
+    private fun IrClass.transparentReifiedProducerParentsOrNull(): List<IrClass>? {
         if (!hasFirstReifiedProducerOwnerShape()) return null
         if (declarations.any { declaration -> declaration is IrProperty } ||
             declaredProducerMembers().isNotEmpty()
@@ -251,12 +293,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return null
         }
         val parameter = typeParameters.single()
-        val parentType = dotNetDirectInterfaceTypes().singleOrNull() ?: return null
-        val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
-        val argument = parentType.arguments.singleOrNull() as? IrTypeProjection ?: return null
-        val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-        return parent.takeIf {
-            argument.variance == Variance.INVARIANT && argumentParameter?.owner === parameter
+        val parentTypes = dotNetDirectInterfaceTypes().takeIf { it.isNotEmpty() } ?: return null
+        return parentTypes.map { parentType ->
+            val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
+            val argument = parentType.arguments.singleOrNull() as? IrTypeProjection ?: return null
+            val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+            parent.takeIf {
+                argument.variance == Variance.INVARIANT && argumentParameter?.owner === parameter
+            } ?: return null
         }
     }
 

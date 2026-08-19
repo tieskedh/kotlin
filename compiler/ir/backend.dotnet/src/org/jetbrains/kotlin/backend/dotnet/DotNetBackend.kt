@@ -224,6 +224,8 @@ object DotNetBackend {
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                     externalReifiedGenericInterfaceCapabilityProviders =
                         context.externalReifiedGenericInterfaceCapabilityProviders,
+                    externalGenericOwnerCapabilitySupertypeProviders =
+                        context.externalGenericOwnerCapabilitySupertypeProviders,
                     genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
                     genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
                     genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
@@ -352,6 +354,8 @@ object DotNetBackend {
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                 externalReifiedGenericInterfaceCapabilityProviders =
                     context.externalReifiedGenericInterfaceCapabilityProviders,
+                externalGenericOwnerCapabilitySupertypeProviders =
+                    context.externalGenericOwnerCapabilitySupertypeProviders,
                 genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
                 genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
                 genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
