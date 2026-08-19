@@ -220,6 +220,22 @@ The separate Kotlin consumer and a C# reflection oracle prove both signatures,
 same-object return, one actual foreign member invocation, and the later
 `String` result check on Framework 4.8 and .NET 10 with both FIR parsers.
 
+The paired input boundary keeps that ordinary exact API rather than changing
+its sole MethodDef to `object`. For each admitted public final function with
+one exact-looking classifier input, ABI 40 may publish one additional compiler
+MethodDef whose selected parameter is `object`. Calls use it only when producer
+provenance says that the argument came from the classifier path. Exact Kotlin
+and C# calls continue to use the natural MethodDef and direct source body. The
+alternate entry deep-copies the same compiler IR body, is named by the logical
+function digest, and is bound by an explicit producer record across separate
+compilation. `CHECK_NOT_NULL` is carrier-neutral, so it and an immutable local
+cannot turn the foreign object into a fabricated `Source<string>`.
+
+This is a callable boundary, not permission to erase all parameters of that
+logical type. Open/overridable functions, multiple selected inputs, defaults,
+varargs, function generics, generic owners, custom property accessors, and
+unproven control flow remain outside the proof.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -239,13 +255,15 @@ must cover:
    compositions beyond the admitted one-input consumer root;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
-4. broad and `@UnsafeVariance` inputs, parameterized throwing `as`, mixed-
-   control-flow classifier returns, and classifier-derived fields and input
-   parameters crossing separately compiled exact-looking boundaries;
+4. broad and `@UnsafeVariance` inputs, one shared classifier predicate for
+   parameterized `is`/`as`/`as?`, mixed-control-flow classifier returns,
+   classifier-derived fields, and broader input parameters crossing separately
+   compiled exact-looking boundaries;
 5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and
    ordinary foreign implementations beyond the no-input covariant producer;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
-   assembly graphs, including classifier-derived fields and parameters;
+   assembly graphs, including classifier-derived fields and non-final or
+   multi-input parameters;
 7. Runtime and Stdlib owners including collection special bridges without a
    collection-specific representation; and
 8. exact inverse rollback plus Framework 4.8, .NET 10, trimming, and NativeAOT

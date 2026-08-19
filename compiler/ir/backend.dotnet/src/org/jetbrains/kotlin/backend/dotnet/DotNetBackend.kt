@@ -230,10 +230,13 @@ object DotNetBackend {
                     genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
                     genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                     genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
+                    genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
                     genericOwnerDirectForeignOverrideDispatches =
                         context.genericOwnerDirectForeignOverrideDispatches,
                     genericOwnerForeignOverrideProbeTargets = context.genericOwnerForeignOverrideProbeTargets,
                     externalGenericOwnerPhysicalSlots = context.externalGenericOwnerPhysicalSlots,
+                    externalGenericOwnerFunctionInputEntries =
+                        context.externalGenericOwnerFunctionInputEntries,
                     genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
                     genericOwnerForeignDispatchCallTargets = context.genericOwnerForeignDispatchCallTargets,
                     genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
@@ -362,10 +365,13 @@ object DotNetBackend {
                 genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
                 genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                 genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
+                genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
                 genericOwnerDirectForeignOverrideDispatches =
                     context.genericOwnerDirectForeignOverrideDispatches,
                 genericOwnerForeignOverrideProbeTargets = context.genericOwnerForeignOverrideProbeTargets,
                 externalGenericOwnerPhysicalSlots = context.externalGenericOwnerPhysicalSlots,
+                externalGenericOwnerFunctionInputEntries =
+                    context.externalGenericOwnerFunctionInputEntries,
                 genericOwnerCapabilityCallTargets = context.genericOwnerCapabilityCallTargets,
                 genericOwnerForeignDispatchCallTargets = context.genericOwnerForeignDispatchCallTargets,
                 genericOwnerCapabilityDeclarations = context.genericOwnerCapabilityDeclarations,
