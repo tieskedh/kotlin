@@ -125,6 +125,12 @@ data class DotNetGenericOwnerAbi(
     }
 }
 
+/** Physical carrier selected for one generic-owner slot in an otherwise ordinary function. */
+enum class DotNetGenericOwnerFunctionCarrierKind {
+    SEMANTIC_CAPABILITY,
+    OBJECT,
+}
+
 enum class DotNetInterfaceDefaultPromotionView {
     CANONICAL,
     DECLARED,
@@ -194,12 +200,12 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
-    /** Producer-selected semantic-capability carriers in one otherwise ordinary function ABI. */
+    /** Producer-selected non-natural carriers in one otherwise ordinary function ABI. */
     data class GenericOwnerFunctionCarrier(
         override val ownerPath: List<String>,
         val logicalFunctionKey: String,
-        val carriesReturn: Boolean,
-        val parameterIndices: List<Int>,
+        val returnCarrier: DotNetGenericOwnerFunctionCarrierKind?,
+        val parameterCarriers: Map<Int, DotNetGenericOwnerFunctionCarrierKind>,
     ) : DotNetPhysicalDeclaration {
         init {
             require(ownerPath.isNotEmpty()) {
@@ -208,14 +214,11 @@ sealed interface DotNetPhysicalDeclaration {
             require(logicalFunctionKey.isNotEmpty()) {
                 "a generic-owner function carrier requires a logical function identity"
             }
-            require(carriesReturn || parameterIndices.isNotEmpty()) {
+            require(returnCarrier != null || parameterCarriers.isNotEmpty()) {
                 "a generic-owner function carrier must select at least one signature slot"
             }
-            require(
-                parameterIndices.all { index -> index >= 0 } &&
-                        parameterIndices == parameterIndices.distinct().sorted()
-            ) {
-                "generic-owner function carrier parameter indices must be sorted, unique, and non-negative"
+            require(parameterCarriers.keys.all { index -> index >= 0 }) {
+                "generic-owner function carrier parameter indices must be non-negative"
             }
         }
     }
@@ -479,7 +482,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "38"
+    const val ABI_VERSION = "39"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -675,10 +678,36 @@ object DotNetLibraryAbiCodec {
         listOf(
             "S",
             logicalFunctionKey,
-            if (carriesReturn) "1" else "0",
-            parameterIndices.joinToString(","),
+            returnCarrier.encodeCarrierKind(),
+            parameterCarriers.toSortedMap().entries.joinToString(",") { entry ->
+                "${entry.key}:${entry.value.encodeCarrierKind()}"
+            },
             ownerPath.size.toString(),
         ) + ownerPath
+
+    private fun DotNetGenericOwnerFunctionCarrierKind?.encodeCarrierKind(): String = when (this) {
+        null -> "N"
+        DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY -> "C"
+        DotNetGenericOwnerFunctionCarrierKind.OBJECT -> "O"
+    }
+
+    private fun String.decodeCarrierKind(
+        logicalKey: String,
+        slotDescription: String,
+        allowsNatural: Boolean,
+    ): DotNetGenericOwnerFunctionCarrierKind? = when (this) {
+        "N" -> {
+            require(allowsNatural) {
+                "generic-owner function carrier '$logicalKey' has a natural $slotDescription"
+            }
+            null
+        }
+        "C" -> DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY
+        "O" -> DotNetGenericOwnerFunctionCarrierKind.OBJECT
+        else -> throw IllegalArgumentException(
+            "generic-owner function carrier '$logicalKey' has invalid $slotDescription carrier '$this'"
+        )
+    }
 
     private fun decodeGenericOwnerFunctionCarrier(
         fields: List<String>,
@@ -691,29 +720,33 @@ object DotNetLibraryAbiCodec {
         require(ownerSize != null && ownerSize > 0 && fields.size == 5 + ownerSize) {
             "generic-owner function carrier '$logicalKey' has an invalid CLR owner-path payload"
         }
-        val carriesReturn = when (fields[2]) {
-            "0" -> false
-            "1" -> true
-            else -> throw IllegalArgumentException(
-                "generic-owner function carrier '$logicalKey' has invalid return flag '${fields[2]}'"
-            )
-        }
-        val parameterIndices = if (fields[3].isEmpty()) {
-            emptyList()
-        } else {
-            fields[3].split(',').map { encodedIndex ->
-                encodedIndex.toIntOrNull()
+        val returnCarrier = fields[2].decodeCarrierKind(logicalKey, "return", allowsNatural = true)
+        val parameterCarriers = buildMap {
+            if (fields[3].isNotEmpty()) fields[3].split(',').forEach { encodedEntry ->
+                val components = encodedEntry.split(':')
+                require(components.size == 2) {
+                    "generic-owner function carrier '$logicalKey' has invalid parameter entry '$encodedEntry'"
+                }
+                val index = components[0].toIntOrNull()
                     ?: throw IllegalArgumentException(
                         "generic-owner function carrier '$logicalKey' has invalid parameter index " +
-                                "'$encodedIndex'"
+                                "'${components[0]}'"
                     )
+                val carrier = components[1].decodeCarrierKind(
+                    logicalKey,
+                    "parameter $index",
+                    allowsNatural = false,
+                )
+                require(put(index, checkNotNull(carrier)) == null) {
+                    "generic-owner function carrier '$logicalKey' repeats parameter index $index"
+                }
             }
         }
         return DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
             ownerPath = fields.drop(5).requireOwnerPath(logicalKey, "generic-owner function carrier"),
             logicalFunctionKey = fields[1],
-            carriesReturn = carriesReturn,
-            parameterIndices = parameterIndices,
+            returnCarrier = returnCarrier,
+            parameterCarriers = parameterCarriers,
         ).also { carrier ->
             require(carrier.indexKey() == logicalKey) {
                 "generic-owner function carrier '$logicalKey' is inconsistent with its structured identity"
@@ -1791,6 +1824,11 @@ internal class DotNetExternalDeclarations(
         return genericOwnerMemberFamiliesByLogicalKey[logicalKey]
     }
 
+    fun genericOwnerFunctionCarrierOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerFunctionCarrier? {
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        return genericOwnerFunctionCarriersByLogicalKey[logicalKey]
+    }
+
     fun genericOwnerPhysicalFunctionInfo(
         function: IrSimpleFunction,
         binding: DotNetBoundGenericOwnerPhysicalSlot,
@@ -1940,7 +1978,9 @@ internal class DotNetExternalDeclarations(
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlMethodSignature {
         val physicalParameters = parameterTypes.toMutableList()
-        carrier.parameterIndices.forEach { index ->
+        for (entry in carrier.parameterCarriers.entries) {
+            val index = entry.key
+            val carrierKind = entry.value
             val parameter = function.parameters.getOrNull(index)
                 ?: error(
                     "external function '${carrier.logicalFunctionKey}' records missing generic-owner " +
@@ -1952,23 +1992,38 @@ internal class DotNetExternalDeclarations(
                             "at recorded index $index"
                 )
             }
-            physicalParameters[index] =
-                typeMapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type)
-                ?: error(
-                    "external function '${carrier.logicalFunctionKey}' records parameter $index as a " +
-                            "generic-owner capability without a producer capability"
-                )
+            physicalParameters[index] = when (carrierKind) {
+                DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY ->
+                    typeMapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type)
+                        ?: error(
+                            "external function '${carrier.logicalFunctionKey}' records parameter $index as a " +
+                                    "generic-owner capability without a producer capability"
+                        )
+                DotNetGenericOwnerFunctionCarrierKind.OBJECT -> {
+                    require(typeMapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type) != null) {
+                        "external function '${carrier.logicalFunctionKey}' records parameter $index as object " +
+                                "without a producer generic-owner capability"
+                    }
+                    DotNetIlValueType.Object
+                }
+            }
         }
-        val physicalReturn = if (carrier.carriesReturn) {
-            DotNetIlReturnType.Value(
+        val physicalReturn = when (carrier.returnCarrier) {
+            null -> returnType
+            DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY -> DotNetIlReturnType.Value(
                 typeMapper.genericOwnerSemanticCapabilityTypeOrNull(function.returnType)
                     ?: error(
                         "external function '${carrier.logicalFunctionKey}' records its return as a " +
                                 "generic-owner capability without a producer capability"
                     )
             )
-        } else {
-            returnType
+            DotNetGenericOwnerFunctionCarrierKind.OBJECT -> {
+                require(typeMapper.genericOwnerSemanticCapabilityTypeOrNull(function.returnType) != null) {
+                    "external function '${carrier.logicalFunctionKey}' records its return as object without a " +
+                            "producer generic-owner capability"
+                }
+                DotNetIlReturnType.Value(DotNetIlValueType.Object)
+            }
         }
         return copy(returnType = physicalReturn, parameterTypes = physicalParameters)
     }
@@ -2384,21 +2439,34 @@ internal fun collectDotNetLibraryDeclarations(
         )
         typeMapper?.let { mapper ->
             val capabilityReturn = mapper.genericOwnerSemanticCapabilityTypeOrNull(function.returnType)
-            val carriesReturn = mapper.isGenericOwnerCapabilityDeclaration(function) &&
-                    functionInfo.signature.returnType == capabilityReturn?.let(DotNetIlReturnType::Value)
-            val capabilityParameterIndices = function.parameters.mapIndexedNotNull { index, parameter ->
-                val capability = mapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type)
-                index.takeIf {
-                    mapper.isGenericOwnerCapabilityDeclaration(parameter) &&
-                            functionInfo.signature.parameterTypes.getOrNull(index) == capability
-                }
+            val returnCarrier = when {
+                mapper.isGenericOwnerForeignDispatchDeclaration(function) &&
+                        functionInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object) ->
+                    DotNetGenericOwnerFunctionCarrierKind.OBJECT
+                mapper.isGenericOwnerCapabilityDeclaration(function) &&
+                        functionInfo.signature.returnType == capabilityReturn?.let(DotNetIlReturnType::Value) ->
+                    DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY
+                else -> null
             }
-            if (carriesReturn || capabilityParameterIndices.isNotEmpty()) {
+            val parameterCarriers = function.parameters.mapIndexedNotNull { index, parameter ->
+                val capability = mapper.genericOwnerSemanticCapabilityTypeOrNull(parameter.type)
+                val carrier = when {
+                    mapper.isGenericOwnerForeignDispatchDeclaration(parameter) &&
+                            functionInfo.signature.parameterTypes.getOrNull(index) == DotNetIlValueType.Object ->
+                        DotNetGenericOwnerFunctionCarrierKind.OBJECT
+                    mapper.isGenericOwnerCapabilityDeclaration(parameter) &&
+                            functionInfo.signature.parameterTypes.getOrNull(index) == capability ->
+                        DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY
+                    else -> null
+                }
+                carrier?.let { index to it }
+            }.toMap()
+            if (returnCarrier != null || parameterCarriers.isNotEmpty()) {
                 val carrier = DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
                     ownerPath = functionInfo.owner.physicalPathComponents(),
                     logicalFunctionKey = logicalKey,
-                    carriesReturn = carriesReturn,
-                    parameterIndices = capabilityParameterIndices,
+                    returnCarrier = returnCarrier,
+                    parameterCarriers = parameterCarriers,
                 )
                 put(carrier.indexKey(), carrier)
             }

@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
@@ -37,11 +38,14 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
@@ -248,6 +252,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
 
         fun IrExpression.classifierErasedInterfaceOwnerOrNull(): IrClass? = when (this) {
+            is IrCall -> type.reifiedCovariantInterfaceOwnerOrNull().takeIf {
+                symbol.owner in context.genericOwnerForeignDispatchDeclarations ||
+                        externalDeclarations.genericOwnerFunctionCarrierOrNull(symbol.owner)
+                            ?.carrier?.returnCarrier == DotNetGenericOwnerFunctionCarrierKind.OBJECT
+            }
             is IrTypeOperatorCall -> when (operator) {
                 IrTypeOperator.SAFE_CAST -> typeOperand.reifiedCovariantInterfaceOwnerOrNull()
                 IrTypeOperator.IMPLICIT_CAST,
@@ -318,19 +327,29 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return false
         }
 
+        fun IrSimpleFunction.externalReturnCarrierOrNull(): DotNetGenericOwnerFunctionCarrierKind? =
+            externalDeclarations.genericOwnerFunctionCarrierOrNull(this)?.carrier?.returnCarrier
+
         fun IrExpression.readsSemanticInterfaceDeclaration(): Boolean = when (this) {
             is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrGetField -> symbol.owner in context.genericOwnerCapabilityDeclarations
-            is IrCall -> symbol.owner in context.genericOwnerCapabilityDeclarations
-            is IrTypeOperatorCall ->
-                operator == IrTypeOperator.IMPLICIT_CAST && argument.readsSemanticInterfaceDeclaration()
+            is IrCall -> symbol.owner in context.genericOwnerCapabilityDeclarations ||
+                    symbol.owner.externalReturnCarrierOrNull() != null
+            is IrTypeOperatorCall -> when (operator) {
+                IrTypeOperator.IMPLICIT_CAST,
+                IrTypeOperator.IMPLICIT_NOTNULL,
+                    -> argument.readsSemanticInterfaceDeclaration()
+                else -> false
+            }
             else -> false
         }
 
         fun IrExpression.readsForeignDispatchDeclaration(): Boolean = when (this) {
             is IrGetValue -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
             is IrGetField -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
-            is IrCall -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
+            is IrCall -> symbol.owner in context.genericOwnerForeignDispatchDeclarations ||
+                    symbol.owner.externalReturnCarrierOrNull() ==
+                    DotNetGenericOwnerFunctionCarrierKind.OBJECT
             is IrTypeOperatorCall ->
                 argument.readsForeignDispatchDeclaration() ||
                         (operator == IrTypeOperator.IMPLICIT_CAST &&
@@ -380,6 +399,42 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
 
+        // Publish an object result only from one authoritative producer expression. A logical
+        // exact-looking return type is insufficient evidence, and nested/mixed control flow
+        // remains fail-closed until its complete result graph is proven.
+        fun IrSimpleFunction.singlePhysicalReturnProducerOrNull(): IrExpression? = when (val functionBody = body) {
+            is IrExpressionBody -> functionBody.expression
+            is IrBlockBody -> functionBody.statements.filterIsInstance<IrReturn>()
+                .singleOrNull { expression -> expression.returnTargetSymbol == symbol }
+                ?.value
+            else -> null
+        }
+
+        fun recordExternalFunctionCarrier(function: IrSimpleFunction) {
+            val carrier = externalDeclarations.genericOwnerFunctionCarrierOrNull(function)?.carrier ?: return
+            when (carrier.returnCarrier) {
+                null -> Unit
+                DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY ->
+                    context.genericOwnerCapabilityDeclarations += function
+                DotNetGenericOwnerFunctionCarrierKind.OBJECT -> {
+                    context.genericOwnerCapabilityDeclarations += function
+                    context.genericOwnerForeignDispatchDeclarations += function
+                }
+            }
+            for (entry in carrier.parameterCarriers.entries) {
+                val index = entry.key
+                val carrierKind = entry.value
+                val parameter = function.parameters.getOrNull(index)
+                    ?: error(
+                        "External generic-owner function '${function.name}' records missing parameter $index"
+                    )
+                context.genericOwnerCapabilityDeclarations += parameter
+                if (carrierKind == DotNetGenericOwnerFunctionCarrierKind.OBJECT) {
+                    context.genericOwnerForeignDispatchDeclarations += parameter
+                }
+            }
+        }
+
         irModule.acceptVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
                 element.acceptChildrenVoid(this)
@@ -387,7 +442,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
             override fun visitFunction(declaration: org.jetbrains.kotlin.ir.declarations.IrFunction) {
                 if (declaration is IrSimpleFunction) {
-                    recordSemanticDeclaration(declaration, declaration.returnType)
+                    recordSemanticDeclaration(
+                        declaration,
+                        declaration.returnType,
+                        declaration.singlePhysicalReturnProducerOrNull(),
+                    )
                 }
                 declaration.acceptChildrenVoid(this)
             }
@@ -419,9 +478,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val source = expression.symbol.owner.let { candidate ->
                     candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
                 }
+                recordExternalFunctionCarrier(source)
                 // The physical carrier is part of the callable ABI, so a separately compiled
                 // caller must derive the same decision from its external declaration stub. The
-                // producer module has already published these broad covariant views as `object`;
+                // producer module has already published explicitly selected non-natural views;
                 // recording the called stub here prevents the consumer from naming a constructed
                 // CLR interface which the published method deliberately does not accept.
                 recordSemanticDeclaration(source, source.returnType)
@@ -443,6 +503,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     null -> false
                     is IrGetValue -> receiver.symbol.owner in context.genericOwnerCapabilityDeclarations
                     is IrGetField -> receiver.symbol.owner in context.genericOwnerCapabilityDeclarations
+                    is IrCall -> receiver.readsSemanticInterfaceDeclaration()
                     is IrTypeOperatorCall ->
                         receiver.readsSemanticInterfaceDeclaration() ||
                                 (receiver.type.potentialSemanticInterfaceOwnerOrNull() != null &&

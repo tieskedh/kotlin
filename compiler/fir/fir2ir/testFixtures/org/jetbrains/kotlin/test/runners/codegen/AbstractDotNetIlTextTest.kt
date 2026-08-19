@@ -4423,6 +4423,46 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (classifier.safeRead(rawString) != "raw-string")
                         throw new InvalidOperationException(
                             "Kotlin safe cast did not dispatch the matching precompiled producer");
+                    if (typeof(RehearsalSeparateProducerClassifier)
+                            .GetMethod("safeView").ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "classifier-derived generic view was not published through object");
+                    if (typeof(RehearsalSeparateProducerClassifier)
+                            .GetMethod("exactView").ReturnType !=
+                                typeof(RehearsalSeparateProducer<string>) ||
+                        typeof(RehearsalSeparateProducerClassifier)
+                            .GetMethod("exactView").GetParameters()[0].ParameterType !=
+                                typeof(RehearsalSeparateProducer<string>))
+                        throw new InvalidOperationException(
+                            "ordinary exact generic view lost its natural CLR signature");
+                    object safeView = classifier.safeView(rawProducer);
+                    if (!object.ReferenceEquals(safeView, rawProducer))
+                        throw new InvalidOperationException(
+                            "classifier-derived return boundary changed object identity");
+                    RehearsalSeparateProducer<string> exactView =
+                        classifier.exactView(rawString);
+                    if (!object.ReferenceEquals(exactView, rawString))
+                        throw new InvalidOperationException(
+                            "ordinary exact return boundary changed object identity");
+                    RehearsalSeparateClassifierBoundary classifierBoundary =
+                        new RehearsalSeparateClassifierBoundary();
+                    if (!classifierBoundary.same(rawProducer))
+                        throw new InvalidOperationException(
+                            "separate Kotlin consumer lost classifier-derived object identity");
+                    int callsBeforeBoundaryRead = rawProducer.Calls;
+                    try
+                    {
+                        classifierBoundary.read(rawProducer);
+                        throw new InvalidOperationException(
+                            "separate Kotlin consumer accepted an incompatible producer result");
+                    }
+                    catch (InvalidCastException)
+                    {
+                        // The separately compiled use, not safeView, checks String compatibility.
+                    }
+                    if (rawProducer.Calls != callsBeforeBoundaryRead + 1)
+                        throw new InvalidOperationException(
+                            "classifier-derived return failed before separate typed use");
                     int callsBeforeUnsafeSafeRead = rawProducer.Calls;
                     try
                     {

@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-classifier-result-boundary-2026-08-19.md`](reified-generic-interface-classifier-result-boundary-2026-08-19.md)
+  records ABI 39's distinct capability/object function carriers, a
+  classifier-derived safe-cast view crossing separate compilation without a
+  false constructed-generic cast, retained natural exact APIs, and the final
+  2,287-test proof.
 - [`reified-generic-interface-foreign-classifier-2026-08-19.md`](reified-generic-interface-foreign-classifier-2026-08-19.md)
   records declaration-erased `is`/`as?` over ordinary foreign CLR producers,
   same-object safe casts, delayed typed-result failure, classifier-admitted

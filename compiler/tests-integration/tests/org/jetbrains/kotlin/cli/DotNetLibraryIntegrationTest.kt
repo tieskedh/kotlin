@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerAbi
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpErasedOwnerRelativeConstraint
@@ -10266,8 +10267,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
                         ownerPath = listOf("sample.LibraryKt"),
                         logicalFunctionKey = "F:sample/consumeGenericOwner",
-                        carriesReturn = true,
-                        parameterIndices = listOf(0, 2),
+                        returnCarrier = DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY,
+                        parameterCarriers = mapOf(
+                            0 to DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY,
+                            2 to DotNetGenericOwnerFunctionCarrierKind.OBJECT,
+                        ),
                     ),
             "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
