@@ -1230,12 +1230,28 @@ producer-recorded input-slot family. The public authoring manifest retains
 `void consume(object)`. Generated partial C# implementations author only
 `consume(object)` or `consume(int)` on their selected natural construction;
 Kotlin semantic calls reach both bodies without changing identity on either
-profile. This remains a source-generation contract, not support for arbitrary
-precompiled or non-partial CLR implementors.
+profile. This remains a source-generation contract for the input adapter, not
+support for arbitrary precompiled or non-partial CLR consumers.
+
+The no-input covariant producer now has a narrower, language-neutral foreign
+fallback. The natural `Producer<T>` and its compiler semantic capability are
+siblings, so ordinary precompiled/non-partial CLR code implements only the
+natural interface. A broad Kotlin boundary carries the same object as
+`object`: capability-bearing Kotlin/generated objects dispatch directly,
+while a foreign object resolves and caches exactly one closed natural
+construction. Zero constructions fail as a cast and multiple distinct
+constructions fail as ambiguous; neither enumeration order nor a wrapper may
+select a view. A real `Producer<*>` field retains identity, and reflection's
+invocation wrapper is removed before an authored exception escapes. This proof
+executes on Framework 4.8 and .NET 10 JIT. It does not yet authorize foreign
+input/member families, runtime classifier tests, trimming, or NativeAOT.
 
 Continue with default, property, broader/multiple member, invariant, and
-mixed-variance gates, then the Runtime/Stdlib graph. The authoring generator
-still cannot retrofit precompiled, non-partial, or other-language implementors.
+mixed-variance gates, including derivability rules for ordinary foreign
+implementations, then close runtime classifier and deployment behavior before
+the Runtime/Stdlib graph. Keep the authoring generator as an optional fast path
+where it can add the semantic sibling, and as the required path only where no
+sound language-neutral adapter has yet been proven.
 See
 [`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md)
 and the external-child, intersection, and child-owned-member evidence in

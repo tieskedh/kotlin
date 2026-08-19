@@ -38,6 +38,7 @@ import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
@@ -119,7 +120,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
             val capability = buildSemanticCapability(owner, file, suffix, emptyList())
             file.declarations += capability
-            owner.superTypes += capability.symbol.defaultType
             context.reifiedGenericInterfaces += owner
             context.genericOwnerCapabilityInterfaces[owner] = capability
             materializeDeclaredSemanticSlots(
@@ -186,7 +186,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
                 val capability = buildSemanticCapability(owner, file, suffix, localCapabilities)
                 file.declarations += capability
-                owner.superTypes += capability.symbol.defaultType
                 context.reifiedGenericInterfaces += owner
                 context.genericOwnerCapabilityInterfaces[owner] = capability
                 if (externalProviders.isNotEmpty()) {
@@ -299,8 +298,17 @@ internal class DotNetReifiedGenericInterfaceLowering(
         fun IrExpression.readsSemanticInterfaceDeclaration(): Boolean = when (this) {
             is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrGetField -> symbol.owner in context.genericOwnerCapabilityDeclarations
+            is IrCall -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrTypeOperatorCall ->
                 operator == IrTypeOperator.IMPLICIT_CAST && argument.readsSemanticInterfaceDeclaration()
+            else -> false
+        }
+
+        fun IrExpression.readsForeignDispatchDeclaration(): Boolean = when (this) {
+            is IrGetValue -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
+            is IrGetField -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
+            is IrCall -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
+            is IrTypeOperatorCall -> argument.readsForeignDispatchDeclaration()
             else -> false
         }
 
@@ -330,11 +338,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
             type: IrType,
             exactProducer: IrExpression? = null,
         ) {
-            if (type.potentialSemanticInterfaceOwnerOrNull() == null) return
+            val semanticOwner = type.potentialSemanticInterfaceOwnerOrNull() ?: return
             if (exactProducer?.provesExactPhysicalInterfaceView(type) == true) {
                 exactInterfaceDeclarations += declaration
             } else {
                 context.genericOwnerCapabilityDeclarations += declaration
+                if (semanticOwner.typeParameters.single().variance == Variance.OUT_VARIANCE) {
+                    context.genericOwnerForeignDispatchDeclarations += declaration
+                }
             }
         }
 
@@ -377,6 +388,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val source = expression.symbol.owner.let { candidate ->
                     candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
                 }
+                // The physical carrier is part of the callable ABI, so a separately compiled
+                // caller must derive the same decision from its external declaration stub. The
+                // producer module has already published these broad covariant views as `object`;
+                // recording the called stub here prevents the consumer from naming a constructed
+                // CLR interface which the published method deliberately does not accept.
+                recordSemanticDeclaration(source, source.returnType)
+                source.parameters
+                    .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                    .forEach { parameter -> recordSemanticDeclaration(parameter, parameter.type) }
                 val sourceOwner = source.parent as? IrClass
                 val slot = slotsBySource[source] ?: sourceOwner
                     ?.takeIf(externalDeclarations::hasReifiedGenericInterface)
@@ -400,7 +420,20 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
                 if (slot != null && usesSemanticCarrier) {
                     context.genericOwnerCapabilityCallTargets[expression] = slot
+                    if (receiver?.readsForeignDispatchDeclaration() == true) {
+                        context.genericOwnerForeignDispatchCallTargets[expression] = slot
+                    }
                 }
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitConstructorCall(expression: IrConstructorCall) {
+                // Constructors have their own IR node and therefore do not pass through
+                // visitCall. Their regular parameters nevertheless publish the same physical
+                // ABI and must be re-derived from an external stub by a separate compilation.
+                expression.symbol.owner.parameters
+                    .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                    .forEach { parameter -> recordSemanticDeclaration(parameter, parameter.type) }
                 expression.acceptChildrenVoid(this)
             }
         })
