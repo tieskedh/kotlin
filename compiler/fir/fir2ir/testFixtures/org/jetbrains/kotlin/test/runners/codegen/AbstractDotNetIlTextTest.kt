@@ -4123,6 +4123,7 @@ private const val DOTNET_CSHARP_AUTHORING_TOOLING_PROPERTY =
 private fun validateReifiedGenericInterfaceCSharpManifest(
     producer: File,
     expectedDeclaredOwner: String = "RehearsalSeparateProducer`1",
+    expectedMemberName: String = "produce",
 ) {
     val resource = checkNotNull(
         DotNetManagedResourceReader.read(
@@ -4151,12 +4152,12 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     }
     if (expectedDeclaredOwner == "RehearsalSeparateChildProducer`1") {
         check(contract.members.isEmpty() &&
-                contract.canonicalOwnerPath.last().startsWith("IRehearsalSeparateProducerKotlinSemantic")) {
-            "The external-parent child did not reuse the producer assembly's semantic capability"
+                contract.canonicalOwnerPath.last().startsWith("IRehearsalSeparateChildProducerKotlinSemantic")) {
+            "The external-parent intersection did not publish one combined semantic capability"
         }
         return
     }
-    val member = contract.members.single { candidate -> candidate.sourceName == "produce" }
+    val member = contract.members.single { candidate -> candidate.sourceName == expectedMemberName }
     check(member.authoringView == DotNetCSharpInterfaceView.DECLARED) {
         "C# authoring must target the natural generic interface"
     }
@@ -4214,8 +4215,14 @@ private fun validateGenericOwnerForeignCSharpOverride(
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
     if (isSeparateProbe && producesLibrary) {
         when {
-            producer.name.equals("lib.dll", ignoreCase = true) ->
+            producer.name.equals("lib.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(producer)
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateSecondaryProducer`1",
+                    expectedMemberName = "produceSecondary",
+                )
+            }
             producer.name.equals("middle.dll", ignoreCase = true) ->
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
@@ -4244,6 +4251,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public string produce()
                 {
                     return "csharp-child-interface";
+                }
+
+                public string produceSecondary()
+                {
+                    return "csharp-secondary-child-interface";
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpLocalIntersectionProducer :
+                RehearsalSeparateLocalIntersectionProducer<string>
+            {
+                public string produce()
+                {
+                    return "csharp-local-intersection";
+                }
+
+                public string produceSecondary()
+                {
+                    return "csharp-local-intersection-secondary";
                 }
             }
 
@@ -4300,6 +4326,35 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!reader.same(childProducer, childProducer))
                         throw new InvalidOperationException(
                             "the generated C# subinterface bridge changed object identity");
+                    if (childProducer.produceSecondary() != "csharp-secondary-child-interface")
+                        throw new InvalidOperationException(
+                            "direct C# secondary generic-interface implementation was not invoked");
+                    object broadSecondary =
+                        new RehearsalSeparateSecondaryProducerReader().read(childProducer);
+                    if (!object.Equals(broadSecondary, "csharp-secondary-child-interface"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated secondary bridge: " +
+                            broadSecondary);
+                    RehearsalSeparateCSharpLocalIntersectionProducer localIntersection =
+                        new RehearsalSeparateCSharpLocalIntersectionProducer();
+                    if (localIntersection.produce() != "csharp-local-intersection" ||
+                        localIntersection.produceSecondary() !=
+                            "csharp-local-intersection-secondary")
+                        throw new InvalidOperationException(
+                            "direct C# local-intersection implementation was not invoked");
+                    object broadLocalIntersection = reader.read(localIntersection);
+                    if (!object.Equals(broadLocalIntersection, "csharp-local-intersection"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated local-intersection bridge: " +
+                            broadLocalIntersection);
+                    object broadLocalIntersectionSecondary =
+                        new RehearsalSeparateSecondaryProducerReader().read(localIntersection);
+                    if (!object.Equals(
+                            broadLocalIntersectionSecondary,
+                            "csharp-local-intersection-secondary"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated local-intersection " +
+                            "secondary bridge: " + broadLocalIntersectionSecondary);
                     return 0;
                 }
             }
@@ -4415,6 +4470,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpChildProducer" in generated) {
             "The C# authoring tool did not generate the foreign subinterface implementation bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpLocalIntersectionProducer" in generated) {
+            "The C# authoring tool did not generate the local interface-intersection bridge:\n$generated"
         }
         check("KotlinSemantic" !in source.readText()) {
             "Authored C# source must not name the Kotlin semantic capability"

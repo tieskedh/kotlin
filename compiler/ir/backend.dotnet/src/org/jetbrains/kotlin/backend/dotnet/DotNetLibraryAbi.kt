@@ -1768,11 +1768,22 @@ internal class DotNetExternalDeclarations(
             "external Kotlin/.NET class '$logicalKey' publishes a generic-owner capability " +
                     "without the complete CLR owner arity"
         }
-        return buildClassInfo(
+        val capabilityInfo = buildClassInfo(
             genericOwnerAbi.capabilityAssemblyName,
             genericOwnerAbi.capabilityOwnerPath,
             emptyList(),
-        ).also { genericOwnerCapabilityInfoByLogicalKey[logicalKey] = it }
+        )
+        genericOwnerCapabilityInfoByLogicalKey[logicalKey] = capabilityInfo
+        if (irClass.isInterface) {
+            capabilityInfo.interfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { parentType ->
+                val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return@mapNotNull null
+                genericOwnerCapabilityInfoOrNull(parent)?.takeUnless { parentCapability ->
+                    parentCapability.assemblyName == capabilityInfo.assemblyName &&
+                            parentCapability.physicalPathComponents() == capabilityInfo.physicalPathComponents()
+                }?.let { parentCapability -> DotNetIlValueType.UserClass(parentCapability) }
+            }.distinct()
+        }
+        return capabilityInfo
     }
 
     fun genericOwnerMemberFamilyOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerMemberFamily? {
