@@ -56,7 +56,6 @@ import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
-import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
@@ -73,7 +72,6 @@ import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSuspendFunction
-import org.jetbrains.kotlin.ir.util.isSubtypeOf
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.render
@@ -157,6 +155,7 @@ internal class DotNetIlEmitter(
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
     private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+    private val genericOwnerCapabilityBearingDeclarations: Set<IrDeclaration> = emptySet(),
     private val genericOwnerForeignDispatchDeclarations: Set<IrDeclaration> = emptySet(),
     private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
 ) {
@@ -599,32 +598,15 @@ internal class DotNetIlEmitter(
                     DotNetIlValueType.UserClass(providerInfo)
                 }.distinct()
             }
-        val genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean =
-            if (genericOwnerCapabilities.isEmpty()) {
-                { false }
-            } else {
-                val typeSystem = IrTypeSystemContextImpl(irBuiltIns)
-                val supportedValueTypes = listOf(
-                    irBuiltIns.booleanType,
-                    irBuiltIns.byteType,
-                    irBuiltIns.shortType,
-                    irBuiltIns.intType,
-                    irBuiltIns.longType,
-                    irBuiltIns.floatType,
-                    irBuiltIns.doubleType,
-                    irBuiltIns.charType,
-                )
-                val cache = mutableMapOf<IrType, Boolean>()
-                val predicate: (IrType) -> Boolean = { targetType ->
-                    cache.getOrPut(targetType) {
-                        supportedValueTypes.any { valueType ->
-                            valueType.isSubtypeOf(targetType, typeSystem) &&
-                                    !targetType.isSubtypeOf(valueType, typeSystem)
-                        }
-                    }
-                }
-                predicate
-            }
+        // A rehearsal consumer can need this proof solely for a capability published by another
+        // module; its local capability map is then legitimately empty. Gate on the epoch rather
+        // than that map so producer and consumer re-derive the same nested construction without
+        // constructing a type-system/cache in the ordinary production emitter.
+        val genericArgumentHasProperClrValueSubtype = if (genericOwnerRehearsal) {
+            dotNetGenericArgumentHasProperClrValueSubtype(irBuiltIns)
+        } else {
+            { _: IrType -> false }
+        }
         val typeMapper = DotNetIlTypeMapper(
             availableClasses = availableClasses,
             localClasses = moduleClasses,
@@ -633,6 +615,7 @@ internal class DotNetIlEmitter(
             genericInterfaces = genericInterfaces,
             genericClasses = genericClasses,
             genericOwnerObjectStateFields = genericOwnerObjectStateFields,
+            genericOwnerRehearsal = genericOwnerRehearsal,
             genericOwnerCapabilities = genericOwnerCapabilities,
             genericOwnerReflectionCapabilities = genericOwnerReflectionCapabilityInterfaces.mapNotNull { entry ->
                 availableClasses[entry.value]?.let { entry.key to it }
@@ -640,6 +623,7 @@ internal class DotNetIlEmitter(
             genericOwnerCapabilityCallTargets = genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets = genericOwnerForeignDispatchCallTargets,
             genericOwnerCapabilityDeclarations = genericOwnerCapabilityDeclarations,
+            genericOwnerCapabilityBearingDeclarations = genericOwnerCapabilityBearingDeclarations,
             genericOwnerForeignDispatchDeclarations = genericOwnerForeignDispatchDeclarations,
             genericOwnerReflectionCapabilityDeclarations = genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots = boundExternalGenericOwnerPhysicalSlots,

@@ -440,6 +440,29 @@ internal class DotNetIlExpressionCodegen(
                                 expression.type.isDotNetInvariantOpenNullableGenericArray())
             val naturalType = if (eraseTransientArrayProjection) expectedType else mappedNaturalType(expression)
             if (naturalType != null && naturalType != expectedType && !eraseTransientArrayProjection) {
+                if (typeMapper.isGenericOwnerRehearsalEnabled() &&
+                    naturalType == DotNetIlValueType.Object &&
+                    expectedType.isDotNetReferenceShaped()
+                ) {
+                    val logicalType = typeMapper.toDotNetIlValueType(expression.type)
+                    if (logicalType != null &&
+                        typeMapper.isGenericOwnerCapabilityViewOf(expectedType, logicalType)
+                    ) {
+                        // A nested unstable construction such as Box<Consumer<Int>> stores the
+                        // original sibling-capability object in Box<object>. The declaration and
+                        // call planner select a capability only at the input-bearing member use;
+                        // recover precisely that selected view without fabricating Consumer<int>
+                        // or turning identity/null consumers into semantic calls.
+                        emitExpression(expression, DotNetIlValueType.Object)
+                        if (methodContext.isTerminated) return
+                        methodContext.emit(
+                            "castclass ${expectedType.nameInSignature}",
+                            pops = 1,
+                            pushes = 1,
+                        )
+                        return
+                    }
+                }
                 val kFunctionArity = expression.type.dotNetKFunctionExecutionArityOrNull()
                 if (kFunctionArity != null &&
                     expectedType == DotNetRuntimeTypes.functionExecutionType(kFunctionArity)
@@ -3811,6 +3834,20 @@ internal class DotNetIlExpressionCodegen(
                         "A relative generic constraint has no CLR widening coercion"
                     }
                 )
+                return
+            }
+            // Keep an exact natural C<T> local on the ordinary CLR path, but permit a later
+            // Kotlin-variant view to select the same object's non-generic capability. The
+            // lowering records this only for immutable aliases whose producer is a Kotlin class
+            // emitted with both InterfaceImpl rows; arbitrary foreign I<T> objects do not gain
+            // this escape hatch.
+            if (slotType.isDotNetReferenceShaped() &&
+                expectedType.isDotNetReferenceShaped() &&
+                typeMapper.isGenericOwnerCapabilityBearingDeclaration(expression.symbol.owner) &&
+                typeMapper.isGenericOwnerCapabilityViewOf(expectedType, slotType)
+            ) {
+                emitLoadSlot(slot)
+                methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
                 return
             }
             // A NARROWED read of a nullable-primitive slot: the frontend types a null-test-

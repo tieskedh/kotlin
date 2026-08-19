@@ -1312,14 +1312,32 @@ retains `Box<Producer<Animal>>`; reference-only CLR covariance is not
 unnecessarily erased. The predicate is Kotlin-type-system based and cached,
 not a `Number`/`Comparable` or declaration-name exception.
 
-The next nested-carrier gate is the dual contravariant construction plus a
-nested open argument. Prove when a physical `Consumer<Super>` may occupy a
-logical `Consumer<Sub>` slot that CLR value-type variance cannot name, while a
-reference-only contravariant construction remains exact. Then carry the same
-decision recursively through an open enclosing type parameter before
-admitting invariant, mixed, multi-parameter, or value-class owners. Any
-unstable construction must still widen only its enclosing instantiation,
-never the open owner's `!T` field or unrelated `List<T>` state.
+The dual contravariant nested construction is now closed. A Kotlin object
+which naturally implements `Consumer<Any?>` may legally be viewed as
+`Consumer<Int>`, but CLR variance does not convert `Consumer<object>` to
+`Consumer<int>` because constructed-generic variance applies only to reference
+arguments. The concrete enclosing `Box<Consumer<Int>>` therefore becomes
+`Box<object>` and crosses the same object's capability only at `consume`.
+Conversely, `Consumer<Animal> -> Consumer<Cat>` is reference-only CLR
+contravariance, so `Box<Consumer<Cat>>` and its `Consumer<Cat>` field remain
+typed. Exact natural locals stay on `I<T>` while only compiler-proven Kotlin
+implementations may select their sibling capability; an arbitrary C# `I<T>`
+implementation is never assumed to implement it.
+
+This gate also makes representation-aware interface routing authoritative over
+an earlier conservative owner route and keeps the natural interface MethodDef's
+dispatch receiver typed. The proper-value-subtype predicate is cached in every
+rehearsal emitter, including a separate consumer with no locally owned
+capability, so a producer cannot publish `Box<object>` while that consumer
+reconstructs a false typed return. Epoch-off emitters do not construct this
+type-system/cache. The rules contain no `Box`, `Consumer`, stdlib, or
+declaration-name exception.
+
+The next nested-carrier gate carries the same decision recursively through a
+nested open enclosing type parameter. Only after that proof should invariant,
+mixed, multi-parameter, or value-class owners be admitted. Any unstable
+construction must still widen only its enclosing instantiation, never the open
+owner's `!T` field or unrelated `List<T>` state.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1360,6 +1378,8 @@ The nested construction evidence is in
 [`../archive/generic-owner-nested-construction-carrier-2026-08-19.md`](../archive/generic-owner-nested-construction-carrier-2026-08-19.md).
 The proper-value-subtype extension is in
 [`../archive/generic-owner-value-subtype-construction-stability-2026-08-19.md`](../archive/generic-owner-value-subtype-construction-stability-2026-08-19.md).
+The contravariant extension is in
+[`../archive/generic-owner-contravariant-construction-stability-2026-08-19.md`](../archive/generic-owner-contravariant-construction-stability-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
