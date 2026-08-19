@@ -235,6 +235,29 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
 
+        fun IrType.reifiedCovariantInterfaceOwnerOrNull(): IrClass? {
+            val owner = ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                ?.takeIf { candidate ->
+                    candidate in context.reifiedGenericInterfaces ||
+                            externalDeclarations.hasReifiedGenericInterface(candidate)
+                }
+                ?: return null
+            return owner.takeIf {
+                it.typeParameters.singleOrNull()?.variance == Variance.OUT_VARIANCE
+            }
+        }
+
+        fun IrExpression.classifierErasedInterfaceOwnerOrNull(): IrClass? = when (this) {
+            is IrTypeOperatorCall -> when (operator) {
+                IrTypeOperator.SAFE_CAST -> typeOperand.reifiedCovariantInterfaceOwnerOrNull()
+                IrTypeOperator.IMPLICIT_CAST,
+                IrTypeOperator.IMPLICIT_NOTNULL,
+                    -> argument.classifierErasedInterfaceOwnerOrNull()
+                else -> null
+            }
+            else -> null
+        }
+
         fun IrType.sameInvariantTypeAs(other: IrType): Boolean {
             val left = this as? IrSimpleType ?: return false
             val right = other as? IrSimpleType ?: return false
@@ -308,7 +331,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
             is IrGetValue -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
             is IrGetField -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
             is IrCall -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
-            is IrTypeOperatorCall -> argument.readsForeignDispatchDeclaration()
+            is IrTypeOperatorCall ->
+                argument.readsForeignDispatchDeclaration() ||
+                        (operator == IrTypeOperator.IMPLICIT_CAST &&
+                                type.reifiedCovariantInterfaceOwnerOrNull() != null)
             else -> false
         }
 
@@ -338,8 +364,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
             type: IrType,
             exactProducer: IrExpression? = null,
         ) {
-            val semanticOwner = type.potentialSemanticInterfaceOwnerOrNull() ?: return
-            if (exactProducer?.provesExactPhysicalInterfaceView(type) == true) {
+            val classifierErasedOwner = exactProducer?.classifierErasedInterfaceOwnerOrNull()
+            val semanticOwner = classifierErasedOwner
+                ?: type.potentialSemanticInterfaceOwnerOrNull()
+                ?: return
+            if (classifierErasedOwner == null &&
+                exactProducer?.provesExactPhysicalInterfaceView(type) == true
+            ) {
                 exactInterfaceDeclarations += declaration
             } else {
                 context.genericOwnerCapabilityDeclarations += declaration

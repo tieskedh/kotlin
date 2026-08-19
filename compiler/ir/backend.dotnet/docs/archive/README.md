@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-foreign-classifier-2026-08-19.md`](reified-generic-interface-foreign-classifier-2026-08-19.md)
+  records declaration-erased `is`/`as?` over ordinary foreign CLR producers,
+  same-object safe casts, delayed typed-result failure, classifier-admitted
+  multi-construction objects, and Framework 4.8/.NET 10 execution.
 - [`reified-generic-interface-ordinary-foreign-producer-2026-08-19.md`](reified-generic-interface-ordinary-foreign-producer-2026-08-19.md)
   records the sibling natural/semantic interface correction, cached unique-
   construction fallback for ordinary precompiled CLR producers, real star

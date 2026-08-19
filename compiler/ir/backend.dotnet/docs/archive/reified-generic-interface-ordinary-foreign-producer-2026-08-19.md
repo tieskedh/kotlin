@@ -90,7 +90,9 @@ The foreign fallback is admitted only for the structurally derivable
 no-input covariant producer family. Input-bearing, invariant, mixed,
 multi-parameter, overloaded, defaulted, property, and generic-method families
 remain separate gates. Runtime `is`/`as?` classifier behavior for ordinary
-foreign objects and ReadyToRun, trimming, and NativeAOT retention also remain
-unproven. Generated semantic siblings remain an optional fast path, and remain
+foreign objects is closed by the subsequent
+[`reified-generic-interface-foreign-classifier-2026-08-19.md`](reified-generic-interface-foreign-classifier-2026-08-19.md)
+proof. ReadyToRun, trimming, and NativeAOT retention remain unproven. Generated
+semantic siblings remain an optional fast path, and remain
 required for families such as the current contravariant consumer whose adapter
 has not yet been derived language-neutrally.

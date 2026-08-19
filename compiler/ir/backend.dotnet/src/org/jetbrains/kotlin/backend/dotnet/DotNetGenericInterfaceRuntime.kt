@@ -56,12 +56,18 @@ internal object DotNetGenericInterfaceRuntime {
          extends ${coreLibraryReference}System.Object
   {
     .field assembly $entryType 'head'
+    .field assembly initonly $typeType[] 'interfaces'
 
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(
+        $typeType 'runtimeType') cil managed
     {
-      .maxstack 1
+      .maxstack 2
       ldarg.0
       call instance void ${coreLibraryReference}System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetInterfaces()
+      stfld $typeType[] Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'interfaces'
       ret
     }
   }
@@ -77,6 +83,94 @@ internal object DotNetGenericInterfaceRuntime {
       .maxstack 1
       newobj instance void $tableType::.ctor()
       stsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
+      ret
+    }
+
+    .method private hidebysig static $stateType 'GetProducerState'(
+        $typeType 'runtimeType') cil managed
+    {
+      .maxstack 3
+      .locals init ([0] $stateType 'state')
+      ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
+      call void ${coreLibraryReference}System.Threading.Monitor::Enter(object)
+      .try
+      {
+        ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
+        ldarg.0
+        ldloca.s 'state'
+        callvirt instance bool $tableType::TryGetValue(!0, !1&)
+        brtrue.s GIF_StateReadyInTable
+        ldarg.0
+        newobj instance void $stateType::.ctor($typeType)
+        stloc.0
+        ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
+        ldarg.0
+        ldloc.0
+        callvirt instance void $tableType::Add(!0, !1)
+      GIF_StateReadyInTable:
+        leave.s GIF_StateReady
+      }
+      finally
+      {
+        ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
+        call void ${coreLibraryReference}System.Threading.Monitor::Exit(object)
+        endfinally
+      }
+    GIF_StateReady:
+      ldloc.0
+      ret
+    }
+
+    .method public hidebysig static bool 'IsOpenGenericInterfaceInstance'(
+        object 'instance',
+        $typeType 'openDefinition') cil managed
+    {
+      .maxstack 2
+      .locals init (
+        [0] $typeType[] 'interfaces',
+        [1] int32 'index',
+        [2] $typeType 'candidate'
+      )
+      ldarg.0
+      brtrue.s GIF_TestInstanceReady
+      ldc.i4.0
+      ret
+    GIF_TestInstanceReady:
+      ldarg.0
+      callvirt instance $typeType ${coreLibraryReference}System.Object::GetType()
+      call $stateType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'GetProducerState'($typeType)
+      ldfld $typeType[] Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'interfaces'
+      stloc.0
+      ldc.i4.0
+      stloc.1
+    GIF_TestNext:
+      ldloc.1
+      ldloc.0
+      ldlen
+      conv.i4
+      bge.s GIF_TestMiss
+      ldloc.0
+      ldloc.1
+      ldelem.ref
+      stloc.2
+      ldloc.2
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse.s GIF_TestContinue
+      ldloc.2
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      ldarg.1
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse.s GIF_TestContinue
+      ldc.i4.1
+      ret
+    GIF_TestContinue:
+      ldloc.1
+      ldc.i4.1
+      add
+      stloc.1
+      br.s GIF_TestNext
+    GIF_TestMiss:
+      ldc.i4.0
       ret
     }
 
@@ -106,33 +200,9 @@ internal object DotNetGenericInterfaceRuntime {
       ldarg.0
       callvirt instance $typeType ${coreLibraryReference}System.Object::GetType()
       stloc.s 7
-
-      ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
-      call void ${coreLibraryReference}System.Threading.Monitor::Enter(object)
-      .try
-      {
-        ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
-        ldloc.s 7
-        ldloca.s 'state'
-        callvirt instance bool $tableType::TryGetValue(!0, !1&)
-        brtrue.s GIF_StateReadyInTable
-        newobj instance void $stateType::.ctor()
-        stloc.s 8
-        ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
-        ldloc.s 7
-        ldloc.s 8
-        callvirt instance void $tableType::Add(!0, !1)
-      GIF_StateReadyInTable:
-        leave.s GIF_StateReady
-      }
-      finally
-      {
-        ldsfld $tableType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'producerMethods'
-        call void ${coreLibraryReference}System.Threading.Monitor::Exit(object)
-        endfinally
-      }
-
-    GIF_StateReady:
+      ldloc.s 7
+      call $stateType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'GetProducerState'($typeType)
+      stloc.s 8
       ldloc.s 8
       call void ${coreLibraryReference}System.Threading.Monitor::Enter(object)
       .try
@@ -164,8 +234,8 @@ internal object DotNetGenericInterfaceRuntime {
         br.s GIF_CacheNext
 
       GIF_CacheMiss:
-        ldloc.s 7
-        callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetInterfaces()
+        ldloc.s 8
+        ldfld $typeType[] Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'interfaces'
         stloc.0
         ldc.i4.0
         stloc.1
@@ -280,4 +350,10 @@ internal object DotNetGenericInterfaceRuntime {
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueProducer".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type, string)"
+
+    fun isOpenGenericInterfaceInstanceCallInstruction(coreLibraryReference: String): String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"IsOpenGenericInterfaceInstance".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type)"
 }

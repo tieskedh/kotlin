@@ -1285,6 +1285,9 @@ internal class DotNetIlTypeMapper private constructor(
     fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerCapabilityDeclarations
 
+    fun isGenericOwnerForeignDispatchDeclaration(declaration: IrDeclaration): Boolean =
+        declaration in genericOwnerForeignDispatchDeclarations
+
     fun genericOwnerForeignDispatchCallTarget(call: IrCall): IrSimpleFunction? =
         genericOwnerForeignDispatchCallTargets[call]
 
@@ -1304,6 +1307,13 @@ internal class DotNetIlTypeMapper private constructor(
     fun genericOwnerRuntimeClassifierTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
         val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
         return genericOwnerCapabilityInfoOrNull(owner)?.let(DotNetIlValueType::UserClass)
+    }
+
+    /** The natural open CLR owner paired with the optional semantic classifier fast path. */
+    fun genericOwnerNaturalRuntimeClassifierInfoOrNull(type: IrType): DotNetIlClassInfo? {
+        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        genericOwnerCapabilityInfoOrNull(owner) ?: return null
+        return classInfoOrNull(owner)
     }
 
     private fun genericOwnerCapabilityTypeOrNull(
