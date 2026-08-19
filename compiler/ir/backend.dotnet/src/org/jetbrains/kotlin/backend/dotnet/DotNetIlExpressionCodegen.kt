@@ -296,13 +296,13 @@ internal class DotNetIlExpressionCodegen(
         val naturalType = mappedNaturalType(expression) ?: return null
         val runtimeClassifier = typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.type)
         if (naturalType == runtimeClassifier) return naturalType
-        if (naturalType == DotNetIlValueType.Object &&
-            runtimeClassifier != null &&
-            expression.readsGenericOwnerForeignDispatchDeclaration()
-        ) {
-            // Classifier-derived safe-cast temporaries may hold an ordinary foreign I<X> which
-            // has no capability. Null/identity checks are type-agnostic and must observe that
-            // object directly rather than reconstructing the logical constructed interface.
+        if (naturalType == DotNetIlValueType.Object && runtimeClassifier != null) {
+            // A semantic generic-owner value can come either from a classifier-derived cast or
+            // from a construction whose enclosing owner selected object for this nested logical
+            // argument (Box<Producer<Any?>> -> Box<object>). Null/identity checks are
+            // type-agnostic and must observe that object directly rather than reconstructing the
+            // logical constructed interface. A consumer which genuinely needs I<X> performs its
+            // own compatibility check or enters the semantic dispatcher instead.
             return naturalType
         }
         val logicalType = typeMapper.toDotNetIlValueType(expression.type) ?: return null

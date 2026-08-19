@@ -4467,6 +4467,33 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!object.ReferenceEquals(exactView, rawString))
                         throw new InvalidOperationException(
                             "ordinary exact return boundary changed object identity");
+                    Type separateOpenBox = typeof(RehearsalSeparateNestedBox<>);
+                    System.Reflection.FieldInfo separateValueField = separateOpenBox.GetField(
+                        "value",
+                        System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic);
+                    if (separateValueField == null ||
+                            !separateValueField.FieldType.IsGenericParameter ||
+                            separateValueField.FieldType.GenericParameterPosition != 0)
+                        throw new InvalidOperationException(
+                            "the separate nested box did not retain one physical !T field");
+                    Type separateBroadBoxReturn = typeof(libKt)
+                        .GetMethod("rehearsalSeparateBroadProducerBox").ReturnType;
+                    if (separateBroadBoxReturn !=
+                            typeof(RehearsalSeparateNestedBox<object>) ||
+                            separateBroadBoxReturn.GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType !=
+                                typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate broad nested construction was not Box<object>");
+                    Type separateExactBoxReturn = typeof(libKt)
+                        .GetMethod("rehearsalSeparateExactProducerBox").ReturnType;
+                    if (separateExactBoxReturn != typeof(RehearsalSeparateNestedBox<
+                            RehearsalSeparateProducer<string>>))
+                        throw new InvalidOperationException(
+                            "the separate exact nested construction lost its typed CLR argument");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4691,6 +4718,43 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 "csharp-after-kotlin"))
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed a C# override after a Kotlin override");
+                    Type openBox = typeof(RehearsalNestedBox<>);
+                    System.Reflection.FieldInfo valueField = openBox.GetField(
+                        "value",
+                        System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic);
+                    if (valueField == null || !valueField.FieldType.IsGenericParameter ||
+                            valueField.FieldType.GenericParameterPosition != 0)
+                        throw new InvalidOperationException(
+                            "RehearsalNestedBox<T> did not retain one physical !T field");
+                    Type broadBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalBroadProducerBox").ReturnType;
+                    if (broadBoxReturn != typeof(RehearsalNestedBox<object>) ||
+                            broadBoxReturn.GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the CLR-unnameable nested producer construction did not select Box<object>");
+                    Type exactBoxReturn = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .GetMethod("rehearsalExactStringProducerBox").ReturnType;
+                    if (exactBoxReturn !=
+                            typeof(RehearsalNestedBox<RehearsalProducer<string>>) ||
+                            exactBoxReturn.GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType !=
+                                typeof(RehearsalProducer<string>) ||
+                            typeof(RehearsalNestedBox<int>).GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType != typeof(int) ||
+                            typeof(RehearsalNestedBox<string>).GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType != typeof(string))
+                        throw new InvalidOperationException(
+                            "exact Box<T> constructions lost their natural typed field");
                     return 0;
                 }
             }
