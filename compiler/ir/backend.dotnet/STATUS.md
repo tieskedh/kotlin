@@ -27,6 +27,25 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+- Latest generic-interface reopening proof: the true-CLR-generic class-owner
+  rehearsal invalidates the accepted erased-interface ADR's premise that a
+  Kotlin `Values<T>` cannot truthfully implement CLR `Source<T>`. A bounded,
+  production-inert integration test now proves the main foreign-source
+  boundary for the replacement hypothesis: `Source<out T>` inherits one
+  non-generic declaration-semantic capability, while C# authors only a partial
+  class with the natural `Read(): T` member. The existing versioned manifest
+  and Roslyn generator add the explicit semantic bridge without the source
+  naming it. Reference and value substitutions preserve same-object identity,
+  typed results, semantic results, and required boxing on Framework 4.8 and
+  .NET 10. This closes only automatic partial C# source authoring; compiler
+  emission, all projection/input/default/inheritance cases, other CLR
+  languages, and precompiled or non-partial implementors remain gates. The
+  accepted production interface ABI is still erased. The final target
+  aggregate covers 190 XML suites and 2,287 tests with zero failures, errors,
+  or skips; the 187-suite FIR and two-suite integration roots were freshly
+  written, while the unchanged six-test `dotnet.ir` root remained up-to-date.
+  See
+  [`docs/decisions/draft-adr-reified-generic-interface-owner.md`](docs/decisions/draft-adr-reified-generic-interface-owner.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
@@ -3497,11 +3516,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    cutover. The first normal Kotlin-emitter checkpoint now emits real `C<T>`
    owners, true `!T` ordinary state, semantic/capability families, physical
    inner parameters, generic value-class carriers, and ABI-37 separate-library
-   bindings behind the test-only rehearsal epoch. Continue with the complete
-   Runtime/Stdlib owner graph and its residual canonical/capability joins,
-   covariant returns, and intrinsic state requirements, then execute the
-   representative products and exact inverse rollback before the next go/no-go
-   decision.
+   bindings behind the test-only rehearsal epoch. The source-built Stdlib has
+   now reached the generic-interface boundary at `AbstractMap<K, V>.keys`:
+   treating the erased `Set<K>` carrier as permanently canonical would merely
+   preserve an obsolete constraint. Next emit and consume the general natural
+   `I<T>` plus declaration-semantic capability family, including its versioned
+   C# authoring record; do not add a `Map`, `Set`, or `Sequence` representation
+   exception. Then continue the complete Runtime/Stdlib owner graph and its
+   residual capability joins, covariant returns, and intrinsic state
+   requirements before executing representative products and exact inverse
+   rollback for the next go/no-go decision.
 2. The dependency recomputation after eager windowing selected and completed
    both the exact seven-declaration Iterable/Sequence-consumer closure and the
    complete supported-classifier `allEqual`/`allEqualBy` and

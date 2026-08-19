@@ -1268,6 +1268,18 @@ See the
   or an implementation-set-dependent typed ABI. Kotlin constructions,
   projections, casts, defaults, and separate consumers all use that one
   physical identity; KLIB retains the logical parameters and override graph.
+  This remains the production rule, but it is not a permanent constraint on
+  the test-only true-CLR-generic owner rehearsal. That rehearsal must evaluate
+  one general interface family: a truthful natural `I<T>` which inherits a
+  non-generic declaration-semantic capability for projected, widened, and
+  classifier-only Kotlin routes. The same implementing object occupies both
+  views; wrappers, shadow state, and collection-specific representations are
+  forbidden. A versioned producer manifest plus the existing Roslyn generator
+  may add the capability implementation to a partial C# source implementor,
+  but that convenience cannot retrofit precompiled, non-partial, or non-C#
+  types. Keep this reopening production-inert until its complete atomic gate
+  replaces the accepted erased ABI. See
+  [the reopening draft](docs/decisions/draft-adr-reified-generic-interface-owner.md).
   Imported CLR generic interfaces remain native: keep one semantic owner backed
   by the selected generic TypeDef, preserve platform flexibility through FIR2IR,
   and bind Kotlin implementations to its exact constructed slots. Resolved

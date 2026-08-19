@@ -14,6 +14,13 @@ non-generic Kotlin interfaces only. Historical generic sections are retained as
 design evidence until the explicit export programme selects its own contracts;
 they must not be used to reconstruct or extend the removed split ABI.
 
+That accepted production scope is unchanged. The production-inert
+[CLR-generic interface reopening](draft-adr-reified-generic-interface-owner.md)
+reuses the dormant generic manifest reader and Roslyn generation mechanism for
+one bounded foreign-source bridge proof. It does not restore the historical
+canonical/declared/exact ABI or authorize generic interface authoring in
+production.
+
 ## Context
 
 A non-generic Kotlin-owned interface has one physical CLR identity but may still

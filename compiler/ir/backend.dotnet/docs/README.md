@@ -110,6 +110,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)
+- [Draft CLR-generic interface owner with declaration-semantic capability](decisions/draft-adr-reified-generic-interface-owner.md)
 - [Exact foreign CLR generic methods](decisions/foreign-clr-generic-methods.md)
 - [Native identity for foreign CLR generic interfaces](decisions/foreign-clr-generic-type-identities.md)
 - [Ordinary Kotlin enums as reference classes](decisions/ordinary-enum-reference-classes.md)
