@@ -1192,27 +1192,37 @@ assemblies reject the selected self-describing library graph before emission.
 Kotlin exact/widened calls and direct generated C# root/child implementations
 execute through A -> B -> C on PSI and LightTree, .NET 10 and Framework 4.8.
 
-The independent-interface intersection gate is now closed for the same
-transparent shape. `Child<out T> : Primary<T>, Secondary<T>` remains a natural
-CLR `Child<T>` and implements one memberless non-generic child capability which
-inherits both root capabilities. The roots and child may share one producer or
-the child may be compiled in B over roots from A. A consumer reconstructs the
-capability graph from logical KLIB supertypes and producer-recorded physical
-identities; no ABI schema addition, name inference, copied semantic slot, or
-state is introduced. Kotlin and generated partial C# implementations execute
-both exact and widened root routes on the same object on both profiles.
+The independent-interface intersection gate is now closed, including the
+first child-owned member. `Child<out T> : Primary<T>, Secondary<T>` remains a
+natural CLR `Child<T>`. A member-free child implements one memberless
+non-generic capability which inherits both root capabilities. If the child
+adds one abstract no-input `T`-result member, that same general fixpoint gives
+it a child capability which inherits the roots and owns exactly one new
+object-result slot. Inherited members remain on their root families; no slot,
+body, state, or wrapper is copied into the child.
 
-This proof still admits only member-free transparent children; a child which
-introduces a new member is not silently assigned its parents' member families.
-Continue with member-declaring children and independent input/default/property/
-mixed-variance gates, then the Runtime/Stdlib graph. The authoring generator
+The roots and child may share one producer or the child may be compiled in B
+over roots from A. A consumer reconstructs the capability graph from logical
+KLIB supertypes and producer-recorded physical identities; no ABI schema
+addition or name inference is needed. Exact Kotlin calls use the natural child
+MethodDef, widened child calls use its one semantic slot, and root calls retain
+their respective capabilities. Kotlin and generated partial C# implementations
+execute all routes on the same object on PSI and LightTree, .NET 10 and
+Framework 4.8. The C# manifest records only the member declared by each
+interface, so the generator composes inherited contracts without duplicating
+their member families.
+
+Continue with independent input-bearing, default, property, broader member,
+and mixed-variance gates, then the Runtime/Stdlib graph. The authoring generator
 still cannot retrofit precompiled, non-partial, or other-language implementors.
 See
 [`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md)
-and the external-child and intersection evidence in
+and the external-child, intersection, and child-owned-member evidence in
 [`../archive/reified-generic-interface-external-child-2026-08-19.md`](../archive/reified-generic-interface-external-child-2026-08-19.md)
 and
-[`../archive/reified-generic-interface-intersection-2026-08-19.md`](../archive/reified-generic-interface-intersection-2026-08-19.md).
+[`../archive/reified-generic-interface-intersection-2026-08-19.md`](../archive/reified-generic-interface-intersection-2026-08-19.md)
+and
+[`../archive/reified-generic-interface-member-child-2026-08-19.md`](../archive/reified-generic-interface-member-child-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
