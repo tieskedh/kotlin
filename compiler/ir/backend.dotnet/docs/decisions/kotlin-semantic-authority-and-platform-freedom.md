@@ -36,21 +36,30 @@ specifications to clarify which generic types have distinct runtime
 representations. The [generic-cast documentation][unchecked-casts] explains
 why a concrete parameterized cast may receive an unchecked warning. A warning
 describes limited proof; it does not transfer semantic authority to the CLR.
+The separately accepted
+[breaking-change ledger](breaking-kotlin-changes.md) records the one explicit
+pre-ABI exception selected for warning-bearing parameterized generic-owner
+casts. That exception is intentional incompatibility, not specification
+freedom.
 
 ## Decision
 
-> Kotlin semantics remain authoritative. Kotlin/.NET uses a stronger CLR
-> runtime check only where the Kotlin specification deliberately leaves the
-> runtime outcome or failure point platform- or implementation-dependent.
+> Kotlin semantics remain authoritative except for an incompatibility named
+> explicitly in the accepted breaking-change ledger. Otherwise Kotlin/.NET
+> uses a stronger CLR runtime check only where the Kotlin specification leaves
+> the runtime outcome or failure point platform- or implementation-dependent.
 
 Every use of that freedom is operation-specific. The owning ADR must identify
 the exact specification permission and the CLR fact used. Similar syntax, an
 unchecked warning, `@Suppress`, `@UnsafeVariance`, a reified physical carrier,
 or a convenient `isinst` instruction is not independent permission.
+An accepted breaking-change entry is operation-specific authority only for its
+written source boundary and must state the portable behavior it replaces.
 
 ### Required Kotlin behavior
 
-Source-legal Kotlin behavior is preserved completely. This includes:
+Outside an accepted breaking-change entry, source-legal Kotlin behavior is
+preserved completely. This includes:
 
 - ordinary subtyping, declaration-site variance, use-site projections, and
   star projections;
@@ -95,19 +104,25 @@ The warning is not the reason this is permitted. The cast-expression rule for
 failure timing is the reason. If that rule changes, the target decision must
 be revisited.
 
-### Safe casts are evaluated separately
+### Warning-bearing parameterized casts
 
-The permission above does not extend mechanically from `as` to `as?`. For a
-parameterized safe-cast target, the specification says that generic arguments
-are not checked with respect to subtyping. A Kotlin-owned `C<A> as? C<B>`
-therefore uses the logical classifier/capability check, returns the same object
-when that classifier matches, and otherwise returns `null`. It does not use
-the exact constructed CLR owner as a universal safe-cast predicate or claim an
-exact `C<B>` physical carrier for the successful semantic view.
+The throwing-cast permission above does not extend mechanically from `as` to
+`as?`: the specification says that generic arguments of a parameterized safe
+cast are not checked with respect to subtyping. Nevertheless, breaking-change
+entry BK-1 deliberately makes warning-bearing parameterized `as` and `as?` on
+an admitted true CLR-generic Kotlin owner use one Kotlin-aware runtime-subtyping
+predicate.
 
-Non-parameterized safe casts and separately specified reified operations keep
-their own accepted rules. No rule in this ADR generalizes one operation's
-platform freedom to another.
+This is narrower than using the strongest CLR check. `C<Int>` must still be a
+valid `C<Any>` result when `C` is covariant, including when CLR value-type
+variance cannot express that view. An incompatible `C<Int> as? C<String>`
+returns null; its throwing counterpart fails at the cast. A successful
+CLR-unnameable Kotlin view retains the same object's semantic carrier rather
+than fabricating `C<object>`.
+
+Star casts, `is C<*>`, ordinary variance/projection conversions, and every
+warning-free Kotlin operation remain on their specified classifier or semantic
+path. No warning and no ledger entry means this deviation is unavailable.
 
 ### Physical implementation freedom
 
@@ -122,8 +137,9 @@ an explicit semantic/ABI decision.
 
 The change and its owning ADR must establish all of the following:
 
-1. the exact Kotlin operation and specification clause that permits the
-   platform difference;
+1. the exact Kotlin operation and either the specification clause permitting
+   the platform difference or the accepted breaking-change entry authorizing
+   an intentional incompatibility;
 2. the exact CLR runtime or metadata fact that makes the check truthful;
 3. the result, identity, exception classification, and failure point on every
    successful and unsuccessful path;
@@ -142,10 +158,13 @@ Absence of any item keeps the semantic fallback authoritative.
   "stricter casts" policy.
 - A true CLR-generic Kotlin owner may use earlier failure for incompatible
   parameterized throwing casts only as part of its atomic ABI decision.
+- BK-1 additionally runtime-checks warning-bearing parameterized safe casts
+  with Kotlin-aware variance and records that deliberate incompatibility.
 - The generic-owner semantic capability remains mandatory for ordinary Kotlin
-  variance, projections, broad candidate inputs, and parameterized safe casts.
-- Compiler warnings and suppression annotations remain diagnostics/source
-  permissions, not backend semantic permissions.
+  variance, projections, broad candidate inputs, stars, and successful cast
+  views which have no truthful CLR construction.
+- Warnings remain diagnostics rather than general backend permission; only the
+  exact BK-1 boundary gives one warning category additional target meaning.
 
 ## Rejected alternatives
 

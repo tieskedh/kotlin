@@ -167,16 +167,17 @@ separate broad-input or abstract-family gates.
 
 ## Cast and mutation policy
 
-Kotlin diagnoses the generic-argument part of `value as C<X>` as unchecked.
-The CLR target may reject a physically incompatible constructed owner at that
-cast instead of admitting a view that later writes an incompatible value. The
-candidate uses that permission:
+Kotlin diagnoses the generic-argument part of `value as C<X>` or
+`value as? C<X>` as unchecked. Under pre-ABI breaking entry BK-1, both forms
+use one Kotlin-aware generic-argument subtyping predicate rather than exposing
+the CLR's constructed-generic equality directly:
 
-- `C<string> as C<int>` may throw `InvalidCastException`, logically classified
-  as Kotlin `ClassCastException`, at the throwing cast;
-- `C<string> as? C<int>` checks the logical classifier rather than generic
-  argument subtyping and returns the same semantic object; a classifier
-  mismatch returns null;
+- incompatible `C<string> as C<int>` throws `InvalidCastException`, logically
+  classified as Kotlin `ClassCastException`, at the throwing cast;
+- the corresponding `C<string> as? C<int>` returns null;
+- a source-legal declaration-site variance relation succeeds in both forms;
+  for example, covariant `C<Int> -> C<Any>` retains the same object even when
+  CLR value-type variance cannot name the constructed target;
 - `is C<*>`, `as C<*>`, star/projection conversions, and ordinary widened
   calls test the open declaration/capability and preserve the same object;
 - every source-legal mutation through an exact or input-projected view updates
@@ -187,13 +188,12 @@ candidate uses that permission:
 
 Early failure never permits a valid star, projection, variance, widened
 candidate, or separate-module call to fail. The hostile matrix, rather than a
-microbenchmark, decides that boundary.
-
-This asymmetry is deliberate. The Kotlin cast-expression rules make the
-failure point of a parameterized throwing `as` implementation-defined, while
-generic arguments of a parameterized `as?` are not checked with respect to
-subtyping. See the accepted
-[semantic-authority and platform-freedom ADR](kotlin-semantic-authority-and-platform-freedom.md).
+microbenchmark, decides that boundary. The stricter safe-cast behavior is a
+deliberate Kotlin incompatibility, not an inference from CLR convenience. See
+the accepted
+[semantic-authority and platform-freedom ADR](kotlin-semantic-authority-and-platform-freedom.md)
+and the mandatory
+[breaking-change ledger](breaking-kotlin-changes.md).
 
 ## Physical carrier rule
 

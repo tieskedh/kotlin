@@ -35,17 +35,20 @@ irreducible host operations; it does not fork a Common algorithm merely
 because a BCL equivalent exists.
 
 Kotlin semantics remain authoritative when CLR runtime information is
-stronger. Use a stronger CLR check only where the Kotlin specification makes
-the exact runtime outcome or failure point platform- or implementation-
-dependent, and record that permission in the owning ADR. An unchecked warning,
-`@Suppress`, `@UnsafeVariance`, a reified carrier, or convenient `isinst` is
-not permission by itself. Parameterized throwing `as` may use its explicitly
-implementation-defined failure timing; parameterized `as?` must not
-mechanically inherit that rule because its generic arguments are not checked
-with respect to subtyping. Ordinary variance, projections, override families,
-broad candidate inputs, identity, and dispatch remain exact Kotlin contracts.
-See
-[`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+stronger, except for an explicitly accepted pre-ABI entry in the breaking-
+change ledger. A warning, `@Suppress`, `@UnsafeVariance`, a reified carrier,
+or convenient `isinst` is never general permission to change behavior.
+Breaking entry BK-1 is deliberately narrower: warning-bearing parameterized
+`as` and `as?` operations on an admitted CLR-generic owner use the same
+Kotlin-aware generic-argument subtyping predicate. Thus a covariant
+`Producer<Int> -> Producer<Any>` cast succeeds and retains the same object even
+when CLR value-type variance cannot name that view, while the unrelated
+`Producer<Int> -> Producer<String>` cast throws or returns null respectively.
+Ordinary variance, projections, stars, override families, broad candidate
+inputs, identity, and dispatch remain exact Kotlin contracts. See
+[`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md)
+and
+[`docs/decisions/breaking-kotlin-changes.md`](docs/decisions/breaking-kotlin-changes.md).
 
 Common `Comparable<T>` uses the profile-selected CLR `System.IComparable` and
 `System.IComparable<T>` views on one object, but Kotlin interface calls retain

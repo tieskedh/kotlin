@@ -100,15 +100,17 @@ fails deterministically; interface enumeration order is never semantic
 evidence. Exact CLR calls to either construction remain ordinary typed calls.
 
 Classifier operations deliberately have a different admission rule from a
-member call. Kotlin `is Source<*>` and parameterized `as? Source<String>` test
-the declaration classifier and ignore the constructed CLR arguments. They
-therefore succeed when the object has the capability or any closed natural
-`Source<T>` construction, including more than one construction. A successful
-safe cast returns the original object on the broad `object` carrier. It does
-not select one construction, create an adapter, or fabricate
-`Source<string>`. A following member call still requires the capability or one
-unique natural construction, and a following concrete `String` use checks the
-member result at that typed-use boundary.
+warning-bearing parameterized cast or member call. Kotlin `is Source<*>` tests
+only the declaration classifier and therefore succeeds when the object has the
+capability or any closed natural `Source<T>` construction, including more than
+one construction. Under breaking entry BK-1, parameterized `as` and `as?`
+share a recursive Kotlin-aware argument-subtyping predicate. `Source<Int>` is
+therefore compatible with covariant `Source<Any>` in both forms, including the
+CLR-unnameable `Source<int> -> Source<object>` view, but is incompatible with
+`Source<String>`. A successful cast returns the original object on the broad
+`object` carrier. It does not select a construction for later broad dispatch,
+create an adapter, or fabricate a constructed CLR interface. A following
+member call still requires the capability or one unique natural construction.
 
 This fallback changes no object identity and creates no proxy, wrapper, or
 third public canonical type. It is currently admitted only for the structural
@@ -191,21 +193,24 @@ interface method, runtime proxy, identity-changing wrapper, or declaration-
 name/stdlib exception participates.
 
 The same precompiled product now proves classifier-erased `is`, `!is`,
-nullable `is`, smart-cast use, and parameterized `as?`. An ordinary
-`Source<int>` passes `as? Source<String>` and preserves identity; its later
-`String` result use throws `InvalidCastException`. An ordinary capability-free
-multi-construction object passes the classifier and safe cast because the
-declaration classifier is present, while its member call remains
-deterministically ambiguous. The compiler caches the runtime type's interface
-vector once and uses no constructed-generic `isinst` for these Kotlin
-operations.
+nullable `is`, smart-cast use, and warning-bearing parameterized `as`/`as?`.
+An ordinary `Source<int>` succeeds as `Source<Any>` in both cast forms with
+the same identity, but `as? Source<String>` returns null and throwing
+`as Source<String>` fails at the cast boundary. Recursive
+`Source<Source<Int>> -> Source<Source<Any>>` succeeds while the corresponding
+`String` target fails. An ordinary capability-free multi-construction object
+passes the classifier and a cast for a construction it actually satisfies,
+while its broad member call remains deterministically ambiguous. The compiler
+caches the runtime type's interface vector once and creates no wrapper or fake
+constructed interface for these Kotlin operations.
 
 A classifier-derived view may also cross a separately compiled callable
 result without becoming a false natural construction. For example,
 `safeView(Any?): Source<String>? = value as? Source<String>` keeps the logical
-KLIB result but publishes CLR `object`, because a successful call may return a
-plain foreign `Source<int>`. The producer records that physical selection in
-ABI 39. The existing generic-owner function-carrier record now identifies
+KLIB result but conservatively publishes CLR `object`; this cast-derived
+carrier does not assert a constructed CLR identity. Incompatible constructions
+return null before the boundary. The producer records that physical selection
+in ABI 39. The existing generic-owner function-carrier record now identifies
 `SEMANTIC_CAPABILITY` and `OBJECT` independently for every selected result or
 parameter slot. A consumer obeys that producer record and propagates object
 provenance through aliases and FIR's safe-call temporary before routing a
@@ -255,8 +260,8 @@ must cover:
    compositions beyond the admitted one-input consumer root;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
-4. broad and `@UnsafeVariance` inputs, one shared classifier predicate for
-   parameterized `is`/`as`/`as?`, mixed-control-flow classifier returns,
+4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded
+   warning-bearing covariant producer proof, mixed-control-flow cast returns,
    classifier-derived fields, and broader input parameters crossing separately
    compiled exact-looking boundaries;
 5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and

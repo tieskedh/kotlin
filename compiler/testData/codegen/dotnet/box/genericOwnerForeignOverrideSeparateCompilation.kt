@@ -96,6 +96,44 @@ public class RehearsalSeparateProducerClassifier {
     public fun safeView(value: Any?): RehearsalSeparateProducer<String>? =
         value as? RehearsalSeparateProducer<String>
 
+    public fun safeStarSame(value: Any?): Boolean {
+        val producer = value as? RehearsalSeparateProducer<*>
+        return producer === value
+    }
+
+    public fun checkedStarSame(value: Any?): Boolean {
+        val producer = value as RehearsalSeparateProducer<*>
+        return producer === value
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    public fun safeAnySame(value: Any?): Boolean {
+        val producer = value as? RehearsalSeparateProducer<Any>
+        return producer === value
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    public fun checkedAnySame(value: Any?): Boolean {
+        val producer = value as RehearsalSeparateProducer<Any>
+        return producer === value
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    public fun checkedStringView(value: Any?): RehearsalSeparateProducer<String> =
+        value as RehearsalSeparateProducer<String>
+
+    @Suppress("UNCHECKED_CAST")
+    public fun safeNestedAnySame(value: Any?): Boolean {
+        val producer = value as? RehearsalSeparateProducer<RehearsalSeparateProducer<Any>>
+        return producer === value
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    public fun safeNestedStringSame(value: Any?): Boolean {
+        val producer = value as? RehearsalSeparateProducer<RehearsalSeparateProducer<String>>
+        return producer === value
+    }
+
     public fun exactView(
         value: RehearsalSeparateProducer<String>,
     ): RehearsalSeparateProducer<String> = value

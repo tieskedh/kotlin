@@ -193,19 +193,23 @@ internal class DotNetIlExpressionCodegen(
                 return DotNetIlValueType.Object
             }
         }
-        if (expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.SAFE_CAST) {
+        if (expression is IrTypeOperatorCall &&
+            (expression.operator == IrTypeOperator.CAST ||
+                    expression.operator == IrTypeOperator.SAFE_CAST)
+        ) {
             typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand)
                 ?.let { return DotNetIlValueType.Object }
         }
         if (expression is IrTypeOperatorCall &&
             (expression.operator == IrTypeOperator.IMPLICIT_CAST ||
                     expression.operator == IrTypeOperator.IMPLICIT_NOTNULL) &&
-            expression.argument.readsGenericOwnerForeignDispatchDeclaration() &&
+            (expression.argument.readsGenericOwnerForeignDispatchDeclaration() ||
+                    mappedNaturalType(expression.argument) == DotNetIlValueType.Object) &&
             typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand) != null
         ) {
-            // A classifier-derived I<X> view remains the original object. Reporting the logical
-            // GenericInstance here would make a safe-call null test reconstruct I<X> before the
-            // semantic member dispatcher can select the actual natural construction.
+            // A successful generic-owner cast retains the original object. Reporting the logical
+            // GenericInstance here would make a following implicit cast reconstruct I<X> before
+            // the semantic member dispatcher can select the actual natural construction.
             return DotNetIlValueType.Object
         }
         if (expression is IrTypeOperatorCall &&
@@ -926,6 +930,15 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitThrow()
     }
 
+    /** Throws the CLR exception mapped to Kotlin [ClassCastException]. */
+    private fun emitThrowClassCastException() {
+        methodContext.emit(
+            "newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()",
+            pushes = 1,
+        )
+        methodContext.emitThrow()
+    }
+
     /**
      * Produces the empty (`null`) `Nullable<T>` value on the stack: `initobj` through the
      * address of a fresh synthetic local, then a load of the zero-initialized value — the
@@ -1112,12 +1125,13 @@ internal class DotNetIlExpressionCodegen(
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
         if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
             expectedType == DotNetIlValueType.Object &&
-            expression.argument.readsGenericOwnerForeignDispatchDeclaration() &&
+            operandType == DotNetIlValueType.Object &&
             typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand) != null
         ) {
-            // FIR's logical smartcast is used here only to test the safe-call receiver for null.
-            // The preceding classifier-erased as? already produced the original object, and a
-            // real member or typed ABI use performs its own semantic dispatch or checked recovery.
+            // FIR's logical smartcast is used here only to test the cast-derived receiver for
+            // null. The preceding Kotlin-compatible generic-owner cast already produced the
+            // original object, and a real member or typed ABI use performs its own semantic
+            // dispatch or checked recovery.
             emitExpression(expression.argument, DotNetIlValueType.Object)
             return
         }
@@ -1242,29 +1256,44 @@ internal class DotNetIlExpressionCodegen(
                 }
                 return
             }
-            if (expression.operator == IrTypeOperator.SAFE_CAST) {
-                val capabilityType =
-                    typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)
-                val naturalClassifier =
-                    typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand)
-                if (capabilityType != null && naturalClassifier != null) {
-                    if (expectedType != DotNetIlValueType.Object) {
-                        dotNetUnsupported(
-                            "safe generic-owner cast produces object " +
-                                    "where ${expectedType.nameInSignature} is expected"
+            val capabilityType =
+                typeMapper.genericOwnerRuntimeClassifierTypeOrNull(expression.typeOperand)
+            val naturalClassifier =
+                typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand)
+            if (capabilityType != null && naturalClassifier != null) {
+                if (expectedType != DotNetIlValueType.Object) {
+                    dotNetUnsupported(
+                        "generic-owner cast produces object " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                val receiverSlot = spillToSyntheticLocal(
+                    DotNetIlValueType.Object,
+                    "<genericInterfaceCastReceiver>",
+                )
+                fun emitMatch() {
+                    val requestedConstruction = castType as? DotNetIlValueType.GenericInstance
+                    if (requestedConstruction != null) {
+                        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+                        emitSystemTypeOrNull(requestedConstruction.nameInSignature)
+                        methodContext.emit(
+                            DotNetGenericInterfaceRuntime
+                                .isCompatibleGenericOwnerInstanceCallInstruction(coreLibraryReference),
+                            pops = 2,
+                            pushes = 1,
+                        )
+                    } else {
+                        emitReifiedGenericInterfaceClassifierMatch(
+                            receiverSlot.index,
+                            capabilityType,
+                            naturalClassifier,
                         )
                     }
-                    emitExpression(expression.argument, DotNetIlValueType.Object)
-                    if (methodContext.isTerminated) return
-                    val receiverSlot = spillToSyntheticLocal(
-                        DotNetIlValueType.Object,
-                        "<genericInterfaceSafeCastReceiver>",
-                    )
-                    emitReifiedGenericInterfaceClassifierMatch(
-                        receiverSlot.index,
-                        capabilityType,
-                        naturalClassifier,
-                    )
+                }
+                if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                    emitMatch()
                     val failedLabel = methodContext.nextLabel("genericInterfaceSafeCastFailed")
                     val joinLabel = methodContext.nextLabel("genericInterfaceSafeCastJoin")
                     methodContext.emitBranch("brfalse", failedLabel, pops = 1)
@@ -1273,8 +1302,24 @@ internal class DotNetIlExpressionCodegen(
                     methodContext.emitLabel(failedLabel)
                     methodContext.emit("ldnull", pushes = 1)
                     methodContext.emitLabel(joinLabel)
-                    return
+                } else {
+                    val nonNullLabel = methodContext.nextLabel("genericInterfaceCastNonNull")
+                    val succeededLabel = methodContext.nextLabel("genericInterfaceCastSucceeded")
+                    methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+                    if (expression.typeOperand.isNullable()) {
+                        methodContext.emitBranch("brfalse", succeededLabel, pops = 1)
+                    } else {
+                        methodContext.emitBranch("brtrue", nonNullLabel, pops = 1)
+                        emitThrowNullPointerException()
+                        methodContext.emitLabel(nonNullLabel)
+                    }
+                    emitMatch()
+                    methodContext.emitBranch("brtrue", succeededLabel, pops = 1)
+                    emitThrowClassCastException()
+                    methodContext.emitLabel(succeededLabel)
+                    methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
                 }
+                return
             }
             val bigFunctionArity = expression.typeOperand.dotNetBigCallableArityOrNull()
             if (bigFunctionArity != null) {
@@ -1430,10 +1475,9 @@ internal class DotNetIlExpressionCodegen(
                 is DotNetIlValueType.PrimitiveArray,
                 is DotNetIlValueType.GenericArray,
                     -> true
-                // A throwing parameterized `as` may use Kotlin's implementation-defined
-                // failure point. For a rehearsal owner, CLR castclass against the constructed
-                // C<T> is therefore the truthful early check. Safe casts and `is` deliberately
-                // stay on the declaration-erased semantic capability instead.
+                // Kotlin generic-owner casts were handled above through their Kotlin-aware
+                // construction predicate and object carrier. A remaining imported CLR generic
+                // retains its ordinary constructed throwing-cast behavior.
                 is DotNetIlValueType.GenericInstance -> expression.operator == IrTypeOperator.CAST
                 else -> false
             }
@@ -3153,6 +3197,9 @@ internal class DotNetIlExpressionCodegen(
         is IrGetField -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
         is IrCall -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
         is IrTypeOperatorCall -> when (operator) {
+            IrTypeOperator.CAST,
+            IrTypeOperator.SAFE_CAST,
+                -> typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(typeOperand) != null
             IrTypeOperator.IMPLICIT_CAST,
             IrTypeOperator.IMPLICIT_NOTNULL,
                 -> argument.readsGenericOwnerForeignDispatchDeclaration()

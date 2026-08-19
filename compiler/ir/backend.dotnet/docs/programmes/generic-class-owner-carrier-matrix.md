@@ -493,17 +493,20 @@ type-safe-barrier family remains separate evidence.
 | `value is C<*>` | recorded open TypeDef ancestry or trusted `S(C)` binding | true for every construction/derived instance of this declaration |
 | `value as C<*>` | same | same object or ordinary cast failure |
 | `value as? C<*>` | same | same object or null |
-| `value as C<X>` | exact requested construction when the cast attempts to check it | same object or classified `InvalidCastException`/`ClassCastException` |
-| `value as? C<X>` | recorded open TypeDef ancestry or trusted `S(C)` binding; generic arguments are not a subtyping predicate | same semantic object or null; never an exact-carrier claim |
+| warning-bearing `value as C<X>` | natural constructions plus recursive Kotlin declaration-site variance | same object on a Kotlin subtype; otherwise classified `InvalidCastException`/`ClassCastException` |
+| warning-bearing `value as? C<X>` | the same Kotlin-aware predicate as throwing `as` | same semantic object on a Kotlin subtype; otherwise null; never a fictitious exact-carrier claim |
 | ordinary variance/projection conversion | logical KLIB relation plus `S(C)` | same object; never an exact constructed-owner cast |
-| unchecked incompatible exact cast | physical construction disagrees | may fail at the cast; never create a second view/store |
+| incompatible unchecked construction | no construction satisfies Kotlin argument subtyping | fail or null at the cast boundary; never create a second view/store |
 
-The prototype must distinguish a parameterized throwing cast whose failure
-timing is implementation-defined from a safe cast whose generic arguments are
-not checked with respect to subtyping. It may not generalize one operation's
-platform freedom to another or claim stronger runtime checking in diagnostics
-or reflection than it performs. See the
-[platform-freedom ADR](../decisions/kotlin-semantic-authority-and-platform-freedom.md).
+Under pre-ABI breaking entry BK-1, warning-bearing parameterized throwing and
+safe casts deliberately use one predicate. This is stricter than the Kotlin
+safe-cast rule, but it is not CLR constructed-type equality: declaration-site
+variance still makes covariant `C<Int> -> C<Any>` succeed even when the CLR
+cannot name that value-type widening. Warning-free stars, projections, and
+ordinary variance are outside the exception. See the
+[platform-freedom ADR](../decisions/kotlin-semantic-authority-and-platform-freedom.md)
+and the mandatory
+[breaking-change ledger](../decisions/breaking-kotlin-changes.md).
 
 ## Reflection and binding requirements
 
