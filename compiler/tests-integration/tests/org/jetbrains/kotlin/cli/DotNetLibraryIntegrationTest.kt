@@ -10217,6 +10217,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ownerPath = listOf("sample.GenericOwner`2"),
                 physicalTypeParameterCount = 2,
                 genericOwnerAbi = DotNetGenericOwnerAbi(
+                    capabilityAssemblyName = "sample.CapabilityAssembly",
                     capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
                 ),
             ),
@@ -10325,6 +10326,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY),
         )
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetGenericOwnerAbi(
+                capabilityAssemblyName = "invalid]assembly",
+                capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+            )
+        }
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
             DotNetLibraryAbiCodec.logicalIdentityDigest("F:sample/foo|-123456789[0]"),

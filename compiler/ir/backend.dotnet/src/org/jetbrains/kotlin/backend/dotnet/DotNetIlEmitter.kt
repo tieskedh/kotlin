@@ -135,7 +135,9 @@ internal class DotNetIlEmitter(
     private val genericOwnerCallRouteTraceSiteCount: Int? = null,
     private val genericOwnerRehearsal: Boolean = false,
     private val genericOwnerArchitecturePlans: Map<IrClass, DotNetGenericOwnerArchitecturePlan> = emptyMap(),
+    private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
+    private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
     private val genericOwnerReflectionCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -481,7 +483,7 @@ internal class DotNetIlEmitter(
                 else -> irClass.fqNameWhenAvailable!!.asString()
             }
             val isErasedGenericInterface = irClass.isDotNetGenericInterfaceDeclaration &&
-                    irClass !in genericOwnerCapabilityInterfaces
+                    irClass !in reifiedGenericInterfaces
             val isErasedGenericClass = irClass.isDotNetGenericClassDeclaration &&
                     (!genericOwnerRehearsal ||
                             genericOwnerArchitecturePlans[irClass]
@@ -500,7 +502,7 @@ internal class DotNetIlEmitter(
                     enclosingClass = enclosingClassInfo,
                     typeParameterVariances = when {
                         isErasedGenericInterface || isErasedGenericClass -> emptyList()
-                        irClass.isInterface && irClass in genericOwnerCapabilityInterfaces ->
+                        irClass.isInterface && irClass in reifiedGenericInterfaces ->
                             irClass.typeParameters.map { it.variance }
                         else -> List(irClass.typeParameters.size) { Variance.INVARIANT }
                     },
@@ -556,6 +558,27 @@ internal class DotNetIlEmitter(
             java.util.Collections.newSetFromMap(
                 java.util.IdentityHashMap<DotNetClrClasspathAssembly.WithoutCarrier, Boolean>()
             )
+        val genericOwnerCapabilities = buildMap {
+            genericOwnerCapabilityInterfaces.forEach { entry ->
+                // Bootstrap Stdlib and USER emission share one lowered module but own disjoint
+                // declaration sets. Register only capabilities owned by this emitter; calls into
+                // the other product must bind through that producer's physical declaration index.
+                availableClasses[entry.value]?.let { capabilityInfo -> put(entry.key, capabilityInfo) }
+            }
+            externalReifiedGenericInterfaceCapabilityProviders.forEach { entry ->
+                val capabilityInfo = externalDeclarations.genericOwnerCapabilityInfoOrNull(entry.value)
+                    ?: error(
+                        "Internal .NET backend error: external reified-interface capability provider " +
+                                "'${entry.value.render()}' has no producer-recorded capability"
+                    )
+                require(capabilityInfo.typeParameterCount == 0) {
+                    "External reified-interface capability for '${entry.key.render()}' must be non-generic"
+                }
+                check(put(entry.key, capabilityInfo) == null) {
+                    "Internal .NET backend error: '${entry.key.render()}' has local and external capabilities"
+                }
+            }
+        }
         val typeMapper = DotNetIlTypeMapper(
             availableClasses = availableClasses,
             localClasses = moduleClasses,
@@ -564,12 +587,7 @@ internal class DotNetIlEmitter(
             genericInterfaces = genericInterfaces,
             genericClasses = genericClasses,
             genericOwnerObjectStateFields = genericOwnerObjectStateFields,
-            genericOwnerCapabilities = genericOwnerCapabilityInterfaces.mapNotNull { entry ->
-                // Bootstrap Stdlib and USER emission share one lowered module but own disjoint
-                // declaration sets. Register only capabilities owned by this emitter; calls into
-                // the other product must bind through that producer's physical declaration index.
-                availableClasses[entry.value]?.let { entry.key to it }
-            }.toMap(),
+            genericOwnerCapabilities = genericOwnerCapabilities,
             genericOwnerReflectionCapabilities = genericOwnerReflectionCapabilityInterfaces.mapNotNull { entry ->
                 availableClasses[entry.value]?.let { entry.key to it }
             }.toMap(),
@@ -1652,8 +1670,9 @@ internal class DotNetIlEmitter(
             availableFunctions = availableFunctions,
             genericInterfaces = genericInterfaces,
             genericClasses = genericClasses,
-            genericOwnerCapabilityInterfaces = if (genericOwnerRehearsal) {
-                genericOwnerCapabilityInterfaces
+            currentAssemblyName = assemblyName,
+            genericOwnerCapabilities = if (genericOwnerRehearsal) {
+                genericOwnerCapabilities
             } else {
                 emptyMap()
             },
@@ -1690,8 +1709,13 @@ internal class DotNetIlEmitter(
                                 typeMapper = typeMapper,
                                 preLoweringDeclarationKeys = preLoweringDeclarationKeys,
                                 interfaceDefaultImplementations = interfaceDefaultImplementations,
-                                genericOwnerCapabilityInterfaces = if (genericOwnerRehearsal) {
-                                    genericOwnerCapabilityInterfaces
+                                reifiedGenericInterfaces = if (genericOwnerRehearsal) {
+                                    reifiedGenericInterfaces
+                                } else {
+                                    emptySet()
+                                },
+                                genericOwnerCapabilities = if (genericOwnerRehearsal) {
+                                    genericOwnerCapabilities
                                 } else {
                                     emptyMap()
                                 },

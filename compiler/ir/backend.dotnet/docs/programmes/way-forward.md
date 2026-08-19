@@ -1136,7 +1136,7 @@ emitted rather than C#-physicalized. Behind one test-only epoch flag, admitted
 ordinary owners become real `C<T>` TypeDefs, producer-proven ordinary state is
 stored as `!T`, object-domain semantic state remains on the same owner, and
 typed/semantic/capability member families, inner-owner parameters, generic
-value-class carriers, reflection, and ABI-37 separate-library bindings compose
+value-class carriers, reflection, and ABI-38 separate-library bindings compose
 on bounded hostile products. Production emission remains erased. The next
 slice is not another owner selection: it must close the complete source-built
 Runtime/Stdlib graph, whose remaining failures are later canonical/capability
@@ -1181,16 +1181,26 @@ substituted natural slot receives one typed MethodImpl; equal signatures keep
 the direct natural route. The prior rule which excluded every Kotlin generic
 interface remains correct only for production-erased owners.
 
-Production remains erased. The next ABI gate is a child interface declared in
-a separately compiled product above an external reified parent. The current
-generic-owner ABI records a capability owner path but still assumes the
-current producer assembly when reconstructing that owner; the solution must
-retain producer assembly identity or publish a proven local semantic alias,
-not erase the child or duplicate state. After that, continue with independent
-input/default/property/mixed-variance gates and the Runtime/Stdlib graph. The
-authoring generator still cannot retrofit precompiled, non-partial, or other-
-language implementors. See
-[`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md).
+Production remains erased. The external-parent ABI gate is now closed without
+changing the structural admission rule. Assembly B may declare a transparent
+`Child<out T> : Parent<T>` above the admitted root in assembly A. The fixpoint
+retains A as the semantic provider, ABI 38 publishes both its assembly and
+TypeDef path, and downstream consumers reconstruct exactly that capability.
+B emits only the natural covariant `Child<T>` edge: no erased child, duplicate
+capability, local alias, or state is introduced. Missing producer capability
+assemblies reject the selected self-describing library graph before emission.
+Kotlin exact/widened calls and direct generated C# root/child implementations
+execute through A -> B -> C on PSI and LightTree, .NET 10 and Framework 4.8.
+
+This proof deliberately admits only member-free transparent children; a child
+which introduces a new member is not silently assigned the parent's member
+family. Continue with interface intersections and independent input/default/
+property/mixed-variance gates, then the Runtime/Stdlib graph. The authoring
+generator still cannot retrofit precompiled, non-partial, or other-language
+implementors. See
+[`../decisions/draft-adr-reified-generic-interface-owner.md`](../decisions/draft-adr-reified-generic-interface-owner.md)
+and
+[`../archive/reified-generic-interface-external-child-2026-08-19.md`](../archive/reified-generic-interface-external-child-2026-08-19.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a

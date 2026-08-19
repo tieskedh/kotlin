@@ -21,8 +21,6 @@ public interface RehearsalSeparateProducer<out T> {
     public fun produce(): T
 }
 
-public interface RehearsalSeparateChildProducer<out T> : RehearsalSeparateProducer<T>
-
 public class RehearsalSeparateProducerReader {
     public fun read(producer: RehearsalSeparateProducer<Any?>): Any? = producer.produce()
 
@@ -37,6 +35,8 @@ public open class RehearsalSeparateKotlinOverrideStore<T>(initial: T) :
     RehearsalSeparateStore<T>(initial) {
     public override fun read(): T = super.read()
 }
+
+public interface RehearsalSeparateChildProducer<out T> : RehearsalSeparateProducer<T>
 
 public class RehearsalSeparateProducerValue<T>(private val value: T) :
     RehearsalSeparateProducer<T> {
