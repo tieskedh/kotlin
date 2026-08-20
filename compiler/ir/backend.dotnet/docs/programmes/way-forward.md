@@ -1536,8 +1536,16 @@ or an ordinary C# generic-method override, so exact and widened calls retain
 one body and one object across separate compilation. See
 [`../archive/reified-generic-interface-method-generic-default-2026-08-20.md`](../archive/reified-generic-interface-method-generic-default-2026-08-20.md).
 
+The same exact `<R>(R): T` family is now admitted as an abstract root. A
+generic Kotlin implementation in a second product and an ordinary C#
+implementation each supply only the natural generic method. Separate exact
+and Kotlin-widened consumers reach that same method and preserve identity;
+the compiler or authoring generator supplies the semantic capability without
+making it part of normal C# source. See
+[`../archive/reified-generic-interface-abstract-method-generic-2026-08-21.md`](../archive/reified-generic-interface-abstract-method-generic-2026-08-21.md).
+
 With that typed contract consolidated, continue with multiple-property
-families, abstract and constrained method-generic roots, read-only property
+families, constrained method-generic roots, read-only property
 inheritance, diamonds, reabstraction, changed-argument and deeper/multiple
 inheritance, broader input-bearing inheritance, broader and mixed
 method/property families, and mixed-variance gates, including derivability
