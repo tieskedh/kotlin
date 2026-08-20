@@ -1365,11 +1365,9 @@ invariant nesting or the enclosing `!T` field.
 An ordinary non-partial C# implementation of the natural invariant interface
 crosses both same-product and separate-KLIB star reads. The Roslyn authoring
 tool consequently ignores a class whose Kotlin contracts are all admitted
-invariant owners; generated partial capability adapters remain required when
-any admitted variant contract needs them. The remaining construction gates
-are mutable/broader invariant member families, mixed variance,
-multi-parameter owners, and value-class substitutions. Each must preserve the
-boundary-versus-state distinction.
+invariant owners whose broad operations have the unique-construction fallback;
+generated partial capability adapters remain required when any admitted
+variant contract needs them.
 
 Use-site projection is now closed as its own boundary rather than being
 mistaken for declaration invariance. Kotlin may view
@@ -1387,6 +1385,26 @@ physical construction; a downstream generic capability fallback may not
 replace the outer owner with its non-generic capability merely because one
 nested logical argument is projected.
 
+The first mutable/broader invariant member family closes without changing
+that priority. `InvariantCell<T>` has exactly one abstract `T` result and one
+abstract `T` input/`Unit` member. Its normal CLR and C# contract is the single
+natural invariant `InvariantCell<T>`; exact/open calls, the Kotlin
+implementation's `!T` field, and `Box<InvariantCell<!!T>>` stay typed. A star
+or output-projected read and an input-projected write cross the non-generic
+capability only for that operation. An ordinary non-partial C#
+`InvariantCell<string>` or `InvariantCell<object>` needs no hidden interface:
+the same cached foreign fallback invokes the uniquely selected natural member
+with zero or one argument. `Box<InvariantCell<out Any?>>` is still the construction-local
+`Box<object>` hostile case and does not contaminate other boxes or generic
+state. Runtime surface 40 owns the argument-bearing dispatcher; the original
+producer entry remains as an ABI-compatible wrapper.
+
+This does not admit arbitrary multi-member interfaces. The structural gate is
+exactly one producer plus one consumer, with no properties, defaults,
+overloads, constraints, intersections, or inherited member family. The
+authoring tool applies the same exact manifest-shape test before deciding that
+a non-partial C# implementation needs no generated capability.
+
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
 present. Warning-bearing parameterized `as` and `as?` use one Kotlin-aware
@@ -1398,9 +1416,9 @@ cast incompatibility with the Kotlin specification is limited to BK-1 in the
 breaking-change ledger and must not leak into ordinary variance, projections,
 or warning-free operations.
 
-Continue with default, property, broader/multiple member, and mixed-variance
-gates, including derivability rules for ordinary foreign
-implementations, then close classifier-derived field and broader-input
+Continue with property syntax, defaults, inheritance and broader/multiple
+member families, and mixed-variance gates, including derivability rules for
+ordinary foreign implementations, then close classifier-derived field and broader-input
 boundaries and
 deployment behavior before the Runtime/Stdlib graph. Keep the authoring
 generator as an optional fast path where it can add the semantic sibling, and
@@ -1432,6 +1450,8 @@ The nested open-argument evidence is in
 [`../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md`](../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md).
 The invariant use-site-projection evidence is in
 [`../archive/generic-owner-invariant-projection-boundary-2026-08-20.md`](../archive/generic-owner-invariant-projection-boundary-2026-08-20.md).
+The mutable invariant operation-boundary evidence is in
+[`../archive/generic-owner-mutable-invariant-cell-2026-08-20.md`](../archive/generic-owner-mutable-invariant-cell-2026-08-20.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a

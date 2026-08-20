@@ -3139,30 +3139,28 @@ internal class DotNetIlExpressionCodegen(
 
     /**
      * Keeps the direct semantic capability as the fast path while admitting an ordinary foreign
-     * implementation of the natural `I<T>`. The first proof is deliberately limited to the
-     * admitted no-input producer family and an object result. The runtime selects exactly one
-     * constructed natural interface or rejects an ambiguous multi-construction object.
+     * implementation of the natural `I<T>`. The runtime selects exactly one constructed natural
+     * interface or rejects an ambiguous multi-construction object. The admitted foreign shapes
+     * are deliberately bounded to an object-result producer or a declaration-invariant
+     * one-object-input Unit member; overloads and broader signatures remain outside this path.
      */
     private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
         call: IrCall,
         expectedType: DotNetIlValueType?,
     ): Boolean {
-        if (expectedType == null || call.arguments.size != 1) return false
+        if (call.arguments.size !in 1..2) return false
         val source = call.symbol.owner.let {
             it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
         }
-        val receiver = call.arguments.single() ?: return false
+        val sourceOwner = source.parent as? IrClass ?: return false
+        val receiver = call.arguments.first() ?: return false
+        val regularArguments = call.arguments.drop(1).map { argument -> argument ?: return false }
         val semanticSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call)
             ?: genericOwnerCapabilitySlotOrNull(source)?.takeIf {
                 (source.parent as? IrClass)?.isInterface == true &&
                         mappedNaturalType(receiver) == DotNetIlValueType.Object
             }
             ?: return false
-        val resultNarrowing = when (expectedType) {
-            DotNetIlValueType.Object -> null
-            else -> expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
-                ?: return false
-        }
         val semanticInfo = availableFunctions[semanticSlot]
             ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
             ?: return false
@@ -3171,10 +3169,41 @@ internal class DotNetIlExpressionCodegen(
             ?: return false
         if (semanticInfo.owner.typeParameterCount != 0 ||
             naturalInfo.owner.typeParameterCount != 1 ||
-            semanticInfo.signature.parameterTypes.size != 1 ||
-            semanticInfo.signature.returnType != DotNetIlReturnType.Value(DotNetIlValueType.Object)
+            semanticInfo.signature.parameterTypes.size != call.arguments.size ||
+            naturalInfo.signature.parameterTypes.size != call.arguments.size
         ) {
             return false
+        }
+        fun DotNetIlValueType.isNaturalOwnerParameter(): Boolean =
+            this is DotNetIlValueType.TypeParameter && index == 0 && !isMethodParameter
+        val naturalResultType =
+            (naturalInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        val isProducer = regularArguments.isEmpty() &&
+                semanticInfo.signature.returnType ==
+                    DotNetIlReturnType.Value(DotNetIlValueType.Object) &&
+                naturalResultType?.isNaturalOwnerParameter() == true
+        val isConsumer = regularArguments.size == 1 &&
+                sourceOwner.typeParameters.singleOrNull()?.variance ==
+                    org.jetbrains.kotlin.types.Variance.INVARIANT &&
+                semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
+                semanticInfo.signature.returnType == DotNetIlReturnType.Void &&
+                naturalInfo.signature.parameterTypes[1].isNaturalOwnerParameter() &&
+                naturalInfo.signature.returnType == DotNetIlReturnType.Void
+        if (!isProducer && !isConsumer) return false
+        val resultNarrowing = if (isProducer) {
+            val resultType = expectedType ?: return false
+            when (resultType) {
+                DotNetIlValueType.Object -> null
+                else -> resultType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                    ?: return false
+            }
+        } else {
+            if (expectedType != null &&
+                !DotNetRuntimeTypes.unitType.isDotNetAssignableTo(expectedType)
+            ) {
+                return false
+            }
+            null
         }
         semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         naturalInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
@@ -3186,15 +3215,27 @@ internal class DotNetIlExpressionCodegen(
             DotNetIlValueType.Object,
             "<reifiedGenericInterfaceForeignReceiver>",
         )
+        val regularArgumentSlots = regularArguments.mapIndexed { index, argument ->
+            val parameterType = semanticInfo.signature.parameterTypes[index + 1]
+            emitExpression(argument, parameterType)
+            spillToSyntheticLocal(
+                parameterType,
+                "<reifiedGenericInterfaceForeignArgument$index>",
+            )
+        }
         val capabilityType = DotNetIlValueType.UserClass(semanticInfo.owner)
         val capabilitySlot = methodContext.declareSyntheticLocal(
             capabilityType,
             "<reifiedGenericInterfaceCapability>",
         )
-        val resultSlot = methodContext.declareSyntheticLocal(
-            DotNetIlValueType.Object,
-            "<reifiedGenericInterfaceForeignResult>",
-        )
+        val resultSlot = if (isProducer) {
+            methodContext.declareSyntheticLocal(
+                DotNetIlValueType.Object,
+                "<reifiedGenericInterfaceForeignResult>",
+            )
+        } else {
+            null
+        }
         val foreignLabel = methodContext.nextLabel("reifiedGenericInterfaceForeign")
         val joinLabel = methodContext.nextLabel("reifiedGenericInterfaceJoin")
 
@@ -3204,16 +3245,21 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
         methodContext.emitBranch("brfalse", foreignLabel, pops = 1)
         methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        regularArgumentSlots.forEach { slot ->
+            methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+        }
         methodContext.emit(
             semanticInfo.renderCallInstruction(
                 semanticInfo.physicalMethodName ?: semanticSlot.dotNetIlMethodName(),
                 virtual = true,
                 ownerToken = semanticInfo.owner.ilTypeRef,
             ),
-            pops = 1,
-            pushes = 1,
+            pops = semanticInfo.signature.parameterTypes.size,
+            pushes = if (isProducer) 1 else 0,
         )
-        methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+        resultSlot?.let { slot ->
+            methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+        }
         methodContext.emitGoto(joinLabel)
 
         methodContext.emitLabel(foreignLabel)
@@ -3223,17 +3269,37 @@ internal class DotNetIlExpressionCodegen(
             "ldstr ${(naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()).toIlStringLiteral()}",
             pushes = 1,
         )
+        if (regularArgumentSlots.isEmpty()) {
+            methodContext.emit("ldnull", pushes = 1)
+        } else {
+            methodContext.emit("ldc.i4.${regularArgumentSlots.size}", pushes = 1)
+            methodContext.emit("newarr ${coreLibraryReference}System.Object", pops = 1, pushes = 1)
+            regularArgumentSlots.forEachIndexed { index, slot ->
+                methodContext.emit("dup", pops = 1, pushes = 2)
+                methodContext.emit("ldc.i4.$index", pushes = 1)
+                methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+                methodContext.emit("stelem.ref", pops = 3)
+            }
+        }
         methodContext.emit(
-            DotNetGenericInterfaceRuntime.invokeUniqueProducerCallInstruction(coreLibraryReference),
-            pops = 3,
+            DotNetGenericInterfaceRuntime.invokeUniqueMemberCallInstruction(coreLibraryReference),
+            pops = 4,
             pushes = 1,
         )
-        methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+        if (resultSlot != null) {
+            methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+        } else {
+            methodContext.emit("pop", pops = 1)
+        }
 
         methodContext.emitLabel(joinLabel)
-        methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
-        resultNarrowing?.let { instruction ->
-            methodContext.emit(instruction, pops = 1, pushes = 1)
+        if (resultSlot != null) {
+            methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+            resultNarrowing?.let { instruction ->
+                methodContext.emit(instruction, pops = 1, pushes = 1)
+            }
+        } else if (expectedType != null) {
+            emitRuntimeUnitInstance()
         }
         return true
     }
@@ -3261,8 +3327,9 @@ internal class DotNetIlExpressionCodegen(
      * Enters a generic owner semantic slot only when the receiver expression physically comes
      * from an object-carried open nested construction. Ordinary closed receivers remain on their
      * natural CLR MethodDef. Covariant no-input interfaces take the capability-or-foreign
-     * dispatcher above; input-bearing foreign interfaces remain unclaimed, while a Kotlin class
-     * instance always inherits its compiler capability on the same object.
+     * dispatcher above; input-bearing foreign interfaces outside the bounded invariant cell
+     * remain unclaimed, while a Kotlin class instance always inherits its compiler capability on
+     * the same object.
      */
     private fun emitReifiedGenericInterfaceObjectCarrierCapabilityCallOrNull(
         call: IrCall,

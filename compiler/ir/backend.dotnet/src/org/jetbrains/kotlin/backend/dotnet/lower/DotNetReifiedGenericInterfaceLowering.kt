@@ -62,6 +62,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -92,10 +93,11 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
- * returning its owner parameter directly, or a public contravariant consumer with one abstract
- * owner-parameter input and `Unit` result. An invariant producer has no legal sibling widening:
- * exact and open constructions stay on natural `I<T>`, while only a star read uses the semantic
- * operation boundary. Covariant subinterfaces inherit the producer family at a fixpoint,
+ * returning its owner parameter directly, a public contravariant consumer with one abstract
+ * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
+ * An invariant owner has no legal declaration-site sibling widening: exact and open
+ * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
+ * semantic boundary. Covariant subinterfaces inherit the producer family at a fixpoint,
  * including across a producer boundary. A child which adds the same producer member shape owns
  * only its new semantic slot; inherited slots remain inherited. An intersection without new
  * members receives one memberless capability alias over its independent roots. Other families
@@ -847,11 +849,19 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (declarations.any { declaration -> declaration is IrProperty }) return false
         val parameter = typeParameters.single()
         val members = declaredInterfaceMembers()
-        val member = members.singleOrNull() ?: return false
+        if (members.map { member -> member.name }.distinct().size != members.size) return false
         return when (parameter.variance) {
-            Variance.OUT_VARIANCE -> member.isDirectProducerMember(parameter)
-            Variance.IN_VARIANCE -> member.isDirectConsumerMember(parameter)
-            Variance.INVARIANT -> member.isDirectProducerMember(parameter)
+            Variance.OUT_VARIANCE -> members.singleOrNull()?.isDirectProducerMember(parameter) == true
+            Variance.IN_VARIANCE -> members.singleOrNull()?.isDirectConsumerMember(parameter) == true
+            Variance.INVARIANT ->
+                members.singleOrNull()?.isDirectProducerMember(parameter) == true ||
+                        (members.size == 2 &&
+                                members.count { member ->
+                                    member.isDirectProducerMember(parameter)
+                                } == 1 &&
+                                members.count { member ->
+                                    member.isDirectConsumerMember(parameter)
+                                } == 1)
         }
     }
 
@@ -862,7 +872,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
         ) {
             return false
         }
-        val resultParameter = (returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        val resultType = returnType as? IrSimpleType ?: return false
+        if (resultType.isMarkedNullable()) return false
+        val resultParameter = resultType.classifier as? IrTypeParameterSymbol
         return resultParameter?.owner === parameter
     }
 
@@ -874,7 +886,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
         val regular = parameters.singleOrNull { it.kind == IrParameterKind.Regular } ?: return false
         if (parameters.size != 2) return false
-        val inputParameter = (regular.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        val inputType = regular.type as? IrSimpleType ?: return false
+        if (inputType.isMarkedNullable()) return false
+        val inputParameter = inputType.classifier as? IrTypeParameterSymbol
         return inputParameter?.owner === parameter
     }
 

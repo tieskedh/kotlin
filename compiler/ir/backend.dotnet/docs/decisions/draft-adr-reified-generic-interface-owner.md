@@ -289,6 +289,18 @@ general fallback. Kotlin may store different compatible projected producers
 through the same box, and a capability-free ordinary C# producer crosses both
 the operation and storage paths without a wrapper or identity change.
 
+The first multi-direction invariant contract follows the same rule rather
+than falling back to an erased owner. An admitted `Cell<T>` contains exactly
+one abstract `T` output and one abstract `T` input/`Unit` member. The natural
+CLR `Cell<T>` is the normal API, and an exact Kotlin implementation stores its
+state in `!T`. Star/output-projected reads and input-projected writes use the
+semantic capability only at the operation. For an ordinary non-partial C#
+implementation, runtime surface 40 generalizes the cached unique-construction
+fallback to invoke either a zero-input producer or a one-input consumer. It
+does not require C# to implement the compiler capability. Exact/open nested
+`Box<Cell<!!T>>` stays typed; only a concrete projected
+`Box<Cell<out Any?>>` selects `Box<object>`.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -304,8 +316,9 @@ must cover:
 
 1. general member-declaring children beyond one producer-output slot, including
    multiple members, overloads, and deeper inheritance;
-2. mutable/broader invariant members, mixed, multi-parameter, and input-
-   bearing child/interface compositions beyond the admitted roots;
+2. invariant member families beyond the admitted one-producer/one-consumer
+   root, mixed or multiple type parameters, and input-bearing child/interface
+   compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded
@@ -313,7 +326,8 @@ must cover:
    classifier-derived fields, and broader input parameters crossing separately
    compiled exact-looking boundaries;
 5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and
-   ordinary foreign implementations beyond the no-input covariant producer;
+   ordinary foreign implementations beyond the proven producer, consumer,
+   and invariant-cell shapes;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
    assembly graphs, including classifier-derived fields and non-final or
    multi-input parameters;

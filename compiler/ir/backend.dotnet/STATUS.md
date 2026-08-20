@@ -288,6 +288,33 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
   unchanged six-test `dotnet.ir` model root remained up-to-date.
+- The first broader declaration-invariant family is now closed in the test-
+  only epoch. `InvariantCell<T>` owns one abstract `T` result and one abstract
+  `T` input/`Unit` member on the same natural invariant CLR interface. Exact
+  and open calls remain ordinary `InvariantCell<!!T>` calls, the Kotlin value
+  implementation retains one physical `!T` field, and
+  `Box<InvariantCell<!!T>>` remains fully typed. Output/star reads and input
+  projections select the semantic capability only at the operation. An
+  ordinary non-partial C# `InvariantCell<string>` or `InvariantCell<object>`
+  implements only the two natural members; a cached unique-construction
+  fallback invokes either member when a projected Kotlin boundary receives
+  that foreign object. The
+  Roslyn authoring tool skips exactly this structurally admitted one-producer/
+  one-consumer invariant bundle, while all broader shapes remain fail-closed.
+  Materializing `InvariantCell<out Any?>` in a box selects `Box<object>` for
+  that construction only; it does not erase the interface family, the box
+  TypeDef, or unrelated fields. Runtime surface 40 adds the generalized
+  argument-bearing foreign-member dispatcher while retaining the surface-39
+  producer entry. PSI/LightTree execution on Framework 4.8 and .NET 10 passes
+  the eight-test rehearsal matrix and the same eight-test epoch-off inverse
+  with zero failures, errors, or skips. Property syntax, defaults, overloads,
+  inheritance around this broader family, mixed/multiple parameters, and
+  value-class substitutions remain separate gates. Evidence is archived in
+  [`docs/archive/generic-owner-mutable-invariant-cell-2026-08-20.md`](docs/archive/generic-owner-mutable-invariant-cell-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

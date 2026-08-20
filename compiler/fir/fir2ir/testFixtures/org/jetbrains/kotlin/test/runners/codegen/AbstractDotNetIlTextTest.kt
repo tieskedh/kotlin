@@ -4124,6 +4124,7 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     producer: File,
     expectedDeclaredOwner: String = "RehearsalSeparateProducer`1",
     expectedMemberName: String = "produce",
+    expectedContractMemberCount: Int = 1,
     expectedVariance: DotNetCSharpTypeParameterVariance = DotNetCSharpTypeParameterVariance.OUT,
     expectedSemanticReturnType: String = "object",
     expectedSemanticParameterTypes: List<String> = emptyList(),
@@ -4161,9 +4162,11 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
             "The member-declaring child did not publish its own semantic capability"
         }
     }
-    val member = contract.members.singleOrNull()
-    check(member?.sourceName == expectedMemberName) {
-        "The reified generic-interface contract copied inherited members or lost its declared member"
+    val member = contract.members.singleOrNull { candidate ->
+        candidate.sourceName == expectedMemberName
+    }
+    check(contract.members.size == expectedContractMemberCount && member != null) {
+        "The reified generic-interface contract copied, lost, or duplicated declared members"
     }
     check(member.authoringView == DotNetCSharpInterfaceView.DECLARED) {
         "C# authoring must target the natural generic interface"
@@ -4247,6 +4250,24 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedMemberName = "produceInvariant",
                     expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateInvariantCell`1",
+                    expectedMemberName = "readCell",
+                    expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateInvariantCell`1",
+                    expectedMemberName = "writeCell",
+                    expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                )
             }
             producer.name.equals("middle.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(
@@ -4308,6 +4329,38 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public string produceInvariant()
                 {
                     return "csharp-separate-invariant";
+                }
+            }
+
+            public sealed class RehearsalSeparateCSharpInvariantCell :
+                RehearsalSeparateInvariantCell<string>
+            {
+                public string Value = "csharp-separate-cell";
+
+                public string readCell()
+                {
+                    return Value;
+                }
+
+                public void writeCell(string value)
+                {
+                    Value = value;
+                }
+            }
+
+            public sealed class RehearsalSeparateCSharpInvariantObjectCell :
+                RehearsalSeparateInvariantCell<object>
+            {
+                public object Value = "csharp-separate-object-cell";
+
+                public object readCell()
+                {
+                    return Value;
+                }
+
+                public void writeCell(object value)
+                {
+                    Value = value;
                 }
             }
 
@@ -4422,6 +4475,39 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "separate projected invariant storage rejected or replaced a " +
                             "natural C# implementation");
+                    RehearsalSeparateCSharpInvariantCell invariantCell =
+                        new RehearsalSeparateCSharpInvariantCell();
+                    invariantCell.writeCell("csharp-separate-exact-cell");
+                    if (invariantCell.readCell() != "csharp-separate-exact-cell" ||
+                            !object.Equals(
+                                libKt.rehearsalSeparateStarInvariantCellRead(invariantCell),
+                                "csharp-separate-exact-cell") ||
+                            !object.Equals(
+                                libKt.rehearsalSeparateProjectedInvariantCellRead(invariantCell),
+                                "csharp-separate-exact-cell"))
+                        throw new InvalidOperationException(
+                            "separate projected invariant read bypassed a natural C# cell");
+                    libKt.rehearsalSeparateProjectedInvariantCellWrite(
+                        invariantCell,
+                        "csharp-separate-projected-cell");
+                    if (invariantCell.Value != "csharp-separate-projected-cell")
+                        throw new InvalidOperationException(
+                            "separate projected invariant write bypassed a natural C# cell");
+                    RehearsalSeparateCSharpInvariantObjectCell invariantObjectCell =
+                        new RehearsalSeparateCSharpInvariantObjectCell();
+                    libKt.rehearsalSeparateProjectedInvariantCellWrite(
+                        invariantObjectCell,
+                        "csharp-separate-broad-projected-cell");
+                    if (!object.Equals(
+                            invariantObjectCell.Value,
+                            "csharp-separate-broad-projected-cell"))
+                        throw new InvalidOperationException(
+                            "separate projected invariant write rejected a natural object cell");
+                    RehearsalSeparateNestedBox<object> projectedInvariantCellBox =
+                        libKt.rehearsalSeparateProjectedInvariantCellBox(invariantCell);
+                    if (!object.ReferenceEquals(projectedInvariantCellBox.read(), invariantCell))
+                        throw new InvalidOperationException(
+                            "separate projected invariant cell storage changed C# identity");
                     RehearsalSeparateRawCSharpIntProducer rawProducer =
                         new RehearsalSeparateRawCSharpIntProducer();
                     RehearsalSeparateProducer<int> rawExact = rawProducer;
@@ -4657,6 +4743,76 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "the separate projected invariant nesting was not Box<object>: " +
                                 separateProjectedInvariantBox);
+                    Type separateInvariantCell = typeof(RehearsalSeparateInvariantCell<>);
+                    Type separateInvariantCellParameter =
+                        separateInvariantCell.GetGenericArguments()[0];
+                    if ((separateInvariantCellParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                            separateInvariantCell.GetMethod("readCell").ReturnType !=
+                                separateInvariantCellParameter ||
+                            separateInvariantCell.GetMethod("writeCell")
+                                .GetParameters()[0].ParameterType !=
+                                separateInvariantCellParameter)
+                        throw new InvalidOperationException(
+                            "the separate invariant cell lost its natural CLR T slots");
+                    Type separateInvariantCellValue =
+                        typeof(RehearsalSeparateInvariantCellValue<>);
+                    Type separateInvariantCellValueParameter =
+                        separateInvariantCellValue.GetGenericArguments()[0];
+                    System.Reflection.FieldInfo separateInvariantCellStorage =
+                        separateInvariantCellValue.GetField(
+                            "value",
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.NonPublic);
+                    if (separateInvariantCellStorage == null ||
+                            separateInvariantCellStorage.FieldType !=
+                                separateInvariantCellValueParameter)
+                        throw new InvalidOperationException(
+                            "the separate invariant cell implementation lost its CLR T field");
+                    System.Reflection.MethodInfo separateInvariantCellIdentity = typeof(libKt)
+                        .GetMethod("rehearsalSeparateOpenInvariantCellBoxIdentity");
+                    Type separateInvariantCellIdentityParameter =
+                        separateInvariantCellIdentity.GetParameters()[0].ParameterType;
+                    Type separateInvariantCellNestedArgument =
+                        separateInvariantCellIdentityParameter.GetGenericArguments()[0];
+                    if (separateInvariantCellIdentity.ReturnType !=
+                            separateInvariantCellIdentityParameter ||
+                            separateInvariantCellIdentityParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateNestedBox<>) ||
+                            separateInvariantCellNestedArgument.GetGenericTypeDefinition() !=
+                                separateInvariantCell ||
+                            !separateInvariantCellNestedArgument.GetGenericArguments()[0]
+                                .IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "separate open invariant cell nesting was unnecessarily object-erased");
+                    System.Reflection.MethodInfo separateProjectedCellRead = typeof(libKt)
+                        .GetMethod("rehearsalSeparateProjectedInvariantCellRead");
+                    System.Reflection.MethodInfo separateProjectedCellWrite = typeof(libKt)
+                        .GetMethod("rehearsalSeparateProjectedInvariantCellWrite");
+                    System.Reflection.MethodInfo separateProjectedCellWriteResult = typeof(libKt)
+                        .GetMethod("rehearsalSeparateProjectedInvariantCellWriteResult");
+                    if (separateProjectedCellRead.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                            separateProjectedCellRead.ReturnType != typeof(object) ||
+                            separateProjectedCellWrite.GetParameters()[0].ParameterType !=
+                                typeof(object) ||
+                            separateProjectedCellWrite.GetParameters()[1].ParameterType !=
+                                typeof(string) ||
+                            separateProjectedCellWrite.ReturnType != typeof(void) ||
+                            separateProjectedCellWriteResult.GetParameters()[0].ParameterType !=
+                                typeof(object) ||
+                            separateProjectedCellWriteResult.GetParameters()[1].ParameterType !=
+                                typeof(string) ||
+                            separateProjectedCellWriteResult.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate invariant cell projections lacked object boundaries");
+                    Type separateProjectedCellBox = typeof(libKt)
+                        .GetMethod("rehearsalSeparateProjectedInvariantCellBox").ReturnType;
+                    if (separateProjectedCellBox !=
+                            typeof(RehearsalSeparateNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "the separate projected invariant cell nesting was not Box<object>");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4871,6 +5027,75 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class RehearsalCSharpInvariantCell :
+                RehearsalInvariantCell<string>
+            {
+                public string Value = "csharp-cell";
+
+                public string readCell()
+                {
+                    return Value;
+                }
+
+                public void writeCell(string value)
+                {
+                    Value = value;
+                }
+            }
+
+            public sealed class RehearsalCSharpInvariantObjectCell :
+                RehearsalInvariantCell<object>
+            {
+                public object Value = "csharp-object-cell";
+
+                public object readCell()
+                {
+                    return Value;
+                }
+
+                public void writeCell(object value)
+                {
+                    Value = value;
+                }
+            }
+
+            public sealed class RehearsalCSharpAmbiguousInvariantCell :
+                RehearsalInvariantCell<string>,
+                RehearsalInvariantCell<object>
+            {
+                string RehearsalInvariantCell<string>.readCell()
+                {
+                    return "string";
+                }
+
+                void RehearsalInvariantCell<string>.writeCell(string value)
+                {
+                }
+
+                object RehearsalInvariantCell<object>.readCell()
+                {
+                    return "object";
+                }
+
+                void RehearsalInvariantCell<object>.writeCell(object value)
+                {
+                }
+            }
+
+            public sealed class RehearsalCSharpThrowingInvariantCell :
+                RehearsalInvariantCell<string>
+            {
+                public string readCell()
+                {
+                    return "throwing";
+                }
+
+                public void writeCell(string value)
+                {
+                    throw new InvalidOperationException("cell-write-sentinel");
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -4915,6 +5140,86 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "projected invariant storage rejected or replaced a natural C# " +
                             "implementation");
+                    RehearsalCSharpInvariantCell invariantCell =
+                        new RehearsalCSharpInvariantCell();
+                    invariantCell.writeCell("csharp-exact-cell");
+                    if (invariantCell.readCell() != "csharp-exact-cell" ||
+                            !object.Equals(
+                                genericOwnerRehearsalStateCarriersKt
+                                    .rehearsalStarInvariantCellRead(invariantCell),
+                                "csharp-exact-cell") ||
+                            !object.Equals(
+                                genericOwnerRehearsalStateCarriersKt
+                                    .rehearsalProjectedInvariantCellRead(invariantCell),
+                                "csharp-exact-cell"))
+                        throw new InvalidOperationException(
+                            "projected invariant read bypassed a natural C# cell");
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantCellWrite(
+                            invariantCell,
+                            "csharp-projected-cell");
+                    if (invariantCell.Value != "csharp-projected-cell")
+                        throw new InvalidOperationException(
+                            "projected invariant write bypassed a natural C# cell");
+                    RehearsalCSharpInvariantObjectCell invariantObjectCell =
+                        new RehearsalCSharpInvariantObjectCell();
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantCellWrite(
+                            invariantObjectCell,
+                            "csharp-broad-projected-cell");
+                    if (!object.Equals(
+                            invariantObjectCell.Value,
+                            "csharp-broad-projected-cell"))
+                        throw new InvalidOperationException(
+                            "projected invariant write rejected a natural object cell");
+                    try
+                    {
+                        genericOwnerRehearsalStateCarriersKt
+                            .rehearsalProjectedInvariantCellWrite(
+                                new object(),
+                                "missing");
+                        throw new InvalidOperationException(
+                            "projected invariant write accepted no natural construction");
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    try
+                    {
+                        genericOwnerRehearsalStateCarriersKt
+                            .rehearsalProjectedInvariantCellWrite(
+                                new RehearsalCSharpAmbiguousInvariantCell(),
+                                "ambiguous");
+                        throw new InvalidOperationException(
+                            "projected invariant write accepted multiple natural constructions");
+                    }
+                    catch (InvalidOperationException failure)
+                    {
+                        if (failure.Message !=
+                                "A foreign Kotlin generic-interface view has multiple CLR " +
+                                    "constructions")
+                            throw;
+                    }
+                    try
+                    {
+                        genericOwnerRehearsalStateCarriersKt
+                            .rehearsalProjectedInvariantCellWrite(
+                                new RehearsalCSharpThrowingInvariantCell(),
+                                "throw");
+                        throw new InvalidOperationException(
+                            "projected invariant write swallowed its member exception");
+                    }
+                    catch (InvalidOperationException failure)
+                    {
+                        if (failure.Message != "cell-write-sentinel")
+                            throw;
+                    }
+                    RehearsalNestedBox<object> projectedInvariantCellBox =
+                        genericOwnerRehearsalStateCarriersKt
+                            .rehearsalProjectedInvariantCellBox(invariantCell);
+                    if (!object.ReferenceEquals(projectedInvariantCellBox.read(), invariantCell))
+                        throw new InvalidOperationException(
+                            "projected invariant cell storage changed C# identity");
                     Type openBox = typeof(RehearsalNestedBox<>);
                     System.Reflection.FieldInfo valueField = openBox.GetField(
                         "value",
@@ -5065,6 +5370,66 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "the projected invariant nested construction was not Box<object>: " +
                                 projectedInvariantBox);
+                    Type invariantCellOwner = typeof(RehearsalInvariantCell<>);
+                    Type invariantCellParameter = invariantCellOwner.GetGenericArguments()[0];
+                    if (typeof(RehearsalInvariantOverloaded).IsGenericType)
+                        throw new InvalidOperationException(
+                            "the overloaded invariant control was reified");
+                    if (typeof(RehearsalInvariantNullableCell).IsGenericType)
+                        throw new InvalidOperationException(
+                            "the open-nullable invariant control was reified");
+                    if ((invariantCellParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                            invariantCellOwner.GetMethod("readCell").ReturnType !=
+                                invariantCellParameter ||
+                            invariantCellOwner.GetMethod("writeCell")
+                                .GetParameters()[0].ParameterType != invariantCellParameter)
+                        throw new InvalidOperationException(
+                            "the invariant cell lost its natural CLR T slots");
+                    System.Reflection.MethodInfo invariantCellIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenInvariantCellBoxIdentity");
+                    Type invariantCellIdentityParameter =
+                        invariantCellIdentity.GetParameters()[0].ParameterType;
+                    Type invariantCellNestedArgument =
+                        invariantCellIdentityParameter.GetGenericArguments()[0];
+                    if (invariantCellIdentity.ReturnType != invariantCellIdentityParameter ||
+                            invariantCellIdentityParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalNestedBox<>) ||
+                            invariantCellNestedArgument.GetGenericTypeDefinition() !=
+                                invariantCellOwner ||
+                            !invariantCellNestedArgument.GetGenericArguments()[0]
+                                .IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "open invariant cell nesting was unnecessarily object-erased");
+                    System.Reflection.MethodInfo projectedCellRead =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantCellRead");
+                    System.Reflection.MethodInfo projectedCellWrite =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantCellWrite");
+                    System.Reflection.MethodInfo projectedCellWriteResult =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantCellWriteResult");
+                    if (projectedCellRead.GetParameters()[0].ParameterType != typeof(object) ||
+                            projectedCellRead.ReturnType != typeof(object) ||
+                            projectedCellWrite.GetParameters()[0].ParameterType != typeof(object) ||
+                            projectedCellWrite.GetParameters()[1].ParameterType != typeof(string) ||
+                            projectedCellWrite.ReturnType != typeof(void) ||
+                            projectedCellWriteResult.GetParameters()[0].ParameterType !=
+                                typeof(object) ||
+                            projectedCellWriteResult.GetParameters()[1].ParameterType !=
+                                typeof(string) ||
+                            projectedCellWriteResult.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the invariant cell projections lacked object boundaries");
+                    Type projectedCellBox =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantCellBox").ReturnType;
+                    if (projectedCellBox != typeof(RehearsalNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "the projected invariant cell nesting was not Box<object>");
                     return 0;
                 }
             }

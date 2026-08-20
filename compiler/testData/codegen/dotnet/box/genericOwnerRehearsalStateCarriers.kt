@@ -90,6 +90,28 @@ public interface RehearsalInvariantProducer<T> {
     public fun produceInvariant(): T
 }
 
+// The first broader invariant family owns both directions on one natural CLR I<T>. Exact and
+// open calls must stay typed; output/input projections select semantic operations independently.
+public interface RehearsalInvariantCell<T> {
+    public fun readCell(): T
+
+    public fun writeCell(value: T)
+}
+
+// The runtime fallback resolves by the producer-recorded CLR member name, so an overloaded
+// producer/consumer pair remains on the erased production ABI until overload selection is proven.
+public interface RehearsalInvariantOverloaded<T> {
+    public fun exchange(): T
+
+    public fun exchange(value: T)
+}
+
+public interface RehearsalInvariantNullableCell<T> {
+    public fun readNullableCell(): T?
+
+    public fun writeNullableCell(value: T)
+}
+
 private class RehearsalProducerValue<T>(private val value: T) : RehearsalProducer<T> {
     override fun produce(): T = value
 }
@@ -109,6 +131,15 @@ private class RehearsalInvariantProducerValue<T>(private val value: T) :
     override fun produceInvariant(): T = value
 }
 
+private class RehearsalInvariantCellValue<T>(private var value: T) :
+    RehearsalInvariantCell<T> {
+    override fun readCell(): T = value
+
+    override fun writeCell(value: T) {
+        this.value = value
+    }
+}
+
 private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
 
 public fun rehearsalStarInvariantProduce(producer: RehearsalInvariantProducer<*>): Any? =
@@ -117,6 +148,29 @@ public fun rehearsalStarInvariantProduce(producer: RehearsalInvariantProducer<*>
 public fun rehearsalProjectedInvariantProduce(
     producer: RehearsalInvariantProducer<out Any?>,
 ): Any? = producer.produceInvariant()
+
+public fun rehearsalStarInvariantCellRead(cell: RehearsalInvariantCell<*>): Any? =
+    cell.readCell()
+
+public fun rehearsalProjectedInvariantCellRead(
+    cell: RehearsalInvariantCell<out Any?>,
+): Any? = cell.readCell()
+
+public fun rehearsalProjectedInvariantCellWrite(
+    cell: RehearsalInvariantCell<in String>,
+    value: String,
+) {
+    cell.writeCell(value)
+}
+
+public fun rehearsalProjectedInvariantCellWriteResult(
+    cell: RehearsalInvariantCell<in String>,
+    value: String,
+): Any? = cell.writeCell(value)
+
+public fun <T> rehearsalOpenInvariantCellIdentity(
+    cell: RehearsalInvariantCell<T>,
+): RehearsalInvariantCell<T> = cell
 
 // The owner itself always retains one !T field. A logical construction whose argument can carry
 // a CLR-unnameable semantic producer view substitutes object for this construction only; exact
@@ -199,6 +253,14 @@ public fun rehearsalProjectedInvariantProducerBox(
 ): RehearsalNestedBox<RehearsalInvariantProducer<out Any?>> =
     RehearsalNestedBox(producer)
 
+public fun <T> rehearsalOpenInvariantCellBoxIdentity(
+    box: RehearsalNestedBox<RehearsalInvariantCell<T>>,
+): RehearsalNestedBox<RehearsalInvariantCell<T>> = box
+
+public fun rehearsalProjectedInvariantCellBox(
+    cell: RehearsalInvariantCell<out Any?>,
+): RehearsalNestedBox<RehearsalInvariantCell<out Any?>> = RehearsalNestedBox(cell)
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -268,6 +330,54 @@ fun box(): String {
         projectedInvariantBox.read().produceInvariant() != 47
     ) {
         return "fail: projected invariant producer box write"
+    }
+
+    val invariantCell: RehearsalInvariantCell<String> = RehearsalInvariantCellValue("cell")
+    invariantCell.writeCell("exact-cell")
+    if (invariantCell.readCell() != "exact-cell") return "fail: exact invariant cell"
+    val projectedOutputCell: RehearsalInvariantCell<out Any?> = invariantCell
+    if (rehearsalProjectedInvariantCellRead(projectedOutputCell) != "exact-cell" ||
+        rehearsalStarInvariantCellRead(projectedOutputCell) != "exact-cell" ||
+        projectedOutputCell !== invariantCell
+    ) {
+        return "fail: projected invariant cell read"
+    }
+    val projectedInputCell: RehearsalInvariantCell<in String> = invariantCell
+    rehearsalProjectedInvariantCellWrite(projectedInputCell, "projected-cell")
+    val projectedWriteResult: Any? =
+        rehearsalProjectedInvariantCellWriteResult(projectedInputCell, "projected-cell-result")
+    if (projectedWriteResult !== Unit ||
+        invariantCell.readCell() != "projected-cell-result" ||
+        projectedInputCell !== invariantCell
+    ) {
+        return "fail: projected invariant cell write"
+    }
+    val broadInvariantCell: RehearsalInvariantCell<Any?> =
+        RehearsalInvariantCellValue("broad-cell")
+    val projectedBroadInputCell: RehearsalInvariantCell<in String> = broadInvariantCell
+    rehearsalProjectedInvariantCellWrite(projectedBroadInputCell, "broad-projected-cell")
+    if (broadInvariantCell.readCell() != "broad-projected-cell" ||
+        projectedBroadInputCell !== broadInvariantCell
+    ) {
+        return "fail: broad projected invariant cell write"
+    }
+    if (rehearsalOpenInvariantCellIdentity(invariantCell) !== invariantCell) {
+        return "fail: open invariant cell identity"
+    }
+    val invariantCellBox = RehearsalNestedBox(invariantCell)
+    if (rehearsalOpenInvariantCellBoxIdentity(invariantCellBox) !== invariantCellBox) {
+        return "fail: open invariant cell box identity"
+    }
+    val projectedInvariantCellBox = rehearsalProjectedInvariantCellBox(projectedOutputCell)
+    if (projectedInvariantCellBox.read() !== invariantCell) {
+        return "fail: projected invariant cell box identity"
+    }
+    val intInvariantCell: RehearsalInvariantCell<Int> = RehearsalInvariantCellValue(59)
+    projectedInvariantCellBox.write(intInvariantCell)
+    if (projectedInvariantCellBox.read() !== intInvariantCell ||
+        rehearsalProjectedInvariantCellRead(projectedInvariantCellBox.read()) != 59
+    ) {
+        return "fail: projected invariant cell box mutation"
     }
 
     val intBox = RehearsalNestedBox(51)

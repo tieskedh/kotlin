@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-mutable-invariant-cell-2026-08-20.md`](generic-owner-mutable-invariant-cell-2026-08-20.md)
+  records the natural two-direction invariant `Cell<T>`, retained `!T` state
+  and exact/open nesting, operation-local projected read/write dispatch,
+  ordinary non-partial C# implementation, Runtime surface 40, and paired
+  rehearsal/inverse Framework 4.8/.NET 10 matrices.
 - [`generic-owner-invariant-projection-boundary-2026-08-20.md`](generic-owner-invariant-projection-boundary-2026-08-20.md)
   records the construction-local `object` carrier for invariant use-site
   projection, retained `Box<T>`/`!T` and exact/open invariant controls,
