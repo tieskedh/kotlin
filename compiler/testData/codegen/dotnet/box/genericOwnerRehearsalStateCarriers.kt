@@ -107,6 +107,11 @@ public interface RehearsalInvariantPropertyCellChild<T> :
     public var childPropertyCellValue: T
 }
 
+public interface RehearsalInvariantPropertyConsumerChild<T> :
+    RehearsalInvariantPropertyCell<T> {
+    public fun consumePropertyCellValue(value: T)
+}
+
 // Property admission is deliberately exact. Read-only state, open-nullable state, and a property
 // mixed with an unrelated member remain on the erased production ABI until each broader family
 // has its own proof.
@@ -175,6 +180,14 @@ private class RehearsalInvariantPropertyCellChildValue<T>(
     override var childPropertyCellValue: T,
 ) : RehearsalInvariantPropertyCellChild<T>
 
+private class RehearsalInvariantPropertyConsumerChildValue<T>(
+    override var propertyCellValue: T,
+) : RehearsalInvariantPropertyConsumerChild<T> {
+    override fun consumePropertyCellValue(value: T) {
+        propertyCellValue = value
+    }
+}
+
 private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
 
 public fun rehearsalStarInvariantProduce(producer: RehearsalInvariantProducer<*>): Any? =
@@ -240,6 +253,17 @@ public fun rehearsalProjectedInvariantPropertyCellChildWrite(
 public fun <T> rehearsalOpenInvariantPropertyCellChildIdentity(
     cell: RehearsalInvariantPropertyCellChild<T>,
 ): RehearsalInvariantPropertyCellChild<T> = cell
+
+public fun rehearsalProjectedInvariantPropertyConsumerChildWrite(
+    cell: RehearsalInvariantPropertyConsumerChild<in String>,
+    value: String,
+) {
+    cell.consumePropertyCellValue(value)
+}
+
+public fun <T> rehearsalOpenInvariantPropertyConsumerChildIdentity(
+    cell: RehearsalInvariantPropertyConsumerChild<T>,
+): RehearsalInvariantPropertyConsumerChild<T> = cell
 
 // The owner itself always retains one !T field. A logical construction whose argument can carry
 // a CLR-unnameable semantic producer view substitutes object for this construction only; exact
@@ -580,6 +604,36 @@ fun box(): String {
         "broad-projected-property-child"
     ) {
         return "fail: broad projected invariant property child write"
+    }
+    val invariantPropertyConsumerChild: RehearsalInvariantPropertyConsumerChild<String> =
+        RehearsalInvariantPropertyConsumerChildValue("property-consumer")
+    invariantPropertyConsumerChild.consumePropertyCellValue("exact-property-consumer")
+    val projectedInputPropertyConsumerChild:
+            RehearsalInvariantPropertyConsumerChild<in String> =
+        invariantPropertyConsumerChild
+    rehearsalProjectedInvariantPropertyConsumerChildWrite(
+        projectedInputPropertyConsumerChild,
+        "projected-property-consumer",
+    )
+    if (invariantPropertyConsumerChild.propertyCellValue !=
+        "projected-property-consumer" ||
+        rehearsalOpenInvariantPropertyConsumerChildIdentity(
+            invariantPropertyConsumerChild
+        ) !== invariantPropertyConsumerChild
+    ) {
+        return "fail: projected invariant property consumer child write"
+    }
+    val broadInvariantPropertyConsumerChild:
+            RehearsalInvariantPropertyConsumerChild<Any?> =
+        RehearsalInvariantPropertyConsumerChildValue("broad-property-consumer")
+    rehearsalProjectedInvariantPropertyConsumerChildWrite(
+        broadInvariantPropertyConsumerChild,
+        "broad-projected-property-consumer",
+    )
+    if (broadInvariantPropertyConsumerChild.propertyCellValue !=
+        "broad-projected-property-consumer"
+    ) {
+        return "fail: broad projected invariant property consumer child write"
     }
     val invariantPropertyCellChildBox = RehearsalNestedBox(invariantPropertyCellChild)
     if (rehearsalOpenInvariantPropertyCellChildBoxIdentity(invariantPropertyCellChildBox) !==

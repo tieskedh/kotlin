@@ -323,6 +323,19 @@ owner declarations and may neither block the child nor become duplicated ABI.
 This rule does not admit deeper, changed-argument, multi-parent, mixed-member,
 or multiple-property inheritance.
 
+One direct owner-parameter input also composes above that exact property root.
+`ConsumerChild<T> : PropertyCell<T>` owns a natural `Consume(!T)` method while
+its one-method semantic capability inherits the parent's accessor capability.
+Exact/open receivers remain the natural child; only input-projected calls use
+an object receiver. A C# `ConsumerChild<string>` or `ConsumerChild<object>`
+implements the inherited property and natural method without a partial class
+or compiler interface. The authoring tool treats the manifest's structurally
+exact invariant consumer-only contract as a complete child fragment only when
+the constructed CLR child inherits a bound complete producer contract. A
+standalone invariant consumer retains its generated object adapter. This does
+not generalize to multiple inputs, changed arguments, or arbitrary mixed-
+member children.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -336,13 +349,14 @@ Broader member surfaces or changed variance require separate complete proofs.
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
 must cover:
 
-1. general member-declaring children beyond one producer-output slot or the
-   exact one-level invariant-property child, including multiple members,
-   overloads, changed arguments, multiple parents, and deeper inheritance;
+1. general member-declaring children beyond one producer-output slot, the
+   exact one-level invariant-property child, or its one-consumer sibling,
+   including multiple members, overloads, changed arguments, multiple parents,
+   and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
-   method root, exact mutable-property root, and exact one-level property
-   child, mixed or multiple type parameters, and input-bearing child/interface
-   compositions;
+   method root, exact mutable-property root, exact one-level property child,
+   and exact property-root consumer child, mixed or multiple type parameters,
+   and broader input-bearing child/interface compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded

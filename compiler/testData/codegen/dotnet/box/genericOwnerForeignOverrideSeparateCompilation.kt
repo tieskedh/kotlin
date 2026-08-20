@@ -341,10 +341,23 @@ public interface RehearsalSeparateInvariantPropertyCellChild<T> :
     public var childPropertyCellValue: T
 }
 
+public interface RehearsalSeparateInvariantPropertyConsumerChild<T> :
+    RehearsalSeparateInvariantPropertyCell<T> {
+    public fun consumePropertyCellValue(value: T)
+}
+
 public class RehearsalSeparateInvariantPropertyCellChildValue<T>(
     override var propertyCellValue: T,
     override var childPropertyCellValue: T,
 ) : RehearsalSeparateInvariantPropertyCellChild<T>
+
+public class RehearsalSeparateInvariantPropertyConsumerChildValue<T>(
+    override var propertyCellValue: T,
+) : RehearsalSeparateInvariantPropertyConsumerChild<T> {
+    public override fun consumePropertyCellValue(value: T) {
+        propertyCellValue = value
+    }
+}
 
 public fun rehearsalSeparateProjectedInvariantPropertyCellChildRead(
     cell: RehearsalSeparateInvariantPropertyCellChild<out Any?>,
@@ -360,6 +373,17 @@ public fun rehearsalSeparateProjectedInvariantPropertyCellChildWrite(
 public fun <T> rehearsalSeparateOpenInvariantPropertyCellChildIdentity(
     cell: RehearsalSeparateInvariantPropertyCellChild<T>,
 ): RehearsalSeparateInvariantPropertyCellChild<T> = cell
+
+public fun rehearsalSeparateProjectedInvariantPropertyConsumerChildWrite(
+    cell: RehearsalSeparateInvariantPropertyConsumerChild<in String>,
+    value: String,
+) {
+    cell.consumePropertyCellValue(value)
+}
+
+public fun <T> rehearsalSeparateOpenInvariantPropertyConsumerChildIdentity(
+    cell: RehearsalSeparateInvariantPropertyConsumerChild<T>,
+): RehearsalSeparateInvariantPropertyConsumerChild<T> = cell
 
 public fun <T> rehearsalSeparateOpenInvariantPropertyCellChildBoxIdentity(
     box: RehearsalSeparateNestedBox<RehearsalSeparateInvariantPropertyCellChild<T>>,
@@ -703,6 +727,43 @@ fun box(): String {
         "separate-broad-projected-property-child"
     ) {
         return "fail: separate broad projected invariant property child write"
+    }
+    val invariantPropertyConsumerChild:
+            RehearsalSeparateInvariantPropertyConsumerChild<String> =
+        RehearsalSeparateInvariantPropertyConsumerChildValue(
+            "separate-property-consumer"
+        )
+    invariantPropertyConsumerChild.consumePropertyCellValue(
+        "separate-exact-property-consumer"
+    )
+    val projectedInputPropertyConsumerChild:
+            RehearsalSeparateInvariantPropertyConsumerChild<in String> =
+        invariantPropertyConsumerChild
+    rehearsalSeparateProjectedInvariantPropertyConsumerChildWrite(
+        projectedInputPropertyConsumerChild,
+        "separate-projected-property-consumer",
+    )
+    if (invariantPropertyConsumerChild.propertyCellValue !=
+        "separate-projected-property-consumer" ||
+        rehearsalSeparateOpenInvariantPropertyConsumerChildIdentity(
+            invariantPropertyConsumerChild
+        ) !== invariantPropertyConsumerChild
+    ) {
+        return "fail: separate projected invariant property consumer child write"
+    }
+    val broadInvariantPropertyConsumerChild:
+            RehearsalSeparateInvariantPropertyConsumerChild<Any?> =
+        RehearsalSeparateInvariantPropertyConsumerChildValue(
+            "separate-broad-property-consumer"
+        )
+    rehearsalSeparateProjectedInvariantPropertyConsumerChildWrite(
+        broadInvariantPropertyConsumerChild,
+        "separate-broad-projected-property-consumer",
+    )
+    if (broadInvariantPropertyConsumerChild.propertyCellValue !=
+        "separate-broad-projected-property-consumer"
+    ) {
+        return "fail: separate broad projected invariant property consumer child write"
     }
     val invariantPropertyCellChildBox =
         RehearsalSeparateNestedBox(invariantPropertyCellChild)
