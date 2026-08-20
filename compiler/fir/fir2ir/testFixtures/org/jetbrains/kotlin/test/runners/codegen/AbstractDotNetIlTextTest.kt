@@ -4241,6 +4241,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedNaturalReturnType = "void",
                     expectedNaturalParameterTypes = listOf("!0"),
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateInvariantProducer`1",
+                    expectedMemberName = "produceInvariant",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                )
             }
             producer.name.equals("middle.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(
@@ -4290,6 +4296,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public void consume(int value)
                 {
                     Value = value;
+                }
+            }
+
+            // Deliberately non-partial and with no other Kotlin contract: an ordinary C#
+            // implementation supplies only the natural invariant CLR interface and must still
+            // cross Kotlin's star operation boundary.
+            public sealed class RehearsalSeparateCSharpInvariantProducer :
+                RehearsalSeparateInvariantProducer<string>
+            {
+                public string produceInvariant()
+                {
+                    return "csharp-separate-invariant";
                 }
             }
 
@@ -4380,6 +4398,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!reader.same(producer, producer))
                         throw new InvalidOperationException(
                             "the generated C# interface bridge changed object identity");
+                    RehearsalSeparateCSharpInvariantProducer invariantProducer =
+                        new RehearsalSeparateCSharpInvariantProducer();
+                    if (invariantProducer.produceInvariant() !=
+                            "csharp-separate-invariant" ||
+                            !object.Equals(
+                                libKt.rehearsalSeparateStarInvariantProduce(invariantProducer),
+                                "csharp-separate-invariant"))
+                        throw new InvalidOperationException(
+                            "separate Kotlin star dispatch bypassed a natural invariant C# " +
+                            "implementation");
                     RehearsalSeparateRawCSharpIntProducer rawProducer =
                         new RehearsalSeparateRawCSharpIntProducer();
                     RehearsalSeparateProducer<int> rawExact = rawProducer;
@@ -4568,6 +4596,33 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                     typeof(RehearsalSeparateNestedBox<>))
                         throw new InvalidOperationException(
                             "stable separate open nesting was unnecessarily object-erased");
+                    Type separateInvariantOwner =
+                        typeof(RehearsalSeparateInvariantProducer<>);
+                    Type separateInvariantParameter =
+                        separateInvariantOwner.GetGenericArguments()[0];
+                    if ((separateInvariantParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                            separateInvariantOwner.GetMethod("produceInvariant").ReturnType !=
+                                separateInvariantParameter)
+                        throw new InvalidOperationException(
+                            "the separate invariant producer lost its natural CLR T slot");
+                    System.Reflection.MethodInfo separateInvariantIdentity = typeof(libKt)
+                        .GetMethod("rehearsalSeparateOpenInvariantProducerBoxIdentity");
+                    Type separateInvariantIdentityParameter = separateInvariantIdentity
+                        .GetParameters()[0].ParameterType;
+                    Type separateInvariantNestedArgument = separateInvariantIdentityParameter
+                        .GetGenericArguments()[0];
+                    if (separateInvariantIdentity.ReturnType !=
+                            separateInvariantIdentityParameter ||
+                            separateInvariantIdentityParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateNestedBox<>) ||
+                            separateInvariantNestedArgument.GetGenericTypeDefinition() !=
+                                separateInvariantOwner ||
+                            !separateInvariantNestedArgument.GetGenericArguments()[0]
+                                .IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "separate open invariant nesting was unnecessarily object-erased");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4773,6 +4828,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class RehearsalCSharpInvariantProducer :
+                RehearsalInvariantProducer<string>
+            {
+                public string produceInvariant()
+                {
+                    return "csharp-invariant";
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -4792,6 +4856,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 "csharp-after-kotlin"))
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed a C# override after a Kotlin override");
+                    RehearsalCSharpInvariantProducer invariantProducer =
+                        new RehearsalCSharpInvariantProducer();
+                    if (invariantProducer.produceInvariant() != "csharp-invariant" ||
+                            !object.Equals(
+                                genericOwnerRehearsalStateCarriersKt
+                                    .rehearsalStarInvariantProduce(invariantProducer),
+                                "csharp-invariant"))
+                        throw new InvalidOperationException(
+                            "Kotlin star dispatch bypassed a natural invariant C# implementation");
                     Type openBox = typeof(RehearsalNestedBox<>);
                     System.Reflection.FieldInfo valueField = openBox.GetField(
                         "value",
@@ -4899,6 +4972,29 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 .GetGenericTypeDefinition() != typeof(RehearsalNestedBox<>))
                         throw new InvalidOperationException(
                             "stable open nesting was unnecessarily object-erased");
+                    Type invariantOwner = typeof(RehearsalInvariantProducer<>);
+                    Type invariantParameter = invariantOwner.GetGenericArguments()[0];
+                    if ((invariantParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                            invariantOwner.GetMethod("produceInvariant").ReturnType !=
+                                invariantParameter)
+                        throw new InvalidOperationException(
+                            "the invariant producer did not retain its natural CLR T slot");
+                    System.Reflection.MethodInfo invariantIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenInvariantProducerBoxIdentity");
+                    Type invariantIdentityParameter =
+                        invariantIdentity.GetParameters()[0].ParameterType;
+                    Type invariantNestedArgument =
+                        invariantIdentityParameter.GetGenericArguments()[0];
+                    if (invariantIdentity.ReturnType != invariantIdentityParameter ||
+                            invariantIdentityParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalNestedBox<>) ||
+                            invariantNestedArgument.GetGenericTypeDefinition() != invariantOwner ||
+                            !invariantNestedArgument.GetGenericArguments()[0].IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "open invariant nesting was unnecessarily object-erased");
                     return 0;
                 }
             }

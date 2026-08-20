@@ -237,6 +237,30 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
   unchanged six-test `dotnet.ir` model root remained up-to-date.
+- The first declaration-invariant generic-interface owner is now reified in
+  the test-only epoch. A public top-level `InvariantProducer<T>` with one
+  abstract no-input `T` result publishes natural invariant CLR `I<T>` metadata
+  plus the existing non-generic object-result operation capability. Exact and
+  open substitutions stay natural: the hostile control
+  `<T>(Box<InvariantProducer<T>>) -> Box<InvariantProducer<T>>` remains
+  `Box<InvariantProducer<!!T>> -> Box<InvariantProducer<!!T>>`, retains the
+  original box/producer identities, and does not enter the open-variant object
+  boundary. A public `InvariantProducer<*>` parameter is physically `object`;
+  its read selects the capability or exactly one ordinary natural CLR
+  construction. Both direct and separate-KLIB C# probes use non-partial
+  classes which implement only `InvariantProducer<string>`. The Roslyn
+  authoring tool now skips an implementation whose Kotlin contracts are all
+  admitted invariant owners, while variant contracts retain their generated-
+  capability `partial` requirement. PSI/LightTree execution on Framework 4.8
+  and .NET 10 passes the eight-test rehearsal matrix and the same eight-test
+  epoch-off inverse with zero failures, errors, or skips. Mutable/multi-member,
+  mixed, multi-parameter, and value-class interface owners remain separate
+  gates. Evidence is archived in
+  [`docs/archive/generic-owner-invariant-producer-2026-08-20.md`](docs/archive/generic-owner-invariant-producer-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
