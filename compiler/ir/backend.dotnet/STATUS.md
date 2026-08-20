@@ -415,11 +415,16 @@ verification, and work state.
   [`docs/archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md`](docs/archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md).
   The three-producer deployment evidence is archived in
   [`docs/archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md`](docs/archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md).
-  Before broadening this family, normalize local analysis and external ABI
-  decoding to one typed published-family contract. It must record family
-  kind, exact root/parent relation, identity parameter mapping, bounded depth,
-  declared roles, and capability binding; `hasReifiedGenericInterface` alone
-  remains only an existence check.
+  ABI 41 now normalizes local analysis and external decoding to one immutable
+  published-family contract. It records family kind, exact root/parent
+  relation, identity parameter mapping, bounded depth, declared roles, and
+  owned/reused capability binding. One validator conjunctively checks that
+  contract against KLIB for both local and external parents; the external
+  index first validates its Class, capability, member-family, and parent-
+  contract closure atomically. `hasReifiedGenericInterface` remains only an
+  existence check. The candidate direct/separate matrix and epoch-off inverse
+  each pass eight PSI/LightTree, Framework 4.8/.NET 10 lanes. Evidence is in
+  [`docs/archive/generic-interface-published-family-contract-2026-08-20.md`](docs/archive/generic-interface-published-family-contract-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
