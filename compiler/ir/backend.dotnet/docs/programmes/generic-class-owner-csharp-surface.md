@@ -348,6 +348,18 @@ property migration condition, not nullability annotations, collision policy,
 or the complete acceptance matrix. See
 [`../archive/generic-owner-direct-property-surface-2026-08-17.md`](../archive/generic-owner-direct-property-surface-2026-08-17.md).
 
+The Kotlin-emitter rehearsal now proves the corresponding first inherited
+interface surface directly. An exact invariant `Child<T> : Parent<T>` owns one
+new natural `Property<T>` row and inherits the parent's row; ordinary non-
+partial C# `Child<string>` and `Child<object>` implementations provide only
+the two expected auto-properties. Kotlin projected parent and child operations
+reach those same properties through the unique-construction fallback. The
+compiler capability is neither a C# author obligation nor copied into CLR
+Property metadata, and the separate producer manifest contains only the
+child-owned accessor pair. This is one exact edge, not proof of arbitrary
+foreign generic inheritance. See
+[`../archive/generic-owner-invariant-property-child-2026-08-20.md`](../archive/generic-owner-invariant-property-child-2026-08-20.md).
+
 Physical-family schema 16 now closes the nullable-reference part of that
 direct surface. Every MethodDef value slot, property, and physical state carries
 the exact Roslyn preorder transform captured from the original IR type while
