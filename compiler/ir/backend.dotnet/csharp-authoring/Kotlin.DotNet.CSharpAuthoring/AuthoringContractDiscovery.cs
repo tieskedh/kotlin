@@ -240,26 +240,49 @@ internal static class AuthoringContractDiscovery
                 contract.TypeParameters[0].Variance,
                 "INVARIANT",
                 StringComparison.Ordinal) ||
-            contract.Members.Length != 1 ||
+            (contract.Members.Length != 1 && contract.Members.Length != 2) ||
+            contract.Members.Select(member => member.SourceName)
+                .Distinct(StringComparer.Ordinal).Count() != contract.Members.Length ||
             !contract.Intersections.IsEmpty)
             return true;
-        KotlinMemberContract member = contract.Members[0];
-        if (member.Kind != KotlinMemberKind.Method ||
-            member.DefaultKind != KotlinDefaultKind.Abstract ||
-            member.WrongShapePolicy != null ||
-            !member.ErasedOwnerRelativeConstraints.IsEmpty ||
-            !member.OverriddenLogicalMemberKeys.IsEmpty ||
-            member.Slots.Length != 2)
+        int producerCount = 0;
+        int consumerCount = 0;
+        foreach (KotlinMemberContract member in contract.Members)
+        {
+            if (member.Kind != KotlinMemberKind.Method ||
+                member.DefaultKind != KotlinDefaultKind.Abstract ||
+                member.WrongShapePolicy != null ||
+                !member.ErasedOwnerRelativeConstraints.IsEmpty ||
+                !member.OverriddenLogicalMemberKeys.IsEmpty ||
+                member.Slots.Length != 2)
+                return true;
+            KotlinMethodLocator? semantic = member.Slots
+                .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Erased);
+            KotlinMethodLocator? natural = member.Slots
+                .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Declared);
+            if (semantic == null || natural == null ||
+                semantic.GenericArity != 0 || natural.GenericArity != 0)
+                return true;
+            if (semantic.ReturnType == "object" &&
+                semantic.ParameterTypes.IsEmpty &&
+                natural.ReturnType == "!0" &&
+                natural.ParameterTypes.IsEmpty)
+            {
+                producerCount++;
+                continue;
+            }
+            if (semantic.ReturnType == "void" &&
+                semantic.ParameterTypes.SequenceEqual(new[] { "object" }) &&
+                natural.ReturnType == "void" &&
+                natural.ParameterTypes.SequenceEqual(new[] { "!0" }))
+            {
+                consumerCount++;
+                continue;
+            }
             return true;
-        KotlinMethodLocator? semantic = member.Slots
-            .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Erased);
-        KotlinMethodLocator? natural = member.Slots
-            .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Declared);
-        return semantic == null || natural == null ||
-            semantic.GenericArity != 0 || semantic.ReturnType != "object" ||
-            !semantic.ParameterTypes.IsEmpty ||
-            natural.GenericArity != 0 || natural.ReturnType != "!0" ||
-            !natural.ParameterTypes.IsEmpty;
+        }
+        return !(producerCount == 1 &&
+            consumerCount == contract.Members.Length - 1);
     }
 
     private static ImmutableArray<BoundKotlinInterface> FindImplementedKotlinInterfaces(

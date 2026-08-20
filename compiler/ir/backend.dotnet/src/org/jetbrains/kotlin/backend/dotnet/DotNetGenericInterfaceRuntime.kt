@@ -396,10 +396,11 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
-    .method public hidebysig static object 'InvokeUniqueProducer'(
+    .method public hidebysig static object 'InvokeUniqueMember'(
         object 'instance',
         $typeType 'openDefinition',
-        string 'methodName') cil managed
+        string 'methodName',
+        object[] 'arguments') cil managed
     {
       .maxstack 5
       .locals init (
@@ -538,7 +539,7 @@ internal object DotNetGenericInterfaceRuntime {
       {
         ldloc.s 4
         ldarg.0
-        ldnull
+        ldarg.3
         callvirt instance object ${coreLibraryReference}System.Reflection.MethodBase::Invoke(object, object[])
         stloc.s 6
         leave.s GIF_Return
@@ -563,6 +564,24 @@ internal object DotNetGenericInterfaceRuntime {
       ldloc.s 6
       ret
     }
+
+    .method public hidebysig static object 'InvokeUniqueProducer'(
+        object 'instance',
+        $typeType 'openDefinition',
+        string 'methodName') cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      ldnull
+      call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMember'(
+          object,
+          $typeType,
+          string,
+          object[])
+      ret
+    }
   }
         """.trimIndent()
     }
@@ -572,6 +591,12 @@ internal object DotNetGenericInterfaceRuntime {
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueProducer".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type, string)"
+
+    fun invokeUniqueMemberCallInstruction(coreLibraryReference: String): String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"InvokeUniqueMember".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type, string, object[])"
 
     fun isOpenGenericInterfaceInstanceCallInstruction(coreLibraryReference: String): String =
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
