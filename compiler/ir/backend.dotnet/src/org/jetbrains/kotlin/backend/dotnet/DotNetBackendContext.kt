@@ -193,6 +193,9 @@ internal class DotNetBackendContext(
     val erasedGenericClasses: MutableSet<IrClass> = hashSetOf()
     /** Rehearsal-only generic interfaces whose natural CLR owner is the truthful `I<T>` TypeDef. */
     val reifiedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
+    /** Immutable physical-family contracts published identically to local and external consumers. */
+    val publishedGenericInterfaceFamilies:
+        MutableMap<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = linkedMapOf()
     /** Fail-closed evidence consumed only by the atomic CLR-generic rehearsal epoch. */
     val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
     /** Static call-site evidence only; codegen must never consume these route requirements. */

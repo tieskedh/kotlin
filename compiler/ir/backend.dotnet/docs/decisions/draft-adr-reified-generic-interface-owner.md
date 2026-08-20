@@ -356,15 +356,16 @@ proves the natural and 2-to-1-to-1 capability chains retain those three owners
 without copied slots. This physical evidence does not broaden the admitted
 declaration family.
 
-The current ABI-40 deployment proof expresses that admission as an exact
-conjunction of logical structure, full-arity owner records, and member-family
-records. Before the family broadens, replace that conjunction with one typed
-published-family contract containing family kind, direct parent/root keys,
-identity parameter mapping, bounded depth, declared member roles, and
-capability binding. Local declaration analysis and external ABI decoding must
-produce the same immutable contract; child admission must not know which path
-produced it. The KLIB remains authoritative for the logical edge and the
-physical record remains authoritative for the producer-selected family.
+ABI 41 replaces that loose conjunction with one typed published-family
+contract containing family kind, direct parent/root keys, identity parameter
+mapping, bounded depth, declared member roles, and capability binding. Local
+declaration analysis and external ABI decoding produce the same immutable
+contract and pass it to one child-admission validator. The KLIB remains
+authoritative for the logical edge; the physical record remains authoritative
+for the producer-selected family. The external index atomically validates the
+contract against its Class, capability, member-family, and parent-contract
+records before exposing it. See
+[`../archive/generic-interface-published-family-contract-2026-08-20.md`](../archive/generic-interface-published-family-contract-2026-08-20.md).
 
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/

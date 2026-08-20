@@ -1451,12 +1451,14 @@ with full-arity producer records and exact member-family evidence rather than
 reapplying a local-file ownership predicate. Natural and semantic TypeDefs
 remain in their declaring assemblies; no slot is copied downstream.
 
-Before this shape broadens, normalize those predicates into one versioned
-published-family contract. Local declaration analysis and external ABI
-decoding must produce the same family kind, root/parent relation, identity
-parameter mapping, bounded depth, declared roles, and capability binding for
-one admission consumer. `hasReifiedGenericInterface` remains a cheap
-existence query, not proof of a particular family.
+ABI 41 now normalizes those predicates into one versioned published-family
+contract. Local declaration analysis and external ABI decoding produce the
+same family kind, root/parent relation, identity parameter mapping, bounded
+depth, declared roles, and capability binding for one admission consumer.
+The external index validates Class, capability, member-family, and parent-
+contract closure atomically. `hasReifiedGenericInterface` remains a cheap
+existence query, not proof of a particular family. See
+[`../archive/generic-interface-published-family-contract-2026-08-20.md`](../archive/generic-interface-published-family-contract-2026-08-20.md).
 
 This does not admit arbitrary multi-member interfaces. The structural gates
 are exactly one producer, one producer plus one consumer method, or one mutable
@@ -1480,12 +1482,11 @@ cast incompatibility with the Kotlin specification is limited to BK-1 in the
 breaking-change ledger and must not leak into ordinary variance, projections,
 or warning-free operations.
 
-First consolidate the typed published-family contract described above. Then
-continue with defaults, broader input-bearing inheritance, broader/multiple
-and mixed method/property families, and mixed-variance gates, including
-derivability rules for ordinary foreign implementations, then close
-classifier-derived field and broader-
-input boundaries and deployment behavior before the Runtime/Stdlib graph.
+With that typed contract consolidated, continue with defaults, broader input-
+bearing inheritance, broader/multiple and mixed method/property families, and
+mixed-variance gates, including derivability rules for ordinary foreign
+implementations, then close classifier-derived field and broader-input
+boundaries and deployment behavior before the Runtime/Stdlib graph.
 Before that graph opens, split stable declaration-family publication from
 concrete call/value routing. The family contract, MethodDef ownership, and
 override/capability slots must be fixed early enough for subsequent lowerings;

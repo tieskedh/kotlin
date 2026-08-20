@@ -136,6 +136,8 @@ internal class DotNetIlEmitter(
     private val genericOwnerRehearsal: Boolean = false,
     private val genericOwnerArchitecturePlans: Map<IrClass, DotNetGenericOwnerArchitecturePlan> = emptyMap(),
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
+    private val publishedGenericInterfaceFamilies:
+            Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
     private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
@@ -1710,6 +1712,11 @@ internal class DotNetIlEmitter(
             currentAssemblyName = assemblyName,
             genericOwnerCapabilities = if (genericOwnerRehearsal) {
                 genericOwnerCapabilities
+            } else {
+                emptyMap()
+            },
+            publishedGenericInterfaceFamilies = if (genericOwnerRehearsal) {
+                publishedGenericInterfaceFamilies
             } else {
                 emptyMap()
             },
