@@ -118,6 +118,24 @@ public class RehearsalSeparateAbstractMethodGenericReader {
     ): Boolean = producer === expected
 }
 
+public interface RehearsalSeparateConstrainedMethodGenericProducer<out T> {
+    public fun <R> produceConstrainedGeneric(value: R): T
+            where R : RehearsalSeparateConsumer<R>
+}
+
+public class RehearsalSeparateConstrainedMethodGenericReader {
+    public fun <R> read(
+        producer: RehearsalSeparateConstrainedMethodGenericProducer<Any?>,
+        value: R,
+    ): Any? where R : RehearsalSeparateConsumer<R> =
+        producer.produceConstrainedGeneric(value)
+
+    public fun same(
+        producer: RehearsalSeparateConstrainedMethodGenericProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }
@@ -545,6 +563,26 @@ public class RehearsalSeparateAbstractMethodGenericProducerValue<T>(private val 
     public override fun <R> produceAbstractGeneric(value: R): T = this.value
 }
 
+public class RehearsalSeparateKotlinMethodConstraintValue :
+    RehearsalSeparateConsumer<RehearsalSeparateKotlinMethodConstraintValue> {
+    public var count: Int = 0
+        private set
+
+    public override fun consume(value: RehearsalSeparateKotlinMethodConstraintValue) {
+        check(value === this)
+        count += 1
+    }
+}
+
+public class RehearsalSeparateConstrainedMethodGenericProducerValue<T>(private val value: T) :
+    RehearsalSeparateConstrainedMethodGenericProducer<T> {
+    public override fun <R> produceConstrainedGeneric(value: R): T
+            where R : RehearsalSeparateConsumer<R> {
+        value.consume(value)
+        return this.value
+    }
+}
+
 public class RehearsalSeparateInvariantProducerValue<T>(private val value: T) :
     RehearsalSeparateInvariantProducer<T> {
     public override fun produceInvariant(): T = value
@@ -726,6 +764,27 @@ fun box(): String {
         ) != 37 || broadAbstractMethodGeneric !== exactAbstractMethodGeneric
     ) {
         return "fail: separate broad abstract method-generic producer"
+    }
+    val constrainedMethodGenericValue = RehearsalSeparateKotlinMethodConstraintValue()
+    val exactConstrainedMethodGeneric:
+            RehearsalSeparateConstrainedMethodGenericProducer<Int> =
+        RehearsalSeparateConstrainedMethodGenericProducerValue(41)
+    if (exactConstrainedMethodGeneric.produceConstrainedGeneric(
+            constrainedMethodGenericValue,
+        ) != 41
+    ) {
+        return "fail: separate exact constrained method-generic producer"
+    }
+    val broadConstrainedMethodGeneric:
+            RehearsalSeparateConstrainedMethodGenericProducer<Any?> =
+        exactConstrainedMethodGeneric
+    if (RehearsalSeparateConstrainedMethodGenericReader().read(
+            broadConstrainedMethodGeneric,
+            constrainedMethodGenericValue,
+        ) != 41 || broadConstrainedMethodGeneric !== exactConstrainedMethodGeneric ||
+        constrainedMethodGenericValue.count != 2
+    ) {
+        return "fail: separate broad constrained method-generic producer"
     }
     val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
         RehearsalSeparateDefaultConsumerValue()

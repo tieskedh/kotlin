@@ -4333,6 +4333,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateConstrainedMethodGenericProducer`1",
+                    expectedMemberName = "produceConstrainedGeneric",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner = "RehearsalSeparateInvariantProducer`1",
                     expectedMemberName = "produceInvariant",
                     expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
@@ -4537,6 +4549,31 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public int produceAbstractGeneric<R>(R value)
                 {
                     return 3000 + (int)(object)value;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpMethodConstraintValue :
+                RehearsalSeparateConsumer<RehearsalSeparateCSharpMethodConstraintValue>
+            {
+                public int Count;
+
+                public void consume(RehearsalSeparateCSharpMethodConstraintValue value)
+                {
+                    if (!object.ReferenceEquals(value, this))
+                        throw new InvalidOperationException(
+                            "method-generic constraint value lost identity");
+                    Count++;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpConstrainedMethodGenericProducer :
+                RehearsalSeparateConstrainedMethodGenericProducer<int>
+            {
+                public int produceConstrainedGeneric<R>(R value)
+                    where R : RehearsalSeparateConsumer<R>
+                {
+                    value.consume(value);
+                    return 4000;
                 }
             }
 
@@ -5961,6 +5998,82 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             abstractMethodGenericProducer))
                         throw new InvalidOperationException(
                             "abstract generic-interface method bypassed the C# generic override");
+                    RehearsalSeparateCSharpConstrainedMethodGenericProducer
+                        constrainedMethodGenericProducer =
+                            new RehearsalSeparateCSharpConstrainedMethodGenericProducer();
+                    RehearsalSeparateConstrainedMethodGenericProducer<int>
+                        constrainedMethodGenericProducerView = constrainedMethodGenericProducer;
+                    RehearsalSeparateCSharpMethodConstraintValue constrainedMethodGenericValue =
+                        new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateConstrainedMethodGenericReader constrainedMethodGenericReader =
+                        new RehearsalSeparateConstrainedMethodGenericReader();
+                    if (constrainedMethodGenericProducerView.produceConstrainedGeneric(
+                            constrainedMethodGenericValue) != 4000 ||
+                        !object.Equals(
+                            constrainedMethodGenericReader.read(
+                                constrainedMethodGenericProducer,
+                                constrainedMethodGenericValue),
+                            4000) ||
+                        !constrainedMethodGenericReader.same(
+                            constrainedMethodGenericProducer,
+                            constrainedMethodGenericProducer) ||
+                        constrainedMethodGenericValue.Count != 2)
+                        throw new InvalidOperationException(
+                            "constrained generic-interface method lost dispatch or identity");
+                    int constrainedMethodGenericSlotCount = 0;
+                    string constrainedMethodGenericSlots = "";
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpConstrainedMethodGenericProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalConstraintOwner =
+                            candidate ==
+                                typeof(RehearsalSeparateConstrainedMethodGenericProducer<int>);
+                        System.Reflection.MethodInfo[] constrainedMethods = candidate.GetMethods(
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                        if (constrainedMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "constrained generic-interface owner did not expose one declared slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo constrainedMethod = constrainedMethods[0];
+                        if (isNaturalConstraintOwner &&
+                            constrainedMethod.Name != "produceConstrainedGeneric")
+                            throw new InvalidOperationException(
+                                "natural constrained generic-interface slot lost its source name");
+                        if (constrainedMethod.ReturnType !=
+                            (isNaturalConstraintOwner ? typeof(int) : typeof(object)))
+                            throw new InvalidOperationException(
+                                "constrained generic-interface slot lost its result carrier");
+                        Type[] methodParameters = constrainedMethod.GetGenericArguments();
+                        if (methodParameters.Length != 1 ||
+                            !methodParameters[0].IsGenericParameter)
+                            throw new InvalidOperationException(
+                                "constrained generic-interface slot lost method arity");
+                        Type[] constraints =
+                            methodParameters[0].GetGenericParameterConstraints();
+                        System.Reflection.ParameterInfo[] valueParameters =
+                            constrainedMethod.GetParameters();
+                        constrainedMethodGenericSlots += candidate.FullName + " -> " +
+                            constrainedMethod.ToString() + " [" +
+                            string.Join(", ", Array.ConvertAll(
+                                constraints,
+                                constraint => constraint.ToString())) + "]\n";
+                        if (valueParameters.Length != 1 ||
+                            valueParameters[0].ParameterType != methodParameters[0] ||
+                            constraints.Length != 1 || !constraints[0].IsGenericType ||
+                            constraints[0].GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateConsumer<>) ||
+                            constraints[0].GetGenericArguments()[0] != methodParameters[0])
+                            throw new InvalidOperationException(
+                                "constrained generic-interface slot lost its self bound");
+                        constrainedMethodGenericSlotCount++;
+                    }
+                    if (constrainedMethodGenericSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "constrained generic-interface family did not expose two exact slots: " +
+                            constrainedMethodGenericSlotCount + "\n" + constrainedMethodGenericSlots);
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -7264,6 +7377,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpAbstractMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the abstract method-generic bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpConstrainedMethodGenericProducer" in generated) {
+            "The C# authoring tool did not generate the constrained method-generic bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpMethodConstraintValue" in generated) {
+            "The C# authoring tool did not generate the method-constraint value bridge:\n$generated"
         }
         check("RehearsalSeparateCSharpDerivedDefaultConsumer" !in generated) {
             "The ordinary C# subclass unexpectedly required a generated semantic bridge:\n$generated"
