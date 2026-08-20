@@ -360,6 +360,19 @@ child-owned accessor pair. This is one exact edge, not proof of arbitrary
 foreign generic inheritance. See
 [`../archive/generic-owner-invariant-property-child-2026-08-20.md`](../archive/generic-owner-invariant-property-child-2026-08-20.md).
 
+The next inherited surface adds one direct `T` input above that property root.
+An ordinary non-partial C# `ConsumerChild<string>` or
+`ConsumerChild<object>` implements the inherited auto-property and one normal
+`Consume(T)` method. Kotlin input projection reaches that method through the
+unique-construction fallback; C# still implements no semantic interface. This
+found and repaired an authoring analyzer defect: it evaluated the child-owned
+consumer manifest without its inherited producer context and demanded
+`partial`. The structurally exact invariant one-consumer fragment is now a
+no-adapter child shape only when the concrete CLR child inherits a bound
+complete producer manifest. Standalone consumers retain their generated object
+adapter. See
+[`../archive/generic-owner-invariant-consumer-child-2026-08-20.md`](../archive/generic-owner-invariant-consumer-child-2026-08-20.md).
+
 Physical-family schema 16 now closes the nullable-reference part of that
 direct surface. Every MethodDef value slot, property, and physical state carries
 the exact Roslyn preorder transform captured from the original IR type while
