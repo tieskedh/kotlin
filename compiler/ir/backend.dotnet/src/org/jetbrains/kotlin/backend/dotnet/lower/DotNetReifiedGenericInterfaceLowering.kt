@@ -281,6 +281,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return simpleType.arguments.singleOrNull() !is IrTypeProjection
         }
 
+        fun IrType.hasUseSiteProjectedReifiedInterfaceArgument(): Boolean {
+            val simpleType = this as? IrSimpleType ?: return false
+            reifiedInterfaceOwnerOrNull() ?: return false
+            val projection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+            return projection.variance != Variance.INVARIANT
+        }
+
         fun IrType.reifiedCovariantInterfaceOwnerOrNull(): IrClass? {
             val owner = reifiedInterfaceOwnerOrNull() ?: return null
             return owner.takeIf {
@@ -483,12 +490,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     ?: return
                 context.genericOwnerCapabilityDeclarations += declaration
                 if (semanticOwner.typeParameters.single().variance == Variance.OUT_VARIANCE ||
-                    type.hasOpenReifiedInterfaceArgument() || type.hasStarReifiedInterfaceArgument()
+                    type.hasOpenReifiedInterfaceArgument() || type.hasStarReifiedInterfaceArgument() ||
+                    (semanticOwner.typeParameters.single().variance == Variance.INVARIANT &&
+                            type.hasUseSiteProjectedReifiedInterfaceArgument())
                 ) {
-                    // An open or star I<T> occurrence cannot promise one natural construction.
-                    // Object admits both the Kotlin capability and an ordinary natural CLR
-                    // implementation. Star input is not callable in Kotlin; a no-input output
-                    // member uses the capability-or-natural foreign dispatcher at the operation.
+                    // An open, star, or admitted invariant projected I<T> occurrence cannot
+                    // promise one natural construction. Object admits both the Kotlin capability
+                    // and an ordinary natural CLR implementation. Star/projected input is not
+                    // callable for this no-input family; its output member uses the capability-
+                    // or-natural foreign dispatcher at the operation.
                     context.genericOwnerForeignDispatchDeclarations += declaration
                 }
             }

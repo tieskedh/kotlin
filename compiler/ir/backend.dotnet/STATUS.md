@@ -261,6 +261,33 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
   unchanged six-test `dotnet.ir` model root remained up-to-date.
+- The declaration-invariant producer now also has a closed use-site-projection
+  boundary. `InvariantProducer<String>` may be viewed in Kotlin as
+  `InvariantProducer<out Any?>`, but CLR invariance cannot turn the same object
+  into `InvariantProducer<object>`. A public projected parameter/result is
+  consequently `object` and selects the semantic capability or exactly one
+  natural foreign construction only when `produceInvariant()` is called.
+  This does not erase the interface family or the enclosing generic class.
+  Constructing `Box<InvariantProducer<out Any?>>` selects the concrete
+  `Box<object>` construction only; `Box<T>` retains its single `!T` field, and
+  exact/open `Box<InvariantProducer<T>>` remains
+  `Box<InvariantProducer<!!T>>`. The producer-origin planner now treats an
+  exact constructor's complete logical type as evidence for the already-
+  selected physical construction, so a later general semantic pass cannot
+  replace that `Box<object>` result with the whole non-generic `Box`
+  capability. Same-module and separate-KLIB Kotlin mutation store both String
+  and Int invariant producers through the projected box without a wrapper or
+  second identity. Ordinary non-partial C# implementations cross both the
+  projected operation and nested storage boundary with the same identity.
+  PSI/LightTree execution on Framework 4.8 and .NET 10 passes the eight-test
+  rehearsal matrix and the same eight-test epoch-off inverse with zero
+  failures, errors, or skips. Mutable/multi-member invariant owners remain the
+  next separate gate. Evidence is archived in
+  [`docs/archive/generic-owner-invariant-projection-boundary-2026-08-20.md`](docs/archive/generic-owner-invariant-projection-boundary-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

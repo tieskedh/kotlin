@@ -275,6 +275,20 @@ complete: exact calls use that slot and star output calls use the unique-
 construction fallback. The authoring generator remains active only when a
 variant contract in the same class genuinely requires a generated capability.
 
+Use-site projection is deliberately distinct from that exact invariant
+control. Kotlin permits `InvariantProducer<String>` to flow as
+`InvariantProducer<out Any?>`, but CLR invariance does not provide an
+`InvariantProducer<string> -> InvariantProducer<object>` conversion. A public
+projected interface occurrence therefore uses `object`; the output operation
+then selects the compiler capability or exactly one natural CLR construction.
+If code constructs `Box<InvariantProducer<out Any?>>`, the generic-argument
+mapper chooses `Box<object>` for that construction only. It does not erase
+`Box<T>`, change its `!T` field, or replace the complete box with the box's
+non-generic semantic capability. Exact construction provenance outranks that
+general fallback. Kotlin may store different compatible projected producers
+through the same box, and a capability-free ordinary C# producer crosses both
+the operation and storage paths without a wrapper or identity change.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural

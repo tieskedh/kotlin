@@ -2717,6 +2717,14 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             while (pending.isNotEmpty()) {
                 val candidate = pending.removeFirst()
                 if (!visited.add(candidate)) continue
+                // An exact construction already selected the backend's physical carrier for
+                // this complete logical type. In particular, constructing
+                // Box<InvariantProducer<out Any?>> closes Box<object>; the projection is not an
+                // unresolved Box capability merely because the stricter invariant comparison
+                // below deliberately refuses to equate projected interface views. Arbitrary
+                // boundary values never reach this arm as exact origins: they are seeded as
+                // unresolved and casts/widening preserve their producer provenance.
+                if (candidate == expected) return true
                 if (candidate.sameInvariantTypeAs(expected)) return true
                 val simple = candidate as? IrSimpleType ?: continue
                 val classifier = (simple.classifier as? IrClassSymbol)?.owner ?: continue
