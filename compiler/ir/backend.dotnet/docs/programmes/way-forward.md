@@ -1433,15 +1433,27 @@ complete producer manifest, rather than demanding a local producer already
 supplied by the parent contract. A standalone invariant consumer retains its
 generated object adapter.
 
+One further consumer edge is now closed as an explicit bounded depth proof.
+`ConsumerGrandchild<T> : ConsumerChild<T> : PropertyCell<T>` stays a natural
+CLR generic hierarchy with one Property row at the root, one `Consume(!T)`
+method per descendant, one Kotlin `!T` state field, and a 2-to-1-to-1 inherited
+capability chain. Exact/open access remains typed and only the projected
+secondary operation has an object receiver. Ordinary non-partial C# string/
+object grandchildren implement the property and two methods. The authoring
+tool finds the transitive complete producer root. Admission reconstructs the
+exact first child and permits one further direct consumer; it is deliberately
+not unbounded recursion.
+
 This does not admit arbitrary multi-member interfaces. The structural gates
 are exactly one producer, one producer plus one consumer method, or one mutable
 property with that same producer/consumer shape, plus the exact one-level
 property child above, plus one direct consumer child above the same property
-root. Read-only and open-nullable properties, broader mixed method/property
-bundles, defaults, overloads, constraints, intersections, changed arguments,
-multiple parents, and deeper inheritance remain excluded. The
-authoring tool applies the same exact manifest-shape test before deciding that
-a non-partial C# implementation needs no generated capability.
+root and one further exact consumer edge. Read-only and open-nullable
+properties, broader mixed method/property bundles, defaults, overloads,
+constraints, intersections, changed arguments, multiple parents, and deeper
+inheritance remain excluded. The authoring tool applies the same exact
+manifest-shape test before deciding that a non-partial C# implementation needs
+no generated capability.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1454,11 +1466,12 @@ cast incompatibility with the Kotlin specification is limited to BK-1 in the
 breaking-change ledger and must not leak into ordinary variance, projections,
 or warning-free operations.
 
-Continue with defaults, deeper and broader input-bearing inheritance,
-broader/multiple and mixed method/property families, and mixed-variance gates, including
-derivability rules for ordinary foreign implementations, then close
-classifier-derived field and broader-input boundaries and deployment behavior
-before the Runtime/Stdlib graph. Keep the authoring
+Continue with defaults, a three-producer-assembly/deeper inheritance proof,
+broader input-bearing inheritance, broader/multiple and mixed method/property
+families, and mixed-variance gates, including derivability rules for ordinary
+foreign implementations, then close classifier-derived field and broader-
+input boundaries and deployment behavior before the Runtime/Stdlib graph.
+Keep the authoring
 generator as an optional fast path where it can add the semantic sibling, and
 as the required path only where no sound language-neutral adapter has yet been
 proven.
@@ -1494,6 +1507,8 @@ The exact invariant-property inheritance evidence is in
 [`../archive/generic-owner-invariant-property-child-2026-08-20.md`](../archive/generic-owner-invariant-property-child-2026-08-20.md).
 The exact invariant consumer-child evidence is in
 [`../archive/generic-owner-invariant-consumer-child-2026-08-20.md`](../archive/generic-owner-invariant-consumer-child-2026-08-20.md).
+The bounded invariant consumer-grandchild evidence is in
+[`../archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md`](../archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md).
 The invariant use-site-projection evidence is in
 [`../archive/generic-owner-invariant-projection-boundary-2026-08-20.md`](../archive/generic-owner-invariant-projection-boundary-2026-08-20.md).
 The mutable invariant operation-boundary evidence is in

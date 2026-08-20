@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-invariant-consumer-grandchild-2026-08-20.md`](generic-owner-invariant-consumer-grandchild-2026-08-20.md)
+  records the bounded second invariant consumer edge, natural three-level CLR
+  hierarchy, one `!T` state field, 2-to-1-to-1 inherited capability chain,
+  ordinary non-partial C# grandchildren, transitive authoring context, and
+  paired rehearsal/inverse matrices.
 - [`generic-owner-invariant-consumer-child-2026-08-20.md`](generic-owner-invariant-consumer-child-2026-08-20.md)
   records one natural invariant property-root/consumer-child edge, inherited
   parent capability and Property metadata, a child-owned `Consume(!T)` slot,

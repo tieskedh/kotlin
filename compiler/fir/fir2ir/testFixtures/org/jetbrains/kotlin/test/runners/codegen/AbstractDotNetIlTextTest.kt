@@ -4343,6 +4343,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedNaturalReturnType = "void",
                     expectedNaturalParameterTypes = listOf("!0"),
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateInvariantPropertyConsumerGrandchild`1",
+                    expectedMemberName = "consumeSecondaryPropertyCellValue",
+                    expectedContractMemberCount = 1,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                )
             }
         }
         return
@@ -4480,6 +4492,41 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     "csharp-separate-object-property-consumer";
 
                 public void consumePropertyCellValue(object value)
+                {
+                    propertyCellValue = value;
+                }
+            }
+
+            public sealed class RehearsalSeparateCSharpInvariantPropertyConsumerGrandchild :
+                RehearsalSeparateInvariantPropertyConsumerGrandchild<string>
+            {
+                public string propertyCellValue { get; set; } =
+                    "csharp-separate-property-consumer-grandchild";
+
+                public void consumePropertyCellValue(string value)
+                {
+                    propertyCellValue = value;
+                }
+
+                public void consumeSecondaryPropertyCellValue(string value)
+                {
+                    propertyCellValue = value;
+                }
+            }
+
+            public sealed class
+                RehearsalSeparateCSharpInvariantObjectPropertyConsumerGrandchild :
+                    RehearsalSeparateInvariantPropertyConsumerGrandchild<object>
+            {
+                public object propertyCellValue { get; set; } =
+                    "csharp-separate-object-property-consumer-grandchild";
+
+                public void consumePropertyCellValue(object value)
+                {
+                    propertyCellValue = value;
+                }
+
+                public void consumeSecondaryPropertyCellValue(object value)
                 {
                     propertyCellValue = value;
                 }
@@ -4735,6 +4782,29 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "csharp-separate-broad-property-consumer"))
                         throw new InvalidOperationException(
                             "separate projected consumer rejected a natural object child");
+                    RehearsalSeparateCSharpInvariantPropertyConsumerGrandchild
+                        invariantPropertyConsumerGrandchild =
+                            new RehearsalSeparateCSharpInvariantPropertyConsumerGrandchild();
+                    invariantPropertyConsumerGrandchild.consumePropertyCellValue(
+                        "csharp-separate-exact-consumer-child");
+                    middleKt.rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite(
+                        invariantPropertyConsumerGrandchild,
+                        "csharp-separate-projected-consumer-grandchild");
+                    if (invariantPropertyConsumerGrandchild.propertyCellValue !=
+                            "csharp-separate-projected-consumer-grandchild")
+                        throw new InvalidOperationException(
+                            "separate projected consumer bypassed a natural C# grandchild method");
+                    RehearsalSeparateCSharpInvariantObjectPropertyConsumerGrandchild
+                        invariantObjectPropertyConsumerGrandchild =
+                            new RehearsalSeparateCSharpInvariantObjectPropertyConsumerGrandchild();
+                    middleKt.rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite(
+                        invariantObjectPropertyConsumerGrandchild,
+                        "csharp-separate-broad-consumer-grandchild");
+                    if (!object.Equals(
+                            invariantObjectPropertyConsumerGrandchild.propertyCellValue,
+                            "csharp-separate-broad-consumer-grandchild"))
+                        throw new InvalidOperationException(
+                            "separate projected consumer rejected a natural object grandchild");
                     RehearsalSeparateNestedBox<object>
                         projectedInvariantPropertyCellChildBox =
                             middleKt.rehearsalSeparateProjectedInvariantPropertyCellChildBox(
@@ -5369,6 +5439,145 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             typeof(void))
                         throw new InvalidOperationException(
                             "separate projected consumer child lacked an object boundary");
+                    Type separateInvariantPropertyConsumerGrandchild =
+                        typeof(RehearsalSeparateInvariantPropertyConsumerGrandchild<>);
+                    Type separateInvariantPropertyConsumerGrandchildParameter =
+                        separateInvariantPropertyConsumerGrandchild.GetGenericArguments()[0];
+                    Type[] separateInvariantPropertyConsumerGrandchildParents =
+                        separateInvariantPropertyConsumerGrandchild.GetInterfaces();
+                    System.Reflection.MethodInfo[]
+                        separateInvariantPropertyConsumerGrandchildMethods =
+                            separateInvariantPropertyConsumerGrandchild.GetMethods(
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.DeclaredOnly);
+                    if ((separateInvariantPropertyConsumerGrandchildParameter
+                                .GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        separateInvariantPropertyConsumerGrandchildParents.Length != 2 ||
+                        Array.FindIndex(
+                            separateInvariantPropertyConsumerGrandchildParents,
+                            candidate => candidate.IsGenericType &&
+                                candidate.GetGenericTypeDefinition() ==
+                                    separateInvariantPropertyConsumerChild) < 0 ||
+                        Array.FindIndex(
+                            separateInvariantPropertyConsumerGrandchildParents,
+                            candidate => candidate.IsGenericType &&
+                                candidate.GetGenericTypeDefinition() ==
+                                    separateInvariantPropertyCell) < 0 ||
+                        separateInvariantPropertyConsumerGrandchildMethods.Length != 1 ||
+                        separateInvariantPropertyConsumerGrandchildMethods[0].Name !=
+                            "consumeSecondaryPropertyCellValue" ||
+                        separateInvariantPropertyConsumerGrandchildMethods[0].ReturnType !=
+                            typeof(void) ||
+                        separateInvariantPropertyConsumerGrandchildMethods[0]
+                            .GetParameters().Length != 1 ||
+                        separateInvariantPropertyConsumerGrandchildMethods[0]
+                            .GetParameters()[0].ParameterType !=
+                                separateInvariantPropertyConsumerGrandchildParameter ||
+                        separateInvariantPropertyConsumerGrandchild.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.DeclaredOnly).Length != 0)
+                        throw new InvalidOperationException(
+                            "the separate consumer grandchild lost natural CLR inheritance");
+                    Type separateInvariantPropertyConsumerGrandchildValue =
+                        typeof(RehearsalSeparateInvariantPropertyConsumerGrandchildValue<>);
+                    Type separateInvariantPropertyConsumerGrandchildValueParameter =
+                        separateInvariantPropertyConsumerGrandchildValue.GetGenericArguments()[0];
+                    System.Reflection.FieldInfo
+                        separateInvariantPropertyConsumerGrandchildStorage =
+                            separateInvariantPropertyConsumerGrandchildValue.GetField(
+                                "propertyCellValue",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic);
+                    if (separateInvariantPropertyConsumerGrandchildStorage == null ||
+                        separateInvariantPropertyConsumerGrandchildStorage.FieldType !=
+                            separateInvariantPropertyConsumerGrandchildValueParameter)
+                        throw new InvalidOperationException(
+                            "the consumer grandchild lost its physical !T field");
+                    Type separateGrandchildRootCapability = null;
+                    var separateGrandchildConsumerCapabilities =
+                        new System.Collections.Generic.List<Type>();
+                    foreach (Type implemented in
+                             separateInvariantPropertyConsumerGrandchildValue.GetInterfaces())
+                    {
+                        if (implemented.IsGenericType)
+                            continue;
+                        System.Reflection.MethodInfo[] capabilityMethods =
+                            implemented.GetMethods(
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.DeclaredOnly);
+                        if (implemented.GetProperties(
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.DeclaredOnly).Length != 0)
+                            throw new InvalidOperationException(
+                                "a deep semantic capability fabricated a CLR Property row");
+                        if (capabilityMethods.Length == 2 &&
+                            implemented.GetInterfaces().Length == 0)
+                            separateGrandchildRootCapability = implemented;
+                        else if (capabilityMethods.Length == 1)
+                            separateGrandchildConsumerCapabilities.Add(implemented);
+                    }
+                    Type separateGrandchildChildCapability = null;
+                    Type separateGrandchildCapability = null;
+                    if (separateGrandchildRootCapability != null)
+                    {
+                        foreach (Type candidate in separateGrandchildConsumerCapabilities)
+                        {
+                            Type[] candidateParents = candidate.GetInterfaces();
+                            if (candidateParents.Length == 1 &&
+                                candidateParents[0] == separateGrandchildRootCapability)
+                                separateGrandchildChildCapability = candidate;
+                        }
+                    }
+                    if (separateGrandchildChildCapability != null)
+                    {
+                        foreach (Type candidate in separateGrandchildConsumerCapabilities)
+                        {
+                            if (candidate != separateGrandchildChildCapability &&
+                                Array.IndexOf(
+                                    candidate.GetInterfaces(),
+                                    separateGrandchildChildCapability) >= 0)
+                                separateGrandchildCapability = candidate;
+                        }
+                    }
+                    if (separateGrandchildRootCapability == null ||
+                        separateGrandchildChildCapability == null ||
+                        separateGrandchildCapability == null)
+                        throw new InvalidOperationException(
+                            "the deep consumer capability chain was not 2-to-1-to-1");
+                    System.Reflection.MethodInfo
+                        separateInvariantPropertyConsumerGrandchildIdentity =
+                            typeof(middleKt).GetMethod(
+                                "rehearsalSeparateOpenInvariantPropertyConsumerGrandchildIdentity");
+                    Type separateInvariantPropertyConsumerGrandchildIdentityParameter =
+                        separateInvariantPropertyConsumerGrandchildIdentity.GetParameters()[0]
+                            .ParameterType;
+                    if (separateInvariantPropertyConsumerGrandchildIdentity.ReturnType !=
+                            separateInvariantPropertyConsumerGrandchildIdentityParameter ||
+                        separateInvariantPropertyConsumerGrandchildIdentityParameter
+                            .GetGenericTypeDefinition() !=
+                                separateInvariantPropertyConsumerGrandchild ||
+                        !separateInvariantPropertyConsumerGrandchildIdentityParameter
+                            .GetGenericArguments()[0].IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "separate open consumer-grandchild access was erased");
+                    System.Reflection.MethodInfo
+                        separateProjectedInvariantPropertyConsumerGrandchildWrite =
+                            typeof(middleKt).GetMethod(
+                                "rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite");
+                    if (separateProjectedInvariantPropertyConsumerGrandchildWrite
+                            .GetParameters()[0].ParameterType != typeof(object) ||
+                        separateProjectedInvariantPropertyConsumerGrandchildWrite
+                            .GetParameters()[1].ParameterType != typeof(string) ||
+                        separateProjectedInvariantPropertyConsumerGrandchildWrite.ReturnType !=
+                            typeof(void))
+                        throw new InvalidOperationException(
+                            "separate projected consumer grandchild lacked an object boundary");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -5672,6 +5881,40 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class RehearsalCSharpInvariantPropertyConsumerGrandchild :
+                RehearsalInvariantPropertyConsumerGrandchild<string>
+            {
+                public string propertyCellValue { get; set; } =
+                    "csharp-property-consumer-grandchild";
+
+                public void consumePropertyCellValue(string value)
+                {
+                    propertyCellValue = value;
+                }
+
+                public void consumeSecondaryPropertyCellValue(string value)
+                {
+                    propertyCellValue = value;
+                }
+            }
+
+            public sealed class RehearsalCSharpInvariantObjectPropertyConsumerGrandchild :
+                RehearsalInvariantPropertyConsumerGrandchild<object>
+            {
+                public object propertyCellValue { get; set; } =
+                    "csharp-object-property-consumer-grandchild";
+
+                public void consumePropertyCellValue(object value)
+                {
+                    propertyCellValue = value;
+                }
+
+                public void consumeSecondaryPropertyCellValue(object value)
+                {
+                    propertyCellValue = value;
+                }
+            }
+
             public sealed class RehearsalCSharpAmbiguousInvariantPropertyCell :
                 RehearsalInvariantPropertyCell<string>,
                 RehearsalInvariantPropertyCell<object>
@@ -5936,6 +6179,31 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "csharp-broad-property-consumer"))
                         throw new InvalidOperationException(
                             "projected consumer rejected a natural object child");
+                    RehearsalCSharpInvariantPropertyConsumerGrandchild
+                        invariantPropertyConsumerGrandchild =
+                            new RehearsalCSharpInvariantPropertyConsumerGrandchild();
+                    invariantPropertyConsumerGrandchild.consumePropertyCellValue(
+                        "csharp-exact-consumer-child");
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantPropertyConsumerGrandchildWrite(
+                            invariantPropertyConsumerGrandchild,
+                            "csharp-projected-consumer-grandchild");
+                    if (invariantPropertyConsumerGrandchild.propertyCellValue !=
+                            "csharp-projected-consumer-grandchild")
+                        throw new InvalidOperationException(
+                            "projected consumer bypassed a natural C# grandchild method");
+                    RehearsalCSharpInvariantObjectPropertyConsumerGrandchild
+                        invariantObjectPropertyConsumerGrandchild =
+                            new RehearsalCSharpInvariantObjectPropertyConsumerGrandchild();
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantPropertyConsumerGrandchildWrite(
+                            invariantObjectPropertyConsumerGrandchild,
+                            "csharp-broad-consumer-grandchild");
+                    if (!object.Equals(
+                            invariantObjectPropertyConsumerGrandchild.propertyCellValue,
+                            "csharp-broad-consumer-grandchild"))
+                        throw new InvalidOperationException(
+                            "projected consumer rejected a natural object grandchild");
                     RehearsalNestedBox<object> projectedInvariantPropertyCellChildBox =
                         genericOwnerRehearsalStateCarriersKt
                             .rehearsalProjectedInvariantPropertyCellChildBox(
@@ -6437,6 +6705,73 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         projectedInvariantPropertyConsumerChildWrite.ReturnType != typeof(void))
                         throw new InvalidOperationException(
                             "the projected consumer child lacked an object boundary");
+                    Type invariantPropertyConsumerGrandchildOwner =
+                        typeof(RehearsalInvariantPropertyConsumerGrandchild<>);
+                    Type invariantPropertyConsumerGrandchildParameter =
+                        invariantPropertyConsumerGrandchildOwner.GetGenericArguments()[0];
+                    Type[] invariantPropertyConsumerGrandchildParents =
+                        invariantPropertyConsumerGrandchildOwner.GetInterfaces();
+                    System.Reflection.MethodInfo[] invariantPropertyConsumerGrandchildMethods =
+                        invariantPropertyConsumerGrandchildOwner.GetMethods(
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                    if ((invariantPropertyConsumerGrandchildParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        invariantPropertyConsumerGrandchildParents.Length != 2 ||
+                        Array.FindIndex(
+                            invariantPropertyConsumerGrandchildParents,
+                            candidate => candidate.IsGenericType &&
+                                candidate.GetGenericTypeDefinition() ==
+                                    invariantPropertyConsumerChildOwner) < 0 ||
+                        Array.FindIndex(
+                            invariantPropertyConsumerGrandchildParents,
+                            candidate => candidate.IsGenericType &&
+                                candidate.GetGenericTypeDefinition() ==
+                                    invariantPropertyCellOwner) < 0 ||
+                        invariantPropertyConsumerGrandchildMethods.Length != 1 ||
+                        invariantPropertyConsumerGrandchildMethods[0].Name !=
+                            "consumeSecondaryPropertyCellValue" ||
+                        invariantPropertyConsumerGrandchildMethods[0].ReturnType != typeof(void) ||
+                        invariantPropertyConsumerGrandchildMethods[0]
+                            .GetParameters().Length != 1 ||
+                        invariantPropertyConsumerGrandchildMethods[0]
+                            .GetParameters()[0].ParameterType !=
+                                invariantPropertyConsumerGrandchildParameter ||
+                        invariantPropertyConsumerGrandchildOwner.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.DeclaredOnly).Length != 0)
+                        throw new InvalidOperationException(
+                            "the invariant consumer grandchild lost natural CLR inheritance");
+                    System.Reflection.MethodInfo invariantPropertyConsumerGrandchildIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt).GetMethod(
+                            "rehearsalOpenInvariantPropertyConsumerGrandchildIdentity");
+                    Type invariantPropertyConsumerGrandchildIdentityParameter =
+                        invariantPropertyConsumerGrandchildIdentity.GetParameters()[0]
+                            .ParameterType;
+                    if (invariantPropertyConsumerGrandchildIdentity.ReturnType !=
+                            invariantPropertyConsumerGrandchildIdentityParameter ||
+                        invariantPropertyConsumerGrandchildIdentityParameter
+                            .GetGenericTypeDefinition() !=
+                                invariantPropertyConsumerGrandchildOwner ||
+                        !invariantPropertyConsumerGrandchildIdentityParameter
+                            .GetGenericArguments()[0].IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "open invariant consumer-grandchild access was erased");
+                    System.Reflection.MethodInfo
+                        projectedInvariantPropertyConsumerGrandchildWrite =
+                            typeof(genericOwnerRehearsalStateCarriersKt).GetMethod(
+                                "rehearsalProjectedInvariantPropertyConsumerGrandchildWrite");
+                    if (projectedInvariantPropertyConsumerGrandchildWrite
+                            .GetParameters()[0].ParameterType != typeof(object) ||
+                        projectedInvariantPropertyConsumerGrandchildWrite
+                            .GetParameters()[1].ParameterType != typeof(string) ||
+                        projectedInvariantPropertyConsumerGrandchildWrite.ReturnType !=
+                            typeof(void))
+                        throw new InvalidOperationException(
+                            "the projected consumer grandchild lacked an object boundary");
                     return 0;
                 }
             }
