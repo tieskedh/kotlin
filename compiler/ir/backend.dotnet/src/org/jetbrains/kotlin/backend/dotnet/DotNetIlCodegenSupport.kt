@@ -1234,10 +1234,12 @@ internal class DotNetIlTypeMapper private constructor(
             when (owner.typeParameters[index].variance) {
                 Variance.OUT_VARIANCE ->
                     mappedArgument == DotNetIlValueType.Object ||
+                            mappedArgument is DotNetIlValueType.TypeParameter ||
                             (simpleType.arguments[index] as? IrTypeProjection)?.type
                                 ?.let(genericArgumentHasProperClrValueSubtype) == true
                 Variance.IN_VARIANCE ->
-                    mappedArgument.isSupportedPrimitiveArrayElement() ||
+                    mappedArgument is DotNetIlValueType.TypeParameter ||
+                            mappedArgument.isSupportedPrimitiveArrayElement() ||
                             mappedArgument is DotNetIlValueType.NullableValue
                 Variance.INVARIANT -> false
             }
@@ -1250,7 +1252,9 @@ internal class DotNetIlTypeMapper private constructor(
             // Box<T>'s T, neither target construction contains every legal Kotlin value. Dually,
             // Consumer<Int> may be the same Kotlin object as Consumer<Any?>, but CLR variance
             // cannot convert Consumer<object> to Consumer<int>. Reference-only contravariance
-            // remains a stable natural construction.
+            // remains a stable natural construction. An open method-owned T must also choose one
+            // MethodDef before substitutions are known: Producer<!!T>/Consumer<!!T> would be
+            // truthful for reference substitutions but not for the same value-type cases above.
             // Substitute object for this nested construction only; exact scalar, reference-only,
             // and stable nested constructions retain their natural generic argument.
             return DotNetIlValueType.Object
@@ -1460,6 +1464,108 @@ internal class DotNetIlTypeMapper private constructor(
         val expectedOwner = logicalType as? DotNetIlValueType.GenericInstance ?: return false
         return genericOwnerCanonicalTypeRefByCapabilityTypeRef[producedCapability.classInfo.ilTypeRef] ==
                 expectedOwner.classInfo.ilTypeRef
+    }
+
+    /**
+     * Whether [physicalType] is the same enclosing CLR construction as [logicalType], except
+     * that one or more nested admitted variant-interface arguments use their universal object
+     * carrier. This is deliberately not ordinary CLR assignability: `Box<object>` and
+     * `Box<Producer<int>>` are invariant sibling constructions. It only recognizes a carrier
+     * selected by [toDotNetIlGenericArgumentType], so immutable provenance can retain the actual
+     * construction without teaching arbitrary Kotlin casts that those siblings are compatible.
+     */
+    fun isGenericOwnerNestedConstructionCarrierOf(
+        physicalType: DotNetIlValueType,
+        logicalType: DotNetIlValueType,
+    ): Boolean {
+        if (!genericOwnerRehearsal || physicalType == logicalType) return false
+        val logicalRoot = logicalType as? DotNetIlValueType.GenericInstance ?: return false
+        if (physicalType == DotNetIlValueType.Object) {
+            fun containsNestedAdmittedOwner(
+                type: DotNetIlValueType,
+                depth: Int,
+            ): Boolean {
+                val instance = type as? DotNetIlValueType.GenericInstance ?: return false
+                if (depth > 0 && instance.classInfo.ilTypeRef in
+                    genericOwnerCanonicalTypeRefByCapabilityTypeRef.values &&
+                    instance.classInfo.typeParameterVariances.any { variance ->
+                        variance != Variance.INVARIANT
+                    }
+                ) {
+                    return true
+                }
+                return instance.arguments.any { argument ->
+                    containsNestedAdmittedOwner(argument, depth + 1)
+                }
+            }
+            return containsNestedAdmittedOwner(logicalRoot, 0)
+        }
+        val physicalRoot = physicalType as? DotNetIlValueType.GenericInstance ?: return false
+        if (physicalRoot.classInfo.ilTypeRef != logicalRoot.classInfo.ilTypeRef ||
+            physicalRoot.arguments.size != logicalRoot.arguments.size
+        ) {
+            return false
+        }
+
+        fun matches(physical: DotNetIlValueType, logical: DotNetIlValueType): Boolean {
+            if (physical == logical) return true
+            if (physical == DotNetIlValueType.Object) {
+                val logicalOwner = logical as? DotNetIlValueType.GenericInstance ?: return false
+                return logicalOwner.classInfo.ilTypeRef in
+                        genericOwnerCanonicalTypeRefByCapabilityTypeRef.values &&
+                        logicalOwner.classInfo.typeParameterVariances.any { variance ->
+                            variance != Variance.INVARIANT
+                        }
+            }
+            val physicalInstance = physical as? DotNetIlValueType.GenericInstance ?: return false
+            val logicalInstance = logical as? DotNetIlValueType.GenericInstance ?: return false
+            return physicalInstance.classInfo.ilTypeRef == logicalInstance.classInfo.ilTypeRef &&
+                    physicalInstance.arguments.size == logicalInstance.arguments.size &&
+                    physicalInstance.arguments.indices.all { index ->
+                        matches(physicalInstance.arguments[index], logicalInstance.arguments[index])
+                    }
+        }
+
+        return physicalRoot.arguments.indices.all { index ->
+            matches(physicalRoot.arguments[index], logicalRoot.arguments[index])
+        }
+    }
+
+    fun isNestedGenericOwnerConstruction(type: IrType): Boolean {
+        if (!genericOwnerRehearsal) return false
+        val simpleType = type as? IrSimpleType ?: return false
+        val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
+        if (!owner.isDotNetGenericClassDeclaration || isErasedGenericClass(owner)) return false
+
+        fun containsAdmittedOwner(nested: IrType): Boolean {
+            val nestedType = nested as? IrSimpleType ?: return false
+            val nestedOwner = (nestedType.classifier as? IrClassSymbol)?.owner ?: return false
+            if (nestedOwner.isInterface &&
+                nestedOwner.typeParameters.any { parameter ->
+                    parameter.variance != Variance.INVARIANT
+                } &&
+                genericOwnerCapabilityInfoOrNull(nestedOwner) != null
+            ) {
+                return true
+            }
+            return nestedType.arguments.any { argument ->
+                (argument as? IrTypeProjection)?.type?.let(::containsAdmittedOwner) == true
+            }
+        }
+
+        return simpleType.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.let(::containsAdmittedOwner) == true
+        }
+    }
+
+    fun isOpenNestedGenericOwnerConstruction(type: IrType): Boolean {
+        if (!genericOwnerRehearsal) return false
+        val simpleType = type as? IrSimpleType ?: return false
+        val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
+        return owner.isDotNetGenericClassDeclaration && !isErasedGenericClass(owner) &&
+                simpleType.arguments.any { argument ->
+                    (argument as? IrTypeProjection)?.type?.containsOpenVariantGenericOwner() == true
+                }
     }
 
     /**
@@ -1776,6 +1882,14 @@ internal class DotNetIlTypeMapper private constructor(
             return DotNetIlValueType.UserClass(classInfo)
         }
         if (type.arguments.size != classInfo.typeParameterCount) return null
+        if (isOpenNestedGenericOwnerConstruction(type)) {
+            // A generic MethodDef containing Box<Producer<T>> cannot accept both a caller's
+            // exact Box<Producer<string>> and a semantic Box<object> through either invariant
+            // construction. Carry the actual box object across this open boundary; construction
+            // still closes a concrete Box<X>, and member use later selects that object's class
+            // capability. Closed Box<Producer<String>> continues through the ordinary typed arm.
+            return DotNetIlValueType.Object
+        }
         val capability = genericOwnerCapabilityInfoOrNull(irClass)
         if (capability != null && type.arguments.any { argument ->
                 val projection = argument as? IrTypeProjection
@@ -1821,6 +1935,23 @@ internal class DotNetIlTypeMapper private constructor(
             toDotNetIlGenericArgumentType(projection.type) ?: return null
         }
         return DotNetIlValueType.GenericInstance(classInfo, arguments)
+    }
+
+    private fun IrType.containsOpenVariantGenericOwner(): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
+        if (genericOwnerCapabilityInfoOrNull(owner) != null &&
+            owner.typeParameters.indices.any { index ->
+                owner.typeParameters[index].variance != Variance.INVARIANT &&
+                        ((simpleType.arguments.getOrNull(index) as? IrTypeProjection)?.type
+                            as? IrSimpleType)?.classifier is IrTypeParameterSymbol
+            }
+        ) {
+            return true
+        }
+        return simpleType.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.containsOpenVariantGenericOwner() == true
+        }
     }
 
     /**

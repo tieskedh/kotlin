@@ -1333,11 +1333,25 @@ reconstructs a false typed return. Epoch-off emitters do not construct this
 type-system/cache. The rules contain no `Box`, `Consumer`, stdlib, or
 declaration-name exception.
 
-The next nested-carrier gate carries the same decision recursively through a
-nested open enclosing type parameter. Only after that proof should invariant,
-mixed, multi-parameter, or value-class owners be admitted. Any unstable
-construction must still widen only its enclosing instantiation, never the open
-owner's `!T` field or unrelated `List<T>` state.
+The nested open-argument gate now carries the same decision through one
+generic MethodDef. A factory over `Producer<T>` or `Consumer<T>` accepts the
+open interface value as `object`, constructs its concrete `Box<object>`, and
+publishes the enclosing open result as `object`. More importantly, an identity
+boundary over `Box<Producer<T>>` or `Box<Consumer<T>>` is `object -> object`:
+that single MethodDef can therefore accept both an existing exact
+`Box<Producer<string>>` and an already semantic `Box<object>` without changing
+either object. Calls on the object-carried box use its existing class
+capability; calls on a value read from it enter the interface capability or
+the admitted ordinary-producer fallback only at the operation. No wrapper,
+shadow state, or fabricated invariant construction is introduced.
+
+The widening is structural and stops at the open boundary. Closed exact and
+reference-only constructions remain typed, the open `Box<T>` TypeDef still has
+one `!T` field, and the negative control `<T>(Box<Box<T>>) -> Box<Box<T>>`
+retains `Box<Box<!!T>>`. Thus unrelated stable nesting and `List<T>` state are
+not erased merely because the compiler supports semantic variant views. The
+next construction gates are invariant, mixed, multi-parameter, and value-class
+owners; each must preserve this boundary-versus-state distinction.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1380,6 +1394,8 @@ The proper-value-subtype extension is in
 [`../archive/generic-owner-value-subtype-construction-stability-2026-08-19.md`](../archive/generic-owner-value-subtype-construction-stability-2026-08-19.md).
 The contravariant extension is in
 [`../archive/generic-owner-contravariant-construction-stability-2026-08-19.md`](../archive/generic-owner-contravariant-construction-stability-2026-08-19.md).
+The nested open-argument evidence is in
+[`../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md`](../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
