@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-invariant-property-cell-2026-08-20.md`](generic-owner-invariant-property-cell-2026-08-20.md)
+  records the real CLR `Property<T>` row and `!T` implementation field for the
+  exact mutable invariant property family, operation-local projected access,
+  ordinary non-partial C# properties, fail-closed broader shapes, and paired
+  rehearsal/inverse Framework 4.8/.NET 10 matrices.
 - [`generic-owner-mutable-invariant-cell-2026-08-20.md`](generic-owner-mutable-invariant-cell-2026-08-20.md)
   records the natural two-direction invariant `Cell<T>`, retained `!T` state
   and exact/open nesting, operation-local projected read/write dispatch,

@@ -98,6 +98,27 @@ public interface RehearsalInvariantCell<T> {
     public fun writeCell(value: T)
 }
 
+public interface RehearsalInvariantPropertyCell<T> {
+    public var propertyCellValue: T
+}
+
+// Property admission is deliberately exact. Read-only state, open-nullable state, and a property
+// mixed with an unrelated member remain on the erased production ABI until each broader family
+// has its own proof.
+public interface RehearsalInvariantReadOnlyProperty<T> {
+    public val readOnlyPropertyValue: T
+}
+
+public interface RehearsalInvariantNullablePropertyCell<T> {
+    public var nullablePropertyCellValue: T?
+}
+
+public interface RehearsalInvariantPropertyCellWithMember<T> {
+    public var propertyCellWithMemberValue: T
+
+    public fun touchPropertyCell()
+}
+
 // The runtime fallback resolves by the producer-recorded CLR member name, so an overloaded
 // producer/consumer pair remains on the erased production ABI until overload selection is proven.
 public interface RehearsalInvariantOverloaded<T> {
@@ -140,6 +161,10 @@ private class RehearsalInvariantCellValue<T>(private var value: T) :
     }
 }
 
+private class RehearsalInvariantPropertyCellValue<T>(
+    override var propertyCellValue: T,
+) : RehearsalInvariantPropertyCell<T>
+
 private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
 
 public fun rehearsalStarInvariantProduce(producer: RehearsalInvariantProducer<*>): Any? =
@@ -171,6 +196,25 @@ public fun rehearsalProjectedInvariantCellWriteResult(
 public fun <T> rehearsalOpenInvariantCellIdentity(
     cell: RehearsalInvariantCell<T>,
 ): RehearsalInvariantCell<T> = cell
+
+public fun rehearsalStarInvariantPropertyCellRead(
+    cell: RehearsalInvariantPropertyCell<*>,
+): Any? = cell.propertyCellValue
+
+public fun rehearsalProjectedInvariantPropertyCellRead(
+    cell: RehearsalInvariantPropertyCell<out Any?>,
+): Any? = cell.propertyCellValue
+
+public fun rehearsalProjectedInvariantPropertyCellWrite(
+    cell: RehearsalInvariantPropertyCell<in String>,
+    value: String,
+) {
+    cell.propertyCellValue = value
+}
+
+public fun <T> rehearsalOpenInvariantPropertyCellIdentity(
+    cell: RehearsalInvariantPropertyCell<T>,
+): RehearsalInvariantPropertyCell<T> = cell
 
 // The owner itself always retains one !T field. A logical construction whose argument can carry
 // a CLR-unnameable semantic producer view substitutes object for this construction only; exact
@@ -260,6 +304,14 @@ public fun <T> rehearsalOpenInvariantCellBoxIdentity(
 public fun rehearsalProjectedInvariantCellBox(
     cell: RehearsalInvariantCell<out Any?>,
 ): RehearsalNestedBox<RehearsalInvariantCell<out Any?>> = RehearsalNestedBox(cell)
+
+public fun <T> rehearsalOpenInvariantPropertyCellBoxIdentity(
+    box: RehearsalNestedBox<RehearsalInvariantPropertyCell<T>>,
+): RehearsalNestedBox<RehearsalInvariantPropertyCell<T>> = box
+
+public fun rehearsalProjectedInvariantPropertyCellBox(
+    cell: RehearsalInvariantPropertyCell<out Any?>,
+): RehearsalNestedBox<RehearsalInvariantPropertyCell<out Any?>> = RehearsalNestedBox(cell)
 
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
@@ -378,6 +430,73 @@ fun box(): String {
         rehearsalProjectedInvariantCellRead(projectedInvariantCellBox.read()) != 59
     ) {
         return "fail: projected invariant cell box mutation"
+    }
+
+    val invariantPropertyCell: RehearsalInvariantPropertyCell<String> =
+        RehearsalInvariantPropertyCellValue("property-cell")
+    invariantPropertyCell.propertyCellValue = "exact-property-cell"
+    if (invariantPropertyCell.propertyCellValue != "exact-property-cell") {
+        return "fail: exact invariant property cell"
+    }
+    val projectedOutputPropertyCell: RehearsalInvariantPropertyCell<out Any?> =
+        invariantPropertyCell
+    if (rehearsalProjectedInvariantPropertyCellRead(projectedOutputPropertyCell) !=
+        "exact-property-cell" ||
+        rehearsalStarInvariantPropertyCellRead(projectedOutputPropertyCell) !=
+        "exact-property-cell" ||
+        projectedOutputPropertyCell !== invariantPropertyCell
+    ) {
+        return "fail: projected invariant property cell read"
+    }
+    val projectedInputPropertyCell: RehearsalInvariantPropertyCell<in String> =
+        invariantPropertyCell
+    rehearsalProjectedInvariantPropertyCellWrite(
+        projectedInputPropertyCell,
+        "projected-property-cell",
+    )
+    if (invariantPropertyCell.propertyCellValue != "projected-property-cell" ||
+        projectedInputPropertyCell !== invariantPropertyCell
+    ) {
+        return "fail: projected invariant property cell write"
+    }
+    val broadInvariantPropertyCell: RehearsalInvariantPropertyCell<Any?> =
+        RehearsalInvariantPropertyCellValue("broad-property-cell")
+    val projectedBroadInputPropertyCell: RehearsalInvariantPropertyCell<in String> =
+        broadInvariantPropertyCell
+    rehearsalProjectedInvariantPropertyCellWrite(
+        projectedBroadInputPropertyCell,
+        "broad-projected-property-cell",
+    )
+    if (broadInvariantPropertyCell.propertyCellValue != "broad-projected-property-cell" ||
+        projectedBroadInputPropertyCell !== broadInvariantPropertyCell
+    ) {
+        return "fail: broad projected invariant property cell write"
+    }
+    if (rehearsalOpenInvariantPropertyCellIdentity(invariantPropertyCell) !==
+        invariantPropertyCell
+    ) {
+        return "fail: open invariant property cell identity"
+    }
+    val invariantPropertyCellBox = RehearsalNestedBox(invariantPropertyCell)
+    if (rehearsalOpenInvariantPropertyCellBoxIdentity(invariantPropertyCellBox) !==
+        invariantPropertyCellBox
+    ) {
+        return "fail: open invariant property cell box identity"
+    }
+    val projectedInvariantPropertyCellBox =
+        rehearsalProjectedInvariantPropertyCellBox(projectedOutputPropertyCell)
+    if (projectedInvariantPropertyCellBox.read() !== invariantPropertyCell) {
+        return "fail: projected invariant property cell box identity"
+    }
+    val intInvariantPropertyCell: RehearsalInvariantPropertyCell<Int> =
+        RehearsalInvariantPropertyCellValue(67)
+    projectedInvariantPropertyCellBox.write(intInvariantPropertyCell)
+    if (projectedInvariantPropertyCellBox.read() !== intInvariantPropertyCell ||
+        rehearsalProjectedInvariantPropertyCellRead(
+            projectedInvariantPropertyCellBox.read()
+        ) != 67
+    ) {
+        return "fail: projected invariant property cell box mutation"
     }
 
     val intBox = RehearsalNestedBox(51)

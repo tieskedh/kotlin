@@ -1399,11 +1399,23 @@ with zero or one argument. `Box<InvariantCell<out Any?>>` is still the construct
 state. Runtime surface 40 owns the argument-bearing dispatcher; the original
 producer entry remains as an ABI-compatible wrapper.
 
-This does not admit arbitrary multi-member interfaces. The structural gate is
-exactly one producer plus one consumer, with no properties, defaults,
-overloads, constraints, intersections, or inherited member family. The
-authoring tool applies the same exact manifest-shape test before deciding that
-a non-partial C# implementation needs no generated capability.
+The equivalent exact property family is now closed without changing that
+representation. `InvariantPropertyCell<T> { var value: T }` emits one natural
+invariant interface with a real CLR `Property<T>` row, `!T` getter/setter
+slots, and a `!T` implementation field. Star/out reads and in writes use the
+same operation-local capability-or-unique-natural-construction path. Exact/open
+nesting stays `Box<InvariantPropertyCell<!!T>>`; only the projected construction
+is `Box<object>`. An ordinary non-partial C# implementation supplies one normal
+auto-property. The manifest proves that the natural getter and setter share one
+property name while neither semantic slot fabricates a Property row.
+
+This does not admit arbitrary multi-member interfaces. The structural gates
+are exactly one producer, one producer plus one consumer method, or one mutable
+property with that same producer/consumer shape. Read-only and open-nullable
+properties, mixed method/property bundles, defaults, overloads, constraints,
+intersections, and inherited member families remain excluded. The authoring
+tool applies the same exact manifest-shape test before deciding that a non-
+partial C# implementation needs no generated capability.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1416,11 +1428,10 @@ cast incompatibility with the Kotlin specification is limited to BK-1 in the
 breaking-change ledger and must not leak into ordinary variance, projections,
 or warning-free operations.
 
-Continue with property syntax, defaults, inheritance and broader/multiple
-member families, and mixed-variance gates, including derivability rules for
-ordinary foreign implementations, then close classifier-derived field and broader-input
-boundaries and
-deployment behavior before the Runtime/Stdlib graph. Keep the authoring
+Continue with defaults, inheritance, broader/multiple and mixed method/property
+families, and mixed-variance gates, including derivability rules for ordinary
+foreign implementations, then close classifier-derived field and broader-input
+boundaries and deployment behavior before the Runtime/Stdlib graph. Keep the authoring
 generator as an optional fast path where it can add the semantic sibling, and
 as the required path only where no sound language-neutral adapter has yet been
 proven.
@@ -1448,6 +1459,10 @@ The contravariant extension is in
 [`../archive/generic-owner-contravariant-construction-stability-2026-08-19.md`](../archive/generic-owner-contravariant-construction-stability-2026-08-19.md).
 The nested open-argument evidence is in
 [`../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md`](../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md).
+The mutable invariant method and property evidence is in
+[`../archive/generic-owner-mutable-invariant-cell-2026-08-20.md`](../archive/generic-owner-mutable-invariant-cell-2026-08-20.md)
+and
+[`../archive/generic-owner-invariant-property-cell-2026-08-20.md`](../archive/generic-owner-invariant-property-cell-2026-08-20.md).
 The invariant use-site-projection evidence is in
 [`../archive/generic-owner-invariant-projection-boundary-2026-08-20.md`](../archive/generic-owner-invariant-projection-boundary-2026-08-20.md).
 The mutable invariant operation-boundary evidence is in
