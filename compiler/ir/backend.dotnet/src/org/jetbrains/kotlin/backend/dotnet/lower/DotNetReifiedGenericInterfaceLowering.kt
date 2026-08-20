@@ -38,7 +38,6 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
-import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -78,6 +77,7 @@ import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
+import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.fileOrNull
@@ -104,7 +104,8 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
- * returning its owner parameter directly, a public contravariant consumer with one abstract
+ * returning its owner parameter directly, one covariant root default `<R>(R) -> T` whose method
+ * parameter has only the universal bound, a public contravariant consumer with one abstract
  * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
@@ -153,7 +154,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetPublishedGenericInterfaceMemberRole.PROPERTY_GETTER
                     property?.setter === member && member.isDirectConsumerMember(parameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.PROPERTY_SETTER
-                    member.isDirectProducerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+                    member.isDirectProducerMember(parameter) ||
+                            member.isDirectMethodGenericProducerMember(parameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.PRODUCER
                     member.isDirectConsumerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.CONSUMER
                     else -> return null
                 }
@@ -1162,17 +1165,28 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 name = Name.identifier(physicalName)
                 visibility = DescriptorVisibilities.PUBLIC
                 modality = Modality.ABSTRACT
-                returnType = source.returnType.semanticInterfaceSlotType(
-                    (source.parent as IrClass).typeParameters.single(),
-                )
+                returnType = context.irBuiltIns.anyNType
             }.apply {
                 parameters += createDispatchReceiverParameterWithClassParent()
                 val ownerParameter = (source.parent as IrClass).typeParameters.single()
+                val copiedMethodParameters = copyTypeParametersFrom(source)
+                val methodSubstitutor = IrTypeSubstitutor(
+                    source.typeParameters.zip(copiedMethodParameters).associate { pair ->
+                        pair.first.symbol to pair.second.defaultType
+                    },
+                    allowEmptySubstitution = true,
+                )
+                fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
+                    type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
+                )
+                returnType = semanticType(source.returnType)
                 source.parameters.filter { parameter -> parameter.kind == IrParameterKind.Regular }
                     .forEach { parameter ->
-                        addValueParameter(
-                            parameter.name.asString(),
-                            parameter.type.semanticInterfaceSlotType(ownerParameter),
+                        parameters += parameter.copyTo(
+                            this,
+                            type = semanticType(parameter.type),
+                            varargElementType = parameter.varargElementType?.let(::semanticType),
+                            defaultValue = null,
                         )
                     }
             }
@@ -1254,7 +1268,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return false
         }
         return when (parameter.variance) {
-            Variance.OUT_VARIANCE -> members.singleOrNull()?.isDirectProducerMember(parameter) == true
+            Variance.OUT_VARIANCE -> members.singleOrNull()?.let { member ->
+                member.isDirectProducerMember(parameter) ||
+                        member.isDirectMethodGenericProducerMember(parameter)
+            } == true
             Variance.IN_VARIANCE -> members.singleOrNull()?.isDirectConsumerMember(parameter) == true
             Variance.INVARIANT ->
                 members.singleOrNull()?.isDirectProducerMember(parameter) == true ||
@@ -1361,6 +1378,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return resultParameter?.owner === parameter
     }
 
+    private fun IrSimpleFunction.isDirectMethodGenericProducerMember(
+        ownerParameter: IrTypeParameter,
+    ): Boolean {
+        val hasDefaultImplementation = this in context.interfaceDefaultImplementations
+        if (!hasDefaultImplementation || visibility != DescriptorVisibilities.PUBLIC ||
+            correspondingPropertySymbol != null || isSuspend
+        ) {
+            return false
+        }
+        return hasDirectMethodGenericProducerSignature(ownerParameter)
+    }
+
     private fun IrSimpleFunction.isDirectConsumerMember(parameter: IrTypeParameter): Boolean {
         val hasDefaultImplementation = this in context.interfaceDefaultImplementations
         if (visibility != DescriptorVisibilities.PUBLIC ||
@@ -1393,10 +1422,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return parameter.superTypes.all(IrType::isNullableAny)
     }
 
-    private fun IrType.semanticInterfaceSlotType(ownerParameter: IrTypeParameter): IrType {
-        val classifier = (this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-        return if (classifier?.owner === ownerParameter) context.irBuiltIns.anyNType else this
-    }
 }
 
 /**
@@ -1436,8 +1461,10 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
 ): IrSimpleFunction = context.externalReifiedGenericInterfaceCapabilitySlots.getOrPut(source) {
     val owner = source.parent as? IrClass
         ?: error("Internal .NET backend error: external reified-interface member has no owner")
-    require(source.typeParameters.isEmpty() &&
-            source.parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver) {
+    val ownerParameter = owner.typeParameters.single()
+    require(source.parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver &&
+            (source.typeParameters.isEmpty() ||
+                    source.hasDirectMethodGenericProducerSignature(ownerParameter))) {
         "External reified-interface member '${source.name}' is outside the admitted structural family"
     }
     val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
@@ -1449,23 +1476,28 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
         name = Name.special("<ExternalReifiedGenericInterfaceCapability-${source.name.asString()}>")
         visibility = DescriptorVisibilities.PRIVATE
         modality = Modality.ABSTRACT
-        val ownerParameter = owner.typeParameters.single()
-        val resultParameter = (source.returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-        returnType = if (resultParameter?.owner === ownerParameter) {
-            context.irBuiltIns.anyNType
-        } else {
-            source.returnType
-        }
+        returnType = context.irBuiltIns.anyNType
     }.apply {
         parent = owner
         parameters += createDispatchReceiverParameterWithClassParent()
-        val ownerParameter = owner.typeParameters.single()
+        val copiedMethodParameters = copyTypeParametersFrom(source)
+        val methodSubstitutor = IrTypeSubstitutor(
+            source.typeParameters.zip(copiedMethodParameters).associate { pair ->
+                pair.first.symbol to pair.second.defaultType
+            },
+            allowEmptySubstitution = true,
+        )
+        fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
+            type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
+        )
+        returnType = semanticType(source.returnType)
         source.parameters.filter { parameter -> parameter.kind == IrParameterKind.Regular }
             .forEach { parameter ->
-                val inputParameter = (parameter.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-                addValueParameter(
-                    parameter.name.asString(),
-                    if (inputParameter?.owner === ownerParameter) context.irBuiltIns.anyNType else parameter.type,
+                parameters += parameter.copyTo(
+                    this,
+                    type = semanticType(parameter.type),
+                    varargElementType = parameter.varargElementType?.let(::semanticType),
+                    defaultValue = null,
                 )
             }
         context.genericOwnerCapabilityDeclarations += this
@@ -1477,6 +1509,42 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
             binding.family.capabilityMethodName,
         )
     }
+}
+
+private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
+    ownerParameter: IrTypeParameter,
+): Boolean {
+    val methodParameter = typeParameters.singleOrNull() ?: return false
+    if (methodParameter.parent !== this || methodParameter.isReified ||
+        methodParameter.variance != Variance.INVARIANT ||
+        methodParameter.superTypes.singleOrNull()?.isNullableAny() != true
+    ) {
+        return false
+    }
+    if (parameters.size != 2 ||
+        parameters[0].kind != IrParameterKind.DispatchReceiver
+    ) {
+        return false
+    }
+    val input = parameters[1]
+    if (input.kind != IrParameterKind.Regular || input.defaultValue != null ||
+        input.varargElementType != null
+    ) {
+        return false
+    }
+    val inputType = input.type as? IrSimpleType ?: return false
+    val resultType = returnType as? IrSimpleType ?: return false
+    if (inputType.isMarkedNullable() || resultType.isMarkedNullable()) return false
+    return (inputType.classifier as? IrTypeParameterSymbol)?.owner === methodParameter &&
+            (resultType.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
+}
+
+private fun IrType.semanticInterfaceSlotType(
+    ownerParameter: IrTypeParameter,
+    objectType: IrType,
+): IrType {
+    val classifier = (this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+    return if (classifier?.owner === ownerParameter) objectType else this
 }
 
 /** Reconstructs one producer-recorded object-input MethodDef without adding a logical callable. */
