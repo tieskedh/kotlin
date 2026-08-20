@@ -204,6 +204,24 @@ generates its helper forwarder, while .NET 10 inherits the DIM directly. This
 closes one default shape only; multiple defaults, properties, generic methods,
 diamonds, reabstraction, and broader inheritance remain independent gates.
 
+That default also composes through one hostile three-product inheritance
+chain. The interface/default owner is in the first Kotlin DLL. A second Kotlin
+DLL defines `OpenDefaultConsumer<T>` and overrides only the natural `!T`
+member. An ordinary non-partial C# class derives from
+`OpenDefaultConsumer<object>` and overrides only the ordinary
+`consumeDefault(object)` virtual. The inherited compiler capability converts
+the Kotlin-valid contravariant input at the operation boundary and invokes the
+natural slot virtually, so both an exact `DefaultConsumer<object>` call and a
+value-type-narrowed `DefaultConsumer<Int>` call observe the C# override. The
+middle Kotlin body is not invoked and identity is unchanged.
+
+This class-subclass case does not require the interface authoring generator:
+the generic Kotlin base already owns the semantic obligation. Generated source
+must not mention the C# subclass, and C# neither names nor overrides the hidden
+capability. This adds no probe, runtime helper, or physical ABI record. It does
+not admit changed-argument, multiple/deeper-parent, unsafe broad-input, or
+other default families.
+
 The covariant producer proof also compiles a separate ordinary C# DLL without
 the authoring generator. Its non-partial `Source<int>` implementation has only
 the natural `int` member. Kotlin exact and broad calls, a real `Source<*>`
@@ -438,9 +456,10 @@ must cover:
    compiled exact-looking boundaries;
 5. Kotlin/C# properties beyond the exact mutable invariant cell, broader
    default families (including multiple members, properties, generic methods,
-   diamonds, and reabstraction), hostile inheritance, and ordinary foreign
-   implementations beyond the proven producer, consumer, invariant-cell, and
-   one contravariant default shapes;
+   diamonds, and reabstraction), hostile inheritance beyond the proven
+   external default -> generic Kotlin override -> ordinary C# subclass chain,
+   and ordinary foreign implementations beyond the proven producer, consumer,
+   invariant-cell, and one contravariant default shapes;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
    assembly graphs, including classifier-derived fields and non-final or
    multi-input parameters;

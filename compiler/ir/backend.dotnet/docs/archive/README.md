@@ -14,6 +14,15 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-default-hostile-inheritance-2026-08-20.md`](reified-generic-interface-default-hostile-inheritance-2026-08-20.md)
+  records the three-product external default, generic Kotlin natural override,
+  and ordinary non-partial C# subclass chain, exact/narrowed virtual dispatch,
+  unchanged identity, and the absence of generated or C#-authored semantic
+  bridges.
+- [`reified-generic-interface-defaults-2026-08-20.md`](reified-generic-interface-defaults-2026-08-20.md)
+  records the first contravariant generic-interface default, Framework helper
+  and .NET 10 DIM placement, natural Kotlin/C# overrides, value-type-narrowed
+  semantic dispatch, and paired candidate/inverse verification.
 - [`generic-owner-final-call-value-routing-2026-08-20.md`](generic-owner-final-call-value-routing-2026-08-20.md)
   records the final monotone call/value router after all current lowerings
   which can introduce generic operations, generated value-class carrier
