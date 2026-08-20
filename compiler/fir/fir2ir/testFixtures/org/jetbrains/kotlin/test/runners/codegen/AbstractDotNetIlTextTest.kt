@@ -4307,6 +4307,30 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedDeclaredOwner = "RehearsalSeparateMemberChildProducer`1",
                     expectedMemberName = "produceMemberChild",
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateInvariantPropertyCellChild`1",
+                    expectedMemberName = "childPropertyCellValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                    expectedNaturalPropertyName = "childPropertyCellValue",
+                    expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateInvariantPropertyCellChild`1",
+                    expectedMemberName = "childPropertyCellValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_SETTER,
+                    expectedNaturalPropertyName = "childPropertyCellValue",
+                    expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                )
             }
         }
         return
@@ -4403,6 +4427,26 @@ private fun validateGenericOwnerForeignCSharpOverride(
             {
                 public object propertyCellValue { get; set; } =
                     "csharp-separate-object-property-cell";
+            }
+
+            public sealed class RehearsalSeparateCSharpInvariantPropertyCellChild :
+                RehearsalSeparateInvariantPropertyCellChild<string>
+            {
+                public string propertyCellValue { get; set; } =
+                    "csharp-separate-property-parent";
+
+                public string childPropertyCellValue { get; set; } =
+                    "csharp-separate-property-child";
+            }
+
+            public sealed class RehearsalSeparateCSharpInvariantObjectPropertyCellChild :
+                RehearsalSeparateInvariantPropertyCellChild<object>
+            {
+                public object propertyCellValue { get; set; } =
+                    "csharp-separate-object-property-parent";
+
+                public object childPropertyCellValue { get; set; } =
+                    "csharp-separate-object-property-child";
             }
 
             public sealed partial class RehearsalSeparateCSharpChildProducer :
@@ -4586,6 +4630,61 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             invariantPropertyCell))
                         throw new InvalidOperationException(
                             "separate projected property-cell storage changed C# identity");
+                    RehearsalSeparateCSharpInvariantPropertyCellChild
+                        invariantPropertyCellChild =
+                            new RehearsalSeparateCSharpInvariantPropertyCellChild();
+                    invariantPropertyCellChild.propertyCellValue =
+                        "csharp-separate-exact-property-parent";
+                    invariantPropertyCellChild.childPropertyCellValue =
+                        "csharp-separate-exact-property-child";
+                    if (!object.Equals(
+                            libKt.rehearsalSeparateProjectedInvariantPropertyCellRead(
+                                invariantPropertyCellChild),
+                            "csharp-separate-exact-property-parent") ||
+                        !object.Equals(
+                            middleKt.rehearsalSeparateProjectedInvariantPropertyCellChildRead(
+                                invariantPropertyCellChild),
+                            "csharp-separate-exact-property-child"))
+                        throw new InvalidOperationException(
+                            "separate projected reads bypassed a natural C# property child");
+                    libKt.rehearsalSeparateProjectedInvariantPropertyCellWrite(
+                        invariantPropertyCellChild,
+                        "csharp-separate-projected-property-parent");
+                    middleKt.rehearsalSeparateProjectedInvariantPropertyCellChildWrite(
+                        invariantPropertyCellChild,
+                        "csharp-separate-projected-property-child");
+                    if (invariantPropertyCellChild.propertyCellValue !=
+                            "csharp-separate-projected-property-parent" ||
+                        invariantPropertyCellChild.childPropertyCellValue !=
+                            "csharp-separate-projected-property-child")
+                        throw new InvalidOperationException(
+                            "separate projected writes bypassed a natural C# property child");
+                    RehearsalSeparateCSharpInvariantObjectPropertyCellChild
+                        invariantObjectPropertyCellChild =
+                            new RehearsalSeparateCSharpInvariantObjectPropertyCellChild();
+                    libKt.rehearsalSeparateProjectedInvariantPropertyCellWrite(
+                        invariantObjectPropertyCellChild,
+                        "csharp-separate-broad-property-parent");
+                    middleKt.rehearsalSeparateProjectedInvariantPropertyCellChildWrite(
+                        invariantObjectPropertyCellChild,
+                        "csharp-separate-broad-property-child");
+                    if (!object.Equals(
+                            invariantObjectPropertyCellChild.propertyCellValue,
+                            "csharp-separate-broad-property-parent") ||
+                        !object.Equals(
+                            invariantObjectPropertyCellChild.childPropertyCellValue,
+                            "csharp-separate-broad-property-child"))
+                        throw new InvalidOperationException(
+                            "separate projected writes rejected a natural object property child");
+                    RehearsalSeparateNestedBox<object>
+                        projectedInvariantPropertyCellChildBox =
+                            middleKt.rehearsalSeparateProjectedInvariantPropertyCellChildBox(
+                                invariantPropertyCellChild);
+                    if (!object.ReferenceEquals(
+                            projectedInvariantPropertyCellChildBox.read(),
+                            invariantPropertyCellChild))
+                        throw new InvalidOperationException(
+                            "separate projected property-child storage changed C# identity");
                     RehearsalSeparateNestedBox<object> projectedInvariantCellBox =
                         libKt.rehearsalSeparateProjectedInvariantCellBox(invariantCell);
                     if (!object.ReferenceEquals(projectedInvariantCellBox.read(), invariantCell))
@@ -4973,6 +5072,133 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             typeof(RehearsalSeparateNestedBox<object>))
                         throw new InvalidOperationException(
                             "the separate projected invariant property nesting was not Box<object>");
+                    Type separateInvariantPropertyCellChild =
+                        typeof(RehearsalSeparateInvariantPropertyCellChild<>);
+                    Type separateInvariantPropertyCellChildParameter =
+                        separateInvariantPropertyCellChild.GetGenericArguments()[0];
+                    Type[] separateInvariantPropertyCellChildParents =
+                        separateInvariantPropertyCellChild.GetInterfaces();
+                    System.Reflection.PropertyInfo[] separateInvariantPropertyCellChildProperties =
+                        separateInvariantPropertyCellChild.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                    if ((separateInvariantPropertyCellChildParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        separateInvariantPropertyCellChildParents.Length != 1 ||
+                        separateInvariantPropertyCellChildParents[0].GetGenericTypeDefinition() !=
+                            separateInvariantPropertyCell ||
+                        separateInvariantPropertyCellChildParents[0].GetGenericArguments()[0] !=
+                            separateInvariantPropertyCellChildParameter ||
+                        separateInvariantPropertyCellChildProperties.Length != 1 ||
+                        separateInvariantPropertyCellChildProperties[0].Name !=
+                            "childPropertyCellValue" ||
+                        separateInvariantPropertyCellChildProperties[0].PropertyType !=
+                            separateInvariantPropertyCellChildParameter ||
+                        !separateInvariantPropertyCellChildProperties[0].CanRead ||
+                        !separateInvariantPropertyCellChildProperties[0].CanWrite)
+                        throw new InvalidOperationException(
+                            "the separate property child lost natural CLR inheritance");
+                    Type separateInvariantPropertyCellChildValue =
+                        typeof(RehearsalSeparateInvariantPropertyCellChildValue<>);
+                    Type separateInvariantPropertyCellChildValueParameter =
+                        separateInvariantPropertyCellChildValue.GetGenericArguments()[0];
+                    System.Reflection.FieldInfo separateInvariantPropertyCellChildParentStorage =
+                        separateInvariantPropertyCellChildValue.GetField(
+                            "propertyCellValue",
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.NonPublic);
+                    System.Reflection.FieldInfo separateInvariantPropertyCellChildStorage =
+                        separateInvariantPropertyCellChildValue.GetField(
+                            "childPropertyCellValue",
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.NonPublic);
+                    if (separateInvariantPropertyCellChildParentStorage == null ||
+                        separateInvariantPropertyCellChildStorage == null ||
+                        separateInvariantPropertyCellChildParentStorage.FieldType !=
+                            separateInvariantPropertyCellChildValueParameter ||
+                        separateInvariantPropertyCellChildStorage.FieldType !=
+                            separateInvariantPropertyCellChildValueParameter)
+                        throw new InvalidOperationException(
+                            "the property child implementation lost its two physical !T fields");
+                    Type separateParentPropertyCapability = null;
+                    Type separateChildPropertyCapability = null;
+                    foreach (Type implemented in
+                             separateInvariantPropertyCellChildValue.GetInterfaces())
+                    {
+                        if (implemented.IsGenericType)
+                            continue;
+                        Type[] capabilityParents = implemented.GetInterfaces();
+                        System.Reflection.MethodInfo[] capabilityMethods =
+                            implemented.GetMethods(
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.DeclaredOnly);
+                        if (capabilityMethods.Length != 2)
+                            continue;
+                        if (implemented.GetProperties(
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.DeclaredOnly).Length != 0)
+                            throw new InvalidOperationException(
+                                "a semantic property capability fabricated a CLR Property row");
+                        if (capabilityParents.Length == 0)
+                            separateParentPropertyCapability = implemented;
+                        else if (capabilityParents.Length == 1)
+                            separateChildPropertyCapability = implemented;
+                    }
+                    if (separateParentPropertyCapability == null ||
+                        separateChildPropertyCapability == null ||
+                        separateChildPropertyCapability.GetInterfaces()[0] !=
+                            separateParentPropertyCapability)
+                        throw new InvalidOperationException(
+                            "the child semantic capability did not inherit the parent capability");
+                    System.Reflection.MethodInfo separateInvariantPropertyCellChildIdentity =
+                        typeof(middleKt)
+                            .GetMethod(
+                                "rehearsalSeparateOpenInvariantPropertyCellChildBoxIdentity");
+                    Type separateInvariantPropertyCellChildIdentityParameter =
+                        separateInvariantPropertyCellChildIdentity.GetParameters()[0]
+                            .ParameterType;
+                    Type separateInvariantPropertyCellChildNestedArgument =
+                        separateInvariantPropertyCellChildIdentityParameter
+                            .GetGenericArguments()[0];
+                    if (separateInvariantPropertyCellChildIdentity.ReturnType !=
+                            separateInvariantPropertyCellChildIdentityParameter ||
+                        separateInvariantPropertyCellChildIdentityParameter
+                            .GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateNestedBox<>) ||
+                        separateInvariantPropertyCellChildNestedArgument
+                            .GetGenericTypeDefinition() !=
+                                separateInvariantPropertyCellChild ||
+                        !separateInvariantPropertyCellChildNestedArgument
+                            .GetGenericArguments()[0].IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "separate open property-child nesting was unnecessarily erased");
+                    System.Reflection.MethodInfo separateProjectedPropertyCellChildRead =
+                        typeof(middleKt)
+                            .GetMethod(
+                                "rehearsalSeparateProjectedInvariantPropertyCellChildRead");
+                    System.Reflection.MethodInfo separateProjectedPropertyCellChildWrite =
+                        typeof(middleKt)
+                            .GetMethod(
+                                "rehearsalSeparateProjectedInvariantPropertyCellChildWrite");
+                    Type separateProjectedPropertyCellChildBox = typeof(middleKt)
+                        .GetMethod("rehearsalSeparateProjectedInvariantPropertyCellChildBox")
+                        .ReturnType;
+                    if (separateProjectedPropertyCellChildRead.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                        separateProjectedPropertyCellChildRead.ReturnType != typeof(object) ||
+                        separateProjectedPropertyCellChildWrite.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                        separateProjectedPropertyCellChildWrite.GetParameters()[1].ParameterType !=
+                            typeof(string) ||
+                        separateProjectedPropertyCellChildWrite.ReturnType != typeof(void) ||
+                        separateProjectedPropertyCellChildBox !=
+                            typeof(RehearsalSeparateNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "separate projected property child lacked object boundaries");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -5232,6 +5458,26 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     "csharp-object-property-cell";
             }
 
+            public sealed class RehearsalCSharpInvariantPropertyCellChild :
+                RehearsalInvariantPropertyCellChild<string>
+            {
+                public string propertyCellValue { get; set; } =
+                    "csharp-property-parent";
+
+                public string childPropertyCellValue { get; set; } =
+                    "csharp-property-child";
+            }
+
+            public sealed class RehearsalCSharpInvariantObjectPropertyCellChild :
+                RehearsalInvariantPropertyCellChild<object>
+            {
+                public object propertyCellValue { get; set; } =
+                    "csharp-object-property-parent";
+
+                public object childPropertyCellValue { get; set; } =
+                    "csharp-object-property-child";
+            }
+
             public sealed class RehearsalCSharpAmbiguousInvariantPropertyCell :
                 RehearsalInvariantPropertyCell<string>,
                 RehearsalInvariantPropertyCell<object>
@@ -5420,6 +5666,66 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             invariantPropertyCell))
                         throw new InvalidOperationException(
                             "projected property-cell storage changed C# identity");
+                    RehearsalCSharpInvariantPropertyCellChild invariantPropertyCellChild =
+                        new RehearsalCSharpInvariantPropertyCellChild();
+                    invariantPropertyCellChild.propertyCellValue =
+                        "csharp-exact-property-parent";
+                    invariantPropertyCellChild.childPropertyCellValue =
+                        "csharp-exact-property-child";
+                    if (!object.Equals(
+                            genericOwnerRehearsalStateCarriersKt
+                                .rehearsalProjectedInvariantPropertyCellRead(
+                                    invariantPropertyCellChild),
+                            "csharp-exact-property-parent") ||
+                        !object.Equals(
+                            genericOwnerRehearsalStateCarriersKt
+                                .rehearsalProjectedInvariantPropertyCellChildRead(
+                                    invariantPropertyCellChild),
+                            "csharp-exact-property-child"))
+                        throw new InvalidOperationException(
+                            "projected reads bypassed a natural C# property child");
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantPropertyCellWrite(
+                            invariantPropertyCellChild,
+                            "csharp-projected-property-parent");
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantPropertyCellChildWrite(
+                            invariantPropertyCellChild,
+                            "csharp-projected-property-child");
+                    if (invariantPropertyCellChild.propertyCellValue !=
+                            "csharp-projected-property-parent" ||
+                        invariantPropertyCellChild.childPropertyCellValue !=
+                            "csharp-projected-property-child")
+                        throw new InvalidOperationException(
+                            "projected writes bypassed a natural C# property child");
+                    RehearsalCSharpInvariantObjectPropertyCellChild
+                        invariantObjectPropertyCellChild =
+                            new RehearsalCSharpInvariantObjectPropertyCellChild();
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantPropertyCellWrite(
+                            invariantObjectPropertyCellChild,
+                            "csharp-broad-property-parent");
+                    genericOwnerRehearsalStateCarriersKt
+                        .rehearsalProjectedInvariantPropertyCellChildWrite(
+                            invariantObjectPropertyCellChild,
+                            "csharp-broad-property-child");
+                    if (!object.Equals(
+                            invariantObjectPropertyCellChild.propertyCellValue,
+                            "csharp-broad-property-parent") ||
+                        !object.Equals(
+                            invariantObjectPropertyCellChild.childPropertyCellValue,
+                            "csharp-broad-property-child"))
+                        throw new InvalidOperationException(
+                            "projected writes rejected a natural object property child");
+                    RehearsalNestedBox<object> projectedInvariantPropertyCellChildBox =
+                        genericOwnerRehearsalStateCarriersKt
+                            .rehearsalProjectedInvariantPropertyCellChildBox(
+                                invariantPropertyCellChild);
+                    if (!object.ReferenceEquals(
+                            projectedInvariantPropertyCellChildBox.read(),
+                            invariantPropertyCellChild))
+                        throw new InvalidOperationException(
+                            "projected property-child storage changed C# identity");
                     try
                     {
                         genericOwnerRehearsalStateCarriersKt
@@ -5788,6 +6094,72 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (projectedPropertyCellBox != typeof(RehearsalNestedBox<object>))
                         throw new InvalidOperationException(
                             "the projected invariant property-cell nesting was not Box<object>");
+                    Type invariantPropertyCellChildOwner =
+                        typeof(RehearsalInvariantPropertyCellChild<>);
+                    Type invariantPropertyCellChildParameter =
+                        invariantPropertyCellChildOwner.GetGenericArguments()[0];
+                    Type[] invariantPropertyCellChildParents =
+                        invariantPropertyCellChildOwner.GetInterfaces();
+                    System.Reflection.PropertyInfo[] invariantPropertyCellChildProperties =
+                        invariantPropertyCellChildOwner.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                    if ((invariantPropertyCellChildParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        invariantPropertyCellChildParents.Length != 1 ||
+                        invariantPropertyCellChildParents[0].GetGenericTypeDefinition() !=
+                            invariantPropertyCellOwner ||
+                        invariantPropertyCellChildParents[0].GetGenericArguments()[0] !=
+                            invariantPropertyCellChildParameter ||
+                        invariantPropertyCellChildProperties.Length != 1 ||
+                        invariantPropertyCellChildProperties[0].Name !=
+                            "childPropertyCellValue" ||
+                        invariantPropertyCellChildProperties[0].PropertyType !=
+                            invariantPropertyCellChildParameter ||
+                        !invariantPropertyCellChildProperties[0].CanRead ||
+                        !invariantPropertyCellChildProperties[0].CanWrite)
+                        throw new InvalidOperationException(
+                            "the invariant property child lost its natural CLR inheritance");
+                    System.Reflection.MethodInfo invariantPropertyCellChildIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenInvariantPropertyCellChildBoxIdentity");
+                    Type invariantPropertyCellChildIdentityParameter =
+                        invariantPropertyCellChildIdentity.GetParameters()[0].ParameterType;
+                    Type invariantPropertyCellChildNestedArgument =
+                        invariantPropertyCellChildIdentityParameter.GetGenericArguments()[0];
+                    if (invariantPropertyCellChildIdentity.ReturnType !=
+                            invariantPropertyCellChildIdentityParameter ||
+                        invariantPropertyCellChildIdentityParameter.GetGenericTypeDefinition() !=
+                            typeof(RehearsalNestedBox<>) ||
+                        invariantPropertyCellChildNestedArgument.GetGenericTypeDefinition() !=
+                            invariantPropertyCellChildOwner ||
+                        !invariantPropertyCellChildNestedArgument.GetGenericArguments()[0]
+                            .IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "open invariant property-child nesting was unnecessarily erased");
+                    System.Reflection.MethodInfo projectedPropertyCellChildRead =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantPropertyCellChildRead");
+                    System.Reflection.MethodInfo projectedPropertyCellChildWrite =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantPropertyCellChildWrite");
+                    Type projectedPropertyCellChildBox =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantPropertyCellChildBox")
+                            .ReturnType;
+                    if (projectedPropertyCellChildRead.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                        projectedPropertyCellChildRead.ReturnType != typeof(object) ||
+                        projectedPropertyCellChildWrite.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                        projectedPropertyCellChildWrite.GetParameters()[1].ParameterType !=
+                            typeof(string) ||
+                        projectedPropertyCellChildWrite.ReturnType != typeof(void) ||
+                        projectedPropertyCellChildBox != typeof(RehearsalNestedBox<object>))
+                        throw new InvalidOperationException(
+                            "the projected property child lacked operation-local boundaries");
                     return 0;
                 }
             }

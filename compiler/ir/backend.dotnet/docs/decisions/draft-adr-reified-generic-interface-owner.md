@@ -313,6 +313,16 @@ an ordinary non-partial C# implementation supplies one normal property and no
 compiler ABI member. Read-only, open-nullable, mixed method/property, and
 multi-property families remain fail-closed.
 
+The exact property family composes across one exact inheritance edge. For
+`Child<T> : Parent<T>`, where both levels declare one admitted mutable `T`
+property, the natural CLR child inherits `Parent<T>` and owns only its new
+Property row. Its semantic capability inherits the parent capability and owns
+only the child accessor slots. Implementations retain separate `!T` fields for
+the two source properties. Inherited FIR fake-property declarations are not
+owner declarations and may neither block the child nor become duplicated ABI.
+This rule does not admit deeper, changed-argument, multi-parent, mixed-member,
+or multiple-property inheritance.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -326,11 +336,13 @@ Broader member surfaces or changed variance require separate complete proofs.
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
 must cover:
 
-1. general member-declaring children beyond one producer-output slot, including
-   multiple members, overloads, and deeper inheritance;
+1. general member-declaring children beyond one producer-output slot or the
+   exact one-level invariant-property child, including multiple members,
+   overloads, changed arguments, multiple parents, and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
-   method root and exact mutable-property equivalent, mixed or multiple type
-   parameters, and input-bearing child/interface compositions;
+   method root, exact mutable-property root, and exact one-level property
+   child, mixed or multiple type parameters, and input-bearing child/interface
+   compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded
