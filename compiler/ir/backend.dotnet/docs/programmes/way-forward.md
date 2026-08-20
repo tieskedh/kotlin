@@ -1371,6 +1371,22 @@ are mutable/broader invariant member families, mixed variance,
 multi-parameter owners, and value-class substitutions. Each must preserve the
 boundary-versus-state distinction.
 
+Use-site projection is now closed as its own boundary rather than being
+mistaken for declaration invariance. Kotlin may view
+`InvariantProducer<String>` as `InvariantProducer<out Any?>`, but the CLR
+cannot convert the same invariant construction to
+`InvariantProducer<object>`. The projected callable carrier is therefore
+`object`, with capability-or-unique-natural selection delayed until the
+producer operation. When that projected value is materialized inside
+`Box<InvariantProducer<out Any?>>`, only this concrete nested construction
+becomes `Box<object>`. The `Box<T>` TypeDef and field remain typed, exact/open
+invariant nesting remains `Box<InvariantProducer<!!T>>`, and an ordinary
+non-partial C# implementation retains identity through the projected call and
+box. An exact constructor origin is proof of its complete already-selected
+physical construction; a downstream generic capability fallback may not
+replace the outer owner with its non-generic capability merely because one
+nested logical argument is projected.
+
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
 present. Warning-bearing parameterized `as` and `as?` use one Kotlin-aware
@@ -1414,6 +1430,8 @@ The contravariant extension is in
 [`../archive/generic-owner-contravariant-construction-stability-2026-08-19.md`](../archive/generic-owner-contravariant-construction-stability-2026-08-19.md).
 The nested open-argument evidence is in
 [`../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md`](../archive/generic-owner-open-nested-construction-boundary-2026-08-20.md).
+The invariant use-site-projection evidence is in
+[`../archive/generic-owner-invariant-projection-boundary-2026-08-20.md`](../archive/generic-owner-invariant-projection-boundary-2026-08-20.md).
 
 The first whole-Stdlib composition correction makes typed proof precedence an
 explicit rehearsal invariant. A downstream semantic rewrite may not degrade a
