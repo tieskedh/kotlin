@@ -387,6 +387,29 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
   unchanged six-test `dotnet.ir` model root remained up-to-date.
+- One bounded second consumer edge is now closed above the property-root/
+  consumer-child family. `ConsumerGrandchild<T> : ConsumerChild<T> :
+  PropertyCell<T>` remains a natural invariant CLR generic hierarchy. The root
+  owns the mutable Property row, each descendant owns one natural `Consume(!T)`
+  MethodDef, and a Kotlin implementation retains one authoritative `!T` field.
+  The compiler capabilities inherit without copied slots or Property rows and
+  expose exactly a 2-to-1-to-1 declared-method chain. Exact/open calls stay
+  typed; only the input-projected secondary call uses an object receiver.
+  Ordinary non-partial C# string/object grandchildren implement one property
+  and two methods with no compiler interface. The existing context-aware
+  authoring rule finds the transitive complete producer root while standalone
+  consumers retain their adapter. In the separate proof the root is in
+  `lib.dll` and both descendants are in `middle.dll`; a three-producer-assembly
+  chain remains open. PSI/LightTree execution on Framework 4.8 and .NET 10
+  passes the eight-test rehearsal matrix and the same epoch-off inverse with
+  zero failures, errors, or skips. A third edge, broader members, multiple
+  parents, changed arguments, nullable/defaulted/constrained input, and extra
+  parameters remain fail-closed. Evidence is archived in
+  [`docs/archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md`](docs/archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
