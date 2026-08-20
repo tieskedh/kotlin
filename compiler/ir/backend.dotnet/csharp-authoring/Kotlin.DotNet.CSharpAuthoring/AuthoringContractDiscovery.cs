@@ -109,7 +109,8 @@ internal static class AuthoringContractDiscovery
                 // dispatch can inspect an ordinary natural implementation at the operation.
                 // Do not turn the optional capability fast path into a partial-source
                 // obligation when this C# type implements only such interfaces.
-                if (!interfaces.Any(RequiresGeneratedCapability))
+                if (!interfaces.Any(bound =>
+                        RequiresGeneratedCapability(bound, interfaces)))
                     continue;
 
                 Location location = declaration.Identifier.GetLocation();
@@ -232,9 +233,37 @@ internal static class AuthoringContractDiscovery
         return result.ToImmutable();
     }
 
-    private static bool RequiresGeneratedCapability(BoundKotlinInterface bound)
+    private enum NaturalFallbackKind
     {
-        KotlinInterfaceContract contract = bound.Contract;
+        None,
+        CompleteProducerBundle,
+        ConsumerChildFragment,
+    }
+
+    private static bool RequiresGeneratedCapability(
+        BoundKotlinInterface bound,
+        ImmutableArray<BoundKotlinInterface> interfaces)
+    {
+        NaturalFallbackKind kind = NaturalFallbackKindOrNone(bound.Contract);
+        if (kind == NaturalFallbackKind.CompleteProducerBundle)
+            return false;
+        if (kind != NaturalFallbackKind.ConsumerChildFragment)
+            return true;
+        // A consumer-only contract is adapter-free only as the child-owned half of a
+        // concrete interface hierarchy whose inherited manifest owns the producer bundle.
+        // A standalone invariant consumer still needs its generated object adapter.
+        return !bound.InterfaceType.AllInterfaces.Any(inheritedType =>
+            interfaces.Any(candidate =>
+                SymbolEqualityComparer.Default.Equals(
+                    candidate.InterfaceType,
+                    inheritedType) &&
+                NaturalFallbackKindOrNone(candidate.Contract) ==
+                    NaturalFallbackKind.CompleteProducerBundle));
+    }
+
+    private static NaturalFallbackKind NaturalFallbackKindOrNone(
+        KotlinInterfaceContract contract)
+    {
         if (contract.TypeParameters.Length != 1 ||
             !string.Equals(
                 contract.TypeParameters[0].Variance,
@@ -242,7 +271,7 @@ internal static class AuthoringContractDiscovery
                 StringComparison.Ordinal) ||
             (contract.Members.Length != 1 && contract.Members.Length != 2) ||
             !contract.Intersections.IsEmpty)
-            return true;
+            return NaturalFallbackKind.None;
         bool isMethodBundle = contract.Members.All(member =>
                 member.Kind == KotlinMemberKind.Method) &&
             contract.Members.Select(member => member.SourceName)
@@ -255,7 +284,7 @@ internal static class AuthoringContractDiscovery
             contract.Members.Select(member => member.SourceName)
                 .Distinct(StringComparer.Ordinal).Count() == 1;
         if (!isMethodBundle && !isPropertyBundle)
-            return true;
+            return NaturalFallbackKind.None;
         int producerCount = 0;
         int consumerCount = 0;
         string? naturalPropertyName = null;
@@ -266,7 +295,7 @@ internal static class AuthoringContractDiscovery
                 !member.ErasedOwnerRelativeConstraints.IsEmpty ||
                 !member.OverriddenLogicalMemberKeys.IsEmpty ||
                 member.Slots.Length != 2)
-                return true;
+                return NaturalFallbackKind.None;
             KotlinMethodLocator? semantic = member.Slots
                 .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Erased);
             KotlinMethodLocator? natural = member.Slots
@@ -276,7 +305,7 @@ internal static class AuthoringContractDiscovery
                 semantic.PropertyName != null ||
                 (isMethodBundle && natural.PropertyName != null) ||
                 (isPropertyBundle && natural.PropertyName == null))
-                return true;
+                return NaturalFallbackKind.None;
             if (isPropertyBundle)
             {
                 naturalPropertyName ??= natural.PropertyName;
@@ -284,7 +313,7 @@ internal static class AuthoringContractDiscovery
                         naturalPropertyName,
                         natural.PropertyName,
                         StringComparison.Ordinal))
-                    return true;
+                    return NaturalFallbackKind.None;
             }
             if (semantic.ReturnType == "object" &&
                 semantic.ParameterTypes.IsEmpty &&
@@ -293,7 +322,7 @@ internal static class AuthoringContractDiscovery
             {
                 if (isPropertyBundle &&
                     member.Kind != KotlinMemberKind.PropertyGetter)
-                    return true;
+                    return NaturalFallbackKind.None;
                 producerCount++;
                 continue;
             }
@@ -304,14 +333,21 @@ internal static class AuthoringContractDiscovery
             {
                 if (isPropertyBundle &&
                     member.Kind != KotlinMemberKind.PropertySetter)
-                    return true;
+                    return NaturalFallbackKind.None;
                 consumerCount++;
                 continue;
             }
-            return true;
+            return NaturalFallbackKind.None;
         }
-        return !(producerCount == 1 &&
-            consumerCount == contract.Members.Length - 1);
+        bool hasCompleteProducerBundle = producerCount == 1 &&
+            consumerCount == contract.Members.Length - 1;
+        if (hasCompleteProducerBundle)
+            return NaturalFallbackKind.CompleteProducerBundle;
+        bool hasConsumerChildFragment = contract.Members.Length == 1 &&
+            producerCount == 0 && consumerCount == 1;
+        return hasConsumerChildFragment
+            ? NaturalFallbackKind.ConsumerChildFragment
+            : NaturalFallbackKind.None;
     }
 
     private static ImmutableArray<BoundKotlinInterface> FindImplementedKotlinInterfaces(
