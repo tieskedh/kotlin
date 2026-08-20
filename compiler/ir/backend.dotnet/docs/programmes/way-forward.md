@@ -1516,11 +1516,22 @@ new physical ABI: valid contravariant input remains a checked conversion at
 the operation boundary followed by ordinary virtual dispatch. See
 [`../archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md`](../archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md).
 
-With that typed contract consolidated, continue with multiple/property/
-method-generic default families, diamonds, reabstraction, changed-argument and
-deeper/multiple inheritance, broader input-bearing inheritance, broader and
-mixed method/property families, and mixed-variance gates, including
-derivability rules for ordinary foreign implementations. Then close
+The first default-property gate is now also closed for a covariant read-only
+root. Its natural `Property<T>` is the sole ordinary C# API; Framework uses the
+recorded helper and .NET 10 the getter DIM. The non-generic semantic capability
+remains method-backed compiler ABI. Authoring tooling therefore groups
+property syntax by the physical Property locator and emits an explicit method
+adapter only for a method-backed semantic slot. Both adapters converge on one
+C# source property or the same Kotlin helper/DIM, so exact and widened reads
+retain one body and one object. See
+[`../archive/reified-generic-interface-default-property-2026-08-20.md`](../archive/reified-generic-interface-default-property-2026-08-20.md).
+
+With that typed contract consolidated, continue with multiple-property and
+method-generic default families, read-only property inheritance, diamonds,
+reabstraction, changed-argument and deeper/multiple inheritance, broader input-
+bearing inheritance, broader and mixed method/property families, and mixed-
+variance gates, including derivability rules for ordinary foreign
+implementations. Then close
 classifier-derived field and broader-input boundaries and deployment behavior
 before the Runtime/Stdlib graph.
 Before that graph opens, split stable declaration-family publication from

@@ -573,7 +573,9 @@ internal static class KotlinImplementationEmitter
     {
         List<ResolvedMember> resolvedMembers = members.ToList();
         foreach (IGrouping<PropertyIdentity, ResolvedMember> propertyGroup in resolvedMembers
-                     .Where(member => member.Member.Kind != KotlinMemberKind.Method)
+                     .Where(member =>
+                         member.Member.Kind != KotlinMemberKind.Method &&
+                         member.Locator.PropertyName != null)
                      .GroupBy(member => new PropertyIdentity(
                          member.Method.ContainingType,
                          member.Locator.PropertyName)))
@@ -581,6 +583,16 @@ internal static class KotlinImplementationEmitter
             EmitProperty(
                 authoringContract,
                 propertyGroup.ToImmutableArray(),
+                output,
+                diagnostics);
+        }
+        foreach (ResolvedMember accessor in resolvedMembers.Where(member =>
+                     member.Member.Kind != KotlinMemberKind.Method &&
+                     member.Locator.PropertyName == null))
+        {
+            EmitMethodBackedPropertyAccessor(
+                authoringContract,
+                accessor,
                 output,
                 diagnostics);
         }
@@ -710,12 +722,91 @@ internal static class KotlinImplementationEmitter
         output.AppendLine();
     }
 
+    private static void EmitMethodBackedPropertyAccessor(
+        AuthoringContract authoringContract,
+        ResolvedMember accessor,
+        StringBuilder output,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        IMethodSymbol physicalMethod = accessor.Method;
+        IPropertySymbol? authoringProperty =
+            accessor.AuthoringMethod.AssociatedSymbol as IPropertySymbol;
+        bool isGetter = accessor.Member.Kind == KotlinMemberKind.PropertyGetter;
+        bool isSetter = accessor.Member.Kind == KotlinMemberKind.PropertySetter;
+        if ((!isGetter && !isSetter) ||
+            physicalMethod.AssociatedSymbol != null ||
+            authoringProperty == null ||
+            isGetter &&
+                (physicalMethod.ReturnsVoid || physicalMethod.Parameters.Length != 0) ||
+            isSetter &&
+                (!physicalMethod.ReturnsVoid || physicalMethod.Parameters.Length != 1))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.MalformedManifest,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                physicalMethod.ContainingAssembly.Identity.Name,
+                "method-backed property accessor has an inconsistent CLR shape"));
+            return;
+        }
+        if (physicalMethod.ReturnsByRef ||
+            physicalMethod.ReturnsByRefReadonly ||
+            physicalMethod.Parameters.Any(parameter =>
+                parameter.RefKind != RefKind.None))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.UnsupportedToolingShape,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                physicalMethod.ContainingType.ToDisplayString(),
+                $"by-reference property accessor '{accessor.SourceName}'"));
+            return;
+        }
+        if (!TryCSharpIdentifier(physicalMethod.Name, out string methodName))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.UnsupportedToolingShape,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                physicalMethod.ContainingType.ToDisplayString(),
+                $"method-backed property accessor name '{physicalMethod.Name}' is not expressible in C#"));
+            return;
+        }
+
+        IPropertySymbol? sourceProperty = FindSourceProperty(
+            authoringContract.ImplementationType,
+            accessor.SourceName,
+            authoringProperty.Type,
+            out ImmutableArray<IPropertySymbol> ambiguousProperties);
+        if (!ambiguousProperties.IsEmpty)
+        {
+            foreach (IPropertySymbol property in ambiguousProperties)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    Diagnostics.ConflictingMember,
+                    property.Locations.FirstOrDefault() ??
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                    property.ToDisplayString(),
+                    physicalMethod.ToDisplayString()));
+            }
+            return;
+        }
+
+        string? body = PropertyAccessorBody(
+            authoringContract,
+            accessor,
+            sourceProperty,
+            diagnostics);
+        if (body == null)
+            return;
+        EmitExplicitMethod(physicalMethod, body, output, methodName);
+    }
+
     private static string? PropertyAccessorBody(
         AuthoringContract authoringContract,
         ResolvedMember accessor,
         IPropertySymbol? sourceProperty,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        ITypeSymbol physicalType = PropertyAccessorPhysicalType(accessor);
+        string inputExpression = PropertyAccessorInputExpression(accessor);
         if (sourceProperty != null)
         {
             if (accessor.Member.Kind == KotlinMemberKind.PropertyGetter)
@@ -733,7 +824,7 @@ internal static class KotlinImplementationEmitter
                 if (!TryConvertExpression(
                         authoringContract.Compilation,
                         sourceProperty.Type,
-                        ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                        physicalType,
                         sourceExpression,
                         out string resultExpression))
                 {
@@ -741,7 +832,7 @@ internal static class KotlinImplementationEmitter
                         authoringContract,
                         accessor,
                         sourceProperty.Type,
-                        ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                        physicalType,
                         diagnostics);
                     return null;
                 }
@@ -757,15 +848,15 @@ internal static class KotlinImplementationEmitter
             }
             if (!TryConvertExpression(
                     authoringContract.Compilation,
-                    ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                    physicalType,
                     sourceProperty.Type,
-                    "value",
+                    inputExpression,
                     out string valueExpression))
             {
                 ReportUnsupportedConversion(
                     authoringContract,
                     accessor,
-                    ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                    physicalType,
                     sourceProperty.Type,
                     diagnostics);
                 return null;
@@ -818,8 +909,6 @@ internal static class KotlinImplementationEmitter
     {
         if (accessor.AuthoringMethod.AssociatedSymbol is not
                 IPropertySymbol semanticProperty ||
-            accessor.Method.AssociatedSymbol is not
-                IPropertySymbol physicalProperty ||
             !TryCSharpIdentifier(
                 semanticProperty.Name,
                 out string semanticPropertyName))
@@ -835,20 +924,22 @@ internal static class KotlinImplementationEmitter
         string semanticExpression =
             "((" + DisplayType(semanticProperty.ContainingType) +
             ")this)." + semanticPropertyName;
+        ITypeSymbol physicalType = PropertyAccessorPhysicalType(accessor);
+        string inputExpression = PropertyAccessorInputExpression(accessor);
         if (accessor.Member.Kind == KotlinMemberKind.PropertySetter)
         {
             if (semanticProperty.SetMethod == null ||
                 !TryConvertExpression(
                     authoringContract.Compilation,
-                    physicalProperty.Type,
+                    physicalType,
                     semanticProperty.Type,
-                    "value",
+                    inputExpression,
                     out string valueExpression))
             {
                 ReportUnsupportedConversion(
                     authoringContract,
                     accessor,
-                    physicalProperty.Type,
+                    physicalType,
                     semanticProperty.Type,
                     diagnostics);
                 return null;
@@ -860,7 +951,7 @@ internal static class KotlinImplementationEmitter
             !TryConvertExpression(
                 authoringContract.Compilation,
                 semanticProperty.Type,
-                physicalProperty.Type,
+                physicalType,
                 semanticExpression,
                 out string resultExpression))
         {
@@ -868,7 +959,7 @@ internal static class KotlinImplementationEmitter
                 authoringContract,
                 accessor,
                 semanticProperty.Type,
-                physicalProperty.Type,
+                physicalType,
                 diagnostics);
             return null;
         }
@@ -884,13 +975,14 @@ internal static class KotlinImplementationEmitter
             slot.Role == KotlinSlotRole.Helper);
         bool isSetter =
             accessor.Member.Kind == KotlinMemberKind.PropertySetter;
+        string inputExpression = PropertyAccessorInputExpression(accessor);
         if (helper == null ||
             !TryHelperCall(
                 accessor.MemberAssembly,
                 helper,
                 HelperTypeArguments(accessor, accessor.Method, helper),
                 isSetter
-                    ? "this, value"
+                    ? "this, " + inputExpression
                     : "this",
                 out string call,
                 out IMethodSymbol? helperMethod))
@@ -913,14 +1005,13 @@ internal static class KotlinImplementationEmitter
                     $"setter helper locator for '{accessor.Member.LogicalKey}' has no value parameter"));
                 return null;
             }
-            ITypeSymbol setterPhysicalType =
-                ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type;
+            ITypeSymbol setterPhysicalType = PropertyAccessorPhysicalType(accessor);
             ITypeSymbol helperType = helperMethod.Parameters.Last().Type;
             if (!TryConvertExpression(
                     authoringContract.Compilation,
                     setterPhysicalType,
                     helperType,
-                    "value",
+                    inputExpression,
                     out string valueExpression))
             {
                 ReportUnsupportedConversion(
@@ -931,7 +1022,7 @@ internal static class KotlinImplementationEmitter
                     diagnostics);
                 return null;
             }
-            if (!string.Equals(valueExpression, "value", StringComparison.Ordinal) &&
+            if (!string.Equals(valueExpression, inputExpression, StringComparison.Ordinal) &&
                 !TryHelperCall(
                     accessor.MemberAssembly,
                     helper,
@@ -949,8 +1040,7 @@ internal static class KotlinImplementationEmitter
             }
             return "{ " + call + "; }";
         }
-        ITypeSymbol physicalType =
-            ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type;
+        ITypeSymbol physicalType = PropertyAccessorPhysicalType(accessor);
         if (!TryConvertExpression(
                 authoringContract.Compilation,
                 helperMethod!.ReturnType,
@@ -968,6 +1058,20 @@ internal static class KotlinImplementationEmitter
         }
         return "{ return " + result + "; }";
     }
+
+    private static ITypeSymbol PropertyAccessorPhysicalType(
+        ResolvedMember accessor)
+    {
+        if (accessor.Method.AssociatedSymbol is IPropertySymbol property)
+            return property.Type;
+        return accessor.Member.Kind == KotlinMemberKind.PropertyGetter
+            ? accessor.Method.ReturnType
+            : accessor.Method.Parameters.Single().Type;
+    }
+
+    private static string PropertyAccessorInputExpression(
+        ResolvedMember accessor) =>
+        accessor.Method.AssociatedSymbol is IPropertySymbol ? "value" : "p0";
 
     private static void EmitMethod(
         AuthoringContract authoringContract,
@@ -1116,6 +1220,17 @@ internal static class KotlinImplementationEmitter
             }
         }
 
+        EmitExplicitMethod(physicalMethod, body, output, methodName);
+    }
+
+    private static void EmitExplicitMethod(
+        IMethodSymbol physicalMethod,
+        string body,
+        StringBuilder output,
+        string? resolvedMethodName = null)
+    {
+        string methodName = resolvedMethodName ??
+            EscapeIdentifier(physicalMethod.Name);
         output.Append("        ");
         output.Append(DisplayType(physicalMethod.ReturnType));
         output.Append(' ');
