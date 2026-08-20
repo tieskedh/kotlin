@@ -100,14 +100,18 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * semantic boundary. Covariant producer subinterfaces and exact invariant-property children
  * inherit their family at a fixpoint, including across a library boundary. An invariant child
  * may add either one matching property or one direct consumer to an exact property root. One
- * further direct-consumer edge is admitted above that exact consumer child. A child owns only its
- * new semantic slots; inherited slots remain inherited. An intersection without new members
- * receives one memberless capability alias over its independent roots. Other families retain the
- * accepted erased production ABI until their complete semantic surface has its own proof.
+ * further direct-consumer edge is admitted above that exact consumer child, including when both
+ * edges come from separate producer assemblies. External admission requires their versioned
+ * physical owner and member-family records. A child owns only its new semantic slots; inherited
+ * slots remain inherited. An intersection without new members receives one memberless capability
+ * alias over its independent roots. Other families retain the accepted erased production ABI
+ * until their complete semantic surface has its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
+    private val externalDeclarations = context.externalDeclarationsForLowering()
+
     private data class ReifiedInterfaceChildShape(
         val parents: List<IrClass>,
         val declaredMembers: List<IrSimpleFunction>,
@@ -115,7 +119,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
     override fun lower(irModule: IrModuleFragment) {
         if (!context.configuration.dotNetGenericOwnerRehearsal) return
-        val externalDeclarations = context.externalDeclarationsForLowering()
 
         val genericInterfaces = mutableListOf<IrClass>()
         val sourceFunctions = mutableListOf<IrSimpleFunction>()
@@ -939,10 +942,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrClass.isExactInvariantPropertyConsumerChildOfRoot(): Boolean {
-        if (!hasFirstReifiedInterfaceOwnerShape()) return false
+        val isExternalReifiedOwner = externalDeclarations.hasReifiedGenericInterface(this)
+        if (!hasFirstReifiedInterfaceOwnerShape() && !isExternalReifiedOwner) return false
         val parameter = typeParameters.single()
-        if (parameter.variance != Variance.INVARIANT ||
-            directInvariantConsumerMembersOrNull(parameter) == null
+        val consumerMembers = directInvariantConsumerMembersOrNull(parameter)
+        if (parameter.variance != Variance.INVARIANT || consumerMembers == null ||
+            (isExternalReifiedOwner && consumerMembers.any { member ->
+                externalDeclarations.genericOwnerMemberFamilyOrNull(member) == null
+            })
         ) {
             return false
         }
@@ -954,9 +961,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return false
         }
         val parentParameter = parent.typeParameters.singleOrNull() ?: return false
+        val parentPropertyMembers = parent.directInvariantPropertyMembersOrNull(parentParameter)
+            ?: return false
+        val isExternalReifiedParent = externalDeclarations.hasReifiedGenericInterface(parent)
         return parentParameter.variance == Variance.INVARIANT &&
                 parent.dotNetDirectInterfaceTypes().isEmpty() &&
-                parent.directInvariantPropertyMembersOrNull(parentParameter) != null
+                (parent.hasFirstReifiedInterfaceOwnerShape() || isExternalReifiedParent) &&
+                (!isExternalReifiedParent || parentPropertyMembers.all { member ->
+                    externalDeclarations.genericOwnerMemberFamilyOrNull(member) != null
+                })
     }
 
     private fun IrSimpleFunction.isDirectProducerMember(parameter: IrTypeParameter): Boolean {

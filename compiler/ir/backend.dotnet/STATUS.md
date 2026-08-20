@@ -398,14 +398,28 @@ verification, and work state.
   Ordinary non-partial C# string/object grandchildren implement one property
   and two methods with no compiler interface. The existing context-aware
   authoring rule finds the transitive complete producer root while standalone
-  consumers retain their adapter. In the separate proof the root is in
-  `lib.dll` and both descendants are in `middle.dll`; a three-producer-assembly
-  chain remains open. PSI/LightTree execution on Framework 4.8 and .NET 10
-  passes the eight-test rehearsal matrix and the same epoch-off inverse with
-  zero failures, errors, or skips. A third edge, broader members, multiple
+  consumers retain their adapter. The deployment proof now places the root,
+  first consumer, and second consumer in `lib.dll`, `middle.dll`, and
+  `leaf.dll`. Its fail-first run exposed that local declaration admission was
+  reapplied to an external parent and discarded its stronger producer ABI.
+  External admission now requires the exact KLIB parent/root shapes, full-
+  arity generic-owner records, and producer-recorded member families for the
+  consumer plus both property accessors. Reflection proves the natural and
+  2-to-1-to-1 capability TypeDefs remain owned by their three producer DLLs;
+  no inherited member or capability is copied. PSI/LightTree execution on
+  Framework 4.8 and .NET 10 passes the eight-test rehearsal matrix and the
+  same epoch-off inverse with zero failures, errors, or skips. A third edge,
+  broader members, multiple
   parents, changed arguments, nullable/defaulted/constrained input, and extra
   parameters remain fail-closed. Evidence is archived in
   [`docs/archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md`](docs/archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md).
+  The three-producer deployment evidence is archived in
+  [`docs/archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md`](docs/archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md).
+  Before broadening this family, normalize local analysis and external ABI
+  decoding to one typed published-family contract. It must record family
+  kind, exact root/parent relation, identity parameter mapping, bounded depth,
+  declared roles, and capability binding; `hasReifiedGenericInterface` alone
+  remains only an existence check.
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the

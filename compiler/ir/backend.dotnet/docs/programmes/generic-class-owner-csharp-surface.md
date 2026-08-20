@@ -383,6 +383,16 @@ property state. This is exact depth-two evidence, not permission to accept an
 arbitrary inheritance graph. See
 [`../archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md`](../archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md).
 
+The same bounded family now survives a real three-producer Kotlin assembly
+chain: the property root is in `lib.dll`, the first consumer in `middle.dll`,
+and the second consumer in `leaf.dll`. The fail-first leaf compile showed that
+local declaration ownership cannot be reconstructed from an external IR
+parent. Admission now joins the exact KLIB shape with the producer-recorded
+full-arity owner and member families. Reflection proves every natural and
+semantic TypeDef stays in its declaring DLL, while ordinary non-partial C#
+grandchildren retain the same one-property/two-method surface. See
+[`../archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md`](../archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md).
+
 Physical-family schema 16 now closes the nullable-reference part of that
 direct surface. Every MethodDef value slot, property, and physical state carries
 the exact Roslyn preorder transform captured from the original IR type while
