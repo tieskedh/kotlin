@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerAbi
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCapabilitySuperInterfaceAbi
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
@@ -10220,6 +10221,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 genericOwnerAbi = DotNetGenericOwnerAbi(
                     capabilityAssemblyName = "sample.CapabilityAssembly",
                     capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                    capabilitySuperInterfaces = listOf(
+                        DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+                            assemblyName = "Kotlin.Runtime",
+                            ownerPath = listOf("Kotlin.Collections.Iterator"),
+                        ),
+                        DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+                            assemblyName = "sample.ParentAssembly",
+                            ownerPath = listOf("sample.IParentKotlinSemantic"),
+                        ),
+                    ),
                 ),
             ),
             "C:sample/Box" to DotNetPhysicalDeclaration.Class(
@@ -10342,6 +10353,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetGenericOwnerAbi(
                 capabilityAssemblyName = "invalid]assembly",
                 capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetGenericOwnerAbi(
+                capabilityAssemblyName = "sample.CapabilityAssembly",
+                capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                capabilitySuperInterfaces = listOf(
+                    DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+                        assemblyName = "sample.CapabilityAssembly",
+                        ownerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                    )
+                ),
             )
         }
         assertEquals(

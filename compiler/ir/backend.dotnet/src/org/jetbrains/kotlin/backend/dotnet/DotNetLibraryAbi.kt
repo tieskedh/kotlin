@@ -106,10 +106,24 @@ data class DotNetValueClassAbi(
     }
 }
 
+/** One entry in the producer-selected non-generic interface closure of a capability. */
+data class DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+    val assemblyName: String,
+    val ownerPath: List<String>,
+) {
+    init {
+        require(assemblyName.matches(Regex("[A-Za-z_][A-Za-z0-9_.-]*")) &&
+                ownerPath.isNotEmpty() && ownerPath.all(String::isNotEmpty)) {
+            "a generic-owner capability superinterface requires a valid physical CLR identity"
+        }
+    }
+}
+
 /** Producer-owned non-generic classifier identity implemented by every constructed `C<T>`. */
 data class DotNetGenericOwnerAbi(
     val capabilityAssemblyName: String,
     val capabilityOwnerPath: List<String>,
+    val capabilitySuperInterfaces: List<DotNetGenericOwnerCapabilitySuperInterfaceAbi> = emptyList(),
 ) {
     init {
         require(CLR_ASSEMBLY_NAME.matches(capabilityAssemblyName)) {
@@ -117,6 +131,21 @@ data class DotNetGenericOwnerAbi(
         }
         require(capabilityOwnerPath.isNotEmpty()) {
             "a CLR-generic Kotlin owner requires a semantic capability TypeDef"
+        }
+        require(capabilitySuperInterfaces == capabilitySuperInterfaces
+            .distinct()
+            .sortedWith(compareBy<DotNetGenericOwnerCapabilitySuperInterfaceAbi>(
+                { superInterface -> superInterface.assemblyName },
+                { superInterface -> superInterface.ownerPath.joinToString(".") },
+            ))
+        ) {
+            "CLR-generic owner capability superinterfaces must be sorted and unique"
+        }
+        require(capabilitySuperInterfaces.none { superInterface ->
+            superInterface.assemblyName == capabilityAssemblyName &&
+                    superInterface.ownerPath == capabilityOwnerPath
+        }) {
+            "a CLR-generic owner capability cannot inherit itself"
         }
     }
 
@@ -636,13 +665,13 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "41"
+    const val ABI_VERSION = "42"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
     const val PHYSICAL_NAME_GRAMMAR_VERSION = "3"
     const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
-    const val CURRENT_RUNTIME_SURFACE_LEVEL = 41
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 42
     const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
     const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"
@@ -1479,6 +1508,7 @@ object DotNetLibraryAbiCodec {
         val initializationPath = staticInitialization?.ownerPath.orEmpty()
         val objectInstancePath = objectInstance?.ownerPath.orEmpty()
         val genericOwnerCapabilityPath = genericOwnerAbi?.capabilityOwnerPath.orEmpty()
+        val genericOwnerCapabilitySuperInterfaces = genericOwnerAbi?.capabilitySuperInterfaces.orEmpty()
         return listOf(
             "C",
             ownerPath.size.toString(),
@@ -1492,7 +1522,12 @@ object DotNetLibraryAbiCodec {
             valueClassAbi?.unboxMethodName.orEmpty(),
             genericOwnerAbi?.capabilityAssemblyName.orEmpty(),
             genericOwnerCapabilityPath.size.toString(),
-        ) + ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath
+            genericOwnerCapabilitySuperInterfaces.size.toString(),
+        ) + ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath +
+                genericOwnerCapabilitySuperInterfaces.flatMap { superInterface ->
+                    listOf(superInterface.assemblyName, superInterface.ownerPath.size.toString()) +
+                            superInterface.ownerPath
+                }
     }
 
     private fun DotNetPhysicalDeclaration.EnumEntry.encodeFields(): List<String> =
@@ -1519,7 +1554,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.Class {
-        require(fields.size >= 13) {
+        require(fields.size >= 14) {
             "class declaration '$logicalKey' has an incomplete CLR identity"
         }
         fun pathSize(fieldIndex: Int, view: String, allowAbsent: Boolean = false): Int {
@@ -1538,9 +1573,10 @@ object DotNetLibraryAbiCodec {
         val initializationSize = pathSize(3, "static-initialization", allowAbsent = true)
         val objectInstanceSize = pathSize(5, "object-instance", allowAbsent = true)
         val genericOwnerCapabilitySize = pathSize(11, "generic-owner capability", allowAbsent = true)
-        val expectedSize = 12 + ownerSize + initializationSize + objectInstanceSize + genericOwnerCapabilitySize
-        require(fields.size == expectedSize) {
-            "class declaration '$logicalKey' has an inconsistent CLR owner-path payload"
+        val genericOwnerCapabilitySuperInterfaceCount = fields[12].toIntOrNull()
+        require(genericOwnerCapabilitySuperInterfaceCount != null &&
+                genericOwnerCapabilitySuperInterfaceCount >= 0) {
+            "class declaration '$logicalKey' has an invalid capability superinterface count '${fields[12]}'"
         }
         require((initializationSize == 0) == fields[4].isEmpty()) {
             "class declaration '$logicalKey' has an inconsistent static-initialization identity"
@@ -1554,8 +1590,13 @@ object DotNetLibraryAbiCodec {
         require((genericOwnerCapabilitySize == 0) == fields[10].isEmpty()) {
             "class declaration '$logicalKey' has an inconsistent generic-owner capability assembly"
         }
-        var offset = 12
-        fun takePath(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
+        var offset = 13
+        fun takePath(size: Int): List<String> {
+            require(offset + size <= fields.size) {
+                "class declaration '$logicalKey' has a truncated CLR owner-path payload"
+            }
+            return fields.subList(offset, offset + size).also { offset += size }
+        }
         val ownerPath = takePath(ownerSize).requireOwnerPath(logicalKey, "runtime")
         val initialization = if (initializationSize == 0) {
             null
@@ -1574,13 +1615,36 @@ object DotNetLibraryAbiCodec {
             )
         }
         val genericOwnerAbi = if (genericOwnerCapabilitySize == 0) {
+            require(genericOwnerCapabilitySuperInterfaceCount == 0) {
+                "class declaration '$logicalKey' has capability supertypes without a capability"
+            }
             null
         } else {
+            val capabilityOwnerPath =
+                takePath(genericOwnerCapabilitySize).requireOwnerPath(logicalKey, "generic-owner capability")
+            val capabilitySuperInterfaces = List(genericOwnerCapabilitySuperInterfaceCount) {
+                require(offset + 2 <= fields.size) {
+                    "class declaration '$logicalKey' has a truncated capability superinterface"
+                }
+                val assemblyName = fields[offset++]
+                val ownerPathSize = fields[offset++].toIntOrNull()
+                require(ownerPathSize != null && ownerPathSize > 0) {
+                    "class declaration '$logicalKey' has an invalid capability superinterface path"
+                }
+                DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+                    assemblyName,
+                    takePath(ownerPathSize)
+                        .requireOwnerPath(logicalKey, "generic-owner capability superinterface"),
+                )
+            }
             DotNetGenericOwnerAbi(
                 capabilityAssemblyName = fields[10],
-                capabilityOwnerPath =
-                    takePath(genericOwnerCapabilitySize).requireOwnerPath(logicalKey, "generic-owner capability"),
+                capabilityOwnerPath = capabilityOwnerPath,
+                capabilitySuperInterfaces = capabilitySuperInterfaces,
             )
+        }
+        require(offset == fields.size) {
+            "class declaration '$logicalKey' has an inconsistent CLR owner-path payload"
         }
         return DotNetPhysicalDeclaration.Class(
             ownerPath = ownerPath,
@@ -2243,14 +2307,12 @@ internal class DotNetExternalDeclarations(
             emptyList(),
         )
         genericOwnerCapabilityInfoByLogicalKey[logicalKey] = capabilityInfo
-        if (irClass.isInterface) {
-            capabilityInfo.interfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { parentType ->
-                val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return@mapNotNull null
-                genericOwnerCapabilityInfoOrNull(parent)?.takeUnless { parentCapability ->
-                    parentCapability.assemblyName == capabilityInfo.assemblyName &&
-                            parentCapability.physicalPathComponents() == capabilityInfo.physicalPathComponents()
-                }?.let { parentCapability -> DotNetIlValueType.UserClass(parentCapability) }
-            }.distinct()
+        capabilityInfo.interfaces = genericOwnerAbi.capabilitySuperInterfaces.map { superInterface ->
+            DotNetIlValueType.UserClass(buildClassInfo(
+                superInterface.assemblyName,
+                superInterface.ownerPath,
+                emptyList(),
+            ))
         }
         return capabilityInfo
     }
@@ -2758,9 +2820,31 @@ internal fun collectDotNetLibraryDeclarations(
             require(capabilityInfo.typeParameterCount == 0) {
                 "generic-owner capability for '${irClass.render()}' must be a non-generic CLR TypeDef"
             }
+            val capabilitySuperInterfaces = capabilityInfo.interfaces.asSequence()
+                .flatMap { superInterface ->
+                    sequenceOf(superInterface) + superInterface.dotNetAllSupertypes()
+                }
+                .map { superInterface ->
+                    val superInfo = (superInterface as? DotNetIlValueType.UserClass)?.classInfo
+                        ?: error(
+                            "Internal .NET backend error: generic-owner capability for " +
+                                    "'${irClass.render()}' has a constructed or mapped superinterface"
+                        )
+                    require(superInfo.typeParameterCount == 0) {
+                        "generic-owner capability for '${irClass.render()}' has a generic superinterface"
+                    }
+                    DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+                        assemblyName = superInfo.assemblyName ?: currentAssemblyName,
+                        ownerPath = superInfo.physicalPathComponents(),
+                    )
+                }.distinct().sortedWith(compareBy(
+                    { superInterface -> superInterface.assemblyName },
+                    { superInterface -> superInterface.ownerPath.joinToString(".") },
+                )).toList()
             DotNetGenericOwnerAbi(
                 capabilityAssemblyName = capabilityInfo.assemblyName ?: currentAssemblyName,
                 capabilityOwnerPath = capabilityInfo.physicalPathComponents(),
+                capabilitySuperInterfaces = capabilitySuperInterfaces,
             )
         }
         val staticInitialization = staticInitializations[irClass]?.let { lowered ->

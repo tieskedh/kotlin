@@ -416,6 +416,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         } while (changed)
 
+        closeGenericClassCapabilityInterfaceSupertypes()
+
         fun IrType.hasClrValueGenericArgumentCarrier(): Boolean {
             if (isPrimitiveType() || isPrimitiveType(nullable = true)) return true
             val valueClassCarrier = dotNetUnboxedValueClassTypeOrNull() ?: return false
@@ -965,6 +967,57 @@ internal class DotNetReifiedGenericInterfaceLowering(
         superTypes = listOf(context.irBuiltIns.anyType) +
                 inheritedCapabilities.map { it.symbol.defaultType }
         createThisReceiverParameter()
+    }
+
+    /**
+     * Preserves every direct interface fact which is valid for all closed constructions of C<T>.
+     *
+     * A non-generic class capability cannot inherit one arbitrary construction of a reified CLR
+     * interface. It can, however, inherit that interface's semantic capability. Kotlin generic
+     * interfaces which remain declaration-erased have one physical identity for every argument,
+     * so substituting the class parameters with Any? is truthful as well. Imported CLR generics
+     * are deliberately excluded: C<Int> implementing IFoo<Int> does not imply IFoo<object>.
+     */
+    private fun closeGenericClassCapabilityInterfaceSupertypes() {
+        for (entry in context.genericOwnerCapabilityInterfaces.toList()) {
+            val owner = entry.first
+            val capability = entry.second
+            if (!owner.isDotNetGenericClassDeclaration) continue
+            val ownerSubstitutor = IrTypeSubstitutor(
+                owner.typeParameters.associate { parameter ->
+                    parameter.symbol to context.irBuiltIns.anyNType
+                },
+                allowEmptySubstitution = true,
+            )
+            for (superType in owner.dotNetDirectInterfaceTypes()) {
+                val superOwner = (superType.classifier as? IrClassSymbol)?.owner
+                    ?: continue
+                if (superOwner === capability ||
+                    superOwner.origin == DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
+                ) {
+                    continue
+                }
+                val localCapability = context.genericOwnerCapabilityInterfaces[superOwner]
+                when {
+                    localCapability != null ->
+                        capability.superTypes += localCapability.symbol.defaultType
+                    externalDeclarations.hasReifiedGenericInterface(superOwner) -> {
+                        val providers = context.externalGenericOwnerCapabilitySupertypeProviders[capability]
+                            .orEmpty()
+                        val provider = context.externalReifiedGenericInterfaceCapabilityProviders[superOwner]
+                            ?: superOwner
+                        if (provider !in providers) {
+                            context.externalGenericOwnerCapabilitySupertypeProviders[capability] =
+                                providers + provider
+                        }
+                    }
+                    superOwner.isDotNetGenericInterfaceDeclaration ->
+                        capability.superTypes += ownerSubstitutor.substitute(superType)
+                    superOwner.typeParameters.isEmpty() -> capability.superTypes += superType
+                }
+            }
+            capability.superTypes = capability.superTypes.distinct()
+        }
     }
 
     private fun materializeDeclaredSemanticSlots(

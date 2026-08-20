@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-capability-superinterface-closure-2026-08-20.md`](generic-owner-capability-superinterface-closure-2026-08-20.md)
+  records ABI 42's producer-owned complete non-generic capability-interface
+  closure, local and separate late-`for` hostile proofs, CLR-generic exclusion,
+  and the remaining final call/value-router boundary.
 - [`generic-interface-published-family-contract-2026-08-20.md`](generic-interface-published-family-contract-2026-08-20.md)
   records ABI 41's typed root/parent/member/capability contract, atomic
   external-index validation, shared local/external admission consumer, and

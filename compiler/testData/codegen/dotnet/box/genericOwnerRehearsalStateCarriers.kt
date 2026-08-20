@@ -36,6 +36,25 @@ private class RehearsalTypedInitializer<out T>(private val source: RehearsalType
     fun read(): T = observed
 }
 
+// ForLoopsLowering creates the Iterator hasNext()/next() calls after generic-owner family
+// publication. The early capability contract must therefore preserve its universal Iterator
+// superinterface without reconstructing one arbitrary C<T> construction from those later calls.
+private class RehearsalLateRoutedIterator<out T>(private val value: T) : Iterator<T> {
+    private var consumed: Boolean = false
+
+    override fun hasNext(): Boolean = !consumed
+
+    override fun next(): T {
+        consumed = true
+        return value
+    }
+}
+
+private fun rehearsalLateRoutedLoop(iterator: RehearsalLateRoutedIterator<Any?>): Any? {
+    for (value in iterator) return value
+    return null
+}
+
 // Having a typed backing field is deliberately insufficient for a custom getter: it owns
 // independent Kotlin behavior and therefore must remain subject to ordinary member routing.
 private class RehearsalCustomGetter<T>(initial: T) {
@@ -411,6 +430,12 @@ fun box(): String {
 
     val typedInitializer = RehearsalTypedInitializer(RehearsalTypedSource(42))
     if (typedInitializer.read() != 42) return "fail: typed initializer"
+
+    val lateRoutedIterator = RehearsalLateRoutedIterator(43)
+    val widenedLateRoutedIterator: RehearsalLateRoutedIterator<Any?> = lateRoutedIterator
+    if (rehearsalLateRoutedLoop(widenedLateRoutedIterator) != 43) {
+        return "fail: late-routed widened iterator"
+    }
 
     val customGetter = RehearsalCustomGetter("custom")
     if (customGetter.read() != "custom" || customGetter.readCount() != 1) return "fail: custom getter"
