@@ -486,6 +486,27 @@ verification, and work state.
   six-test `dotnet.ir` model root remained up-to-date.
   Evidence is archived in
   [`docs/archive/reified-generic-interface-defaults-2026-08-20.md`](docs/archive/reified-generic-interface-defaults-2026-08-20.md).
+- The first reified generic-interface default now also survives hostile
+  inheritance across three products. `lib.dll` owns the contravariant
+  interface and default, `middle.dll` owns the real generic
+  `OpenDefaultConsumer<T>` natural override, and an ordinary non-partial C#
+  class derives from `OpenDefaultConsumer<object>` and overrides only
+  `consumeDefault(object)`. Calls through exact
+  `DefaultConsumer<object>` and Kotlin's legal value-type-narrowed
+  `DefaultConsumer<Int>` view both reach the C# override; the Kotlin middle
+  body remains untouched and the receiver keeps one identity. No C# semantic
+  member, partial class, generated bridge, reflection, or new runtime/physical
+  ABI is involved. The first test formulation incorrectly expected the
+  optional interface authoring generator to augment this inherited class
+  case; all four lanes rejected that assertion. The corrected proof makes the
+  C# class non-partial and asserts that no generated source mentions it. The
+  enabled candidate and erased epoch-off inverse each pass four
+  PSI/LightTree, Framework 4.8/.NET 10 lanes with zero failures, errors, or
+  skips. This closes one generic Kotlin-override-to-C#-subclass default chain,
+  not multiple defaults, properties, method generics, diamonds,
+  reabstraction, changed type arguments, or deeper/multiple inheritance.
+  Evidence is archived in
+  [`docs/archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md`](docs/archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

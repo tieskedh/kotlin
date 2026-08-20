@@ -1505,11 +1505,24 @@ a type nested inside a generic interface; non-generic helpers remain nested.
 See
 [`../archive/reified-generic-interface-defaults-2026-08-20.md`](../archive/reified-generic-interface-defaults-2026-08-20.md).
 
-With that typed contract consolidated, continue with broader default families,
-broader input-bearing inheritance, broader/multiple and mixed method/property
-families, and mixed-variance gates, including derivability rules for ordinary
-foreign implementations, then close classifier-derived field and broader-input
-boundaries and deployment behavior before the Runtime/Stdlib graph.
+The first hostile default-inheritance chain is also closed across three
+products. A real generic Kotlin `OpenDefaultConsumer<T>` in a second DLL
+overrides that external default. A non-partial C# subclass of the
+`<object>` construction overrides only the natural member; exact and
+value-type-narrowed Kotlin calls both reach it without generated source or a
+C#-authored semantic member. The inherited Kotlin body is not invoked and the
+receiver retains one identity on both profiles and frontends. This required no
+new physical ABI: valid contravariant input remains a checked conversion at
+the operation boundary followed by ordinary virtual dispatch. See
+[`../archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md`](../archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md).
+
+With that typed contract consolidated, continue with multiple/property/
+method-generic default families, diamonds, reabstraction, changed-argument and
+deeper/multiple inheritance, broader input-bearing inheritance, broader and
+mixed method/property families, and mixed-variance gates, including
+derivability rules for ordinary foreign implementations. Then close
+classifier-derived field and broader-input boundaries and deployment behavior
+before the Runtime/Stdlib graph.
 Before that graph opens, split stable declaration-family publication from
 concrete call/value routing. The family contract, MethodDef ownership, and
 override/capability slots must be fixed early enough for subsequent lowerings;
