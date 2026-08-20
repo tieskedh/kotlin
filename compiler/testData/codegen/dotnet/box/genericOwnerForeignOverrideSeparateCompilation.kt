@@ -77,6 +77,31 @@ public class RehearsalSeparateDefaultPropertyReader {
     ): Boolean = producer === expected
 }
 
+private var rehearsalSeparateDefaultMethodGenericReadCount: Int = 0
+
+public interface RehearsalSeparateDefaultMethodGenericProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public fun <R> produceDefaultGeneric(value: R): T {
+        rehearsalSeparateDefaultMethodGenericReadCount += 1
+        return (1000 + (value as Int)) as T
+    }
+}
+
+public fun rehearsalSeparateDefaultMethodGenericReadCount(): Int =
+    rehearsalSeparateDefaultMethodGenericReadCount
+
+public class RehearsalSeparateDefaultMethodGenericReader {
+    public fun read(
+        producer: RehearsalSeparateDefaultMethodGenericProducer<Any?>,
+        value: Int,
+    ): Any? = producer.produceDefaultGeneric(value)
+
+    public fun same(
+        producer: RehearsalSeparateDefaultMethodGenericProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }

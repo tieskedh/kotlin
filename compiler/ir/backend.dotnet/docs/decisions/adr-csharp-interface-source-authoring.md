@@ -396,6 +396,18 @@ the same C# source property, portable helper, or DIM. In particular, C# authors 
 override only the natural property and never need to name the semantic capability. Getter and
 setter conversions are checked independently at that method boundary.
 
+A rehearsal-admitted owner- and method-generic default keeps method parameters
+generic on both views. For the bounded `<R>(R): T` family, the natural slot is
+`<R>(R): T`, the non-generic semantic capability is `<R>(R): object`, and the
+portable static helper prepends the interface owner parameters before the
+method parameters. Generated C# therefore forwards its own `R` unchanged to
+the natural source method or supplies owner arguments followed by `R` to the
+helper. It must not replace `R` with `object`, infer it from an argument, or
+close the method through reflection. Admission currently requires one
+non-reified invariant `R` with exactly the universal bound; owner-relative,
+nominal, special, and constructed method constraints remain outside this
+rehearsal gate.
+
 For a covariant generic property, the strongly typed declared view owns the canonical DIM body.
 The erased canonical interface remains an abstract CLR Property slot reached by an
 interface-owned MethodImpl adapter. CLR dispatch accepts that mapping, but Roslyn does not count

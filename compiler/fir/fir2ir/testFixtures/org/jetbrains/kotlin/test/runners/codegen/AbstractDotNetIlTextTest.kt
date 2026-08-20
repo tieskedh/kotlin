@@ -4134,6 +4134,7 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     expectedSemanticParameterTypes: List<String> = emptyList(),
     expectedNaturalReturnType: String = "!0",
     expectedNaturalParameterTypes: List<String> = emptyList(),
+    expectedMethodGenericArity: Int = 0,
     expectedDefaultKind: DotNetCSharpDefaultKind = DotNetCSharpDefaultKind.ABSTRACT,
 ) {
     val resource = checkNotNull(
@@ -4194,16 +4195,24 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     val natural = member.slots.single { slot -> slot.role == DotNetCSharpSlotRole.DECLARED }
     check(semantic.ownerPath == contract.canonicalOwnerPath &&
             semantic.propertyName == null &&
+            semantic.genericArity == expectedMethodGenericArity &&
             semantic.returnType == expectedSemanticReturnType &&
             semantic.parameterTypes == expectedSemanticParameterTypes) {
         "The declaration-semantic interface slot is not the expected object-domain capability"
     }
     check(natural.ownerPath == contract.declaredOwnerPath &&
             natural.propertyName == expectedNaturalPropertyName &&
+            natural.genericArity == expectedMethodGenericArity &&
             natural.returnType == expectedNaturalReturnType &&
             natural.parameterTypes == expectedNaturalParameterTypes) {
         "The natural generic-interface slot did not retain its CLR owner parameter"
     }
+    member.slots.singleOrNull { slot -> slot.role == DotNetCSharpSlotRole.HELPER }
+        ?.let { helper ->
+            check(helper.genericArity == contract.typeParameters.size + expectedMethodGenericArity) {
+                "The generic-interface default helper lost an owner or method type parameter"
+            }
+        }
 }
 
 /** Returns the Gradle-produced Roslyn tooling without mutating repository state inside a test. */
@@ -4290,6 +4299,24 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
                         DotNetTarget.NETSTANDARD_2_0 ->
                             error("netstandard2.0 has no executable default-property probe")
+                    },
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateDefaultMethodGenericProducer`1",
+                    expectedMemberName = "produceDefaultGeneric",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable method-generic default probe")
                     },
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
@@ -4475,6 +4502,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public int defaultPropertyValue
                 {
                     get { return 82; }
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpDefaultMethodGenericProducer :
+                RehearsalSeparateDefaultMethodGenericProducer<int>
+            {
+            }
+
+            public sealed partial class RehearsalSeparateCSharpDefaultMethodGenericOverrideProducer :
+                RehearsalSeparateDefaultMethodGenericProducer<int>
+            {
+                public int produceDefaultGeneric<R>(R value)
+                {
+                    return 2000 + (int)(object)value;
                 }
             }
 
@@ -5854,6 +5895,35 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         libKt.rehearsalSeparateDefaultPropertyReadCount() != 2)
                         throw new InvalidOperationException(
                             "generic interface default property bypassed the C# override");
+                    RehearsalSeparateDefaultMethodGenericReader defaultMethodGenericReader =
+                        new RehearsalSeparateDefaultMethodGenericReader();
+                    RehearsalSeparateCSharpDefaultMethodGenericProducer defaultMethodGenericProducer =
+                        new RehearsalSeparateCSharpDefaultMethodGenericProducer();
+                    RehearsalSeparateDefaultMethodGenericProducer<int> defaultMethodGenericProducerView =
+                        defaultMethodGenericProducer;
+                    if (defaultMethodGenericProducerView.produceDefaultGeneric<int>(7) != 1007 ||
+                        !object.Equals(
+                            defaultMethodGenericReader.read(defaultMethodGenericProducer, 8),
+                            1008) ||
+                        !defaultMethodGenericReader.same(
+                            defaultMethodGenericProducer,
+                            defaultMethodGenericProducer) ||
+                        libKt.rehearsalSeparateDefaultMethodGenericReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "generic interface method-generic default lost its body or identity");
+                    RehearsalSeparateCSharpDefaultMethodGenericOverrideProducer
+                        defaultMethodGenericOverrideProducer =
+                            new RehearsalSeparateCSharpDefaultMethodGenericOverrideProducer();
+                    if (defaultMethodGenericOverrideProducer.produceDefaultGeneric<int>(7) != 2007 ||
+                        !object.Equals(
+                            defaultMethodGenericReader.read(defaultMethodGenericOverrideProducer, 8),
+                            2008) ||
+                        !defaultMethodGenericReader.same(
+                            defaultMethodGenericOverrideProducer,
+                            defaultMethodGenericOverrideProducer) ||
+                        libKt.rehearsalSeparateDefaultMethodGenericReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "generic interface method-generic default bypassed the C# override");
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -7148,6 +7218,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpDefaultPropertyOverrideProducer" in generated) {
             "The C# authoring tool did not generate the default-property override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpDefaultMethodGenericProducer" in generated) {
+            "The C# authoring tool did not generate the method-generic default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpDefaultMethodGenericOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the method-generic default override bridge:\n$generated"
         }
         check("RehearsalSeparateCSharpDerivedDefaultConsumer" !in generated) {
             "The ordinary C# subclass unexpectedly required a generated semantic bridge:\n$generated"

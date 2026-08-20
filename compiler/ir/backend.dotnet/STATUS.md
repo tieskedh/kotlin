@@ -533,6 +533,29 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and the
   unchanged six-test `dotnet.ir` model root.
+- The first owner- and method-generic interface default is now closed for one
+  covariant root. `DefaultMethodGenericProducer<out T>.<R>(R): T` retains an
+  ordinary CLR `produceDefaultGeneric<R>(R): T` as its natural Kotlin/C# API.
+  Its non-generic semantic capability retains the same method-owned `R` and
+  changes only the owner-dependent result to `object`; the Framework helper
+  carries both owner `T` and method `R`, while .NET 10 retains the natural DIM.
+  Separate C# classes can inherit the Kotlin default or override the ordinary
+  generic method. Exact C# calls and Kotlin-widened calls observe the same
+  body or C# override and keep one receiver identity. The manifest oracle now
+  requires arity one on both interface slots and arity two on the helper, so a
+  superficially callable erased method cannot satisfy the proof. The enabled
+  candidate and erased epoch-off inverse each pass four PSI/LightTree,
+  Framework 4.8/.NET 10 lanes with zero failures, errors, or skips. Admission
+  remains limited to a default with one non-reified invariant method parameter
+  having exactly the universal bound, one direct non-defaulted/non-vararg `R`
+  input, and one non-null direct owner-`T` result. Abstract method-generic
+  roots, constraints, nullable results, child inheritance, overloads, and
+  multiple or mixed members remain separate gates. Evidence is archived in
+  [`docs/archive/reified-generic-interface-method-generic-default-2026-08-20.md`](docs/archive/reified-generic-interface-method-generic-default-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

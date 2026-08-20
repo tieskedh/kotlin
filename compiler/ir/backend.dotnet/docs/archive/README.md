@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-method-generic-default-2026-08-20.md`](reified-generic-interface-method-generic-default-2026-08-20.md)
+  records the first owner-plus-method-generic default, retained generic
+  natural and semantic MethodDefs, two-parameter portable helper, ordinary C#
+  inheritance/override behavior, and paired candidate/inverse execution.
 - [`reified-generic-interface-default-property-2026-08-20.md`](reified-generic-interface-default-property-2026-08-20.md)
   records the first covariant read-only generic default Property, Framework
   helper and .NET 10 DIM placement, method-backed semantic adapter repair,
