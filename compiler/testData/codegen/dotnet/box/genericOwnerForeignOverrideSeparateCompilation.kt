@@ -37,6 +37,10 @@ public fun rehearsalSeparateStarInvariantProduce(
     producer: RehearsalSeparateInvariantProducer<*>,
 ): Any? = producer.produceInvariant()
 
+public fun rehearsalSeparateProjectedInvariantProduce(
+    producer: RehearsalSeparateInvariantProducer<out Any?>,
+): Any? = producer.produceInvariant()
+
 public class RehearsalSeparateConsumerValue<T>(initial: T) :
     RehearsalSeparateConsumer<T> {
     private var value: T = initial
@@ -142,6 +146,11 @@ public fun <T> rehearsalSeparateStableOpenNestedBoxIdentity(
 public fun <T> rehearsalSeparateOpenInvariantProducerBoxIdentity(
     box: RehearsalSeparateNestedBox<RehearsalSeparateInvariantProducer<T>>,
 ): RehearsalSeparateNestedBox<RehearsalSeparateInvariantProducer<T>> = box
+
+public fun rehearsalSeparateProjectedInvariantProducerBox(
+    producer: RehearsalSeparateInvariantProducer<out Any?>,
+): RehearsalSeparateNestedBox<RehearsalSeparateInvariantProducer<out Any?>> =
+    RehearsalSeparateNestedBox(producer)
 
 public class RehearsalSeparateStarProducerStore(
     private val producer: RehearsalSeparateProducer<*>,
@@ -362,6 +371,27 @@ fun box(): String {
         rehearsalSeparateStarInvariantProduce(invariantProducer) != "separate-invariant"
     ) {
         return "fail: separate invariant producer"
+    }
+    val projectedInvariant: RehearsalSeparateInvariantProducer<out Any?> = invariantProducer
+    if (rehearsalSeparateProjectedInvariantProduce(projectedInvariant) !=
+        "separate-invariant" || projectedInvariant !== invariantProducer
+    ) {
+        return "fail: separate projected invariant producer"
+    }
+    val projectedInvariantBox =
+        rehearsalSeparateProjectedInvariantProducerBox(projectedInvariant)
+    if (projectedInvariantBox.read() !== invariantProducer ||
+        projectedInvariantBox.read().produceInvariant() != "separate-invariant"
+    ) {
+        return "fail: separate projected invariant producer box"
+    }
+    val projectedInvariantInt: RehearsalSeparateInvariantProducer<Int> =
+        RehearsalSeparateInvariantProducerValue(43)
+    projectedInvariantBox.write(projectedInvariantInt)
+    if (projectedInvariantBox.read() !== projectedInvariantInt ||
+        projectedInvariantBox.read().produceInvariant() != 43
+    ) {
+        return "fail: separate projected invariant producer box write"
     }
     val invariantBox = RehearsalSeparateNestedBox(invariantProducer)
     val invariantBoxIdentity =

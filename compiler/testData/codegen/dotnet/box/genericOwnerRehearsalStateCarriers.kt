@@ -114,6 +114,10 @@ private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = pro
 public fun rehearsalStarInvariantProduce(producer: RehearsalInvariantProducer<*>): Any? =
     producer.produceInvariant()
 
+public fun rehearsalProjectedInvariantProduce(
+    producer: RehearsalInvariantProducer<out Any?>,
+): Any? = producer.produceInvariant()
+
 // The owner itself always retains one !T field. A logical construction whose argument can carry
 // a CLR-unnameable semantic producer view substitutes object for this construction only; exact
 // scalar, reference, and nested-producer constructions retain their natural CLR argument.
@@ -190,6 +194,11 @@ public fun <T> rehearsalOpenInvariantProducerBoxIdentity(
     box: RehearsalNestedBox<RehearsalInvariantProducer<T>>,
 ): RehearsalNestedBox<RehearsalInvariantProducer<T>> = box
 
+public fun rehearsalProjectedInvariantProducerBox(
+    producer: RehearsalInvariantProducer<out Any?>,
+): RehearsalNestedBox<RehearsalInvariantProducer<out Any?>> =
+    RehearsalNestedBox(producer)
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -241,6 +250,24 @@ fun box(): String {
         rehearsalStarInvariantProduce(invariantString) != "invariant"
     ) {
         return "fail: invariant reference producer"
+    }
+    val projectedInvariant: RehearsalInvariantProducer<out Any?> = invariantString
+    if (rehearsalProjectedInvariantProduce(projectedInvariant) != "invariant" ||
+        projectedInvariant !== invariantString
+    ) {
+        return "fail: projected invariant producer"
+    }
+    val projectedInvariantBox = rehearsalProjectedInvariantProducerBox(projectedInvariant)
+    if (projectedInvariantBox.read() !== invariantString ||
+        projectedInvariantBox.read().produceInvariant() != "invariant"
+    ) {
+        return "fail: projected invariant producer box"
+    }
+    projectedInvariantBox.write(invariantInt)
+    if (projectedInvariantBox.read() !== invariantInt ||
+        projectedInvariantBox.read().produceInvariant() != 47
+    ) {
+        return "fail: projected invariant producer box write"
     }
 
     val intBox = RehearsalNestedBox(51)
