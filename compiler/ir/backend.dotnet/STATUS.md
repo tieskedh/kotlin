@@ -568,14 +568,40 @@ verification, and work state.
   10 lanes pass. Admission remains limited to an abstract member or proven
   default with one non-reified invariant method parameter having exactly the
   universal bound, one direct non-defaulted/non-vararg `R` input, and one
-  non-null direct owner-`T` result. Constraints, nullable results, child
-  inheritance, overloads, and multiple or mixed members remain separate
-  gates. The final normal production aggregate directly audits 190 XML suites
+  non-null direct owner-`T` result. The direct self-bound extension is recorded
+  below; further constraints, nullable results, child inheritance, overloads,
+  and multiple or mixed members remain separate gates. The final normal
+  production aggregate directly audits 190 XML suites
   and 2,287 tests with zero failures, errors, or skips: 187 freshly written
   FIR suites/2,155 tests, two freshly written integration suites/126 tests,
   and the unchanged up-to-date six-test `dotnet.ir` model root. Evidence is
   archived in
   [`docs/archive/reified-generic-interface-abstract-method-generic-2026-08-21.md`](docs/archive/reified-generic-interface-abstract-method-generic-2026-08-21.md).
+- The first constructed method constraint is now retained on a reified
+  generic-interface root. An abstract
+  `ConstrainedProducer<out T>.<R : Consumer<R>>(R): T`, where `Consumer<in R>`
+  is independently admitted as the exact one-member consumer root, emits
+  `Consumer<!!R>` on both the natural `<R>(R): T` MethodDef and the semantic
+  `<R>(R): object` MethodDef. Every copied semantic or implementation bridge
+  remaps that bound to its own method GenericParam; a separate consumer never
+  retains a producer-IR parameter identity. Generic Kotlin and ordinary
+  partial C# implementations each author only the natural method. Exact and
+  Kotlin-widened calls execute that method, preserve receiver/value identity,
+  and invoke the constraint operation. Roslyn source and metadata method
+  parameters are compared alpha-equivalently by kind and ordinal inside the
+  otherwise exact recursive constraint type. Reflection independently proves
+  one self-bound GenericParamConstraint on both interfaces implemented by the
+  C# class. All four candidate and four erased epoch-off PSI/LightTree,
+  Framework 4.8/.NET 10 lanes pass. Admission remains structural and limited
+  to this direct non-null invariant self-bound plus an abstract member;
+  constrained defaults, nominal/special/multiple bounds, nullable results,
+  inheritance, overloads, and mixed members remain separate gates. Evidence
+  is archived in
+  [`docs/archive/reified-generic-interface-constrained-method-generic-2026-08-21.md`](docs/archive/reified-generic-interface-constrained-method-generic-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

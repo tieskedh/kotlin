@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-constrained-method-generic-2026-08-21.md`](reified-generic-interface-constrained-method-generic-2026-08-21.md)
+  records the first retained constructed method constraint on a reified
+  generic-interface root, separate-compilation GenericParam remapping, ordinary
+  C# authoring, and exact metadata/execution evidence.
 - [`reified-generic-interface-abstract-method-generic-2026-08-21.md`](reified-generic-interface-abstract-method-generic-2026-08-21.md)
   records the first abstract owner-plus-method-generic interface root, exact
   natural and widened execution through Kotlin and ordinary C# implementations,

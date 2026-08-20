@@ -981,7 +981,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     /** A rehearsal-selected Kotlin `I<T>` whose one natural CLR owner has a semantic capability. */
     fun isReifiedGenericInterface(irClass: IrClass): Boolean =
-        genericOwnerRehearsal && irClass.isDotNetGenericInterfaceDeclaration &&
+        genericOwnerRehearsal && irClass.isInterface && irClass.typeParameters.isNotEmpty() &&
                 (irClass in genericOwnerCapabilities ||
                         externalDeclarations.hasReifiedGenericInterface(irClass))
 
@@ -2151,7 +2151,10 @@ internal class DotNetIlTypeMapper private constructor(
  * codegen model retains the available erased carrier. A CLR variant interface containing `R : T`
  * load-fails when `T` is variant, while retaining the constraint only on an invariant exact DIM
  * rejects valid Kotlin calls through a widened declaration-site-variance view. Portable closed
- * value-type views cannot express the substituted relationship either. The exact view still
+ * value-type views cannot express the substituted relationship either. A direct self-bound on
+ * a rehearsal-reified Kotlin interface, such as `R : Consumer<R>`, instead retains the natural
+ * constructed `Consumer<!!R>` constraint: both the interface TypeDef and the method parameter
+ * have stable CLR identities. The exact view still
  * keeps the strongly typed parameters and result; only the incompatible physical constraint is
  * weakened. A bound whose classifier is a declaration-erased Kotlin class or interface retains
  * that one non-generic physical owner as a necessarily true CLR constraint; KLIB keeps its exact
@@ -2195,6 +2198,16 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                 boundClass?.isInterface == true &&
                         boundClass.dotNetImportedClrSourceOrNull() != null &&
                         simpleBound.arguments.isNotEmpty()
+            val reifiedKotlinInterfaceSelfBound =
+                boundClass?.let(typeMapper::isReifiedGenericInterface) == true &&
+                        simpleBound.arguments.singleOrNull()?.let { argument ->
+                            val projection = argument as? IrTypeProjection ?: return@let false
+                            val parameter = (projection.type as? IrSimpleType)?.classifier as?
+                                    IrTypeParameterSymbol
+                            projection.variance == Variance.INVARIANT &&
+                                    !projection.type.isMarkedNullable() &&
+                                    parameter?.owner === this
+                        } == true
             val nullableBoundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)
                 ?.takeIf { simpleBound.isMarkedNullable() }
             if (nullableBoundParameter != null) {
@@ -2209,7 +2222,8 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                         simpleBound.arguments.isNotEmpty() &&
                                 !isComparableSelfBound &&
                                 !erasedGenericClassifierBound &&
-                                !constructedForeignInterfaceBound
+                                !constructedForeignInterfaceBound &&
+                                !reifiedKotlinInterfaceSelfBound
                         )
             ) {
                 dotNetUnsupported(
@@ -2246,6 +2260,24 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                                 "constraint for ${bound.render()}"
                     )
                 return@mapIndexedNotNull Triple(1, index, mappedBound)
+            }
+            if (reifiedKotlinInterfaceSelfBound) {
+                val declaredMapper = typeMapper.declaredGenericInterfaceView()
+                val declaredOwner = boundClass.let(declaredMapper::classInfoOrNull)
+                    ?.takeIf { info -> info.typeParameterCount == 1 }
+                    ?: dotNetUnsupported(
+                        "type parameter '${name.asString()}' has no natural CLR generic-interface " +
+                                "constraint for ${bound.render()}"
+                    )
+                val positionalSelf = DotNetIlValueType.TypeParameter(
+                    index = this.index,
+                    isMethodParameter = parent is IrFunction,
+                )
+                return@mapIndexedNotNull Triple(
+                    1,
+                    index,
+                    DotNetIlValueType.GenericInstance(declaredOwner, listOf(positionalSelf)),
+                )
             }
             val boundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)?.owner
             val erasedClassOwner = (boundParameter?.parent as? IrClass)
