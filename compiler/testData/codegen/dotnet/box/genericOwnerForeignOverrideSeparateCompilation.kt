@@ -33,6 +33,12 @@ public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }
 
+public interface RehearsalSeparateInvariantCell<T> {
+    public fun readCell(): T
+
+    public fun writeCell(value: T)
+}
+
 public fun rehearsalSeparateStarInvariantProduce(
     producer: RehearsalSeparateInvariantProducer<*>,
 ): Any? = producer.produceInvariant()
@@ -40,6 +46,39 @@ public fun rehearsalSeparateStarInvariantProduce(
 public fun rehearsalSeparateProjectedInvariantProduce(
     producer: RehearsalSeparateInvariantProducer<out Any?>,
 ): Any? = producer.produceInvariant()
+
+public fun rehearsalSeparateStarInvariantCellRead(
+    cell: RehearsalSeparateInvariantCell<*>,
+): Any? = cell.readCell()
+
+public fun rehearsalSeparateProjectedInvariantCellRead(
+    cell: RehearsalSeparateInvariantCell<out Any?>,
+): Any? = cell.readCell()
+
+public fun rehearsalSeparateProjectedInvariantCellWrite(
+    cell: RehearsalSeparateInvariantCell<in String>,
+    value: String,
+) {
+    cell.writeCell(value)
+}
+
+public fun rehearsalSeparateProjectedInvariantCellWriteResult(
+    cell: RehearsalSeparateInvariantCell<in String>,
+    value: String,
+): Any? = cell.writeCell(value)
+
+public fun <T> rehearsalSeparateOpenInvariantCellIdentity(
+    cell: RehearsalSeparateInvariantCell<T>,
+): RehearsalSeparateInvariantCell<T> = cell
+
+public class RehearsalSeparateInvariantCellValue<T>(private var value: T) :
+    RehearsalSeparateInvariantCell<T> {
+    public override fun readCell(): T = value
+
+    public override fun writeCell(value: T) {
+        this.value = value
+    }
+}
 
 public class RehearsalSeparateConsumerValue<T>(initial: T) :
     RehearsalSeparateConsumer<T> {
@@ -151,6 +190,15 @@ public fun rehearsalSeparateProjectedInvariantProducerBox(
     producer: RehearsalSeparateInvariantProducer<out Any?>,
 ): RehearsalSeparateNestedBox<RehearsalSeparateInvariantProducer<out Any?>> =
     RehearsalSeparateNestedBox(producer)
+
+public fun <T> rehearsalSeparateOpenInvariantCellBoxIdentity(
+    box: RehearsalSeparateNestedBox<RehearsalSeparateInvariantCell<T>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateInvariantCell<T>> = box
+
+public fun rehearsalSeparateProjectedInvariantCellBox(
+    cell: RehearsalSeparateInvariantCell<out Any?>,
+): RehearsalSeparateNestedBox<RehearsalSeparateInvariantCell<out Any?>> =
+    RehearsalSeparateNestedBox(cell)
 
 public class RehearsalSeparateStarProducerStore(
     private val producer: RehearsalSeparateProducer<*>,
@@ -392,6 +440,68 @@ fun box(): String {
         projectedInvariantBox.read().produceInvariant() != 43
     ) {
         return "fail: separate projected invariant producer box write"
+    }
+    val invariantCell: RehearsalSeparateInvariantCell<String> =
+        RehearsalSeparateInvariantCellValue("separate-cell")
+    invariantCell.writeCell("separate-exact-cell")
+    if (invariantCell.readCell() != "separate-exact-cell") {
+        return "fail: separate exact invariant cell"
+    }
+    val projectedOutputCell: RehearsalSeparateInvariantCell<out Any?> = invariantCell
+    if (rehearsalSeparateProjectedInvariantCellRead(projectedOutputCell) !=
+        "separate-exact-cell" ||
+        rehearsalSeparateStarInvariantCellRead(projectedOutputCell) !=
+        "separate-exact-cell" ||
+        projectedOutputCell !== invariantCell
+    ) {
+        return "fail: separate projected invariant cell read"
+    }
+    val projectedInputCell: RehearsalSeparateInvariantCell<in String> = invariantCell
+    rehearsalSeparateProjectedInvariantCellWrite(projectedInputCell, "separate-projected-cell")
+    val projectedWriteResult: Any? = rehearsalSeparateProjectedInvariantCellWriteResult(
+        projectedInputCell,
+        "separate-projected-cell-result",
+    )
+    val externalProjectedWriteResult: Any? =
+        projectedInputCell.writeCell("separate-external-projected-cell-result")
+    if (projectedWriteResult !== Unit || externalProjectedWriteResult !== Unit ||
+        invariantCell.readCell() != "separate-external-projected-cell-result" ||
+        projectedInputCell !== invariantCell
+    ) {
+        return "fail: separate projected invariant cell write"
+    }
+    val broadInvariantCell: RehearsalSeparateInvariantCell<Any?> =
+        RehearsalSeparateInvariantCellValue("separate-broad-cell")
+    val projectedBroadInputCell: RehearsalSeparateInvariantCell<in String> =
+        broadInvariantCell
+    rehearsalSeparateProjectedInvariantCellWrite(
+        projectedBroadInputCell,
+        "separate-broad-projected-cell",
+    )
+    if (broadInvariantCell.readCell() != "separate-broad-projected-cell" ||
+        projectedBroadInputCell !== broadInvariantCell
+    ) {
+        return "fail: separate broad projected invariant cell write"
+    }
+    if (rehearsalSeparateOpenInvariantCellIdentity(invariantCell) !== invariantCell) {
+        return "fail: separate open invariant cell identity"
+    }
+    val invariantCellBox = RehearsalSeparateNestedBox(invariantCell)
+    if (rehearsalSeparateOpenInvariantCellBoxIdentity(invariantCellBox) !== invariantCellBox) {
+        return "fail: separate open invariant cell box identity"
+    }
+    val projectedInvariantCellBox =
+        rehearsalSeparateProjectedInvariantCellBox(projectedOutputCell)
+    if (projectedInvariantCellBox.read() !== invariantCell) {
+        return "fail: separate projected invariant cell box identity"
+    }
+    val intInvariantCell: RehearsalSeparateInvariantCell<Int> =
+        RehearsalSeparateInvariantCellValue(61)
+    projectedInvariantCellBox.write(intInvariantCell)
+    if (projectedInvariantCellBox.read() !== intInvariantCell ||
+        rehearsalSeparateProjectedInvariantCellRead(projectedInvariantCellBox.read()) != 61
+    ) {
+        return "fail: separate projected invariant cell box mutation"
     }
     val invariantBox = RehearsalSeparateNestedBox(invariantProducer)
     val invariantBoxIdentity =
