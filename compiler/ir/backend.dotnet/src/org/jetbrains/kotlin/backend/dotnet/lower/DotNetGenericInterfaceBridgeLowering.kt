@@ -608,12 +608,16 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             overriddenSymbols = listOf(slot.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
             val bridgeTypeParameters = copyTypeParametersFrom(slot)
+            val methodSubstitution = slot.typeParameters.zip(bridgeTypeParameters).associate { pair ->
+                pair.first.symbol to pair.second.symbol.defaultType
+            }
+            val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
             val slotOwner = slot.parent as? IrClass
                 ?: error("Internal .NET backend error: generic interface bridge slot has no class owner")
             bridgeTypeParameters.forEachIndexed { index, parameter ->
                 parameter.superTypes = slot.typeParameters[index].superTypes
                     .filterNot { it.isDotNetOwnerDependentConstraint(slotOwner) }
-                    .map(bridgeTypeTransform)
+                    .map { bound -> methodSubstitutor.substitute(bridgeTypeTransform(bound)) }
                     .ifEmpty { listOf(context.irBuiltIns.anyNType) }
             }
             val ownerBoundMethodArguments =
@@ -626,10 +630,6 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         "generic interface member '${slot.name.asString()}' requires an " +
                                 "owner-relative generic adapter beyond direct method-parameter uses"
                     )
-            val methodSubstitution = slot.typeParameters.zip(bridgeTypeParameters).associate { pair ->
-                pair.first.symbol to pair.second.symbol.defaultType
-            }
-            val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
             fun bridgeType(type: IrType): IrType =
                 methodSubstitutor.substitute(bridgeTypeTransform(type))
 

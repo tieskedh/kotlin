@@ -1625,7 +1625,7 @@ internal static class KotlinImplementationEmitter
                 source.HasValueTypeConstraint != expected.HasValueTypeConstraint ||
                 source.HasUnmanagedTypeConstraint != expected.HasUnmanagedTypeConstraint ||
                 source.HasNotNullConstraint != expected.HasNotNullConstraint ||
-                !TypeArraysEqual(
+                !ConstraintTypeArraysEqual(
                     source.ConstraintTypes,
                     expected.ConstraintTypes))
                 return false;
@@ -1633,7 +1633,7 @@ internal static class KotlinImplementationEmitter
         return true;
     }
 
-    private static bool TypeArraysEqual(
+    private static bool ConstraintTypeArraysEqual(
         ImmutableArray<ITypeSymbol> left,
         ImmutableArray<ITypeSymbol> right)
     {
@@ -1641,7 +1641,46 @@ internal static class KotlinImplementationEmitter
             return false;
         for (int index = 0; index < left.Length; index++)
         {
-            if (!SymbolEqualityComparer.Default.Equals(left[index], right[index]))
+            if (!ConstraintTypesEqual(left[index], right[index]))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool ConstraintTypesEqual(
+        ITypeSymbol left,
+        ITypeSymbol right)
+    {
+        if (SymbolEqualityComparer.Default.Equals(left, right))
+            return true;
+        if (left is ITypeParameterSymbol leftParameter &&
+            right is ITypeParameterSymbol rightParameter)
+        {
+            return leftParameter.TypeParameterKind == TypeParameterKind.Method &&
+                rightParameter.TypeParameterKind == TypeParameterKind.Method &&
+                leftParameter.Ordinal == rightParameter.Ordinal;
+        }
+        if (left is IArrayTypeSymbol leftArray &&
+            right is IArrayTypeSymbol rightArray)
+        {
+            return leftArray.Rank == rightArray.Rank &&
+                leftArray.IsSZArray == rightArray.IsSZArray &&
+                ConstraintTypesEqual(
+                    leftArray.ElementType,
+                    rightArray.ElementType);
+        }
+        if (!(left is INamedTypeSymbol leftNamed) ||
+            !(right is INamedTypeSymbol rightNamed) ||
+            !SymbolEqualityComparer.Default.Equals(
+                leftNamed.OriginalDefinition,
+                rightNamed.OriginalDefinition) ||
+            leftNamed.TypeArguments.Length != rightNamed.TypeArguments.Length)
+            return false;
+        for (int index = 0; index < leftNamed.TypeArguments.Length; index++)
+        {
+            if (!ConstraintTypesEqual(
+                    leftNamed.TypeArguments[index],
+                    rightNamed.TypeArguments[index]))
                 return false;
         }
         return true;
