@@ -1494,10 +1494,21 @@ cast incompatibility with the Kotlin specification is limited to BK-1 in the
 breaking-change ledger and must not leak into ordinary variance, projections,
 or warning-free operations.
 
-With that typed contract consolidated, continue with defaults, broader input-
-bearing inheritance, broader/multiple and mixed method/property families, and
-mixed-variance gates, including derivability rules for ordinary foreign
-implementations, then close classifier-derived field and broader-input
+The first reified generic-interface default gate is now closed for one
+contravariant input member. The natural `I<T>` MethodDef remains the only
+ordinary C# entry. Framework uses the recorded top-level digest-named helper
+and generated natural-slot forwarder; .NET 10 uses the DIM. Exact and
+value-type-narrowed Kotlin views retain one object and one body, while Kotlin
+and ordinary C# overrides of the natural member are observed through the
+semantic route. The generic helper is top-level because C# cannot source-name
+a type nested inside a generic interface; non-generic helpers remain nested.
+See
+[`../archive/reified-generic-interface-defaults-2026-08-20.md`](../archive/reified-generic-interface-defaults-2026-08-20.md).
+
+With that typed contract consolidated, continue with broader default families,
+broader input-bearing inheritance, broader/multiple and mixed method/property
+families, and mixed-variance gates, including derivability rules for ordinary
+foreign implementations, then close classifier-derived field and broader-input
 boundaries and deployment behavior before the Runtime/Stdlib graph.
 Before that graph opens, split stable declaration-family publication from
 concrete call/value routing. The family contract, MethodDef ownership, and

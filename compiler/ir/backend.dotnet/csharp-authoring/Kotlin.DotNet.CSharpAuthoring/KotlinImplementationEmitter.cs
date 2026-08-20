@@ -1036,6 +1036,16 @@ internal static class KotlinImplementationEmitter
                 diagnostics);
             return;
         }
+        else if (resolved.Member.DefaultKind == KotlinDefaultKind.DimWithHelper &&
+                 resolved.RequiresDimAdapter)
+        {
+            body = DimMethodBody(
+                authoringContract,
+                resolved,
+                diagnostics);
+            if (body == null)
+                return;
+        }
         else if (HasEffectiveDim(authoringContract.ImplementationType, physicalMethod))
         {
             return;
@@ -1128,6 +1138,77 @@ internal static class KotlinImplementationEmitter
         output.Append(") ");
         output.AppendLine(body);
         output.AppendLine();
+    }
+
+    private static string? DimMethodBody(
+        AuthoringContract authoringContract,
+        ResolvedMember resolved,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        IMethodSymbol physicalMethod = resolved.Method;
+        IMethodSymbol authoringMethod = resolved.AuthoringMethod;
+        IMethodSymbol substitutedAuthoringMethod = authoringMethod.Arity == 0
+            ? authoringMethod
+            : authoringMethod.Construct(
+                physicalMethod.TypeParameters.Cast<ITypeSymbol>().ToArray());
+        if (!TryCSharpIdentifier(
+                substitutedAuthoringMethod.Name,
+                out string authoringMethodName) ||
+            !TryWrongShapePrelude(
+                authoringContract,
+                resolved,
+                physicalMethod,
+                substitutedAuthoringMethod,
+                diagnostics,
+                out string wrongShapePrelude))
+            return null;
+
+        var arguments = new List<string>();
+        for (int index = 0; index < physicalMethod.Parameters.Length; index++)
+        {
+            if (!TryConvertExpression(
+                    authoringContract.Compilation,
+                    physicalMethod.Parameters[index].Type,
+                    substitutedAuthoringMethod.Parameters[index].Type,
+                    "p" + index,
+                    out string argument))
+            {
+                ReportUnsupportedConversion(
+                    authoringContract,
+                    physicalMethod,
+                    physicalMethod.Parameters[index].Type,
+                    substitutedAuthoringMethod.Parameters[index].Type,
+                    diagnostics);
+                return null;
+            }
+            arguments.Add(argument);
+        }
+        string call = "((" + DisplayType(substitutedAuthoringMethod.ContainingType) +
+            ")this)." + authoringMethodName;
+        if (physicalMethod.Arity != 0)
+        {
+            call += "<" + string.Join(
+                ", ",
+                physicalMethod.TypeParameters.Select(parameter =>
+                    EscapeIdentifier(parameter.Name))) + ">";
+        }
+        call += "(" + string.Join(", ", arguments) + ")";
+        if (physicalMethod.ReturnsVoid)
+            return "{ " + wrongShapePrelude + call + "; }";
+        if (TryConvertExpression(
+                authoringContract.Compilation,
+                substitutedAuthoringMethod.ReturnType,
+                physicalMethod.ReturnType,
+                call,
+                out string result))
+            return "{ " + wrongShapePrelude + "return " + result + "; }";
+        ReportUnsupportedConversion(
+            authoringContract,
+            physicalMethod,
+            substitutedAuthoringMethod.ReturnType,
+            physicalMethod.ReturnType,
+            diagnostics);
+        return null;
     }
 
     private static string? MethodSourceBody(
