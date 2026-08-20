@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-three-assembly-consumer-chain-2026-08-20.md`](generic-owner-three-assembly-consumer-chain-2026-08-20.md)
+  records the property-root/consumer-child/consumer-grandchild family across
+  three Kotlin producer DLLs, producer-recorded external admission, exact
+  TypeDef/capability ownership, ordinary non-partial C# grandchildren, and
+  paired rehearsal/inverse matrices.
 - [`generic-owner-invariant-consumer-grandchild-2026-08-20.md`](generic-owner-invariant-consumer-grandchild-2026-08-20.md)
   records the bounded second invariant consumer edge, natural three-level CLR
   hierarchy, one `!T` state field, 2-to-1-to-1 inherited capability chain,
