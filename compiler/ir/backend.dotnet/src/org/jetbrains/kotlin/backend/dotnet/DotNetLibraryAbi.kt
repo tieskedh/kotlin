@@ -125,6 +125,113 @@ data class DotNetGenericOwnerAbi(
     }
 }
 
+/** Producer-selected topology of one reified Kotlin generic-interface family. */
+enum class DotNetPublishedGenericInterfaceFamilyKind {
+    ROOT,
+    DERIVED,
+    INTERSECTION,
+}
+
+/** Logical role of one member declared directly by a published interface family. */
+enum class DotNetPublishedGenericInterfaceMemberRole {
+    PRODUCER,
+    CONSUMER,
+    PROPERTY_GETTER,
+    PROPERTY_SETTER,
+}
+
+/** Whether the classifier owns a capability TypeDef or reuses one direct parent's capability. */
+enum class DotNetPublishedGenericInterfaceCapabilityBindingKind {
+    OWNED,
+    REUSED_PARENT,
+}
+
+/** One exact direct logical parent and its parent-parameter to child-parameter mapping. */
+data class DotNetPublishedGenericInterfaceParentContract(
+    val logicalOwnerKey: String,
+    val parameterMapping: List<Int>,
+) {
+    init {
+        require(logicalOwnerKey.isNotEmpty()) {
+            "a published generic-interface parent requires a logical owner key"
+        }
+        require(parameterMapping.isNotEmpty() &&
+                parameterMapping == parameterMapping.indices.toList()) {
+            "a published generic-interface parent requires an identity parameter mapping"
+        }
+    }
+}
+
+/** One logical declaration bound to its exact role in the selected physical family. */
+data class DotNetPublishedGenericInterfaceMemberContract(
+    val logicalMemberKey: String,
+    val role: DotNetPublishedGenericInterfaceMemberRole,
+) {
+    init {
+        require(logicalMemberKey.isNotEmpty()) {
+            "a published generic-interface member requires a logical member key"
+        }
+    }
+}
+
+/**
+ * Immutable producer contract consumed identically by local and separate-compilation admission.
+ *
+ * KLIB remains authoritative for the logical declaration graph. This record states which exact
+ * graph the producer physically admitted; a consumer must conjunctively validate both sources.
+ */
+data class DotNetPublishedGenericInterfaceFamilyContract(
+    val logicalOwnerKey: String,
+    val genericArity: Int,
+    val kind: DotNetPublishedGenericInterfaceFamilyKind,
+    val rootLogicalOwnerKeys: List<String>,
+    val directParents: List<DotNetPublishedGenericInterfaceParentContract>,
+    val lineageDepth: Int,
+    val declaredMembers: List<DotNetPublishedGenericInterfaceMemberContract>,
+    val capabilityBindingKind: DotNetPublishedGenericInterfaceCapabilityBindingKind,
+    val reusedParentLogicalOwnerKey: String?,
+) {
+    init {
+        require(logicalOwnerKey.isNotEmpty() && genericArity > 0) {
+            "a published generic-interface family requires a logical owner and positive arity"
+        }
+        require(rootLogicalOwnerKeys.isNotEmpty() &&
+                rootLogicalOwnerKeys.all(String::isNotEmpty) &&
+                rootLogicalOwnerKeys == rootLogicalOwnerKeys.distinct().sorted()) {
+            "published generic-interface roots must be sorted, unique logical owner keys"
+        }
+        require(directParents.map { parent -> parent.logicalOwnerKey }.toSet().size == directParents.size &&
+                directParents == directParents.sortedBy { parent -> parent.logicalOwnerKey } &&
+                directParents.all { parent -> parent.parameterMapping.size == genericArity }) {
+            "published generic-interface parents must be sorted, unique, and full-arity"
+        }
+        require(declaredMembers.map { member -> member.logicalMemberKey }.toSet().size == declaredMembers.size &&
+                declaredMembers == declaredMembers.sortedBy { member -> member.logicalMemberKey }) {
+            "published generic-interface members must be sorted and unique"
+        }
+        require(lineageDepth >= 0) { "a published generic-interface family has negative depth" }
+        require(when (kind) {
+            DotNetPublishedGenericInterfaceFamilyKind.ROOT ->
+                directParents.isEmpty() && lineageDepth == 0 && rootLogicalOwnerKeys == listOf(logicalOwnerKey)
+            DotNetPublishedGenericInterfaceFamilyKind.DERIVED ->
+                directParents.isNotEmpty() && lineageDepth > 0
+            DotNetPublishedGenericInterfaceFamilyKind.INTERSECTION ->
+                directParents.size >= 2 && lineageDepth > 0 && rootLogicalOwnerKeys.size >= 2
+        }) {
+            "published generic-interface family '$logicalOwnerKey' has inconsistent topology"
+        }
+        require(when (capabilityBindingKind) {
+            DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED ->
+                reusedParentLogicalOwnerKey == null
+            DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT ->
+                declaredMembers.isEmpty() &&
+                        directParents.any { parent -> parent.logicalOwnerKey == reusedParentLogicalOwnerKey }
+        }) {
+            "published generic-interface family '$logicalOwnerKey' has inconsistent capability binding"
+        }
+    }
+}
+
 /** Physical carrier selected for one generic-owner slot in an otherwise ordinary function. */
 enum class DotNetGenericOwnerFunctionCarrierKind {
     SEMANTIC_CAPABILITY,
@@ -422,6 +529,23 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /** Atomic physical binding for one producer-selected reified-interface family contract. */
+    data class PublishedGenericInterfaceFamily(
+        override val ownerPath: List<String>,
+        val capabilityAssemblyName: String,
+        val capabilityOwnerPath: List<String>,
+        val contract: DotNetPublishedGenericInterfaceFamilyContract,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty() && capabilityOwnerPath.isNotEmpty()) {
+                "a published generic-interface family requires natural and capability CLR owners"
+            }
+            require(capabilityAssemblyName.matches(Regex("[A-Za-z_][A-Za-z0-9_.-]*"))) {
+                "published generic-interface family '${contract.logicalOwnerKey}' has an invalid assembly"
+            }
+        }
+    }
+
 }
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
@@ -448,6 +572,9 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier.indexKey(): S
 
 internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry.indexKey(): String =
     "Q:$logicalFunctionKey"
+
+internal fun DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily.indexKey(): String =
+    "H:${contract.logicalOwnerKey}"
 
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
 data class DotNetPortablePhysicalAbiDifference(
@@ -509,13 +636,13 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "40"
+    const val ABI_VERSION = "41"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
     const val PHYSICAL_NAME_GRAMMAR_VERSION = "3"
     const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
-    const val CURRENT_RUNTIME_SURFACE_LEVEL = 40
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 41
     const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
     const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"
@@ -566,6 +693,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.CovariantReturnBridge -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerMemberFamily -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
@@ -590,6 +718,7 @@ object DotNetLibraryAbiCodec {
                 "R" -> decodeCovariantReturnBridge(fields, logicalKey)
                 "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
                 "G" -> decodeGenericOwnerMemberFamily(fields, logicalKey)
+                "H" -> decodePublishedGenericInterfaceFamily(fields, logicalKey)
                 "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
                 "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
                 else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
@@ -1200,6 +1329,117 @@ object DotNetLibraryAbiCodec {
         return family
     }
 
+    private fun DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily.encodeFields(): List<String> {
+        val roots = contract.rootLogicalOwnerKeys
+        val parents = contract.directParents
+        val members = contract.declaredMembers
+        return listOf(
+            "H",
+            contract.logicalOwnerKey,
+            contract.genericArity.toString(),
+            contract.kind.name,
+            contract.lineageDepth.toString(),
+            contract.capabilityBindingKind.name,
+            contract.reusedParentLogicalOwnerKey.orEmpty(),
+            ownerPath.size.toString(),
+            capabilityAssemblyName,
+            capabilityOwnerPath.size.toString(),
+            roots.size.toString(),
+            parents.size.toString(),
+            members.size.toString(),
+        ) + ownerPath + capabilityOwnerPath + roots +
+                parents.flatMap { parent ->
+                    listOf(parent.logicalOwnerKey, parent.parameterMapping.joinToString(","))
+                } + members.flatMap { member ->
+                    listOf(member.logicalMemberKey, member.role.name)
+                }
+    }
+
+    private fun decodePublishedGenericInterfaceFamily(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily {
+        require(fields.size >= 16) {
+            "published generic-interface family '$logicalKey' has an incomplete physical contract"
+        }
+        fun positiveCount(index: Int, role: String): Int = fields[index].toIntOrNull().also { count ->
+            require(count != null && count > 0) {
+                "published generic-interface family '$logicalKey' has invalid $role count '${fields[index]}'"
+            }
+        }!!
+        fun nonNegativeCount(index: Int, role: String): Int = fields[index].toIntOrNull().also { count ->
+            require(count != null && count >= 0) {
+                "published generic-interface family '$logicalKey' has invalid $role count '${fields[index]}'"
+            }
+        }!!
+        val genericArity = positiveCount(2, "generic-parameter")
+        val kind = DotNetPublishedGenericInterfaceFamilyKind.entries.singleOrNull { kind ->
+            kind.name == fields[3]
+        } ?: throw IllegalArgumentException(
+            "published generic-interface family '$logicalKey' has invalid kind '${fields[3]}'"
+        )
+        val lineageDepth = nonNegativeCount(4, "lineage-depth")
+        val capabilityBinding = DotNetPublishedGenericInterfaceCapabilityBindingKind.entries.singleOrNull { binding ->
+            binding.name == fields[5]
+        } ?: throw IllegalArgumentException(
+            "published generic-interface family '$logicalKey' has invalid capability binding '${fields[5]}'"
+        )
+        val ownerSize = positiveCount(7, "natural-owner path")
+        val capabilitySize = positiveCount(9, "capability-owner path")
+        val rootCount = positiveCount(10, "root")
+        val parentCount = nonNegativeCount(11, "parent")
+        val memberCount = nonNegativeCount(12, "member")
+        val expectedSize = 13 + ownerSize + capabilitySize + rootCount + parentCount * 2 + memberCount * 2
+        require(fields.size == expectedSize) {
+            "published generic-interface family '$logicalKey' has an inconsistent physical payload"
+        }
+        var offset = 13
+        fun take(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
+        val ownerPath = take(ownerSize).requireOwnerPath(logicalKey, "published natural owner")
+        val capabilityOwnerPath = take(capabilitySize)
+            .requireOwnerPath(logicalKey, "published capability owner")
+        val roots = take(rootCount)
+        val parents = List(parentCount) {
+            val parentKey = fields[offset++]
+            val mapping = fields[offset++].split(',').map { index ->
+                index.toIntOrNull() ?: throw IllegalArgumentException(
+                    "published generic-interface family '$logicalKey' has an invalid parent mapping"
+                )
+            }
+            DotNetPublishedGenericInterfaceParentContract(parentKey, mapping)
+        }
+        val members = List(memberCount) {
+            val memberKey = fields[offset++]
+            val roleName = fields[offset++]
+            val role = DotNetPublishedGenericInterfaceMemberRole.entries.singleOrNull { role ->
+                role.name == roleName
+            } ?: throw IllegalArgumentException(
+                "published generic-interface family '$logicalKey' has invalid member role '$roleName'"
+            )
+            DotNetPublishedGenericInterfaceMemberContract(memberKey, role)
+        }
+        return DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+            ownerPath = ownerPath,
+            capabilityAssemblyName = fields[8],
+            capabilityOwnerPath = capabilityOwnerPath,
+            contract = DotNetPublishedGenericInterfaceFamilyContract(
+                logicalOwnerKey = fields[1],
+                genericArity = genericArity,
+                kind = kind,
+                rootLogicalOwnerKeys = roots,
+                directParents = parents,
+                lineageDepth = lineageDepth,
+                declaredMembers = members,
+                capabilityBindingKind = capabilityBinding,
+                reusedParentLogicalOwnerKey = fields[6].takeIf(String::isNotEmpty),
+            ),
+        ).also { family ->
+            require(family.indexKey() == logicalKey) {
+                "published generic-interface family '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
     private fun decodeInterfaceDefaultClassForwarder(
         fields: List<String>,
         logicalKey: String,
@@ -1676,6 +1916,11 @@ internal data class DotNetBoundGenericOwnerFunctionInputEntry(
     val entry: DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry,
 )
 
+internal data class DotNetBoundPublishedGenericInterfaceFamily(
+    val library: DotNetExternalLibrary,
+    val family: DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily,
+)
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -1759,6 +2004,94 @@ internal class DotNetExternalDeclarationIndex(
                     }
             }
         }
+    internal val publishedGenericInterfaceFamiliesByLogicalKey:
+        Map<String, DotNetBoundPublishedGenericInterfaceFamily> = buildMap {
+            libraries.forEach { library ->
+                library.declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                    .forEach { family ->
+                        val logicalOwnerKey = family.contract.logicalOwnerKey
+                        require(put(
+                            logicalOwnerKey,
+                            DotNetBoundPublishedGenericInterfaceFamily(library, family),
+                        ) == null) {
+                            "duplicate external Kotlin/.NET published generic-interface family " +
+                                    "'$logicalOwnerKey'"
+                        }
+                    }
+            }
+        }
+
+    init {
+        publishedGenericInterfaceFamiliesByLogicalKey.forEach { entry ->
+            val logicalOwnerKey = entry.key
+            val boundFamily = entry.value
+            val family = boundFamily.family
+            val classBinding = declarations[logicalOwnerKey]
+            val classDeclaration = classBinding?.declaration as? DotNetPhysicalDeclaration.Class
+            val genericOwnerAbi = classDeclaration?.genericOwnerAbi
+            require(classBinding?.library === boundFamily.library && classDeclaration != null &&
+                    classDeclaration.ownerPath == family.ownerPath &&
+                    classDeclaration.physicalTypeParameterCount == family.contract.genericArity &&
+                    genericOwnerAbi != null &&
+                    genericOwnerAbi.capabilityAssemblyName == family.capabilityAssemblyName &&
+                    genericOwnerAbi.capabilityOwnerPath == family.capabilityOwnerPath
+            ) {
+                "published generic-interface family '$logicalOwnerKey' is inconsistent with its class record"
+            }
+            family.contract.declaredMembers.forEach { member ->
+                val memberFamily = genericOwnerMemberFamiliesByLogicalKey[member.logicalMemberKey]
+                require(memberFamily != null && memberFamily.library === boundFamily.library &&
+                        memberFamily.family.ownerLogicalKey == logicalOwnerKey) {
+                    "published generic-interface member '${member.logicalMemberKey}' lacks its producer family"
+                }
+            }
+            val parentFamilies = family.contract.directParents.map { parent ->
+                publishedGenericInterfaceFamiliesByLogicalKey[parent.logicalOwnerKey]?.family
+                    ?: throw IllegalArgumentException(
+                        "published generic-interface family '$logicalOwnerKey' lacks parent " +
+                                "'${parent.logicalOwnerKey}'"
+                    )
+            }
+            require(family.contract.directParents.indices.all { index ->
+                family.contract.directParents[index].parameterMapping.size ==
+                        parentFamilies[index].contract.genericArity
+            }) {
+                "published generic-interface family '$logicalOwnerKey' has a partial parent mapping"
+            }
+            if (parentFamilies.isNotEmpty()) {
+                require(family.contract.lineageDepth ==
+                        parentFamilies.maxOf { parent -> parent.contract.lineageDepth } + 1 &&
+                        family.contract.rootLogicalOwnerKeys == parentFamilies
+                            .flatMap { parent -> parent.contract.rootLogicalOwnerKeys }
+                            .distinct()
+                            .sorted()
+                ) {
+                    "published generic-interface family '$logicalOwnerKey' has inconsistent ancestry"
+                }
+            }
+            when (family.contract.capabilityBindingKind) {
+                DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED -> require(
+                    parentFamilies.none { parent ->
+                        parent.capabilityAssemblyName == family.capabilityAssemblyName &&
+                                parent.capabilityOwnerPath == family.capabilityOwnerPath
+                    }
+                ) {
+                    "published generic-interface family '$logicalOwnerKey' claims an inherited capability"
+                }
+                DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT -> {
+                    val reusedParent = parentFamilies.single { parent ->
+                        parent.contract.logicalOwnerKey == family.contract.reusedParentLogicalOwnerKey
+                    }
+                    require(reusedParent.capabilityAssemblyName == family.capabilityAssemblyName &&
+                            reusedParent.capabilityOwnerPath == family.capabilityOwnerPath
+                    ) {
+                        "published generic-interface family '$logicalOwnerKey' reuses the wrong capability"
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -1780,6 +2113,8 @@ internal class DotNetExternalDeclarations(
     private val genericOwnerFunctionCarriersByLogicalKey = index.genericOwnerFunctionCarriersByLogicalKey
     private val genericOwnerFunctionInputEntriesByLogicalKey =
         index.genericOwnerFunctionInputEntriesByLogicalKey
+    private val publishedGenericInterfaceFamiliesByLogicalKey =
+        index.publishedGenericInterfaceFamiliesByLogicalKey
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val classLinksInProgress = hashSetOf<String>()
@@ -1825,6 +2160,14 @@ internal class DotNetExternalDeclarations(
             ?: return false
         return declaration.physicalTypeParameterCount == irClass.typeParameters.size &&
                 declaration.genericOwnerAbi != null
+    }
+
+    /** Exact producer-selected family contract; existence of a reified owner is insufficient. */
+    fun publishedGenericInterfaceFamilyOrNull(
+        irClass: IrClass,
+    ): DotNetPublishedGenericInterfaceFamilyContract? {
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
+        return publishedGenericInterfaceFamiliesByLogicalKey[logicalKey]?.family?.contract
     }
 
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
@@ -2344,6 +2687,8 @@ internal fun collectDotNetLibraryDeclarations(
     genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
     currentAssemblyName: String,
     genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
+    publishedGenericInterfaceFamilies:
+        Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -2786,5 +3131,41 @@ internal fun collectDotNetLibraryDeclarations(
                 ?: forwarder.implementation.dotNetIlMethodName(),
         )
         put(declaration.indexKey(), declaration)
+    }
+    for (entry in publishedGenericInterfaceFamilies) {
+        val owner = entry.key
+        val contract = entry.value
+        if (owner.fileOrNull !in files) continue
+        val logicalOwnerKey = preLoweringDeclarationKeys[owner]
+            ?: continue
+        require(contract.logicalOwnerKey == logicalOwnerKey) {
+            "published generic-interface family for '${owner.render()}' has a stale logical identity"
+        }
+        val ownerInfo = availableClasses[owner]
+            ?: error(
+                "Internal .NET backend error: published generic-interface owner " +
+                        "'${owner.render()}' did not survive physical emission"
+            )
+        val capabilityInfo = genericOwnerCapabilities[owner]
+            ?: error(
+                "Internal .NET backend error: published generic-interface owner " +
+                        "'${owner.render()}' has no physical capability"
+            )
+        val family = DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+            ownerPath = ownerInfo.physicalPathComponents(),
+            capabilityAssemblyName = capabilityInfo.assemblyName ?: currentAssemblyName,
+            capabilityOwnerPath = capabilityInfo.physicalPathComponents(),
+            contract = contract,
+        )
+        contract.declaredMembers.forEach { member ->
+            val memberFamily = this["G:${member.logicalMemberKey}"]
+                    as? DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+            require(memberFamily?.ownerLogicalKey == logicalOwnerKey) {
+                "published generic-interface member '${member.logicalMemberKey}' lacks its local physical family"
+            }
+        }
+        require(put(family.indexKey(), family) == null) {
+            "multiple published generic-interface contracts claim '$logicalOwnerKey'"
+        }
     }
 }
