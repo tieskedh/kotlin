@@ -104,8 +104,9 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
- * returning its owner parameter directly, one covariant root default `<R>(R) -> T` whose method
- * parameter has only the universal bound, a public contravariant consumer with one abstract
+ * returning its owner parameter directly, one covariant root `<R>(R) -> T` whose method parameter
+ * has only the universal bound and whose member is abstract or has a default implementation, a
+ * public contravariant consumer with one abstract
  * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
@@ -1382,7 +1383,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
         ownerParameter: IrTypeParameter,
     ): Boolean {
         val hasDefaultImplementation = this in context.interfaceDefaultImplementations
-        if (!hasDefaultImplementation || visibility != DescriptorVisibilities.PUBLIC ||
+        if ((!hasDefaultImplementation && modality != Modality.ABSTRACT) ||
+            visibility != DescriptorVisibilities.PUBLIC ||
             correspondingPropertySymbol != null || isSuspend
         ) {
             return false

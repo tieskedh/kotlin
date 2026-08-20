@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-abstract-method-generic-2026-08-21.md`](reified-generic-interface-abstract-method-generic-2026-08-21.md)
+  records the first abstract owner-plus-method-generic interface root, exact
+  natural and widened execution through Kotlin and ordinary C# implementations,
+  and paired candidate/inverse execution.
 - [`reified-generic-interface-method-generic-default-2026-08-20.md`](reified-generic-interface-method-generic-default-2026-08-20.md)
   records the first owner-plus-method-generic default, retained generic
   natural and semantic MethodDefs, two-parameter portable helper, ordinary C#
