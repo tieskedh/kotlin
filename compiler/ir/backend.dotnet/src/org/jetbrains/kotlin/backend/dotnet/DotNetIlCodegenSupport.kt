@@ -55,6 +55,7 @@ import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.eraseTypeParameters
 import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.getInlineClassBackingField
 import org.jetbrains.kotlin.ir.util.getInlineClassUnderlyingType
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isNullable
@@ -1423,6 +1424,20 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     private fun genericOwnerCapabilityTypeOrNull(
+        declaration: IrDeclaration,
+        type: IrType,
+    ): DotNetIlValueType? = genericOwnerValueClassCarrierTypeOrNull(type)
+        ?: directGenericOwnerCapabilityTypeOrNull(declaration, type)
+
+    /** The one declaration-selected carrier of a non-null unboxed value-class occurrence. */
+    fun genericOwnerValueClassCarrierTypeOrNull(type: IrType): DotNetIlValueType? {
+        val underlyingType = type.dotNetUnboxedValueClassTypeOrNull() ?: return null
+        val valueClass = type.dotNetValueClassOrNull() ?: return null
+        val backingField = getInlineClassBackingField(valueClass)
+        return directGenericOwnerCapabilityTypeOrNull(backingField, underlyingType)
+    }
+
+    private fun directGenericOwnerCapabilityTypeOrNull(
         declaration: IrDeclaration,
         type: IrType,
     ): DotNetIlValueType? {

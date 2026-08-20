@@ -523,6 +523,28 @@ public fun <T> rehearsalSeparateOpenInvariantPropertyConsumerGrandchildIdentity(
 // MODULE: main(leaf)
 // FILE: main.kt
 
+// Common deep-copies this consumer-owned init body after the external producer family has been
+// bound. Final routing must recover the producer-recorded capability from the stable library ABI.
+private value class RehearsalSeparateLateRoutedValue(
+    val producer: RehearsalSeparateProducer<Any?>,
+) {
+    init {
+        check(producer.produce() == 31)
+    }
+
+    fun read(): Any? = producer.produce()
+}
+
+private value class RehearsalSeparateLateRoutedOwnerValue(
+    val store: RehearsalSeparateStore<Any?>,
+) {
+    init {
+        check(store.read() == 23)
+    }
+
+    fun read(): Any? = store.read()
+}
+
 private fun rehearsalSeparateLateRoutedLoop(
     iterator: RehearsalSeparateLateRoutedIterator<Any?>,
 ): Any? {
@@ -541,6 +563,13 @@ fun box(): String {
         lateRoutedIterator
     if (rehearsalSeparateLateRoutedLoop(widenedLateRoutedIterator) != 29) {
         return "fail: separate late-routed widened iterator"
+    }
+
+    val lateRoutedOwnerSource = RehearsalSeparateStore(23)
+    val lateRoutedOwnerView: RehearsalSeparateStore<Any?> = lateRoutedOwnerSource
+    val lateRoutedOwnerValue = RehearsalSeparateLateRoutedOwnerValue(lateRoutedOwnerView)
+    if (lateRoutedOwnerValue.read() != 23) {
+        return "fail: separate late-routed generic owner"
     }
 
     val exact = RehearsalSeparateKotlinOverrideStore(11)
@@ -565,6 +594,10 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val lateRoutedValue = RehearsalSeparateLateRoutedValue(broadProducer)
+    if (lateRoutedValue.read() != 31) {
+        return "fail: separate late-routed value-class producer"
+    }
     val invariantProducer: RehearsalSeparateInvariantProducer<String> =
         RehearsalSeparateInvariantProducerValue("separate-invariant")
     if (invariantProducer.produceInvariant() != "separate-invariant" ||

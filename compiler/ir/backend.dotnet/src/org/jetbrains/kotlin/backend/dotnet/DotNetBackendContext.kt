@@ -213,6 +213,9 @@ internal class DotNetBackendContext(
     /** External reified-interface member to its producer-bound, un-emitted semantic slot stub. */
     val externalReifiedGenericInterfaceCapabilitySlots:
         MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** External generic-class member to its producer-bound, un-emitted capability slot stub. */
+    val externalGenericOwnerCapabilitySlots:
+        MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its instance capability slot for masked defaults. */
     val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */
@@ -239,6 +242,9 @@ internal class DotNetBackendContext(
     /** Rehearsal-only value/field/function slots whose proven Kotlin view is wider than one C<T>. */
     val genericOwnerCapabilityDeclarations: MutableSet<IrDeclaration> =
         java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+    /** Early-proven exact interface slots which a final routing rescan must never degrade. */
+    val genericOwnerExactInterfaceDeclarationTypes: MutableMap<IrDeclaration, IrType> =
+        java.util.IdentityHashMap()
     /** Natural C<T> slots proven to contain a Kotlin object which also implements its capability. */
     val genericOwnerCapabilityBearingDeclarations: MutableSet<IrDeclaration> =
         java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
