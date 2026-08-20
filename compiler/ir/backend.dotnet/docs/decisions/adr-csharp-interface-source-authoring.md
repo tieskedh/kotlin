@@ -387,6 +387,15 @@ locators for both accessors; generated explicit properties batch the syntax only
 each accessor's semantic member independently. Tooling must never select one parent as the owner
 of the whole mutable property.
 
+A reified Kotlin-owned generic property has two intentionally different physical forms: its
+natural generic interface owns the ordinary CLR Property row, while the non-generic declaration-
+semantic capability owns regular MethodDefs. The logical member kind does not erase that physical
+distinction. Tooling groups and emits property syntax only for locators which name a Property row;
+a method-backed semantic accessor is emitted as an explicit compiler-ABI method which forwards to
+the same C# source property, portable helper, or DIM. In particular, C# authors implement or
+override only the natural property and never need to name the semantic capability. Getter and
+setter conversions are checked independently at that method boundary.
+
 For a covariant generic property, the strongly typed declared view owns the canonical DIM body.
 The erased canonical interface remains an abstract CLR Property slot reached by an
 interface-owned MethodImpl adapter. CLR dispatch accepts that mapping, but Roslyn does not count
