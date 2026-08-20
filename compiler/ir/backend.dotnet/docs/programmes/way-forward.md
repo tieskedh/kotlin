@@ -1544,12 +1544,23 @@ the compiler or authoring generator supplies the semantic capability without
 making it part of normal C# source. See
 [`../archive/reified-generic-interface-abstract-method-generic-2026-08-21.md`](../archive/reified-generic-interface-abstract-method-generic-2026-08-21.md).
 
+The first constructed method-constraint gate is now closed for the abstract
+root `<R : Consumer<R>>(R): T`, where the bound owner is independently proven
+as the admitted one-member contravariant consumer root. Natural and semantic
+MethodDefs both retain the exact `Consumer<!!R>` GenericParamConstraint and
+every local, external, or implementation bridge remaps it to that MethodDef's
+own method parameter. C# authors still implement only the natural generic
+method; authoring tooling compares the source and metadata constraints alpha-
+equivalently by method-parameter ordinal rather than requiring the two Roslyn
+symbols to be identical. See
+[`../archive/reified-generic-interface-constrained-method-generic-2026-08-21.md`](../archive/reified-generic-interface-constrained-method-generic-2026-08-21.md).
+
 With that typed contract consolidated, continue with multiple-property
-families, constrained method-generic roots, read-only property
-inheritance, diamonds, reabstraction, changed-argument and deeper/multiple
-inheritance, broader input-bearing inheritance, broader and mixed
-method/property families, and mixed-variance gates, including derivability
-rules for ordinary foreign implementations. Then close
+families, further nominal/special/multiple method constraints and constrained
+defaults, read-only property inheritance, diamonds, reabstraction, changed-
+argument and deeper/multiple inheritance, broader input-bearing inheritance,
+broader and mixed method/property families, and mixed-variance gates,
+including derivability rules for ordinary foreign implementations. Then close
 classifier-derived field and broader-input boundaries and deployment behavior
 before the Runtime/Stdlib graph.
 Before that graph opens, split stable declaration-family publication from

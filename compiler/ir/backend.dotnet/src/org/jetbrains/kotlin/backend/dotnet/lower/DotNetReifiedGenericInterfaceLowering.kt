@@ -105,7 +105,9 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
  * returning its owner parameter directly, one covariant root `<R>(R) -> T` whose method parameter
- * has only the universal bound and whose member is abstract or has a default implementation, a
+ * has the universal bound and whose member is abstract or has a default implementation, or whose
+ * method parameter has one direct self-bound on an admitted consumer root and whose member is
+ * abstract, a
  * public contravariant consumer with one abstract
  * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
@@ -1177,6 +1179,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     },
                     allowEmptySubstitution = true,
                 )
+                copiedMethodParameters.forEachIndexed { index, copied ->
+                    copied.superTypes = source.typeParameters[index].superTypes
+                        .map(methodSubstitutor::substitute)
+                }
                 fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
                     type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
                 )
@@ -1389,7 +1395,24 @@ internal class DotNetReifiedGenericInterfaceLowering(
         ) {
             return false
         }
-        return hasDirectMethodGenericProducerSignature(ownerParameter)
+        if (hasDefaultImplementation &&
+            typeParameters.singleOrNull()?.superTypes?.singleOrNull()?.isNullableAny() != true
+        ) {
+            return false
+        }
+        return hasDirectMethodGenericProducerSignature(
+            ownerParameter,
+            { constraintOwner -> constraintOwner.isDirectMethodConstraintConsumerRoot() },
+        )
+    }
+
+    private fun IrClass.isDirectMethodConstraintConsumerRoot(): Boolean {
+        if (!hasLogicalReifiedInterfaceOwnerShape() || dotNetDirectInterfaceTypes().isNotEmpty()) {
+            return false
+        }
+        val parameter = typeParameters.singleOrNull() ?: return false
+        return parameter.variance == Variance.IN_VARIANCE &&
+                declaredInterfaceMembers().singleOrNull()?.isDirectConsumerMember(parameter) == true
     }
 
     private fun IrSimpleFunction.isDirectConsumerMember(parameter: IrTypeParameter): Boolean {
@@ -1466,7 +1489,14 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
     val ownerParameter = owner.typeParameters.single()
     require(source.parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver &&
             (source.typeParameters.isEmpty() ||
-                    source.hasDirectMethodGenericProducerSignature(ownerParameter))) {
+                    source.hasDirectMethodGenericProducerSignature(ownerParameter) { constraintOwner ->
+                        val contract = externalDeclarations
+                            .publishedGenericInterfaceFamilyOrNull(constraintOwner)
+                        constraintOwner.typeParameters.singleOrNull()?.variance == Variance.IN_VARIANCE &&
+                                contract?.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                                contract.declaredMembers.singleOrNull()?.role ==
+                                    DotNetPublishedGenericInterfaceMemberRole.CONSUMER
+                    })) {
         "External reified-interface member '${source.name}' is outside the admitted structural family"
     }
     val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
@@ -1489,6 +1519,10 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
             },
             allowEmptySubstitution = true,
         )
+        copiedMethodParameters.forEachIndexed { index, copied ->
+            copied.superTypes = source.typeParameters[index].superTypes
+                .map(methodSubstitutor::substitute)
+        }
         fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
             type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
         )
@@ -1515,11 +1549,17 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
 
 private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     ownerParameter: IrTypeParameter,
+    isAdmittedConstraintOwner: (IrClass) -> Boolean = { false },
 ): Boolean {
     val methodParameter = typeParameters.singleOrNull() ?: return false
+    val methodBound = methodParameter.superTypes.singleOrNull() ?: return false
     if (methodParameter.parent !== this || methodParameter.isReified ||
         methodParameter.variance != Variance.INVARIANT ||
-        methodParameter.superTypes.singleOrNull()?.isNullableAny() != true
+        (!methodBound.isNullableAny() &&
+                !methodBound.isDirectSelfInterfaceConstraint(
+                    methodParameter,
+                    isAdmittedConstraintOwner,
+                ))
     ) {
         return false
     }
@@ -1539,6 +1579,20 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     if (inputType.isMarkedNullable() || resultType.isMarkedNullable()) return false
     return (inputType.classifier as? IrTypeParameterSymbol)?.owner === methodParameter &&
             (resultType.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
+}
+
+private fun IrType.isDirectSelfInterfaceConstraint(
+    methodParameter: IrTypeParameter,
+    isAdmittedConstraintOwner: (IrClass) -> Boolean,
+): Boolean {
+    val simpleType = this as? IrSimpleType ?: return false
+    if (simpleType.isMarkedNullable()) return false
+    val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
+    if (!owner.isInterface || !isAdmittedConstraintOwner(owner)) return false
+    val argument = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+    val argumentType = argument.type as? IrSimpleType ?: return false
+    return argument.variance == Variance.INVARIANT && !argumentType.isMarkedNullable() &&
+            (argumentType.classifier as? IrTypeParameterSymbol)?.owner === methodParameter
 }
 
 private fun IrType.semanticInterfaceSlotType(
