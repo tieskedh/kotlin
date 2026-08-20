@@ -345,6 +345,27 @@ methods. The authoring proof uses the transitive constructed root contract.
 Admission reconstructs exactly the first property-root consumer child and does
 not recursively admit a third edge.
 
+That same bounded edge now crosses three Kotlin producer assemblies. The
+property root, first consumer, and second consumer each own their natural
+TypeDef and corresponding capability in a different DLL. A consumer may not
+reapply the local-`IrFile` ownership test to an external parent: external
+admission instead requires the exact logical KLIB parent/root shapes, the
+producer's full-arity generic-owner records, and producer-recorded member
+families for the child consumer and both root property accessors. Reflection
+proves the natural and 2-to-1-to-1 capability chains retain those three owners
+without copied slots. This physical evidence does not broaden the admitted
+declaration family.
+
+The current ABI-40 deployment proof expresses that admission as an exact
+conjunction of logical structure, full-arity owner records, and member-family
+records. Before the family broadens, replace that conjunction with one typed
+published-family contract containing family kind, direct parent/root keys,
+identity parameter mapping, bounded depth, declared member roles, and
+capability binding. Local declaration analysis and external ABI decoding must
+produce the same immutable contract; child admission must not know which path
+produced it. The KLIB remains authoritative for the logical edge and the
+physical record remains authoritative for the producer-selected family.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
