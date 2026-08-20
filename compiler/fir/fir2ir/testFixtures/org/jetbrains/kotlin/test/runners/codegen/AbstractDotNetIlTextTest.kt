@@ -4392,6 +4392,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         !object.ReferenceEquals(rawProducer, rawProducer))
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch did not preserve the precompiled C# object");
+                    RehearsalSeparateNestedBox<object> rawOpenBox =
+                        (RehearsalSeparateNestedBox<object>)
+                            libKt.rehearsalSeparateOpenProducerBox<int>(rawProducer);
+                    if (!object.ReferenceEquals(rawOpenBox.read(), rawProducer))
+                        throw new InvalidOperationException(
+                            "the open nested construction rejected or replaced a natural C# producer");
                     RehearsalSeparateRawCSharpExplicitProducer rawExplicit =
                         new RehearsalSeparateRawCSharpExplicitProducer();
                     RehearsalSeparateProducer<int> rawExplicitExact = rawExplicit;
@@ -4518,6 +4524,50 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             RehearsalSeparateConsumer<RehearsalSeparateNestedCat>>))
                         throw new InvalidOperationException(
                             "the separate reference-only consumer was unnecessarily widened");
+                    System.Reflection.MethodInfo separateOpenProducerBox = typeof(libKt)
+                        .GetMethod("rehearsalSeparateOpenProducerBox");
+                    Type separateOpenProducerParameter = separateOpenProducerBox
+                        .GetParameters()[0].ParameterType;
+                    if (separateOpenProducerParameter != typeof(object) ||
+                            separateOpenProducerBox.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate open producer construction lacked an object boundary");
+                    System.Reflection.MethodInfo separateOpenConsumerBox = typeof(libKt)
+                        .GetMethod("rehearsalSeparateOpenConsumerBox");
+                    Type separateOpenConsumerParameter = separateOpenConsumerBox
+                        .GetParameters()[0].ParameterType;
+                    if (separateOpenConsumerParameter != typeof(object) ||
+                            separateOpenConsumerBox.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate open consumer construction lacked an object boundary");
+                    System.Reflection.MethodInfo separateOpenProducerIdentity = typeof(libKt)
+                        .GetMethod("rehearsalSeparateOpenProducerBoxIdentity");
+                    if (separateOpenProducerIdentity.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                            separateOpenProducerIdentity.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate open producer box boundary was not object-to-object");
+                    System.Reflection.MethodInfo separateOpenConsumerIdentity = typeof(libKt)
+                        .GetMethod("rehearsalSeparateOpenConsumerBoxIdentity");
+                    if (separateOpenConsumerIdentity.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                            separateOpenConsumerIdentity.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate open consumer box boundary was not object-to-object");
+                    System.Reflection.MethodInfo separateStableOpenIdentity = typeof(libKt)
+                        .GetMethod("rehearsalSeparateStableOpenNestedBoxIdentity");
+                    Type separateStableOpenParameter = separateStableOpenIdentity
+                        .GetParameters()[0].ParameterType;
+                    if (!separateStableOpenParameter.IsGenericType ||
+                            separateStableOpenIdentity.ReturnType != separateStableOpenParameter ||
+                            separateStableOpenParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateNestedBox<>) ||
+                            !separateStableOpenParameter.GetGenericArguments()[0].IsGenericType ||
+                            separateStableOpenParameter.GetGenericArguments()[0]
+                                .GetGenericTypeDefinition() !=
+                                    typeof(RehearsalSeparateNestedBox<>))
+                        throw new InvalidOperationException(
+                            "stable separate open nesting was unnecessarily object-erased");
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4806,6 +4856,49 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             RehearsalConsumer<RehearsalNestedCat>>))
                         throw new InvalidOperationException(
                             "reference-only contravariance was unnecessarily widened to object");
+                    System.Reflection.MethodInfo openProducerBox =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenProducerBox");
+                    Type openProducerParameter = openProducerBox.GetParameters()[0].ParameterType;
+                    if (openProducerParameter != typeof(object) ||
+                            openProducerBox.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the open producer construction lacked an object boundary");
+                    System.Reflection.MethodInfo openConsumerBox =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenConsumerBox");
+                    Type openConsumerParameter = openConsumerBox.GetParameters()[0].ParameterType;
+                    if (openConsumerParameter != typeof(object) ||
+                            openConsumerBox.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the open consumer construction lacked an object boundary");
+                    System.Reflection.MethodInfo openProducerIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenProducerBoxIdentity");
+                    if (openProducerIdentity.GetParameters()[0].ParameterType != typeof(object) ||
+                            openProducerIdentity.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the open producer box boundary was not object-to-object");
+                    System.Reflection.MethodInfo openConsumerIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalOpenConsumerBoxIdentity");
+                    if (openConsumerIdentity.GetParameters()[0].ParameterType != typeof(object) ||
+                            openConsumerIdentity.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the open consumer box boundary was not object-to-object");
+                    System.Reflection.MethodInfo stableOpenIdentity =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalStableOpenNestedBoxIdentity");
+                    Type stableOpenParameter = stableOpenIdentity.GetParameters()[0].ParameterType;
+                    if (!stableOpenParameter.IsGenericType ||
+                            stableOpenIdentity.ReturnType != stableOpenParameter ||
+                            stableOpenParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalNestedBox<>) ||
+                            !stableOpenParameter.GetGenericArguments()[0].IsGenericType ||
+                            stableOpenParameter.GetGenericArguments()[0]
+                                .GetGenericTypeDefinition() != typeof(RehearsalNestedBox<>))
+                        throw new InvalidOperationException(
+                            "stable open nesting was unnecessarily object-erased");
                     return 0;
                 }
             }

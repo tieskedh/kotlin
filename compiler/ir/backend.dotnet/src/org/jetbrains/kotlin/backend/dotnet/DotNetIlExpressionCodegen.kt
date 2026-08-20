@@ -235,6 +235,20 @@ internal class DotNetIlExpressionCodegen(
         if (expression is IrGetValue && typeMapper.isGenericOwnerCapabilityDeclaration(expression.symbol.owner)) {
             return methodContext.reference(expression.symbol).type
         }
+        if (expression is IrGetValue) {
+            val slotType = methodContext.reference(expression.symbol).type
+            val logicalType = typeMapper.toDotNetIlValueType(expression.type)
+            if ((logicalType != null &&
+                    typeMapper.isGenericOwnerNestedConstructionCarrierOf(slotType, logicalType)) ||
+                (slotType == DotNetIlValueType.Object &&
+                        typeMapper.isNestedGenericOwnerConstruction(expression.type))
+            ) {
+                // An immutable local may retain the Box<object> actually returned by an open
+                // nested construction. Its logical Box<Producer<X>> view must not reconstruct
+                // an invariant sibling construction before the member receiver is resolved.
+                return slotType
+            }
+        }
         if (expression is IrGetValue && expression.type.isDotNetGenericArray()) {
             val slotType = methodContext.reference(expression.symbol).type
             if (slotType is DotNetIlValueType.GenericArray ||
@@ -276,6 +290,7 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         if (expression is IrCall) {
+            genericOwnerObjectCarrierCallReturnTypeOrNull(expression)?.let { return it }
             val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
             intrinsic?.naturalReturnType(expression, this)?.let { return it }
             if (
@@ -307,6 +322,21 @@ internal class DotNetIlExpressionCodegen(
         }
         val logicalType = typeMapper.toDotNetIlValueType(expression.type) ?: return null
         return naturalType.takeIf { typeMapper.isGenericOwnerCapabilityViewOf(it, logicalType) }
+    }
+
+    fun genericOwnerNestedConstructionCarrierTypeOrNull(
+        expression: IrExpression,
+        logicalType: IrType,
+    ): DotNetIlValueType? {
+        if (!typeMapper.isGenericOwnerRehearsalEnabled()) return null
+        val physicalType = mappedNaturalType(expression) ?: return null
+        val mappedLogicalType = typeMapper.toDotNetIlValueType(logicalType) ?: return null
+        val openProducerReturn = (expression as? IrCall)?.symbol?.owner?.returnType
+            ?.let(typeMapper::isOpenNestedGenericOwnerConstruction) == true
+        if (physicalType == DotNetIlValueType.Object && openProducerReturn) return physicalType
+        return physicalType.takeIf { candidate ->
+            typeMapper.isGenericOwnerNestedConstructionCarrierOf(candidate, mappedLogicalType)
+        }
     }
 
     fun nextLabel(prefix: String): String = methodContext.nextLabel(prefix)
@@ -2255,6 +2285,7 @@ internal class DotNetIlExpressionCodegen(
     fun tryEmitCapabilityCallForDiscard(call: IrCall): Boolean {
         val logicalResultType = if (call.type.isUnit()) null else typeMapper.toDotNetIlValueType(call.type) ?: return false
         val emitted = emitReifiedGenericInterfaceForeignDispatchCallOrNull(call, logicalResultType) ||
+                emitReifiedGenericInterfaceObjectCarrierCapabilityCallOrNull(call, logicalResultType) ||
                 emitGenericInterfaceCapabilityCallOrNull(call, logicalResultType) ||
                 (logicalResultType != null && emitCallableCapabilityCallOrNull(call, logicalResultType))
         if (!emitted) return false
@@ -2315,11 +2346,23 @@ internal class DotNetIlExpressionCodegen(
         val receiverType = if (info.isInstance) {
             val receiver = call.arguments.firstOrNull()
                 ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
-            if (genericOwnerCallTarget != null) mappedNaturalType(receiver)
-            else typeMapper.toDotNetIlValueType(receiver.type)
-                ?: dotNetUnsupported(
-                    "call to '$calleeName' through a receiver of unsupported type ${receiver.type.render()}"
-                )
+            if (genericOwnerCallTarget != null) {
+                mappedNaturalType(receiver)
+            } else {
+                val logicalReceiverType = typeMapper.toDotNetIlValueType(receiver.type)
+                    ?: dotNetUnsupported(
+                        "call to '$calleeName' through a receiver of unsupported type ${receiver.type.render()}"
+                    )
+                val naturalReceiverType = mappedNaturalType(receiver)
+                naturalReceiverType?.takeIf { candidate ->
+                    (candidate == DotNetIlValueType.Object &&
+                            typeMapper.isNestedGenericOwnerConstruction(receiver.type)) ||
+                            typeMapper.isGenericOwnerNestedConstructionCarrierOf(
+                                candidate,
+                                logicalReceiverType,
+                            )
+                } ?: logicalReceiverType
+            }
         } else {
             null
         }
@@ -2955,6 +2998,7 @@ internal class DotNetIlExpressionCodegen(
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
         if (emitReifiedGenericInterfaceForeignDispatchCallOrNull(call, expectedType)) return
+        if (emitReifiedGenericInterfaceObjectCarrierCapabilityCallOrNull(call, expectedType)) return
         if (emitGenericInterfaceCapabilityCallOrNull(call, expectedType)) return
         if (emitCallableCapabilityCallOrNull(call, expectedType)) return
         val returnType = emitCall(call)
@@ -3103,15 +3147,21 @@ internal class DotNetIlExpressionCodegen(
         call: IrCall,
         expectedType: DotNetIlValueType?,
     ): Boolean {
-        val semanticSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call) ?: return false
         if (expectedType == null || call.arguments.size != 1) return false
+        val source = call.symbol.owner.let {
+            it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
+        }
+        val receiver = call.arguments.single() ?: return false
+        val semanticSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call)
+            ?: genericOwnerCapabilitySlotOrNull(source)?.takeIf {
+                (source.parent as? IrClass)?.isInterface == true &&
+                        mappedNaturalType(receiver) == DotNetIlValueType.Object
+            }
+            ?: return false
         val resultNarrowing = when (expectedType) {
             DotNetIlValueType.Object -> null
             else -> expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
                 ?: return false
-        }
-        val source = call.symbol.owner.let {
-            it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
         }
         val semanticInfo = availableFunctions[semanticSlot]
             ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
@@ -3128,8 +3178,6 @@ internal class DotNetIlExpressionCodegen(
         }
         semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         naturalInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
-        val receiver = call.arguments.single()
-            ?: return false
         emitReifiedGenericInterfaceForeignReceiver(
             receiver,
             naturalInfo.owner,
@@ -3186,6 +3234,99 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
         resultNarrowing?.let { instruction ->
             methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
+        return true
+    }
+
+    private fun genericOwnerCapabilitySlotOrNull(source: IrSimpleFunction): IrSimpleFunction? =
+        genericOwnerCapabilitySlots[source]
+            ?: source.allOverridden().firstNotNullOfOrNull(genericOwnerCapabilitySlots::get)
+
+    private fun genericOwnerObjectCarrierCallReturnTypeOrNull(
+        call: IrCall,
+    ): DotNetIlValueType? {
+        val source = call.symbol.owner.let {
+            it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
+        }
+        val semanticSlot = genericOwnerCapabilitySlotOrNull(source) ?: return null
+        val receiver = call.arguments.firstOrNull() ?: return null
+        if (mappedNaturalType(receiver) != DotNetIlValueType.Object) return null
+        val semanticInfo = availableFunctions[semanticSlot]
+            ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
+            ?: return null
+        return (semanticInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+    }
+
+    /**
+     * Enters a generic owner semantic slot only when the receiver expression physically comes
+     * from an object-carried open nested construction. Ordinary closed receivers remain on their
+     * natural CLR MethodDef. Covariant no-input interfaces take the capability-or-foreign
+     * dispatcher above; input-bearing foreign interfaces remain unclaimed, while a Kotlin class
+     * instance always inherits its compiler capability on the same object.
+     */
+    private fun emitReifiedGenericInterfaceObjectCarrierCapabilityCallOrNull(
+        call: IrCall,
+        expectedType: DotNetIlValueType?,
+    ): Boolean {
+        if (typeMapper.genericOwnerCapabilityCallTarget(call) != null ||
+            typeMapper.genericOwnerForeignDispatchCallTarget(call) != null
+        ) {
+            return false
+        }
+        val source = call.symbol.owner.let {
+            it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
+        }
+        val semanticSlot = genericOwnerCapabilitySlotOrNull(source) ?: return false
+        val receiver = call.arguments.firstOrNull() ?: return false
+        if (mappedNaturalType(receiver) != DotNetIlValueType.Object) return false
+        val semanticInfo = availableFunctions[semanticSlot]
+            ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
+            ?: return false
+        if (semanticInfo.owner.typeParameterCount != 0 ||
+            semanticInfo.signature.parameterTypes.size != call.arguments.size
+        ) {
+            return false
+        }
+        val semanticReturnType = semanticInfo.signature.returnType
+        val resultCoercion = when (semanticReturnType) {
+            DotNetIlReturnType.Void -> {
+                if (expectedType != null &&
+                    !DotNetRuntimeTypes.unitType.isDotNetAssignableTo(expectedType)
+                ) {
+                    return false
+                }
+                null
+            }
+            is DotNetIlReturnType.Value -> {
+                val resultType = expectedType ?: return false
+                when {
+                    semanticReturnType.type.isDotNetAssignableTo(resultType) -> null
+                    semanticReturnType.type == DotNetIlValueType.Object ->
+                        resultType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                    else -> return false
+                }
+            }
+        }
+        semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
+        emitArguments(
+            call.arguments,
+            semanticInfo.signature.parameterTypes,
+            "nested object-carrier call to '${source.name.asString()}'",
+        )
+        methodContext.emit(
+            semanticInfo.renderCallInstruction(
+                semanticInfo.physicalMethodName ?: semanticSlot.dotNetIlMethodName(),
+                virtual = true,
+                ownerToken = semanticInfo.owner.ilTypeRef,
+            ),
+            pops = semanticInfo.signature.parameterTypes.size,
+            pushes = if (semanticReturnType is DotNetIlReturnType.Value) 1 else 0,
+        )
+        resultCoercion?.let { instruction ->
+            methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
+        if (semanticReturnType == DotNetIlReturnType.Void && expectedType != null) {
+            emitRuntimeUnitInstance()
         }
         return true
     }

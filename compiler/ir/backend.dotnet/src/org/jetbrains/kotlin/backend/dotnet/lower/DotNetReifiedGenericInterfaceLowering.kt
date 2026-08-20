@@ -265,6 +265,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
 
+        fun IrType.hasOpenReifiedInterfaceArgument(): Boolean {
+            val simpleType = this as? IrSimpleType ?: return false
+            reifiedInterfaceOwnerOrNull() ?: return false
+            val projection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+            return projection.variance == Variance.INVARIANT &&
+                    (projection.type as? IrSimpleType)?.classifier is IrTypeParameterSymbol
+        }
+
         fun IrType.reifiedCovariantInterfaceOwnerOrNull(): IrClass? {
             val owner = reifiedInterfaceOwnerOrNull() ?: return null
             return owner.takeIf {
@@ -466,7 +474,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     ?: type.potentialSemanticInterfaceOwnerOrNull()
                     ?: return
                 context.genericOwnerCapabilityDeclarations += declaration
-                if (semanticOwner.typeParameters.single().variance == Variance.OUT_VARIANCE) {
+                if (semanticOwner.typeParameters.single().variance == Variance.OUT_VARIANCE ||
+                    type.hasOpenReifiedInterfaceArgument()
+                ) {
+                    // An open I<T> occurrence cannot promise one natural construction for every
+                    // later method/class substitution. Object admits both the Kotlin capability
+                    // and an ordinary natural CLR implementation; input-bearing member use may
+                    // still require the capability until its foreign fallback is separately
+                    // proven.
                     context.genericOwnerForeignDispatchDeclarations += declaration
                 }
             }
