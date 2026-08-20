@@ -17,6 +17,19 @@ public class RehearsalSeparateReader {
     public fun read(store: RehearsalSeparateStore<Any?>): Any? = store.read()
 }
 
+// The producer-selected non-generic class capability must retain every universally valid erased
+// Kotlin superinterface so a later consumer can lower a for-loop without reconstructing C<T>.
+public class RehearsalSeparateLateRoutedIterator<out T>(private val value: T) : Iterator<T> {
+    private var consumed: Boolean = false
+
+    public override fun hasNext(): Boolean = !consumed
+
+    public override fun next(): T {
+        consumed = true
+        return value
+    }
+}
+
 public interface RehearsalSeparateProducer<out T> {
     public fun produce(): T
 }
@@ -510,10 +523,24 @@ public fun <T> rehearsalSeparateOpenInvariantPropertyConsumerGrandchildIdentity(
 // MODULE: main(leaf)
 // FILE: main.kt
 
+private fun rehearsalSeparateLateRoutedLoop(
+    iterator: RehearsalSeparateLateRoutedIterator<Any?>,
+): Any? {
+    for (value in iterator) return value
+    return null
+}
+
 fun box(): String {
     val store = RehearsalSeparateKotlinOverrideStore("kotlin-middle")
     if (RehearsalSeparateReader().read(store) != "kotlin-middle") {
         return "fail: separate Kotlin override"
+    }
+
+    val lateRoutedIterator = RehearsalSeparateLateRoutedIterator(29)
+    val widenedLateRoutedIterator: RehearsalSeparateLateRoutedIterator<Any?> =
+        lateRoutedIterator
+    if (rehearsalSeparateLateRoutedLoop(widenedLateRoutedIterator) != 29) {
+        return "fail: separate late-routed widened iterator"
     }
 
     val exact = RehearsalSeparateKotlinOverrideStore(11)
