@@ -22,14 +22,17 @@ canonical/declared/exact ABI or authorize generic interface authoring in
 production.
 
 Within that production-inert rehearsal, a declaration-invariant no-input
-producer and the exact one-producer/one-consumer invariant-cell bundle are
-capability-optional exceptions. A C# type implementing only such admitted
-invariant contracts is already complete with the natural `I<T>` and need not
-be partial; exact calls stay natural and Kotlin projected operations have a
-cached unique-construction fallback. The analyzer/generator therefore ignores
-that type only after the manifest slots prove one of those exact shapes. If
-any implemented rehearsal contract has declaration-site variance or a broader
-member surface, the bounded partial-generation rules below still apply.
+producer, the exact one-producer/one-consumer invariant-cell method bundle, and
+its exact mutable-property equivalent are capability-optional exceptions. A C#
+type implementing only such admitted invariant contracts is already complete
+with the natural `I<T>` and need not be partial; exact calls stay natural and
+Kotlin projected operations have a cached unique-construction fallback. For
+the property family, both natural slots must share one non-null Property name,
+while both semantic slots must remain ordinary compiler MethodDefs without a
+Property row. The analyzer/generator ignores that type only after the manifest
+slots prove one of these exact shapes. If any implemented rehearsal contract
+has declaration-site variance or a broader member surface, the bounded partial-
+generation rules below still apply.
 
 ## Context
 

@@ -241,16 +241,27 @@ internal static class AuthoringContractDiscovery
                 "INVARIANT",
                 StringComparison.Ordinal) ||
             (contract.Members.Length != 1 && contract.Members.Length != 2) ||
-            contract.Members.Select(member => member.SourceName)
-                .Distinct(StringComparer.Ordinal).Count() != contract.Members.Length ||
             !contract.Intersections.IsEmpty)
+            return true;
+        bool isMethodBundle = contract.Members.All(member =>
+                member.Kind == KotlinMemberKind.Method) &&
+            contract.Members.Select(member => member.SourceName)
+                .Distinct(StringComparer.Ordinal).Count() == contract.Members.Length;
+        bool isPropertyBundle = contract.Members.Length == 2 &&
+            contract.Members.Count(member =>
+                member.Kind == KotlinMemberKind.PropertyGetter) == 1 &&
+            contract.Members.Count(member =>
+                member.Kind == KotlinMemberKind.PropertySetter) == 1 &&
+            contract.Members.Select(member => member.SourceName)
+                .Distinct(StringComparer.Ordinal).Count() == 1;
+        if (!isMethodBundle && !isPropertyBundle)
             return true;
         int producerCount = 0;
         int consumerCount = 0;
+        string? naturalPropertyName = null;
         foreach (KotlinMemberContract member in contract.Members)
         {
-            if (member.Kind != KotlinMemberKind.Method ||
-                member.DefaultKind != KotlinDefaultKind.Abstract ||
+            if (member.DefaultKind != KotlinDefaultKind.Abstract ||
                 member.WrongShapePolicy != null ||
                 !member.ErasedOwnerRelativeConstraints.IsEmpty ||
                 !member.OverriddenLogicalMemberKeys.IsEmpty ||
@@ -261,13 +272,28 @@ internal static class AuthoringContractDiscovery
             KotlinMethodLocator? natural = member.Slots
                 .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Declared);
             if (semantic == null || natural == null ||
-                semantic.GenericArity != 0 || natural.GenericArity != 0)
+                semantic.GenericArity != 0 || natural.GenericArity != 0 ||
+                semantic.PropertyName != null ||
+                (isMethodBundle && natural.PropertyName != null) ||
+                (isPropertyBundle && natural.PropertyName == null))
                 return true;
+            if (isPropertyBundle)
+            {
+                naturalPropertyName ??= natural.PropertyName;
+                if (!string.Equals(
+                        naturalPropertyName,
+                        natural.PropertyName,
+                        StringComparison.Ordinal))
+                    return true;
+            }
             if (semantic.ReturnType == "object" &&
                 semantic.ParameterTypes.IsEmpty &&
                 natural.ReturnType == "!0" &&
                 natural.ParameterTypes.IsEmpty)
             {
+                if (isPropertyBundle &&
+                    member.Kind != KotlinMemberKind.PropertyGetter)
+                    return true;
                 producerCount++;
                 continue;
             }
@@ -276,6 +302,9 @@ internal static class AuthoringContractDiscovery
                 natural.ReturnType == "void" &&
                 natural.ParameterTypes.SequenceEqual(new[] { "!0" }))
             {
+                if (isPropertyBundle &&
+                    member.Kind != KotlinMemberKind.PropertySetter)
+                    return true;
                 consumerCount++;
                 continue;
             }

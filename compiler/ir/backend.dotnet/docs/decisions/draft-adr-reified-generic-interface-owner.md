@@ -301,6 +301,18 @@ does not require C# to implement the compiler capability. Exact/open nested
 `Box<Cell<!!T>>` stays typed; only a concrete projected
 `Box<Cell<out Any?>>` selects `Box<object>`.
 
+Property syntax follows the member-family proof rather than creating a second
+representation. An admitted `PropertyCell<T> { var value: T }` is one natural
+invariant CLR interface with one real mutable `Property` row: its getter returns
+`!T`, its setter accepts `!T`, and an exact Kotlin implementation retains a
+single `!T` backing field. Star/output reads and input-projected writes use the
+same operation-local capability or unique-natural-construction fallback as the
+method cell. The authoring manifest keeps the natural accessor pair under one
+property name and leaves the semantic MethodDefs outside any Property row, so
+an ordinary non-partial C# implementation supplies one normal property and no
+compiler ABI member. Read-only, open-nullable, mixed method/property, and
+multi-property families remain fail-closed.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -317,17 +329,17 @@ must cover:
 1. general member-declaring children beyond one producer-output slot, including
    multiple members, overloads, and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
-   root, mixed or multiple type parameters, and input-bearing child/interface
-   compositions;
+   method root and exact mutable-property equivalent, mixed or multiple type
+   parameters, and input-bearing child/interface compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded
    warning-bearing covariant producer proof, mixed-control-flow cast returns,
    classifier-derived fields, and broader input parameters crossing separately
    compiled exact-looking boundaries;
-5. Kotlin/C# properties, defaults, generic methods, hostile inheritance, and
-   ordinary foreign implementations beyond the proven producer, consumer,
-   and invariant-cell shapes;
+5. Kotlin/C# properties beyond the exact mutable invariant cell, defaults,
+   generic methods, hostile inheritance, and ordinary foreign implementations
+   beyond the proven producer, consumer, and invariant-cell shapes;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
    assembly graphs, including classifier-derived fields and non-final or
    multi-input parameters;
