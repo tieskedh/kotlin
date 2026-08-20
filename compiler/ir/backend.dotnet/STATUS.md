@@ -425,6 +425,20 @@ verification, and work state.
   existence check. The candidate direct/separate matrix and epoch-off inverse
   each pass eight PSI/LightTree, Framework 4.8/.NET 10 lanes. Evidence is in
   [`docs/archive/generic-interface-published-family-contract-2026-08-20.md`](docs/archive/generic-interface-published-family-contract-2026-08-20.md).
+  ABI 42 now also publishes the complete non-generic physical interface
+  closure of every generic-class capability. `ForLoopsLowering` creates its
+  ordinary `Iterator` calls after generic-owner materialization; a widened
+  `C<Int> -> C<Any?>` iterator must therefore remain assignable to the one
+  erased Kotlin `Iterator` TypeDef without reconstructing `C<object>`. Local
+  materialization derives this universal edge structurally from the declared
+  interface family. A separate consumer rebuilds it only from the producer's
+  ABI 42 record, not from mutable consumer KLIB inference. Constructed imported
+  CLR generic interfaces remain excluded because no single construction is
+  universally truthful. The enabled rehearsal and epoch-off inverse each pass
+  eight PSI/LightTree, Framework 4.8/.NET 10 lanes. This closes an early stable
+  declaration prerequisite for late body-generated operations; the final
+  idempotent call/value router remains open. Evidence is in
+  [`docs/archive/generic-owner-capability-superinterface-closure-2026-08-20.md`](docs/archive/generic-owner-capability-superinterface-closure-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the

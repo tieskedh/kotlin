@@ -367,6 +367,24 @@ contract against its Class, capability, member-family, and parent-contract
 records before exposing it. See
 [`../archive/generic-interface-published-family-contract-2026-08-20.md`](../archive/generic-interface-published-family-contract-2026-08-20.md).
 
+ABI 42 makes the physical capability relationship equally producer-owned.
+Every generic-class capability records the complete non-generic physical
+interface closure which is valid for all closed constructions of the class.
+A reified Kotlin interface contributes its semantic capability; a Kotlin
+interface which still has one erased physical identity contributes that
+identity. A constructed imported CLR generic contributes neither, because
+`C<int> : IFoo<int>` cannot justify `IFoo<object>` on a non-generic
+capability. Local materialization and separate consumers therefore agree
+without reconstructing physical inheritance from consumer KLIB.
+
+This early declaration fact is deliberately distinct from final call/value
+routing. It is sufficient for ordinary `Iterator` calls which
+`ForLoopsLowering` creates after generic-owner materialization, including a
+widened class view crossing a producer DLL. It does not choose routes for
+later body-generated operations whose exact/capability decision depends on
+value provenance; the idempotent final router remains a separate gate. See
+[`../archive/generic-owner-capability-superinterface-closure-2026-08-20.md`](../archive/generic-owner-capability-superinterface-closure-2026-08-20.md).
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
