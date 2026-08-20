@@ -1526,12 +1526,22 @@ C# source property or the same Kotlin helper/DIM, so exact and widened reads
 retain one body and one object. See
 [`../archive/reified-generic-interface-default-property-2026-08-20.md`](../archive/reified-generic-interface-default-property-2026-08-20.md).
 
-With that typed contract consolidated, continue with multiple-property and
-method-generic default families, read-only property inheritance, diamonds,
-reabstraction, changed-argument and deeper/multiple inheritance, broader input-
-bearing inheritance, broader and mixed method/property families, and mixed-
-variance gates, including derivability rules for ordinary foreign
-implementations. Then close
+The first owner-plus-method-generic default gate is now closed for the exact
+covariant root `<R>(R): T` with one unconstrained method parameter. The natural
+and semantic interface MethodDefs both retain method-generic arity one; only
+the owner-dependent result becomes `object` on the semantic slot. Framework's
+helper retains owner `T` plus method `R`, while .NET 10 keeps the natural DIM.
+The C# authoring bridge forwards the same `R` to an inherited helper/default
+or an ordinary C# generic-method override, so exact and widened calls retain
+one body and one object across separate compilation. See
+[`../archive/reified-generic-interface-method-generic-default-2026-08-20.md`](../archive/reified-generic-interface-method-generic-default-2026-08-20.md).
+
+With that typed contract consolidated, continue with multiple-property
+families, abstract and constrained method-generic roots, read-only property
+inheritance, diamonds, reabstraction, changed-argument and deeper/multiple
+inheritance, broader input-bearing inheritance, broader and mixed
+method/property families, and mixed-variance gates, including derivability
+rules for ordinary foreign implementations. Then close
 classifier-derived field and broader-input boundaries and deployment behavior
 before the Runtime/Stdlib graph.
 Before that graph opens, split stable declaration-family publication from
