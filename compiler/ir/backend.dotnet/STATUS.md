@@ -556,6 +556,26 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and
   the unchanged up-to-date six-test `dotnet.ir` model root.
+- The exact owner-plus-method-generic producer shape is now also closed for an
+  abstract interface root. `AbstractMethodGenericProducer<out T>.<R>(R): T`
+  retains generic arity one and the method-owned `R` on both its natural
+  `<R>(R): T` slot and declaration-semantic `<R>(R): object` slot. A generic
+  Kotlin implementation in a second DLL and an ordinary partial C#
+  implementation each author only the natural generic method. Exact calls and
+  Kotlin-widened calls from later consumers reach that same implementation and
+  retain one receiver identity; C# never names the semantic capability. All
+  four candidate and four erased epoch-off PSI/LightTree, Framework 4.8/.NET
+  10 lanes pass. Admission remains limited to an abstract member or proven
+  default with one non-reified invariant method parameter having exactly the
+  universal bound, one direct non-defaulted/non-vararg `R` input, and one
+  non-null direct owner-`T` result. Constraints, nullable results, child
+  inheritance, overloads, and multiple or mixed members remain separate
+  gates. The final normal production aggregate directly audits 190 XML suites
+  and 2,287 tests with zero failures, errors, or skips: 187 freshly written
+  FIR suites/2,155 tests, two freshly written integration suites/126 tests,
+  and the unchanged up-to-date six-test `dotnet.ir` model root. Evidence is
+  archived in
+  [`docs/archive/reified-generic-interface-abstract-method-generic-2026-08-21.md`](docs/archive/reified-generic-interface-abstract-method-generic-2026-08-21.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
