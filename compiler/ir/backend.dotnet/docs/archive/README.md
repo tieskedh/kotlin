@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-invariant-projection-boundary-2026-08-20.md`](generic-owner-invariant-projection-boundary-2026-08-20.md)
+  records the construction-local `object` carrier for invariant use-site
+  projection, retained `Box<T>`/`!T` and exact/open invariant controls,
+  exact-constructor provenance precedence, ordinary non-partial C# identity,
+  and paired rehearsal/inverse Framework 4.8/.NET 10 matrices.
 - [`generic-owner-invariant-producer-2026-08-20.md`](generic-owner-invariant-producer-2026-08-20.md)
   records the natural declaration-invariant `I<T>` owner, typed open
   `Box<I<!!T>>` control, object-carried star operation boundary, ordinary

@@ -4408,6 +4408,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "separate Kotlin star dispatch bypassed a natural invariant C# " +
                             "implementation");
+                    if (!object.Equals(
+                            libKt.rehearsalSeparateProjectedInvariantProduce(
+                                invariantProducer),
+                            "csharp-separate-invariant"))
+                        throw new InvalidOperationException(
+                            "separate Kotlin projected dispatch bypassed a natural invariant " +
+                            "C# implementation");
+                    RehearsalSeparateNestedBox<object> projectedInvariantBox =
+                        libKt.rehearsalSeparateProjectedInvariantProducerBox(
+                            invariantProducer);
+                    if (!object.ReferenceEquals(projectedInvariantBox.read(), invariantProducer))
+                        throw new InvalidOperationException(
+                            "separate projected invariant storage rejected or replaced a " +
+                            "natural C# implementation");
                     RehearsalSeparateRawCSharpIntProducer rawProducer =
                         new RehearsalSeparateRawCSharpIntProducer();
                     RehearsalSeparateProducer<int> rawExact = rawProducer;
@@ -4623,6 +4637,26 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 .IsGenericParameter)
                         throw new InvalidOperationException(
                             "separate open invariant nesting was unnecessarily object-erased");
+                    System.Reflection.MethodInfo separateProjectedInvariantProduce =
+                        typeof(libKt)
+                            .GetMethod("rehearsalSeparateProjectedInvariantProduce");
+                    if (separateProjectedInvariantProduce.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                            separateProjectedInvariantProduce.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate projected invariant callable lacked an object boundary");
+                    Type separateProjectedInvariantBox = typeof(libKt)
+                        .GetMethod("rehearsalSeparateProjectedInvariantProducerBox").ReturnType;
+                    if (separateProjectedInvariantBox !=
+                            typeof(RehearsalSeparateNestedBox<object>) ||
+                            separateProjectedInvariantBox.GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType !=
+                                typeof(object))
+                        throw new InvalidOperationException(
+                            "the separate projected invariant nesting was not Box<object>: " +
+                                separateProjectedInvariantBox);
                     if (typeof(RehearsalSeparateClassifierInput)
                             .GetMethod("same").GetParameters()[0].ParameterType !=
                                 typeof(RehearsalSeparateProducer<string>) ||
@@ -4865,6 +4899,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 "csharp-invariant"))
                         throw new InvalidOperationException(
                             "Kotlin star dispatch bypassed a natural invariant C# implementation");
+                    if (!object.Equals(
+                            genericOwnerRehearsalStateCarriersKt
+                                .rehearsalProjectedInvariantProduce(invariantProducer),
+                            "csharp-invariant"))
+                        throw new InvalidOperationException(
+                            "Kotlin projected dispatch bypassed a natural invariant C# " +
+                            "implementation");
+                    RehearsalNestedBox<object> projectedInvariantValueBox =
+                        genericOwnerRehearsalStateCarriersKt
+                            .rehearsalProjectedInvariantProducerBox(invariantProducer);
+                    if (!object.ReferenceEquals(
+                            projectedInvariantValueBox.read(),
+                            invariantProducer))
+                        throw new InvalidOperationException(
+                            "projected invariant storage rejected or replaced a natural C# " +
+                            "implementation");
                     Type openBox = typeof(RehearsalNestedBox<>);
                     System.Reflection.FieldInfo valueField = openBox.GetField(
                         "value",
@@ -4995,6 +5045,26 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             !invariantNestedArgument.GetGenericArguments()[0].IsGenericParameter)
                         throw new InvalidOperationException(
                             "open invariant nesting was unnecessarily object-erased");
+                    System.Reflection.MethodInfo projectedInvariantProduce =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantProduce");
+                    if (projectedInvariantProduce.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                            projectedInvariantProduce.ReturnType != typeof(object))
+                        throw new InvalidOperationException(
+                            "the projected invariant callable lacked an object boundary");
+                    Type projectedInvariantBox =
+                        typeof(genericOwnerRehearsalStateCarriersKt)
+                            .GetMethod("rehearsalProjectedInvariantProducerBox").ReturnType;
+                    if (projectedInvariantBox != typeof(RehearsalNestedBox<object>) ||
+                            projectedInvariantBox.GetField(
+                                "value",
+                                System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.NonPublic).FieldType !=
+                                typeof(object))
+                        throw new InvalidOperationException(
+                            "the projected invariant nested construction was not Box<object>: " +
+                                projectedInvariantBox);
                     return 0;
                 }
             }
