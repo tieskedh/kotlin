@@ -215,6 +215,24 @@ verification, and work state.
   [`docs/archive/generic-owner-value-subtype-construction-stability-2026-08-19.md`](docs/archive/generic-owner-value-subtype-construction-stability-2026-08-19.md).
   The contravariant extension is archived in
   [`docs/archive/generic-owner-contravariant-construction-stability-2026-08-19.md`](docs/archive/generic-owner-contravariant-construction-stability-2026-08-19.md).
+  The nested open-argument gate is now closed without converting the open
+  owner or stable nesting to object state. `Producer<T>` and `Consumer<T>` use
+  `object` at an open callable boundary because no single natural `I<!!T>`
+  construction admits every later value/reference substitution. An open
+  factory constructs a concrete `Box<object>` but publishes the result as
+  `object`; an identity boundary over `Box<Producer<T>>` or
+  `Box<Consumer<T>>` is physically `object -> object`, so the same MethodDef
+  accepts both an existing exact `Box<Producer<string>>` and a semantic
+  `Box<object>`. Both retain identity and mutation on their original physical
+  box. Member use crosses the existing class/interface capability only from
+  that proven object carrier. Closed exact and reference-only constructions
+  stay typed, `RehearsalNestedBox<T>` still has one `!T` field, and the stable
+  negative control `Box<Box<T>>` remains `Box<Box<!!T>>`. Same-module and
+  separate-KLIB execution plus C# metadata/runtime checks pass under PSI and
+  LightTree on Framework 4.8 and .NET 10; the epoch-off inverse passes the same
+  eight-test matrix. Invariant, mixed, multi-parameter, and value-class owners
+  remain separate gates. Evidence is archived in
+  [`docs/archive/generic-owner-open-nested-construction-boundary-2026-08-20.md`](docs/archive/generic-owner-open-nested-construction-boundary-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
