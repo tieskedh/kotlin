@@ -4343,6 +4343,8 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedNaturalReturnType = "void",
                     expectedNaturalParameterTypes = listOf("!0"),
                 )
+            }
+            producer.name.equals("leaf.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
                     expectedDeclaredOwner =
@@ -4787,7 +4789,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             new RehearsalSeparateCSharpInvariantPropertyConsumerGrandchild();
                     invariantPropertyConsumerGrandchild.consumePropertyCellValue(
                         "csharp-separate-exact-consumer-child");
-                    middleKt.rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite(
+                    leafKt.rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite(
                         invariantPropertyConsumerGrandchild,
                         "csharp-separate-projected-consumer-grandchild");
                     if (invariantPropertyConsumerGrandchild.propertyCellValue !=
@@ -4797,7 +4799,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     RehearsalSeparateCSharpInvariantObjectPropertyConsumerGrandchild
                         invariantObjectPropertyConsumerGrandchild =
                             new RehearsalSeparateCSharpInvariantObjectPropertyConsumerGrandchild();
-                    middleKt.rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite(
+                    leafKt.rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite(
                         invariantObjectPropertyConsumerGrandchild,
                         "csharp-separate-broad-consumer-grandchild");
                     if (!object.Equals(
@@ -5482,6 +5484,13 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 System.Reflection.BindingFlags.DeclaredOnly).Length != 0)
                         throw new InvalidOperationException(
                             "the separate consumer grandchild lost natural CLR inheritance");
+                    if (separateInvariantPropertyCell.Assembly != typeof(libKt).Assembly ||
+                        separateInvariantPropertyConsumerChild.Assembly !=
+                            typeof(middleKt).Assembly ||
+                        separateInvariantPropertyConsumerGrandchild.Assembly !=
+                            typeof(leafKt).Assembly)
+                        throw new InvalidOperationException(
+                            "the natural consumer chain was copied across producer assemblies");
                     Type separateInvariantPropertyConsumerGrandchildValue =
                         typeof(RehearsalSeparateInvariantPropertyConsumerGrandchildValue<>);
                     Type separateInvariantPropertyConsumerGrandchildValueParameter =
@@ -5550,9 +5559,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         separateGrandchildCapability == null)
                         throw new InvalidOperationException(
                             "the deep consumer capability chain was not 2-to-1-to-1");
+                    if (separateGrandchildRootCapability.Assembly != typeof(libKt).Assembly ||
+                        separateGrandchildChildCapability.Assembly !=
+                            typeof(middleKt).Assembly ||
+                        separateGrandchildCapability.Assembly != typeof(leafKt).Assembly)
+                        throw new InvalidOperationException(
+                            "the semantic consumer chain copied a producer-owned capability");
                     System.Reflection.MethodInfo
                         separateInvariantPropertyConsumerGrandchildIdentity =
-                            typeof(middleKt).GetMethod(
+                            typeof(leafKt).GetMethod(
                                 "rehearsalSeparateOpenInvariantPropertyConsumerGrandchildIdentity");
                     Type separateInvariantPropertyConsumerGrandchildIdentityParameter =
                         separateInvariantPropertyConsumerGrandchildIdentity.GetParameters()[0]
@@ -5568,7 +5583,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "separate open consumer-grandchild access was erased");
                     System.Reflection.MethodInfo
                         separateProjectedInvariantPropertyConsumerGrandchildWrite =
-                            typeof(middleKt).GetMethod(
+                            typeof(leafKt).GetMethod(
                                 "rehearsalSeparateProjectedInvariantPropertyConsumerGrandchildWrite");
                     if (separateProjectedInvariantPropertyConsumerGrandchildWrite
                             .GetParameters()[0].ParameterType != typeof(object) ||
@@ -6791,7 +6806,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
         else "RehearsalForeignOverrideConsumer.dll"
     )
     val producerReferences = if (isSeparateProbe) {
-        listOf(directory.resolve("lib.dll"), directory.resolve("middle.dll"))
+        listOf(
+            directory.resolve("lib.dll"),
+            directory.resolve("middle.dll"),
+            directory.resolve("leaf.dll"),
+        )
             .onEach { dependency ->
                 check(dependency.isFile) {
                     "The separate generic-owner foreign override probe lacks ${dependency.name}"
