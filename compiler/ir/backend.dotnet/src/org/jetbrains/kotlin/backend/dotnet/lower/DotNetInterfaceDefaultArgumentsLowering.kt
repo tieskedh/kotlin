@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassForwarder
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultPromotion
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
@@ -43,6 +44,7 @@ import org.jetbrains.kotlin.ir.builders.irImplicitCast
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
+import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
@@ -68,6 +70,7 @@ import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassPare
 import org.jetbrains.kotlin.ir.util.createStaticFunctionWithReceivers
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
@@ -301,7 +304,11 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 }
             }
             plan.owner.declarations.removeAll(plan.defaultStubs.mapTo(hashSetOf()) { it.stub })
-            plan.owner.declarations += plan.helper
+            when (val helperParent = plan.helper.parent) {
+                is IrClass -> helperParent.declarations += plan.helper
+                is IrFile -> helperParent.declarations += plan.helper
+                else -> error("Internal .NET backend error: interface-default helper has no declaration container")
+            }
         }
 
         if (bodyPlacement == DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER) {
@@ -1092,18 +1099,37 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         }
     }
 
-    private fun createHelper(irInterface: IrClass): IrClass = context.irFactory.buildClass {
-        startOffset = irInterface.startOffset
-        endOffset = irInterface.endOffset
-        origin = DOTNET_DEFAULT_IMPLS
-        name = DEFAULT_IMPLS_NAME
-        kind = ClassKind.CLASS
-        modality = Modality.FINAL
-        visibility = DescriptorVisibilities.PUBLIC
-    }.apply {
-        parent = irInterface
-        superTypes = listOf(context.irBuiltIns.anyType)
-        createThisReceiverParameter()
+    private fun createHelper(irInterface: IrClass): IrClass {
+        val genericOwner = irInterface.typeParameters.isNotEmpty()
+        val helperParent: IrDeclarationParent = if (genericOwner) {
+            irInterface.fileOrNull
+                ?: error("Internal .NET backend error: generic interface-default helper has no file owner")
+        } else {
+            irInterface
+        }
+        val helperName = if (genericOwner) {
+            val logicalOwnerKey = context.preLoweringDeclarationKeys[irInterface]
+                ?: irInterface.fqNameWhenAvailable?.asString()
+                ?: error("Internal .NET backend error: generic interface-default helper has no logical identity")
+            Name.identifier(
+                "__KotlinDefaultImpls_" + DotNetLibraryAbiCodec.logicalIdentityDigest(logicalOwnerKey)
+            )
+        } else {
+            DEFAULT_IMPLS_NAME
+        }
+        return context.irFactory.buildClass {
+            startOffset = irInterface.startOffset
+            endOffset = irInterface.endOffset
+            origin = DOTNET_DEFAULT_IMPLS
+            name = helperName
+            kind = ClassKind.CLASS
+            modality = Modality.FINAL
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply {
+            parent = helperParent
+            superTypes = listOf(context.irBuiltIns.anyType)
+            createThisReceiverParameter()
+        }
     }
 
     private fun IrClass.memberFunctions(): List<IrSimpleFunction> = declarations.flatMap { declaration ->
@@ -1237,9 +1263,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
     )
 
     private companion object {
-        // Unlike the JVM spelling, this compiler-ABI type must be nameable from generated C#
-        // source. Its physical owner is recorded in the DLL/KLIB contracts, so consumers never
-        // derive the name and a future grammar change remains schema-gated.
+        // This nested spelling is source-nameable for non-generic interfaces. Generic interfaces
+        // use a digest-named top-level helper because C# cannot name a type nested in a generic
+        // interface. Every physical owner remains manifest-recorded rather than inferred.
         val DEFAULT_IMPLS_NAME: Name = Name.identifier("__KotlinDefaultImpls")
     }
 }
