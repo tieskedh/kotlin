@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-invariant-property-child-2026-08-20.md`](generic-owner-invariant-property-child-2026-08-20.md)
+  records one natural `Child<T> : Parent<T>` invariant-property edge, inherited
+  rather than copied CLR Property/capability slots, two `!T` implementation
+  fields, ordinary non-partial C# child properties, operation-local projected
+  access, and paired direct/separate rehearsal and inverse matrices.
 - [`generic-owner-invariant-property-cell-2026-08-20.md`](generic-owner-invariant-property-cell-2026-08-20.md)
   records the real CLR `Property<T>` row and `!T` implementation field for the
   exact mutable invariant property family, operation-local projected access,
