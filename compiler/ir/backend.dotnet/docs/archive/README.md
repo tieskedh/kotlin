@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-invariant-producer-2026-08-20.md`](generic-owner-invariant-producer-2026-08-20.md)
+  records the natural declaration-invariant `I<T>` owner, typed open
+  `Box<I<!!T>>` control, object-carried star operation boundary, ordinary
+  non-partial C# implementation, and paired rehearsal/inverse matrices.
 - [`generic-owner-open-nested-construction-boundary-2026-08-20.md`](generic-owner-open-nested-construction-boundary-2026-08-20.md)
   records object-carried open `Box<Producer<T>>`/`Box<Consumer<T>>` callable
   boundaries, retained exact box identity and `!T` state, operation-local

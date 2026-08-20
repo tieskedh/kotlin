@@ -1349,9 +1349,27 @@ The widening is structural and stops at the open boundary. Closed exact and
 reference-only constructions remain typed, the open `Box<T>` TypeDef still has
 one `!T` field, and the negative control `<T>(Box<Box<T>>) -> Box<Box<T>>`
 retains `Box<Box<!!T>>`. Thus unrelated stable nesting and `List<T>` state are
-not erased merely because the compiler supports semantic variant views. The
-next construction gates are invariant, mixed, multi-parameter, and value-class
-owners; each must preserve this boundary-versus-state distinction.
+not erased merely because the compiler supports semantic variant views.
+
+The first invariant gate is now closed for a public top-level interface with
+one unbounded invariant parameter and one abstract no-input member returning
+that parameter. Exact `InvariantProducer<int>`/`InvariantProducer<string>`
+calls are natural CLR calls. A star parameter is `object` and uses the existing
+capability-or-unique-natural-construction producer dispatcher only at the
+read. Because declaration-invariant owners have no legal sibling widening,
+`<T>(Box<InvariantProducer<T>>) -> Box<InvariantProducer<T>>` remains the
+fully typed `Box<InvariantProducer<!!T>>` MethodDef. This is the explicit
+non-contagion control: admitting semantic variant views does not erase stable
+invariant nesting or the enclosing `!T` field.
+
+An ordinary non-partial C# implementation of the natural invariant interface
+crosses both same-product and separate-KLIB star reads. The Roslyn authoring
+tool consequently ignores a class whose Kotlin contracts are all admitted
+invariant owners; generated partial capability adapters remain required when
+any admitted variant contract needs them. The remaining construction gates
+are mutable/broader invariant member families, mixed variance,
+multi-parameter owners, and value-class substitutions. Each must preserve the
+boundary-versus-state distinction.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1364,8 +1382,8 @@ cast incompatibility with the Kotlin specification is limited to BK-1 in the
 breaking-change ledger and must not leak into ordinary variance, projections,
 or warning-free operations.
 
-Continue with default, property, broader/multiple member, invariant, and
-mixed-variance gates, including derivability rules for ordinary foreign
+Continue with default, property, broader/multiple member, and mixed-variance
+gates, including derivability rules for ordinary foreign
 implementations, then close classifier-derived field and broader-input
 boundaries and
 deployment behavior before the Runtime/Stdlib graph. Keep the authoring

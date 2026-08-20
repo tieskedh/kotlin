@@ -104,6 +104,13 @@ internal static class AuthoringContractDiscovery
                         manifests);
                 if (interfaces.IsEmpty)
                     continue;
+                // An admitted declaration-invariant interface has no legal sibling view. Its
+                // exact construction is the complete CLR contract, while Kotlin star output
+                // dispatch can inspect an ordinary natural implementation at the operation.
+                // Do not turn the optional capability fast path into a partial-source
+                // obligation when this C# type implements only such interfaces.
+                if (!interfaces.Any(RequiresGeneratedCapability))
+                    continue;
 
                 Location location = declaration.Identifier.GetLocation();
                 if (implementation.TypeKind != TypeKind.Class)
@@ -223,6 +230,36 @@ internal static class AuthoringContractDiscovery
             }
         }
         return result.ToImmutable();
+    }
+
+    private static bool RequiresGeneratedCapability(BoundKotlinInterface bound)
+    {
+        KotlinInterfaceContract contract = bound.Contract;
+        if (contract.TypeParameters.Length != 1 ||
+            !string.Equals(
+                contract.TypeParameters[0].Variance,
+                "INVARIANT",
+                StringComparison.Ordinal) ||
+            contract.Members.Length != 1 ||
+            !contract.Intersections.IsEmpty)
+            return true;
+        KotlinMemberContract member = contract.Members[0];
+        if (member.Kind != KotlinMemberKind.Method ||
+            member.DefaultKind != KotlinDefaultKind.Abstract ||
+            member.WrongShapePolicy != null ||
+            !member.ErasedOwnerRelativeConstraints.IsEmpty ||
+            !member.OverriddenLogicalMemberKeys.IsEmpty ||
+            member.Slots.Length != 2)
+            return true;
+        KotlinMethodLocator? semantic = member.Slots
+            .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Erased);
+        KotlinMethodLocator? natural = member.Slots
+            .SingleOrDefault(slot => slot.Role == KotlinSlotRole.Declared);
+        return semantic == null || natural == null ||
+            semantic.GenericArity != 0 || semantic.ReturnType != "object" ||
+            !semantic.ParameterTypes.IsEmpty ||
+            natural.GenericArity != 0 || natural.ReturnType != "!0" ||
+            !natural.ParameterTypes.IsEmpty;
     }
 
     private static ImmutableArray<BoundKotlinInterface> FindImplementedKotlinInterfaces(

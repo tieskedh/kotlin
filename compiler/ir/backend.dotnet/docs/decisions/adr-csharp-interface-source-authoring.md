@@ -21,6 +21,14 @@ one bounded foreign-source bridge proof. It does not restore the historical
 canonical/declared/exact ABI or authorize generic interface authoring in
 production.
 
+Within that production-inert rehearsal, a declaration-invariant no-input
+producer is a capability-optional exception. A C# type implementing only such
+admitted invariant contracts is already complete with the natural `I<T>` and
+need not be partial; exact calls stay natural and Kotlin star-output dispatch
+has a unique-construction fallback. The analyzer/generator therefore ignores
+that type. If any implemented rehearsal contract has declaration-site
+variance, the bounded partial-generation rules below still apply.
+
 ## Context
 
 A non-generic Kotlin-owned interface has one physical CLR identity but may still
@@ -421,8 +429,8 @@ the recorded physical locator and never derive the helper name from the interfac
 ### 4. This is not the universal CLR implementation mechanism
 
 The manifest describes the Kotlin ABI for all consumers, but the Roslyn generator is only the
-supported C# source-authoring convenience. It requires a user-owned partial C# type. It does not
-cover:
+supported C# source-authoring convenience. Where an interface needs generated adapters, it
+requires a user-owned partial C# type. It does not cover:
 
 - precompiled C# implementors;
 - non-partial C# types;
