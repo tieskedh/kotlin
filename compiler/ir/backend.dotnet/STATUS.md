@@ -361,6 +361,32 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
   unchanged six-test `dotnet.ir` model root remained up-to-date.
+- One input-bearing invariant child is now closed above that exact property
+  root. `ConsumerChild<T> : PropertyCell<T>` remains a natural CLR generic
+  hierarchy with one child-owned `Consume(!T)` MethodDef and an inherited
+  mutable Property row. A Kotlin implementation retains one authoritative
+  physical `!T` field. The child semantic capability owns only one object-
+  input method and inherits the parent's two accessor slots; it copies neither
+  Property metadata nor state. Exact/open access stays `ConsumerChild<!!T>`;
+  only an `in String` operation has an object receiver boundary. Ordinary non-
+  partial C# string/object implementations supply one auto-property and one
+  natural method. The first C# run exposed an authoring composition defect:
+  the analyzer required every invariant manifest fragment to own a producer
+  and therefore demanded `partial` despite the inherited property root. It now
+  recognizes the structurally exact one-consumer child fragment only when its
+  CLR interface inherits a bound complete producer manifest. The full
+  integration gate caught and rejected the initially broader rule because it
+  suppressed the required adapter for a standalone synthetic `Shape<T>`.
+  Standalone consumers still use the generator. PSI/LightTree execution
+  on Framework 4.8 and .NET 10 passes the eight-test rehearsal matrix and the
+  same epoch-off inverse with zero failures, errors, or skips. Broader mixed,
+  multi-member, changed-argument, deeper, constrained, and multi-parameter
+  children remain excluded. Evidence is archived in
+  [`docs/archive/generic-owner-invariant-consumer-child-2026-08-20.md`](docs/archive/generic-owner-invariant-consumer-child-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

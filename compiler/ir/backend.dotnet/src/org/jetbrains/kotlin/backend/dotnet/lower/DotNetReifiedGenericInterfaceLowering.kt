@@ -98,11 +98,12 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
  * semantic boundary. Covariant producer subinterfaces and exact invariant-property children
- * inherit their family at a fixpoint, including across a library boundary. A child which adds
- * one admitted member or property owns only its new semantic slots; inherited slots remain
- * inherited. An intersection without new members receives one memberless capability alias over
- * its independent roots. Other families retain the accepted erased production ABI until their
- * complete semantic surface has its own proof.
+ * inherit their family at a fixpoint, including across a library boundary. An invariant child
+ * may add either one matching property or one direct consumer to an exact property root. A child
+ * owns only its new semantic slots; inherited slots remain inherited. An intersection without
+ * new members receives one memberless capability alias over its independent roots. Other
+ * families retain the accepted erased production ABI until their complete semantic surface has
+ * its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
@@ -161,9 +162,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
         // would have to name an already-reified Parent<T> without owning a CLR T, which is
         // impossible. A memberless child in one semantic domain reuses that capability. A child
-        // which adds an admitted producer or invariant property, or joins independent domains,
-        // receives one child capability inheriting the parent capabilities. It owns only its
-        // declared slots: no inherited slot, implementation, or state is copied.
+        // which adds an admitted producer, invariant property, or direct invariant consumer, or
+        // joins independent domains, receives one child capability inheriting the parent
+        // capabilities. It owns only its declared slots: no inherited slot, implementation, or
+        // state is copied.
         var changed: Boolean
         do {
             changed = false
@@ -845,7 +847,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         declared.size <= 1 &&
                         declared.all { member -> member.isDirectProducerMember(parameter) }
             }
-            Variance.INVARIANT -> directInvariantPropertyMembersOrNull(parameter)
+            Variance.INVARIANT -> directInvariantPropertyChildMembersOrNull(parameter)
             Variance.IN_VARIANCE -> null
         } ?: return null
         val parentTypes = dotNetDirectInterfaceTypes().takeIf { it.isNotEmpty() } ?: return null
@@ -914,6 +916,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     setter.correspondingPropertySymbol?.owner === property &&
                     getter.isDirectProducerMember(parameter) &&
                     setter.isDirectConsumerMember(parameter)
+        }
+    }
+
+    private fun IrClass.directInvariantPropertyChildMembersOrNull(
+        parameter: IrTypeParameter,
+    ): List<IrSimpleFunction>? {
+        directInvariantPropertyMembersOrNull(parameter)?.let { return it }
+        if (declaredInterfaceProperties().isNotEmpty()) return null
+        return declaredInterfaceMembers().takeIf { members ->
+            members.size == 1 && members.single().isDirectConsumerMember(parameter)
         }
     }
 
