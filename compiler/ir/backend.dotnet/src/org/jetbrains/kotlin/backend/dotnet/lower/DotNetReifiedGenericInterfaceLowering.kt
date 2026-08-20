@@ -14,8 +14,15 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceParentContract
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
@@ -117,6 +124,146 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val declaredMembers: List<IrSimpleFunction>,
     )
 
+    private fun IrClass.requiredPublishedLogicalKey(role: String): String =
+        context.preLoweringDeclarationKeys[this]
+            ?: fqNameWhenAvailable?.asString()
+            ?: error("Internal .NET backend error: published generic-interface $role has no logical identity")
+
+    private fun IrSimpleFunction.requiredPublishedLogicalKey(role: String): String =
+        context.preLoweringDeclarationKeys[this]
+            ?: (parent as? IrClass)?.let { owner ->
+                "${owner.requiredPublishedLogicalKey("member owner")}#${dotNetGenericInterfaceCanonicalSlotId()}"
+            }
+            ?: error("Internal .NET backend error: published generic-interface $role has no logical identity")
+
+    private fun IrClass.publishedMemberContractsOrNull(
+        members: List<IrSimpleFunction>,
+    ): List<DotNetPublishedGenericInterfaceMemberContract>? {
+        val parameter = typeParameters.singleOrNull() ?: return null
+        return buildList {
+            for (member in members) {
+                val property = member.correspondingPropertySymbol?.owner
+                val role = when {
+                    property?.getter === member && member.isDirectProducerMember(parameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.PROPERTY_GETTER
+                    property?.setter === member && member.isDirectConsumerMember(parameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.PROPERTY_SETTER
+                    member.isDirectProducerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+                    member.isDirectConsumerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.CONSUMER
+                    else -> return null
+                }
+                val logicalMemberKey = context.preLoweringDeclarationKeys[member]
+                    ?: externalDeclarations.genericOwnerMemberFamilyOrNull(member)?.family?.logicalMemberKey
+                    ?: member.takeIf { candidate -> candidate.fileOrNull != null }
+                        ?.requiredPublishedLogicalKey("member")
+                    ?: return null
+                add(DotNetPublishedGenericInterfaceMemberContract(
+                    logicalMemberKey,
+                    role,
+                ))
+            }
+        }.sortedBy { member -> member.logicalMemberKey }
+    }
+
+    private fun rawPublishedFamilyOrNull(owner: IrClass): DotNetPublishedGenericInterfaceFamilyContract? =
+        context.publishedGenericInterfaceFamilies[owner]
+            ?: externalDeclarations.publishedGenericInterfaceFamilyOrNull(owner)
+
+    private fun publishedFamilyOrNull(
+        owner: IrClass,
+        visiting: Set<IrClass> = emptySet(),
+    ): DotNetPublishedGenericInterfaceFamilyContract? {
+        if (owner in visiting || !owner.hasLogicalReifiedInterfaceOwnerShape()) return null
+        val contract = rawPublishedFamilyOrNull(owner) ?: return null
+        if (contract.genericArity != owner.typeParameters.size) return null
+        val declaredMembers = owner.publishedMemberContractsOrNull(owner.declaredInterfaceMembers())
+            ?: return null
+        if (contract.declaredMembers != declaredMembers) return null
+        val parentContracts = mutableListOf<DotNetPublishedGenericInterfaceFamilyContract>()
+        val expectedParents = owner.dotNetDirectInterfaceTypes().map { parentType ->
+            val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
+            val mapping = parentType.arguments.map { argument ->
+                val projection = argument as? IrTypeProjection ?: return null
+                val parameter = (projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+                    ?: return null
+                if (projection.variance != Variance.INVARIANT || parameter.owner.parent !== owner) return null
+                owner.typeParameters.indexOf(parameter.owner).takeIf { index -> index >= 0 } ?: return null
+            }
+            if (mapping != mapping.indices.toList()) return null
+            val parentContract = publishedFamilyOrNull(parent, visiting + owner) ?: return null
+            parentContracts += parentContract
+            DotNetPublishedGenericInterfaceParentContract(parentContract.logicalOwnerKey, mapping)
+        }.sortedBy { parent -> parent.logicalOwnerKey }
+        if (contract.directParents != expectedParents) return null
+        val expectedRoots = if (parentContracts.isEmpty()) {
+            listOf(contract.logicalOwnerKey)
+        } else {
+            parentContracts.flatMap { parent -> parent.rootLogicalOwnerKeys }.distinct().sorted()
+        }
+        val expectedDepth = parentContracts.maxOfOrNull { parent -> parent.lineageDepth + 1 } ?: 0
+        val expectedKind = when {
+            parentContracts.isEmpty() -> DotNetPublishedGenericInterfaceFamilyKind.ROOT
+            expectedRoots.size == 1 -> DotNetPublishedGenericInterfaceFamilyKind.DERIVED
+            else -> DotNetPublishedGenericInterfaceFamilyKind.INTERSECTION
+        }
+        return contract.takeIf {
+            it.rootLogicalOwnerKeys == expectedRoots &&
+                    it.lineageDepth == expectedDepth &&
+                    it.kind == expectedKind
+        }
+    }
+
+    private fun publishFamily(
+        owner: IrClass,
+        parents: List<IrClass>,
+        declaredMembers: List<IrSimpleFunction>,
+        capabilityBindingKind: DotNetPublishedGenericInterfaceCapabilityBindingKind,
+        reusedParent: IrClass? = null,
+    ) {
+        val logicalOwnerKey = owner.requiredPublishedLogicalKey("owner")
+        val parentContracts = parents.map { parent ->
+            publishedFamilyOrNull(parent)
+                ?: error(
+                    "Internal .NET backend error: published generic-interface parent " +
+                            "'${parent.name}' has no family contract"
+                )
+        }
+        val roots = if (parentContracts.isEmpty()) {
+            listOf(logicalOwnerKey)
+        } else {
+            parentContracts.flatMap { contract -> contract.rootLogicalOwnerKeys }.distinct().sorted()
+        }
+        val contract = DotNetPublishedGenericInterfaceFamilyContract(
+            logicalOwnerKey = logicalOwnerKey,
+            genericArity = owner.typeParameters.size,
+            kind = when {
+                parentContracts.isEmpty() -> DotNetPublishedGenericInterfaceFamilyKind.ROOT
+                roots.size == 1 -> DotNetPublishedGenericInterfaceFamilyKind.DERIVED
+                else -> DotNetPublishedGenericInterfaceFamilyKind.INTERSECTION
+            },
+            rootLogicalOwnerKeys = roots,
+            directParents = parentContracts.map { parent ->
+                DotNetPublishedGenericInterfaceParentContract(
+                    parent.logicalOwnerKey,
+                    (0 until parent.genericArity).toList(),
+                )
+            }.sortedBy { parent -> parent.logicalOwnerKey },
+            lineageDepth = parentContracts.maxOfOrNull { contract -> contract.lineageDepth + 1 } ?: 0,
+            declaredMembers = checkNotNull(owner.publishedMemberContractsOrNull(declaredMembers)) {
+                "Internal .NET backend error: published generic-interface member roles changed"
+            },
+            capabilityBindingKind = capabilityBindingKind,
+            reusedParentLogicalOwnerKey = reusedParent?.let { parent ->
+                checkNotNull(publishedFamilyOrNull(parent)) {
+                    "Internal .NET backend error: reused capability parent has no published contract"
+                }.logicalOwnerKey
+            },
+        )
+        check(context.publishedGenericInterfaceFamilies.put(owner, contract) == null) {
+            "Internal .NET backend error: '${owner.name}' published multiple generic-interface contracts"
+        }
+    }
+
     override fun lower(irModule: IrModuleFragment) {
         if (!context.configuration.dotNetGenericOwnerRehearsal) return
 
@@ -160,6 +307,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 owner.declaredInterfaceMembers(),
                 slotsBySource,
             )
+            publishFamily(
+                owner,
+                parents = emptyList(),
+                declaredMembers = owner.declaredInterfaceMembers(),
+                capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
+            )
         }
 
         // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
@@ -175,6 +328,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
             for (owner in genericInterfaces) {
                 if (owner in context.reifiedGenericInterfaces) continue
                 val shape = owner.reifiedInterfaceChildShapeOrNull() ?: continue
+                if (shape.parents.any { parent -> publishedFamilyOrNull(parent) == null }) continue
                 if (shape.parents.any { parent ->
                         parent !in context.genericOwnerCapabilityInterfaces &&
                                 parent !in context.externalReifiedGenericInterfaceCapabilityProviders &&
@@ -199,6 +353,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ) {
                     context.reifiedGenericInterfaces += owner
                     context.genericOwnerCapabilityInterfaces[owner] = localCapabilities.single()
+                    val reusedParent = shape.parents.first { parent ->
+                        context.genericOwnerCapabilityInterfaces[parent] == localCapabilities.single()
+                    }
+                    publishFamily(
+                        owner,
+                        shape.parents,
+                        shape.declaredMembers,
+                        DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
+                        reusedParent,
+                    )
                     changed = true
                     continue
                 }
@@ -207,6 +371,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ) {
                     context.reifiedGenericInterfaces += owner
                     context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProviders.single()
+                    val reusedProvider = externalProviders.single()
+                    val reusedParent = shape.parents.first { parent ->
+                        context.externalReifiedGenericInterfaceCapabilityProviders[parent] == reusedProvider ||
+                                parent == reusedProvider
+                    }
+                    publishFamily(
+                        owner,
+                        shape.parents,
+                        shape.declaredMembers,
+                        DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
+                        reusedParent,
+                    )
                     changed = true
                     continue
                 }
@@ -229,6 +405,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     identity,
                     shape.declaredMembers,
                     slotsBySource,
+                )
+                publishFamily(
+                    owner,
+                    shape.parents,
+                    shape.declaredMembers,
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                 )
                 changed = true
             }
@@ -942,14 +1124,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrClass.isExactInvariantPropertyConsumerChildOfRoot(): Boolean {
-        val isExternalReifiedOwner = externalDeclarations.hasReifiedGenericInterface(this)
-        if (!hasFirstReifiedInterfaceOwnerShape() && !isExternalReifiedOwner) return false
-        val parameter = typeParameters.single()
+        val contract = publishedFamilyOrNull(this) ?: return false
+        val parameter = typeParameters.singleOrNull() ?: return false
         val consumerMembers = directInvariantConsumerMembersOrNull(parameter)
         if (parameter.variance != Variance.INVARIANT || consumerMembers == null ||
-            (isExternalReifiedOwner && consumerMembers.any { member ->
-                externalDeclarations.genericOwnerMemberFamilyOrNull(member) == null
-            })
+            contract.kind != DotNetPublishedGenericInterfaceFamilyKind.DERIVED ||
+            contract.lineageDepth != 1 ||
+            contract.directParents.size != 1 ||
+            contract.capabilityBindingKind != DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED
         ) {
             return false
         }
@@ -963,13 +1145,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val parentParameter = parent.typeParameters.singleOrNull() ?: return false
         val parentPropertyMembers = parent.directInvariantPropertyMembersOrNull(parentParameter)
             ?: return false
-        val isExternalReifiedParent = externalDeclarations.hasReifiedGenericInterface(parent)
+        val rootContract = publishedFamilyOrNull(parent) ?: return false
         return parentParameter.variance == Variance.INVARIANT &&
                 parent.dotNetDirectInterfaceTypes().isEmpty() &&
-                (parent.hasFirstReifiedInterfaceOwnerShape() || isExternalReifiedParent) &&
-                (!isExternalReifiedParent || parentPropertyMembers.all { member ->
-                    externalDeclarations.genericOwnerMemberFamilyOrNull(member) != null
-                })
+                parent.hasLogicalReifiedInterfaceOwnerShape() &&
+                rootContract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                rootContract.lineageDepth == 0 &&
+                contract.rootLogicalOwnerKeys == listOf(rootContract.logicalOwnerKey) &&
+                contract.directParents.single().logicalOwnerKey == rootContract.logicalOwnerKey &&
+                parentPropertyMembers.size == rootContract.declaredMembers.size
     }
 
     private fun IrSimpleFunction.isDirectProducerMember(parameter: IrTypeParameter): Boolean {
@@ -1005,11 +1189,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrClass.hasFirstReifiedInterfaceOwnerShape(): Boolean {
-        if (!isDotNetGenericInterfaceDeclaration || visibility != DescriptorVisibilities.PUBLIC ||
-            parent !is IrFile
-        ) {
-            return false
-        }
+        if (!hasLogicalReifiedInterfaceOwnerShape() || parent !is IrFile) return false
+        return true
+    }
+
+    private fun IrClass.hasLogicalReifiedInterfaceOwnerShape(): Boolean {
+        if (!isDotNetGenericInterfaceDeclaration || visibility != DescriptorVisibilities.PUBLIC) return false
         val parameter = typeParameters.singleOrNull() ?: return false
         return parameter.superTypes.all(IrType::isNullableAny)
     }

@@ -221,6 +221,7 @@ object DotNetBackend {
                     genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                     genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
+                    publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                     externalReifiedGenericInterfaceCapabilityProviders =
                         context.externalReifiedGenericInterfaceCapabilityProviders,
@@ -358,6 +359,7 @@ object DotNetBackend {
                 genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                 genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,
+                publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                 externalReifiedGenericInterfaceCapabilityProviders =
                     context.externalReifiedGenericInterfaceCapabilityProviders,

@@ -393,6 +393,14 @@ semantic TypeDef stays in its declaring DLL, while ordinary non-partial C#
 grandchildren retain the same one-property/two-method surface. See
 [`../archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md`](../archive/generic-owner-three-assembly-consumer-chain-2026-08-20.md).
 
+ABI 41 turns that deployment conjunction into one typed published-interface
+family contract. Local and external parents now reach one validator with exact
+root/parent topology, identity parameter mapping, lineage depth, declared
+member roles, and owned/reused capability binding. The external index rejects
+the family atomically when any Class, capability, member, or parent record is
+missing or inconsistent. See
+[`../archive/generic-interface-published-family-contract-2026-08-20.md`](../archive/generic-interface-published-family-contract-2026-08-20.md).
+
 Physical-family schema 16 now closes the nullable-reference part of that
 direct surface. Every MethodDef value slot, property, and physical state carries
 the exact Roslyn preorder transform captured from the original IR type while

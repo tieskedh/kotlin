@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-interface-published-family-contract-2026-08-20.md`](generic-interface-published-family-contract-2026-08-20.md)
+  records ABI 41's typed root/parent/member/capability contract, atomic
+  external-index validation, shared local/external admission consumer, and
+  paired direct/separate rehearsal matrices.
 - [`generic-owner-three-assembly-consumer-chain-2026-08-20.md`](generic-owner-three-assembly-consumer-chain-2026-08-20.md)
   records the property-root/consumer-child/consumer-grandchild family across
   three Kotlin producer DLLs, producer-recorded external admission, exact
