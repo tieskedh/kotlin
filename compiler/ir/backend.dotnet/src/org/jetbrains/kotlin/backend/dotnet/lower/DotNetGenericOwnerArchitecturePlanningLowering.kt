@@ -1123,7 +1123,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         // un-emitted semantic prototype and bind it to the family record carried by the producer
         // assembly. Codegen can then use the same call path as a local capability slot while the
         // physical owner/name remain entirely producer-authoritative.
-        val externalSlots = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
+        val externalSlots = context.externalGenericOwnerCapabilitySlots
         val externalDefaultSlots = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
         val externalSemanticSlots = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
         fun createExternalDefaultSlot(

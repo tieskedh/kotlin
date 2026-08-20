@@ -380,10 +380,16 @@ without reconstructing physical inheritance from consumer KLIB.
 This early declaration fact is deliberately distinct from final call/value
 routing. It is sufficient for ordinary `Iterator` calls which
 `ForLoopsLowering` creates after generic-owner materialization, including a
-widened class view crossing a producer DLL. It does not choose routes for
-later body-generated operations whose exact/capability decision depends on
-value provenance; the idempotent final router remains a separate gate. See
+widened class view crossing a producer DLL. Later body-generated operations
+whose exact/capability decision depends on value provenance are now handled by
+a final idempotent router after every current body-producing lowering which can
+introduce a generic operation. The router consumes the early contract,
+propagates generated value-class carrier provenance, and adds routes to a
+monotone fixpoint. It cannot materialize a new family or weaken an earlier
+planner route. See
 [`../archive/generic-owner-capability-superinterface-closure-2026-08-20.md`](../archive/generic-owner-capability-superinterface-closure-2026-08-20.md).
+The final-router proof is archived in
+[`../archive/generic-owner-final-call-value-routing-2026-08-20.md`](../archive/generic-owner-final-call-value-routing-2026-08-20.md).
 
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/

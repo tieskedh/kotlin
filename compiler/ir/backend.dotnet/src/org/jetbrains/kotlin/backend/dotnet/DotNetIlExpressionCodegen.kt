@@ -179,6 +179,19 @@ internal class DotNetIlExpressionCodegen(
      */
     fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
         if (expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.REINTERPRET_CAST) {
+            val sourceValueClassCarrier =
+                typeMapper.genericOwnerValueClassCarrierTypeOrNull(expression.argument.type)
+            val targetValueClassCarrier =
+                typeMapper.genericOwnerValueClassCarrierTypeOrNull(expression.typeOperand)
+            val operandCarrier = mappedNaturalType(expression.argument)
+            if (sourceValueClassCarrier != null &&
+                operandCarrier == sourceValueClassCarrier
+            ) {
+                return sourceValueClassCarrier
+            }
+            if (targetValueClassCarrier != null && operandCarrier == targetValueClassCarrier) {
+                return targetValueClassCarrier
+            }
             val valueClass = expression.typeOperand.dotNetValueClassOrNull()
             if (valueClass != null &&
                 expression.typeOperand.referencesTypeParameterOf(valueClass) &&
@@ -1162,14 +1175,23 @@ internal class DotNetIlExpressionCodegen(
                 (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL &&
                         expression.argument.type.dotNetValueClassOrNull() != null &&
                         expression.argument.type.dotNetUnboxedValueClassTypeOrNull() == null)
-        val erasedValueClassOwnerCarrierReinterpret =
-            expression.operator == IrTypeOperator.REINTERPRET_CAST &&
-                    expression.typeOperand.dotNetValueClassOrNull()?.let { valueClass ->
-                        expression.typeOperand.referencesTypeParameterOf(valueClass)
-                    } == true &&
-                    operandType == DotNetIlValueType.Object
-        val castType = if (erasedValueClassOwnerCarrierReinterpret) {
-            DotNetIlValueType.Object
+        val valueClassOwnerCarrierReinterpretType =
+            if (expression.operator != IrTypeOperator.REINTERPRET_CAST) {
+                null
+            } else if (expression.typeOperand.dotNetValueClassOrNull()?.let { valueClass ->
+                    expression.typeOperand.referencesTypeParameterOf(valueClass)
+                } == true && operandType == DotNetIlValueType.Object
+            ) {
+                DotNetIlValueType.Object
+            } else if (typeMapper.genericOwnerValueClassCarrierTypeOrNull(expression.argument.type) == operandType ||
+                typeMapper.genericOwnerValueClassCarrierTypeOrNull(expression.typeOperand) == operandType
+            ) {
+                operandType
+            } else {
+                null
+            }
+        val castType = if (valueClassOwnerCarrierReinterpretType != null) {
+            valueClassOwnerCarrierReinterpretType
         } else if (valueClassRuntimeOperator && boxedValueClassCastType != null) {
             boxedValueClassCastType
         } else {

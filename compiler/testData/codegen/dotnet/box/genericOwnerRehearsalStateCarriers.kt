@@ -89,6 +89,18 @@ public open class RehearsalKotlinOverrideStore<out T>(initial: T) :
     public override fun read(): T = super.read()
 }
 
+// The final pass must apply the same stable routing rule to a copied generic-class call, not only
+// to reified interface members. The unboxed value keeps the class capability as its one carrier.
+private value class RehearsalLateRoutedOwnerValue(
+    val store: RehearsalForeignOverrideStore<Any?>,
+) {
+    init {
+        check(store.read() == 57)
+    }
+
+    fun read(): Any? = store.read()
+}
+
 public fun rehearsalWidenedRead(store: RehearsalForeignOverrideStore<Any?>): Any? = store.read()
 
 // The first generic-interface reopening tranche is structural rather than library- or name-
@@ -169,6 +181,19 @@ public interface RehearsalInvariantNullableCell<T> {
 
 private class RehearsalProducerValue<T>(private val value: T) : RehearsalProducer<T> {
     override fun produce(): T = value
+}
+
+// InlineClassDeclarationLowering deep-copies this init body after generic-owner publication. The
+// final router must classify both its generated static parameter and copied produce() call from
+// stable declaration/value provenance rather than the source IrCall identity.
+private value class RehearsalLateRoutedValue(
+    val producer: RehearsalProducer<Any?>,
+) {
+    init {
+        check(producer.produce() == 41)
+    }
+
+    fun read(): Any? = producer.produce()
 }
 
 private class RehearsalConsumerValue<T>(initial: T) : RehearsalConsumer<T> {
@@ -440,6 +465,11 @@ fun box(): String {
     val customGetter = RehearsalCustomGetter("custom")
     if (customGetter.read() != "custom" || customGetter.readCount() != 1) return "fail: custom getter"
 
+    val lateRoutedOwnerSource = RehearsalForeignOverrideStore(57)
+    val lateRoutedOwnerView: RehearsalForeignOverrideStore<Any?> = lateRoutedOwnerSource
+    val lateRoutedOwnerValue = RehearsalLateRoutedOwnerValue(lateRoutedOwnerView)
+    if (lateRoutedOwnerValue.read() != 57) return "fail: late-routed generic owner"
+
     val exactStore = RehearsalForeignOverrideStore(11)
     val widenedStore: RehearsalForeignOverrideStore<Any?> = exactStore
     widenedStore.write("semantic")
@@ -458,6 +488,8 @@ fun box(): String {
     val broadProducer: RehearsalProducer<Any?> = intProducer
     if (rehearsalBroadProduce(broadProducer) != 41) return "fail: broad value producer"
     if (broadProducer !== intProducer) return "fail: producer identity"
+    val lateRoutedValue = RehearsalLateRoutedValue(broadProducer)
+    if (lateRoutedValue.read() != 41) return "fail: late-routed value-class producer"
 
     val stringProducer: RehearsalProducer<String> = RehearsalProducerValue("typed")
     if (stringProducer.produce() != "typed") return "fail: exact reference producer"

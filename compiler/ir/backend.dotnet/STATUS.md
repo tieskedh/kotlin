@@ -436,9 +436,21 @@ verification, and work state.
   CLR generic interfaces remain excluded because no single construction is
   universally truthful. The enabled rehearsal and epoch-off inverse each pass
   eight PSI/LightTree, Framework 4.8/.NET 10 lanes. This closes an early stable
-  declaration prerequisite for late body-generated operations; the final
-  idempotent call/value router remains open. Evidence is in
+  declaration prerequisite for late body-generated operations. The final
+  idempotent call/value router now runs after every current body-producing
+  lowering which can introduce a generic operation. It retains the early
+  family plan as authority, visits generated calls in post-order, and
+  propagates generic value-class backing carriers through
+  their constructor/getter/box/unbox/reinterpret products, and reaches a
+  monotone fixpoint for reverse declaration-order dependencies. It may only
+  add a proven late route: it cannot create a family or remove a stronger
+  planner route. Local and separate hostile value-class wrappers over widened
+  interface and generic-class values pass all eight enabled and epoch-off
+  lanes; exported IL retains the producer capability and contains no
+  `C<object>` reconstruction. Evidence is in
   [`docs/archive/generic-owner-capability-superinterface-closure-2026-08-20.md`](docs/archive/generic-owner-capability-superinterface-closure-2026-08-20.md).
+  The final-router evidence is in
+  [`docs/archive/generic-owner-final-call-value-routing-2026-08-20.md`](docs/archive/generic-owner-final-call-value-routing-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the

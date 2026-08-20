@@ -27,6 +27,9 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnboxedValueClassTypeOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassConstructorImplementationSourceOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassImplementationSourceOrNull
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
@@ -79,6 +82,7 @@ import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.getInlineClassBackingField
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
@@ -116,6 +120,7 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
+    private val finalRoutingOnly: Boolean = false,
 ) : ModuleLoweringPass {
     private val externalDeclarations = context.externalDeclarationsForLowering()
 
@@ -286,106 +291,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 declaration.acceptChildrenVoid(this)
             }
         })
-        val slotsBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
-        for (owner in genericInterfaces.filter { candidate ->
-            candidate.isFirstReifiedInterfaceCandidate()
-        }) {
-            val file = checkNotNull(owner.fileOrNull) {
-                "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
+        val slotsBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>().apply {
+            if (finalRoutingOnly) {
+                putAll(context.genericOwnerCapabilitySlots)
+                putAll(context.externalGenericOwnerCapabilitySlots)
             }
-            val identity = context.preLoweringDeclarationKeys[owner]
-                ?: owner.fqNameWhenAvailable?.asString()
-                ?: owner.name.asString()
-            val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
-            val capability = buildSemanticCapability(owner, file, suffix, emptyList())
-            file.declarations += capability
-            context.reifiedGenericInterfaces += owner
-            context.genericOwnerCapabilityInterfaces[owner] = capability
-            materializeDeclaredSemanticSlots(
-                capability,
-                identity,
-                owner.declaredInterfaceMembers(),
-                slotsBySource,
-            )
-            publishFamily(
-                owner,
-                parents = emptyList(),
-                declaredMembers = owner.declaredInterfaceMembers(),
-                capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
-            )
         }
-
-        // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
-        // would have to name an already-reified Parent<T> without owning a CLR T, which is
-        // impossible. A memberless child in one semantic domain reuses that capability. A child
-        // which adds an admitted producer, invariant property, or direct invariant consumer, or
-        // joins independent domains, receives one child capability inheriting the parent
-        // capabilities. It owns only its declared slots: no inherited slot, implementation, or
-        // state is copied.
-        var changed: Boolean
-        do {
-            changed = false
-            for (owner in genericInterfaces) {
-                if (owner in context.reifiedGenericInterfaces) continue
-                val shape = owner.reifiedInterfaceChildShapeOrNull() ?: continue
-                if (shape.parents.any { parent -> publishedFamilyOrNull(parent) == null }) continue
-                if (shape.parents.any { parent ->
-                        parent !in context.genericOwnerCapabilityInterfaces &&
-                                parent !in context.externalReifiedGenericInterfaceCapabilityProviders &&
-                                !externalDeclarations.hasReifiedGenericInterface(parent)
-                    }
-                ) {
-                    continue
-                }
-                val localCapabilities = shape.parents.mapNotNull(context.genericOwnerCapabilityInterfaces::get)
-                    .distinct()
-                val externalProviders = shape.parents.mapNotNull { parent ->
-                    context.externalReifiedGenericInterfaceCapabilityProviders[parent]
-                        ?: parent.takeIf(externalDeclarations::hasReifiedGenericInterface)
-                }.distinctBy { provider ->
-                    val capability = checkNotNull(
-                        externalDeclarations.genericOwnerCapabilityInfoOrNull(provider)
-                    )
-                    capability.assemblyName to capability.physicalPathComponents()
-                }
-                if (shape.declaredMembers.isEmpty() &&
-                    localCapabilities.size == 1 && externalProviders.isEmpty()
-                ) {
-                    context.reifiedGenericInterfaces += owner
-                    context.genericOwnerCapabilityInterfaces[owner] = localCapabilities.single()
-                    val reusedParent = shape.parents.first { parent ->
-                        context.genericOwnerCapabilityInterfaces[parent] == localCapabilities.single()
-                    }
-                    publishFamily(
-                        owner,
-                        shape.parents,
-                        shape.declaredMembers,
-                        DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
-                        reusedParent,
-                    )
-                    changed = true
-                    continue
-                }
-                if (shape.declaredMembers.isEmpty() &&
-                    externalProviders.size == 1 && localCapabilities.isEmpty()
-                ) {
-                    context.reifiedGenericInterfaces += owner
-                    context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProviders.single()
-                    val reusedProvider = externalProviders.single()
-                    val reusedParent = shape.parents.first { parent ->
-                        context.externalReifiedGenericInterfaceCapabilityProviders[parent] == reusedProvider ||
-                                parent == reusedProvider
-                    }
-                    publishFamily(
-                        owner,
-                        shape.parents,
-                        shape.declaredMembers,
-                        DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
-                        reusedParent,
-                    )
-                    changed = true
-                    continue
-                }
+        if (!finalRoutingOnly) {
+            for (owner in genericInterfaces.filter { candidate ->
+                candidate.isFirstReifiedInterfaceCandidate()
+            }) {
                 val file = checkNotNull(owner.fileOrNull) {
                     "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
                 }
@@ -393,30 +308,127 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     ?: owner.fqNameWhenAvailable?.asString()
                     ?: owner.name.asString()
                 val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
-                val capability = buildSemanticCapability(owner, file, suffix, localCapabilities)
+                val capability = buildSemanticCapability(owner, file, suffix, emptyList())
                 file.declarations += capability
                 context.reifiedGenericInterfaces += owner
                 context.genericOwnerCapabilityInterfaces[owner] = capability
-                if (externalProviders.isNotEmpty()) {
-                    context.externalGenericOwnerCapabilitySupertypeProviders[capability] = externalProviders
-                }
                 materializeDeclaredSemanticSlots(
                     capability,
                     identity,
-                    shape.declaredMembers,
+                    owner.declaredInterfaceMembers(),
                     slotsBySource,
                 )
                 publishFamily(
                     owner,
-                    shape.parents,
-                    shape.declaredMembers,
-                    DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
+                    parents = emptyList(),
+                    declaredMembers = owner.declaredInterfaceMembers(),
+                    capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                 )
-                changed = true
             }
-        } while (changed)
 
-        closeGenericClassCapabilityInterfaceSupertypes()
+            // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
+            // would have to name an already-reified Parent<T> without owning a CLR T, which is
+            // impossible. A memberless child in one semantic domain reuses that capability. A child
+            // which adds an admitted producer, invariant property, or direct invariant consumer, or
+            // joins independent domains, receives one child capability inheriting the parent
+            // capabilities. It owns only its declared slots: no inherited slot, implementation, or
+            // state is copied.
+            var changed: Boolean
+            do {
+                changed = false
+                for (owner in genericInterfaces) {
+                    if (owner in context.reifiedGenericInterfaces) continue
+                    val shape = owner.reifiedInterfaceChildShapeOrNull() ?: continue
+                    if (shape.parents.any { parent -> publishedFamilyOrNull(parent) == null }) continue
+                    if (shape.parents.any { parent ->
+                            parent !in context.genericOwnerCapabilityInterfaces &&
+                                    parent !in context.externalReifiedGenericInterfaceCapabilityProviders &&
+                                    !externalDeclarations.hasReifiedGenericInterface(parent)
+                        }
+                    ) {
+                        continue
+                    }
+                    val localCapabilities = shape.parents.mapNotNull(context.genericOwnerCapabilityInterfaces::get)
+                        .distinct()
+                    val externalProviders = shape.parents.mapNotNull { parent ->
+                        context.externalReifiedGenericInterfaceCapabilityProviders[parent]
+                            ?: parent.takeIf(externalDeclarations::hasReifiedGenericInterface)
+                    }.distinctBy { provider ->
+                        val capability = checkNotNull(
+                            externalDeclarations.genericOwnerCapabilityInfoOrNull(provider)
+                        )
+                        capability.assemblyName to capability.physicalPathComponents()
+                    }
+                    if (shape.declaredMembers.isEmpty() &&
+                        localCapabilities.size == 1 && externalProviders.isEmpty()
+                    ) {
+                        context.reifiedGenericInterfaces += owner
+                        context.genericOwnerCapabilityInterfaces[owner] = localCapabilities.single()
+                        val reusedParent = shape.parents.first { parent ->
+                            context.genericOwnerCapabilityInterfaces[parent] == localCapabilities.single()
+                        }
+                        publishFamily(
+                            owner,
+                            shape.parents,
+                            shape.declaredMembers,
+                            DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
+                            reusedParent,
+                        )
+                        changed = true
+                        continue
+                    }
+                    if (shape.declaredMembers.isEmpty() &&
+                        externalProviders.size == 1 && localCapabilities.isEmpty()
+                    ) {
+                        context.reifiedGenericInterfaces += owner
+                        context.externalReifiedGenericInterfaceCapabilityProviders[owner] = externalProviders.single()
+                        val reusedProvider = externalProviders.single()
+                        val reusedParent = shape.parents.first { parent ->
+                            context.externalReifiedGenericInterfaceCapabilityProviders[parent] == reusedProvider ||
+                                    parent == reusedProvider
+                        }
+                        publishFamily(
+                            owner,
+                            shape.parents,
+                            shape.declaredMembers,
+                            DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
+                            reusedParent,
+                        )
+                        changed = true
+                        continue
+                    }
+                    val file = checkNotNull(owner.fileOrNull) {
+                        "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
+                    }
+                    val identity = context.preLoweringDeclarationKeys[owner]
+                        ?: owner.fqNameWhenAvailable?.asString()
+                        ?: owner.name.asString()
+                    val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
+                    val capability = buildSemanticCapability(owner, file, suffix, localCapabilities)
+                    file.declarations += capability
+                    context.reifiedGenericInterfaces += owner
+                    context.genericOwnerCapabilityInterfaces[owner] = capability
+                    if (externalProviders.isNotEmpty()) {
+                        context.externalGenericOwnerCapabilitySupertypeProviders[capability] = externalProviders
+                    }
+                    materializeDeclaredSemanticSlots(
+                        capability,
+                        identity,
+                        shape.declaredMembers,
+                        slotsBySource,
+                    )
+                    publishFamily(
+                        owner,
+                        shape.parents,
+                        shape.declaredMembers,
+                        DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
+                    )
+                    changed = true
+                }
+            } while (changed)
+
+            closeGenericClassCapabilityInterfaceSupertypes()
+        }
 
         fun IrType.hasClrValueGenericArgumentCarrier(): Boolean {
             if (isPrimitiveType() || isPrimitiveType(nullable = true)) return true
@@ -574,6 +586,29 @@ internal class DotNetReifiedGenericInterfaceLowering(
         fun IrSimpleFunction.externalReturnCarrierOrNull(): DotNetGenericOwnerFunctionCarrierKind? =
             externalDeclarations.genericOwnerFunctionCarrierOrNull(this)?.carrier?.returnCarrier
 
+        fun IrType.genericOwnerValueClassCarrierDeclarationOrNull(): IrField? {
+            dotNetUnboxedValueClassTypeOrNull() ?: return null
+            val valueClass = dotNetValueClassOrNull() ?: return null
+            return getInlineClassBackingField(valueClass)
+        }
+
+        fun IrSimpleFunction.hasValueClassCarrierSourceIn(
+            declarations: Set<IrDeclaration>,
+        ): Boolean {
+            val source = dotNetValueClassImplementationSourceOrNull() ?: return false
+            if (source in declarations) return true
+            if (source.correspondingPropertySymbol?.owner?.backingField?.let { field ->
+                    field in declarations
+                } == true
+            ) {
+                return true
+            }
+            val backingField = getInlineClassBackingField(parent as IrClass)
+            val returnsBackingClassifier =
+                (returnType as? IrSimpleType)?.classifier == (backingField.type as? IrSimpleType)?.classifier
+            return returnsBackingClassifier && backingField in declarations
+        }
+
         fun IrExpression.readsSemanticInterfaceDeclaration(): Boolean = when (this) {
             is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrGetField -> symbol.owner in context.genericOwnerCapabilityDeclarations
@@ -582,12 +617,20 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     symbol.owner.externalReturnCarrierOrNull() != null -> true
                     (symbol.owner.parent as? IrClass)?.isDotNetGenericClassDeclaration == true ->
                         this in context.genericOwnerCapabilityCallTargets
-                    else -> symbol.owner in context.genericOwnerCapabilityDeclarations
+                    else -> symbol.owner in context.genericOwnerCapabilityDeclarations ||
+                            symbol.owner.hasValueClassCarrierSourceIn(
+                                context.genericOwnerCapabilityDeclarations,
+                            )
                 }
             is IrTypeOperatorCall -> when (operator) {
                 IrTypeOperator.IMPLICIT_CAST,
                 IrTypeOperator.IMPLICIT_NOTNULL,
                     -> argument.readsSemanticInterfaceDeclaration()
+                IrTypeOperator.REINTERPRET_CAST ->
+                    argument.readsSemanticInterfaceDeclaration() ||
+                            argument.type.genericOwnerValueClassCarrierDeclarationOrNull()?.let { field ->
+                                field in context.genericOwnerCapabilityDeclarations
+                            } == true
                 else -> false
             }
             else -> false
@@ -602,6 +645,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetGenericOwnerFunctionCarrierKind.OBJECT)
             is IrTypeOperatorCall ->
                 argument.readsForeignDispatchDeclaration() ||
+                        (operator == IrTypeOperator.REINTERPRET_CAST &&
+                                argument.type.genericOwnerValueClassCarrierDeclarationOrNull()?.let { field ->
+                                    field in context.genericOwnerForeignDispatchDeclarations
+                                } == true) ||
                         ((operator == IrTypeOperator.CAST ||
                                 operator == IrTypeOperator.SAFE_CAST ||
                                 operator == IrTypeOperator.IMPLICIT_CAST) &&
@@ -614,8 +661,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // reference to a later semantic field could otherwise be stored as Consumer<int>. A
         // concrete class is independent evidence because the invariant InterfaceImpl edge is
         // fixed in its physical ancestry (after erased owners above have been normalized).
-        val exactInterfaceDeclarationTypes = linkedMapOf<IrDeclaration, IrType>()
-        val capabilityBearingExactInterfaceDeclarations = linkedSetOf<IrDeclaration>()
+        val exactInterfaceDeclarationTypes = context.genericOwnerExactInterfaceDeclarationTypes
+        val capabilityBearingExactInterfaceDeclarations = context.genericOwnerCapabilityBearingDeclarations
 
         fun IrExpression.provesExactPhysicalInterfaceView(expected: IrType): Boolean {
             if (readsSemanticInterfaceDeclaration()) return false
@@ -664,6 +711,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
             type: IrType,
             exactProducer: IrExpression? = null,
         ) {
+            type.genericOwnerValueClassCarrierDeclarationOrNull()?.let { backingField ->
+                if (backingField in context.genericOwnerCapabilityDeclarations) {
+                    context.genericOwnerCapabilityDeclarations += declaration
+                }
+                if (backingField in context.genericOwnerForeignDispatchDeclarations) {
+                    context.genericOwnerForeignDispatchDeclarations += declaration
+                }
+            }
+            if (declaration in exactInterfaceDeclarationTypes) return
             val classifierErasedOwner = exactProducer?.classifierErasedInterfaceOwnerOrNull()
             val declaredOwner = type.reifiedInterfaceOwnerOrNull()
             if (classifierErasedOwner == null &&
@@ -739,58 +795,60 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // an IR copy of that body with only the classifier-derived input widened to object. This
         // avoids making ordinary Kotlin/C# calls pay an object-domain wrapper while retaining one
         // compiler-authored semantic definition for the same source body.
-        for (source in sourceFunctions) {
-            val objectParameterIndices = source.classifierInputParameterIndicesOrEmpty()
-            if (objectParameterIndices.isEmpty()) continue
-            val logicalKey = context.preLoweringDeclarationKeys[source] ?: continue
-            val physicalName = "${source.dotNetIlMethodName()}__KotlinClassifierInput__" +
-                    DotNetLibraryAbiCodec.logicalIdentityDigest(logicalKey)
-            val inputEntry = context.irFactory.buildFun {
-                startOffset = source.startOffset
-                endOffset = source.endOffset
-                origin = DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY
-                name = Name.identifier(physicalName)
-                visibility = DescriptorVisibilities.PUBLIC
-                modality = Modality.FINAL
-                returnType = source.returnType
-            }.apply inputEntry@{
-                parent = source.parent
-                source.parameters.forEach { parameter ->
-                    parameters += parameter.copyTo(this@inputEntry, defaultValue = null)
+        if (!finalRoutingOnly) {
+            for (source in sourceFunctions) {
+                val objectParameterIndices = source.classifierInputParameterIndicesOrEmpty()
+                if (objectParameterIndices.isEmpty()) continue
+                val logicalKey = context.preLoweringDeclarationKeys[source] ?: continue
+                val physicalName = "${source.dotNetIlMethodName()}__KotlinClassifierInput__" +
+                        DotNetLibraryAbiCodec.logicalIdentityDigest(logicalKey)
+                val inputEntry = context.irFactory.buildFun {
+                    startOffset = source.startOffset
+                    endOffset = source.endOffset
+                    origin = DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY
+                    name = Name.identifier(physicalName)
+                    visibility = DescriptorVisibilities.PUBLIC
+                    modality = Modality.FINAL
+                    returnType = source.returnType
+                }.apply inputEntry@{
+                    parent = source.parent
+                    source.parameters.forEach { parameter ->
+                        parameters += parameter.copyTo(this@inputEntry, defaultValue = null)
+                    }
+                    val parameterMapping = source.parameters.zip(parameters).toMap()
+                    body = source.body!!.deepCopyWithSymbols(this@inputEntry).transform(
+                        object : VariableRemapper(parameterMapping) {
+                            override fun visitReturn(expression: IrReturn): IrExpression = super.visitReturn(
+                                if (expression.returnTargetSymbol == source.symbol) {
+                                    IrReturnImpl(
+                                        expression.startOffset,
+                                        expression.endOffset,
+                                        expression.type,
+                                        this@inputEntry.symbol,
+                                        expression.value,
+                                    )
+                                } else {
+                                    expression
+                                }
+                            )
+                        },
+                        null,
+                    )
                 }
-                val parameterMapping = source.parameters.zip(parameters).toMap()
-                body = source.body!!.deepCopyWithSymbols(this@inputEntry).transform(
-                    object : VariableRemapper(parameterMapping) {
-                        override fun visitReturn(expression: IrReturn): IrExpression = super.visitReturn(
-                            if (expression.returnTargetSymbol == source.symbol) {
-                                IrReturnImpl(
-                                    expression.startOffset,
-                                    expression.endOffset,
-                                    expression.type,
-                                    this@inputEntry.symbol,
-                                    expression.value,
-                                )
-                            } else {
-                                expression
-                            }
-                        )
-                    },
-                    null,
-                )
+                when (val owner = source.parent) {
+                    is IrClass -> owner.declarations += inputEntry
+                    is IrFile -> owner.declarations += inputEntry
+                    else -> error(
+                        "Internal .NET backend error: classifier-input function '${source.name}' has no physical owner"
+                    )
+                }
+                objectParameterIndices.forEach { index ->
+                    val parameter = inputEntry.parameters[index]
+                    context.genericOwnerCapabilityDeclarations += parameter
+                    context.genericOwnerForeignDispatchDeclarations += parameter
+                }
+                context.genericOwnerFunctionInputEntries[source] = inputEntry
             }
-            when (val owner = source.parent) {
-                is IrClass -> owner.declarations += inputEntry
-                is IrFile -> owner.declarations += inputEntry
-                else -> error(
-                    "Internal .NET backend error: classifier-input function '${source.name}' has no physical owner"
-                )
-            }
-            objectParameterIndices.forEach { index ->
-                val parameter = inputEntry.parameters[index]
-                context.genericOwnerCapabilityDeclarations += parameter
-                context.genericOwnerForeignDispatchDeclarations += parameter
-            }
-            context.genericOwnerFunctionInputEntries[source] = inputEntry
         }
 
         fun recordExternalFunctionCarrier(function: IrSimpleFunction) {
@@ -825,11 +883,61 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
             override fun visitFunction(declaration: org.jetbrains.kotlin.ir.declarations.IrFunction) {
                 if (declaration is IrSimpleFunction) {
+                    if (declaration.dotNetValueClassConstructorImplementationSourceOrNull() != null) {
+                        val backingField = getInlineClassBackingField(declaration.parent as IrClass)
+                        val carrierParameter = declaration.parameters.singleOrNull { parameter ->
+                            parameter.kind == IrParameterKind.Regular
+                        }
+                        if (backingField in context.genericOwnerCapabilityDeclarations) {
+                            carrierParameter?.let(context.genericOwnerCapabilityDeclarations::add)
+                        }
+                        if (backingField in context.genericOwnerForeignDispatchDeclarations) {
+                            carrierParameter?.let(context.genericOwnerForeignDispatchDeclarations::add)
+                        }
+                    }
+                    if (declaration.origin == DOTNET_VALUE_CLASS_UNBOX_HELPER ||
+                        declaration.origin == DOTNET_VALUE_CLASS_BOX_HELPER
+                    ) {
+                        val backingField = getInlineClassBackingField(declaration.parent as IrClass)
+                        val carrierDeclaration = if (declaration.origin == DOTNET_VALUE_CLASS_UNBOX_HELPER) {
+                            declaration
+                        } else {
+                            declaration.parameters.singleOrNull { parameter ->
+                                parameter.kind == IrParameterKind.Regular
+                            }
+                        }
+                        if (backingField in context.genericOwnerCapabilityDeclarations) {
+                            carrierDeclaration?.let(context.genericOwnerCapabilityDeclarations::add)
+                        }
+                        if (backingField in context.genericOwnerForeignDispatchDeclarations) {
+                            carrierDeclaration?.let(context.genericOwnerForeignDispatchDeclarations::add)
+                        }
+                    }
+                    declaration.dotNetValueClassImplementationSourceOrNull()?.let { source ->
+                        if (declaration.hasValueClassCarrierSourceIn(context.genericOwnerCapabilityDeclarations)) {
+                            context.genericOwnerCapabilityDeclarations += declaration
+                        }
+                        if (declaration.hasValueClassCarrierSourceIn(context.genericOwnerForeignDispatchDeclarations)) {
+                            context.genericOwnerForeignDispatchDeclarations += declaration
+                        }
+                        exactInterfaceDeclarationTypes[source]?.let { exactType ->
+                            exactInterfaceDeclarationTypes[declaration] = exactType
+                        }
+                    }
                     recordSemanticDeclaration(
                         declaration,
                         declaration.returnType,
                         declaration.singlePhysicalReturnProducerOrNull(),
                     )
+                    if (finalRoutingOnly &&
+                        declaration.dotNetValueClassImplementationSourceOrNull() != null &&
+                        declaration.returnType.potentialSemanticInterfaceOwnerOrNull() != null
+                    ) {
+                        check(declaration in context.genericOwnerCapabilityDeclarations) {
+                            "Internal .NET backend error: late value-class implementation " +
+                                    "'${declaration.name}' lost its semantic result carrier"
+                        }
+                    }
                 }
                 declaration.acceptChildrenVoid(this)
             }
@@ -866,6 +974,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
 
             override fun visitCall(expression: IrCall) {
+                // Route producers before their consuming call. Later Common lowerings commonly
+                // build `outer(generatedGetter(receiver))`; the outer generic-owner decision may
+                // depend on the physical capability returned by that new child call.
+                expression.acceptChildrenVoid(this)
                 val source = expression.symbol.owner.let { candidate ->
                     candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
                 }
@@ -920,21 +1032,30 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                     !receiver.provesExactPhysicalInterfaceView(receiver.type))
                     else -> receiver.type.potentialSemanticInterfaceOwnerOrNull() != null
                 }
+                if (finalRoutingOnly && usesSemanticCarrier &&
+                    sourceOwner?.isDotNetGenericClassDeclaration == true
+                ) {
+                    check(slot != null) {
+                        "Internal .NET backend error: late semantic call to " +
+                                "'${sourceOwner.name}.${source.name}' lacks its published capability slot"
+                    }
+                }
                 if (slot != null) {
                     if (usesSemanticCarrier) {
                         context.genericOwnerCapabilityCallTargets[expression] = slot
                         if (receiver?.readsForeignDispatchDeclaration() == true) {
                             context.genericOwnerForeignDispatchCallTargets[expression] = slot
                         }
-                    } else {
+                    } else if (!finalRoutingOnly) {
                         // This representation-aware pass has more information than the generic
                         // owner route planner: a stable CLR interface construction must not retain
                         // an earlier conservative semantic fallback selected for a sibling call.
+                        // The final rescan is deliberately monotonic: absence of late evidence
+                        // cannot invalidate an authoritative route selected before body copying.
                         context.genericOwnerCapabilityCallTargets.remove(expression)
                         context.genericOwnerForeignDispatchCallTargets.remove(expression)
                     }
                 }
-                expression.acceptChildrenVoid(this)
             }
 
             override fun visitConstructorCall(expression: IrConstructorCall) {
@@ -1255,6 +1376,35 @@ internal class DotNetReifiedGenericInterfaceLowering(
     private fun IrType.semanticInterfaceSlotType(ownerParameter: IrTypeParameter): IrType {
         val classifier = (this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
         return if (classifier?.owner === ownerParameter) context.irBuiltIns.anyNType else this
+    }
+}
+
+/**
+ * Re-applies value/call routing after every body-producing lowering which can introduce a generic
+ * operation has completed.
+ *
+ * Generated declarations need not precede their users. Iterate the monotone identity sets/maps to
+ * a fixpoint so a carrier proven in a later declaration can route an earlier call on the next
+ * round; no round creates a declaration family or removes an authoritative early route.
+ */
+internal class DotNetGenericOwnerFinalRoutingLowering(
+    private val context: DotNetBackendContext,
+) : ModuleLoweringPass {
+    override fun lower(irModule: IrModuleFragment) {
+        fun stateSizes(): List<Int> = listOf(
+            context.genericOwnerCapabilityDeclarations.size,
+            context.genericOwnerForeignDispatchDeclarations.size,
+            context.genericOwnerExactInterfaceDeclarationTypes.size,
+            context.genericOwnerCapabilityBearingDeclarations.size,
+            context.genericOwnerCapabilityCallTargets.size,
+            context.genericOwnerForeignDispatchCallTargets.size,
+        )
+
+        var previousState: List<Int>
+        do {
+            previousState = stateSizes()
+            DotNetReifiedGenericInterfaceLowering(context, finalRoutingOnly = true).lower(irModule)
+        } while (stateSizes() != previousState)
     }
 }
 

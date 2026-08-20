@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-final-call-value-routing-2026-08-20.md`](generic-owner-final-call-value-routing-2026-08-20.md)
+  records the final monotone call/value router after all current lowerings
+  which can introduce generic operations, generated value-class carrier
+  propagation, local and separate hostile proofs, and preservation of
+  authoritative early typed routes.
 - [`generic-owner-capability-superinterface-closure-2026-08-20.md`](generic-owner-capability-superinterface-closure-2026-08-20.md)
   records ABI 42's producer-owned complete non-generic capability-interface
   closure, local and separate late-`for` hostile proofs, CLR-generic exclusion,

@@ -73,6 +73,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassImplementationS
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerArchitecturePlanningLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerFinalRoutingLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.coroutines.DotNetAddContinuationToFunctionCallsLowering
@@ -362,6 +363,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // may produce inline-class values. Running the .NET pass here makes every nominal-box <->
     // exact-carrier edge explicit before CIL emission, including bodies synthesized above.
     ::DotNetValueClassAutoboxingLowering,
+    // Declaration families remain fixed at their early publication point, but Common and target
+    // body passes can copy or introduce new value declarations and IrCall identities. Re-derive
+    // only those physical carriers and call targets from the published contracts at the final IR
+    // boundary. The pass is additive/idempotent and may never weaken an early exact proof.
+    ::DotNetGenericOwnerFinalRoutingLowering,
     // JVM/JS/Wasm/Native invariant: if a call statically returning Nothing somehow returns
     // (for example from foreign CLR code), throw the dedicated Kotlin exception immediately.
     // Run after every body-producing lowering so calls introduced by bridges/helpers receive it.
