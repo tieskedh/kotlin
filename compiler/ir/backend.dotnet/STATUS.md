@@ -455,6 +455,37 @@ verification, and work state.
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
   unchanged six-test `dotnet.ir` model root remained up-to-date.
+- The first reified generic-interface default is now closed for one
+  contravariant input root. `DefaultConsumer<in T>.consumeDefault(T)` remains
+  the one natural CLR and ordinary-C# member. Framework 4.8 moves its one
+  Kotlin body to a manifest-recorded top-level digest-named helper and emits
+  the required natural-slot forwarder; .NET 10 places the body on the natural
+  DIM. Exact `DefaultConsumer<object>` and legal value-type-narrowed
+  `DefaultConsumer<Int>` Kotlin views retain the same object and body. The
+  semantic capability dispatches through a Kotlin or ordinary C# natural
+  override instead of bypassing it for the interface body. Ordinary C# never
+  authors that capability: the portable generator supplies its helper-backed
+  implementation, while modern C# inherits the DIM or overrides the natural
+  method normally. The first fail-first product exposed both a missing modern
+  capability implementation and C#'s inability to source-name a nested type
+  inside a generic interface (`CS0648`). Generic helpers are consequently
+  top-level physical compiler ABI; non-generic helpers remain nested and the
+  already-recorded exact helper owner avoids a new schema contract. A
+  temporarily broad default exception made the epoch-off modern canonical
+  bridge recurse; the final rule is limited to defaults whose implementation
+  owner is itself proven reified. The enabled candidate and epoch-off inverse
+  each pass eight PSI/LightTree, Framework 4.8/.NET 10 lanes with zero
+  failures, errors, or skips. The ordinary profile IL matrix passes nine tests
+  and pins the moved generic helpers plus unchanged non-generic layout.
+  The first full integration pass then exposed one stale assertion which still
+  required the former nested generic-helper spelling; the corrected oracle
+  now requires the namespace-qualified 32-hex top-level helper identity. The
+  final normal production aggregate covers 190 XML suites and 2,287 tests with
+  zero failures, errors, or skips: 187 FIR suites/2,155 tests and two
+  integration suites/126 tests were freshly written, while the unchanged
+  six-test `dotnet.ir` model root remained up-to-date.
+  Evidence is archived in
+  [`docs/archive/reified-generic-interface-defaults-2026-08-20.md`](docs/archive/reified-generic-interface-defaults-2026-08-20.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

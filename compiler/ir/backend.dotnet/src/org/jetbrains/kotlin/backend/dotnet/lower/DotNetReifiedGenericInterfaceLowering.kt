@@ -1331,8 +1331,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrSimpleFunction.isDirectProducerMember(parameter: IrTypeParameter): Boolean {
-        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
-            body != null || typeParameters.isNotEmpty() ||
+        val hasDefaultImplementation = this in context.interfaceDefaultImplementations
+        if (visibility != DescriptorVisibilities.PUBLIC ||
+            (!hasDefaultImplementation && (modality != Modality.ABSTRACT || body != null)) ||
+            typeParameters.isNotEmpty() ||
             parameters.singleOrNull()?.kind != IrParameterKind.DispatchReceiver
         ) {
             return false
@@ -1344,8 +1346,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrSimpleFunction.isDirectConsumerMember(parameter: IrTypeParameter): Boolean {
-        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
-            body != null || typeParameters.isNotEmpty() || !returnType.isUnit()
+        val hasDefaultImplementation = this in context.interfaceDefaultImplementations
+        if (visibility != DescriptorVisibilities.PUBLIC ||
+            (!hasDefaultImplementation && (modality != Modality.ABSTRACT || body != null)) ||
+            typeParameters.isNotEmpty() || !returnType.isUnit()
         ) {
             return false
         }
