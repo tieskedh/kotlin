@@ -507,6 +507,32 @@ verification, and work state.
   reabstraction, changed type arguments, or deeper/multiple inheritance.
   Evidence is archived in
   [`docs/archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md`](docs/archive/reified-generic-interface-default-hostile-inheritance-2026-08-20.md).
+- The first reified generic-interface default property is now closed for one
+  covariant read-only root.
+  `DefaultPropertyProducer<out T>.defaultPropertyValue` remains one natural
+  CLR `Property<T>` and the ordinary C# API. Framework 4.8 keeps its
+  body in the recorded generic helper; .NET 10 keeps it on the natural getter
+  DIM. The hidden declaration-semantic capability deliberately remains a
+  method-only compiler ABI. The C# authoring generator now distinguishes that
+  physical MethodDef from the natural Property row instead of treating every
+  slot in a Kotlin property contract as CLR Property metadata. It emits only
+  the required explicit semantic method adapter, converging it and any natural
+  property adapter on the same C# source property, helper, or DIM. A partial C#
+  `DefaultPropertyProducer<int>` with no source property observes the Kotlin
+  body through exact and Kotlin-widened reads; a class with one ordinary `int`
+  property override is observed through both paths, without duplicate body
+  execution or changed object identity. The fail-first run exposed the
+  method/Property metadata confusion as `KDNCS006`; no manifest or runtime ABI
+  change was needed. The enabled candidate and erased epoch-off inverse each
+  pass four PSI/LightTree, Framework 4.8/.NET 10 lanes with zero failures,
+  errors, or skips. Read-only property inheritance, multiple/mixed properties,
+  method-generic defaults, diamonds, reabstraction, changed arguments, and
+  deeper/multiple inheritance remain separate gates. Evidence is archived in
+  [`docs/archive/reified-generic-interface-default-property-2026-08-20.md`](docs/archive/reified-generic-interface-default-property-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and the
+  unchanged six-test `dotnet.ir` model root.
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

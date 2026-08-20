@@ -53,6 +53,30 @@ public interface RehearsalSeparateDefaultConsumer<in T> {
 public fun rehearsalSeparateDefaultConsumerObserved(): Any? =
     rehearsalSeparateDefaultConsumerObserved
 
+private var rehearsalSeparateDefaultPropertyReadCount: Int = 0
+
+public interface RehearsalSeparateDefaultPropertyProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public val defaultPropertyValue: T
+        get() {
+            rehearsalSeparateDefaultPropertyReadCount += 1
+            return 81 as T
+        }
+}
+
+public fun rehearsalSeparateDefaultPropertyReadCount(): Int =
+    rehearsalSeparateDefaultPropertyReadCount
+
+public class RehearsalSeparateDefaultPropertyReader {
+    public fun read(producer: RehearsalSeparateDefaultPropertyProducer<Any?>): Any? =
+        producer.defaultPropertyValue
+
+    public fun same(
+        producer: RehearsalSeparateDefaultPropertyProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }

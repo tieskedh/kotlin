@@ -1242,8 +1242,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val members = declaredInterfaceMembers()
         val properties = declaredInterfaceProperties()
         if (properties.size == 1) {
-            return parameter.variance == Variance.INVARIANT &&
-                    directInvariantPropertyMembersOrNull(parameter) != null
+            return when (parameter.variance) {
+                Variance.OUT_VARIANCE -> directCovariantPropertyMembersOrNull(parameter) != null
+                Variance.INVARIANT -> directInvariantPropertyMembersOrNull(parameter) != null
+                Variance.IN_VARIANCE -> false
+            }
         }
         if (properties.isNotEmpty() ||
             members.map { member -> member.name }.distinct().size != members.size
@@ -1262,6 +1265,19 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                 members.count { member ->
                                     member.isDirectConsumerMember(parameter)
                                 } == 1)
+        }
+    }
+
+    private fun IrClass.directCovariantPropertyMembersOrNull(
+        parameter: IrTypeParameter,
+    ): List<IrSimpleFunction>? {
+        val property = declaredInterfaceProperties().singleOrNull() ?: return null
+        val getter = property.getter ?: return null
+        val members = declaredInterfaceMembers()
+        return members.takeIf {
+            !property.isVar && property.setter == null && members == listOf(getter) &&
+                    getter.correspondingPropertySymbol?.owner === property &&
+                    getter.isDirectProducerMember(parameter)
         }
     }
 

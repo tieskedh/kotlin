@@ -4279,6 +4279,21 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateDefaultPropertyProducer`1",
+                    expectedMemberName = "defaultPropertyValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                    expectedNaturalPropertyName = "defaultPropertyValue",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable default-property probe")
+                    },
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner = "RehearsalSeparateInvariantProducer`1",
                     expectedMemberName = "produceInvariant",
                     expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
@@ -4446,6 +4461,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public void consumeDefault(object value)
                 {
                     observed = value;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpDefaultPropertyProducer :
+                RehearsalSeparateDefaultPropertyProducer<int>
+            {
+            }
+
+            public sealed partial class RehearsalSeparateCSharpDefaultPropertyOverrideProducer :
+                RehearsalSeparateDefaultPropertyProducer<int>
+            {
+                public int defaultPropertyValue
+                {
+                    get { return 82; }
                 }
             }
 
@@ -5798,6 +5827,33 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             defaultOverrideConsumer))
                         throw new InvalidOperationException(
                             "Kotlin narrowed dispatch bypassed the C# default override bridge");
+                    RehearsalSeparateDefaultPropertyReader defaultPropertyReader =
+                        new RehearsalSeparateDefaultPropertyReader();
+                    RehearsalSeparateCSharpDefaultPropertyProducer defaultPropertyProducer =
+                        new RehearsalSeparateCSharpDefaultPropertyProducer();
+                    RehearsalSeparateDefaultPropertyProducer<int> defaultPropertyProducerView =
+                        defaultPropertyProducer;
+                    if (defaultPropertyProducerView.defaultPropertyValue != 81 ||
+                        !object.Equals(defaultPropertyReader.read(defaultPropertyProducer), 81) ||
+                        !defaultPropertyReader.same(
+                            defaultPropertyProducer,
+                            defaultPropertyProducer) ||
+                        libKt.rehearsalSeparateDefaultPropertyReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "generic interface default property lost its body or identity");
+                    RehearsalSeparateCSharpDefaultPropertyOverrideProducer
+                        defaultPropertyOverrideProducer =
+                            new RehearsalSeparateCSharpDefaultPropertyOverrideProducer();
+                    if (defaultPropertyOverrideProducer.defaultPropertyValue != 82 ||
+                        !object.Equals(
+                            defaultPropertyReader.read(defaultPropertyOverrideProducer),
+                            82) ||
+                        !defaultPropertyReader.same(
+                            defaultPropertyOverrideProducer,
+                            defaultPropertyOverrideProducer) ||
+                        libKt.rehearsalSeparateDefaultPropertyReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "generic interface default property bypassed the C# override");
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -7086,6 +7142,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpDefaultOverrideConsumer" in generated) {
             "The C# authoring tool did not generate the default-override consumer bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpDefaultPropertyProducer" in generated) {
+            "The C# authoring tool did not generate the default-property bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpDefaultPropertyOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the default-property override bridge:\n$generated"
         }
         check("RehearsalSeparateCSharpDerivedDefaultConsumer" !in generated) {
             "The ordinary C# subclass unexpectedly required a generated semantic bridge:\n$generated"

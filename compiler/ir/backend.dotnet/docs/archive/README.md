@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-default-property-2026-08-20.md`](reified-generic-interface-default-property-2026-08-20.md)
+  records the first covariant read-only generic default Property, Framework
+  helper and .NET 10 DIM placement, method-backed semantic adapter repair,
+  ordinary C# inheritance/override behavior, and paired candidate/inverse
+  execution.
 - [`reified-generic-interface-default-hostile-inheritance-2026-08-20.md`](reified-generic-interface-default-hostile-inheritance-2026-08-20.md)
   records the three-product external default, generic Kotlin natural override,
   and ordinary non-partial C# subclass chain, exact/narrowed virtual dispatch,
