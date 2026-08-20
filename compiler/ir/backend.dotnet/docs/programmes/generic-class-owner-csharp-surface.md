@@ -373,6 +373,16 @@ complete producer manifest. Standalone consumers retain their generated object
 adapter. See
 [`../archive/generic-owner-invariant-consumer-child-2026-08-20.md`](../archive/generic-owner-invariant-consumer-child-2026-08-20.md).
 
+The bounded grandchild proof confirms that this authoring rule composes one
+level further. A non-partial C# `ConsumerGrandchild<string>` or
+`ConsumerGrandchild<object>` implements the inherited property plus two normal
+`Consume(T)` methods. Its transitive constructed interface list binds the
+complete producer root, so neither consumer fragment requires an adapter.
+Kotlin projected dispatch reaches the secondary natural method and the same
+property state. This is exact depth-two evidence, not permission to accept an
+arbitrary inheritance graph. See
+[`../archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md`](../archive/generic-owner-invariant-consumer-grandchild-2026-08-20.md).
+
 Physical-family schema 16 now closes the nullable-reference part of that
 direct surface. Every MethodDef value slot, property, and physical state carries
 the exact Roslyn preorder transform captured from the original IR type while

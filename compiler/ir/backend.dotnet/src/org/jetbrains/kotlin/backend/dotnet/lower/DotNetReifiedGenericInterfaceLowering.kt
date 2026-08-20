@@ -99,11 +99,11 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
  * semantic boundary. Covariant producer subinterfaces and exact invariant-property children
  * inherit their family at a fixpoint, including across a library boundary. An invariant child
- * may add either one matching property or one direct consumer to an exact property root. A child
- * owns only its new semantic slots; inherited slots remain inherited. An intersection without
- * new members receives one memberless capability alias over its independent roots. Other
- * families retain the accepted erased production ABI until their complete semantic surface has
- * its own proof.
+ * may add either one matching property or one direct consumer to an exact property root. One
+ * further direct-consumer edge is admitted above that exact consumer child. A child owns only its
+ * new semantic slots; inherited slots remain inherited. An intersection without new members
+ * receives one memberless capability alias over its independent roots. Other families retain the
+ * accepted erased production ABI until their complete semantic surface has its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
@@ -863,9 +863,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val parent = parents.singleOrNull() ?: return null
             val parentParameter = parent.typeParameters.singleOrNull() ?: return null
             val parentPropertyMembers = parent.directInvariantPropertyMembersOrNull(parentParameter)
+            val isDirectConsumer = directInvariantConsumerMembersOrNull(parameter) != null
+            val parentIsConsumerChild = parent.isExactInvariantPropertyConsumerChildOfRoot()
             if (parentParameter.variance != Variance.INVARIANT ||
-                parent.dotNetDirectInterfaceTypes().isNotEmpty() ||
-                parentPropertyMembers == null
+                !((parent.dotNetDirectInterfaceTypes().isEmpty() &&
+                        parentPropertyMembers != null) ||
+                        (isDirectConsumer && parentIsConsumerChild))
             ) {
                 return null
             }
@@ -923,10 +926,37 @@ internal class DotNetReifiedGenericInterfaceLowering(
         parameter: IrTypeParameter,
     ): List<IrSimpleFunction>? {
         directInvariantPropertyMembersOrNull(parameter)?.let { return it }
+        return directInvariantConsumerMembersOrNull(parameter)
+    }
+
+    private fun IrClass.directInvariantConsumerMembersOrNull(
+        parameter: IrTypeParameter,
+    ): List<IrSimpleFunction>? {
         if (declaredInterfaceProperties().isNotEmpty()) return null
         return declaredInterfaceMembers().takeIf { members ->
             members.size == 1 && members.single().isDirectConsumerMember(parameter)
         }
+    }
+
+    private fun IrClass.isExactInvariantPropertyConsumerChildOfRoot(): Boolean {
+        if (!hasFirstReifiedInterfaceOwnerShape()) return false
+        val parameter = typeParameters.single()
+        if (parameter.variance != Variance.INVARIANT ||
+            directInvariantConsumerMembersOrNull(parameter) == null
+        ) {
+            return false
+        }
+        val parentType = dotNetDirectInterfaceTypes().singleOrNull() ?: return false
+        val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return false
+        val argument = parentType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+        val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        if (argument.variance != Variance.INVARIANT || argumentParameter?.owner !== parameter) {
+            return false
+        }
+        val parentParameter = parent.typeParameters.singleOrNull() ?: return false
+        return parentParameter.variance == Variance.INVARIANT &&
+                parent.dotNetDirectInterfaceTypes().isEmpty() &&
+                parent.directInvariantPropertyMembersOrNull(parentParameter) != null
     }
 
     private fun IrSimpleFunction.isDirectProducerMember(parameter: IrTypeParameter): Boolean {
