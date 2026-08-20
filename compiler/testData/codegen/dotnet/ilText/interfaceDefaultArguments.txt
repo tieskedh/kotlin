@@ -237,63 +237,6 @@
 }
 .class interface public abstract auto ansi 'GenericDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
-         extends [mscorlib]System.Object
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig static !!0 'choose$default'<'T'>(class 'GenericDefaults' '$this', !!0 'value', int32 '$mask0') cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 2
-      ldarg.2
-      ldc.i4 1
-      and
-      ldc.i4 0
-      ceq
-      ldc.i4.0
-      ceq
-      brfalse IL_whenNext_1
-      ldarg.0
-      callvirt instance object 'GenericDefaults'::'fallback__KotlinErased__e568c61f44d0d42ddc5ef7625f15b87b'()
-      unbox.any !!0
-      starg 1
-      br IL_whenEnd_0
-  IL_whenNext_1:
-  IL_whenEnd_0:
-      ldarg.0
-      ldarg.1
-      box !!0
-      callvirt instance object 'GenericDefaults'::'choose__KotlinErased__4a52d4bebb1297af29fdeb5943675b2e'(object)
-      unbox.any !!0
-      ret
-    }
-    .method public hidebysig static !!1 'echo$default'<'T', 'R'>(class 'GenericDefaults' '$this', !!1 'value', !!1 'selected', int32 '$mask0') cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 3
-      ldarg.3
-      ldc.i4 2
-      and
-      ldc.i4 0
-      ceq
-      ldc.i4.0
-      ceq
-      brfalse IL_whenNext_1
-      ldarg.1
-      starg 2
-      br IL_whenEnd_0
-  IL_whenNext_1:
-  IL_whenEnd_0:
-      ldarg.0
-      ldarg.1
-      ldarg.2
-      callvirt instance !!0 'GenericDefaults'::'echo__KotlinErased__cfdf24969acfe1d9107243bb0eb76cb7'<!!1>(!!0, !!0)
-      ret
-    }
-  }
   .method public hidebysig newslot abstract virtual instance object 'fallback__KotlinErased__e568c61f44d0d42ddc5ef7625f15b87b'() cil managed
   {
   }
@@ -446,36 +389,6 @@
 }
 .class interface public abstract auto ansi 'VariantDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
-         extends [mscorlib]System.Object
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig static !!0 'value$default'<'T'>(class 'VariantDefaults' '$this', int32 'index', int32 '$mask0') cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 2
-      ldarg.2
-      ldc.i4 1
-      and
-      ldc.i4 0
-      ceq
-      ldc.i4.0
-      ceq
-      brfalse IL_whenNext_1
-      ldc.i4 0
-      starg 1
-      br IL_whenEnd_0
-  IL_whenNext_1:
-  IL_whenEnd_0:
-      ldarg.0
-      ldarg.1
-      callvirt instance object 'VariantDefaults'::'value__KotlinErased__aea780ea979bd30ce22e7e456d287fe9'(int32)
-      unbox.any !!0
-      ret
-    }
-  }
   .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__aea780ea979bd30ce22e7e456d287fe9'(int32 'index') cil managed
   {
   }
@@ -571,39 +484,6 @@
 }
 .class interface public abstract auto ansi 'BoundedDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
-         extends [mscorlib]System.Object
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig static !!0 'choose$default'<(class 'BoundValue') 'T'>(class 'BoundedDefaults' '$this', !!0 'value', int32 '$mask0') cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 2
-      ldarg.2
-      ldc.i4 1
-      and
-      ldc.i4 0
-      ceq
-      ldc.i4.0
-      ceq
-      brfalse IL_whenNext_1
-      ldarg.0
-      callvirt instance object 'BoundedDefaults'::'fallback__KotlinErased__965b163591a237ab8086bada78f6318d'()
-      unbox.any !!0
-      starg 1
-      br IL_whenEnd_0
-  IL_whenNext_1:
-  IL_whenEnd_0:
-      ldarg.0
-      ldarg.1
-      box !!0
-      callvirt instance object 'BoundedDefaults'::'choose__KotlinErased__4835a5ee62dbd7c09c6d5e77e232c149'(object)
-      unbox.any !!0
-      ret
-    }
-  }
   .method public hidebysig newslot abstract virtual instance object 'fallback__KotlinErased__965b163591a237ab8086bada78f6318d'() cil managed
   {
   }
@@ -837,6 +717,126 @@
     ret
   }
 }
+.class public auto ansi sealed beforefieldinit '__KotlinDefaultImpls_607991be0d19a0b219d654aba10f498f'
+       extends [mscorlib]System.Object
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig static !!0 'choose$default'<'T'>(class 'GenericDefaults' '$this', !!0 'value', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    callvirt instance object 'GenericDefaults'::'fallback__KotlinErased__e568c61f44d0d42ddc5ef7625f15b87b'()
+    unbox.any !!0
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    box !!0
+    callvirt instance object 'GenericDefaults'::'choose__KotlinErased__4a52d4bebb1297af29fdeb5943675b2e'(object)
+    unbox.any !!0
+    ret
+  }
+  .method public hidebysig static !!1 'echo$default'<'T', 'R'>(class 'GenericDefaults' '$this', !!1 'value', !!1 'selected', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 3
+    ldarg.3
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.1
+    starg 2
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance !!0 'GenericDefaults'::'echo__KotlinErased__cfdf24969acfe1d9107243bb0eb76cb7'<!!1>(!!0, !!0)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit '__KotlinDefaultImpls_ff9f09ddfadcf3f64f6613ef60dbae0e'
+       extends [mscorlib]System.Object
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig static !!0 'value$default'<'T'>(class 'VariantDefaults' '$this', int32 'index', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 0
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    callvirt instance object 'VariantDefaults'::'value__KotlinErased__aea780ea979bd30ce22e7e456d287fe9'(int32)
+    unbox.any !!0
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit '__KotlinDefaultImpls_583a8418acf5b96793f029715ec056bb'
+       extends [mscorlib]System.Object
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig static !!0 'choose$default'<(class 'BoundValue') 'T'>(class 'BoundedDefaults' '$this', !!0 'value', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    callvirt instance object 'BoundedDefaults'::'fallback__KotlinErased__965b163591a237ab8086bada78f6318d'()
+    unbox.any !!0
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    box !!0
+    callvirt instance object 'BoundedDefaults'::'choose__KotlinErased__4835a5ee62dbd7c09c6d5e77e232c149'(object)
+    unbox.any !!0
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'interfaceDefaultArgumentsKt'
        extends [mscorlib]System.Object
 {
@@ -898,7 +898,7 @@
     initobj !!0
     ldloc.0
     ldc.i4 1
-    call !!0 'GenericDefaults'/'__KotlinDefaultImpls'::'choose$default'<!!0>(class 'GenericDefaults', !!0, int32)
+    call !!0 '__KotlinDefaultImpls_607991be0d19a0b219d654aba10f498f'::'choose$default'<!!0>(class 'GenericDefaults', !!0, int32)
     ret
   }
   .method public hidebysig static !!0 'genericMethodDefault'<'T'>(class 'GenericDefaults' 'value', !!0 'item') cil managed
@@ -913,7 +913,7 @@
     initobj !!0
     ldloc.0
     ldc.i4 2
-    call !!1 'GenericDefaults'/'__KotlinDefaultImpls'::'echo$default'<!!0, !!0>(class 'GenericDefaults', !!1, !!1, int32)
+    call !!1 '__KotlinDefaultImpls_607991be0d19a0b219d654aba10f498f'::'echo$default'<!!0, !!0>(class 'GenericDefaults', !!1, !!1, int32)
     ret
   }
   .method public hidebysig static string 'redeclaredGenericDefault'(class 'StringDefaults' 'value') cil managed
@@ -922,7 +922,7 @@
     ldarg.0
     ldnull
     ldc.i4 1
-    call !!0 'GenericDefaults'/'__KotlinDefaultImpls'::'choose$default'<string>(class 'GenericDefaults', !!0, int32)
+    call !!0 '__KotlinDefaultImpls_607991be0d19a0b219d654aba10f498f'::'choose$default'<string>(class 'GenericDefaults', !!0, int32)
     ret
   }
   .method public hidebysig static string 'variantDefault'(class 'VariantDefaults' 'value') cil managed
@@ -931,7 +931,7 @@
     ldarg.0
     ldc.i4 0
     ldc.i4 1
-    call !!0 'VariantDefaults'/'__KotlinDefaultImpls'::'value$default'<string>(class 'VariantDefaults', int32, int32)
+    call !!0 '__KotlinDefaultImpls_ff9f09ddfadcf3f64f6613ef60dbae0e'::'value$default'<string>(class 'VariantDefaults', int32, int32)
     ret
   }
   .method public hidebysig static !!0 'boundedDefault'<(class 'BoundValue') 'T'>(class 'BoundedDefaults' 'value') cil managed
@@ -945,7 +945,7 @@
     initobj !!0
     ldloc.0
     ldc.i4 1
-    call !!0 'BoundedDefaults'/'__KotlinDefaultImpls'::'choose$default'<!!0>(class 'BoundedDefaults', !!0, int32)
+    call !!0 '__KotlinDefaultImpls_583a8418acf5b96793f029715ec056bb'::'choose$default'<!!0>(class 'BoundedDefaults', !!0, int32)
     ret
   }
   .method public hidebysig static string 'extensionDefault'(class 'ExtensionDefaults' '<this>', string 'value') cil managed

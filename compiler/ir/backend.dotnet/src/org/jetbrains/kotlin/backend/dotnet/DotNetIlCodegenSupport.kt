@@ -979,6 +979,12 @@ internal class DotNetIlTypeMapper private constructor(
                 DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass, classifierInfo(irClass)) ||
                 externalDeclarations.hasGenericInterface(irClass))
 
+    /** A rehearsal-selected Kotlin `I<T>` whose one natural CLR owner has a semantic capability. */
+    fun isReifiedGenericInterface(irClass: IrClass): Boolean =
+        genericOwnerRehearsal && irClass.isDotNetGenericInterfaceDeclaration &&
+                (irClass in genericOwnerCapabilities ||
+                        externalDeclarations.hasReifiedGenericInterface(irClass))
+
     fun isErasedGenericClass(irClass: IrClass): Boolean {
         // Bootstrap stdlib declarations also have historical reconstruction entries. A local
         // class already admitted as C<T> is authoritative for this emission and must not be

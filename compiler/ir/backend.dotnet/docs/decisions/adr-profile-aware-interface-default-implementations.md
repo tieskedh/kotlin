@@ -49,6 +49,15 @@ I/__KotlinDefaultImpls
         // exact Kotlin body declared by I
 ```
 
+For a non-generic interface the helper remains nested as shown above. For a
+generic interface it is instead a metadata-public top-level compiler-ABI type
+named `__KotlinDefaultImpls_<logical-owner-digest>`. C# cannot source-name a
+type nested in a generic interface (`CS0648`); the top-level helper therefore
+preserves portable ordinary-C# implementation without changing logical owner
+identity. Owner type parameters become leading helper-method type parameters.
+The receiver names the exact constructed natural interface in the reified
+epoch and the one canonical interface in the production erased epoch.
+
 A Kotlin class which inherits that default receives a hidden forwarding implementation of the
 CLR interface slot. The forwarder is normally an explicit interface implementation rather than
 an additional public class member:
@@ -108,14 +117,26 @@ DIM spellings and interface slot mapping are .NET-owned.
 
 ### 4. Generic defaults have one body and one helper identity
 
-Every generic Kotlin interface-default declaration has one logical member, one erased physical
-slot, and one stable helper ABI identity. KLIB retains the owner parameters and substitutions;
-the CLR interface does not acquire declared-variance or invariant-exact sibling owners.
+Every generic Kotlin interface-default declaration has one logical member and one stable helper
+ABI identity. KLIB retains the owner parameters and substitutions. The production erased-owner
+epoch retains one erased physical slot; an interface admitted by the reified generic-owner epoch
+instead retains its one natural `I<T>` slot plus only the proven semantic capability required by
+Kotlin views which the CLR cannot represent directly. Neither representation invents sibling
+constructed owners.
 
-On portable profiles, the helper owns the moved body. The erased interface slot remains abstract,
-and implementing classes contain only the required forwarding bridge. On `net10.0`, the erased
-DIM owns the Kotlin body directly. A property accessor retains `specialname` and its CLR Property
-row; moving the body between helper and DIM must not degrade it into an ordinary method.
+On portable profiles, the top-level digest-named helper owns the moved body. The physical
+interface slot remains abstract, and implementing classes contain only the required forwarding
+bridge. On `net10.0`, the corresponding physical DIM owns the Kotlin body directly. A property
+accessor retains `specialname` and its CLR Property row; moving the body between helper and DIM
+must not degrade it into an ordinary method.
+
+For a reified variant input default, the natural `I<!T>` slot remains the ordinary Kotlin and C#
+entry. A Kotlin view whose CLR construction is unavailable calls the same object's semantic
+capability. That capability must dispatch back through the natural virtual slot when a Kotlin or
+C# implementation overrides it; it may not bypass a foreign override by invoking a stale
+interface-owned body. On Framework the generated C# implementation forwards the abstract natural
+slot to the recorded helper. On .NET 10 ordinary C# inherits the DIM without authored compiler
+ABI, while an ordinary natural C# override is observed by exact and semantic Kotlin calls alike.
 
 When a concrete non-generic `net10.0` interface overrides a member inherited from an erased
 generic Kotlin interface, it maps that one inherited slot and dispatches virtually to the
@@ -338,13 +359,13 @@ names, assume that a non-abstract metadata declaration contains a DIM, or inspec
 A library or stdlib cannot be published successfully if a metadata-visible default lacks its
 required physical body record or if a callable with default parameters lacks its required
 dispatcher record.
-Generated `__KotlinDefaultImpls` classes and helper methods are physical compiler ABI only. They do not
-receive independent logical declaration keys, because there are no corresponding KLIB
-declarations; their identities are reachable through the records of the real source members.
-The helper type name is deliberately a valid C# identifier. Portable C# source-authoring tools
-must be able to forward an inherited default to that single Kotlin body; copying the body into
-generated C# is forbidden. The name remains producer-recorded ABI and must not be reconstructed
-from the interface name.
+Generated nested `__KotlinDefaultImpls` classes, top-level digest-named generic helpers, and helper
+methods are physical compiler ABI only. They do not receive independent logical declaration keys,
+because there are no corresponding KLIB declarations; their identities are reachable through the
+records of the real source members. Every helper type name is deliberately a valid C# identifier.
+Portable C# source-authoring tools must be able to forward an inherited default to that single
+Kotlin body; copying the body into generated C# is forbidden. The exact helper owner is
+producer-recorded ABI and must not be reconstructed from the interface name or digest.
 The supported generated implementation path and its DLL-owned helper/view metadata are specified
 by [`adr-csharp-interface-source-authoring.md`](adr-csharp-interface-source-authoring.md).
 
@@ -366,6 +387,9 @@ Before the representation is considered implemented, tests must cover:
 - portable output running with the modern platform variants;
 - a C# implementor inheriting a DIM on `net10.0` and the expected compile-time obligation on
   both `net48` and `netstandard2.0`;
+- a reified contravariant generic interface default through exact and value-type-narrowed Kotlin
+  views, with the same object and body on both runtime profiles, plus ordinary C# default
+  inheritance and a natural C# override observed through both Kotlin routes;
 - generic declared/canonical/exact views, boxing adapters, and covariant returns, including a
   precise derived default mapped to a wider inherited slot without a redundant class bridge;
 - a portable generic default promoted through two incomparable `net10.0` branches and resolved by

@@ -186,6 +186,24 @@ Generated explicit implementations satisfy all semantic capabilities, and
 Kotlin widened calls reach every authored C# member on Framework 4.8 and
 .NET 10.
 
+The first defaulted contravariant root is now closed without reverting to an
+erased interface owner. `DefaultConsumer<in T>.consumeDefault(T)` remains the
+one natural CLR `I<T>` slot. Framework 4.8 moves the single Kotlin body to the
+recorded top-level digest-named helper and gives Kotlin and generated C#
+implementations the required natural-slot forwarder. .NET 10 emits the same
+logical body as a DIM. A `DefaultConsumer<object>` used through Kotlin's legal
+`DefaultConsumer<Int>` view reaches that same body and preserves identity even
+though CLR variance cannot convert reference-constructed `I<object>` to
+value-constructed `I<int>`.
+
+The semantic capability remains an operation boundary, not an alternative C#
+contract. A Kotlin override and an ordinary C# override author only the natural
+`consumeDefault` member; exact and narrowed Kotlin calls observe that virtual
+override. Ordinary C# needs no semantic member: the portable authoring tool
+generates its helper forwarder, while .NET 10 inherits the DIM directly. This
+closes one default shape only; multiple defaults, properties, generic methods,
+diamonds, reabstraction, and broader inheritance remain independent gates.
+
 The covariant producer proof also compiles a separate ordinary C# DLL without
 the authoring generator. Its non-partial `Source<int>` implementation has only
 the natural `int` member. Kotlin exact and broad calls, a real `Source<*>`
@@ -418,9 +436,11 @@ must cover:
    warning-bearing covariant producer proof, mixed-control-flow cast returns,
    classifier-derived fields, and broader input parameters crossing separately
    compiled exact-looking boundaries;
-5. Kotlin/C# properties beyond the exact mutable invariant cell, defaults,
-   generic methods, hostile inheritance, and ordinary foreign implementations
-   beyond the proven producer, consumer, and invariant-cell shapes;
+5. Kotlin/C# properties beyond the exact mutable invariant cell, broader
+   default families (including multiple members, properties, generic methods,
+   diamonds, and reabstraction), hostile inheritance, and ordinary foreign
+   implementations beyond the proven producer, consumer, invariant-cell, and
+   one contravariant default shapes;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
    assembly graphs, including classifier-derived fields and non-final or
    multi-input parameters;

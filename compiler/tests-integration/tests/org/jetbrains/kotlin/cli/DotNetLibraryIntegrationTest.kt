@@ -15051,7 +15051,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val portableMetadata = portableDirectory.resolve("Portable.GenericDefaults.dll")
         val portableIl = portableDirectory.resolve("Portable.GenericDefaults.il").readText()
         assertTrue("abstract virtual instance object 'value__KotlinErased__" in portableIl) { portableIl }
-        assertTrue("/'__KotlinDefaultImpls'::'value'" in portableIl) { portableIl }
+        val portableDefaultHelperReference =
+            Regex("""'genericdefaults\.__KotlinDefaultImpls_[0-9a-f]{32}'::'value'""")
+        assertTrue(portableDefaultHelperReference.containsMatchIn(portableIl)) { portableIl }
         assertTrue("<GenericInterfaceCanonicalBridge-" in portableIl) { portableIl }
         assertFalse("<GenericInterfaceDeclaredBridge-" in portableIl) { portableIl }
         assertFalse("<GenericInterfaceExactBridge-" in portableIl) { portableIl }
@@ -15120,7 +15122,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertFalse("<GenericInterfaceDefaultPromotionDeclared-" in promotedIl) { promotedIl }
         assertFalse("<GenericInterfaceDefaultPromotionExact-" in promotedIl) { promotedIl }
         assertTrue("[Portable.GenericDefaults]" in promotedIl) { promotedIl }
-        assertTrue("/'__KotlinDefaultImpls'::'value'" in promotedIl) { promotedIl }
+        assertTrue(portableDefaultHelperReference.containsMatchIn(promotedIl)) { promotedIl }
         assertTrue("<GenericInterfaceCanonicalBridge-genericdefaults.PortableGeneric-value-" in promotedIl) {
             "The closed override must explicitly map the inherited canonical slot:\n$promotedIl"
         }

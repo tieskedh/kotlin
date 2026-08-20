@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceView
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
@@ -4133,6 +4134,7 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     expectedSemanticParameterTypes: List<String> = emptyList(),
     expectedNaturalReturnType: String = "!0",
     expectedNaturalParameterTypes: List<String> = emptyList(),
+    expectedDefaultKind: DotNetCSharpDefaultKind = DotNetCSharpDefaultKind.ABSTRACT,
 ) {
     val resource = checkNotNull(
         DotNetManagedResourceReader.read(
@@ -4174,8 +4176,18 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     check(member.authoringView == DotNetCSharpInterfaceView.DECLARED) {
         "C# authoring must target the natural generic interface"
     }
-    check(member.slots.mapTo(linkedSetOf()) { slot -> slot.role } ==
-            linkedSetOf(DotNetCSharpSlotRole.ERASED, DotNetCSharpSlotRole.DECLARED)) {
+    check(member.defaultKind == expectedDefaultKind) {
+        "The reified generic-interface manifest recorded an unexpected default-body profile"
+    }
+    val expectedRoles = linkedSetOf(
+        DotNetCSharpSlotRole.ERASED,
+        DotNetCSharpSlotRole.DECLARED,
+    ).apply {
+        if (expectedDefaultKind != DotNetCSharpDefaultKind.ABSTRACT) {
+            add(DotNetCSharpSlotRole.HELPER)
+        }
+    }
+    check(member.slots.mapTo(linkedSetOf()) { slot -> slot.role } == expectedRoles) {
         "The reified generic-interface manifest has an incomplete physical member family"
     }
     val semantic = member.slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
@@ -4248,6 +4260,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedSemanticParameterTypes = listOf("object"),
                     expectedNaturalReturnType = "void",
                     expectedNaturalParameterTypes = listOf("!0"),
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateDefaultConsumer`1",
+                    expectedMemberName = "consumeDefault",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.IN,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable default-consumer probe")
+                    },
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
@@ -4394,6 +4422,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public void consume(int value)
                 {
                     Value = value;
+                }
+            }
+
+            // No authored method: Framework must receive a helper forwarder from the Kotlin
+            // authoring generator, while .NET 10 inherits the DIM. The generator must also
+            // connect Kotlin's narrowed value-type semantic view to that same logical default.
+            public sealed partial class RehearsalSeparateCSharpDefaultConsumer :
+                RehearsalSeparateDefaultConsumer<object>
+            {
+            }
+
+            public sealed partial class RehearsalSeparateCSharpDefaultOverrideConsumer :
+                RehearsalSeparateDefaultConsumer<object>
+            {
+                public object observed;
+
+                public void consumeDefault(object value)
+                {
+                    observed = value;
                 }
             }
 
@@ -5698,6 +5745,41 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             consumerReader.identity(intConsumer), intConsumer))
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed the generated value consumer bridge");
+                    RehearsalSeparateCSharpDefaultConsumer defaultConsumer =
+                        new RehearsalSeparateCSharpDefaultConsumer();
+                    RehearsalSeparateDefaultConsumer<object> defaultConsumerView =
+                        defaultConsumer;
+                    defaultConsumerView.consumeDefault("csharp-default-reference");
+                    if (!object.Equals(
+                            libKt.rehearsalSeparateDefaultConsumerObserved(),
+                            "csharp-default-reference"))
+                        throw new InvalidOperationException(
+                            "ordinary C# default dispatch did not execute Kotlin's one default body");
+                    RehearsalSeparateDefaultConsumerReader defaultConsumerReader =
+                        new RehearsalSeparateDefaultConsumerReader();
+                    defaultConsumerReader.consume(defaultConsumer, 74);
+                    if (!object.Equals(
+                            libKt.rehearsalSeparateDefaultConsumerObserved(), 74) ||
+                        !defaultConsumerReader.same(defaultConsumer, defaultConsumer))
+                        throw new InvalidOperationException(
+                            "Kotlin narrowed dispatch bypassed the C# default implementation bridge");
+                    RehearsalSeparateCSharpDefaultOverrideConsumer defaultOverrideConsumer =
+                        new RehearsalSeparateCSharpDefaultOverrideConsumer();
+                    RehearsalSeparateDefaultConsumer<object> defaultOverrideConsumerView =
+                        defaultOverrideConsumer;
+                    defaultOverrideConsumerView.consumeDefault("csharp-default-override-reference");
+                    if (!object.Equals(
+                            defaultOverrideConsumer.observed,
+                            "csharp-default-override-reference"))
+                        throw new InvalidOperationException(
+                            "ordinary C# override did not replace Kotlin's default");
+                    defaultConsumerReader.consume(defaultOverrideConsumer, 75);
+                    if (!object.Equals(defaultOverrideConsumer.observed, 75) ||
+                        !defaultConsumerReader.same(
+                            defaultOverrideConsumer,
+                            defaultOverrideConsumer))
+                        throw new InvalidOperationException(
+                            "Kotlin narrowed dispatch bypassed the C# default override bridge");
                     RehearsalSeparateCSharpChildProducer childProducer =
                         new RehearsalSeparateCSharpChildProducer();
                     if (childProducer.produce() != "csharp-child-interface")
@@ -6960,6 +7042,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpLocalIntersectionProducer" in generated) {
             "The C# authoring tool did not generate the local interface-intersection bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpDefaultConsumer" in generated) {
+            "The C# authoring tool did not generate the default-consumer bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpDefaultOverrideConsumer" in generated) {
+            "The C# authoring tool did not generate the default-override consumer bridge:\n$generated"
         }
         check("KotlinSemantic" !in source.readText()) {
             "Authored C# source must not name the Kotlin semantic capability"

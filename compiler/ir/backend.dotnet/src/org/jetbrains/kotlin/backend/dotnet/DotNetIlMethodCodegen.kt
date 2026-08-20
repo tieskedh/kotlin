@@ -283,6 +283,12 @@ internal class DotNetIlMethodCodegen(
                 // the static carrier method has no virtual/interface slot of its own.
             } else if (function.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER || function.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) {
                 appendInterfaceDefaultSlotOverrides()
+            } else if (function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET &&
+                (function as IrSimpleFunction).overriddenSymbols.any { overridden ->
+                    (overridden.owner.parent as? IrClass)?.let(typeMapper::isReifiedGenericInterface) == true
+                }
+            ) {
+                appendReifiedGenericInterfaceDefaultOverride()
             } else if (
                 function.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE ||
                 function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
@@ -451,6 +457,61 @@ internal class DotNetIlMethodCodegen(
                         overrideInfo.renderOverrideMethodReference(
                             physicalMethodName,
                             genericArity = bridge.typeParameters.size,
+                        )
+            )
+        }
+    }
+
+    /**
+     * Maps one helper-backed portable default target to the natural closed `I<T>` slot.
+     *
+     * The erased generic-interface architecture adds a separate canonical bridge. A rehearsal-
+     * selected reified interface instead owns its source slot directly on `I<T>`; its class target
+     * must therefore state the constructed MethodImpl as well as the semantic capability bridge.
+     */
+    private fun StringBuilder.appendReifiedGenericInterfaceDefaultOverride() {
+        val bridge = function as IrSimpleFunction
+        val bridgeClass = bridge.parent as? IrClass
+            ?: error("Internal .NET backend error: a reified interface-default target has no class owner")
+        for (overriddenSymbol in bridge.overriddenSymbols) {
+            val overridden = overriddenSymbol.owner
+            val interfaceClass = (overridden.parent as? IrClass)
+                ?.takeIf(typeMapper::isReifiedGenericInterface)
+                ?: continue
+            val interfaceInfo = typeMapper.classInfoOrNull(interfaceClass)
+                ?: dotNetUnsupported("reified generic interface default owner is unavailable")
+            check(interfaceInfo.typeParameterCount == interfaceClass.typeParameters.size) {
+                "Internal .NET backend error: reified interface-default owner changed CLR arity"
+            }
+            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+                interfaceClass.symbol,
+                bridgeClass.defaultType,
+            ) ?: error(
+                "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
+                        "reified generic interface '${interfaceClass.name}'"
+            )
+            val arguments = interfaceClass.typeParameters.map { parameter ->
+                val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
+                typeMapper.toDotNetIlGenericArgumentType(argumentType)
+                    ?: dotNetUnsupported(
+                        "reified interface-default argument '${argumentType.render()}' is unavailable"
+                    )
+            }
+            val ownerToken = DotNetIlValueType.GenericInstance(interfaceInfo, arguments).nameInSignature
+            val overrideInfo = availableFunctions[overridden]
+                ?: typeMapper.referencedFunctionInfoOrNull(overridden)
+                ?: dotNetUnsupported("reified generic interface default slot is unavailable")
+            if (overrideInfo.signature.returnType != signature.returnType) continue
+            check(overridden.typeParameters.size == bridge.typeParameters.size) {
+                "Internal .NET backend error: reified interface-default target changed method arity"
+            }
+            val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+            appendLine(
+                "    .override method " +
+                        overrideInfo.renderOverrideMethodReference(
+                            physicalMethodName,
+                            ownerToken,
+                            bridge.typeParameters.size,
                         )
             )
         }

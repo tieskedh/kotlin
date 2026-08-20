@@ -114,6 +114,18 @@ public interface RehearsalConsumer<in T> {
     public fun consume(value: T)
 }
 
+private var rehearsalDefaultConsumerObserved: Any? = null
+private var rehearsalDefaultConsumerOverrideObserved: Any? = null
+
+// A Kotlin default must retain one logical body across the portable helper and the .NET 10 DIM.
+// The narrowed Int view cannot name the existing I<object> construction on the CLR, so its call
+// must cross the same semantic capability without copying the body or changing object identity.
+public interface RehearsalDefaultConsumer<in T> {
+    public fun consumeDefault(value: T) {
+        rehearsalDefaultConsumerObserved = value
+    }
+}
+
 // Declaration-invariant generic owners have no legal sibling widening. Exact constructions and
 // open method substitutions must therefore remain ordinary CLR I<T>; only a star read needs the
 // classifier/semantic operation boundary.
@@ -204,6 +216,14 @@ private class RehearsalConsumerValue<T>(initial: T) : RehearsalConsumer<T> {
     }
 
     fun read(): T = value
+}
+
+private class RehearsalDefaultConsumerValue : RehearsalDefaultConsumer<Any?>
+
+private class RehearsalDefaultConsumerOverrideValue : RehearsalDefaultConsumer<Any?> {
+    override fun consumeDefault(value: Any?) {
+        rehearsalDefaultConsumerOverrideObserved = value
+    }
 }
 
 private class RehearsalInvariantProducerValue<T>(private val value: T) :
@@ -493,6 +513,31 @@ fun box(): String {
 
     val stringProducer: RehearsalProducer<String> = RehearsalProducerValue("typed")
     if (stringProducer.produce() != "typed") return "fail: exact reference producer"
+
+    val exactDefaultConsumer: RehearsalDefaultConsumer<Any?> =
+        RehearsalDefaultConsumerValue()
+    exactDefaultConsumer.consumeDefault("default-reference")
+    if (rehearsalDefaultConsumerObserved != "default-reference") {
+        return "fail: exact default consumer"
+    }
+    val narrowedDefaultConsumer: RehearsalDefaultConsumer<Int> = exactDefaultConsumer
+    narrowedDefaultConsumer.consumeDefault(61)
+    if (rehearsalDefaultConsumerObserved != 61 ||
+        narrowedDefaultConsumer !== exactDefaultConsumer
+    ) {
+        return "fail: narrowed default consumer"
+    }
+    val overridingDefaultConsumer: RehearsalDefaultConsumer<Any?> =
+        RehearsalDefaultConsumerOverrideValue()
+    overridingDefaultConsumer.consumeDefault("default-override-reference")
+    val narrowedOverridingDefaultConsumer: RehearsalDefaultConsumer<Int> =
+        overridingDefaultConsumer
+    narrowedOverridingDefaultConsumer.consumeDefault(62)
+    if (rehearsalDefaultConsumerOverrideObserved != 62 ||
+        narrowedOverridingDefaultConsumer !== overridingDefaultConsumer
+    ) {
+        return "fail: narrowed overriding default consumer"
+    }
 
     val invariantInt: RehearsalInvariantProducer<Int> = RehearsalInvariantProducerValue(47)
     if (invariantInt.produceInvariant() + 1 != 48 ||

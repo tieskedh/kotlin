@@ -42,6 +42,17 @@ public interface RehearsalSeparateConsumer<in T> {
     public fun consume(value: T)
 }
 
+private var rehearsalSeparateDefaultConsumerObserved: Any? = null
+
+public interface RehearsalSeparateDefaultConsumer<in T> {
+    public fun consumeDefault(value: T) {
+        rehearsalSeparateDefaultConsumerObserved = value
+    }
+}
+
+public fun rehearsalSeparateDefaultConsumerObserved(): Any? =
+    rehearsalSeparateDefaultConsumerObserved
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }
@@ -142,6 +153,20 @@ public class RehearsalSeparateConsumerReader {
 
     public fun same(consumer: RehearsalSeparateConsumer<Int>, expected: Any?): Boolean =
         consumer === expected
+}
+
+public class RehearsalSeparateDefaultConsumerReader {
+    public fun consume(
+        consumer: RehearsalSeparateDefaultConsumer<Int>,
+        value: Int,
+    ) {
+        consumer.consumeDefault(value)
+    }
+
+    public fun same(
+        consumer: RehearsalSeparateDefaultConsumer<Int>,
+        expected: Any?,
+    ): Boolean = consumer === expected
 }
 
 public interface RehearsalSeparateLocalIntersectionProducer<out T> :
@@ -545,6 +570,12 @@ private value class RehearsalSeparateLateRoutedOwnerValue(
     fun read(): Any? = store.read()
 }
 
+// This consumer owns no implementation body. Framework must bind the producer's helper to the
+// natural closed interface slot; .NET 10 inherits the producer's DIM. Both additionally expose
+// the producer capability for the value-type-narrowed Kotlin view.
+private class RehearsalSeparateDefaultConsumerValue :
+    RehearsalSeparateDefaultConsumer<Any?>
+
 private fun rehearsalSeparateLateRoutedLoop(
     iterator: RehearsalSeparateLateRoutedIterator<Any?>,
 ): Any? {
@@ -597,6 +628,19 @@ fun box(): String {
     val lateRoutedValue = RehearsalSeparateLateRoutedValue(broadProducer)
     if (lateRoutedValue.read() != 31) {
         return "fail: separate late-routed value-class producer"
+    }
+    val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
+        RehearsalSeparateDefaultConsumerValue()
+    exactDefaultConsumer.consumeDefault("separate-default-reference")
+    if (rehearsalSeparateDefaultConsumerObserved() != "separate-default-reference") {
+        return "fail: separate exact default consumer"
+    }
+    val narrowedDefaultConsumer: RehearsalSeparateDefaultConsumer<Int> = exactDefaultConsumer
+    narrowedDefaultConsumer.consumeDefault(67)
+    if (rehearsalSeparateDefaultConsumerObserved() != 67 ||
+        narrowedDefaultConsumer !== exactDefaultConsumer
+    ) {
+        return "fail: separate narrowed default consumer"
     }
     val invariantProducer: RehearsalSeparateInvariantProducer<String> =
         RehearsalSeparateInvariantProducerValue("separate-invariant")

@@ -264,7 +264,21 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             } else {
                 target
             } ?: continue
-            if ((implementation.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true) continue
+            val implementationOwner = implementation.parent as? IrClass
+            val implementationOwnerIsReified = implementationOwner != null &&
+                    (implementationOwner in context.reifiedGenericInterfaces ||
+                            externalDeclarations.hasReifiedGenericInterface(implementationOwner))
+            val implementationIsDefault =
+                implementationOwnerIsReified &&
+                        (implementation in context.interfaceDefaultImplementations ||
+                                (externalDeclarations.hasGenericInterface(implementationOwner) ||
+                                        externalDeclarations.hasReifiedGenericInterface(implementationOwner)) &&
+                                externalDeclarations.interfaceDefaultImplementationOrNull(implementation) != null)
+            if ((implementation.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true &&
+                !implementationIsDefault
+            ) {
+                continue
+            }
             val interfaceClass = slot.parent as? IrClass
                 ?: error("Internal .NET backend error: generic interface slot has no interface owner")
             val typedSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
