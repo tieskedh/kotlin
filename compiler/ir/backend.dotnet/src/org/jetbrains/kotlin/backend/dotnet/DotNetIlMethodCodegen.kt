@@ -961,7 +961,21 @@ internal class DotNetIlMethodCodegen(
         } else {
             null
         }
-        val slot = methodContext.declareLocal(variable, exactArrayStorage ?: localOpenNullableArrayStorage)
+        val nestedConstructionStorage = if (
+            exactArrayStorage == null && localOpenNullableArrayStorage == null &&
+            initializer != null && !variable.isVar
+        ) {
+            expressionCodegen.genericOwnerNestedConstructionCarrierTypeOrNull(
+                initializer,
+                variable.type,
+            )
+        } else {
+            null
+        }
+        val slot = methodContext.declareLocal(
+            variable,
+            exactArrayStorage ?: localOpenNullableArrayStorage ?: nestedConstructionStorage,
+        )
         if (initializer == null) return
         // Shared lowerings may place statement-bearing expressions in compiler-temporary
         // initializers (including a Nothing-typed break/continue on a dead value path). Route

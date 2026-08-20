@@ -147,6 +147,30 @@ public fun rehearsalCatConsumerBox(
 ): RehearsalNestedBox<RehearsalConsumer<RehearsalNestedCat>> =
     RehearsalNestedBox(consumer)
 
+// One generic MethodDef must choose a construction which remains truthful for every later T
+// substitution. Its direct producer/consumer input is still the natural CLR I<T> entry, while
+// the enclosing invariant box cannot promise that the nested variant view always has that one
+// physical construction.
+public fun <T> rehearsalOpenProducerBox(
+    producer: RehearsalProducer<T>,
+): RehearsalNestedBox<RehearsalProducer<T>> = RehearsalNestedBox(producer)
+
+public fun <T> rehearsalOpenConsumerBox(
+    consumer: RehearsalConsumer<T>,
+): RehearsalNestedBox<RehearsalConsumer<T>> = RehearsalNestedBox(consumer)
+
+public fun <T> rehearsalOpenProducerBoxIdentity(
+    box: RehearsalNestedBox<RehearsalProducer<T>>,
+): RehearsalNestedBox<RehearsalProducer<T>> = box
+
+public fun <T> rehearsalOpenConsumerBoxIdentity(
+    box: RehearsalNestedBox<RehearsalConsumer<T>>,
+): RehearsalNestedBox<RehearsalConsumer<T>> = box
+
+public fun <T> rehearsalStableOpenNestedBoxIdentity(
+    box: RehearsalNestedBox<RehearsalNestedBox<T>>,
+): RehearsalNestedBox<RehearsalNestedBox<T>> = box
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -192,6 +216,15 @@ fun box(): String {
     val stringBox = RehearsalNestedBox("nested")
     stringBox.write("typed-nested")
     if (stringBox.read() != "typed-nested") return "fail: exact reference box"
+    val stableOpenNestedBox = RehearsalNestedBox(stringBox)
+    val stableOpenNestedBoxIdentity =
+        rehearsalStableOpenNestedBoxIdentity(stableOpenNestedBox)
+    if (stableOpenNestedBoxIdentity !== stableOpenNestedBox ||
+        stableOpenNestedBoxIdentity.read() !== stringBox ||
+        stableOpenNestedBoxIdentity.read().read() != "typed-nested"
+    ) {
+        return "fail: stable open nested box identity"
+    }
 
     val exactProducerBox = rehearsalExactStringProducerBox(stringProducer)
     if (exactProducerBox.read() !== stringProducer ||
@@ -238,6 +271,52 @@ fun box(): String {
         return "fail: reference-only nested producer box"
     }
 
+    val openIntProducerBox = rehearsalOpenProducerBox(intProducer)
+    if (openIntProducerBox.read() !== intProducer ||
+        openIntProducerBox.read().produce() != 41
+    ) {
+        return "fail: open value nested producer box"
+    }
+    val openStringProducerBox = rehearsalOpenProducerBox(stringProducer)
+    if (openStringProducerBox.read() !== stringProducer ||
+        openStringProducerBox.read().produce() != "typed"
+    ) {
+        return "fail: open reference nested producer box"
+    }
+    val openBroadProducerBox = rehearsalOpenProducerBox(broadProducer)
+    if (openBroadProducerBox.read() !== intProducer ||
+        rehearsalBroadProduce(openBroadProducerBox.read()) != 41 ||
+        rehearsalOpenProducerBox(broadProducer).read().produce() != 41
+    ) {
+        return "fail: open broad nested producer box"
+    }
+    val exactProducerBoxIdentity = rehearsalOpenProducerBoxIdentity(exactProducerBox)
+    if (exactProducerBoxIdentity !== exactProducerBox ||
+        exactProducerBoxIdentity.read().produce() != "typed"
+    ) {
+        return "fail: open exact producer box identity"
+    }
+    val identityStringProducer: RehearsalProducer<String> =
+        RehearsalProducerValue("identity-write")
+    exactProducerBoxIdentity.write(identityStringProducer)
+    if (exactProducerBox.read() !== identityStringProducer ||
+        exactProducerBox.read().produce() != "identity-write"
+    ) {
+        return "fail: open exact producer box identity write"
+    }
+    val broadProducerBoxIdentity = rehearsalOpenProducerBoxIdentity(broadProducerBox)
+    if (broadProducerBoxIdentity !== broadProducerBox ||
+        rehearsalBroadProduce(broadProducerBoxIdentity.read()) != "typed"
+    ) {
+        return "fail: open broad producer box identity"
+    }
+    broadProducerBoxIdentity.write(broadProducer)
+    if (broadProducerBox.read() !== intProducer ||
+        rehearsalBroadProduce(broadProducerBox.read()) != 41
+    ) {
+        return "fail: open broad producer box identity write"
+    }
+
     val anyConsumerValue = RehearsalConsumerValue<Any?>("initial")
     val anyConsumer: RehearsalConsumer<Any?> = anyConsumerValue
     val intConsumer: RehearsalConsumer<Int> = anyConsumer
@@ -260,6 +339,37 @@ fun box(): String {
     catConsumerBox.read().consume(RehearsalNestedCat("consumed-cat"))
     if (animalConsumerValue.read().label != "consumed-cat") {
         return "fail: reference-only nested consumer dispatch"
+    }
+
+    val openIntConsumerBox = rehearsalOpenConsumerBox(intConsumer)
+    if (openIntConsumerBox.read() !== anyConsumer) {
+        return "fail: open value nested consumer identity"
+    }
+    openIntConsumerBox.read().consume(73)
+    if (anyConsumerValue.read() != 73) return "fail: open value nested consumer dispatch"
+    rehearsalOpenConsumerBox(intConsumer).read().consume(74)
+    if (anyConsumerValue.read() != 74) return "fail: direct open nested consumer dispatch"
+    val openCatConsumerBox = rehearsalOpenConsumerBox(catConsumer)
+    if (openCatConsumerBox.read() !== animalConsumer) {
+        return "fail: open reference nested consumer identity"
+    }
+    openCatConsumerBox.read().consume(RehearsalNestedCat("open-consumed-cat"))
+    if (animalConsumerValue.read().label != "open-consumed-cat") {
+        return "fail: open reference nested consumer dispatch"
+    }
+    val intConsumerBoxIdentity = rehearsalOpenConsumerBoxIdentity(intConsumerBox)
+    if (intConsumerBoxIdentity !== intConsumerBox) {
+        return "fail: open value consumer box identity"
+    }
+    intConsumerBoxIdentity.read().consume(75)
+    if (anyConsumerValue.read() != 75) return "fail: open value consumer box identity dispatch"
+    val catConsumerBoxIdentity = rehearsalOpenConsumerBoxIdentity(catConsumerBox)
+    if (catConsumerBoxIdentity !== catConsumerBox) {
+        return "fail: open reference consumer box identity"
+    }
+    catConsumerBoxIdentity.read().consume(RehearsalNestedCat("identity-consumed-cat"))
+    if (animalConsumerValue.read().label != "identity-consumed-cat") {
+        return "fail: open reference consumer box identity dispatch"
     }
 
     return "OK"

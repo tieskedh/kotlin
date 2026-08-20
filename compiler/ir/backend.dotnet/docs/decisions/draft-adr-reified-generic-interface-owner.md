@@ -241,6 +241,25 @@ logical type. Open/overridable functions, multiple selected inputs, defaults,
 varargs, function generics, generic owners, custom property accessors, and
 unproven control flow remain outside the proof.
 
+The first open nested-construction proof adds a distinct rule for a generic
+callable whose type parameter occurs inside a variant interface and then an
+invariant generic class. Neither `Box<Producer<!!T>>` nor `Box<object>` is a
+universal parameter: the former rejects Kotlin-unnameable variant views, while
+the latter rejects a caller's already constructed exact
+`Box<Producer<string>>`. The physical callable boundary is therefore `object`.
+It preserves the caller's actual box and selects that same object's class
+capability only when a member is invoked. A factory may still construct the
+concrete `Box<object>` required by its open body; its result crosses the same
+object boundary. A value read from the box enters the producer/consumer
+capability at the subsequent operation, not at storage or identity use.
+
+This object boundary does not alter the generic class TypeDef or all of its
+constructions. `Box<T>` retains one `!T` field; closed stable constructions stay
+typed; and the control `<T>(Box<Box<T>>) -> Box<Box<T>>` remains the ordinary
+`Box<Box<!!T>>` MethodDef. The rule is structural over an admitted nested
+variant owner with an open argument. It contains no collection or declaration-
+name switch and creates no wrapper or second object identity.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural

@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-open-nested-construction-boundary-2026-08-20.md`](generic-owner-open-nested-construction-boundary-2026-08-20.md)
+  records object-carried open `Box<Producer<T>>`/`Box<Consumer<T>>` callable
+  boundaries, retained exact box identity and `!T` state, operation-local
+  capability dispatch, the stable `Box<Box<!!T>>` control, and the paired
+  rehearsal/inverse Framework 4.8/.NET 10 matrices.
 - [`generic-owner-contravariant-construction-stability-2026-08-19.md`](generic-owner-contravariant-construction-stability-2026-08-19.md)
   records construction-local `Consumer<object> -> Consumer<int>` instability,
   retained reference-only CLR contravariance, typed natural interface

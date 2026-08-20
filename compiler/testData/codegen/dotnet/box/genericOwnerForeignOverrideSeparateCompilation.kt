@@ -109,6 +109,28 @@ public fun rehearsalSeparateCatConsumerBox(
 ): RehearsalSeparateNestedBox<RehearsalSeparateConsumer<RehearsalSeparateNestedCat>> =
     RehearsalSeparateNestedBox(consumer)
 
+public fun <T> rehearsalSeparateOpenProducerBox(
+    producer: RehearsalSeparateProducer<T>,
+): RehearsalSeparateNestedBox<RehearsalSeparateProducer<T>> =
+    RehearsalSeparateNestedBox(producer)
+
+public fun <T> rehearsalSeparateOpenConsumerBox(
+    consumer: RehearsalSeparateConsumer<T>,
+): RehearsalSeparateNestedBox<RehearsalSeparateConsumer<T>> =
+    RehearsalSeparateNestedBox(consumer)
+
+public fun <T> rehearsalSeparateOpenProducerBoxIdentity(
+    box: RehearsalSeparateNestedBox<RehearsalSeparateProducer<T>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateProducer<T>> = box
+
+public fun <T> rehearsalSeparateOpenConsumerBoxIdentity(
+    box: RehearsalSeparateNestedBox<RehearsalSeparateConsumer<T>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateConsumer<T>> = box
+
+public fun <T> rehearsalSeparateStableOpenNestedBoxIdentity(
+    box: RehearsalSeparateNestedBox<RehearsalSeparateNestedBox<T>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateNestedBox<T>> = box
+
 public class RehearsalSeparateStarProducerStore(
     private val producer: RehearsalSeparateProducer<*>,
 ) {
@@ -317,6 +339,16 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val stableInnerBox = RehearsalSeparateNestedBox("stable-open")
+    val stableOpenNestedBox = RehearsalSeparateNestedBox(stableInnerBox)
+    val stableOpenNestedBoxIdentity =
+        rehearsalSeparateStableOpenNestedBoxIdentity(stableOpenNestedBox)
+    if (stableOpenNestedBoxIdentity !== stableOpenNestedBox ||
+        stableOpenNestedBoxIdentity.read() !== stableInnerBox ||
+        stableOpenNestedBoxIdentity.read().read() != "stable-open"
+    ) {
+        return "fail: separate stable open nested box identity"
+    }
     val broadProducerBox = rehearsalSeparateBroadProducerBox(broadProducer)
     if (broadProducerBox.read() !== exactProducer ||
         RehearsalSeparateProducerReader().read(broadProducerBox.read()) != 31
@@ -352,6 +384,51 @@ fun box(): String {
         animalProducerBox.read().produce().label != "separate-cat"
     ) {
         return "fail: separate reference-only nested producer box"
+    }
+    val openIntProducerBox = rehearsalSeparateOpenProducerBox(exactProducer)
+    if (openIntProducerBox.read() !== exactProducer ||
+        openIntProducerBox.read().produce() != 31
+    ) {
+        return "fail: separate open value nested producer box"
+    }
+    val openStringProducerBox = rehearsalSeparateOpenProducerBox(exactStringProducer)
+    if (openStringProducerBox.read() !== exactStringProducer ||
+        openStringProducerBox.read().produce() != "separate-nested"
+    ) {
+        return "fail: separate open reference nested producer box"
+    }
+    val openBroadProducerBox = rehearsalSeparateOpenProducerBox(broadProducer)
+    if (openBroadProducerBox.read() !== exactProducer ||
+        RehearsalSeparateProducerReader().read(openBroadProducerBox.read()) != 31 ||
+        rehearsalSeparateOpenProducerBox(broadProducer).read().produce() != 31
+    ) {
+        return "fail: separate open broad nested producer box"
+    }
+    val exactProducerBoxIdentity = rehearsalSeparateOpenProducerBoxIdentity(exactProducerBox)
+    if (exactProducerBoxIdentity !== exactProducerBox ||
+        exactProducerBoxIdentity.read().produce() != "separate-nested"
+    ) {
+        return "fail: separate open exact producer box identity"
+    }
+    val identityStringProducer: RehearsalSeparateProducer<String> =
+        RehearsalSeparateProducerValue("separate-identity-write")
+    exactProducerBoxIdentity.write(identityStringProducer)
+    if (exactProducerBox.read() !== identityStringProducer ||
+        exactProducerBox.read().produce() != "separate-identity-write"
+    ) {
+        return "fail: separate open exact producer box identity write"
+    }
+    val broadProducerBoxIdentity = rehearsalSeparateOpenProducerBoxIdentity(broadProducerBox)
+    if (broadProducerBoxIdentity !== broadProducerBox ||
+        RehearsalSeparateProducerReader().read(broadProducerBoxIdentity.read()) != "separate-nested"
+    ) {
+        return "fail: separate open broad producer box identity"
+    }
+    broadProducerBoxIdentity.write(broadProducer)
+    if (broadProducerBox.read() !== exactProducer ||
+        RehearsalSeparateProducerReader().read(broadProducerBox.read()) != 31
+    ) {
+        return "fail: separate open broad producer box identity write"
     }
     val starProducerStore = RehearsalSeparateStarProducerStore(exactProducer)
     if (starProducerStore.read() != 31 || !starProducerStore.same(exactProducer)) {
@@ -414,6 +491,46 @@ fun box(): String {
     catConsumerBox.read().consume(RehearsalSeparateNestedCat("separate-consumed-cat"))
     if (animalConsumerValue.read().label != "separate-consumed-cat") {
         return "fail: separate reference-only nested consumer dispatch"
+    }
+    val openIntConsumerBox = rehearsalSeparateOpenConsumerBox(narrowIntConsumer)
+    if (openIntConsumerBox.read() !== anyConsumer) {
+        return "fail: separate open value nested consumer identity"
+    }
+    openIntConsumerBox.read().consume(81)
+    if (anyConsumerValue.read() != 81) {
+        return "fail: separate open value nested consumer dispatch"
+    }
+    rehearsalSeparateOpenConsumerBox(narrowIntConsumer).read().consume(82)
+    if (anyConsumerValue.read() != 82) {
+        return "fail: separate direct open nested consumer dispatch"
+    }
+    val openCatConsumerBox = rehearsalSeparateOpenConsumerBox(catConsumer)
+    if (openCatConsumerBox.read() !== animalConsumer) {
+        return "fail: separate open reference nested consumer identity"
+    }
+    openCatConsumerBox.read().consume(
+        RehearsalSeparateNestedCat("separate-open-consumed-cat"),
+    )
+    if (animalConsumerValue.read().label != "separate-open-consumed-cat") {
+        return "fail: separate open reference nested consumer dispatch"
+    }
+    val intConsumerBoxIdentity = rehearsalSeparateOpenConsumerBoxIdentity(narrowIntConsumerBox)
+    if (intConsumerBoxIdentity !== narrowIntConsumerBox) {
+        return "fail: separate open value consumer box identity"
+    }
+    intConsumerBoxIdentity.read().consume(83)
+    if (anyConsumerValue.read() != 83) {
+        return "fail: separate open value consumer box identity dispatch"
+    }
+    val catConsumerBoxIdentity = rehearsalSeparateOpenConsumerBoxIdentity(catConsumerBox)
+    if (catConsumerBoxIdentity !== catConsumerBox) {
+        return "fail: separate open reference consumer box identity"
+    }
+    catConsumerBoxIdentity.read().consume(
+        RehearsalSeparateNestedCat("separate-identity-consumed-cat"),
+    )
+    if (animalConsumerValue.read().label != "separate-identity-consumed-cat") {
+        return "fail: separate open reference consumer box identity dispatch"
     }
 
     val exactChild: RehearsalSeparateChildProducer<Int> =
