@@ -29,6 +29,14 @@ public interface RehearsalSeparateConsumer<in T> {
     public fun consume(value: T)
 }
 
+public interface RehearsalSeparateInvariantProducer<T> {
+    public fun produceInvariant(): T
+}
+
+public fun rehearsalSeparateStarInvariantProduce(
+    producer: RehearsalSeparateInvariantProducer<*>,
+): Any? = producer.produceInvariant()
+
 public class RehearsalSeparateConsumerValue<T>(initial: T) :
     RehearsalSeparateConsumer<T> {
     private var value: T = initial
@@ -130,6 +138,10 @@ public fun <T> rehearsalSeparateOpenConsumerBoxIdentity(
 public fun <T> rehearsalSeparateStableOpenNestedBoxIdentity(
     box: RehearsalSeparateNestedBox<RehearsalSeparateNestedBox<T>>,
 ): RehearsalSeparateNestedBox<RehearsalSeparateNestedBox<T>> = box
+
+public fun <T> rehearsalSeparateOpenInvariantProducerBoxIdentity(
+    box: RehearsalSeparateNestedBox<RehearsalSeparateInvariantProducer<T>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateInvariantProducer<T>> = box
 
 public class RehearsalSeparateStarProducerStore(
     private val producer: RehearsalSeparateProducer<*>,
@@ -262,6 +274,11 @@ public class RehearsalSeparateProducerValue<T>(private val value: T) :
     public override fun produce(): T = value
 }
 
+public class RehearsalSeparateInvariantProducerValue<T>(private val value: T) :
+    RehearsalSeparateInvariantProducer<T> {
+    public override fun produceInvariant(): T = value
+}
+
 public class RehearsalSeparateClassifierBoundary {
     private val classifier = RehearsalSeparateProducerClassifier()
     private val input = RehearsalSeparateClassifierInput()
@@ -339,6 +356,22 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val invariantProducer: RehearsalSeparateInvariantProducer<String> =
+        RehearsalSeparateInvariantProducerValue("separate-invariant")
+    if (invariantProducer.produceInvariant() != "separate-invariant" ||
+        rehearsalSeparateStarInvariantProduce(invariantProducer) != "separate-invariant"
+    ) {
+        return "fail: separate invariant producer"
+    }
+    val invariantBox = RehearsalSeparateNestedBox(invariantProducer)
+    val invariantBoxIdentity =
+        rehearsalSeparateOpenInvariantProducerBoxIdentity(invariantBox)
+    if (invariantBoxIdentity !== invariantBox ||
+        invariantBoxIdentity.read() !== invariantProducer ||
+        invariantBoxIdentity.read().produceInvariant() != "separate-invariant"
+    ) {
+        return "fail: separate invariant open nested box identity"
+    }
     val stableInnerBox = RehearsalSeparateNestedBox("stable-open")
     val stableOpenNestedBox = RehearsalSeparateNestedBox(stableInnerBox)
     val stableOpenNestedBoxIdentity =

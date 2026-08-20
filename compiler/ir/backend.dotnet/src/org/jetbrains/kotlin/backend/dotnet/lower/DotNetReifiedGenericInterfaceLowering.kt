@@ -91,14 +91,16 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * construction, and every implementation supplies both views on the same object.
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
- * tranche accepts either a public covariant producer with one abstract no-input member returning
- * its owner parameter directly or a public contravariant consumer with one abstract owner-
- * parameter input and `Unit` result. Covariant subinterfaces inherit the producer family at a
- * fixpoint, including across a producer boundary. A child which adds the same producer member
- * shape owns only its new semantic slot; inherited slots remain inherited. An intersection
- * without new members receives one memberless capability alias over its independent roots. Other
- * families retain the accepted erased production ABI until their complete semantic surface has
- * its own proof.
+ * tranche accepts a public covariant or invariant producer with one abstract no-input member
+ * returning its owner parameter directly, or a public contravariant consumer with one abstract
+ * owner-parameter input and `Unit` result. An invariant producer has no legal sibling widening:
+ * exact and open constructions stay on natural `I<T>`, while only a star read uses the semantic
+ * operation boundary. Covariant subinterfaces inherit the producer family at a fixpoint,
+ * including across a producer boundary. A child which adds the same producer member shape owns
+ * only its new semantic slot; inherited slots remain inherited. An intersection without new
+ * members receives one memberless capability alias over its independent roots. Other families
+ * retain the accepted erased production ABI until their complete semantic surface has its own
+ * proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
@@ -271,6 +273,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val projection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
             return projection.variance == Variance.INVARIANT &&
                     (projection.type as? IrSimpleType)?.classifier is IrTypeParameterSymbol
+        }
+
+        fun IrType.hasStarReifiedInterfaceArgument(): Boolean {
+            val simpleType = this as? IrSimpleType ?: return false
+            reifiedInterfaceOwnerOrNull() ?: return false
+            return simpleType.arguments.singleOrNull() !is IrTypeProjection
         }
 
         fun IrType.reifiedCovariantInterfaceOwnerOrNull(): IrClass? {
@@ -475,13 +483,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     ?: return
                 context.genericOwnerCapabilityDeclarations += declaration
                 if (semanticOwner.typeParameters.single().variance == Variance.OUT_VARIANCE ||
-                    type.hasOpenReifiedInterfaceArgument()
+                    type.hasOpenReifiedInterfaceArgument() || type.hasStarReifiedInterfaceArgument()
                 ) {
-                    // An open I<T> occurrence cannot promise one natural construction for every
-                    // later method/class substitution. Object admits both the Kotlin capability
-                    // and an ordinary natural CLR implementation; input-bearing member use may
-                    // still require the capability until its foreign fallback is separately
-                    // proven.
+                    // An open or star I<T> occurrence cannot promise one natural construction.
+                    // Object admits both the Kotlin capability and an ordinary natural CLR
+                    // implementation. Star input is not callable in Kotlin; a no-input output
+                    // member uses the capability-or-natural foreign dispatcher at the operation.
                     context.genericOwnerForeignDispatchDeclarations += declaration
                 }
             }
@@ -834,7 +841,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return when (parameter.variance) {
             Variance.OUT_VARIANCE -> member.isDirectProducerMember(parameter)
             Variance.IN_VARIANCE -> member.isDirectConsumerMember(parameter)
-            Variance.INVARIANT -> false
+            Variance.INVARIANT -> member.isDirectProducerMember(parameter)
         }
     }
 
@@ -872,9 +879,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         ) {
             return false
         }
-        val parameter = typeParameters.singleOrNull()
-            ?.takeIf { it.variance == Variance.OUT_VARIANCE || it.variance == Variance.IN_VARIANCE }
-            ?: return false
+        val parameter = typeParameters.singleOrNull() ?: return false
         return parameter.superTypes.all(IrType::isNullableAny)
     }
 

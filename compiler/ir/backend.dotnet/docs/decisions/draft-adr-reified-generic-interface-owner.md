@@ -113,24 +113,28 @@ create an adapter, or fabricate a constructed CLR interface. A following
 member call still requires the capability or one unique natural construction.
 
 This fallback changes no object identity and creates no proxy, wrapper, or
-third public canonical type. It is currently admitted only for the structural
-no-input covariant producer family, where the required call is derivable from
-the open interface and declared member. Input-bearing, invariant, overloaded,
-defaulted, and otherwise non-derivable foreign implementations remain gates.
+third public canonical type. It is currently admitted for the structural
+no-input producer family with either covariant or invariant declaration-site
+variance, where the required call is derivable from the open interface and
+declared member. Input-bearing, overloaded, defaulted, and otherwise non-
+derivable foreign implementations remain gates.
 Trimming and NativeAOT also remain separate gates: runtime interface metadata
 and reflective invocation must not be assumed retained merely because both JIT
 profiles execute the fallback.
 
 ## Compiler-emitted evidence
 
-The one test-only generic-owner epoch now admits two structural root families.
-A public top-level covariant interface with one unbounded owner parameter and
-one abstract public no-input member returning that parameter directly publishes
-the natural `Source<out T>`, its non-generic semantic capability, and their
-complete member family. Exact final substitutions use the natural CLR
-interface. Stars, use-site projections, owner parameters, open class arguments,
-and widened value-type views use a broad object carrier; Kotlin/generated
-objects take the capability fast path from that carrier.
+The one test-only generic-owner epoch now admits three structural root
+families. A public top-level covariant or invariant interface with one
+unbounded owner parameter and one abstract public no-input member returning
+that parameter directly publishes the natural `Source<T>`, its non-generic
+semantic capability, and their complete member family. Exact final
+substitutions use the natural CLR interface. Covariant stars, projections,
+open arguments, and widened value-type views use a broad object carrier;
+Kotlin/generated objects take the capability fast path from that carrier.
+Invariant exact/open substitutions remain natural because they have no legal
+sibling widening. Only an invariant star read enters the object operation
+boundary.
 
 A public top-level contravariant interface with one unbounded owner parameter
 and one abstract public `consume(T): Unit` member publishes natural
@@ -260,6 +264,17 @@ typed; and the control `<T>(Box<Box<T>>) -> Box<Box<T>>` remains the ordinary
 variant owner with an open argument. It contains no collection or declaration-
 name switch and creates no wrapper or second object identity.
 
+The invariant construction control is stronger. One generic MethodDef over
+`Box<InvariantProducer<T>>` can truthfully name
+`Box<InvariantProducer<!!T>>` for every substitution because Kotlin cannot
+widen that declaration to a sibling argument. The input/result and nested
+field therefore remain typed. A public star parameter is instead `object`, so
+ordinary C# implementations can enter without naming the capability. A
+non-partial C# class implementing only the natural invariant interface is
+complete: exact calls use that slot and star output calls use the unique-
+construction fallback. The authoring generator remains active only when a
+variant contract in the same class genuinely requires a generated capability.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -275,8 +290,8 @@ must cover:
 
 1. general member-declaring children beyond one producer-output slot, including
    multiple members, overloads, and deeper inheritance;
-2. invariant, mixed, multi-parameter, and input-bearing child/interface
-   compositions beyond the admitted one-input consumer root;
+2. mutable/broader invariant members, mixed, multi-parameter, and input-
+   bearing child/interface compositions beyond the admitted roots;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded

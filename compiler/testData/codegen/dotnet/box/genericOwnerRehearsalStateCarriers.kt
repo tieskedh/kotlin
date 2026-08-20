@@ -83,6 +83,13 @@ public interface RehearsalConsumer<in T> {
     public fun consume(value: T)
 }
 
+// Declaration-invariant generic owners have no legal sibling widening. Exact constructions and
+// open method substitutions must therefore remain ordinary CLR I<T>; only a star read needs the
+// classifier/semantic operation boundary.
+public interface RehearsalInvariantProducer<T> {
+    public fun produceInvariant(): T
+}
+
 private class RehearsalProducerValue<T>(private val value: T) : RehearsalProducer<T> {
     override fun produce(): T = value
 }
@@ -97,7 +104,15 @@ private class RehearsalConsumerValue<T>(initial: T) : RehearsalConsumer<T> {
     fun read(): T = value
 }
 
+private class RehearsalInvariantProducerValue<T>(private val value: T) :
+    RehearsalInvariantProducer<T> {
+    override fun produceInvariant(): T = value
+}
+
 private fun rehearsalBroadProduce(producer: RehearsalProducer<Any?>): Any? = producer.produce()
+
+public fun rehearsalStarInvariantProduce(producer: RehearsalInvariantProducer<*>): Any? =
+    producer.produceInvariant()
 
 // The owner itself always retains one !T field. A logical construction whose argument can carry
 // a CLR-unnameable semantic producer view substitutes object for this construction only; exact
@@ -171,6 +186,10 @@ public fun <T> rehearsalStableOpenNestedBoxIdentity(
     box: RehearsalNestedBox<RehearsalNestedBox<T>>,
 ): RehearsalNestedBox<RehearsalNestedBox<T>> = box
 
+public fun <T> rehearsalOpenInvariantProducerBoxIdentity(
+    box: RehearsalNestedBox<RehearsalInvariantProducer<T>>,
+): RehearsalNestedBox<RehearsalInvariantProducer<T>> = box
+
 fun box(): String {
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
@@ -210,6 +229,20 @@ fun box(): String {
     val stringProducer: RehearsalProducer<String> = RehearsalProducerValue("typed")
     if (stringProducer.produce() != "typed") return "fail: exact reference producer"
 
+    val invariantInt: RehearsalInvariantProducer<Int> = RehearsalInvariantProducerValue(47)
+    if (invariantInt.produceInvariant() + 1 != 48 ||
+        rehearsalStarInvariantProduce(invariantInt) != 47
+    ) {
+        return "fail: invariant value producer"
+    }
+    val invariantString: RehearsalInvariantProducer<String> =
+        RehearsalInvariantProducerValue("invariant")
+    if (invariantString.produceInvariant() != "invariant" ||
+        rehearsalStarInvariantProduce(invariantString) != "invariant"
+    ) {
+        return "fail: invariant reference producer"
+    }
+
     val intBox = RehearsalNestedBox(51)
     intBox.write(53)
     if (intBox.read() != 53) return "fail: exact value box"
@@ -224,6 +257,14 @@ fun box(): String {
         stableOpenNestedBoxIdentity.read().read() != "typed-nested"
     ) {
         return "fail: stable open nested box identity"
+    }
+    val invariantBox = RehearsalNestedBox(invariantString)
+    val invariantBoxIdentity = rehearsalOpenInvariantProducerBoxIdentity(invariantBox)
+    if (invariantBoxIdentity !== invariantBox ||
+        invariantBoxIdentity.read() !== invariantString ||
+        invariantBoxIdentity.read().produceInvariant() != "invariant"
+    ) {
+        return "fail: invariant open nested box identity"
     }
 
     val exactProducerBox = rehearsalExactStringProducerBox(stringProducer)
