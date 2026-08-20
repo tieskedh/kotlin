@@ -4321,6 +4321,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateAbstractMethodGenericProducer`1",
+                    expectedMemberName = "produceAbstractGeneric",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner = "RehearsalSeparateInvariantProducer`1",
                     expectedMemberName = "produceInvariant",
                     expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
@@ -4516,6 +4528,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public int produceDefaultGeneric<R>(R value)
                 {
                     return 2000 + (int)(object)value;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpAbstractMethodGenericProducer :
+                RehearsalSeparateAbstractMethodGenericProducer<int>
+            {
+                public int produceAbstractGeneric<R>(R value)
+                {
+                    return 3000 + (int)(object)value;
                 }
             }
 
@@ -5924,6 +5945,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         libKt.rehearsalSeparateDefaultMethodGenericReadCount() != 2)
                         throw new InvalidOperationException(
                             "generic interface method-generic default bypassed the C# override");
+                    RehearsalSeparateCSharpAbstractMethodGenericProducer
+                        abstractMethodGenericProducer =
+                            new RehearsalSeparateCSharpAbstractMethodGenericProducer();
+                    RehearsalSeparateAbstractMethodGenericProducer<int>
+                        abstractMethodGenericProducerView = abstractMethodGenericProducer;
+                    RehearsalSeparateAbstractMethodGenericReader abstractMethodGenericReader =
+                        new RehearsalSeparateAbstractMethodGenericReader();
+                    if (abstractMethodGenericProducerView.produceAbstractGeneric<int>(7) != 3007 ||
+                        !object.Equals(
+                            abstractMethodGenericReader.read(abstractMethodGenericProducer, 8),
+                            3008) ||
+                        !abstractMethodGenericReader.same(
+                            abstractMethodGenericProducer,
+                            abstractMethodGenericProducer))
+                        throw new InvalidOperationException(
+                            "abstract generic-interface method bypassed the C# generic override");
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -7224,6 +7261,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpDefaultMethodGenericOverrideProducer" in generated) {
             "The C# authoring tool did not generate the method-generic default override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpAbstractMethodGenericProducer" in generated) {
+            "The C# authoring tool did not generate the abstract method-generic bridge:\n$generated"
         }
         check("RehearsalSeparateCSharpDerivedDefaultConsumer" !in generated) {
             "The ordinary C# subclass unexpectedly required a generated semantic bridge:\n$generated"

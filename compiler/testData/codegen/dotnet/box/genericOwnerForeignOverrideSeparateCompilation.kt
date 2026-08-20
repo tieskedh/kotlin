@@ -102,6 +102,22 @@ public class RehearsalSeparateDefaultMethodGenericReader {
     ): Boolean = producer === expected
 }
 
+public interface RehearsalSeparateAbstractMethodGenericProducer<out T> {
+    public fun <R> produceAbstractGeneric(value: R): T
+}
+
+public class RehearsalSeparateAbstractMethodGenericReader {
+    public fun read(
+        producer: RehearsalSeparateAbstractMethodGenericProducer<Any?>,
+        value: Int,
+    ): Any? = producer.produceAbstractGeneric(value)
+
+    public fun same(
+        producer: RehearsalSeparateAbstractMethodGenericProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }
@@ -524,6 +540,11 @@ public class RehearsalSeparateProducerValue<T>(private val value: T) :
     public override fun produce(): T = value
 }
 
+public class RehearsalSeparateAbstractMethodGenericProducerValue<T>(private val value: T) :
+    RehearsalSeparateAbstractMethodGenericProducer<T> {
+    public override fun <R> produceAbstractGeneric(value: R): T = this.value
+}
+
 public class RehearsalSeparateInvariantProducerValue<T>(private val value: T) :
     RehearsalSeparateInvariantProducer<T> {
     public override fun produceInvariant(): T = value
@@ -689,6 +710,22 @@ fun box(): String {
     val lateRoutedValue = RehearsalSeparateLateRoutedValue(broadProducer)
     if (lateRoutedValue.read() != 31) {
         return "fail: separate late-routed value-class producer"
+    }
+    val exactAbstractMethodGeneric:
+            RehearsalSeparateAbstractMethodGenericProducer<Int> =
+        RehearsalSeparateAbstractMethodGenericProducerValue(37)
+    if (exactAbstractMethodGeneric.produceAbstractGeneric("exact") != 37) {
+        return "fail: separate exact abstract method-generic producer"
+    }
+    val broadAbstractMethodGeneric:
+            RehearsalSeparateAbstractMethodGenericProducer<Any?> =
+        exactAbstractMethodGeneric
+    if (RehearsalSeparateAbstractMethodGenericReader().read(
+            broadAbstractMethodGeneric,
+            1,
+        ) != 37 || broadAbstractMethodGeneric !== exactAbstractMethodGeneric
+    ) {
+        return "fail: separate broad abstract method-generic producer"
     }
     val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
         RehearsalSeparateDefaultConsumerValue()
