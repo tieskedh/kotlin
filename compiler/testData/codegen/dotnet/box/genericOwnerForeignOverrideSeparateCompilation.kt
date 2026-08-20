@@ -336,6 +336,40 @@ public class RehearsalSeparateLocalIntersectionProducerValue<T>(private val valu
 // MODULE: middle(lib)
 // FILE: middle.kt
 
+public interface RehearsalSeparateInvariantPropertyCellChild<T> :
+    RehearsalSeparateInvariantPropertyCell<T> {
+    public var childPropertyCellValue: T
+}
+
+public class RehearsalSeparateInvariantPropertyCellChildValue<T>(
+    override var propertyCellValue: T,
+    override var childPropertyCellValue: T,
+) : RehearsalSeparateInvariantPropertyCellChild<T>
+
+public fun rehearsalSeparateProjectedInvariantPropertyCellChildRead(
+    cell: RehearsalSeparateInvariantPropertyCellChild<out Any?>,
+): Any? = cell.childPropertyCellValue
+
+public fun rehearsalSeparateProjectedInvariantPropertyCellChildWrite(
+    cell: RehearsalSeparateInvariantPropertyCellChild<in String>,
+    value: String,
+) {
+    cell.childPropertyCellValue = value
+}
+
+public fun <T> rehearsalSeparateOpenInvariantPropertyCellChildIdentity(
+    cell: RehearsalSeparateInvariantPropertyCellChild<T>,
+): RehearsalSeparateInvariantPropertyCellChild<T> = cell
+
+public fun <T> rehearsalSeparateOpenInvariantPropertyCellChildBoxIdentity(
+    box: RehearsalSeparateNestedBox<RehearsalSeparateInvariantPropertyCellChild<T>>,
+): RehearsalSeparateNestedBox<RehearsalSeparateInvariantPropertyCellChild<T>> = box
+
+public fun rehearsalSeparateProjectedInvariantPropertyCellChildBox(
+    cell: RehearsalSeparateInvariantPropertyCellChild<out Any?>,
+): RehearsalSeparateNestedBox<RehearsalSeparateInvariantPropertyCellChild<out Any?>> =
+    RehearsalSeparateNestedBox(cell)
+
 public open class RehearsalSeparateKotlinOverrideStore<T>(initial: T) :
     RehearsalSeparateStore<T>(initial) {
     public override fun read(): T = super.read()
@@ -605,6 +639,97 @@ fun box(): String {
         ) != 71
     ) {
         return "fail: separate projected invariant property cell box mutation"
+    }
+    val invariantPropertyCellChild: RehearsalSeparateInvariantPropertyCellChild<String> =
+        RehearsalSeparateInvariantPropertyCellChildValue(
+            "separate-property-parent",
+            "separate-property-child",
+        )
+    invariantPropertyCellChild.propertyCellValue = "separate-exact-property-parent"
+    invariantPropertyCellChild.childPropertyCellValue = "separate-exact-property-child"
+    val projectedOutputPropertyCellChild:
+            RehearsalSeparateInvariantPropertyCellChild<out Any?> =
+        invariantPropertyCellChild
+    if (rehearsalSeparateProjectedInvariantPropertyCellRead(
+            projectedOutputPropertyCellChild
+        ) != "separate-exact-property-parent" ||
+        rehearsalSeparateProjectedInvariantPropertyCellChildRead(
+            projectedOutputPropertyCellChild
+        ) != "separate-exact-property-child"
+    ) {
+        return "fail: separate projected invariant property child read"
+    }
+    val projectedInputPropertyCellChild:
+            RehearsalSeparateInvariantPropertyCellChild<in String> =
+        invariantPropertyCellChild
+    rehearsalSeparateProjectedInvariantPropertyCellWrite(
+        projectedInputPropertyCellChild,
+        "separate-projected-property-parent",
+    )
+    rehearsalSeparateProjectedInvariantPropertyCellChildWrite(
+        projectedInputPropertyCellChild,
+        "separate-projected-property-child",
+    )
+    if (invariantPropertyCellChild.propertyCellValue !=
+        "separate-projected-property-parent" ||
+        invariantPropertyCellChild.childPropertyCellValue !=
+        "separate-projected-property-child" ||
+        rehearsalSeparateOpenInvariantPropertyCellChildIdentity(
+            invariantPropertyCellChild
+        ) !== invariantPropertyCellChild
+    ) {
+        return "fail: separate projected invariant property child write"
+    }
+    val broadInvariantPropertyCellChild:
+            RehearsalSeparateInvariantPropertyCellChild<Any?> =
+        RehearsalSeparateInvariantPropertyCellChildValue(
+            "separate-broad-property-parent",
+            "separate-broad-property-child",
+        )
+    val projectedBroadInputPropertyCellChild:
+            RehearsalSeparateInvariantPropertyCellChild<in String> =
+        broadInvariantPropertyCellChild
+    rehearsalSeparateProjectedInvariantPropertyCellWrite(
+        projectedBroadInputPropertyCellChild,
+        "separate-broad-projected-property-parent",
+    )
+    rehearsalSeparateProjectedInvariantPropertyCellChildWrite(
+        projectedBroadInputPropertyCellChild,
+        "separate-broad-projected-property-child",
+    )
+    if (broadInvariantPropertyCellChild.propertyCellValue !=
+        "separate-broad-projected-property-parent" ||
+        broadInvariantPropertyCellChild.childPropertyCellValue !=
+        "separate-broad-projected-property-child"
+    ) {
+        return "fail: separate broad projected invariant property child write"
+    }
+    val invariantPropertyCellChildBox =
+        RehearsalSeparateNestedBox(invariantPropertyCellChild)
+    if (rehearsalSeparateOpenInvariantPropertyCellChildBoxIdentity(
+            invariantPropertyCellChildBox
+        ) !== invariantPropertyCellChildBox
+    ) {
+        return "fail: separate open invariant property child box identity"
+    }
+    val projectedInvariantPropertyCellChildBox =
+        rehearsalSeparateProjectedInvariantPropertyCellChildBox(
+            projectedOutputPropertyCellChild
+        )
+    val intInvariantPropertyCellChild:
+            RehearsalSeparateInvariantPropertyCellChild<Int> =
+        RehearsalSeparateInvariantPropertyCellChildValue(83, 89)
+    projectedInvariantPropertyCellChildBox.write(intInvariantPropertyCellChild)
+    if (projectedInvariantPropertyCellChildBox.read() !==
+        intInvariantPropertyCellChild ||
+        rehearsalSeparateProjectedInvariantPropertyCellRead(
+            projectedInvariantPropertyCellChildBox.read()
+        ) != 83 ||
+        rehearsalSeparateProjectedInvariantPropertyCellChildRead(
+            projectedInvariantPropertyCellChildBox.read()
+        ) != 89
+    ) {
+        return "fail: separate projected invariant property child box mutation"
     }
     val invariantBox = RehearsalSeparateNestedBox(invariantProducer)
     val invariantBoxIdentity =

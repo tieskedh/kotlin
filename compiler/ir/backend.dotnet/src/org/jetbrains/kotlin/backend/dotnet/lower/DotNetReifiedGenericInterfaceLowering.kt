@@ -97,17 +97,17 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
- * semantic boundary. Covariant subinterfaces inherit the producer family at a fixpoint,
- * including across a producer boundary. A child which adds the same producer member shape owns
- * only its new semantic slot; inherited slots remain inherited. An intersection without new
- * members receives one memberless capability alias over its independent roots. Other families
- * retain the accepted erased production ABI until their complete semantic surface has its own
- * proof.
+ * semantic boundary. Covariant producer subinterfaces and exact invariant-property children
+ * inherit their family at a fixpoint, including across a library boundary. A child which adds
+ * one admitted member or property owns only its new semantic slots; inherited slots remain
+ * inherited. An intersection without new members receives one memberless capability alias over
+ * its independent roots. Other families retain the accepted erased production ABI until their
+ * complete semantic surface has its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
-    private data class ReifiedProducerChildShape(
+    private data class ReifiedInterfaceChildShape(
         val parents: List<IrClass>,
         val declaredMembers: List<IrSimpleFunction>,
     )
@@ -161,15 +161,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
         // would have to name an already-reified Parent<T> without owning a CLR T, which is
         // impossible. A memberless child in one semantic domain reuses that capability. A child
-        // which adds a producer member, or joins independent domains, receives one child capability
-        // inheriting the parent capabilities. It owns only its declared slot: no inherited slot,
-        // implementation, or state is copied.
+        // which adds an admitted producer or invariant property, or joins independent domains,
+        // receives one child capability inheriting the parent capabilities. It owns only its
+        // declared slots: no inherited slot, implementation, or state is copied.
         var changed: Boolean
         do {
             changed = false
             for (owner in genericInterfaces) {
                 if (owner in context.reifiedGenericInterfaces) continue
-                val shape = owner.reifiedProducerChildShapeOrNull() ?: continue
+                val shape = owner.reifiedInterfaceChildShapeOrNull() ?: continue
                 if (shape.parents.any { parent ->
                         parent !in context.genericOwnerCapabilityInterfaces &&
                                 parent !in context.externalReifiedGenericInterfaceCapabilityProviders &&
@@ -831,12 +831,23 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }.filterNot(IrSimpleFunction::isFakeOverride)
 
-    private fun IrClass.reifiedProducerChildShapeOrNull(): ReifiedProducerChildShape? {
-        if (!hasFirstReifiedProducerOwnerShape()) return null
-        if (declarations.any { declaration -> declaration is IrProperty }) return null
+    private fun IrClass.declaredInterfaceProperties(): List<IrProperty> =
+        declarations.filterIsInstance<IrProperty>().filter { property ->
+            listOfNotNull(property.getter, property.setter).any { accessor -> !accessor.isFakeOverride }
+        }
+
+    private fun IrClass.reifiedInterfaceChildShapeOrNull(): ReifiedInterfaceChildShape? {
+        if (!hasFirstReifiedInterfaceOwnerShape()) return null
         val parameter = typeParameters.single()
-        val members = declaredInterfaceMembers()
-        if (members.size > 1 || members.any { member -> !member.isDirectProducerMember(parameter) }) return null
+        val members = when (parameter.variance) {
+            Variance.OUT_VARIANCE -> declaredInterfaceMembers().takeIf { declared ->
+                declaredInterfaceProperties().isEmpty() &&
+                        declared.size <= 1 &&
+                        declared.all { member -> member.isDirectProducerMember(parameter) }
+            }
+            Variance.INVARIANT -> directInvariantPropertyMembersOrNull(parameter)
+            Variance.IN_VARIANCE -> null
+        } ?: return null
         val parentTypes = dotNetDirectInterfaceTypes().takeIf { it.isNotEmpty() } ?: return null
         val parents = parentTypes.map { parentType ->
             val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
@@ -846,7 +857,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 argument.variance == Variance.INVARIANT && argumentParameter?.owner === parameter
             } ?: return null
         }
-        return ReifiedProducerChildShape(parents, members)
+        if (parameter.variance == Variance.INVARIANT) {
+            val parent = parents.singleOrNull() ?: return null
+            val parentParameter = parent.typeParameters.singleOrNull() ?: return null
+            val parentPropertyMembers = parent.directInvariantPropertyMembersOrNull(parentParameter)
+            if (parentParameter.variance != Variance.INVARIANT ||
+                parent.dotNetDirectInterfaceTypes().isNotEmpty() ||
+                parentPropertyMembers == null
+            ) {
+                return null
+            }
+        }
+        return ReifiedInterfaceChildShape(parents, members)
     }
 
     private fun IrClass.isFirstReifiedInterfaceCandidate(): Boolean {
@@ -854,17 +876,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (parent !is IrFile || dotNetDirectInterfaceTypes().isNotEmpty()) return false
         val parameter = typeParameters.single()
         val members = declaredInterfaceMembers()
-        val properties = declarations.filterIsInstance<IrProperty>()
+        val properties = declaredInterfaceProperties()
         if (properties.size == 1) {
-            val property = properties.single()
-            val getter = property.getter ?: return false
-            val setter = property.setter ?: return false
-            return parameter.variance == Variance.INVARIANT && property.isVar &&
-                    members.size == 2 && members.toSet() == setOf(getter, setter) &&
-                    getter.correspondingPropertySymbol?.owner === property &&
-                    setter.correspondingPropertySymbol?.owner === property &&
-                    getter.isDirectProducerMember(parameter) &&
-                    setter.isDirectConsumerMember(parameter)
+            return parameter.variance == Variance.INVARIANT &&
+                    directInvariantPropertyMembersOrNull(parameter) != null
         }
         if (properties.isNotEmpty() ||
             members.map { member -> member.name }.distinct().size != members.size
@@ -883,6 +898,22 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                 members.count { member ->
                                     member.isDirectConsumerMember(parameter)
                                 } == 1)
+        }
+    }
+
+    private fun IrClass.directInvariantPropertyMembersOrNull(
+        parameter: IrTypeParameter,
+    ): List<IrSimpleFunction>? {
+        val property = declaredInterfaceProperties().singleOrNull() ?: return null
+        val getter = property.getter ?: return null
+        val setter = property.setter ?: return null
+        val members = declaredInterfaceMembers()
+        return members.takeIf {
+            property.isVar && members.size == 2 && members.toSet() == setOf(getter, setter) &&
+                    getter.correspondingPropertySymbol?.owner === property &&
+                    setter.correspondingPropertySymbol?.owner === property &&
+                    getter.isDirectProducerMember(parameter) &&
+                    setter.isDirectConsumerMember(parameter)
         }
     }
 
