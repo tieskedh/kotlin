@@ -336,6 +336,15 @@ standalone invariant consumer retains its generated object adapter. This does
 not generalize to multiple inputs, changed arguments, or arbitrary mixed-
 member children.
 
+One further direct consumer composes as a bounded second edge. The natural CLR
+grandchild inherits the consumer child and property root, owns only its new
+`Consume(!T)` MethodDef, and adds one semantic input slot above the inherited
+two-plus-one capability methods. Kotlin implementations retain one `!T` state
+field; ordinary non-partial C# grandchildren provide one property and two
+methods. The authoring proof uses the transitive constructed root contract.
+Admission reconstructs exactly the first property-root consumer child and does
+not recursively admit a third edge.
+
 The consumer proof includes `Consumer<object>` and `Consumer<int>` C# source
 implementations. The manifest records contravariance and the paired natural/
 semantic input signatures; the generator supplies the object-to-natural
@@ -351,8 +360,8 @@ must cover:
 
 1. general member-declaring children beyond one producer-output slot, the
    exact one-level invariant-property child, or its one-consumer sibling,
-   including multiple members, overloads, changed arguments, multiple parents,
-   and deeper inheritance;
+   and the bounded second consumer edge, including multiple members, overloads,
+   changed arguments, multiple parents, and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
    method root, exact mutable-property root, exact one-level property child,
    and exact property-root consumer child, mixed or multiple type parameters,
