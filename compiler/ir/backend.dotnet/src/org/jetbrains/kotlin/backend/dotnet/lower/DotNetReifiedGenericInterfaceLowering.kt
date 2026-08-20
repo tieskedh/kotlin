@@ -823,7 +823,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrClass.declaredInterfaceMembers(): List<IrSimpleFunction> =
-        declarations.filterIsInstance<IrSimpleFunction>().filterNot(IrSimpleFunction::isFakeOverride)
+        declarations.flatMap { declaration ->
+            when (declaration) {
+                is IrSimpleFunction -> listOf(declaration)
+                is IrProperty -> listOfNotNull(declaration.getter, declaration.setter)
+                else -> emptyList()
+            }
+        }.filterNot(IrSimpleFunction::isFakeOverride)
 
     private fun IrClass.reifiedProducerChildShapeOrNull(): ReifiedProducerChildShape? {
         if (!hasFirstReifiedProducerOwnerShape()) return null
@@ -846,10 +852,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
     private fun IrClass.isFirstReifiedInterfaceCandidate(): Boolean {
         if (!hasFirstReifiedInterfaceOwnerShape()) return false
         if (parent !is IrFile || dotNetDirectInterfaceTypes().isNotEmpty()) return false
-        if (declarations.any { declaration -> declaration is IrProperty }) return false
         val parameter = typeParameters.single()
         val members = declaredInterfaceMembers()
-        if (members.map { member -> member.name }.distinct().size != members.size) return false
+        val properties = declarations.filterIsInstance<IrProperty>()
+        if (properties.size == 1) {
+            val property = properties.single()
+            val getter = property.getter ?: return false
+            val setter = property.setter ?: return false
+            return parameter.variance == Variance.INVARIANT && property.isVar &&
+                    members.size == 2 && members.toSet() == setOf(getter, setter) &&
+                    getter.correspondingPropertySymbol?.owner === property &&
+                    setter.correspondingPropertySymbol?.owner === property &&
+                    getter.isDirectProducerMember(parameter) &&
+                    setter.isDirectConsumerMember(parameter)
+        }
+        if (properties.isNotEmpty() ||
+            members.map { member -> member.name }.distinct().size != members.size
+        ) {
+            return false
+        }
         return when (parameter.variance) {
             Variance.OUT_VARIANCE -> members.singleOrNull()?.isDirectProducerMember(parameter) == true
             Variance.IN_VARIANCE -> members.singleOrNull()?.isDirectConsumerMember(parameter) == true

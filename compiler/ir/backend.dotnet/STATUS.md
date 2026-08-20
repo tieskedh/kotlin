@@ -145,11 +145,11 @@ verification, and work state.
   lowering: an inherited class body receives a typed MethodImpl only when its
   CLR return carrier actually differs, while exact signatures remain direct.
   Production remains on the accepted erased interface ABI. Defaults,
-  properties, broader/multiple member shapes, invariant and mixed variance,
-  Runtime/Stdlib closure,
-  other CLR languages, ordinary foreign implementations outside the admitted
-  covariant producer, classifier-derived fields/input boundaries, and
-  deployment modes remain gates. The focused rehearsal and
+  read-only/open-nullable and broader/mixed property families, overloads,
+  inheritance, mixed/multiple type parameters, Runtime/Stdlib closure, other
+  CLR languages, ordinary foreign implementations outside the admitted
+  producer and exact invariant families, classifier-derived fields/input
+  boundaries, and deployment modes remain gates. The focused rehearsal and
   production-inverse matrix covers PSI
   and LightTree on .NET 10 and Framework 4.8: eight tests and zero failures,
   errors, or skips. The final inverse target aggregate covers 190 XML suites
@@ -307,10 +307,33 @@ verification, and work state.
   argument-bearing foreign-member dispatcher while retaining the surface-39
   producer entry. PSI/LightTree execution on Framework 4.8 and .NET 10 passes
   the eight-test rehearsal matrix and the same eight-test epoch-off inverse
-  with zero failures, errors, or skips. Property syntax, defaults, overloads,
-  inheritance around this broader family, mixed/multiple parameters, and
-  value-class substitutions remain separate gates. Evidence is archived in
+  with zero failures, errors, or skips. Defaults, overloads, inheritance around
+  this broader family, mixed/multiple parameters, and value-class substitutions
+  remain separate gates. Evidence is archived in
   [`docs/archive/generic-owner-mutable-invariant-cell-2026-08-20.md`](docs/archive/generic-owner-mutable-invariant-cell-2026-08-20.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
+  and two integration suites/126 tests were freshly written, while the
+  unchanged six-test `dotnet.ir` model root remained up-to-date.
+- The property-syntax equivalent of that mutable invariant family is now
+  closed in the test-only epoch. A public top-level
+  `InvariantPropertyCell<T> { var value: T }` emits one natural invariant CLR
+  interface with a real mutable `Property<T>` row, typed getter/setter slots,
+  and a Kotlin implementation whose backing field remains physical `!T`.
+  Exact/open access and `Box<InvariantPropertyCell<!!T>>` stay typed; star/out
+  reads and in writes cross the semantic boundary only for that operation, and
+  only a materialized projected box becomes `Box<object>`. Ordinary non-partial
+  C# string/object implementations use one normal auto-property and need no
+  compiler capability. The manifest and authoring tool recognize exactly the
+  paired getter/setter property shape. Read-only `val T`, open-nullable `var
+  T?`, and a property mixed with another member remain fail-closed and erased.
+  Missing/ambiguous foreign constructions and accessor exceptions retain the
+  surface-40 dispatcher behavior. PSI/LightTree execution on Framework 4.8 and
+  .NET 10 passes the eight-test rehearsal matrix and the same eight-test epoch-
+  off inverse with zero failures, errors, or skips. Defaults, inheritance,
+  broader property families, mixed/multiple parameters, constraints, and value-
+  class substitutions remain separate gates. Evidence is archived in
+  [`docs/archive/generic-owner-invariant-property-cell-2026-08-20.md`](docs/archive/generic-owner-invariant-property-cell-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
   and two integration suites/126 tests were freshly written, while the
