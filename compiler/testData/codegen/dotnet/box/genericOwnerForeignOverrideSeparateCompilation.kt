@@ -374,6 +374,18 @@ public class RehearsalSeparateLocalIntersectionProducerValue<T>(private val valu
 // MODULE: middle(lib)
 // FILE: middle.kt
 
+private var rehearsalSeparateOpenDefaultConsumerObserved: Any? = null
+
+public fun rehearsalSeparateOpenDefaultConsumerObserved(): Any? =
+    rehearsalSeparateOpenDefaultConsumerObserved
+
+public open class RehearsalSeparateOpenDefaultConsumer<T> :
+    RehearsalSeparateDefaultConsumer<T> {
+    public override fun consumeDefault(value: T) {
+        rehearsalSeparateOpenDefaultConsumerObserved = value
+    }
+}
+
 public interface RehearsalSeparateInvariantPropertyCellChild<T> :
     RehearsalSeparateInvariantPropertyCell<T> {
     public var childPropertyCellValue: T

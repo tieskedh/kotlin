@@ -4389,6 +4389,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         return
     }
+    val derivedDefaultConsumerBase = if (genericOwnerRehearsal) {
+        "RehearsalSeparateOpenDefaultConsumer<object>"
+    } else {
+        "RehearsalSeparateOpenDefaultConsumer"
+    }
     val source = directory.resolve("RehearsalForeignOverrideConsumer.cs").apply {
         writeText(
             if (isSeparateProbe) """
@@ -4439,6 +4444,19 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public object observed;
 
                 public void consumeDefault(object value)
+                {
+                    observed = value;
+                }
+            }
+
+            // A Kotlin class owns the first natural override. C# subclasses only that ordinary
+            // virtual member; inherited Kotlin semantic dispatch must still observe this override.
+            public sealed class RehearsalSeparateCSharpDerivedDefaultConsumer :
+                $derivedDefaultConsumerBase
+            {
+                public object observed;
+
+                public override void consumeDefault(object value)
                 {
                     observed = value;
                 }
@@ -5780,6 +5798,26 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             defaultOverrideConsumer))
                         throw new InvalidOperationException(
                             "Kotlin narrowed dispatch bypassed the C# default override bridge");
+                    RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
+                        new RehearsalSeparateCSharpDerivedDefaultConsumer();
+                    RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
+                        derivedDefaultConsumer;
+                    derivedDefaultConsumerView.consumeDefault(
+                        "csharp-derived-default-override-reference");
+                    if (!object.Equals(
+                            derivedDefaultConsumer.observed,
+                            "csharp-derived-default-override-reference") ||
+                        middleKt.rehearsalSeparateOpenDefaultConsumerObserved() != null)
+                        throw new InvalidOperationException(
+                            "C# subclass override did not replace the Kotlin natural default override");
+                    defaultConsumerReader.consume(derivedDefaultConsumer, 76);
+                    if (!object.Equals(derivedDefaultConsumer.observed, 76) ||
+                        middleKt.rehearsalSeparateOpenDefaultConsumerObserved() != null ||
+                        !defaultConsumerReader.same(
+                            derivedDefaultConsumer,
+                            derivedDefaultConsumer))
+                        throw new InvalidOperationException(
+                            "Kotlin narrowed dispatch bypassed the derived C# default override");
                     RehearsalSeparateCSharpChildProducer childProducer =
                         new RehearsalSeparateCSharpChildProducer();
                     if (childProducer.produce() != "csharp-child-interface")
@@ -7048,6 +7086,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpDefaultOverrideConsumer" in generated) {
             "The C# authoring tool did not generate the default-override consumer bridge:\n$generated"
+        }
+        check("RehearsalSeparateCSharpDerivedDefaultConsumer" !in generated) {
+            "The ordinary C# subclass unexpectedly required a generated semantic bridge:\n$generated"
         }
         check("KotlinSemantic" !in source.readText()) {
             "Authored C# source must not name the Kotlin semantic capability"
