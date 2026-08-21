@@ -4322,6 +4322,24 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
                     expectedDeclaredOwner =
+                        "RehearsalSeparateConstrainedDefaultMethodGenericProducer`1",
+                    expectedMemberName = "produceConstrainedDefaultGeneric",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable constrained default probe")
+                    },
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
                         "RehearsalSeparateAbstractMethodGenericProducer`1",
                     expectedMemberName = "produceAbstractGeneric",
                     expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
@@ -4540,6 +4558,23 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public int produceDefaultGeneric<R>(R value)
                 {
                     return 2000 + (int)(object)value;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpConstrainedDefaultMethodGenericProducer :
+                RehearsalSeparateConstrainedDefaultMethodGenericProducer<int>
+            {
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpConstrainedDefaultMethodGenericOverrideProducer :
+                    RehearsalSeparateConstrainedDefaultMethodGenericProducer<int>
+            {
+                public int produceConstrainedDefaultGeneric<R>(R value)
+                    where R : RehearsalSeparateConsumer<R>
+                {
+                    value.consume(value);
+                    return 6000;
                 }
             }
 
@@ -5982,6 +6017,152 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         libKt.rehearsalSeparateDefaultMethodGenericReadCount() != 2)
                         throw new InvalidOperationException(
                             "generic interface method-generic default bypassed the C# override");
+                    RehearsalSeparateCSharpMethodConstraintValue
+                        constrainedDefaultMethodGenericValue =
+                            new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateCSharpConstrainedDefaultMethodGenericProducer
+                        constrainedDefaultMethodGenericProducer =
+                            new RehearsalSeparateCSharpConstrainedDefaultMethodGenericProducer();
+                    RehearsalSeparateConstrainedDefaultMethodGenericProducer<int>
+                        constrainedDefaultMethodGenericProducerView =
+                            constrainedDefaultMethodGenericProducer;
+                    RehearsalSeparateConstrainedDefaultMethodGenericReader
+                        constrainedDefaultMethodGenericReader =
+                            new RehearsalSeparateConstrainedDefaultMethodGenericReader();
+                    if (constrainedDefaultMethodGenericProducerView
+                            .produceConstrainedDefaultGeneric(
+                                constrainedDefaultMethodGenericValue) != 5000 ||
+                        !object.Equals(
+                            constrainedDefaultMethodGenericReader.read(
+                                constrainedDefaultMethodGenericProducer,
+                                constrainedDefaultMethodGenericValue),
+                            5000) ||
+                        !constrainedDefaultMethodGenericReader.same(
+                            constrainedDefaultMethodGenericProducer,
+                            constrainedDefaultMethodGenericProducer) ||
+                        constrainedDefaultMethodGenericValue.Count != 2 ||
+                        libKt.rehearsalSeparateConstrainedDefaultMethodGenericReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "constrained method-generic default lost its body or identity");
+                    RehearsalSeparateCSharpMethodConstraintValue
+                        constrainedDefaultMethodGenericOverrideValue =
+                            new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateCSharpConstrainedDefaultMethodGenericOverrideProducer
+                        constrainedDefaultMethodGenericOverrideProducer =
+                            new RehearsalSeparateCSharpConstrainedDefaultMethodGenericOverrideProducer();
+                    if (constrainedDefaultMethodGenericOverrideProducer
+                            .produceConstrainedDefaultGeneric(
+                                constrainedDefaultMethodGenericOverrideValue) != 6000 ||
+                        !object.Equals(
+                            constrainedDefaultMethodGenericReader.read(
+                                constrainedDefaultMethodGenericOverrideProducer,
+                                constrainedDefaultMethodGenericOverrideValue),
+                            6000) ||
+                        !constrainedDefaultMethodGenericReader.same(
+                            constrainedDefaultMethodGenericOverrideProducer,
+                            constrainedDefaultMethodGenericOverrideProducer) ||
+                        constrainedDefaultMethodGenericOverrideValue.Count != 2 ||
+                        libKt.rehearsalSeparateConstrainedDefaultMethodGenericReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "constrained method-generic default bypassed the C# override");
+                    int constrainedDefaultSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpConstrainedDefaultMethodGenericProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalDefaultOwner = candidate ==
+                            typeof(RehearsalSeparateConstrainedDefaultMethodGenericProducer<int>);
+                        System.Reflection.MethodInfo[] constrainedDefaultMethods =
+                            candidate.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                        if (constrainedDefaultMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "constrained default owner did not expose one declared slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo constrainedDefaultMethod =
+                            constrainedDefaultMethods[0];
+                        Type[] constrainedDefaultParameters =
+                            constrainedDefaultMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] constrainedDefaultValues =
+                            constrainedDefaultMethod.GetParameters();
+                        if (constrainedDefaultParameters.Length != 1 ||
+                            constrainedDefaultValues.Length != 1 ||
+                            constrainedDefaultValues[0].ParameterType !=
+                                constrainedDefaultParameters[0] ||
+                            constrainedDefaultMethod.ReturnType !=
+                                (isNaturalDefaultOwner ? typeof(int) : typeof(object)))
+                            throw new InvalidOperationException(
+                                "constrained default slot lost its generic signature");
+                        Type[] constrainedDefaultBounds =
+                            constrainedDefaultParameters[0].GetGenericParameterConstraints();
+                        if (constrainedDefaultBounds.Length != 1 ||
+                            !constrainedDefaultBounds[0].IsGenericType ||
+                            constrainedDefaultBounds[0].GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateConsumer<>) ||
+                            constrainedDefaultBounds[0].GetGenericArguments()[0] !=
+                                constrainedDefaultParameters[0])
+                            throw new InvalidOperationException(
+                                "constrained default slot lost its self bound");
+                        constrainedDefaultSlotCount++;
+                    }
+                    if (constrainedDefaultSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "constrained default family did not expose two exact slots");
+                    System.Reflection.MethodInfo constrainedDefaultHelper = null;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateConstrainedDefaultMethodGenericProducer<>)
+                             .Assembly.GetTypes())
+                    {
+                        foreach (System.Reflection.MethodInfo candidateMethod in
+                             candidate.GetMethods(
+                                 System.Reflection.BindingFlags.Public |
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Static |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                        {
+                            if (candidateMethod.Name != "produceConstrainedDefaultGeneric")
+                                continue;
+                            if (constrainedDefaultHelper != null)
+                                throw new InvalidOperationException(
+                                    "constrained default family exposed duplicate helpers");
+                            constrainedDefaultHelper = candidateMethod;
+                        }
+                    }
+                    if (constrainedDefaultHelper == null)
+                        throw new InvalidOperationException(
+                            "constrained default family lost its portable helper");
+                    Type[] constrainedDefaultHelperParameters =
+                        constrainedDefaultHelper.GetGenericArguments();
+                    System.Reflection.ParameterInfo[] constrainedDefaultHelperValues =
+                        constrainedDefaultHelper.GetParameters();
+                    if (constrainedDefaultHelperParameters.Length != 2 ||
+                        constrainedDefaultHelperValues.Length != 2 ||
+                        constrainedDefaultHelper.ReturnType !=
+                            constrainedDefaultHelperParameters[0] ||
+                        constrainedDefaultHelperValues[0].ParameterType != typeof(object) ||
+                        constrainedDefaultHelperValues[1].ParameterType !=
+                            constrainedDefaultHelperParameters[1])
+                        throw new InvalidOperationException(
+                            "constrained default helper lost owner/method parameter order: " +
+                            constrainedDefaultHelper.ToString() + "; generic parameters=" +
+                            string.Join(", ", Array.ConvertAll(
+                                constrainedDefaultHelperParameters,
+                                parameter => parameter.ToString())) + "; values=" +
+                            string.Join(", ", Array.ConvertAll(
+                                constrainedDefaultHelperValues,
+                                parameter => parameter.ParameterType.ToString())));
+                    Type[] constrainedDefaultHelperBounds =
+                        constrainedDefaultHelperParameters[1].GetGenericParameterConstraints();
+                    if (constrainedDefaultHelperBounds.Length != 1 ||
+                        !constrainedDefaultHelperBounds[0].IsGenericType ||
+                        constrainedDefaultHelperBounds[0].GetGenericTypeDefinition() !=
+                            typeof(RehearsalSeparateConsumer<>) ||
+                        constrainedDefaultHelperBounds[0].GetGenericArguments()[0] !=
+                            constrainedDefaultHelperParameters[1])
+                        throw new InvalidOperationException(
+                            "constrained default helper lost its method self bound");
                     RehearsalSeparateCSharpAbstractMethodGenericProducer
                         abstractMethodGenericProducer =
                             new RehearsalSeparateCSharpAbstractMethodGenericProducer();
@@ -7374,6 +7555,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpDefaultMethodGenericOverrideProducer" in generated) {
             "The C# authoring tool did not generate the method-generic default override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpConstrainedDefaultMethodGenericProducer" in generated) {
+            "The C# authoring tool did not generate the constrained default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpConstrainedDefaultMethodGenericOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the constrained default override bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpAbstractMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the abstract method-generic bridge:\n$generated"

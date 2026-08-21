@@ -545,12 +545,13 @@ verification, and work state.
   requires arity one on both interface slots and arity two on the helper, so a
   superficially callable erased method cannot satisfy the proof. The enabled
   candidate and erased epoch-off inverse each pass four PSI/LightTree,
-  Framework 4.8/.NET 10 lanes with zero failures, errors, or skips. Admission
-  remains limited to a default with one non-reified invariant method parameter
-  having exactly the universal bound, one direct non-defaulted/non-vararg `R`
-  input, and one non-null direct owner-`T` result. Abstract method-generic
-  roots, constraints, nullable results, child inheritance, overloads, and
-  multiple or mixed members remain separate gates. Evidence is archived in
+  Framework 4.8/.NET 10 lanes with zero failures, errors, or skips. That first
+  checkpoint was limited to a default with one non-reified invariant method
+  parameter having exactly the universal bound, one direct non-defaulted/non-
+  vararg `R` input, and one non-null direct owner-`T` result. The abstract and
+  direct-self-bound extensions are recorded below; nullable results, child
+  inheritance, overloads, and multiple or mixed members remain separate
+  gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-method-generic-default-2026-08-20.md`](docs/archive/reified-generic-interface-method-generic-default-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
@@ -593,11 +594,34 @@ verification, and work state.
   one self-bound GenericParamConstraint on both interfaces implemented by the
   C# class. All four candidate and four erased epoch-off PSI/LightTree,
   Framework 4.8/.NET 10 lanes pass. Admission remains structural and limited
-  to this direct non-null invariant self-bound plus an abstract member;
-  constrained defaults, nominal/special/multiple bounds, nullable results,
-  inheritance, overloads, and mixed members remain separate gates. Evidence
-  is archived in
+  to this direct non-null invariant self-bound. The constrained-default
+  extension is recorded below; nominal/special/multiple bounds, nullable
+  results, inheritance, overloads, and mixed members remain separate gates.
+  Evidence is archived in
   [`docs/archive/reified-generic-interface-constrained-method-generic-2026-08-21.md`](docs/archive/reified-generic-interface-constrained-method-generic-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
+- The same exact `R : Consumer<R>` constructed method constraint is now closed
+  for a reified generic-interface default. Natural `<R>(R): T`, semantic
+  `<R>(R): object`, and portable helper `<T, R>(object, R): T` MethodDefs all
+  retain the exact `Consumer<!!R>` constraint on their own method parameter.
+  A Kotlin class in a second DLL inherits the body without declaring a source
+  method. On Framework its private helper-forwarder is explicitly bound to the
+  closed natural interface slot after substituting owner `T`; comparing the
+  concrete `int` result to the still-open interface `!T` had previously
+  suppressed that MethodImpl and load-poisoned the class. .NET 10 retains the
+  natural DIM. Ordinary partial C# classes may either inherit the Kotlin
+  default or override only the natural `where R : Consumer<R>` method. Exact
+  and Kotlin-widened Kotlin/C# calls reach the same selected body, invoke the
+  constraint operation, and preserve receiver and argument identity.
+  Reflection independently proves both interface slots plus the two-parameter
+  helper retain the exact self-bound. All four candidate and four erased
+  epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. Further nominal,
+  special, multiple, owner-relative, and nullable constraints, inheritance,
+  overloads, and mixed members remain separate gates. Evidence is archived in
+  [`docs/archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md`](docs/archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and

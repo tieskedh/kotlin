@@ -501,7 +501,13 @@ internal class DotNetIlMethodCodegen(
             val overrideInfo = availableFunctions[overridden]
                 ?: typeMapper.referencedFunctionInfoOrNull(overridden)
                 ?: dotNetUnsupported("reified generic interface default slot is unavailable")
-            if (overrideInfo.signature.returnType != signature.returnType) continue
+            // The MethodImpl owner below is already I<closed arguments>. Compare against that
+            // constructed slot, not the declaration's still-open !T result: on I<int>, !T and
+            // this target's int are the same CLR method result.
+            val closedReturnType = typeMapper.toDotNetIlReturnType(
+                substitutor.substitute(overridden.returnType),
+            ) ?: dotNetUnsupported("reified generic interface default result is unavailable")
+            if (closedReturnType != signature.returnType) continue
             check(overridden.typeParameters.size == bridge.typeParameters.size) {
                 "Internal .NET backend error: reified interface-default target changed method arity"
             }
