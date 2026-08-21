@@ -1293,6 +1293,19 @@ See the
   constraint types as an exact multiset. An order difference must not make a
   normal C# override disappear and route a portable bridge directly to the
   Kotlin default helper.
+  A covariant rehearsal root may admit one abstract owner-plus-method-generic
+  member `<R : @UnsafeVariance T>(R): T`. Kotlin/KLIB retains `R : T`, but the
+  natural variant CLR slot, non-generic semantic slot, and every Kotlin
+  implementation override must omit that GenericParamConstraint. CoreCLR
+  rejects it on the variant interface and rejects an implementation which
+  retains a stronger constraint than the slot. Preserve the actual method `R`
+  on both physical paths; never substitute owner `T`, erase the method to
+  `object`, use reflection, or add IL weaving. Publish the normalized erased-
+  constraint indices in the C# manifest. C# authors implement one ordinary
+  unconstrained generic method and generated source forwards the same `R` to
+  the semantic capability. Owner-relative defaults, nested or multiple
+  relative bounds, nullable bounds, mixed members, and inherited forms remain
+  separate gates.
   A rehearsal-admitted invariant root may carry one or more complete public
   abstract mutable `T` properties only when every declared member belongs to
   exactly one getter/setter pair for the same property and each natural slot

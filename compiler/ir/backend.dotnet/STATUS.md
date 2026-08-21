@@ -674,10 +674,9 @@ verification, and work state.
   .NET 10, preserve receiver/value identity, and execute both constraint
   operations; reflection independently proves both bounds on both slots and the
   helper. All four candidate and four erased epoch-off PSI/LightTree/runtime
-  lanes pass. Owner-relative `R : T` stays closed because a semantic capability
-  with unconstrained `R` cannot call an ordinary C# `where R : T` override
-  without reflection, IL weaving, or changing the actual method argument type.
-  Evidence is archived in
+  lanes pass. The abstract owner-relative extension is recorded below; special,
+  nullable, other constructed, and defaulted owner-relative constraints remain
+  closed. Evidence is archived in
   [`docs/archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md`](docs/archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
@@ -725,6 +724,32 @@ verification, and work state.
   Defaulted, multi-property, changed-argument, mixed-member, and deeper/multiple
   read-only inheritance remain closed. Evidence is archived in
   [`docs/archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](docs/archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
+- The first direct owner-relative method constraint is now closed for one
+  abstract covariant root: `<R : @UnsafeVariance T>(R): T`. Kotlin and KLIB
+  retain the authoritative `R : T` relationship. The natural variant CLR slot,
+  non-generic semantic slot, and Kotlin implementation override deliberately
+  omit that executable GenericParamConstraint: CoreCLR rejects `R : T` on the
+  covariant TypeDef and load-fails an implementation which retains a stronger
+  constraint than its interface slot. Both slots remain genuinely generic in
+  the same `R`; neither substitutes owner `T`, erases the value parameter, uses
+  reflection, nor requires IL weaving. Schema 7 publishes the normalized
+  `(method R=0, owner T=0)` relationship and C# authoring emits `KDNCS009`
+  guidance. An ordinary partial C# class implements only the unconstrained
+  natural generic method; its `typeof(R)` result proves exact and Kotlin-widened
+  calls preserve the actual `Int32` or `String` method construction and the
+  same receiver. A Kotlin `Producer<Marker>` implementation also survives a
+  legal widened `Producer<Any?>` call with a `String` method argument.
+  Reflection proves covariance, typed `T` results, `R` value parameters, and
+  zero physical constraints on both slots and the Kotlin override. All four
+  candidate and four erased epoch-off PSI/LightTree, Framework 4.8/.NET 10
+  lanes pass. Defaults, nested or multiple relative bounds, nullable bounds,
+  mixed members, and inherited owner-relative forms remain closed. Evidence is
+  archived in
+  [`docs/archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md`](docs/archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and

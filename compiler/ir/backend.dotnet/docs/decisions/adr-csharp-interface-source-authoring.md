@@ -340,6 +340,18 @@ only the logical fact needed to explain the weakened boundary and generate an ap
 adapter. It is not a CLR `where` clause and does not duplicate arbitrary Kotlin types or
 representable constraints. Readers reject out-of-range, duplicate, or unordered pairs.
 
+The first accepted use is an abstract covariant root
+`<R : @UnsafeVariance T>(R): T`. The natural variant CLR slot and non-generic
+semantic slot both omit `R : T`, as do Kotlin implementation overrides: the
+constraint is illegal on the variant TypeDef, and CoreCLR rejects an
+implementation whose constraint is stronger than the interface slot. Both
+physical methods nevertheless keep generic arity one and use their actual
+method `R` as the value carrier. The generated C# semantic adapter forwards
+that same `R` to one ordinary unconstrained natural C# method. It must not
+substitute owner `T`, use `object` as the method argument, reflectively close
+the method, or require IL weaving. `KDNCS009` explains the deliberately weaker
+CLR/C# signature; KLIB remains authoritative for Kotlin callers.
+
 Wrong-shape behavior is likewise semantic metadata, not a C# naming convention. Generated
 canonical adapters use the recorded policy before narrowing to the typed source body. An ordinary
 user `@UnsafeVariance` member has no policy and retains normal cast or unbox failure. Tooling must
@@ -446,11 +458,12 @@ Roslyn source and metadata parameters are alpha-equivalent by method-parameter
 kind and ordinal inside the otherwise exact recursive constraint type; source-
 symbol identity is not part of the CLR contract. Independent constraint order
 is not semantic, so authoring compares the complete constraint arrays as an
-exact multiset. Owner-relative bounds remain outside this rehearsal gate: an
-unconstrained semantic method parameter cannot call an ordinary C#
-`where R : T` implementation while preserving the actual `R` without
-reflection or IL weaving. Other constructed, special, and nullable forms also
-remain outside the gate.
+exact multiset. One direct owner-relative bound is the deliberate exception to
+exact physical constraint retention: on an abstract covariant root it follows
+the schema-7 weakened-bound rule above, and C# authors must not add a
+`where R : T` clause to the unconstrained natural method. Owner-relative
+defaults, nested or multiple relative bounds, inherited forms, and other
+constructed, special, and nullable forms remain outside the gate.
 
 For a covariant generic property, the strongly typed declared view owns the canonical DIM body.
 The erased canonical interface remains an abstract CLR Property slot reached by an
