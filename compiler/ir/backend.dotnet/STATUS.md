@@ -902,6 +902,32 @@ verification, and work state.
   remained up-to-date. Nullable and other special/constructed method bounds
   remain separate gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md`](docs/archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md).
+- A reified-interface default may now declare the nullable owner-relative
+  method bound `<R : @UnsafeVariance T?>`. Kotlin source and KLIB retain
+  `R : T?`, but the natural `<R>(R): T` slot, semantic `<R>(R): object` slot,
+  helper `<T, R>(object, R): T`, Kotlin overrides, and ordinary C# overrides
+  retain the actual CLR `R` with no `R : T` GenericParamConstraint. That
+  stronger CLR row would reject the legal `T = Int`, `R = Int?` construction.
+  The fail-first corpus also exposed a body-codegen gap: after Kotlin narrows an
+  `R : Int?` value, the slot remains physical `!!R` while the use expects
+  `int32`. The emitter now handles exactly a final nullable-primitive bound
+  with `box !!R; unbox.any primitive`, accepting `R = Int` and `R = Int?`
+  without inventing a constraint or erasing the method token. Separate Kotlin
+  and C# defaults/overrides receive a real nullable value and null input,
+  preserve one receiver and the selected body, and expose no compiler
+  capability to ordinary C#. Reflection proves zero special flags and zero
+  GenericParamConstraint rows on both slots, the helper, and the Kotlin
+  override. PSI and LightTree execute candidate, explicit epoch-off, and
+  property-absent lanes on Framework 4.8 and .NET 10: twelve lanes with zero
+  failures, errors, or skips. The full `dotNetTest` aggregate exits zero; direct
+  audit reports 190 XML suites and 2,287 tests with zero failures, errors, or
+  skips. The 187 FIR suites/2,155 tests and two integration suites/126 tests
+  were freshly written, while the unchanged six-test `dotnet.ir` model root
+  remained up-to-date. The feature test is present in all four PSI/LightTree by
+  Framework/.NET box suites. Multiple or nested nullable relations, nullable
+  nominal or constructed roots, and mixed member families remain separate
+  gates. Evidence is archived in
+  [`docs/archive/reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md`](docs/archive/reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
