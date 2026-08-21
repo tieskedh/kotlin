@@ -1641,9 +1641,17 @@ reified interface receive only their own natural and interface-capability
 MethodImpls. Multiple binding owners share the original pre-lowering owner-
 bound proof and never call a private dispatcher declared on another TypeDef.
 A separately compiled C# grandchild overrides only the inherited public entry
-and remains authoritative for exact and widened Kotlin dispatch. Reuse from an
-earlier prepared producer artifact, an unprepared external base, broader
-parameter graphs, and mixed families remain closed.
+and remains authoritative for exact and widened Kotlin dispatch.
+
+That family may now cross one producer boundary when the earlier artifact
+already prepared and published it. The consumer resolves the producer's exact
+typed Function record and semantic hook/probe family, creates no new external
+body or family member, and emits only the new binding owner's MethodImpls. An
+ordinary C# grandchild still overrides only the inherited public typed entry;
+the compiler-owned semantic route observes that override. An unprepared
+external base remains closed rather than being mutated or reconstructed from
+names. Generic bases or binding owners, broader parameter graphs, and mixed
+families remain separate gates.
 See
 [`../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md)
 and
@@ -1651,7 +1659,9 @@ and
 and
 [`../archive/reified-generic-interface-open-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-open-owner-relative-implementation-2026-08-21.md)
 and
-[`../archive/reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md).
+[`../archive/reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md)
+and
+[`../archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md).
 
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial

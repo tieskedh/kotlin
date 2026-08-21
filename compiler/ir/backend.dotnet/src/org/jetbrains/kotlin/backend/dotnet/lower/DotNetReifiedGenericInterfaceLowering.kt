@@ -1199,7 +1199,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 )
                 copiedMethodParameters.forEachIndexed { index, copied ->
                     copied.superTypes = source.typeParameters[index].superTypes
+                        .filterNot { bound ->
+                            bound.isDotNetOwnerDependentConstraint(source.parent as IrClass)
+                        }
                         .map(methodSubstitutor::substitute)
+                        .ifEmpty { listOf(context.irBuiltIns.anyNType) }
                     if (source.typeParameters[index].superTypes.any { bound ->
                             bound.isDotNetOwnerDependentConstraint(source.parent as IrClass)
                         }

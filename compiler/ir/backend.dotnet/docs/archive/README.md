@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md`](reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md)
+  records consumer-side reuse of a producer-prepared external owner-relative
+  family, exact MethodRef/MethodImpl composition without member copying, and
+  ordinary C# override dispatch across Framework 4.8 and .NET 10.
 - [`reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md`](reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md)
   records a local base-owned `<R : String>(R): String` body first bound to the
   reified interface by open and final derived classes, shared family reuse, and

@@ -662,6 +662,17 @@ public class RehearsalSeparateLocalIntersectionProducerValue<T>(private val valu
     public override fun produceSecondary(): T = value
 }
 
+// A local publisher prepares the base-owned semantic family in this artifact. A later module
+// must be able to bind another derived class to the same reified interface without copying the
+// body or requiring a source-visible Kotlin/C# bridge on the external base.
+public open class RehearsalSeparatePreparedInheritedOwnerRelativeMethodGenericBase {
+    public open fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
+}
+
+public class RehearsalSeparatePreparedInheritedOwnerRelativeMethodGenericPublisher :
+    RehearsalSeparatePreparedInheritedOwnerRelativeMethodGenericBase(),
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String>
+
 // MODULE: middle(lib)
 // FILE: middle.kt
 
@@ -874,6 +885,14 @@ public open class RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer :
 
 public class RehearsalSeparateFinalInheritedOwnerRelativeMethodGenericProducer :
     RehearsalSeparateInheritedOwnerRelativeMethodGenericBase(),
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String>
+
+public open class RehearsalSeparateExternalInheritedOwnerRelativeMethodGenericProducer :
+    RehearsalSeparatePreparedInheritedOwnerRelativeMethodGenericBase(),
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String>
+
+public class RehearsalSeparateFinalExternalInheritedOwnerRelativeMethodGenericProducer :
+    RehearsalSeparatePreparedInheritedOwnerRelativeMethodGenericBase(),
     RehearsalSeparateOwnerRelativeMethodGenericProducer<String>
 
 public class RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue<T> :
@@ -1203,6 +1222,24 @@ fun box(): String {
         ) != "exact-final-inherited-owner-relative"
     ) {
         return "fail: separate exact final inherited owner-relative method-generic producer"
+    }
+    val exactExternalInheritedOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateExternalInheritedOwnerRelativeMethodGenericProducer()
+    if (exactExternalInheritedOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-external-inherited-owner-relative",
+        ) != "exact-external-inherited-owner-relative"
+    ) {
+        return "fail: separate exact external inherited owner-relative method-generic producer"
+    }
+    val exactFinalExternalInheritedOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateFinalExternalInheritedOwnerRelativeMethodGenericProducer()
+    if (exactFinalExternalInheritedOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-final-external-inherited-owner-relative",
+        ) != "exact-final-external-inherited-owner-relative"
+    ) {
+        return "fail: separate exact final external inherited owner-relative method-generic producer"
     }
     val exactOwnerRelativeDefaultMethodGeneric:
             RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<String> =

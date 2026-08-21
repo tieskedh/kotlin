@@ -851,9 +851,37 @@ verification, and work state.
   already-green 2,155-test FIR and six-test model roots as up-to-date. The
   feature test is present in all four PSI/LightTree by Framework/.NET box
   suites.
-  A base supplied by an earlier artifact, including reuse of a producer-
-  published prepared family, remains a separate gate. Evidence is archived in
+  At that checkpoint, a base supplied by an earlier artifact remained a
+  separate gate. Evidence is archived in
   [`docs/archive/reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md`](docs/archive/reified-generic-interface-inherited-owner-relative-implementation-2026-08-21.md).
+- A later Kotlin artifact may now add the owner-relative interface to an open
+  or final non-generic class which inherits a producer-prepared external base
+  family. The producer artifact remains the only owner of the public typed
+  entry, semantic hook, foreign-override probe, class capability, dispatcher,
+  and Kotlin body. Its physical-family record and exact public Function record
+  give the consumer assembly-qualified MethodRefs for that existing family;
+  the consumer emits only its own natural and interface-capability MethodImpls.
+  It does not mutate the deserialized base, copy a body or compiler member,
+  infer a generated name, or call the producer-private class dispatcher. Two
+  middle-artifact binding siblings prove that one external family is reused.
+  An ordinary C# grandchild overrides only the inherited public `<R>(R):
+  String` entry, and direct, natural-interface, and widened Kotlin dispatch all
+  reach that override with the actual `R`. Reflection proves the entry remains
+  declared on the producer base and physically unconstrained. The proof also
+  fixed producer publication of the semantic slot: erasing the one owner-
+  relative `R : T` relation now removes that detached owner bound while
+  preserving every independent method constraint, falling back to `Any?` only
+  when no independent bound remains. PSI and LightTree execute candidate,
+  explicit epoch-off, and property-absent lanes on Framework 4.8 and .NET 10:
+  twelve lanes with zero failures, errors, or skips. The full `dotNetTest`
+  aggregate exits zero; direct audit reports 190 XML suites and 2,287 tests
+  with zero failures, errors, or skips. The 187 FIR suites/2,155 tests and two
+  integration suites/126 tests were freshly written, while the unchanged six-
+  test `dotnet.ir` model root remained up-to-date. The feature test is present
+  in all four PSI/LightTree by Framework/.NET box suites. An unprepared
+  external base, generic base or binding owner, overload, broader parameter/
+  bound graph, and mixed member family remain closed. Evidence is archived in
+  [`docs/archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md`](docs/archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

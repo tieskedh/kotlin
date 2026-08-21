@@ -2322,6 +2322,31 @@ internal class DotNetExternalDeclarations(
         return genericOwnerMemberFamiliesByLogicalKey[logicalKey]
     }
 
+    /** Exact public MethodDef identity paired with a producer-recorded semantic family. */
+    fun genericOwnerTypedEntryPhysicalSlotOrNull(
+        function: IrSimpleFunction,
+        familyBinding: DotNetBoundGenericOwnerMemberFamily,
+    ): DotNetBoundGenericOwnerPhysicalSlot? {
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
+        require(bound.library === familyBinding.library && declaration.isInstance) {
+            "external generic-owner typed entry and semantic family are inconsistent"
+        }
+        val semanticOwnerPath = requireNotNull(familyBinding.family.semanticHookOwnerPath) {
+            "external generic-owner typed entry has no semantic family owner"
+        }
+        require(declaration.ownerPath == semanticOwnerPath) {
+            "external generic-owner typed entry and semantic hook have different CLR owners"
+        }
+        return DotNetBoundGenericOwnerPhysicalSlot(
+            bound.library,
+            familyBinding.family,
+            declaration.ownerPath,
+            declaration.methodName,
+        )
+    }
+
     fun genericOwnerFunctionCarrierOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerFunctionCarrier? {
         val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
         return genericOwnerFunctionCarriersByLogicalKey[logicalKey]
