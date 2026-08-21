@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-constrained-method-generic-default-2026-08-21.md`](reified-generic-interface-constrained-method-generic-default-2026-08-21.md)
+  records the first constrained owner-plus-method-generic interface default,
+  retained helper/slot constraints, closed Framework MethodImpl binding, and
+  ordinary C# default inheritance and override behavior.
 - [`reified-generic-interface-constrained-method-generic-2026-08-21.md`](reified-generic-interface-constrained-method-generic-2026-08-21.md)
   records the first retained constructed method constraint on a reified
   generic-interface root, separate-compilation GenericParam remapping, ordinary
