@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWAR
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE
@@ -283,12 +284,17 @@ internal class DotNetIlMethodCodegen(
                 // the static carrier method has no virtual/interface slot of its own.
             } else if (function.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER || function.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) {
                 appendInterfaceDefaultSlotOverrides()
-            } else if (function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET &&
+            } else if (
+                (
+                    function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET ||
+                            function.origin ==
+                            DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE
+                ) &&
                 (function as IrSimpleFunction).overriddenSymbols.any { overridden ->
                     (overridden.owner.parent as? IrClass)?.let(typeMapper::isReifiedGenericInterface) == true
                 }
             ) {
-                appendReifiedGenericInterfaceDefaultOverride()
+                appendReifiedGenericInterfaceNaturalOverride()
             } else if (
                 function.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE ||
                 function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
@@ -463,16 +469,17 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * Maps one helper-backed portable default target to the natural closed `I<T>` slot.
+     * Maps one class-owned target to the natural closed slot of a reified `I<T>`.
      *
      * The erased generic-interface architecture adds a separate canonical bridge. A rehearsal-
-     * selected reified interface instead owns its source slot directly on `I<T>`; its class target
-     * must therefore state the constructed MethodImpl as well as the semantic capability bridge.
+     * selected reified interface instead owns its source slot directly on `I<T>`; a portable
+     * default target or a closed-owner semantic forwarding bridge must therefore state the
+     * constructed MethodImpl as well as the semantic capability bridge.
      */
-    private fun StringBuilder.appendReifiedGenericInterfaceDefaultOverride() {
+    private fun StringBuilder.appendReifiedGenericInterfaceNaturalOverride() {
         val bridge = function as IrSimpleFunction
         val bridgeClass = bridge.parent as? IrClass
-            ?: error("Internal .NET backend error: a reified interface-default target has no class owner")
+            ?: error("Internal .NET backend error: a reified generic-interface target has no class owner")
         for (overriddenSymbol in bridge.overriddenSymbols) {
             val overridden = overriddenSymbol.owner
             val interfaceClass = (overridden.parent as? IrClass)

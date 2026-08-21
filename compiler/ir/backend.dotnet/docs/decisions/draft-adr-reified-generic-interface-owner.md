@@ -435,6 +435,24 @@ production-inert and deliberately narrow. Only one child-owned member with the
 admitted producer-output shape and one independent consumer root are proven.
 Broader member surfaces or changed variance require separate complete proofs.
 
+An admitted owner-relative abstract method `<R : T>(R): T` erases its
+executable CLR `R : T` constraint while KLIB retains that relationship. For a
+final non-generic Kotlin implementation with a closed owner argument, the
+class's one source body is not lowered through a closed `R -> T` input cast.
+It moves to one private unconstrained `<R>(R): object` semantic twin. The
+closed public class method remains the direct C# entry and casts only its
+result; a private natural MethodImpl for `I<closed T>` and the non-generic
+semantic capability bridge both forward the actual method `R` to the same
+body. The natural MethodImpl alone adapts the result to closed `T`.
+
+That split is target- versus slot-scoped: one semantic twin exists per Kotlin
+implementation target, while each independent reified interface slot receives
+its own MethodImpl. It preserves a single body when one override implements
+two roots. This proof applies only to a final, locally declared, non-generic
+class with one method parameter and one direct owner-relative bound. An open
+or inherited implementation requires a semantic override family and cannot
+reuse the private-twin rule.
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal

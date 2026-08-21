@@ -1617,9 +1617,18 @@ overrides only the natural generic method. Generic Kotlin implementations and
 their later ordinary C# subclasses use a method-generic allocation-free
 foreign-override probe, including through a three-Kotlin-product chain, so a
 widened Kotlin call cannot bypass the C# override. The corresponding
-non-generic Kotlin implementor of the abstract sibling remains the next
-explicit composition gate. See
-[`../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md).
+final non-generic Kotlin implementor of the abstract sibling is now closed as
+a separate composition gate. One private unconstrained semantic twin owns the
+body; the closed public class entry, one natural MethodImpl per reified root,
+and each semantic capability forward to it without substituting owner `T` for
+method `R`. Reference, value, nullable, and dual-root implementations cross a
+producer DLL and ordinary C# consumer on Framework and .NET 10. An open
+non-generic implementor is the next explicit gate because its semantic body
+must join an override family and ordinary C# subclassing; the private final
+twin is deliberately not generalized to that shape. See
+[`../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md)
+and
+[`../archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md).
 
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial
