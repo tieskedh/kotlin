@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetUnboxedValueClassTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassConstructorImplementationSourceOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassImplementationSourceOrNull
+import org.jetbrains.kotlin.backend.dotnet.isDotNetCharSequenceType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
@@ -106,7 +107,8 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
  * returning its owner parameter directly, one covariant root `<R>(R) -> T` whose member is
  * abstract or has a default implementation and whose method parameter has either the universal
- * bound or one direct self-bound on an admitted consumer root, a public contravariant consumer
+ * bound, one direct self-bound on an admitted consumer root, or that self-bound together with
+ * direct non-generic interface constraints, a public contravariant consumer
  * with one abstract
  * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
@@ -1546,14 +1548,26 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     isAdmittedConstraintOwner: (IrClass) -> Boolean = { false },
 ): Boolean {
     val methodParameter = typeParameters.singleOrNull() ?: return false
-    val methodBound = methodParameter.superTypes.singleOrNull() ?: return false
-    if (methodParameter.parent !== this || methodParameter.isReified ||
-        methodParameter.variance != Variance.INVARIANT ||
-        (!methodBound.isNullableAny() &&
-                !methodBound.isDirectSelfInterfaceConstraint(
+    val methodBounds = methodParameter.superTypes
+    val hasSupportedBounds = when {
+        methodBounds.singleOrNull()?.isNullableAny() == true -> true
+        else -> {
+            val selfBounds = methodBounds.count { bound ->
+                bound.isDirectSelfInterfaceConstraint(
                     methodParameter,
                     isAdmittedConstraintOwner,
-                ))
+                )
+            }
+            selfBounds == 1 && methodBounds.all { bound ->
+                bound.isDirectSelfInterfaceConstraint(
+                    methodParameter,
+                    isAdmittedConstraintOwner,
+                ) || bound.isDirectNonGenericInterfaceConstraint()
+            }
+        }
+    }
+    if (methodParameter.parent !== this || methodParameter.isReified ||
+        methodParameter.variance != Variance.INVARIANT || !hasSupportedBounds
     ) {
         return false
     }
@@ -1573,6 +1587,18 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     if (inputType.isMarkedNullable() || resultType.isMarkedNullable()) return false
     return (inputType.classifier as? IrTypeParameterSymbol)?.owner === methodParameter &&
             (resultType.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
+}
+
+private fun IrType.isDirectNonGenericInterfaceConstraint(): Boolean {
+    val simpleType = this as? IrSimpleType ?: return false
+    if (simpleType.isMarkedNullable() || simpleType.arguments.isNotEmpty() ||
+        simpleType.isDotNetCharSequenceType()
+    ) {
+        return false
+    }
+    val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
+    return owner.isInterface && owner.typeParameters.isEmpty() &&
+            owner.visibility == DescriptorVisibilities.PUBLIC
 }
 
 private fun IrType.isDirectSelfInterfaceConstraint(

@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-multiple-method-constraints-2026-08-21.md`](reified-generic-interface-multiple-method-constraints-2026-08-21.md)
+  records the first composed recursive and nominal method constraints, exact
+  slot/helper metadata, order-independent C# authoring, and Framework/.NET 10
+  dispatch evidence.
 - [`reified-generic-interface-constrained-method-generic-default-2026-08-21.md`](reified-generic-interface-constrained-method-generic-default-2026-08-21.md)
   records the first constrained owner-plus-method-generic interface default,
   retained helper/slot constraints, closed Framework MethodImpl binding, and
