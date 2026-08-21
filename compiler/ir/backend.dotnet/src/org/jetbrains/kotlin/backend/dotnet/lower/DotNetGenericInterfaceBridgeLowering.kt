@@ -274,6 +274,30 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                                 (externalDeclarations.hasGenericInterface(implementationOwner) ||
                                         externalDeclarations.hasReifiedGenericInterface(implementationOwner)) &&
                                 externalDeclarations.interfaceDefaultImplementationOrNull(implementation) != null)
+            val implementationUsesDefaultHelper =
+                implementationIsDefault ||
+                        implementation.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
+            val hasOwnerRelativeMethodBound =
+                slot.dotNetDirectOwnerRelativeMethodBoundsOrNull(slot.parent as IrClass)
+                    ?.any { bound -> bound != null } == true
+            val ownerRelativeDefaultHelper = if (
+                implementationUsesDefaultHelper &&
+                hasOwnerRelativeMethodBound
+            ) {
+                context.genericInterfaceDefaultSemanticHelpers[implementation]
+                    ?: context.genericInterfaceDefaultSemanticHelpers[slot]
+                    ?: error(
+                        "Internal .NET backend error: owner-relative generic-interface default " +
+                                "'${slot.name}' has no semantic helper"
+                    )
+            } else {
+                null
+            }
+            val ownerRelativeSemanticTarget = if (hasOwnerRelativeMethodBound) {
+                context.genericOwnerCapabilityDispatchers[implementation]
+            } else {
+                null
+            }
             if ((implementation.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true &&
                 !implementationIsDefault
             ) {
@@ -325,16 +349,24 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         slot,
                     )
                 if (!irClass.inheritsReifiedGenericInterfaceCapabilityBridge(capabilitySlot)) {
-                    createForwardingBridge(
-                        irClass = plan.implementingClass,
-                        slot = capabilitySlot,
-                        target = plan.target,
-                        origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
-                        bridgeName = "<ReifiedGenericInterfaceCapabilityBridge-${plan.interfaceIdentity}-" +
-                                "${plan.slot.name.asString()}-${plan.slotIdentity}>",
-                        bridgeTypeTransform = { it },
-                        ownerConstraintTypeTransform = { it },
-                    )
+                    if (ownerRelativeDefaultHelper != null) {
+                        createOwnerRelativeDefaultCapabilityBridge(
+                            plan,
+                            capabilitySlot,
+                            ownerRelativeDefaultHelper,
+                        )
+                    } else {
+                        createForwardingBridge(
+                            irClass = plan.implementingClass,
+                            slot = capabilitySlot,
+                            target = ownerRelativeSemanticTarget ?: plan.target,
+                            origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
+                            bridgeName = "<ReifiedGenericInterfaceCapabilityBridge-${plan.interfaceIdentity}-" +
+                                    "${plan.slot.name.asString()}-${plan.slotIdentity}>",
+                            bridgeTypeTransform = { it },
+                            ownerConstraintTypeTransform = { it },
+                        )
+                    }
                 }
                 continue
             }
@@ -578,6 +610,70 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             bridgeTypeTransform = plan.typedSubstitutor::substitute,
             ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
         )
+    }
+
+    /**
+     * A default body observes `R : T` through the logical interface view. A semantic call may
+     * widen that view independently of the implementing class's natural CLR construction, so
+     * routing through the class target would close the helper at the narrower physical `T` and
+     * cast `R` too early. Invoke the same helper body with semantic owner arguments instead.
+     */
+    private fun createOwnerRelativeDefaultCapabilityBridge(
+        plan: BridgePlan,
+        slot: IrSimpleFunction,
+        helper: IrSimpleFunction,
+    ): IrSimpleFunction {
+        val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
+        return plan.implementingClass.addFunction {
+            startOffset = plan.target.startOffset
+            endOffset = plan.target.endOffset
+            origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER
+            name = Name.special(
+                "<ReifiedGenericInterfaceOwnerRelativeDefaultCapabilityBridge-${plan.interfaceIdentity}-" +
+                        "${plan.slot.name.asString()}-${plan.slotIdentity}>"
+            )
+            visibility = DescriptorVisibilities.PRIVATE
+            modality = Modality.FINAL
+            returnType = slot.returnType
+        }.apply bridge@{
+            overriddenSymbols = listOf(slot.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            val bridgeTypeParameters = copyTypeParametersFrom(slot)
+            val methodSubstitution = slot.typeParameters.zip(bridgeTypeParameters).associate { pair ->
+                pair.first.symbol to pair.second.symbol.defaultType
+            }
+            val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
+            bridgeTypeParameters.forEachIndexed { index, parameter ->
+                parameter.superTypes = slot.typeParameters[index].superTypes
+                    .map(methodSubstitutor::substitute)
+            }
+            returnType = methodSubstitutor.substitute(slot.returnType)
+            slotParameters.forEach { parameter ->
+                addValueParameter(parameter.name.asString(), methodSubstitutor.substitute(parameter.type))
+            }
+            body = context.createIrBuilder(symbol).irBlockBody {
+                check(
+                    helper.typeParameters.size ==
+                            plan.interfaceClass.typeParameters.size + bridgeTypeParameters.size
+                ) {
+                    "Internal .NET backend error: owner-relative default helper arity mismatch"
+                }
+                val call = irCall(helper.symbol, this@bridge.returnType).apply {
+                    plan.interfaceClass.typeParameters.indices.forEach { index ->
+                        typeArguments[index] = context.irBuiltIns.anyNType
+                    }
+                    bridgeTypeParameters.forEachIndexed { index, parameter ->
+                        typeArguments[plan.interfaceClass.typeParameters.size + index] =
+                            parameter.symbol.defaultType
+                    }
+                    arguments[0] = irGet(this@bridge.parameters[0])
+                    this@bridge.parameters.drop(1).forEachIndexed { index, parameter ->
+                        arguments[index + 1] = irGet(parameter)
+                    }
+                }
+                +irReturn(call)
+            }
+        }
     }
 
     private fun createForwardingBridge(

@@ -211,6 +211,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 helper.declarations += helperFunction
                 val binding = LocalDefaultBinding(irInterface, member, helperFunction, bodyPlacement)
                 defaultBindings[member] = binding
+                context.genericInterfaceDefaultSemanticHelpers[member] = helperFunction
                 context.interfaceDefaultImplementations[member] =
                     org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultImplementation(
                         helperFunction,
@@ -287,7 +288,19 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                         binding.member.modality = Modality.ABSTRACT
                     }
                     DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER -> {
-                        binding.helper.body = createExactDimForwardingBody(binding, binding.member)
+                        val hasOwnerRelativeMethodBound = binding.member.typeParameters.any { methodParameter ->
+                            methodParameter.superTypes.any { bound ->
+                                bound.isDotNetOwnerDependentConstraint(binding.owner)
+                            }
+                        }
+                        if (hasOwnerRelativeMethodBound) {
+                            binding.helper.body = binding.member.moveBodyTo(binding.helper)?.also { body ->
+                                remapHelperBodyTypes(plan.owner, binding.member, binding.helper, body)
+                            }
+                            binding.member.body = createDimHelperForwardingBody(binding)
+                        } else {
+                            binding.helper.body = createExactDimForwardingBody(binding, binding.member)
+                        }
                     }
                 }
             }
@@ -414,6 +427,28 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             +irReturn(call)
         }
 
+    /**
+     * Keep an owner-relative default body in the portable helper. The natural DIM remains the
+     * typed CLR entry and closes that helper with its own owner construction, while a semantic
+     * capability can close the same helper with its widened Kotlin view.
+     */
+    private fun createDimHelperForwardingBody(
+        binding: LocalDefaultBinding,
+    ) = context.createIrBuilder(binding.member.symbol).irBlockBody {
+        val call = irCall(binding.helper.symbol, binding.member.returnType).apply {
+            binding.owner.typeParameters.forEachIndexed { index, parameter ->
+                typeArguments[index] = parameter.symbol.defaultType
+            }
+            binding.member.typeParameters.forEachIndexed { index, parameter ->
+                typeArguments[binding.owner.typeParameters.size + index] = parameter.symbol.defaultType
+            }
+            binding.member.parameters.forEachIndexed { index, parameter ->
+                arguments[index] = irGet(parameter)
+            }
+        }
+        +irReturn(call)
+    }
+
     private fun createExternalDefaultBinding(
         owner: IrClass,
         member: IrSimpleFunction,
@@ -439,6 +474,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             origin = DOTNET_INTERFACE_DEFAULT_HELPER,
         )
         context.externalInterfaceDefaultHelpers[helper] = bound
+        context.genericInterfaceDefaultSemanticHelpers[member] = helper
         return ExternalDefaultBinding(owner, member, helper, bound)
     }
 

@@ -67,10 +67,11 @@ internal data class DotNetLoweredInterfaceDefaultImplementation(
 )
 
 /**
- * Rehearsal-only dispatcher split for a concrete no-input semantic output. The typed and semantic
+ * Rehearsal-only dispatcher split for a concrete semantic output family. The typed and semantic
  * virtual slots normally move together for Kotlin subclasses. When only the typed slot changed,
  * an ordinary foreign subclass supplied the natural C# override and capability dispatch must use
- * it; otherwise the raw semantic hook remains authoritative.
+ * it; otherwise the raw semantic hook remains authoritative. The admitted method-generic shape
+ * carries one declaration-independent input and preserves that method argument on either route.
  */
 internal data class DotNetGenericOwnerDirectForeignOverrideDispatch(
     val typedEntry: IrSimpleFunction,
@@ -180,6 +181,9 @@ internal class DotNetBackendContext(
     /** Hidden class MethodImpls which later compilations must account for during DIM selection. */
     val interfaceDefaultClassForwarders:
         MutableList<DotNetLoweredInterfaceDefaultClassForwarder> = mutableListOf()
+    /** Logical generic-interface default member to its local or materialized helper call target. */
+    val genericInterfaceDefaultSemanticHelpers: MutableMap<IrSimpleFunction, IrSimpleFunction> =
+        linkedMapOf()
     /** Logical classifier to the non-generic physical owner selected for companion-block statics. */
     val companionStaticOwners: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Kotlin object declaration to the synthesized field carrying its one CLR instance. */
@@ -220,9 +224,11 @@ internal class DotNetBackendContext(
     val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */
     val genericOwnerSemanticHooks: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Logical generic-owner member to its final semantic capability dispatcher. */
+    val genericOwnerCapabilityDispatchers: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Natural function to its compiler-owned classifier-derived object-input entry. */
     val genericOwnerFunctionInputEntries: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
-    /** Concrete no-input capability dispatchers which preserve a direct foreign typed override. */
+    /** Concrete admitted capability dispatchers which preserve a direct foreign typed override. */
     val genericOwnerDirectForeignOverrideDispatches:
         MutableMap<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = linkedMapOf()
     /** Generated virtual probe to the exact Kotlin typed declaration it represents. */
