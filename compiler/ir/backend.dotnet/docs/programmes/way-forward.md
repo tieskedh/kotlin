@@ -1604,9 +1604,22 @@ remain generic in the original method `R`. An ordinary C# implementation writes
 one unconstrained generic method, and generated source forwards that same `R`;
 `typeof(R)` proves that widened calls do not substitute owner `T`. Schema 7's
 normalized method/owner-parameter pair explains the weakened CLR boundary to
-tooling. Defaults, nested/multiple or nullable relative bounds, mixed members,
-and inherited owner-relative forms remain closed. See
+tooling. Nested/multiple or nullable relative bounds, mixed members, and
+inherited owner-relative forms remain closed; the direct default form is
+closed below. See
 [`../archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md).
+
+That direct owner-relative family may now own one Kotlin default body. Framework
+and .NET 10 share the recorded helper as the sole body; the modern natural DIM
+is a typed wrapper, while the semantic bridge closes owner `T` with `object`
+and preserves the actual method `R`. Ordinary C# inherits that default or
+overrides only the natural generic method. Generic Kotlin implementations and
+their later ordinary C# subclasses use a method-generic allocation-free
+foreign-override probe, including through a three-Kotlin-product chain, so a
+widened Kotlin call cannot bypass the C# override. The corresponding
+non-generic Kotlin implementor of the abstract sibling remains the next
+explicit composition gate. See
+[`../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md).
 
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial
@@ -1626,7 +1639,7 @@ identity. See
 [`../archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](../archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
 
 With that typed contract consolidated, continue with special, nullable, and other
-constructed method constraints, defaulted and multiple read-only property
+constructed method constraints, multiple read-only property
 inheritance, diamonds, reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,
 broader and mixed method/property families, and mixed-variance gates,

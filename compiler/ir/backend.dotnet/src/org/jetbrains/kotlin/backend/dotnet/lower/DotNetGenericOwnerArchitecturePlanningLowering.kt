@@ -497,10 +497,23 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             val owner = source.parent as IrClass
             val plan = admittedPlansByOwner.getValue(owner)
             val family = plan.memberFamilies.getValue(source)
+            val supportsNoInputForeignOverrideProbe =
+                source.typeParameters.isEmpty() &&
+                        source.parameters.size == 1 &&
+                        family.parameterSlotDomains.isEmpty()
+            val supportsOwnerRelativeMethodForeignOverrideProbe =
+                source.typeParameters.size == 1 &&
+                        source.parameters.size == 2 &&
+                        family.parameterSlotDomains == listOf(
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                        ) &&
+                        DotNetGenericOwnerSemanticHookReason.OWNER_RELATIVE_METHOD_BOUND in
+                        family.semanticHookReasons
+            val supportsDirectForeignOverrideProbe =
+                supportsNoInputForeignOverrideProbe || supportsOwnerRelativeMethodForeignOverrideProbe
             if (owner.kind == ClassKind.INTERFACE || source.modality != Modality.OPEN ||
                 DescriptorVisibilities.isPrivate(source.visibility) ||
-                source.parameters.size != 1 || source.typeParameters.isNotEmpty() ||
-                family.parameterSlotDomains.isNotEmpty() ||
+                !supportsDirectForeignOverrideProbe ||
                 family.returnSlotDomain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
             ) return@forEach
             val prototype = checkNotNull(
@@ -522,6 +535,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 returnType = context.irBuiltIns.booleanType
             }.apply {
                 parameters += createDispatchReceiverParameterWithClassParent()
+                copyTypeParametersFrom(prototype)
                 // The emitter owns the allocation-free ldvirtftn/ldftn comparison. Keep a valid
                 // placeholder body so every ordinary IR invariant remains satisfied meanwhile.
                 body = context.createIrBuilder(symbol).irBlockBody {
@@ -784,6 +798,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 context.genericOwnerCapabilityDeclarations += dispatcher
                 context.genericOwnerCapabilityDeclarations += dispatcher.parameters.drop(1)
+                context.genericOwnerCapabilityDispatchers[source] = dispatcher
                 val semanticHook = semanticHooksBySource[source]
                 val foreignOverrideProbe = foreignOverrideProbesBySource[source]
                 if (semanticHook != null && foreignOverrideProbe != null) {
@@ -1932,6 +1947,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         fun bindExternalForeignOverrideProbe(
             source: IrSimpleFunction,
             binding: DotNetBoundGenericOwnerMemberFamily,
+            semanticPrototype: IrSimpleFunction,
         ) {
             val methodName = binding.family.foreignOverrideProbeMethodName ?: return
             externalForeignOverrideProbesBySource.getOrPut(source) {
@@ -1953,6 +1969,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }.apply {
                     parent = owner
                     parameters += createDispatchReceiverParameterWithClassParent()
+                    copyTypeParametersFrom(semanticPrototype)
                     context.externalGenericOwnerPhysicalSlots[this] =
                         DotNetBoundGenericOwnerPhysicalSlot(
                             binding.library,
@@ -2026,7 +2043,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                                     overriddenLogicalBindingKey =
                                         declaringOverride.dotNetLibraryAbiKeyOrNull("F"),
                                 )
-                            bindExternalForeignOverrideProbe(declaringOverride, externalBinding)
+                            bindExternalForeignOverrideProbe(
+                                declaringOverride,
+                                externalBinding,
+                                overriddenPrototype,
+                            )
                         }
                     }
                 }

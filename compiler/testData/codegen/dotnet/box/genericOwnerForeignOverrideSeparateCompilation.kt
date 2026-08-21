@@ -264,6 +264,30 @@ public class RehearsalSeparateOwnerRelativeMethodGenericReader {
     ): Boolean = producer === expected
 }
 
+private var rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount: Int = 0
+
+public interface RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<out T> {
+    public fun <R : @UnsafeVariance T> produceOwnerRelativeDefaultGeneric(value: R): T {
+        rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount += 1
+        return value
+    }
+}
+
+public fun rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount(): Int =
+    rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount
+
+public class RehearsalSeparateOwnerRelativeDefaultMethodGenericReader {
+    public fun <R> read(
+        producer: RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<Any?>,
+        value: R,
+    ): Any? = producer.produceOwnerRelativeDefaultGeneric(value)
+
+    public fun same(
+        producer: RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }
@@ -793,10 +817,13 @@ public class RehearsalSeparateConstrainedMethodGenericProducerValue<T>(private v
     }
 }
 
-public class RehearsalSeparateOwnerRelativeMethodGenericProducerValue<T>(private val value: T) :
+public open class RehearsalSeparateOwnerRelativeMethodGenericProducerValue<T>(private val value: T) :
     RehearsalSeparateOwnerRelativeMethodGenericProducer<T> {
-    public override fun <R : T> produceOwnerRelativeGeneric(value: R): T = this.value
+    public override fun <R : T> produceOwnerRelativeGeneric(value: R): T = value
 }
+
+public class RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue<T> :
+    RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<T>
 
 public class RehearsalSeparateInvariantProducerValue<T>(private val value: T) :
     RehearsalSeparateInvariantProducer<T> {
@@ -856,6 +883,11 @@ public class RehearsalSeparateReadOnlyPropertyChildValue<T>(
 
 // MODULE: leaf(middle)
 // FILE: leaf.kt
+
+public open class RehearsalSeparateLeafOwnerRelativeMethodGenericProducer<T>(value: T) :
+    RehearsalSeparateOwnerRelativeMethodGenericProducerValue<T>(value) {
+    public override fun <R : T> produceOwnerRelativeGeneric(value: R): T = value
+}
 
 public interface RehearsalSeparateInvariantPropertyConsumerGrandchild<T> :
     RehearsalSeparateInvariantPropertyConsumerChild<T> {
@@ -1051,13 +1083,37 @@ fun box(): String {
     if (RehearsalSeparateOwnerRelativeMethodGenericReader().read(
             broadOwnerRelativeMethodGeneric,
             "widened-owner-relative-input",
-        ) !== ownerRelativeResult ||
+        ) != "widened-owner-relative-input" ||
         !RehearsalSeparateOwnerRelativeMethodGenericReader().same(
             broadOwnerRelativeMethodGeneric,
             exactOwnerRelativeMethodGeneric,
         )
     ) {
         return "fail: separate broad owner-relative method-generic producer"
+    }
+    val exactOwnerRelativeDefaultMethodGeneric:
+            RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<String> =
+        RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue()
+    if (exactOwnerRelativeDefaultMethodGeneric.produceOwnerRelativeDefaultGeneric(
+            "exact-owner-relative-default",
+        ) != "exact-owner-relative-default"
+    ) {
+        return "fail: separate exact owner-relative default method-generic producer"
+    }
+    val broadOwnerRelativeDefaultMethodGeneric:
+            RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<Any?> =
+        exactOwnerRelativeDefaultMethodGeneric
+    if (RehearsalSeparateOwnerRelativeDefaultMethodGenericReader().read(
+            broadOwnerRelativeDefaultMethodGeneric,
+            73,
+        ) != 73 ||
+        !RehearsalSeparateOwnerRelativeDefaultMethodGenericReader().same(
+            broadOwnerRelativeDefaultMethodGeneric,
+            exactOwnerRelativeDefaultMethodGeneric,
+        ) ||
+        rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount() != 2
+    ) {
+        return "fail: separate broad owner-relative default method-generic producer"
     }
     val constrainedDefaultMethodGenericValue = RehearsalSeparateKotlinMethodConstraintValue()
     val exactConstrainedDefaultMethodGeneric:
