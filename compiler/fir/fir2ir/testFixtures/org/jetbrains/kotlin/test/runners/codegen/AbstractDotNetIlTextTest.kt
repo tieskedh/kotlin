@@ -7144,6 +7144,157 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             .GetGenericParameterConstraints().Length != 0)
                         throw new InvalidOperationException(
                             "Kotlin owner-relative override retained a stronger CLR constraint");
+                    RehearsalSeparateClosedOwnerRelativeMethodGenericProducer
+                        closedOwnerRelativeProducer =
+                            new RehearsalSeparateClosedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        closedOwnerRelativeNaturalView = closedOwnerRelativeProducer;
+                    if (closedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>(
+                                "csharp-closed-owner-relative") !=
+                            "csharp-closed-owner-relative" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(closedOwnerRelativeProducer, 41),
+                            41) ||
+                        !ownerRelativeReader.same(
+                            closedOwnerRelativeProducer,
+                            closedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "closed Kotlin owner-relative implementation changed C# entry, " +
+                            "widened dispatch, or identity");
+                    System.Reflection.MethodInfo closedOwnerRelativeSource =
+                        typeof(RehearsalSeparateClosedOwnerRelativeMethodGenericProducer)
+                            .GetMethod("produceOwnerRelativeGeneric");
+                    Type[] closedOwnerRelativeSourceParameters =
+                        closedOwnerRelativeSource.GetGenericArguments();
+                    if (!closedOwnerRelativeSource.IsPublic ||
+                        closedOwnerRelativeSource.ReturnType != typeof(string) ||
+                        closedOwnerRelativeSourceParameters.Length != 1 ||
+                        closedOwnerRelativeSourceParameters[0]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        closedOwnerRelativeSource.GetParameters().Length != 1 ||
+                        closedOwnerRelativeSource.GetParameters()[0].ParameterType !=
+                            typeof(string))
+                        throw new InvalidOperationException(
+                            "closed Kotlin owner-relative implementation lost its natural " +
+                            "typed C# entry: " + closedOwnerRelativeSource +
+                            ", public=" + closedOwnerRelativeSource.IsPublic +
+                            ", return=" + closedOwnerRelativeSource.ReturnType +
+                            ", generic=" + closedOwnerRelativeSourceParameters.Length +
+                            ", constraints=" +
+                                closedOwnerRelativeSourceParameters[0]
+                                    .GetGenericParameterConstraints().Length +
+                            ", parameter=" +
+                                closedOwnerRelativeSource.GetParameters()[0].ParameterType);
+                    int closedOwnerRelativeMapCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateClosedOwnerRelativeMethodGenericProducer)
+                             .GetInterfaces())
+                    {
+                        System.Reflection.InterfaceMapping map =
+                            typeof(RehearsalSeparateClosedOwnerRelativeMethodGenericProducer)
+                                .GetInterfaceMap(candidate);
+                        if (map.InterfaceMethods.Length != 1 || map.TargetMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "closed owner-relative interface map did not expose one slot: " +
+                                candidate.FullName);
+                        bool isNaturalClosedOwnerRelative = candidate ==
+                            typeof(RehearsalSeparateOwnerRelativeMethodGenericProducer<string>);
+                        System.Reflection.MethodInfo mappedClosedOwnerRelative =
+                            map.TargetMethods[0];
+                        Type[] mappedClosedOwnerRelativeParameters =
+                            mappedClosedOwnerRelative.GetGenericArguments();
+                        if (!mappedClosedOwnerRelative.IsPrivate ||
+                            mappedClosedOwnerRelative.DeclaringType !=
+                                typeof(RehearsalSeparateClosedOwnerRelativeMethodGenericProducer) ||
+                            mappedClosedOwnerRelative.ReturnType !=
+                                (isNaturalClosedOwnerRelative ? typeof(string) : typeof(object)) ||
+                            mappedClosedOwnerRelativeParameters.Length != 1 ||
+                            mappedClosedOwnerRelativeParameters[0]
+                                .GetGenericParameterConstraints().Length != 0 ||
+                            mappedClosedOwnerRelative.GetParameters().Length != 1 ||
+                            mappedClosedOwnerRelative.GetParameters()[0].ParameterType !=
+                                mappedClosedOwnerRelativeParameters[0])
+                            throw new InvalidOperationException(
+                                "closed owner-relative interface map lost its exact physical " +
+                                "MethodImpl target");
+                        closedOwnerRelativeMapCount++;
+                    }
+                    if (closedOwnerRelativeMapCount != 2)
+                        throw new InvalidOperationException(
+                            "closed owner-relative implementation did not map natural and " +
+                            "semantic slots");
+                    RehearsalSeparateClosedIntOwnerRelativeMethodGenericProducer
+                        closedIntOwnerRelativeProducer =
+                            new RehearsalSeparateClosedIntOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<int>
+                        closedIntOwnerRelativeNaturalView = closedIntOwnerRelativeProducer;
+                    if (closedIntOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<int>(43) != 43 ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                closedIntOwnerRelativeProducer,
+                                "semantic-closed-int-owner-relative"),
+                            "semantic-closed-int-owner-relative") ||
+                        !ownerRelativeReader.same(
+                            closedIntOwnerRelativeProducer,
+                            closedIntOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "closed Int owner-relative implementation lost scalar or widened " +
+                            "dispatch");
+                    RehearsalSeparateClosedNullableOwnerRelativeMethodGenericProducer
+                        closedNullableOwnerRelativeProducer =
+                            new RehearsalSeparateClosedNullableOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        closedNullableOwnerRelativeNaturalView =
+                            closedNullableOwnerRelativeProducer;
+                    if (closedNullableOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>(null) != null ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                closedNullableOwnerRelativeProducer,
+                                47),
+                            47) ||
+                        !ownerRelativeReader.same(
+                            closedNullableOwnerRelativeProducer,
+                            closedNullableOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "closed nullable owner-relative implementation lost null, widened " +
+                            "dispatch, or identity");
+                    RehearsalSeparateClosedDualOwnerRelativeMethodGenericProducer
+                        closedDualOwnerRelativeProducer =
+                            new RehearsalSeparateClosedDualOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        closedDualOwnerRelativeNaturalView = closedDualOwnerRelativeProducer;
+                    RehearsalSeparateSecondaryOwnerRelativeMethodGenericProducer<string>
+                        closedDualOwnerRelativeSecondaryNaturalView =
+                            closedDualOwnerRelativeProducer;
+                    RehearsalSeparateSecondaryOwnerRelativeMethodGenericReader
+                        secondaryOwnerRelativeReader =
+                            new RehearsalSeparateSecondaryOwnerRelativeMethodGenericReader();
+                    if (closedDualOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>("dual-primary") !=
+                            "dual-primary" ||
+                        closedDualOwnerRelativeSecondaryNaturalView
+                            .produceOwnerRelativeGeneric<string>("dual-secondary") !=
+                            "dual-secondary" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(closedDualOwnerRelativeProducer, 51),
+                            51) ||
+                        !object.Equals(
+                            secondaryOwnerRelativeReader.read(
+                                closedDualOwnerRelativeProducer,
+                                53),
+                            53) ||
+                        !ownerRelativeReader.same(
+                            closedDualOwnerRelativeProducer,
+                            closedDualOwnerRelativeProducer) ||
+                        !secondaryOwnerRelativeReader.same(
+                            closedDualOwnerRelativeProducer,
+                            closedDualOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "closed dual owner-relative implementation lost one natural or " +
+                            "semantic MethodImpl");
                     RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer
                         derivedOwnerRelativeProducer =
                             new RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer();
