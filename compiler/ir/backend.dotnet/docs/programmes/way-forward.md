@@ -1663,6 +1663,17 @@ and
 and
 [`../archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md).
 
+The first special Kotlin method bound is now closed for a reified-interface
+default. `<R : Any>(R): T` retains its authoritative non-null Kotlin/KLIB bound
+but emits an unconstrained CLR method parameter on the natural and semantic
+slots, portable helper, and implementations. Neither `class` nor `struct` can
+represent a Kotlin bound which admits both reference and value substitutions.
+Ordinary C# therefore authors the same unconstrained generic method; exact and
+widened calls select inherited Kotlin defaults and Kotlin/C# overrides on
+Framework 4.8 and .NET 10. Reflection pins zero special flags and zero nominal
+constraints throughout the family. See
+[`../archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md`](../archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md).
+
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial
 C# implementations prove independent typed Property rows, `!T` Kotlin fields,
@@ -1680,7 +1691,7 @@ compiler-ABI adapters serve both Kotlin-widened views without changing object
 identity. See
 [`../archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](../archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
 
-With that typed contract consolidated, continue with special, nullable, and other
+With that typed contract consolidated, continue with nullable and other
 constructed method constraints, multiple read-only property
 inheritance, diamonds, reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,

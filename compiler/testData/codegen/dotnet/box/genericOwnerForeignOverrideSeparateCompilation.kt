@@ -214,6 +214,31 @@ public class RehearsalSeparateNominalConstrainedDefaultReader {
     ): Boolean = producer === expected
 }
 
+private var rehearsalSeparateNonNullDefaultReadCount: Int = 0
+
+public interface RehearsalSeparateNonNullDefaultProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public fun <R : Any> produceNonNullDefault(value: R): T {
+        rehearsalSeparateNonNullDefaultReadCount += 1
+        return ("NonNull:" + value.toString()) as T
+    }
+}
+
+public fun rehearsalSeparateNonNullDefaultReadCount(): Int =
+    rehearsalSeparateNonNullDefaultReadCount
+
+public class RehearsalSeparateNonNullDefaultReader {
+    public fun <R : Any> read(
+        producer: RehearsalSeparateNonNullDefaultProducer<Any?>,
+        value: R,
+    ): Any? = producer.produceNonNullDefault(value)
+
+    public fun same(
+        producer: RehearsalSeparateNonNullDefaultProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateAbstractMethodGenericProducer<out T> {
     public fun <R> produceAbstractGeneric(value: R): T
 }
@@ -696,6 +721,15 @@ public class RehearsalSeparateMultiConstrainedDefaultProducerValue :
 
 public class RehearsalSeparateNominalConstrainedDefaultProducerValue :
     RehearsalSeparateNominalConstrainedDefaultProducer<Int>
+
+public class RehearsalSeparateNonNullDefaultProducerValue :
+    RehearsalSeparateNonNullDefaultProducer<String>
+
+public class RehearsalSeparateNonNullDefaultOverrideProducerValue :
+    RehearsalSeparateNonNullDefaultProducer<String> {
+    public override fun <R : Any> produceNonNullDefault(value: R): String =
+        "KotlinOverride:" + value.toString()
+}
 
 public interface RehearsalSeparateInvariantPropertyCellChild<T> :
     RehearsalSeparateInvariantPropertyCell<T> {
@@ -1335,6 +1369,36 @@ fun box(): String {
         rehearsalSeparateNominalConstrainedDefaultReadCount() != 2
     ) {
         return "fail: separate broad nominal-constrained method-generic default"
+    }
+    val exactNonNullDefault: RehearsalSeparateNonNullDefaultProducer<String> =
+        RehearsalSeparateNonNullDefaultProducerValue()
+    if (exactNonNullDefault.produceNonNullDefault(37) != "NonNull:37") {
+        return "fail: separate exact non-null method-generic default"
+    }
+    val broadNonNullDefault: RehearsalSeparateNonNullDefaultProducer<Any?> =
+        exactNonNullDefault
+    if (RehearsalSeparateNonNullDefaultReader().read(
+            broadNonNullDefault,
+            "broad",
+        ) != "NonNull:broad" ||
+        broadNonNullDefault !== exactNonNullDefault ||
+        rehearsalSeparateNonNullDefaultReadCount() != 2
+    ) {
+        return "fail: separate broad non-null method-generic default"
+    }
+    val exactNonNullOverride: RehearsalSeparateNonNullDefaultProducer<String> =
+        RehearsalSeparateNonNullDefaultOverrideProducerValue()
+    val broadNonNullOverride: RehearsalSeparateNonNullDefaultProducer<Any?> =
+        exactNonNullOverride
+    if (exactNonNullOverride.produceNonNullDefault(41) !=
+            "KotlinOverride:41" ||
+        RehearsalSeparateNonNullDefaultReader().read(
+            broadNonNullOverride,
+            "override",
+        ) != "KotlinOverride:override" ||
+        broadNonNullOverride !== exactNonNullOverride
+    ) {
+        return "fail: separate non-null method-generic Kotlin override"
     }
     val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
         RehearsalSeparateDefaultConsumerValue()
