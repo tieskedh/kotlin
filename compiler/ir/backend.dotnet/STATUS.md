@@ -882,6 +882,26 @@ verification, and work state.
   external base, generic base or binding owner, overload, broader parameter/
   bound graph, and mixed member family remain closed. Evidence is archived in
   [`docs/archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md`](docs/archive/reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md).
+- A method-generic reified-interface default may now declare the explicit
+  Kotlin non-null bound `<R : Any>`. Kotlin source and KLIB remain authoritative
+  for nullability; the natural `<R>(R): T` slot, semantic `<R>(R): object` slot,
+  portable helper `<T, R>(object, R): T`, Kotlin override, and ordinary C#
+  override all keep the physical CLR `R` unconstrained. This is deliberate:
+  Kotlin `Any` admits both reference and value substitutions, so neither CLR
+  `class`, `struct`, `System.Object`, nor `new()` is truthful. Exact and widened
+  Kotlin/C# calls exercise both `Int32` and `String`, preserve one receiver and
+  the selected default or override body, and never require C# to name the
+  semantic capability. Reflection independently proves zero special flags and
+  zero GenericParamConstraint rows on both interface slots, the helper, and the
+  Kotlin override. PSI and LightTree execute candidate, explicit epoch-off, and
+  property-absent lanes on Framework 4.8 and .NET 10: twelve lanes with zero
+  failures, errors, or skips. The full `dotNetTest` aggregate exits zero; direct
+  audit reports 190 XML suites and 2,287 tests with zero failures, errors, or
+  skips. The 187 FIR suites/2,155 tests and two integration suites/126 tests
+  were freshly written, while the unchanged six-test `dotnet.ir` model root
+  remained up-to-date. Nullable and other special/constructed method bounds
+  remain separate gates. Evidence is archived in
+  [`docs/archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md`](docs/archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one
