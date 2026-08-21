@@ -468,8 +468,24 @@ interface producer, while a later consumer of the open class must also recover
 that class's semantic hook and probe MethodDefs. C# subclasses override only the
 public generic method and neither implement nor name either capability. The
 final private-twin representation above remains unchanged. This open proof is
-limited to one locally declared method with one direct owner-relative bound;
-inherited implementations still require their own override-family proof.
+limited to one locally declared method with one direct owner-relative bound. A
+body inherited from an ordinary non-generic base uses the distinct rule below.
+
+That inherited proof is now closed for a local non-generic base body. When an
+open or final derived class first adds the reified interface, the physical
+family is attached to the real base declaration: one public unconstrained
+typed entry, one protected semantic hook and probe, and one base-owned
+capability plus private dispatcher. The derived binding owner receives only
+its natural MethodImpl and its own private interface-capability dispatcher; it
+does not copy the body, hook, probe, or base capability. Multiple derived
+binding owners reuse the same family and its recorded pre-lowering owner-bound
+proof. They must never call one another's or the base's private dispatcher.
+
+This local rule also preserves ordinary C# subclassing through the inherited
+public entry. It does not yet admit an unprepared external base or prove that a
+later compilation can add a new reified interface binding from a previously
+published prepared base family. That cross-assembly composition remains a
+separate producer/consumer ABI gate.
 
 ## Remaining gates
 
