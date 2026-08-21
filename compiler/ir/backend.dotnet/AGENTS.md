@@ -1303,6 +1303,15 @@ See the
   exact abstract natural property pairs. Never infer that fallback from member
   count alone, and never admit a mixed, incomplete, defaulted, inherited,
   nullable, or covariant multi-property family through this proof.
+  A covariant reified child may add one abstract read-only `val T` property to
+  exact identity-substituted reified parents. The child natural TypeDef owns
+  only that Property row and its typed getter; the parent Property remains in
+  the producer assembly. Its compiler capability likewise owns only the child
+  semantic getter and inherits the parent capability. Kotlin implementations
+  retain independent `!T` fields and C# authors implement only the two natural
+  properties; generated source supplies compiler-ABI adapters for a partial C#
+  class. Defaulted, multi-property, changed-argument, mixed-member, and
+  non-covariant read-only children remain separate gates.
   Imported CLR generic interfaces remain native: keep one semantic owner backed
   by the selected generic TypeDef, preserve platform flexibility through FIR2IR,
   and bind Kotlin implementations to its exact constructed slots. Resolved
