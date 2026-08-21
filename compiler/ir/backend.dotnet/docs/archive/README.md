@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md`](reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md)
+  records final non-generic Kotlin implementations of `<R : T>(R): T`, one
+  authoritative semantic body, per-slot natural MethodImpls, closed C# entries,
+  and reference/value/nullable/dual-root widened dispatch.
 - [`reified-generic-interface-owner-relative-method-default-2026-08-21.md`](reified-generic-interface-owner-relative-method-default-2026-08-21.md)
   records the defaulted direct `R : T` method bound, one cross-profile helper
   body, semantic owner closure without method-`R` loss, ordinary C# override

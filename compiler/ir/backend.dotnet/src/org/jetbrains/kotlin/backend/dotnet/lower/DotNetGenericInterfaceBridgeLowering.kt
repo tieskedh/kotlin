@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.ir.moveBodyTo
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.common.lower.SpecialMethodWithDefaultInfo
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
@@ -81,6 +82,14 @@ internal val DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE: IrDeclarationOrigin =
 internal val DOTNET_GENERIC_INTERFACE_EXACT_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_EXACT_BRIDGE")
 
+internal val DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_SEMANTIC_IMPLEMENTATION:
+    IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_SEMANTIC_IMPLEMENTATION")
+
+internal val DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE:
+    IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE")
+
 internal val IrDeclarationOrigin.dotNetGenericInterfaceBridgeMemberViewOrNull: DotNetGenericInterfaceMemberView?
     get() = when (this) {
         DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE -> DotNetGenericInterfaceMemberView.DECLARED
@@ -103,6 +112,8 @@ internal val IrDeclarationOrigin.isDotNetGenericInterfaceBridge: Boolean
  */
 internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetBackendContext) : ModuleLoweringPass {
     private val specialBridgeMethods = SpecialBridgeMethods(context)
+    private val closedOwnerRelativeSemanticImplementations =
+        linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
 
     private data class BridgePlan(
         val implementingClass: IrClass,
@@ -293,7 +304,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             } else {
                 null
             }
-            val ownerRelativeSemanticTarget = if (hasOwnerRelativeMethodBound) {
+            val genericOwnerRelativeSemanticTarget = if (hasOwnerRelativeMethodBound) {
                 context.genericOwnerCapabilityDispatchers[implementation]
             } else {
                 null
@@ -356,10 +367,16 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                             ownerRelativeDefaultHelper,
                         )
                     } else {
+                        val semanticTarget = genericOwnerRelativeSemanticTarget
+                            ?: if (hasOwnerRelativeMethodBound) {
+                                createClosedOwnerRelativeSemanticImplementation(plan)
+                            } else {
+                                plan.target
+                            }
                         createForwardingBridge(
                             irClass = plan.implementingClass,
                             slot = capabilitySlot,
-                            target = ownerRelativeSemanticTarget ?: plan.target,
+                            target = semanticTarget,
                             origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
                             bridgeName = "<ReifiedGenericInterfaceCapabilityBridge-${plan.interfaceIdentity}-" +
                                     "${plan.slot.name.asString()}-${plan.slotIdentity}>",
@@ -440,6 +457,94 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 }
             }
         }
+    }
+
+    /**
+     * A final non-generic Kotlin implementation has no generic-owner planner from which to obtain
+     * the paired object-domain body. Move its one authoritative body to a private semantic twin;
+     * the natural method remains the typed CLR entry and casts only its own result. The semantic
+     * interface bridge calls the twin directly and therefore preserves the actual method `R`.
+     */
+    private fun createClosedOwnerRelativeSemanticImplementation(
+        plan: BridgePlan,
+    ): IrSimpleFunction {
+        val owner = plan.implementingClass
+        val target = plan.target
+        if (owner.typeParameters.isNotEmpty() || owner.modality != Modality.FINAL ||
+            target.parent != owner || target.isFakeOverride || target.body == null ||
+            target.typeParameters.size != 1 || target.parameters.size != 2 ||
+            target.typeParameters.single().origin !=
+            DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+        ) {
+            dotNetUnsupported(
+                "owner-relative generic-interface implementation '${target.name}' requires " +
+                        "an open, inherited, or broader non-generic semantic family"
+            )
+        }
+        val semantic = closedOwnerRelativeSemanticImplementations.getOrPut(target) {
+            val implementation = owner.addFunction {
+                startOffset = target.startOffset
+                endOffset = target.endOffset
+                origin = DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_SEMANTIC_IMPLEMENTATION
+                name = Name.special(
+                    "<ReifiedGenericInterfaceClosedOwnerRelativeSemanticImplementation-" +
+                            "${plan.interfaceIdentity}-${plan.slotIdentity}>"
+                )
+                visibility = DescriptorVisibilities.PRIVATE
+                modality = Modality.FINAL
+                returnType = context.irBuiltIns.anyNType
+            }.apply {
+                parameters += createDispatchReceiverParameterWithClassParent()
+                val semanticTypeParameters = copyTypeParametersFrom(target)
+                semanticTypeParameters.forEach { parameter ->
+                    parameter.origin = DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+                    parameter.superTypes = listOf(context.irBuiltIns.anyNType)
+                }
+                val methodSubstitutor = IrTypeSubstitutor(
+                    target.typeParameters.zip(semanticTypeParameters).associate { pair ->
+                        pair.first.symbol to pair.second.symbol.defaultType
+                    },
+                    allowEmptySubstitution = true,
+                )
+                target.parameters.drop(1).forEach { parameter ->
+                    addValueParameter(
+                        parameter.name.asString(),
+                        methodSubstitutor.substitute(parameter.type),
+                    )
+                }
+            }
+            implementation.body = target.moveBodyTo(implementation)
+            target.body = context.createIrBuilder(target.symbol).irBlockBody {
+                val call = irCall(implementation.symbol, implementation.returnType).apply {
+                    arguments[0] = irGet(target.parameters[0])
+                    target.typeParameters.forEachIndexed { index, parameter ->
+                        typeArguments[index] = parameter.symbol.defaultType
+                    }
+                    target.parameters.drop(1).forEachIndexed { index, parameter ->
+                        arguments[index + 1] = irGet(parameter)
+                    }
+                }
+                +irReturn(irImplicitCast(call, target.returnType))
+            }
+            implementation
+        }
+        val alreadyBindsNaturalSlot = owner.declarations.filterIsInstance<IrSimpleFunction>().any { function ->
+            function.origin == DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE &&
+                    function.overriddenSymbols.singleOrNull() == plan.slot.symbol
+        }
+        if (!alreadyBindsNaturalSlot) {
+            createForwardingBridge(
+                irClass = owner,
+                slot = plan.slot,
+                target = semantic,
+                origin = DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE,
+                bridgeName = "<ReifiedGenericInterfaceClosedOwnerRelativeNaturalBridge-" +
+                        "${plan.interfaceIdentity}-${plan.slotIdentity}>",
+                bridgeTypeTransform = plan.typedSubstitutor::substitute,
+                ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
+            )
+        }
+        return semantic
     }
 
     /**
