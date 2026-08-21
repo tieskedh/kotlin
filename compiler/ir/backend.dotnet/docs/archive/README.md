@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-read-only-property-child-2026-08-21.md`](reified-generic-interface-read-only-property-child-2026-08-21.md)
+  records one exact covariant read-only property-inheritance edge, independent
+  parent/child Property ownership and `!T` fields, ordinary partial C# property
+  authoring, and widened dispatch across producer assemblies.
 - [`reified-generic-interface-multiple-invariant-properties-2026-08-21.md`](reified-generic-interface-multiple-invariant-properties-2026-08-21.md)
   records the first homogeneous multi-property invariant root, independent CLR
   Property rows and `!T` fields, operation-local projected access, and ordinary
