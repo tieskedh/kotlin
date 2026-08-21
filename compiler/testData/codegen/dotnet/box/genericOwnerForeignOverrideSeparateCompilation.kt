@@ -864,6 +864,18 @@ public open class RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer 
     public override open fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
 }
 
+public open class RehearsalSeparateInheritedOwnerRelativeMethodGenericBase {
+    public open fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
+}
+
+public open class RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateInheritedOwnerRelativeMethodGenericBase(),
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String>
+
+public class RehearsalSeparateFinalInheritedOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateInheritedOwnerRelativeMethodGenericBase(),
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String>
+
 public class RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue<T> :
     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<T>
 
@@ -1173,6 +1185,24 @@ fun box(): String {
         ) != "exact-open-closed-owner-relative"
     ) {
         return "fail: separate exact open closed owner-relative method-generic producer"
+    }
+    val exactInheritedOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer()
+    if (exactInheritedOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-inherited-owner-relative",
+        ) != "exact-inherited-owner-relative"
+    ) {
+        return "fail: separate exact inherited owner-relative method-generic producer"
+    }
+    val exactFinalInheritedOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateFinalInheritedOwnerRelativeMethodGenericProducer()
+    if (exactFinalInheritedOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-final-inherited-owner-relative",
+        ) != "exact-final-inherited-owner-relative"
+    ) {
+        return "fail: separate exact final inherited owner-relative method-generic producer"
     }
     val exactOwnerRelativeDefaultMethodGeneric:
             RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<String> =
