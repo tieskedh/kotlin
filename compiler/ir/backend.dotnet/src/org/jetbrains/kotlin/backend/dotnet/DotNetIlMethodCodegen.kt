@@ -864,13 +864,22 @@ internal class DotNetIlMethodCodegen(
             "Direct foreign override dispatch requires an object-returning capability dispatcher " +
                     "with at most one explicit input"
         }
-        val typedInfo = checkNotNull(availableFunctions[dispatch.typedEntry]) {
+        val typedInfo = checkNotNull(
+            availableFunctions[dispatch.typedEntry]
+                ?: typeMapper.referencedFunctionInfoOrNull(dispatch.typedEntry)
+        ) {
             "Direct foreign override dispatch lacks its typed MethodDef"
         }
-        val semanticInfo = checkNotNull(availableFunctions[dispatch.semanticHook]) {
+        val semanticInfo = checkNotNull(
+            availableFunctions[dispatch.semanticHook]
+                ?: typeMapper.referencedFunctionInfoOrNull(dispatch.semanticHook)
+        ) {
             "Direct foreign override dispatch lacks its semantic MethodDef"
         }
-        val probeInfo = checkNotNull(availableFunctions[dispatch.foreignOverrideProbe]) {
+        val probeInfo = checkNotNull(
+            availableFunctions[dispatch.foreignOverrideProbe]
+                ?: typeMapper.referencedFunctionInfoOrNull(dispatch.foreignOverrideProbe)
+        ) {
             "Direct foreign override dispatch lacks its virtual probe MethodDef"
         }
         val dispatcherOwner = function.parent as? IrClass
@@ -880,8 +889,10 @@ internal class DotNetIlMethodCodegen(
                 dispatch.foreignOverrideProbe.parent == familyOwner
         val familyIsOnDispatcherAncestry = dispatcherOwner != null && familyOwner != null &&
                 (dispatcherOwner == familyOwner || dispatcherOwner.isSubclassOf(familyOwner))
-        val crossesNonGenericInheritance = typedInfo.owner != functionInfo.owner
-        check(typedInfo.owner == semanticInfo.owner && typedInfo.owner == probeInfo.owner &&
+        val familyOwnerToken = typedInfo.owner.ilTypeRef
+        val crossesNonGenericInheritance = familyOwnerToken != functionInfo.owner.ilTypeRef
+        check(familyOwnerToken == semanticInfo.owner.ilTypeRef &&
+                familyOwnerToken == probeInfo.owner.ilTypeRef &&
                 familyMembersShareOwner && familyIsOnDispatcherAncestry &&
                 (!crossesNonGenericInheritance ||
                         typedInfo.owner.typeParameterCount == 0 &&
@@ -889,7 +900,7 @@ internal class DotNetIlMethodCodegen(
                 dispatch.typedEntry.typeParameters.size == function.typeParameters.size &&
                 dispatch.semanticHook.typeParameters.size == function.typeParameters.size &&
                 function.typeParameters.size <= 1) {
-            "Direct foreign override dispatch must compare one supported local owner family"
+            "Direct foreign override dispatch must compare one supported owner family"
         }
         fun DotNetIlFunctionInfo.openOwnerToken(): String = if (owner.typeParameterCount == 0) {
             owner.ilTypeRef
