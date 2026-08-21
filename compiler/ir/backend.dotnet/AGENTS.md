@@ -1322,8 +1322,11 @@ See the
   fallback policy. A default member's own method type parameters remain real
   CLR method parameters on its ordinary slot bridge: copy their substituted
   bounds, arguments, return, and parameter types, and render the `.override`
-  with the same method arity. Do not misclassify a generic method on an erased
-  non-generic interface as a generic-interface TypeDef. See
+  with the same method arity. For a helper-backed class target of a constructed
+  generic interface, compare MethodImpl compatibility only after substituting
+  the interface owner through that class; an open `!T` declaration result and
+  its closed `int` target are not incompatible. Do not misclassify a generic
+  method on an erased non-generic interface as a generic-interface TypeDef. See
   [the interface-default ADR](docs/decisions/adr-profile-aware-interface-default-implementations.md).
 - Function values use the selected erased `FunctionN` identity plus exact
   execution capabilities; callable and property-reference identity is a

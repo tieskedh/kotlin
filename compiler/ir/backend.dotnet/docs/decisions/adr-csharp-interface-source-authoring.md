@@ -406,17 +406,19 @@ to that same method. For a default, generated C# forwards its own `R`
 unchanged to the natural source method or supplies owner arguments followed by
 `R` to the helper. It must not replace `R` with `object`, infer it from an
 argument, or close the method through reflection. Admission currently
-requires one non-reified invariant `R`. A default still requires exactly the
-universal bound. An abstract root may instead use the exact direct non-null
-self-bound `R : Consumer<R>` when `Consumer<in T>` is independently admitted
-as the one-member consumer root. Both natural and semantic MethodDefs retain
-that constructed GenericParamConstraint, and each generated slot or bridge
-must remap the bound to its own method GenericParam. Roslyn source and metadata
-parameters are alpha-equivalent by method-parameter kind and ordinal inside
-the otherwise exact recursive constraint type; source-symbol identity is not
-part of the CLR contract. Owner-relative, other nominal or constructed,
-special, multiple, and constrained-default forms remain outside this
-rehearsal gate.
+requires one non-reified invariant `R`. An abstract root or a default may use
+either the universal bound or the exact direct non-null self-bound
+`R : Consumer<R>` when `Consumer<in T>` is independently admitted as the one-
+member consumer root. Both natural and semantic MethodDefs, every helper, and
+each generated slot or bridge retain that constructed GenericParamConstraint
+and remap it to their own method GenericParam. A helper-backed class target is
+bound to the closed natural interface slot after owner substitution; comparing
+its concrete result to the declaration's still-open `!T` must not suppress the
+MethodImpl on Framework. Roslyn source and metadata parameters are alpha-
+equivalent by method-parameter kind and ordinal inside the otherwise exact
+recursive constraint type; source-symbol identity is not part of the CLR
+contract. Owner-relative, other nominal or constructed, special, and multiple
+forms remain outside this rehearsal gate.
 
 For a covariant generic property, the strongly typed declared view owns the canonical DIM body.
 The erased canonical interface remains an abstract CLR Property slot reached by an

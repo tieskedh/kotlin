@@ -102,6 +102,34 @@ public class RehearsalSeparateDefaultMethodGenericReader {
     ): Boolean = producer === expected
 }
 
+private var rehearsalSeparateConstrainedDefaultMethodGenericReadCount: Int = 0
+
+public interface RehearsalSeparateConstrainedDefaultMethodGenericProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public fun <R> produceConstrainedDefaultGeneric(value: R): T
+            where R : RehearsalSeparateConsumer<R> {
+        value.consume(value)
+        rehearsalSeparateConstrainedDefaultMethodGenericReadCount += 1
+        return 5000 as T
+    }
+}
+
+public fun rehearsalSeparateConstrainedDefaultMethodGenericReadCount(): Int =
+    rehearsalSeparateConstrainedDefaultMethodGenericReadCount
+
+public class RehearsalSeparateConstrainedDefaultMethodGenericReader {
+    public fun <R> read(
+        producer: RehearsalSeparateConstrainedDefaultMethodGenericProducer<Any?>,
+        value: R,
+    ): Any? where R : RehearsalSeparateConsumer<R> =
+        producer.produceConstrainedDefaultGeneric(value)
+
+    public fun same(
+        producer: RehearsalSeparateConstrainedDefaultMethodGenericProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateAbstractMethodGenericProducer<out T> {
     public fun <R> produceAbstractGeneric(value: R): T
 }
@@ -469,6 +497,9 @@ public open class RehearsalSeparateOpenDefaultConsumer<T> :
     }
 }
 
+public class RehearsalSeparateConstrainedDefaultMethodGenericProducerValue :
+    RehearsalSeparateConstrainedDefaultMethodGenericProducer<Int>
+
 public interface RehearsalSeparateInvariantPropertyCellChild<T> :
     RehearsalSeparateInvariantPropertyCell<T> {
     public var childPropertyCellValue: T
@@ -785,6 +816,29 @@ fun box(): String {
         constrainedMethodGenericValue.count != 2
     ) {
         return "fail: separate broad constrained method-generic producer"
+    }
+    val constrainedDefaultMethodGenericValue = RehearsalSeparateKotlinMethodConstraintValue()
+    val exactConstrainedDefaultMethodGeneric:
+            RehearsalSeparateConstrainedDefaultMethodGenericProducer<Int> =
+        RehearsalSeparateConstrainedDefaultMethodGenericProducerValue()
+    if (exactConstrainedDefaultMethodGeneric.produceConstrainedDefaultGeneric(
+            constrainedDefaultMethodGenericValue,
+        ) != 5000
+    ) {
+        return "fail: separate exact constrained method-generic default"
+    }
+    val broadConstrainedDefaultMethodGeneric:
+            RehearsalSeparateConstrainedDefaultMethodGenericProducer<Any?> =
+        exactConstrainedDefaultMethodGeneric
+    if (RehearsalSeparateConstrainedDefaultMethodGenericReader().read(
+            broadConstrainedDefaultMethodGeneric,
+            constrainedDefaultMethodGenericValue,
+        ) != 5000 ||
+        broadConstrainedDefaultMethodGeneric !== exactConstrainedDefaultMethodGeneric ||
+        constrainedDefaultMethodGenericValue.count != 2 ||
+        rehearsalSeparateConstrainedDefaultMethodGenericReadCount() != 2
+    ) {
+        return "fail: separate broad constrained method-generic default"
     }
     val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
         RehearsalSeparateDefaultConsumerValue()
