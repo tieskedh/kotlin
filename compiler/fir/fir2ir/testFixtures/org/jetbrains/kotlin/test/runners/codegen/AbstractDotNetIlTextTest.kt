@@ -4838,6 +4838,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class
+                RehearsalSeparateCSharpDerivedOpenClosedOwnerRelativeMethodGenericProducer :
+                    RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer
+            {
+                public override string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return "OpenClosedDerived:" + typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
             public sealed partial class
                 RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer :
                     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>
@@ -7295,6 +7305,64 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "closed dual owner-relative implementation lost one natural or " +
                             "semantic MethodImpl");
+                    RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer
+                        openClosedOwnerRelativeProducer =
+                            new RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        openClosedOwnerRelativeNaturalView = openClosedOwnerRelativeProducer;
+                    if (openClosedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>("open-closed-base") !=
+                            "open-closed-base" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(openClosedOwnerRelativeProducer, 59),
+                            59) ||
+                        !ownerRelativeReader.same(
+                            openClosedOwnerRelativeProducer,
+                            openClosedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "open closed Kotlin owner-relative implementation lost its base " +
+                            "natural or semantic route");
+                    RehearsalSeparateCSharpDerivedOpenClosedOwnerRelativeMethodGenericProducer
+                        derivedOpenClosedOwnerRelativeProducer =
+                            new RehearsalSeparateCSharpDerivedOpenClosedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        derivedOpenClosedOwnerRelativeNaturalView =
+                            derivedOpenClosedOwnerRelativeProducer;
+                    if (derivedOpenClosedOwnerRelativeProducer
+                            .produceOwnerRelativeGeneric<int>(61) !=
+                            "OpenClosedDerived:Int32:61" ||
+                        derivedOpenClosedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<int>(63) !=
+                            "OpenClosedDerived:Int32:63" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                derivedOpenClosedOwnerRelativeProducer,
+                                67),
+                            "OpenClosedDerived:Int32:67") ||
+                        !ownerRelativeReader.same(
+                            derivedOpenClosedOwnerRelativeProducer,
+                            derivedOpenClosedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "open closed owner-relative capability bypassed the ordinary C# " +
+                            "typed override");
+                    System.Reflection.MethodInfo openClosedOwnerRelativeSource =
+                        typeof(RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer)
+                            .GetMethod("produceOwnerRelativeGeneric");
+                    Type[] openClosedOwnerRelativeSourceParameters =
+                        openClosedOwnerRelativeSource.GetGenericArguments();
+                    if (!openClosedOwnerRelativeSource.IsPublic ||
+                        !openClosedOwnerRelativeSource.IsVirtual ||
+                        openClosedOwnerRelativeSource.IsFinal ||
+                        openClosedOwnerRelativeSource.ReturnType != typeof(string) ||
+                        openClosedOwnerRelativeSourceParameters.Length != 1 ||
+                        openClosedOwnerRelativeSourceParameters[0]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        openClosedOwnerRelativeSource.GetParameters().Length != 1 ||
+                        openClosedOwnerRelativeSource.GetParameters()[0].ParameterType !=
+                            openClosedOwnerRelativeSourceParameters[0])
+                        throw new InvalidOperationException(
+                            "open closed owner-relative implementation lost its overridable " +
+                            "unconstrained C# entry");
                     RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer
                         derivedOwnerRelativeProducer =
                             new RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer();
