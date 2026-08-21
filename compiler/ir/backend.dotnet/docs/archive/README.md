@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-open-owner-relative-implementation-2026-08-21.md`](reified-generic-interface-open-owner-relative-implementation-2026-08-21.md)
+  records an open non-generic Kotlin `<R : T>(R): T` implementation, its
+  protected semantic/probe family, class-owned capability, and ordinary C#
+  typed override dispatch across Framework 4.8 and .NET 10.
 - [`reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md`](reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md)
   records final non-generic Kotlin implementations of `<R : T>(R): T`, one
   authoritative semantic body, per-slot natural MethodImpls, closed C# entries,

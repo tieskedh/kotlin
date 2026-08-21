@@ -899,10 +899,11 @@ internal class DotNetIlMethodCodegen(
         val probeReference = probeInfo.reference(dispatch.foreignOverrideProbe)
         val typedReturn = (typedInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
         check(typedInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
+                typedInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
                 probeInfo.signature.parameterTypes.size == 1 &&
                 semanticInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
                 dispatch.foreignOverrideProbe.typeParameters.size == function.typeParameters.size &&
-                typedReturn is DotNetIlValueType.TypeParameter &&
+                typedReturn != null &&
                 probeInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 semanticInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
             "Direct foreign override dispatch requires matching typed and semantic slots"
@@ -927,7 +928,9 @@ internal class DotNetIlMethodCodegen(
             pops = signature.parameterTypes.size,
             pushes = 1,
         )
-        methodContext.emit("box ${typedReturn.nameInSignature}", pops = 1, pushes = 1)
+        if (!typedReturn.isDotNetReferenceShaped()) {
+            methodContext.emit("box ${typedReturn.nameInSignature}", pops = 1, pushes = 1)
+        }
         methodContext.emitReturn(pops = 1)
 
         methodContext.emitLabel(semanticLabel)

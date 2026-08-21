@@ -859,6 +859,11 @@ public class RehearsalSeparateClosedDualOwnerRelativeMethodGenericProducer :
     public override fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
 }
 
+public open class RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String> {
+    public override open fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
+}
+
 public class RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue<T> :
     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<T>
 
@@ -1159,6 +1164,15 @@ fun box(): String {
         ) != "exact-closed-dual-owner-relative"
     ) {
         return "fail: separate exact closed dual owner-relative method-generic producer"
+    }
+    val exactOpenClosedOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateOpenClosedOwnerRelativeMethodGenericProducer()
+    if (exactOpenClosedOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-open-closed-owner-relative",
+        ) != "exact-open-closed-owner-relative"
+    ) {
+        return "fail: separate exact open closed owner-relative method-generic producer"
     }
     val exactOwnerRelativeDefaultMethodGeneric:
             RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<String> =

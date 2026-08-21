@@ -1622,13 +1622,24 @@ a separate composition gate. One private unconstrained semantic twin owns the
 body; the closed public class entry, one natural MethodImpl per reified root,
 and each semantic capability forward to it without substituting owner `T` for
 method `R`. Reference, value, nullable, and dual-root implementations cross a
-producer DLL and ordinary C# consumer on Framework and .NET 10. An open
-non-generic implementor is the next explicit gate because its semantic body
-must join an override family and ordinary C# subclassing; the private final
-twin is deliberately not generalized to that shape. See
+producer DLL and ordinary C# consumer on Framework and .NET 10.
+
+The corresponding locally declared open non-generic implementation is now
+closed without generalizing that private-final representation. Its public
+virtual class entry remains genuinely generic in unconstrained method `R`; one
+protected virtual semantic hook owns the Kotlin body, and a protected generic
+probe detects an ordinary C# override of only that public entry. The reified
+interface capability and a class-owned separate-compilation capability each
+have a private final dispatcher. Both choose the C# typed override when present
+and otherwise retain the raw Kotlin semantic body, with one object and no
+shadow state. Final implementors keep their prior closed C# entry. Inherited
+non-generic bodies, broader parameter graphs, and mixed families remain closed.
+See
 [`../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md)
 and
-[`../archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md).
+[`../archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md)
+and
+[`../archive/reified-generic-interface-open-owner-relative-implementation-2026-08-21.md`](../archive/reified-generic-interface-open-owner-relative-implementation-2026-08-21.md).
 
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial

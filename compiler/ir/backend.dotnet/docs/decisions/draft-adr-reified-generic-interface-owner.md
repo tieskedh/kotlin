@@ -449,9 +449,27 @@ That split is target- versus slot-scoped: one semantic twin exists per Kotlin
 implementation target, while each independent reified interface slot receives
 its own MethodImpl. It preserves a single body when one override implements
 two roots. This proof applies only to a final, locally declared, non-generic
-class with one method parameter and one direct owner-relative bound. An open
-or inherited implementation requires a semantic override family and cannot
-reuse the private-twin rule.
+class with one method parameter and one direct owner-relative bound.
+
+An open, locally declared, non-generic implementation uses a distinct override-
+family form. Its public class entry is an unconstrained virtual `<R>(R): closed
+T`, and the one Kotlin body moves to a protected virtual `<R>(R): object`
+semantic hook. A protected virtual method-generic probe detects a later ordinary
+C# override of the public entry without reflection or allocation. The class
+also owns a non-generic compiler-ABI capability interface and private final
+dispatcher, while the reified interface retains its independent semantic
+capability and dispatcher. Both dispatchers call the C# typed override when the
+probe changes and otherwise preserve the raw Kotlin semantic hook. The natural
+`I<closed T>` MethodImpl targets the public virtual entry.
+
+The class-owned capability is necessary separate-compilation evidence, not a
+second object or state: the generic interface capability belongs to the
+interface producer, while a later consumer of the open class must also recover
+that class's semantic hook and probe MethodDefs. C# subclasses override only the
+public generic method and neither implement nor name either capability. The
+final private-twin representation above remains unchanged. This open proof is
+limited to one locally declared method with one direct owner-relative bound;
+inherited implementations still require their own override-family proof.
 
 ## Remaining gates
 
