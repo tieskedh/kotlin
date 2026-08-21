@@ -1641,8 +1641,9 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     val methodBounds = methodParameter.superTypes
     val hasDirectOwnerRelativeBound = methodBounds.singleOrNull()?.let { bound ->
         val simpleBound = bound as? IrSimpleType ?: return@let false
-        !simpleBound.isMarkedNullable() &&
-                (simpleBound.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
+        // Both `R : T` and `R : T?` keep the real method parameter while the owner-relative
+        // relation remains Kotlin/KLIB authority and is omitted from the variant CLR slot.
+        (simpleBound.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
     } == true
     val hasSupportedBounds = when {
         methodBounds.singleOrNull()?.let { bound ->

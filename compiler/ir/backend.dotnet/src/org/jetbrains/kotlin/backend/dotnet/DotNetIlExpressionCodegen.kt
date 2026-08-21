@@ -44,7 +44,9 @@ import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableNothing
+import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.isUnit
+import org.jetbrains.kotlin.ir.types.makeNotNull
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.erasedUpperBound
@@ -4093,6 +4095,29 @@ internal class DotNetIlExpressionCodegen(
                 emitNullableUnwrapOrThrowNpe(slotType)
                 return
             }
+            // A final nullable-primitive method bound keeps a genuine CLR method token: both
+            // `R = Int` and `R = Int?` are valid substitutions, so neither a primitive slot nor a
+            // CLR constraint is truthful. After a Kotlin null check, FIR nevertheless reads the
+            // same R value at its proven non-null primitive upper bound. Box the open token first
+            // (Nullable<T> becomes boxed-T-or-null), then recover the exact primitive. This is the
+            // generic equivalent of the NullableValue branch above and fails at the narrowed use
+            // if an unsound null ever reaches it.
+            if (slotType is DotNetIlValueType.TypeParameter &&
+                expression.isNullablePrimitiveTypeParameterNarrowing(expectedType)
+            ) {
+                emitLoadSlot(slot)
+                methodContext.emit(
+                    "box ${slotType.nameInSignature}",
+                    pops = 1,
+                    pushes = 1,
+                )
+                methodContext.emit(
+                    "unbox.any ${expectedType.nameInSignature}",
+                    pops = 1,
+                    pushes = 1,
+                )
+                return
+            }
             // A REFERENCE smartcast can likewise narrow a bare local read without an
             // IrTypeOperatorCall. The frontend proof changes the IrGetValue type, but the CLR
             // local necessarily keeps its declared wider type. A checked `castclass` is the
@@ -4123,6 +4148,19 @@ internal class DotNetIlExpressionCodegen(
         return declaredParameter == readParameter &&
                 declaredType.isMarkedNullable() &&
                 typeMapper.toDotNetIlValueType(declaredParameter.owner.defaultType) == expectedType
+    }
+
+    private fun IrGetValue.isNullablePrimitiveTypeParameterNarrowing(
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val declaredType = symbol.owner.type as? IrSimpleType ?: return false
+        val declaredParameter = declaredType.classifier as? IrTypeParameterSymbol ?: return false
+        val readParameter = (type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol ?: return false
+        if (declaredParameter != readParameter) return false
+        val nullablePrimitiveBound = declaredParameter.owner.superTypes.singleOrNull()
+            ?.takeIf { bound -> bound.isPrimitiveType(nullable = true) }
+            ?: return false
+        return typeMapper.toDotNetIlValueType(nullablePrimitiveBound.makeNotNull()) == expectedType
     }
 
     private fun emitLoadSlot(slot: DotNetIlSlot) {

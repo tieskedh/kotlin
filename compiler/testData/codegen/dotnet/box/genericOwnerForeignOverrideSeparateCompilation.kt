@@ -329,6 +329,36 @@ public class RehearsalSeparateOwnerRelativeDefaultMethodGenericReader {
     ): Boolean = producer === expected
 }
 
+private var rehearsalSeparateNullableOwnerRelativeDefaultReadCount: Int = 0
+private var rehearsalSeparateNullableOwnerRelativeDefaultSawNull: Boolean = false
+
+public interface RehearsalSeparateNullableOwnerRelativeDefaultProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public fun <R : @UnsafeVariance T?> produceNullableOwnerRelativeDefault(value: R): T {
+        rehearsalSeparateNullableOwnerRelativeDefaultReadCount += 1
+        if (value == null) rehearsalSeparateNullableOwnerRelativeDefaultSawNull = true
+        return 83 as T
+    }
+}
+
+public fun rehearsalSeparateNullableOwnerRelativeDefaultReadCount(): Int =
+    rehearsalSeparateNullableOwnerRelativeDefaultReadCount
+
+public fun rehearsalSeparateNullableOwnerRelativeDefaultSawNull(): Boolean =
+    rehearsalSeparateNullableOwnerRelativeDefaultSawNull
+
+public class RehearsalSeparateNullableOwnerRelativeDefaultReader {
+    public fun <R> read(
+        producer: RehearsalSeparateNullableOwnerRelativeDefaultProducer<Any?>,
+        value: R,
+    ): Any? = producer.produceNullableOwnerRelativeDefault(value)
+
+    public fun same(
+        producer: RehearsalSeparateNullableOwnerRelativeDefaultProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateInvariantProducer<T> {
     public fun produceInvariant(): T
 }
@@ -932,6 +962,15 @@ public class RehearsalSeparateFinalExternalInheritedOwnerRelativeMethodGenericPr
 public class RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue<T> :
     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<T>
 
+public class RehearsalSeparateNullableOwnerRelativeDefaultProducerValue :
+    RehearsalSeparateNullableOwnerRelativeDefaultProducer<Int>
+
+public class RehearsalSeparateNullableOwnerRelativeDefaultOverrideProducerValue :
+    RehearsalSeparateNullableOwnerRelativeDefaultProducer<Int> {
+    public override fun <R : Int?> produceNullableOwnerRelativeDefault(value: R): Int =
+        value ?: -1
+}
+
 public class RehearsalSeparateInvariantProducerValue<T>(private val value: T) :
     RehearsalSeparateInvariantProducer<T> {
     public override fun produceInvariant(): T = value
@@ -1298,6 +1337,49 @@ fun box(): String {
         rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount() != 2
     ) {
         return "fail: separate broad owner-relative default method-generic producer"
+    }
+    val exactNullableOwnerRelativeDefault:
+            RehearsalSeparateNullableOwnerRelativeDefaultProducer<Int> =
+        RehearsalSeparateNullableOwnerRelativeDefaultProducerValue()
+    if (exactNullableOwnerRelativeDefault
+            .produceNullableOwnerRelativeDefault<Int?>(83) != 83
+    ) {
+        return "fail: separate exact nullable owner-relative default"
+    }
+    val broadNullableOwnerRelativeDefault:
+            RehearsalSeparateNullableOwnerRelativeDefaultProducer<Any?> =
+        exactNullableOwnerRelativeDefault
+    if (RehearsalSeparateNullableOwnerRelativeDefaultReader().read<Int?>(
+            broadNullableOwnerRelativeDefault,
+            null,
+        ) != 83 ||
+        !RehearsalSeparateNullableOwnerRelativeDefaultReader().same(
+            broadNullableOwnerRelativeDefault,
+            exactNullableOwnerRelativeDefault,
+        ) ||
+        rehearsalSeparateNullableOwnerRelativeDefaultReadCount() != 2 ||
+        !rehearsalSeparateNullableOwnerRelativeDefaultSawNull()
+    ) {
+        return "fail: separate broad nullable owner-relative default"
+    }
+    val exactNullableOwnerRelativeOverride:
+            RehearsalSeparateNullableOwnerRelativeDefaultProducer<Int> =
+        RehearsalSeparateNullableOwnerRelativeDefaultOverrideProducerValue()
+    val broadNullableOwnerRelativeOverride:
+            RehearsalSeparateNullableOwnerRelativeDefaultProducer<Any?> =
+        exactNullableOwnerRelativeOverride
+    if (exactNullableOwnerRelativeOverride
+            .produceNullableOwnerRelativeDefault<Int?>(89) != 89 ||
+        RehearsalSeparateNullableOwnerRelativeDefaultReader().read<Int?>(
+            broadNullableOwnerRelativeOverride,
+            null,
+        ) != -1 ||
+        !RehearsalSeparateNullableOwnerRelativeDefaultReader().same(
+            broadNullableOwnerRelativeOverride,
+            exactNullableOwnerRelativeOverride,
+        )
+    ) {
+        return "fail: separate nullable owner-relative Kotlin override"
     }
     val constrainedDefaultMethodGenericValue = RehearsalSeparateKotlinMethodConstraintValue()
     val exactConstrainedDefaultMethodGeneric:

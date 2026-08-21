@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md`](reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md)
+  records `<R : T?>` on a reified-interface default, authoritative Kotlin/KLIB
+  nullability, deliberately absent CLR `R : T`, nullable-primitive body
+  narrowing, and ordinary Kotlin/C# execution with one real method token.
 - [`reified-generic-interface-non-null-method-constraint-2026-08-21.md`](reified-generic-interface-non-null-method-constraint-2026-08-21.md)
   records `<R : Any>` on a reified-interface default, authoritative Kotlin/KLIB
   nullability, physically unconstrained CLR slots/helper/overrides, and ordinary
