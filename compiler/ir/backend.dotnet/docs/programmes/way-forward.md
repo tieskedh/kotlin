@@ -1593,11 +1593,20 @@ one or more interfaces and at most one non-final class. The first proof uses
 retain the exact `Base` and `Marker` constraints, while ordinary Kotlin and C#
 implementations inherit or override the one natural constrained method. This is
 structural rather than library-specific: erased, nullable, generic, final, and
-non-public classifiers remain outside the proof. Owner-relative `R : T` remains
-closed because the unconstrained semantic `R` cannot call ordinary C# source
-with `where R : T` without reflection, IL weaving, or substituting a different
-method argument type. See
+non-public classifiers remain outside the proof. See
 [`../archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md`](../archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md).
+
+The first owner-relative constraint is now closed for one abstract covariant
+root `<R : @UnsafeVariance T>(R): T`. KLIB retains `R : T`, while the natural
+variant CLR slot, semantic capability slot, and Kotlin implementation overrides
+omit that physically illegal or stronger GenericParamConstraint. Both slots
+remain generic in the original method `R`. An ordinary C# implementation writes
+one unconstrained generic method, and generated source forwards that same `R`;
+`typeof(R)` proves that widened calls do not substitute owner `T`. Schema 7's
+normalized method/owner-parameter pair explains the weakened CLR boundary to
+tooling. Defaults, nested/multiple or nullable relative bounds, mixed members,
+and inherited owner-relative forms remain closed. See
+[`../archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md`](../archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md).
 
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial
@@ -1616,8 +1625,7 @@ compiler-ABI adapters serve both Kotlin-widened views without changing object
 identity. See
 [`../archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](../archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
 
-With that typed contract consolidated, continue with special/owner-relative/
-nullable and other
+With that typed contract consolidated, continue with special, nullable, and other
 constructed method constraints, defaulted and multiple read-only property
 inheritance, diamonds, reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,

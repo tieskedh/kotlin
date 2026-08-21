@@ -15,6 +15,8 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -1089,6 +1091,21 @@ internal fun collectDotNetCSharpImplementationManifest(
                         DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER ->
                             DotNetCSharpDefaultKind.DIM_WITH_HELPER
                     }
+                    val erasedOwnerRelativeConstraints = if (isReifiedGenericInterface) {
+                        source.dotNetDirectOwnerRelativeMethodBoundsOrNull(irClass)
+                            ?.mapIndexedNotNull { methodIndex, bound ->
+                                val ownerParameter = ((bound as? IrSimpleType)?.classifier as?
+                                        IrTypeParameterSymbol)?.owner
+                                    ?: return@mapIndexedNotNull null
+                                DotNetCSharpErasedOwnerRelativeConstraint(
+                                    methodTypeParameterIndex = methodIndex,
+                                    ownerTypeParameterIndex = ownerParameter.index,
+                                )
+                            }
+                            .orEmpty()
+                    } else {
+                        emptyList()
+                    }
                     DotNetCSharpMemberContract(
                         logicalKey = memberKey,
                         kind = source.memberKind(),
@@ -1102,7 +1119,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                             null
                         },
                         wrongShapePolicy = null,
-                        erasedOwnerRelativeConstraints = emptyList(),
+                        erasedOwnerRelativeConstraints = erasedOwnerRelativeConstraints,
                         overriddenLogicalMemberKeys = overriddenLogicalMemberKeys(source),
                         slots = slots,
                     )

@@ -4136,6 +4136,7 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     expectedNaturalParameterTypes: List<String> = emptyList(),
     expectedMethodGenericArity: Int = 0,
     expectedDefaultKind: DotNetCSharpDefaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+    expectedErasedOwnerRelativeConstraints: List<Pair<Int, Int>> = emptyList(),
 ) {
     val resource = checkNotNull(
         DotNetManagedResourceReader.read(
@@ -4179,6 +4180,12 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     }
     check(member.defaultKind == expectedDefaultKind) {
         "The reified generic-interface manifest recorded an unexpected default-body profile"
+    }
+    check(member.erasedOwnerRelativeConstraints.map { constraint ->
+            constraint.methodTypeParameterIndex to constraint.ownerTypeParameterIndex
+        } == expectedErasedOwnerRelativeConstraints
+    ) {
+        "The reified generic-interface manifest lost its erased owner-relative constraint"
     }
     val expectedRoles = linkedSetOf(
         DotNetCSharpSlotRole.ERASED,
@@ -4404,6 +4411,19 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedNaturalReturnType = "!0",
                     expectedNaturalParameterTypes = listOf("!!0"),
                     expectedMethodGenericArity = 1,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateOwnerRelativeMethodGenericProducer`1",
+                    expectedMemberName = "produceOwnerRelativeGeneric",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedErasedOwnerRelativeConstraints = listOf(0 to 0),
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
@@ -4759,6 +4779,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 {
                     value.consume(value);
                     return 4000;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpOwnerRelativeMethodGenericProducer :
+                RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+            {
+                public string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return typeof(R).Name + ":" + value.ToString();
                 }
             }
 
@@ -6983,6 +7012,75 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "constrained generic-interface family did not expose two exact slots: " +
                             constrainedMethodGenericSlotCount + "\n" + constrainedMethodGenericSlots);
+                    RehearsalSeparateCSharpOwnerRelativeMethodGenericProducer
+                        ownerRelativeMethodGenericProducer =
+                            new RehearsalSeparateCSharpOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        ownerRelativeNaturalView = ownerRelativeMethodGenericProducer;
+                    RehearsalSeparateOwnerRelativeMethodGenericReader ownerRelativeReader =
+                        new RehearsalSeparateOwnerRelativeMethodGenericReader();
+                    if (ownerRelativeNaturalView.produceOwnerRelativeGeneric<int>(17) !=
+                            "Int32:17" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(ownerRelativeMethodGenericProducer, 19),
+                            "Int32:19") ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                ownerRelativeMethodGenericProducer,
+                                "semantic-owner-relative"),
+                            "String:semantic-owner-relative") ||
+                        !ownerRelativeReader.same(
+                            ownerRelativeMethodGenericProducer,
+                            ownerRelativeMethodGenericProducer))
+                        throw new InvalidOperationException(
+                            "owner-relative generic method changed C# R, dispatch, or identity");
+                    int ownerRelativeSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpOwnerRelativeMethodGenericProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalOwnerRelative = candidate ==
+                            typeof(RehearsalSeparateOwnerRelativeMethodGenericProducer<string>);
+                        System.Reflection.MethodInfo[] ownerRelativeMethods = candidate.GetMethods(
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                        if (ownerRelativeMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "owner-relative generic interface did not expose one slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo ownerRelativeMethod = ownerRelativeMethods[0];
+                        Type[] ownerRelativeParameters =
+                            ownerRelativeMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] ownerRelativeValues =
+                            ownerRelativeMethod.GetParameters();
+                        if (ownerRelativeParameters.Length != 1 ||
+                            ownerRelativeParameters[0].GetGenericParameterConstraints().Length != 0 ||
+                            ownerRelativeValues.Length != 1 ||
+                            ownerRelativeValues[0].ParameterType != ownerRelativeParameters[0] ||
+                            ownerRelativeMethod.ReturnType !=
+                                (isNaturalOwnerRelative ? typeof(string) : typeof(object)))
+                            throw new InvalidOperationException(
+                                "owner-relative constraint was not erased from one physical slot");
+                        if (isNaturalOwnerRelative &&
+                            ownerRelativeMethod.Name != "produceOwnerRelativeGeneric")
+                            throw new InvalidOperationException(
+                                "natural owner-relative slot lost its source name");
+                        ownerRelativeSlotCount++;
+                    }
+                    if (ownerRelativeSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "owner-relative family did not expose natural and semantic slots");
+                    System.Reflection.MethodInfo kotlinOwnerRelativeMethod =
+                        typeof(RehearsalSeparateOwnerRelativeMethodGenericProducerValue<>)
+                            .GetMethod("produceOwnerRelativeGeneric");
+                    Type[] kotlinOwnerRelativeParameters =
+                        kotlinOwnerRelativeMethod.GetGenericArguments();
+                    if (kotlinOwnerRelativeParameters.Length != 1 ||
+                        kotlinOwnerRelativeParameters[0]
+                            .GetGenericParameterConstraints().Length != 0)
+                        throw new InvalidOperationException(
+                            "Kotlin owner-relative override retained a stronger CLR constraint");
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -8334,6 +8432,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpConstrainedMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the constrained method-generic bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpOwnerRelativeMethodGenericProducer" in generated) {
+            "The C# authoring tool did not generate the owner-relative method-generic bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpMethodConstraintValue" in generated) {
             "The C# authoring tool did not generate the method-constraint value bridge:\n$generated"

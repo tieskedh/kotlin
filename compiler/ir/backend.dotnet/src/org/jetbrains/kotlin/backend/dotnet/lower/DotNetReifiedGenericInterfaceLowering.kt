@@ -20,6 +20,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceParentContract
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
@@ -34,6 +36,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetCharSequenceType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetNumberType
+import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -110,7 +113,8 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * returning its owner parameter directly, one covariant root `<R>(R) -> T` whose member is
  * abstract or has a default implementation and whose method parameter has either the universal
  * bound, direct non-generic nominal bounds, one direct self-bound on an admitted consumer root,
- * or that self-bound together with nominal bounds, a public contravariant consumer
+ * or that self-bound together with nominal bounds, plus an abstract root with one direct
+ * owner-relative `R : T` bound, a public contravariant consumer
  * with one abstract owner-parameter input and `Unit` result, an invariant method cell containing
  * exactly one of each, or an invariant property root containing one or more complete mutable
  * owner-parameter properties.
@@ -317,6 +321,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val identity = context.preLoweringDeclarationKeys[owner]
                     ?: owner.fqNameWhenAvailable?.asString()
                     ?: owner.name.asString()
+                owner.declaredInterfaceMembers().forEach { member ->
+                    member.markDirectOwnerRelativeMethodBoundsErased(owner)
+                }
                 val suffix = Integer.toUnsignedString(identity.hashCode(), 16)
                 val capability = buildSemanticCapability(owner, file, suffix, emptyList())
                 file.declarations += capability
@@ -437,6 +444,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
             } while (changed)
 
+            sourceFunctions.forEach { function ->
+                function.erasedOwnerRelativeOverrideParameterIndices()
+                    .forEach { index ->
+                        function.typeParameters[index].origin =
+                            DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+                    }
+            }
             closeGenericClassCapabilityInterfaceSupertypes()
         }
 
@@ -1186,6 +1200,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 copiedMethodParameters.forEachIndexed { index, copied ->
                     copied.superTypes = source.typeParameters[index].superTypes
                         .map(methodSubstitutor::substitute)
+                    if (source.typeParameters[index].superTypes.any { bound ->
+                            bound.isDotNetOwnerDependentConstraint(source.parent as IrClass)
+                        }
+                    ) {
+                        copied.origin = DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+                    }
                 }
                 fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
                     type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
@@ -1221,6 +1241,41 @@ internal class DotNetReifiedGenericInterfaceLowering(
         declarations.filterIsInstance<IrProperty>().filter { property ->
             listOfNotNull(property.getter, property.setter).any { accessor -> !accessor.isFakeOverride }
         }
+
+    private fun IrSimpleFunction.markDirectOwnerRelativeMethodBoundsErased(owner: IrClass) {
+        val bounds = dotNetDirectOwnerRelativeMethodBoundsOrNull(owner) ?: return
+        bounds.forEachIndexed { index, bound ->
+            if (bound != null) {
+                typeParameters[index].origin =
+                    DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+            }
+        }
+    }
+
+    private fun IrSimpleFunction.erasedOwnerRelativeOverrideParameterIndices(
+        visited: MutableSet<IrSimpleFunction> = mutableSetOf(),
+    ): Set<Int> {
+        if (!visited.add(this)) return emptySet()
+        val result = typeParameters.mapIndexedNotNullTo(linkedSetOf()) { index, parameter ->
+            index.takeIf {
+                parameter.origin == DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+            }
+        }
+        val owner = parent as? IrClass
+        if (owner != null &&
+            (owner in context.reifiedGenericInterfaces ||
+                    externalDeclarations.hasReifiedGenericInterface(owner))
+        ) {
+            dotNetDirectOwnerRelativeMethodBoundsOrNull(owner)
+                ?.forEachIndexed { index, bound ->
+                    if (bound != null) result += index
+                }
+        }
+        overriddenSymbols.forEach { overridden ->
+            result += overridden.owner.erasedOwnerRelativeOverrideParameterIndices(visited)
+        }
+        return result.filterTo(linkedSetOf()) { index -> index in typeParameters.indices }
+    }
 
     private fun IrClass.reifiedInterfaceChildShapeOrNull(): ReifiedInterfaceChildShape? {
         if (!hasFirstReifiedInterfaceOwnerShape()) return null
@@ -1422,6 +1477,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
         ) {
             return false
         }
+        if (hasDefaultImplementation && typeParameters.any { methodParameter ->
+                methodParameter.superTypes.any { bound ->
+                    bound.isDotNetOwnerDependentConstraint(parent as IrClass)
+                }
+            }
+        ) {
+            // A helper-backed owner-relative body needs its own cross-profile proof. Keep this
+            // abstract gate from silently admitting portable helper and DIM placement as well.
+            return false
+        }
         return hasDirectMethodGenericProducerSignature(
             ownerParameter,
             { constraintOwner -> constraintOwner.isDirectMethodConstraintConsumerRoot() },
@@ -1523,6 +1588,8 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
     }
     val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
         ?: error("External reified-interface member '${source.name}' has no producer semantic family")
+    val ownerRelativeBounds = source.dotNetDirectOwnerRelativeMethodBoundsOrNull(owner)
+        ?: error("External reified-interface member '${source.name}' has unsupported owner-relative bounds")
     context.irFactory.buildFun {
         startOffset = source.startOffset
         endOffset = source.endOffset
@@ -1544,6 +1611,9 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
         copiedMethodParameters.forEachIndexed { index, copied ->
             copied.superTypes = source.typeParameters[index].superTypes
                 .map(methodSubstitutor::substitute)
+            if (ownerRelativeBounds[index] != null) {
+                copied.origin = DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+            }
         }
         fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
             type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
@@ -1575,8 +1645,14 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
 ): Boolean {
     val methodParameter = typeParameters.singleOrNull() ?: return false
     val methodBounds = methodParameter.superTypes
+    val hasDirectOwnerRelativeBound = methodBounds.singleOrNull()?.let { bound ->
+        val simpleBound = bound as? IrSimpleType ?: return@let false
+        !simpleBound.isMarkedNullable() &&
+                (simpleBound.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
+    } == true
     val hasSupportedBounds = when {
         methodBounds.singleOrNull()?.isNullableAny() == true -> true
+        hasDirectOwnerRelativeBound -> true
         else -> {
             val selfBounds = methodBounds.count { bound ->
                 bound.isDirectSelfInterfaceConstraint(
