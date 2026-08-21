@@ -4858,6 +4858,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class
+                RehearsalSeparateCSharpDerivedExternalInheritedOwnerRelativeMethodGenericProducer :
+                    RehearsalSeparateExternalInheritedOwnerRelativeMethodGenericProducer
+            {
+                public override string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return "ExternalInheritedDerived:" + typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
             public sealed partial class
                 RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer :
                     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>
@@ -7456,6 +7466,82 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "final inherited binding duplicated or bypassed the shared base " +
                             "owner-relative family");
+                    RehearsalSeparateExternalInheritedOwnerRelativeMethodGenericProducer
+                        externalInheritedOwnerRelativeProducer =
+                            new RehearsalSeparateExternalInheritedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        externalInheritedOwnerRelativeNaturalView =
+                            externalInheritedOwnerRelativeProducer;
+                    if (externalInheritedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>("external-inherited-base") !=
+                            "external-inherited-base" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                externalInheritedOwnerRelativeProducer,
+                                97),
+                            97) ||
+                        !ownerRelativeReader.same(
+                            externalInheritedOwnerRelativeProducer,
+                            externalInheritedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "external inherited Kotlin binding lost the prepared base family");
+                    RehearsalSeparateCSharpDerivedExternalInheritedOwnerRelativeMethodGenericProducer
+                        derivedExternalInheritedOwnerRelativeProducer =
+                            new RehearsalSeparateCSharpDerivedExternalInheritedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        derivedExternalInheritedOwnerRelativeNaturalView =
+                            derivedExternalInheritedOwnerRelativeProducer;
+                    if (derivedExternalInheritedOwnerRelativeProducer
+                            .produceOwnerRelativeGeneric<int>(101) !=
+                            "ExternalInheritedDerived:Int32:101" ||
+                        derivedExternalInheritedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<int>(103) !=
+                            "ExternalInheritedDerived:Int32:103" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                derivedExternalInheritedOwnerRelativeProducer,
+                                107),
+                            "ExternalInheritedDerived:Int32:107") ||
+                        !ownerRelativeReader.same(
+                            derivedExternalInheritedOwnerRelativeProducer,
+                            derivedExternalInheritedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "external prepared family bypassed the ordinary C# typed override");
+                    RehearsalSeparateFinalExternalInheritedOwnerRelativeMethodGenericProducer
+                        finalExternalInheritedOwnerRelativeProducer =
+                            new RehearsalSeparateFinalExternalInheritedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        finalExternalInheritedOwnerRelativeNaturalView =
+                            finalExternalInheritedOwnerRelativeProducer;
+                    if (finalExternalInheritedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>("final-external-inherited-base") !=
+                            "final-external-inherited-base" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                finalExternalInheritedOwnerRelativeProducer,
+                                109),
+                            109) ||
+                        !ownerRelativeReader.same(
+                            finalExternalInheritedOwnerRelativeProducer,
+                            finalExternalInheritedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "final external binding copied or bypassed the prepared base family");
+                    System.Reflection.MethodInfo externalInheritedOwnerRelativeSource =
+                        typeof(RehearsalSeparateExternalInheritedOwnerRelativeMethodGenericProducer)
+                            .GetMethod("produceOwnerRelativeGeneric");
+                    Type[] externalInheritedOwnerRelativeSourceParameters =
+                        externalInheritedOwnerRelativeSource.GetGenericArguments();
+                    if (externalInheritedOwnerRelativeSource.DeclaringType !=
+                            typeof(RehearsalSeparatePreparedInheritedOwnerRelativeMethodGenericBase) ||
+                        externalInheritedOwnerRelativeSource.ReturnType != typeof(string) ||
+                        !externalInheritedOwnerRelativeSource.IsPublic ||
+                        !externalInheritedOwnerRelativeSource.IsVirtual ||
+                        externalInheritedOwnerRelativeSource.IsFinal ||
+                        externalInheritedOwnerRelativeSourceParameters.Length != 1 ||
+                        externalInheritedOwnerRelativeSourceParameters[0]
+                            .GetGenericParameterConstraints().Length != 0)
+                        throw new InvalidOperationException(
+                            "external binding copied or constrained the producer base entry");
                     RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer
                         derivedOwnerRelativeProducer =
                             new RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer();

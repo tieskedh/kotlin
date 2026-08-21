@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceMemberView
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectForeignOverrideDispatch
@@ -45,6 +46,7 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.builders.irBlockBody
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
@@ -99,6 +101,10 @@ internal val DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRID
     IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE")
 
+private val DOTNET_REIFIED_GENERIC_INTERFACE_EXTERNAL_OWNER_RELATIVE_FAMILY_MEMBER:
+    IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_REIFIED_GENERIC_INTERFACE_EXTERNAL_OWNER_RELATIVE_FAMILY_MEMBER")
+
 internal val IrDeclarationOrigin.dotNetGenericInterfaceBridgeMemberViewOrNull: DotNetGenericInterfaceMemberView?
     get() = when (this) {
         DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE -> DotNetGenericInterfaceMemberView.DECLARED
@@ -129,6 +135,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private data class NonGenericOwnerRelativeImplementation(
         val familyOwner: IrClass,
         val inheritedOwnerBound: IrType?,
+        val typedImplementation: IrSimpleFunction,
         val semanticImplementation: IrSimpleFunction,
         val foreignOverrideProbe: IrSimpleFunction?,
         val ownedCapabilitySlot: IrSimpleFunction?,
@@ -398,7 +405,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                             (plan.target in nonGenericOwnerRelativeImplementations ||
                                     genericOwnerRelativeSemanticTarget == null)
                         ) {
-                            createNonGenericOwnerRelativeImplementation(plan, localClasses)
+                            createNonGenericOwnerRelativeImplementation(
+                                plan,
+                                localClasses,
+                                externalDeclarations,
+                            )
                         } else {
                             null
                         }
@@ -416,30 +427,8 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                             ownerConstraintTypeTransform = { it },
                         )
                         nonGenericImplementation?.foreignOverrideProbe?.let { probe ->
-                            val ownedSlot = checkNotNull(nonGenericImplementation.ownedCapabilitySlot) {
-                                "Internal .NET backend error: an open non-generic owner-relative " +
-                                        "family lacks its producer-owned capability slot"
-                            }
-                            val ownedDispatcher = openNonGenericOwnerRelativeDispatchers.getOrPut(plan.target) {
-                                createForwardingBridge(
-                                    irClass = nonGenericImplementation.familyOwner,
-                                    slot = ownedSlot,
-                                    target = nonGenericImplementation.semanticImplementation,
-                                    origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
-                                    bridgeName = "<ReifiedGenericInterfaceOpenOwnerRelativeCapabilityBridge-" +
-                                            "${plan.interfaceIdentity}-${plan.slotIdentity}>",
-                                    bridgeTypeTransform = { it },
-                                    ownerConstraintTypeTransform = { it },
-                                )
-                            }
-                            val existingSlot = context.genericOwnerCapabilitySlots.put(plan.target, ownedSlot)
-                            check(existingSlot == null || existingSlot == ownedSlot) {
-                                "Internal .NET backend error: an open non-generic owner-relative " +
-                                        "family produced multiple owned capability slots"
-                            }
-                            context.genericOwnerCapabilityDispatchers[plan.target] = ownedDispatcher
                             val directDispatch = DotNetGenericOwnerDirectForeignOverrideDispatch(
-                                typedEntry = plan.target,
+                                typedEntry = nonGenericImplementation.typedImplementation,
                                 semanticHook = nonGenericImplementation.semanticImplementation,
                                 foreignOverrideProbe = probe,
                             )
@@ -448,7 +437,28 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                             // producer-published capability. Both must observe one ordinary C#
                             // override of the public typed slot.
                             context.genericOwnerDirectForeignOverrideDispatches[capabilityBridge] = directDispatch
-                            context.genericOwnerDirectForeignOverrideDispatches[ownedDispatcher] = directDispatch
+                            nonGenericImplementation.ownedCapabilitySlot?.let { ownedSlot ->
+                                val ownedDispatcher = openNonGenericOwnerRelativeDispatchers.getOrPut(plan.target) {
+                                    createForwardingBridge(
+                                        irClass = nonGenericImplementation.familyOwner,
+                                        slot = ownedSlot,
+                                        target = nonGenericImplementation.semanticImplementation,
+                                        origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
+                                        bridgeName =
+                                            "<ReifiedGenericInterfaceOpenOwnerRelativeCapabilityBridge-" +
+                                                    "${plan.interfaceIdentity}-${plan.slotIdentity}>",
+                                        bridgeTypeTransform = { it },
+                                        ownerConstraintTypeTransform = { it },
+                                    )
+                                }
+                                val existingSlot = context.genericOwnerCapabilitySlots.put(plan.target, ownedSlot)
+                                check(existingSlot == null || existingSlot == ownedSlot) {
+                                    "Internal .NET backend error: an open non-generic owner-relative " +
+                                            "family produced multiple owned capability slots"
+                                }
+                                context.genericOwnerCapabilityDispatchers[plan.target] = ownedDispatcher
+                                context.genericOwnerDirectForeignOverrideDispatches[ownedDispatcher] = directDispatch
+                            }
                         }
                     }
                 }
@@ -538,6 +548,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun createNonGenericOwnerRelativeImplementation(
         plan: BridgePlan,
         localClasses: Set<IrClass>,
+        externalDeclarations: DotNetExternalDeclarations,
     ): NonGenericOwnerRelativeImplementation {
         val target = plan.target
         val owner = target.parent as? IrClass
@@ -562,6 +573,15 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         } else {
                             target.typeParameters.singleOrNull()?.superTypes?.singleOrNull() == inheritedOwnerBound
                         })
+        if (isInheritedImplementation && owner !in localClasses) {
+            return reusePreparedExternalNonGenericOwnerRelativeImplementation(
+                plan,
+                owner,
+                inheritedOwnerBound,
+                existingImplementation,
+                externalDeclarations,
+            )
+        }
         // Kotlin IR may retain OPEN on an override declared inside a final class. The owner still
         // closes the physical family, so only a genuinely inheritable owner needs an open target.
         val isFinalFamily = owner.modality == Modality.FINAL
@@ -686,29 +706,176 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             NonGenericOwnerRelativeImplementation(
                 owner,
                 inheritedOwnerBound,
+                target,
                 implementation,
                 probe,
                 ownedCapabilitySlot,
             )
         }
-        val alreadyBindsNaturalSlot = plan.implementingClass.declarations
-            .filterIsInstance<IrSimpleFunction>().any { function ->
-            function.origin == DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE &&
-                    function.overriddenSymbols.singleOrNull() == plan.slot.symbol
-        }
-        if (!alreadyBindsNaturalSlot) {
-            createForwardingBridge(
-                irClass = plan.implementingClass,
-                slot = plan.slot,
-                target = if (isOpenFamily) target else implementation.semanticImplementation,
-                origin = DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE,
-                bridgeName = "<ReifiedGenericInterfaceClosedOwnerRelativeNaturalBridge-" +
-                        "${plan.interfaceIdentity}-${plan.slotIdentity}>",
-                bridgeTypeTransform = plan.typedSubstitutor::substitute,
-                ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
+        ensureNonGenericOwnerRelativeNaturalBridge(
+            plan,
+            if (isOpenFamily) target else implementation.semanticImplementation,
+        )
+        return implementation
+    }
+
+    /**
+     * Reuses an open non-generic family whose semantic hook/probe were published by an earlier
+     * artifact. The consumer emits only its own natural and interface-capability MethodImpls;
+     * every callable family member remains a MethodRef to the producer base TypeDef.
+     */
+    private fun reusePreparedExternalNonGenericOwnerRelativeImplementation(
+        plan: BridgePlan,
+        owner: IrClass,
+        inheritedOwnerBound: IrType?,
+        existingImplementation: NonGenericOwnerRelativeImplementation?,
+        externalDeclarations: DotNetExternalDeclarations,
+    ): NonGenericOwnerRelativeImplementation {
+        val target = plan.target
+        val existingMatches = existingImplementation == null ||
+                (existingImplementation.familyOwner == owner &&
+                        existingImplementation.inheritedOwnerBound == inheritedOwnerBound &&
+                        existingImplementation.ownedCapabilitySlot == null)
+        val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(target)
+        val family = binding?.family
+        val typedEntryBinding = binding?.let { preparedBinding ->
+            externalDeclarations.genericOwnerTypedEntryPhysicalSlotOrNull(
+                target,
+                preparedBinding,
             )
         }
+        val semanticOwnerPath = family?.semanticHookOwnerPath
+        val semanticMethodName = family?.semanticHookMethodName
+        val probeMethodName = family?.foreignOverrideProbeMethodName
+        if (!existingMatches || !externalDeclarations.hasClass(owner) ||
+            owner.typeParameters.isNotEmpty() || owner.modality != Modality.OPEN ||
+            plan.implementingClass.typeParameters.isNotEmpty() ||
+            target.isFakeOverride || target.body != null || target.modality != Modality.OPEN ||
+            target.typeParameters.size != 1 || target.parameters.size != 2 ||
+            inheritedOwnerBound == null ||
+            target.typeParameters.single().superTypes.singleOrNull() != inheritedOwnerBound ||
+            binding == null || typedEntryBinding == null || semanticOwnerPath == null ||
+            semanticMethodName == null ||
+            probeMethodName == null
+        ) {
+            dotNetUnsupported(
+                "owner-relative generic-interface implementation " +
+                        "'${plan.implementingClass.name}.${target.name}' requires a producer-prepared " +
+                        "open non-generic semantic family"
+            )
+        }
+        val implementation = existingImplementation ?: run {
+            fun buildExternalFamilyMember(
+                name: String,
+                returnType: IrType,
+                physicalBinding: DotNetBoundGenericOwnerPhysicalSlot,
+                includeValueParameters: Boolean,
+            ): IrSimpleFunction = context.irFactory.buildFun {
+                startOffset = target.startOffset
+                endOffset = target.endOffset
+                origin =
+                    DOTNET_REIFIED_GENERIC_INTERFACE_EXTERNAL_OWNER_RELATIVE_FAMILY_MEMBER
+                this.name = Name.special(name)
+                visibility = DescriptorVisibilities.PROTECTED
+                modality = Modality.OPEN
+                this.returnType = returnType
+            }.apply {
+                parent = owner
+                parameters += createDispatchReceiverParameterWithClassParent()
+                val copiedTypeParameters = copyTypeParametersFrom(target)
+                copiedTypeParameters.forEach { parameter ->
+                    parameter.origin = DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+                    parameter.superTypes = listOf(context.irBuiltIns.anyNType)
+                }
+                if (includeValueParameters) {
+                    val substitutor = IrTypeSubstitutor(
+                        target.typeParameters.zip(copiedTypeParameters).associate { pair ->
+                            pair.first.symbol to pair.second.symbol.defaultType
+                        },
+                        allowEmptySubstitution = true,
+                    )
+                    target.parameters.filter { parameter ->
+                        parameter.kind == IrParameterKind.Regular
+                    }.forEach { parameter ->
+                        addValueParameter(
+                            parameter.name.asString(),
+                            substitutor.substitute(parameter.type),
+                        )
+                    }
+                }
+                context.externalGenericOwnerPhysicalSlots[this] =
+                    physicalBinding
+            }
+            val typed = buildExternalFamilyMember(
+                "<ExternalPreparedOwnerRelativeTyped-${nonGenericOwnerRelativeImplementations.size}>",
+                target.returnType,
+                typedEntryBinding,
+                includeValueParameters = true,
+            )
+            val semantic = buildExternalFamilyMember(
+                "<ExternalPreparedOwnerRelativeSemantic-${nonGenericOwnerRelativeImplementations.size}>",
+                context.irBuiltIns.anyNType,
+                DotNetBoundGenericOwnerPhysicalSlot(
+                    binding.library,
+                    family,
+                    semanticOwnerPath,
+                    semanticMethodName,
+                ),
+                includeValueParameters = true,
+            )
+            val probe = buildExternalFamilyMember(
+                "<ExternalPreparedOwnerRelativeProbe-${nonGenericOwnerRelativeImplementations.size}>",
+                context.irBuiltIns.booleanType,
+                DotNetBoundGenericOwnerPhysicalSlot(
+                    binding.library,
+                    family,
+                    semanticOwnerPath,
+                    probeMethodName,
+                ),
+                includeValueParameters = false,
+            )
+            context.genericOwnerSemanticHooks[target] = semantic
+            context.genericOwnerCapabilityDeclarations += semantic
+            context.genericOwnerCapabilityDeclarations += semantic.parameters.drop(1)
+            NonGenericOwnerRelativeImplementation(
+                owner,
+                inheritedOwnerBound,
+                typed,
+                semantic,
+                probe,
+                ownedCapabilitySlot = null,
+            ).also { created ->
+                nonGenericOwnerRelativeImplementations[target] = created
+            }
+        }
+        ensureNonGenericOwnerRelativeNaturalBridge(
+            plan,
+            implementation.typedImplementation,
+        )
         return implementation
+    }
+
+    private fun ensureNonGenericOwnerRelativeNaturalBridge(
+        plan: BridgePlan,
+        target: IrSimpleFunction,
+    ) {
+        val alreadyBindsNaturalSlot = plan.implementingClass.declarations
+            .filterIsInstance<IrSimpleFunction>().any { function ->
+                function.origin ==
+                        DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE &&
+                        function.overriddenSymbols.singleOrNull() == plan.slot.symbol
+            }
+        if (alreadyBindsNaturalSlot) return
+        createForwardingBridge(
+            irClass = plan.implementingClass,
+            slot = plan.slot,
+            target = target,
+            origin = DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE,
+            bridgeName = "<ReifiedGenericInterfaceClosedOwnerRelativeNaturalBridge-" +
+                    "${plan.interfaceIdentity}-${plan.slotIdentity}>",
+            bridgeTypeTransform = plan.typedSubstitutor::substitute,
+            ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
+        )
     }
 
     /**
@@ -1083,7 +1250,8 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 val targetMethodArguments = bridgeTypeParameters.mapIndexed { index, parameter ->
                     val targetParameter = target.typeParameters[index]
                     val targetRetainsPhysicalBound =
-                        targetParameter.origin != DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER &&
+                        targetParameter.origin !=
+                                DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER &&
                                 targetParameter.superTypes.any { bound -> !bound.isNullableAny() }
                     ownerBoundMethodArguments[index]
                         ?.takeIf { targetRetainsPhysicalBound }

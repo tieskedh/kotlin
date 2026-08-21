@@ -481,11 +481,25 @@ does not copy the body, hook, probe, or base capability. Multiple derived
 binding owners reuse the same family and its recorded pre-lowering owner-bound
 proof. They must never call one another's or the base's private dispatcher.
 
-This local rule also preserves ordinary C# subclassing through the inherited
-public entry. It does not yet admit an unprepared external base or prove that a
-later compilation can add a new reified interface binding from a previously
-published prepared base family. That cross-assembly composition remains a
-separate producer/consumer ABI gate.
+This rule also preserves ordinary C# subclassing through the inherited public
+entry. A later artifact may now add a new reified-interface binding when the
+producer already prepared and published that exact open base family. The
+consumer binds an un-emitted IR prototype to the producer's assembly-qualified
+public Function record and the recorded semantic-hook/probe MethodDefs. It
+emits only its own natural and interface-capability MethodImpls: the external
+body, typed entry, hook, probe, class capability, and private dispatcher remain
+producer-owned and are neither copied nor inferred by generated name. Semantic
+dispatch compares the three producer MethodRefs by physical CLR owner, because
+separate resolver instances may legitimately materialize distinct class-info
+objects for that same owner.
+
+An ordinary C# subclass of the new binding owner still overrides only the
+inherited public typed method. Its exact, natural-interface, and Kotlin
+semantic calls all observe that override. An unprepared external base remains
+closed: the consumer does not mutate an external IR declaration or synthesize a
+new family from KLIB shape alone. Generic bases or binding owners, overloads,
+multiple method/value parameters, broader bounds, and mixed member families
+remain independent gates.
 
 ## Remaining gates
 
