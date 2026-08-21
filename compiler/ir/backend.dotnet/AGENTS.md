@@ -1293,6 +1293,16 @@ See the
   constraint types as an exact multiset. An order difference must not make a
   normal C# override disappear and route a portable bridge directly to the
   Kotlin default helper.
+  A rehearsal-admitted invariant root may carry one or more complete public
+  abstract mutable `T` properties only when every declared member belongs to
+  exactly one getter/setter pair for the same property and each natural slot
+  remains `!T`. Kotlin implementations retain one physical `!T` field per
+  property; star/output reads and input writes cross only their operation-local
+  semantic boundary. Ordinary non-partial C# implementations need no generated
+  capability when the producer manifest can partition the entire contract into
+  exact abstract natural property pairs. Never infer that fallback from member
+  count alone, and never admit a mixed, incomplete, defaulted, inherited,
+  nullable, or covariant multi-property family through this proof.
   Imported CLR generic interfaces remain native: keep one semantic owner backed
   by the selected generic TypeDef, preserve platform flexibility through FIR2IR,
   and bind Kotlin implementations to its exact constructed slots. Resolved

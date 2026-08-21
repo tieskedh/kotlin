@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-multiple-invariant-properties-2026-08-21.md`](reified-generic-interface-multiple-invariant-properties-2026-08-21.md)
+  records the first homogeneous multi-property invariant root, independent CLR
+  Property rows and `!T` fields, operation-local projected access, and ordinary
+  non-partial C# auto-properties on Framework and .NET 10.
 - [`reified-generic-interface-nominal-method-constraints-2026-08-21.md`](reified-generic-interface-nominal-method-constraints-2026-08-21.md)
   records the first nominal-only class-plus-interface method constraint,
   structural admission without a self-bound, exact slot/helper metadata, and

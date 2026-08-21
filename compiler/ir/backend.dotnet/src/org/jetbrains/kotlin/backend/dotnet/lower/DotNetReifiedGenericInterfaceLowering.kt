@@ -111,8 +111,9 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * abstract or has a default implementation and whose method parameter has either the universal
  * bound, direct non-generic nominal bounds, one direct self-bound on an admitted consumer root,
  * or that self-bound together with nominal bounds, a public contravariant consumer
- * with one abstract
- * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
+ * with one abstract owner-parameter input and `Unit` result, an invariant method cell containing
+ * exactly one of each, or an invariant property root containing one or more complete mutable
+ * owner-parameter properties.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
  * semantic boundary. Covariant producer subinterfaces and exact invariant-property children
@@ -1265,10 +1266,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val parameter = typeParameters.single()
         val members = declaredInterfaceMembers()
         val properties = declaredInterfaceProperties()
-        if (properties.size == 1) {
+        if (properties.isNotEmpty()) {
             return when (parameter.variance) {
-                Variance.OUT_VARIANCE -> directCovariantPropertyMembersOrNull(parameter) != null
-                Variance.INVARIANT -> directInvariantPropertyMembersOrNull(parameter) != null
+                Variance.OUT_VARIANCE -> properties.size == 1 &&
+                        directCovariantPropertyMembersOrNull(parameter) != null
+                Variance.INVARIANT -> directInvariantPropertyMembersOrNull(
+                    parameter,
+                    allowMultipleProperties = true,
+                ) != null
                 Variance.IN_VARIANCE -> false
             }
         }
@@ -1310,17 +1315,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
     private fun IrClass.directInvariantPropertyMembersOrNull(
         parameter: IrTypeParameter,
+        allowMultipleProperties: Boolean = false,
     ): List<IrSimpleFunction>? {
-        val property = declaredInterfaceProperties().singleOrNull() ?: return null
-        val getter = property.getter ?: return null
-        val setter = property.setter ?: return null
+        val properties = declaredInterfaceProperties().takeIf { candidates ->
+            candidates.isNotEmpty() && (allowMultipleProperties || candidates.size == 1)
+        } ?: return null
+        val accessors = properties.flatMap { property ->
+            listOf(property.getter ?: return null, property.setter ?: return null)
+        }
         val members = declaredInterfaceMembers()
         return members.takeIf {
-            property.isVar && members.size == 2 && members.toSet() == setOf(getter, setter) &&
-                    getter.correspondingPropertySymbol?.owner === property &&
-                    setter.correspondingPropertySymbol?.owner === property &&
-                    getter.isDirectProducerMember(parameter) &&
-                    setter.isDirectConsumerMember(parameter)
+            members.size == accessors.size && members.toSet() == accessors.toSet() &&
+                    properties.all { property ->
+                        val getter = property.getter ?: return@all false
+                        val setter = property.setter ?: return@all false
+                        property.isVar && getter.correspondingPropertySymbol?.owner === property &&
+                                setter.correspondingPropertySymbol?.owner === property &&
+                                getter.isDirectProducerMember(parameter) &&
+                                setter.isDirectConsumerMember(parameter)
+                    }
         }
     }
 

@@ -1409,6 +1409,16 @@ is `Box<object>`. An ordinary non-partial C# implementation supplies one normal
 auto-property. The manifest proves that the natural getter and setter share one
 property name while neither semantic slot fabricates a Property row.
 
+That invariant root may now contain one or more complete abstract mutable
+properties. Each property remains an independent natural CLR `Property<T>` row
+with `!T` getter/setter slots, and a Kotlin implementation retains one physical
+`!T` field per property. Projected operations cross the semantic boundary per
+accessor, not by replacing the owner or its state with an object representation.
+The authoring analyzer permits an ordinary non-partial C# implementation only
+when the complete manifest partitions into exact abstract getter/setter pairs
+by property name. This does not widen method, mixed-member, defaulted,
+inherited, nullable, covariant, or constrained multi-property shapes.
+
 One inheritance edge now composes that same proof. An exact
 `Child<T> : Parent<T>` whose root and child each declare one admitted mutable
 `T` property remains a natural CLR generic hierarchy. The child owns only its
@@ -1473,15 +1483,15 @@ and across a producer DLL without `C<object>` or owner erasure. See
 [`../archive/generic-owner-capability-superinterface-closure-2026-08-20.md`](../archive/generic-owner-capability-superinterface-closure-2026-08-20.md).
 
 This does not admit arbitrary multi-member interfaces. The structural gates
-are exactly one producer, one producer plus one consumer method, or one mutable
-property with that same producer/consumer shape, plus the exact one-level
-property child above, plus one direct consumer child above the same property
-root and one further exact consumer edge. Read-only and open-nullable
-properties, broader mixed method/property bundles, defaults, overloads,
-constraints, intersections, changed arguments, multiple parents, and deeper
-inheritance remain excluded. The authoring tool applies the same exact
-manifest-shape test before deciding that a non-partial C# implementation needs
-no generated capability.
+are exactly one producer, one producer plus one consumer method, or one or more
+complete mutable properties with that same producer/consumer shape, plus the
+exact one-level single-property child above, one direct consumer child above
+the same single-property root, and one further exact consumer edge. Read-only
+and open-nullable properties, broader mixed method/property bundles, defaults,
+overloads, constraints, intersections, changed arguments, multiple parents,
+and deeper inheritance remain excluded. The authoring tool applies the same
+exact manifest-shape test before deciding that a non-partial C# implementation
+needs no generated capability.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1587,8 +1597,16 @@ with `where R : T` without reflection, IL weaving, or substituting a different
 method argument type. See
 [`../archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md`](../archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md).
 
-With that typed contract consolidated, continue with multiple-property
-families, special/owner-relative/nullable and other
+The invariant property root now composes any nonempty number of complete
+abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial
+C# implementations prove independent typed Property rows, `!T` Kotlin fields,
+projected reads/writes, receiver identity, and exact four-member manifest
+grouping on Framework 4.8 and .NET 10. The natural-fallback analyzer groups by
+source property name rather than assuming a two-member contract. See
+[`../archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md`](../archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md).
+
+With that typed contract consolidated, continue with special/owner-relative/
+nullable and other
 constructed method constraints, read-only property inheritance, diamonds,
 reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,

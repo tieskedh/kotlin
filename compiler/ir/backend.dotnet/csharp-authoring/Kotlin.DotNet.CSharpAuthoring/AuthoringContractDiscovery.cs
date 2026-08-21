@@ -105,8 +105,9 @@ internal static class AuthoringContractDiscovery
                 if (interfaces.IsEmpty)
                     continue;
                 // An admitted declaration-invariant interface has no legal sibling view. Its
-                // exact construction is the complete CLR contract, while Kotlin star output
-                // dispatch can inspect an ordinary natural implementation at the operation.
+                // exact construction, including every complete mutable property pair, is the
+                // complete CLR contract, while Kotlin star output dispatch can inspect an
+                // ordinary natural implementation at the operation.
                 // Do not turn the optional capability fast path into a partial-source
                 // obligation when this C# type implements only such interfaces.
                 if (!interfaces.Any(bound =>
@@ -236,7 +237,7 @@ internal static class AuthoringContractDiscovery
     private enum NaturalFallbackKind
     {
         None,
-        CompleteProducerBundle,
+        CompleteNaturalBundle,
         ConsumerChildFragment,
     }
 
@@ -245,12 +246,12 @@ internal static class AuthoringContractDiscovery
         ImmutableArray<BoundKotlinInterface> interfaces)
     {
         NaturalFallbackKind kind = NaturalFallbackKindOrNone(bound.Contract);
-        if (kind == NaturalFallbackKind.CompleteProducerBundle)
+        if (kind == NaturalFallbackKind.CompleteNaturalBundle)
             return false;
         if (kind != NaturalFallbackKind.ConsumerChildFragment)
             return true;
         // A consumer-only contract is adapter-free only as the child-owned half of a
-        // concrete interface hierarchy whose inherited manifest owns the producer bundle.
+        // concrete interface hierarchy whose inherited manifest owns the complete natural bundle.
         // A standalone invariant consumer still needs its generated object adapter.
         return !bound.InterfaceType.AllInterfaces.Any(inheritedType =>
             interfaces.Any(candidate =>
@@ -258,7 +259,7 @@ internal static class AuthoringContractDiscovery
                     candidate.InterfaceType,
                     inheritedType) &&
                 NaturalFallbackKindOrNone(candidate.Contract) ==
-                    NaturalFallbackKind.CompleteProducerBundle));
+                    NaturalFallbackKind.CompleteNaturalBundle));
     }
 
     private static NaturalFallbackKind NaturalFallbackKindOrNone(
@@ -269,25 +270,31 @@ internal static class AuthoringContractDiscovery
                 contract.TypeParameters[0].Variance,
                 "INVARIANT",
                 StringComparison.Ordinal) ||
-            (contract.Members.Length != 1 && contract.Members.Length != 2) ||
             !contract.Intersections.IsEmpty)
             return NaturalFallbackKind.None;
-        bool isMethodBundle = contract.Members.All(member =>
+        bool isMethodBundle =
+            (contract.Members.Length == 1 || contract.Members.Length == 2) &&
+            contract.Members.All(member =>
                 member.Kind == KotlinMemberKind.Method) &&
             contract.Members.Select(member => member.SourceName)
                 .Distinct(StringComparer.Ordinal).Count() == contract.Members.Length;
-        bool isPropertyBundle = contract.Members.Length == 2 &&
-            contract.Members.Count(member =>
-                member.Kind == KotlinMemberKind.PropertyGetter) == 1 &&
-            contract.Members.Count(member =>
-                member.Kind == KotlinMemberKind.PropertySetter) == 1 &&
-            contract.Members.Select(member => member.SourceName)
-                .Distinct(StringComparer.Ordinal).Count() == 1;
+        IGrouping<string, KotlinMemberContract>[] propertyGroups = contract.Members
+            .GroupBy(member => member.SourceName, StringComparer.Ordinal)
+            .ToArray();
+        bool isPropertyBundle = contract.Members.Length >= 2 &&
+            contract.Members.Length % 2 == 0 &&
+            propertyGroups.All(group =>
+                group.Count() == 2 &&
+                group.Count(member =>
+                    member.Kind == KotlinMemberKind.PropertyGetter) == 1 &&
+                group.Count(member =>
+                    member.Kind == KotlinMemberKind.PropertySetter) == 1);
         if (!isMethodBundle && !isPropertyBundle)
             return NaturalFallbackKind.None;
         int producerCount = 0;
         int consumerCount = 0;
-        string? naturalPropertyName = null;
+        var naturalPropertyNames = new Dictionary<string, string>(
+            StringComparer.Ordinal);
         foreach (KotlinMemberContract member in contract.Members)
         {
             if (member.DefaultKind != KotlinDefaultKind.Abstract ||
@@ -308,12 +315,15 @@ internal static class AuthoringContractDiscovery
                 return NaturalFallbackKind.None;
             if (isPropertyBundle)
             {
-                naturalPropertyName ??= natural.PropertyName;
-                if (!string.Equals(
+                if (naturalPropertyNames.TryGetValue(
+                        member.SourceName,
+                        out string? naturalPropertyName) &&
+                    !string.Equals(
                         naturalPropertyName,
                         natural.PropertyName,
                         StringComparison.Ordinal))
                     return NaturalFallbackKind.None;
+                naturalPropertyNames[member.SourceName] = natural.PropertyName!;
             }
             if (semantic.ReturnType == "object" &&
                 semantic.ParameterTypes.IsEmpty &&
@@ -339,10 +349,15 @@ internal static class AuthoringContractDiscovery
             }
             return NaturalFallbackKind.None;
         }
-        bool hasCompleteProducerBundle = producerCount == 1 &&
-            consumerCount == contract.Members.Length - 1;
-        if (hasCompleteProducerBundle)
-            return NaturalFallbackKind.CompleteProducerBundle;
+        bool hasCompleteNaturalBundle = isMethodBundle
+            ? producerCount == 1 && consumerCount == contract.Members.Length - 1
+            : producerCount == propertyGroups.Length &&
+                consumerCount == propertyGroups.Length &&
+                naturalPropertyNames.Count == propertyGroups.Length &&
+                naturalPropertyNames.Values
+                    .Distinct(StringComparer.Ordinal).Count() == propertyGroups.Length;
+        if (hasCompleteNaturalBundle)
+            return NaturalFallbackKind.CompleteNaturalBundle;
         bool hasConsumerChildFragment = contract.Members.Length == 1 &&
             producerCount == 0 && consumerCount == 1;
         return hasConsumerChildFragment

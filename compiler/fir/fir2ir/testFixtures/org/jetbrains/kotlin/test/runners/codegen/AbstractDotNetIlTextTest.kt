@@ -4443,6 +4443,50 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedNaturalReturnType = "void",
                     expectedNaturalParameterTypes = listOf("!0"),
                 )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateDualInvariantPropertyCell`1",
+                    expectedMemberName = "primaryPropertyCellValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                    expectedNaturalPropertyName = "primaryPropertyCellValue",
+                    expectedContractMemberCount = 4,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateDualInvariantPropertyCell`1",
+                    expectedMemberName = "primaryPropertyCellValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_SETTER,
+                    expectedNaturalPropertyName = "primaryPropertyCellValue",
+                    expectedContractMemberCount = 4,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateDualInvariantPropertyCell`1",
+                    expectedMemberName = "secondaryPropertyCellValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                    expectedNaturalPropertyName = "secondaryPropertyCellValue",
+                    expectedContractMemberCount = 4,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateDualInvariantPropertyCell`1",
+                    expectedMemberName = "secondaryPropertyCellValue",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_SETTER,
+                    expectedNaturalPropertyName = "secondaryPropertyCellValue",
+                    expectedContractMemberCount = 4,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                    expectedSemanticReturnType = "void",
+                    expectedSemanticParameterTypes = listOf("object"),
+                    expectedNaturalReturnType = "void",
+                    expectedNaturalParameterTypes = listOf("!0"),
+                )
             }
             producer.name.equals("middle.dll", ignoreCase = true) -> {
                 validateReifiedGenericInterfaceCSharpManifest(
@@ -4773,6 +4817,26 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     "csharp-separate-object-property-cell";
             }
 
+            public sealed class RehearsalSeparateCSharpDualInvariantPropertyCell :
+                RehearsalSeparateDualInvariantPropertyCell<string>
+            {
+                public string primaryPropertyCellValue { get; set; } =
+                    "csharp-separate-dual-primary";
+
+                public string secondaryPropertyCellValue { get; set; } =
+                    "csharp-separate-dual-secondary";
+            }
+
+            public sealed class RehearsalSeparateCSharpDualInvariantObjectPropertyCell :
+                RehearsalSeparateDualInvariantPropertyCell<object>
+            {
+                public object primaryPropertyCellValue { get; set; } =
+                    "csharp-separate-dual-object-primary";
+
+                public object secondaryPropertyCellValue { get; set; } =
+                    "csharp-separate-dual-object-secondary";
+            }
+
             public sealed class RehearsalSeparateCSharpInvariantPropertyCellChild :
                 RehearsalSeparateInvariantPropertyCellChild<string>
             {
@@ -5025,6 +5089,60 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "csharp-separate-broad-projected-property-cell"))
                         throw new InvalidOperationException(
                             "separate projected setter rejected a natural object property cell");
+                    RehearsalSeparateCSharpDualInvariantPropertyCell
+                        dualInvariantPropertyCell =
+                            new RehearsalSeparateCSharpDualInvariantPropertyCell();
+                    dualInvariantPropertyCell.primaryPropertyCellValue =
+                        "csharp-separate-dual-exact-primary";
+                    dualInvariantPropertyCell.secondaryPropertyCellValue =
+                        "csharp-separate-dual-exact-secondary";
+                    if (!object.Equals(
+                            libKt.rehearsalSeparateProjectedDualInvariantPropertyCellPrimaryRead(
+                                dualInvariantPropertyCell),
+                            "csharp-separate-dual-exact-primary") ||
+                        !object.Equals(
+                            libKt.rehearsalSeparateProjectedDualInvariantPropertyCellSecondaryRead(
+                                dualInvariantPropertyCell),
+                            "csharp-separate-dual-exact-secondary") ||
+                        !object.Equals(
+                            libKt.rehearsalSeparateStarDualInvariantPropertyCellPrimaryRead(
+                                dualInvariantPropertyCell),
+                            "csharp-separate-dual-exact-primary") ||
+                        !object.Equals(
+                            libKt.rehearsalSeparateStarDualInvariantPropertyCellSecondaryRead(
+                                dualInvariantPropertyCell),
+                            "csharp-separate-dual-exact-secondary"))
+                        throw new InvalidOperationException(
+                            "separate projected reads bypassed natural C# dual properties");
+                    libKt.rehearsalSeparateProjectedDualInvariantPropertyCellWrite(
+                        dualInvariantPropertyCell,
+                        "csharp-separate-dual-projected-primary",
+                        "csharp-separate-dual-projected-secondary");
+                    if (dualInvariantPropertyCell.primaryPropertyCellValue !=
+                            "csharp-separate-dual-projected-primary" ||
+                        dualInvariantPropertyCell.secondaryPropertyCellValue !=
+                            "csharp-separate-dual-projected-secondary" ||
+                        !object.ReferenceEquals(
+                            libKt.rehearsalSeparateOpenDualInvariantPropertyCellIdentity(
+                                dualInvariantPropertyCell),
+                            dualInvariantPropertyCell))
+                        throw new InvalidOperationException(
+                            "separate projected writes bypassed natural C# dual properties");
+                    RehearsalSeparateCSharpDualInvariantObjectPropertyCell
+                        dualInvariantObjectPropertyCell =
+                            new RehearsalSeparateCSharpDualInvariantObjectPropertyCell();
+                    libKt.rehearsalSeparateProjectedDualInvariantPropertyCellWrite(
+                        dualInvariantObjectPropertyCell,
+                        "csharp-separate-dual-broad-primary",
+                        "csharp-separate-dual-broad-secondary");
+                    if (!object.Equals(
+                            dualInvariantObjectPropertyCell.primaryPropertyCellValue,
+                            "csharp-separate-dual-broad-primary") ||
+                        !object.Equals(
+                            dualInvariantObjectPropertyCell.secondaryPropertyCellValue,
+                            "csharp-separate-dual-broad-secondary"))
+                        throw new InvalidOperationException(
+                            "separate projected writes rejected natural object dual properties");
                     RehearsalSeparateNestedBox<object> projectedInvariantPropertyCellBox =
                         libKt.rehearsalSeparateProjectedInvariantPropertyCellBox(
                             invariantPropertyCell);
@@ -5482,6 +5600,91 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 separateInvariantPropertyCellValueParameter)
                         throw new InvalidOperationException(
                             "the invariant property implementation lost its physical !T field");
+                    Type separateDualInvariantPropertyCell =
+                        typeof(RehearsalSeparateDualInvariantPropertyCell<>);
+                    Type separateDualInvariantPropertyCellParameter =
+                        separateDualInvariantPropertyCell.GetGenericArguments()[0];
+                    System.Reflection.PropertyInfo[] separateDualInvariantProperties =
+                        separateDualInvariantPropertyCell.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    bool hasSeparateDualPrimaryProperty = false;
+                    bool hasSeparateDualSecondaryProperty = false;
+                    foreach (System.Reflection.PropertyInfo property in
+                             separateDualInvariantProperties)
+                    {
+                        if (property.PropertyType !=
+                                separateDualInvariantPropertyCellParameter ||
+                            !property.CanRead || !property.CanWrite ||
+                            property.GetMethod.ReturnType !=
+                                separateDualInvariantPropertyCellParameter ||
+                            property.SetMethod.GetParameters()[0].ParameterType !=
+                                separateDualInvariantPropertyCellParameter)
+                            throw new InvalidOperationException(
+                                "a dual invariant property lost its physical !T contract");
+                        if (property.Name == "primaryPropertyCellValue")
+                            hasSeparateDualPrimaryProperty = true;
+                        else if (property.Name == "secondaryPropertyCellValue")
+                            hasSeparateDualSecondaryProperty = true;
+                        else
+                            throw new InvalidOperationException(
+                                "the dual invariant owner exposed an unexpected property");
+                    }
+                    if ((separateDualInvariantPropertyCellParameter
+                                .GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        separateDualInvariantProperties.Length != 2 ||
+                        !hasSeparateDualPrimaryProperty ||
+                        !hasSeparateDualSecondaryProperty)
+                        throw new InvalidOperationException(
+                            "the dual invariant owner lost its two CLR Property<T> rows");
+                    Type separateDualInvariantPropertyCellValue =
+                        typeof(RehearsalSeparateDualInvariantPropertyCellValue<>);
+                    Type separateDualInvariantPropertyCellValueParameter =
+                        separateDualInvariantPropertyCellValue.GetGenericArguments()[0];
+                    System.Reflection.FieldInfo separateDualPrimaryStorage =
+                        separateDualInvariantPropertyCellValue.GetField(
+                            "primaryPropertyCellValue",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    System.Reflection.FieldInfo separateDualSecondaryStorage =
+                        separateDualInvariantPropertyCellValue.GetField(
+                            "secondaryPropertyCellValue",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    if (separateDualPrimaryStorage == null ||
+                        separateDualSecondaryStorage == null ||
+                        separateDualPrimaryStorage.FieldType !=
+                            separateDualInvariantPropertyCellValueParameter ||
+                        separateDualSecondaryStorage.FieldType !=
+                            separateDualInvariantPropertyCellValueParameter)
+                        throw new InvalidOperationException(
+                            "the dual property implementation lost its two physical !T fields");
+                    System.Reflection.MethodInfo separateDualPrimaryRead = typeof(libKt)
+                        .GetMethod(
+                            "rehearsalSeparateProjectedDualInvariantPropertyCellPrimaryRead");
+                    System.Reflection.MethodInfo separateDualSecondaryRead = typeof(libKt)
+                        .GetMethod(
+                            "rehearsalSeparateProjectedDualInvariantPropertyCellSecondaryRead");
+                    System.Reflection.MethodInfo separateDualWrite = typeof(libKt)
+                        .GetMethod("rehearsalSeparateProjectedDualInvariantPropertyCellWrite");
+                    if (separateDualPrimaryRead.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                        separateDualPrimaryRead.ReturnType != typeof(object) ||
+                        separateDualSecondaryRead.GetParameters()[0].ParameterType !=
+                            typeof(object) ||
+                        separateDualSecondaryRead.ReturnType != typeof(object) ||
+                        separateDualWrite.GetParameters().Length != 3 ||
+                        separateDualWrite.GetParameters()[0].ParameterType != typeof(object) ||
+                        separateDualWrite.GetParameters()[1].ParameterType != typeof(string) ||
+                        separateDualWrite.GetParameters()[2].ParameterType != typeof(string) ||
+                        separateDualWrite.ReturnType != typeof(void))
+                        throw new InvalidOperationException(
+                            "the dual property projections lacked operation-local boundaries");
                     System.Reflection.MethodInfo separateInvariantPropertyCellIdentity =
                         typeof(libKt)
                             .GetMethod("rehearsalSeparateOpenInvariantPropertyCellBoxIdentity");
