@@ -1574,8 +1574,21 @@ compares their recursive types as an exact multiset, so Framework's portable
 bridge and .NET 10 DIM both reach the same ordinary C# override. See
 [`../archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md`](../archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md).
 
+The method-generic producer gate now also admits a nonempty set of direct
+public non-generic nominal bounds without requiring the constructed self-bound:
+one or more interfaces and at most one non-final class. The first proof uses
+`R : Marker, R : Base`; natural and semantic slots plus the portable helper all
+retain the exact `Base` and `Marker` constraints, while ordinary Kotlin and C#
+implementations inherit or override the one natural constrained method. This is
+structural rather than library-specific: erased, nullable, generic, final, and
+non-public classifiers remain outside the proof. Owner-relative `R : T` remains
+closed because the unconstrained semantic `R` cannot call ordinary C# source
+with `where R : T` without reflection, IL weaving, or substituting a different
+method argument type. See
+[`../archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md`](../archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md).
+
 With that typed contract consolidated, continue with multiple-property
-families, special/class/owner-relative/nullable, nominal-only, and other
+families, special/owner-relative/nullable and other
 constructed method constraints, read-only property inheritance, diamonds,
 reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,
