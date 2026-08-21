@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassImplementationSourceO
 import org.jetbrains.kotlin.backend.dotnet.isDotNetCharSequenceType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
+import org.jetbrains.kotlin.backend.dotnet.isDotNetNumberType
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -72,6 +73,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.types.isPrimitiveType
@@ -107,8 +109,8 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
  * returning its owner parameter directly, one covariant root `<R>(R) -> T` whose member is
  * abstract or has a default implementation and whose method parameter has either the universal
- * bound, one direct self-bound on an admitted consumer root, or that self-bound together with
- * direct non-generic interface constraints, a public contravariant consumer
+ * bound, direct non-generic nominal bounds, one direct self-bound on an admitted consumer root,
+ * or that self-bound together with nominal bounds, a public contravariant consumer
  * with one abstract
  * owner-parameter input and `Unit` result, or an invariant cell containing exactly one of each.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
@@ -1558,11 +1560,11 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
                     isAdmittedConstraintOwner,
                 )
             }
-            selfBounds == 1 && methodBounds.all { bound ->
+            methodBounds.isNotEmpty() && selfBounds <= 1 && methodBounds.all { bound ->
                 bound.isDirectSelfInterfaceConstraint(
                     methodParameter,
                     isAdmittedConstraintOwner,
-                ) || bound.isDirectNonGenericInterfaceConstraint()
+                ) || bound.isDirectNonGenericNominalConstraint()
             }
         }
     }
@@ -1589,15 +1591,18 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
             (resultType.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
 }
 
-private fun IrType.isDirectNonGenericInterfaceConstraint(): Boolean {
+private fun IrType.isDirectNonGenericNominalConstraint(): Boolean {
     val simpleType = this as? IrSimpleType ?: return false
     if (simpleType.isMarkedNullable() || simpleType.arguments.isNotEmpty() ||
-        simpleType.isDotNetCharSequenceType()
+        simpleType.isAny() || simpleType.isDotNetCharSequenceType() ||
+        simpleType.isDotNetNumberType()
     ) {
         return false
     }
     val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
-    return owner.isInterface && owner.typeParameters.isEmpty() &&
+    val hasStableNominalKind = owner.isInterface ||
+            (owner.kind == ClassKind.CLASS && owner.modality != Modality.FINAL)
+    return hasStableNominalKind && owner.typeParameters.isEmpty() &&
             owner.visibility == DescriptorVisibilities.PUBLIC
 }
 

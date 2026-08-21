@@ -4358,6 +4358,24 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
                     expectedDeclaredOwner =
+                        "RehearsalSeparateNominalConstrainedDefaultProducer`1",
+                    expectedMemberName = "produceNominalConstrainedDefault",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable nominal-constraint default probe")
+                    },
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
                         "RehearsalSeparateAbstractMethodGenericProducer`1",
                     expectedMemberName = "produceAbstractGeneric",
                     expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
@@ -4615,6 +4633,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed partial class RehearsalSeparateCSharpNominalConstrainedDefaultProducer :
+                RehearsalSeparateNominalConstrainedDefaultProducer<int>
+            {
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpNominalConstrainedDefaultOverrideProducer :
+                    RehearsalSeparateNominalConstrainedDefaultProducer<int>
+            {
+                public int produceNominalConstrainedDefault<R>(R value)
+                    where R : RehearsalSeparateMethodConstraintBase,
+                              RehearsalSeparateMethodConstraintMarker
+                {
+                    value.mark();
+                    value.baseMark();
+                    return 10000;
+                }
+            }
+
             public sealed partial class RehearsalSeparateCSharpAbstractMethodGenericProducer :
                 RehearsalSeparateAbstractMethodGenericProducer<int>
             {
@@ -4625,11 +4662,13 @@ private fun validateGenericOwnerForeignCSharpOverride(
             }
 
             public sealed partial class RehearsalSeparateCSharpMethodConstraintValue :
+                RehearsalSeparateMethodConstraintBase,
                 RehearsalSeparateConsumer<RehearsalSeparateCSharpMethodConstraintValue>,
                 RehearsalSeparateMethodConstraintMarker
             {
                 public int Count;
                 public int MarkCount;
+                public int BaseMarkCount;
 
                 public void consume(RehearsalSeparateCSharpMethodConstraintValue value)
                 {
@@ -4643,6 +4682,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 {
                     MarkCount++;
                     return MarkCount;
+                }
+
+                public override int baseMark()
+                {
+                    BaseMarkCount++;
+                    return BaseMarkCount;
                 }
             }
 
@@ -6384,6 +6429,175 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         !hasMultiHelperConsumerBound || !hasMultiHelperMarkerBound)
                         throw new InvalidOperationException(
                             "multi-constrained helper lost an unordered bound");
+                    RehearsalSeparateCSharpMethodConstraintValue
+                        nominalConstrainedDefaultValue =
+                            new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateCSharpNominalConstrainedDefaultProducer
+                        nominalConstrainedDefaultProducer =
+                            new RehearsalSeparateCSharpNominalConstrainedDefaultProducer();
+                    RehearsalSeparateNominalConstrainedDefaultProducer<int>
+                        nominalConstrainedDefaultProducerView =
+                            nominalConstrainedDefaultProducer;
+                    RehearsalSeparateNominalConstrainedDefaultReader
+                        nominalConstrainedDefaultReader =
+                            new RehearsalSeparateNominalConstrainedDefaultReader();
+                    if (nominalConstrainedDefaultProducerView
+                            .produceNominalConstrainedDefault(
+                                nominalConstrainedDefaultValue) != 9000 ||
+                        !object.Equals(
+                            nominalConstrainedDefaultReader.read(
+                                nominalConstrainedDefaultProducer,
+                                nominalConstrainedDefaultValue),
+                            9000) ||
+                        !nominalConstrainedDefaultReader.same(
+                            nominalConstrainedDefaultProducer,
+                            nominalConstrainedDefaultProducer) ||
+                        nominalConstrainedDefaultValue.MarkCount != 2 ||
+                        nominalConstrainedDefaultValue.BaseMarkCount != 2 ||
+                        libKt.rehearsalSeparateNominalConstrainedDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "nominal-constrained default lost its body or identity");
+                    RehearsalSeparateCSharpMethodConstraintValue
+                        nominalConstrainedDefaultOverrideValue =
+                            new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateCSharpNominalConstrainedDefaultOverrideProducer
+                        nominalConstrainedDefaultOverrideProducer =
+                            new RehearsalSeparateCSharpNominalConstrainedDefaultOverrideProducer();
+                    if (nominalConstrainedDefaultOverrideProducer
+                            .produceNominalConstrainedDefault(
+                                nominalConstrainedDefaultOverrideValue) != 10000 ||
+                        !object.Equals(
+                            nominalConstrainedDefaultReader.read(
+                                nominalConstrainedDefaultOverrideProducer,
+                                nominalConstrainedDefaultOverrideValue),
+                            10000) ||
+                        !nominalConstrainedDefaultReader.same(
+                            nominalConstrainedDefaultOverrideProducer,
+                            nominalConstrainedDefaultOverrideProducer) ||
+                        nominalConstrainedDefaultOverrideValue.MarkCount != 2 ||
+                        nominalConstrainedDefaultOverrideValue.BaseMarkCount != 2 ||
+                        libKt.rehearsalSeparateNominalConstrainedDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "nominal-constrained default bypassed the C# override");
+                    int nominalConstrainedDefaultSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpNominalConstrainedDefaultProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalNominalConstraintOwner = candidate ==
+                            typeof(RehearsalSeparateNominalConstrainedDefaultProducer<int>);
+                        System.Reflection.MethodInfo[] nominalConstrainedMethods =
+                            candidate.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                        if (nominalConstrainedMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "nominal-constrained default owner did not expose one slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo nominalConstrainedMethod =
+                            nominalConstrainedMethods[0];
+                        Type[] nominalConstrainedParameters =
+                            nominalConstrainedMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] nominalConstrainedValues =
+                            nominalConstrainedMethod.GetParameters();
+                        if (nominalConstrainedParameters.Length != 1 ||
+                            nominalConstrainedValues.Length != 1 ||
+                            nominalConstrainedValues[0].ParameterType !=
+                                nominalConstrainedParameters[0] ||
+                            nominalConstrainedMethod.ReturnType !=
+                                (isNaturalNominalConstraintOwner ? typeof(int) : typeof(object)))
+                            throw new InvalidOperationException(
+                                "nominal-constrained default slot lost its generic signature");
+                        Type[] nominalConstrainedBounds =
+                            nominalConstrainedParameters[0].GetGenericParameterConstraints();
+                        bool hasNominalBaseBound = false;
+                        bool hasNominalMarkerBound = false;
+                        foreach (Type bound in nominalConstrainedBounds)
+                        {
+                            if (bound == typeof(RehearsalSeparateMethodConstraintBase))
+                            {
+                                hasNominalBaseBound = true;
+                                continue;
+                            }
+                            if (bound == typeof(RehearsalSeparateMethodConstraintMarker))
+                            {
+                                hasNominalMarkerBound = true;
+                                continue;
+                            }
+                            throw new InvalidOperationException(
+                                "nominal-constrained slot exposed an unexpected bound: " +
+                                bound.ToString());
+                        }
+                        if (nominalConstrainedBounds.Length != 2 ||
+                            !hasNominalBaseBound || !hasNominalMarkerBound)
+                            throw new InvalidOperationException(
+                                "nominal-constrained slot lost a class/interface bound");
+                        nominalConstrainedDefaultSlotCount++;
+                    }
+                    if (nominalConstrainedDefaultSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "nominal-constrained family did not expose two exact slots");
+                    System.Reflection.MethodInfo nominalConstrainedDefaultHelper = null;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateNominalConstrainedDefaultProducer<>)
+                             .Assembly.GetTypes())
+                    {
+                        foreach (System.Reflection.MethodInfo candidateMethod in
+                             candidate.GetMethods(
+                                 System.Reflection.BindingFlags.Public |
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Static |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                        {
+                            if (candidateMethod.Name != "produceNominalConstrainedDefault")
+                                continue;
+                            if (nominalConstrainedDefaultHelper != null)
+                                throw new InvalidOperationException(
+                                    "nominal-constrained default exposed duplicate helpers");
+                            nominalConstrainedDefaultHelper = candidateMethod;
+                        }
+                    }
+                    if (nominalConstrainedDefaultHelper == null)
+                        throw new InvalidOperationException(
+                            "nominal-constrained default lost its portable helper");
+                    Type[] nominalConstrainedHelperParameters =
+                        nominalConstrainedDefaultHelper.GetGenericArguments();
+                    System.Reflection.ParameterInfo[] nominalConstrainedHelperValues =
+                        nominalConstrainedDefaultHelper.GetParameters();
+                    if (nominalConstrainedHelperParameters.Length != 2 ||
+                        nominalConstrainedHelperValues.Length != 2 ||
+                        nominalConstrainedDefaultHelper.ReturnType !=
+                            nominalConstrainedHelperParameters[0] ||
+                        nominalConstrainedHelperValues[0].ParameterType != typeof(object) ||
+                        nominalConstrainedHelperValues[1].ParameterType !=
+                            nominalConstrainedHelperParameters[1])
+                        throw new InvalidOperationException(
+                            "nominal-constrained helper lost owner/method parameter order");
+                    Type[] nominalConstrainedHelperBounds =
+                        nominalConstrainedHelperParameters[1].GetGenericParameterConstraints();
+                    bool hasNominalHelperBaseBound = false;
+                    bool hasNominalHelperMarkerBound = false;
+                    foreach (Type bound in nominalConstrainedHelperBounds)
+                    {
+                        if (bound == typeof(RehearsalSeparateMethodConstraintBase))
+                        {
+                            hasNominalHelperBaseBound = true;
+                            continue;
+                        }
+                        if (bound == typeof(RehearsalSeparateMethodConstraintMarker))
+                        {
+                            hasNominalHelperMarkerBound = true;
+                            continue;
+                        }
+                        throw new InvalidOperationException(
+                            "nominal-constrained helper exposed an unexpected bound: " +
+                            bound.ToString());
+                    }
+                    if (nominalConstrainedHelperBounds.Length != 2 ||
+                        !hasNominalHelperBaseBound || !hasNominalHelperMarkerBound)
+                        throw new InvalidOperationException(
+                            "nominal-constrained helper lost a class/interface bound");
                     RehearsalSeparateCSharpAbstractMethodGenericProducer
                         abstractMethodGenericProducer =
                             new RehearsalSeparateCSharpAbstractMethodGenericProducer();
@@ -7788,6 +8002,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpMultiConstrainedDefaultOverrideProducer" in generated) {
             "The C# authoring tool did not generate the multi-constrained default override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpNominalConstrainedDefaultProducer" in generated) {
+            "The C# authoring tool did not generate the nominal-constrained default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpNominalConstrainedDefaultOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the nominal-constrained override bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpAbstractMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the abstract method-generic bridge:\n$generated"
