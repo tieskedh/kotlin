@@ -116,15 +116,15 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * owner-parameter properties.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
- * semantic boundary. Covariant producer subinterfaces and exact invariant-property children
- * inherit their family at a fixpoint, including across a library boundary. An invariant child
- * may add either one matching property or one direct consumer to an exact property root. One
- * further direct-consumer edge is admitted above that exact consumer child, including when both
- * edges come from separate producer assemblies. External admission requires their versioned
- * physical owner and member-family records. A child owns only its new semantic slots; inherited
- * slots remain inherited. An intersection without new members receives one memberless capability
- * alias over its independent roots. Other families retain the accepted erased production ABI
- * until their complete semantic surface has its own proof.
+ * semantic boundary. Covariant producer and single read-only-property subinterfaces plus exact
+ * invariant-property children inherit their family at a fixpoint, including across a library
+ * boundary. An invariant child may add either one matching property or one direct consumer to an
+ * exact property root. One further direct-consumer edge is admitted above that exact consumer
+ * child, including when both edges come from separate producer assemblies. External admission
+ * requires their versioned physical owner and member-family records. A child owns only its new
+ * semantic slots; inherited slots remain inherited. An intersection without new members receives
+ * one memberless capability alias over its independent roots. Other families retain the accepted
+ * erased production ABI until their complete semantic surface has its own proof.
  */
 internal class DotNetReifiedGenericInterfaceLowering(
     private val context: DotNetBackendContext,
@@ -1226,10 +1226,21 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (!hasFirstReifiedInterfaceOwnerShape()) return null
         val parameter = typeParameters.single()
         val members = when (parameter.variance) {
-            Variance.OUT_VARIANCE -> declaredInterfaceMembers().takeIf { declared ->
-                declaredInterfaceProperties().isEmpty() &&
+            Variance.OUT_VARIANCE -> {
+                val properties = declaredInterfaceProperties()
+                when {
+                    properties.isEmpty() -> declaredInterfaceMembers().takeIf { declared ->
                         declared.size <= 1 &&
-                        declared.all { member -> member.isDirectProducerMember(parameter) }
+                                declared.all { member -> member.isDirectProducerMember(parameter) }
+                    }
+                    properties.size == 1 -> directCovariantPropertyMembersOrNull(parameter)
+                        ?.takeIf { declared ->
+                            declared.none { member ->
+                                member in context.interfaceDefaultImplementations
+                            }
+                        }
+                    else -> null
+                }
             }
             Variance.INVARIANT -> directInvariantPropertyChildMembersOrNull(parameter)
             Variance.IN_VARIANCE -> null

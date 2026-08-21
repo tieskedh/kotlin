@@ -408,6 +408,18 @@ properties as normal auto-properties without generated capability source.
 Incomplete groups, mixed methods/properties, defaults, overrides, intersections,
 or wrong-shape policies still require generated adaptation or remain closed.
 
+An admitted covariant child may add one abstract read-only `T` property above
+an exact `Parent<T>` construction. The child natural TypeDef owns only its new
+CLR Property row and typed getter; its semantic capability owns only the new
+object-result getter. Both parent slots remain inherited from, and physically
+owned by, the producer assembly. An ordinary partial C# class implements the
+parent and child natural properties. Generated source supplies the two
+compiler-ABI adapters, so C# authors never implement or name the semantic
+capabilities. This gate requires an exact owner-parameter substitution and a
+single abstract property on each admitted child edge. Defaulted,
+multi-property, changed-argument, mixed-member, and deeper/multiple read-only
+inheritance remain separate decisions.
+
 A rehearsal-admitted owner- and method-generic member keeps method parameters
 generic on both views. For the bounded `<R>(R): T` family, the natural slot is
 `<R>(R): T`, the non-generic semantic capability is `<R>(R): object`, and the

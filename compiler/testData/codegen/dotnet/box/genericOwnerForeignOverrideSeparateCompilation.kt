@@ -77,6 +77,20 @@ public class RehearsalSeparateDefaultPropertyReader {
     ): Boolean = producer === expected
 }
 
+public interface RehearsalSeparateReadOnlyPropertyParent<out T> {
+    public val parentReadOnlyProperty: T
+}
+
+public class RehearsalSeparateReadOnlyPropertyParentReader {
+    public fun read(producer: RehearsalSeparateReadOnlyPropertyParent<Any?>): Any? =
+        producer.parentReadOnlyProperty
+
+    public fun same(
+        producer: RehearsalSeparateReadOnlyPropertyParent<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 private var rehearsalSeparateDefaultMethodGenericReadCount: Int = 0
 
 public interface RehearsalSeparateDefaultMethodGenericProducer<out T> {
@@ -700,6 +714,21 @@ public class RehearsalSeparateMemberChildProducerReader {
         producer.produceMemberChild()
 }
 
+public interface RehearsalSeparateReadOnlyPropertyChild<out T> :
+    RehearsalSeparateReadOnlyPropertyParent<T> {
+    public val childReadOnlyProperty: T
+}
+
+public class RehearsalSeparateReadOnlyPropertyChildReader {
+    public fun read(producer: RehearsalSeparateReadOnlyPropertyChild<Any?>): Any? =
+        producer.childReadOnlyProperty
+
+    public fun same(
+        producer: RehearsalSeparateReadOnlyPropertyChild<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public class RehearsalSeparateProducerValue<T>(private val value: T) :
     RehearsalSeparateProducer<T> {
     public override fun produce(): T = value
@@ -798,6 +827,11 @@ public class RehearsalSeparateMemberChildProducerValue<T>(private val value: T) 
 
     public override fun produceMemberChild(): T = value
 }
+
+public class RehearsalSeparateReadOnlyPropertyChildValue<T>(
+    override val parentReadOnlyProperty: T,
+    override val childReadOnlyProperty: T,
+) : RehearsalSeparateReadOnlyPropertyChild<T>
 
 // MODULE: leaf(middle)
 // FILE: leaf.kt
@@ -910,6 +944,34 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val readOnlyPropertyChild: RehearsalSeparateReadOnlyPropertyChild<String> =
+        RehearsalSeparateReadOnlyPropertyChildValue(
+            "separate-read-only-parent",
+            "separate-read-only-child",
+        )
+    val broadReadOnlyPropertyParent:
+            RehearsalSeparateReadOnlyPropertyParent<Any?> = readOnlyPropertyChild
+    val broadReadOnlyPropertyChild:
+            RehearsalSeparateReadOnlyPropertyChild<Any?> = readOnlyPropertyChild
+    if (readOnlyPropertyChild.parentReadOnlyProperty != "separate-read-only-parent" ||
+        readOnlyPropertyChild.childReadOnlyProperty != "separate-read-only-child" ||
+        RehearsalSeparateReadOnlyPropertyParentReader().read(
+            broadReadOnlyPropertyParent,
+        ) != "separate-read-only-parent" ||
+        RehearsalSeparateReadOnlyPropertyChildReader().read(
+            broadReadOnlyPropertyChild,
+        ) != "separate-read-only-child" ||
+        !RehearsalSeparateReadOnlyPropertyParentReader().same(
+            broadReadOnlyPropertyParent,
+            readOnlyPropertyChild,
+        ) ||
+        !RehearsalSeparateReadOnlyPropertyChildReader().same(
+            broadReadOnlyPropertyChild,
+            readOnlyPropertyChild,
+        )
+    ) {
+        return "fail: separate read-only property inheritance"
+    }
     val lateRoutedValue = RehearsalSeparateLateRoutedValue(broadProducer)
     if (lateRoutedValue.read() != 31) {
         return "fail: separate late-routed value-class producer"

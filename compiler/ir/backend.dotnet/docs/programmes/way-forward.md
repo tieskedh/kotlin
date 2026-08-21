@@ -1486,12 +1486,14 @@ This does not admit arbitrary multi-member interfaces. The structural gates
 are exactly one producer, one producer plus one consumer method, or one or more
 complete mutable properties with that same producer/consumer shape, plus the
 exact one-level single-property child above, one direct consumer child above
-the same single-property root, and one further exact consumer edge. Read-only
-and open-nullable properties, broader mixed method/property bundles, defaults,
-overloads, constraints, intersections, changed arguments, multiple parents,
-and deeper inheritance remain excluded. The authoring tool applies the same
-exact manifest-shape test before deciding that a non-partial C# implementation
-needs no generated capability.
+the same single-property root, one further exact consumer edge, and one exact
+covariant child adding one abstract read-only `T` property above an exact
+single-property covariant parent. Open-nullable properties, defaulted or
+multiple read-only properties, broader mixed method/property bundles,
+defaults, overloads, constraints, intersections, changed arguments, multiple
+parents, and deeper inheritance remain excluded. The authoring tool applies
+the same exact manifest-shape test before deciding that a non-partial C#
+implementation needs no generated capability.
 
 That gate must preserve the now-explicit operation boundary. Star/classifier
 tests such as `is Producer<*>` ask only whether the logical classifier is
@@ -1605,10 +1607,19 @@ grouping on Framework 4.8 and .NET 10. The natural-fallback analyzer groups by
 source property name rather than assuming a two-member contract. See
 [`../archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md`](../archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md).
 
+A covariant read-only property root now also composes one exact inheritance
+edge. `Child<out T> : Parent<T>` owns one new natural CLR Property/getter and
+one child semantic getter while inheriting both parent slots from the producer
+assembly. A Kotlin implementation retains two independent `!T` fields. An
+ordinary partial C# class implements only the two natural properties; generated
+compiler-ABI adapters serve both Kotlin-widened views without changing object
+identity. See
+[`../archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](../archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
+
 With that typed contract consolidated, continue with special/owner-relative/
 nullable and other
-constructed method constraints, read-only property inheritance, diamonds,
-reabstraction, changed-
+constructed method constraints, defaulted and multiple read-only property
+inheritance, diamonds, reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,
 broader and mixed method/property families, and mixed-variance gates,
 including derivability rules for ordinary foreign implementations. Then close

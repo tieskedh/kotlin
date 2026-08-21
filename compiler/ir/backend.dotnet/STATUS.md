@@ -526,9 +526,10 @@ verification, and work state.
   method/Property metadata confusion as `KDNCS006`; no manifest or runtime ABI
   change was needed. The enabled candidate and erased epoch-off inverse each
   pass four PSI/LightTree, Framework 4.8/.NET 10 lanes with zero failures,
-  errors, or skips. Read-only property inheritance, multiple/mixed properties,
-  method-generic defaults, diamonds, reabstraction, changed arguments, and
-  deeper/multiple inheritance remain separate gates. Evidence is archived in
+  errors, or skips. The abstract read-only property-inheritance extension is
+  recorded below; default-property inheritance, multiple/mixed properties,
+  diamonds, reabstraction, changed arguments, and deeper/multiple inheritance
+  remain separate gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-default-property-2026-08-20.md`](docs/archive/reified-generic-interface-default-property-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
@@ -702,6 +703,28 @@ verification, and work state.
   Defaulted, inherited, nullable, covariant, mixed, and constrained multiple-
   property roots remain separate gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md`](docs/archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
+- One covariant read-only property inheritance edge is now closed across
+  producer assemblies. `Child<out T> : Parent<T>` adds one public abstract
+  `val T` property with an exact owner-parameter substitution. The child natural
+  TypeDef owns one typed CLR Property/getter and inherits the parent Property
+  from `lib.dll`; its non-generic semantic capability owns only the child getter
+  and inherits the parent capability. No Property, accessor, or semantic slot is
+  copied into the consuming assembly. A Kotlin implementation retains two
+  independent physical `!T` backing fields. Exact child calls plus widened
+  parent and child calls select those fields and preserve receiver identity.
+  An ordinary partial C# `Child<string>` implements only the two natural read-
+  only properties; generated compiler-ABI adapters make both Kotlin-widened
+  views reach the same C# object. Reflection verifies covariance, the exact
+  `Child<T> : Parent<T>` edge, one child-owned and one parent-owned read-only
+  Property row, assembly ownership, and both `!T` fields. All four candidate and
+  four erased epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass.
+  Defaulted, multi-property, changed-argument, mixed-member, and deeper/multiple
+  read-only inheritance remain closed. Evidence is archived in
+  [`docs/archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](docs/archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and

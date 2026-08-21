@@ -4303,6 +4303,14 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner = "RehearsalSeparateReadOnlyPropertyParent`1",
+                    expectedMemberName = "parentReadOnlyProperty",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                    expectedNaturalPropertyName = "parentReadOnlyProperty",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner =
                         "RehearsalSeparateDefaultMethodGenericProducer`1",
                     expectedMemberName = "produceDefaultGeneric",
@@ -4498,6 +4506,14 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     producer,
                     expectedDeclaredOwner = "RehearsalSeparateMemberChildProducer`1",
                     expectedMemberName = "produceMemberChild",
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateReadOnlyPropertyChild`1",
+                    expectedMemberName = "childReadOnlyProperty",
+                    expectedMemberKind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                    expectedNaturalPropertyName = "childReadOnlyProperty",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
@@ -4947,6 +4963,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 {
                     return "csharp-member-child-owned-interface";
                 }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpReadOnlyPropertyChild :
+                RehearsalSeparateReadOnlyPropertyChild<string>
+            {
+                public string parentReadOnlyProperty { get; } =
+                    "csharp-read-only-parent";
+
+                public string childReadOnlyProperty { get; } =
+                    "csharp-read-only-child";
             }
 
             public sealed partial class RehearsalSeparateCSharpLocalIntersectionProducer :
@@ -5724,6 +5750,70 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             typeof(RehearsalSeparateNestedBox<object>))
                         throw new InvalidOperationException(
                             "the separate projected invariant property nesting was not Box<object>");
+                    Type separateReadOnlyPropertyParent =
+                        typeof(RehearsalSeparateReadOnlyPropertyParent<>);
+                    Type separateReadOnlyPropertyChild =
+                        typeof(RehearsalSeparateReadOnlyPropertyChild<>);
+                    Type separateReadOnlyPropertyChildParameter =
+                        separateReadOnlyPropertyChild.GetGenericArguments()[0];
+                    Type[] separateReadOnlyPropertyChildParents =
+                        separateReadOnlyPropertyChild.GetInterfaces();
+                    System.Reflection.PropertyInfo[] separateReadOnlyChildProperties =
+                        separateReadOnlyPropertyChild.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    System.Reflection.PropertyInfo[] separateReadOnlyParentProperties =
+                        separateReadOnlyPropertyParent.GetProperties(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    if ((separateReadOnlyPropertyChildParameter.GenericParameterAttributes &
+                            System.Reflection.GenericParameterAttributes.VarianceMask) !=
+                            System.Reflection.GenericParameterAttributes.Covariant ||
+                        separateReadOnlyPropertyChildParents.Length != 1 ||
+                        separateReadOnlyPropertyChildParents[0].GetGenericTypeDefinition() !=
+                            separateReadOnlyPropertyParent ||
+                        separateReadOnlyPropertyChildParents[0].GetGenericArguments()[0] !=
+                            separateReadOnlyPropertyChildParameter ||
+                        separateReadOnlyChildProperties.Length != 1 ||
+                        separateReadOnlyChildProperties[0].Name != "childReadOnlyProperty" ||
+                        separateReadOnlyChildProperties[0].PropertyType !=
+                            separateReadOnlyPropertyChildParameter ||
+                        !separateReadOnlyChildProperties[0].CanRead ||
+                        separateReadOnlyChildProperties[0].CanWrite ||
+                        separateReadOnlyParentProperties.Length != 1 ||
+                        separateReadOnlyParentProperties[0].Name !=
+                            "parentReadOnlyProperty" ||
+                        separateReadOnlyParentProperties[0].CanWrite ||
+                        separateReadOnlyPropertyParent.Assembly != typeof(libKt).Assembly ||
+                        separateReadOnlyPropertyChild.Assembly != typeof(middleKt).Assembly)
+                        throw new InvalidOperationException(
+                            "read-only property inheritance lost its natural CLR shape");
+                    Type separateReadOnlyPropertyChildValue =
+                        typeof(RehearsalSeparateReadOnlyPropertyChildValue<>);
+                    Type separateReadOnlyPropertyChildValueParameter =
+                        separateReadOnlyPropertyChildValue.GetGenericArguments()[0];
+                    System.Reflection.FieldInfo separateReadOnlyParentStorage =
+                        separateReadOnlyPropertyChildValue.GetField(
+                            "parentReadOnlyProperty",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    System.Reflection.FieldInfo separateReadOnlyChildStorage =
+                        separateReadOnlyPropertyChildValue.GetField(
+                            "childReadOnlyProperty",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly);
+                    if (separateReadOnlyParentStorage == null ||
+                        separateReadOnlyChildStorage == null ||
+                        separateReadOnlyParentStorage.FieldType !=
+                            separateReadOnlyPropertyChildValueParameter ||
+                        separateReadOnlyChildStorage.FieldType !=
+                            separateReadOnlyPropertyChildValueParameter)
+                        throw new InvalidOperationException(
+                            "read-only property child lost its two physical !T fields");
                     Type separateInvariantPropertyCellChild =
                         typeof(RehearsalSeparateInvariantPropertyCellChild<>);
                     Type separateInvariantPropertyCellChildParameter =
@@ -6967,6 +7057,30 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed the generated member-child-owned " +
                             "bridge: " + broadMemberChildOwned);
+                    RehearsalSeparateCSharpReadOnlyPropertyChild readOnlyPropertyChild =
+                        new RehearsalSeparateCSharpReadOnlyPropertyChild();
+                    RehearsalSeparateReadOnlyPropertyParentReader readOnlyPropertyParentReader =
+                        new RehearsalSeparateReadOnlyPropertyParentReader();
+                    RehearsalSeparateReadOnlyPropertyChildReader readOnlyPropertyChildReader =
+                        new RehearsalSeparateReadOnlyPropertyChildReader();
+                    if (readOnlyPropertyChild.parentReadOnlyProperty !=
+                            "csharp-read-only-parent" ||
+                        readOnlyPropertyChild.childReadOnlyProperty !=
+                            "csharp-read-only-child" ||
+                        !object.Equals(
+                            readOnlyPropertyParentReader.read(readOnlyPropertyChild),
+                            "csharp-read-only-parent") ||
+                        !object.Equals(
+                            readOnlyPropertyChildReader.read(readOnlyPropertyChild),
+                            "csharp-read-only-child") ||
+                        !readOnlyPropertyParentReader.same(
+                            readOnlyPropertyChild,
+                            readOnlyPropertyChild) ||
+                        !readOnlyPropertyChildReader.same(
+                            readOnlyPropertyChild,
+                            readOnlyPropertyChild))
+                        throw new InvalidOperationException(
+                            "read-only property inheritance lost C# dispatch or identity");
                     RehearsalSeparateCSharpLocalIntersectionProducer localIntersection =
                         new RehearsalSeparateCSharpLocalIntersectionProducer();
                     if (localIntersection.produce() != "csharp-local-intersection" ||
@@ -8172,6 +8286,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpChildProducer" in generated) {
             "The C# authoring tool did not generate the foreign subinterface implementation bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpReadOnlyPropertyChild" in generated) {
+            "The C# authoring tool did not generate the read-only property-child bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpLocalIntersectionProducer" in generated) {
             "The C# authoring tool did not generate the local interface-intersection bridge:\n$generated"
