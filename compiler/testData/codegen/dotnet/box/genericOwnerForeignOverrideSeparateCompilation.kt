@@ -130,6 +130,41 @@ public class RehearsalSeparateConstrainedDefaultMethodGenericReader {
     ): Boolean = producer === expected
 }
 
+public interface RehearsalSeparateMethodConstraintMarker {
+    public fun mark(): Int
+}
+
+private var rehearsalSeparateMultiConstrainedDefaultReadCount: Int = 0
+
+public interface RehearsalSeparateMultiConstrainedDefaultProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public fun <R> produceMultiConstrainedDefault(value: R): T
+            where R : RehearsalSeparateConsumer<R>,
+                  R : RehearsalSeparateMethodConstraintMarker {
+        value.consume(value)
+        value.mark()
+        rehearsalSeparateMultiConstrainedDefaultReadCount += 1
+        return 7000 as T
+    }
+}
+
+public fun rehearsalSeparateMultiConstrainedDefaultReadCount(): Int =
+    rehearsalSeparateMultiConstrainedDefaultReadCount
+
+public class RehearsalSeparateMultiConstrainedDefaultReader {
+    public fun <R> read(
+        producer: RehearsalSeparateMultiConstrainedDefaultProducer<Any?>,
+        value: R,
+    ): Any? where R : RehearsalSeparateConsumer<R>,
+                  R : RehearsalSeparateMethodConstraintMarker =
+        producer.produceMultiConstrainedDefault(value)
+
+    public fun same(
+        producer: RehearsalSeparateMultiConstrainedDefaultProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
 public interface RehearsalSeparateAbstractMethodGenericProducer<out T> {
     public fun <R> produceAbstractGeneric(value: R): T
 }
@@ -500,6 +535,9 @@ public open class RehearsalSeparateOpenDefaultConsumer<T> :
 public class RehearsalSeparateConstrainedDefaultMethodGenericProducerValue :
     RehearsalSeparateConstrainedDefaultMethodGenericProducer<Int>
 
+public class RehearsalSeparateMultiConstrainedDefaultProducerValue :
+    RehearsalSeparateMultiConstrainedDefaultProducer<Int>
+
 public interface RehearsalSeparateInvariantPropertyCellChild<T> :
     RehearsalSeparateInvariantPropertyCell<T> {
     public var childPropertyCellValue: T
@@ -595,13 +633,22 @@ public class RehearsalSeparateAbstractMethodGenericProducerValue<T>(private val 
 }
 
 public class RehearsalSeparateKotlinMethodConstraintValue :
-    RehearsalSeparateConsumer<RehearsalSeparateKotlinMethodConstraintValue> {
+    RehearsalSeparateConsumer<RehearsalSeparateKotlinMethodConstraintValue>,
+    RehearsalSeparateMethodConstraintMarker {
     public var count: Int = 0
+        private set
+
+    public var markCount: Int = 0
         private set
 
     public override fun consume(value: RehearsalSeparateKotlinMethodConstraintValue) {
         check(value === this)
         count += 1
+    }
+
+    public override fun mark(): Int {
+        markCount += 1
+        return markCount
     }
 }
 
@@ -839,6 +886,30 @@ fun box(): String {
         rehearsalSeparateConstrainedDefaultMethodGenericReadCount() != 2
     ) {
         return "fail: separate broad constrained method-generic default"
+    }
+    val multiConstrainedDefaultValue = RehearsalSeparateKotlinMethodConstraintValue()
+    val exactMultiConstrainedDefault:
+            RehearsalSeparateMultiConstrainedDefaultProducer<Int> =
+        RehearsalSeparateMultiConstrainedDefaultProducerValue()
+    if (exactMultiConstrainedDefault.produceMultiConstrainedDefault(
+            multiConstrainedDefaultValue,
+        ) != 7000
+    ) {
+        return "fail: separate exact multi-constrained method-generic default"
+    }
+    val broadMultiConstrainedDefault:
+            RehearsalSeparateMultiConstrainedDefaultProducer<Any?> =
+        exactMultiConstrainedDefault
+    if (RehearsalSeparateMultiConstrainedDefaultReader().read(
+            broadMultiConstrainedDefault,
+            multiConstrainedDefaultValue,
+        ) != 7000 ||
+        broadMultiConstrainedDefault !== exactMultiConstrainedDefault ||
+        multiConstrainedDefaultValue.count != 2 ||
+        multiConstrainedDefaultValue.markCount != 2 ||
+        rehearsalSeparateMultiConstrainedDefaultReadCount() != 2
+    ) {
+        return "fail: separate broad multi-constrained method-generic default"
     }
     val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
         RehearsalSeparateDefaultConsumerValue()

@@ -618,10 +618,39 @@ verification, and work state.
   constraint operation, and preserve receiver and argument identity.
   Reflection independently proves both interface slots plus the two-parameter
   helper retain the exact self-bound. All four candidate and four erased
-  epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. Further nominal,
-  special, multiple, owner-relative, and nullable constraints, inheritance,
+  epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. The multiple-
+  interface extension is recorded below; further special, owner-relative,
+  nullable, nominal-only, and other constructed constraints, inheritance,
   overloads, and mixed members remain separate gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md`](docs/archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
+- A method-generic interface default may now retain its admitted direct
+  `R : Consumer<R>` self-bound together with direct public non-generic nominal
+  interface bounds. The first proof composes `Consumer<R>` with an independent
+  marker on one `R`; natural `<R>(R): T`, semantic `<R>(R): object`, and
+  portable helper `<T, R>(object, R): T` MethodDefs each expose both exact
+  GenericParamConstraint rows after local and separate-compilation remapping.
+  The structural gate admits one self-bound plus one or more direct nominal
+  interface bounds; it does not infer eligibility from declaration names or
+  marker member shape, and excludes the declaration-erased `CharSequence`
+  capability. A Kotlin class and an ordinary C# class inherit the default;
+  another C# class overrides only the natural method while spelling its two
+  independent constraints in the reverse source order. The Roslyn authoring
+  matcher now treats constraint order as non-semantic and compares the exact
+  recursive types as a multiset. Without that repair, .NET 10 DIM happened to
+  reach the override but Framework's generated portable bridge bypassed it and
+  called the Kotlin helper. Exact and Kotlin-widened calls now select the same
+  body on both runtimes, retain receiver/value identity, and execute both bound
+  operations once. Reflection verifies both unordered constraints on both
+  interface slots and on the helper. All four candidate and four erased epoch-
+  off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. Further special, class,
+  owner-relative, nullable, nominal-only, and other constructed constraints,
+  inheritance, overloads, and mixed members remain separate gates. Evidence
+  is archived in
+  [`docs/archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md`](docs/archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and

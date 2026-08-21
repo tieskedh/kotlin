@@ -1639,10 +1639,25 @@ internal static class KotlinImplementationEmitter
     {
         if (left.Length != right.Length)
             return false;
-        for (int index = 0; index < left.Length; index++)
+        // GenericParamConstraint row/source order is not semantic. Match the
+        // exact recursive types as a multiset so a normal C# where-clause may
+        // spell independent interface constraints in either order.
+        var matched = new bool[right.Length];
+        foreach (ITypeSymbol leftConstraint in left)
         {
-            if (!ConstraintTypesEqual(left[index], right[index]))
+            int match = -1;
+            for (int index = 0; index < right.Length; index++)
+            {
+                if (!matched[index] &&
+                    ConstraintTypesEqual(leftConstraint, right[index]))
+                {
+                    match = index;
+                    break;
+                }
+            }
+            if (match < 0)
                 return false;
+            matched[match] = true;
         }
         return true;
     }

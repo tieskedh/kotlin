@@ -1565,9 +1565,19 @@ natural constrained generic method; exact and Kotlin-widened calls converge
 on the selected body and preserve identity. See
 [`../archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md`](../archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md).
 
+That self-bound can now compose with one or more direct public non-generic
+nominal interface bounds without weakening the physical method parameter.
+Natural and semantic slots plus the portable helper retain the complete exact
+constraint set after local and separate-compilation remapping. C# may spell
+the independent `where` constraints in another order: the authoring matcher
+compares their recursive types as an exact multiset, so Framework's portable
+bridge and .NET 10 DIM both reach the same ordinary C# override. See
+[`../archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md`](../archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md).
+
 With that typed contract consolidated, continue with multiple-property
-families, further nominal/special/multiple method constraints, read-only
-property inheritance, diamonds, reabstraction, changed-
+families, special/class/owner-relative/nullable, nominal-only, and other
+constructed method constraints, read-only property inheritance, diamonds,
+reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,
 broader and mixed method/property families, and mixed-variance gates,
 including derivability rules for ordinary foreign implementations. Then close
