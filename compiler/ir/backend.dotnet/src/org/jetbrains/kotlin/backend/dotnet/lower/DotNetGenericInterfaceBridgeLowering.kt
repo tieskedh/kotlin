@@ -127,6 +127,8 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private val openNonGenericOwnerRelativeDispatchers = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
 
     private data class NonGenericOwnerRelativeImplementation(
+        val familyOwner: IrClass,
+        val inheritedOwnerBound: IrType?,
         val semanticImplementation: IrSimpleFunction,
         val foreignOverrideProbe: IrSimpleFunction?,
         val ownedCapabilitySlot: IrSimpleFunction?,
@@ -145,6 +147,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
 
     override fun lower(irModule: IrModuleFragment) {
         val bridgeOwners = mutableListOf<IrClass>()
+        val localClasses = linkedSetOf<IrClass>()
         val genericInterfaces = hashSetOf<IrClass>()
         val genericClasses = hashSetOf<IrClass>()
         val externalDeclarations = context.externalDeclarationsForLowering()
@@ -158,6 +161,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     declaration.acceptChildrenVoid(this)
                     return
                 }
+                localClasses += declaration
                 if (declaration.isInterface) {
                     if (declaration.isDotNetGenericInterfaceDeclaration) {
                         genericInterfaces += declaration
@@ -207,6 +211,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 ::isMappedKotlinGenericInterface,
                 ::isErasedKotlinCarrier,
                 externalDeclarations,
+                localClasses,
             )
         }
     }
@@ -227,6 +232,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         isMappedKotlinGenericInterface: (IrClass) -> Boolean,
         isErasedKotlinCarrier: (IrClass) -> Boolean,
         externalDeclarations: DotNetExternalDeclarations,
+        localClasses: Set<IrClass>,
     ) {
         // The semantic interface is a property of the implemented owner view, not merely of a
         // member which happens to declare a slot. In particular, a producer intersection can
@@ -385,9 +391,14 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         )
                     } else {
                         val nonGenericImplementation = if (
-                            genericOwnerRelativeSemanticTarget == null && hasOwnerRelativeMethodBound
+                            hasOwnerRelativeMethodBound &&
+                            // Every local binding owner needs its own natural and interface
+                            // MethodImpls. Reusing the base's private dispatcher would violate
+                            // CLR accessibility even though the base family itself is shared.
+                            (plan.target in nonGenericOwnerRelativeImplementations ||
+                                    genericOwnerRelativeSemanticTarget == null)
                         ) {
-                            createNonGenericOwnerRelativeImplementation(plan)
+                            createNonGenericOwnerRelativeImplementation(plan, localClasses)
                         } else {
                             null
                         }
@@ -411,7 +422,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                             }
                             val ownedDispatcher = openNonGenericOwnerRelativeDispatchers.getOrPut(plan.target) {
                                 createForwardingBridge(
-                                    irClass = plan.implementingClass,
+                                    irClass = nonGenericImplementation.familyOwner,
                                     slot = ownedSlot,
                                     target = nonGenericImplementation.semanticImplementation,
                                     origin = DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER,
@@ -518,35 +529,69 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     /**
      * A non-generic Kotlin implementation has no generic-owner planner from which to obtain the
      * paired object-domain body. Move its one authoritative body to a semantic twin; the natural
-     * method remains the typed CLR entry and casts only its own result. A final family calls the
-     * twin directly. An open family additionally owns one non-generic capability interface so its
-     * semantic hook and ordinary C# typed override remain discoverable across separate compilation.
+     * method remains the typed CLR entry and casts only its own result. A local inherited body
+     * keeps that family on its real base owner while each derived interface binding receives its
+     * own MethodImpls. A final family calls the twin directly. An open family additionally owns
+     * one non-generic capability interface so its semantic hook and ordinary C# typed override
+     * remain discoverable across separate compilation.
      */
     private fun createNonGenericOwnerRelativeImplementation(
         plan: BridgePlan,
+        localClasses: Set<IrClass>,
     ): NonGenericOwnerRelativeImplementation {
-        val owner = plan.implementingClass
         val target = plan.target
+        val owner = target.parent as? IrClass
+            ?: dotNetUnsupported(
+                "owner-relative generic-interface implementation '${target.name}' has no class owner"
+            )
+        val isInheritedImplementation = owner != plan.implementingClass
+        val existingImplementation = nonGenericOwnerRelativeImplementations[target]
+        val inheritedOwnerBound = if (isInheritedImplementation) {
+            val slotOwner = plan.slot.parent as? IrClass
+                ?: error("Internal .NET backend error: owner-relative slot has no class owner")
+            plan.slot.dotNetDirectOwnerRelativeMethodBoundsOrNull(slotOwner)
+                ?.singleOrNull()
+                ?.let(plan.typedSubstitutor::substitute)
+        } else {
+            null
+        }
+        val inheritedOwnerBoundMatches = !isInheritedImplementation ||
+                (inheritedOwnerBound != null &&
+                        if (existingImplementation != null) {
+                            existingImplementation.inheritedOwnerBound == inheritedOwnerBound
+                        } else {
+                            target.typeParameters.singleOrNull()?.superTypes?.singleOrNull() == inheritedOwnerBound
+                        })
         // Kotlin IR may retain OPEN on an override declared inside a final class. The owner still
         // closes the physical family, so only a genuinely inheritable owner needs an open target.
         val isFinalFamily = owner.modality == Modality.FINAL
         val isOpenFamily = owner.modality == Modality.OPEN && target.modality == Modality.OPEN
         if (owner.typeParameters.isNotEmpty() || (!isFinalFamily && !isOpenFamily) ||
-            target.parent != owner || target.isFakeOverride || target.body == null ||
+            target.isFakeOverride || target.body == null ||
             target.typeParameters.size != 1 || target.parameters.size != 2 ||
-            target.typeParameters.single().origin !=
-            DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
+            (!isInheritedImplementation && target.typeParameters.single().origin !=
+                    DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER) ||
+            (isInheritedImplementation &&
+                    (owner !in localClasses || plan.implementingClass.typeParameters.isNotEmpty() ||
+                            !inheritedOwnerBoundMatches))
         ) {
             dotNetUnsupported(
-                "owner-relative generic-interface implementation '${owner.name}.${target.name}' requires " +
-                        "a directly declared final or open non-generic semantic family"
+                "owner-relative generic-interface implementation " +
+                        "'${plan.implementingClass.name}.${target.name}' requires a directly declared " +
+                        "or local inherited final/open non-generic semantic family"
             )
+        }
+        if (isInheritedImplementation) {
+            target.typeParameters.single().origin =
+                DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
         }
         val implementation = nonGenericOwnerRelativeImplementations.getOrPut(target) {
             val logicalRoots = target.overriddenSymbols.map { overridden ->
                 context.preLoweringDeclarationKeys[overridden.owner]
                     ?: "${plan.interfaceIdentity}:${plan.slotIdentity}"
-            }.distinct().sorted()
+            }.distinct().sorted().ifEmpty {
+                listOf("${plan.interfaceIdentity}:${plan.slotIdentity}")
+            }
             val implementation = owner.addFunction {
                 startOffset = target.startOffset
                 endOffset = target.endOffset
@@ -638,15 +683,22 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             context.genericOwnerSemanticHooks[target] = implementation
             context.genericOwnerCapabilityDeclarations += implementation
             context.genericOwnerCapabilityDeclarations += implementation.parameters.drop(1)
-            NonGenericOwnerRelativeImplementation(implementation, probe, ownedCapabilitySlot)
+            NonGenericOwnerRelativeImplementation(
+                owner,
+                inheritedOwnerBound,
+                implementation,
+                probe,
+                ownedCapabilitySlot,
+            )
         }
-        val alreadyBindsNaturalSlot = owner.declarations.filterIsInstance<IrSimpleFunction>().any { function ->
+        val alreadyBindsNaturalSlot = plan.implementingClass.declarations
+            .filterIsInstance<IrSimpleFunction>().any { function ->
             function.origin == DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE &&
                     function.overriddenSymbols.singleOrNull() == plan.slot.symbol
         }
         if (!alreadyBindsNaturalSlot) {
             createForwardingBridge(
-                irClass = owner,
+                irClass = plan.implementingClass,
                 slot = plan.slot,
                 target = if (isOpenFamily) target else implementation.semanticImplementation,
                 origin = DOTNET_REIFIED_GENERIC_INTERFACE_CLOSED_OWNER_RELATIVE_NATURAL_BRIDGE,
@@ -669,8 +721,9 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         plan: BridgePlan,
         logicalRoots: List<String>,
     ): IrSimpleFunction {
-        val owner = plan.implementingClass
         val target = plan.target
+        val owner = target.parent as? IrClass
+            ?: error("Internal .NET backend error: open non-generic capability target has no class owner")
         val file = checkNotNull(owner.fileOrNull) {
             "Internal .NET backend error: open non-generic capability owner '${owner.name}' has no file"
         }
