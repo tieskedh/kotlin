@@ -1674,6 +1674,16 @@ Framework 4.8 and .NET 10. Reflection pins zero special flags and zero nominal
 constraints throughout the family. See
 [`../archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md`](../archive/reified-generic-interface-non-null-method-constraint-2026-08-21.md).
 
+The direct nullable owner-relative bound is now closed for a reified-interface
+default. `<R : T?>(R): T` retains its exact Kotlin/KLIB relation but emits no
+CLR `R : T` row, because `T = Int`, `R = Int?` is a valid Kotlin substitution.
+Natural and semantic slots, the portable helper, and Kotlin and ordinary C#
+overrides retain the actual unconstrained CLR `R`. A final nullable-primitive
+body narrowing is recovered from that open slot without erasing the method
+token. Exact and widened Kotlin/C# calls exercise non-null and null values on
+Framework 4.8 and .NET 10. See
+[`../archive/reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md`](../archive/reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md).
+
 The invariant property root now composes any nonempty number of complete
 abstract mutable `T` properties. Two-property Kotlin and ordinary non-partial
 C# implementations prove independent typed Property rows, `!T` Kotlin fields,
@@ -1691,8 +1701,8 @@ compiler-ABI adapters serve both Kotlin-widened views without changing object
 identity. See
 [`../archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](../archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
 
-With that typed contract consolidated, continue with nullable and other
-constructed method constraints, multiple read-only property
+With that typed contract consolidated, continue with other constructed method
+constraints, multiple read-only property
 inheritance, diamonds, reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,
 broader and mixed method/property families, and mixed-variance gates,

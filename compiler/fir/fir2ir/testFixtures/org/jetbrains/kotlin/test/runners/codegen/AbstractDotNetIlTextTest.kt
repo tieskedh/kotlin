@@ -4464,6 +4464,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateNullableOwnerRelativeDefaultProducer`1",
+                    expectedMemberName = "produceNullableOwnerRelativeDefault",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable nullable owner-relative probe")
+                    },
+                    expectedErasedOwnerRelativeConstraints = listOf(0 to 0),
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner = "RehearsalSeparateInvariantProducer`1",
                     expectedMemberName = "produceInvariant",
                     expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
@@ -4913,6 +4932,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public string produceOwnerRelativeDefaultGeneric<R>(R value)
                 {
                     return typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpNullableOwnerRelativeDefaultProducer :
+                    RehearsalSeparateNullableOwnerRelativeDefaultProducer<int>
+            {
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpNullableOwnerRelativeDefaultOverrideProducer :
+                    RehearsalSeparateNullableOwnerRelativeDefaultProducer<int>
+            {
+                public int produceNullableOwnerRelativeDefault<R>(R value)
+                {
+                    return typeof(R) == typeof(string) ? 101 : Convert.ToInt32(value);
                 }
             }
 
@@ -7878,6 +7913,139 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             ownerRelativeDefaultHelperParameters[0])
                         throw new InvalidOperationException(
                             "owner-relative default helper lost T/R order or physical erasure");
+                    RehearsalSeparateNullableOwnerRelativeDefaultReader
+                        nullableOwnerRelativeReader =
+                            new RehearsalSeparateNullableOwnerRelativeDefaultReader();
+                    RehearsalSeparateCSharpNullableOwnerRelativeDefaultProducer
+                        nullableOwnerRelativeProducer =
+                            new RehearsalSeparateCSharpNullableOwnerRelativeDefaultProducer();
+                    RehearsalSeparateNullableOwnerRelativeDefaultProducer<int>
+                        nullableOwnerRelativeNaturalView = nullableOwnerRelativeProducer;
+                    if (nullableOwnerRelativeNaturalView
+                            .produceNullableOwnerRelativeDefault<int?>(91) != 83 ||
+                        !object.Equals(
+                            nullableOwnerRelativeReader.read<int?>(
+                                nullableOwnerRelativeProducer,
+                                null),
+                            83) ||
+                        !nullableOwnerRelativeReader.same(
+                            nullableOwnerRelativeProducer,
+                            nullableOwnerRelativeProducer) ||
+                        libKt.rehearsalSeparateNullableOwnerRelativeDefaultReadCount() != 2 ||
+                        !libKt.rehearsalSeparateNullableOwnerRelativeDefaultSawNull())
+                        throw new InvalidOperationException(
+                            "nullable owner-relative default lost its body or widened view");
+                    RehearsalSeparateCSharpNullableOwnerRelativeDefaultOverrideProducer
+                        nullableOwnerRelativeOverrideProducer =
+                            new RehearsalSeparateCSharpNullableOwnerRelativeDefaultOverrideProducer();
+                    if (nullableOwnerRelativeOverrideProducer
+                            .produceNullableOwnerRelativeDefault<int?>(97) != 97 ||
+                        !object.Equals(
+                            nullableOwnerRelativeReader.read<string>(
+                                nullableOwnerRelativeOverrideProducer,
+                                "semantic-nullable-owner-relative"),
+                            101) ||
+                        !nullableOwnerRelativeReader.same(
+                            nullableOwnerRelativeOverrideProducer,
+                            nullableOwnerRelativeOverrideProducer) ||
+                        libKt.rehearsalSeparateNullableOwnerRelativeDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "nullable owner-relative default bypassed the C# override");
+                    int nullableOwnerRelativeSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpNullableOwnerRelativeDefaultProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalNullableOwnerRelative = candidate ==
+                            typeof(RehearsalSeparateNullableOwnerRelativeDefaultProducer<int>);
+                        System.Reflection.MethodInfo[] nullableOwnerRelativeMethods =
+                            candidate.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                        if (nullableOwnerRelativeMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "nullable owner-relative owner did not expose one slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo nullableOwnerRelativeMethod =
+                            nullableOwnerRelativeMethods[0];
+                        Type[] nullableOwnerRelativeParameters =
+                            nullableOwnerRelativeMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] nullableOwnerRelativeValues =
+                            nullableOwnerRelativeMethod.GetParameters();
+                        if (nullableOwnerRelativeParameters.Length != 1 ||
+                            nullableOwnerRelativeParameters[0].GenericParameterAttributes !=
+                                System.Reflection.GenericParameterAttributes.None ||
+                            nullableOwnerRelativeParameters[0]
+                                .GetGenericParameterConstraints().Length != 0 ||
+                            nullableOwnerRelativeValues.Length != 1 ||
+                            nullableOwnerRelativeValues[0].ParameterType !=
+                                nullableOwnerRelativeParameters[0] ||
+                            nullableOwnerRelativeMethod.ReturnType !=
+                                (isNaturalNullableOwnerRelative
+                                    ? typeof(int)
+                                    : typeof(object)))
+                            throw new InvalidOperationException(
+                                "nullable owner-relative slot invented a CLR constraint");
+                        nullableOwnerRelativeSlotCount++;
+                    }
+                    if (nullableOwnerRelativeSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "nullable owner-relative family did not expose two exact slots");
+                    System.Reflection.MethodInfo nullableOwnerRelativeHelper = null;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateNullableOwnerRelativeDefaultProducer<>)
+                             .Assembly.GetTypes())
+                    {
+                        foreach (System.Reflection.MethodInfo candidateMethod in
+                             candidate.GetMethods(
+                                 System.Reflection.BindingFlags.Public |
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Static |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                        {
+                            if (candidateMethod.Name !=
+                                    "produceNullableOwnerRelativeDefault")
+                                continue;
+                            if (nullableOwnerRelativeHelper != null)
+                                throw new InvalidOperationException(
+                                    "nullable owner-relative exposed duplicate helpers");
+                            nullableOwnerRelativeHelper = candidateMethod;
+                        }
+                    }
+                    if (nullableOwnerRelativeHelper == null)
+                        throw new InvalidOperationException(
+                            "nullable owner-relative lost its portable helper");
+                    Type[] nullableOwnerRelativeHelperParameters =
+                        nullableOwnerRelativeHelper.GetGenericArguments();
+                    System.Reflection.ParameterInfo[] nullableOwnerRelativeHelperValues =
+                        nullableOwnerRelativeHelper.GetParameters();
+                    if (nullableOwnerRelativeHelperParameters.Length != 2 ||
+                        nullableOwnerRelativeHelperParameters[1].GenericParameterAttributes !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        nullableOwnerRelativeHelperParameters[1]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        nullableOwnerRelativeHelperValues.Length != 2 ||
+                        nullableOwnerRelativeHelperValues[0].ParameterType != typeof(object) ||
+                        nullableOwnerRelativeHelperValues[1].ParameterType !=
+                            nullableOwnerRelativeHelperParameters[1] ||
+                        nullableOwnerRelativeHelper.ReturnType !=
+                            nullableOwnerRelativeHelperParameters[0])
+                        throw new InvalidOperationException(
+                            "nullable owner-relative helper lost T/R order or erasure");
+                    System.Reflection.MethodInfo kotlinNullableOwnerRelativeOverride =
+                        typeof(RehearsalSeparateNullableOwnerRelativeDefaultOverrideProducerValue)
+                            .GetMethod("produceNullableOwnerRelativeDefault");
+                    Type[] kotlinNullableOwnerRelativeOverrideParameters =
+                        kotlinNullableOwnerRelativeOverride.GetGenericArguments();
+                    if (kotlinNullableOwnerRelativeOverrideParameters.Length != 1 ||
+                        kotlinNullableOwnerRelativeOverrideParameters[0]
+                            .GenericParameterAttributes !=
+                                System.Reflection.GenericParameterAttributes.None ||
+                        kotlinNullableOwnerRelativeOverrideParameters[0]
+                            .GetGenericParameterConstraints().Length != 0)
+                        throw new InvalidOperationException(
+                            "Kotlin nullable owner-relative override retained a CLR constraint");
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -9244,6 +9412,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericOverrideProducer" in generated) {
             "The C# authoring tool did not generate the owner-relative default override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpNullableOwnerRelativeDefaultProducer" in generated) {
+            "The C# authoring tool did not generate the nullable owner-relative default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpNullableOwnerRelativeDefaultOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the nullable owner-relative override bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpMethodConstraintValue" in generated) {
             "The C# authoring tool did not generate the method-constraint value bridge:\n$generated"

@@ -446,6 +446,17 @@ Kotlin overrides, and ordinary C# overrides therefore all use the same
 unconstrained CLR method GenericParam. The semantic capability changes only
 owner-dependent carriers; it must not invent a stronger constraint on `R`.
 
+The same physical rule applies to a direct nullable owner-relative method bound
+`<R : T?>`. Kotlin source and KLIB retain both the owner relation and its
+nullability. The CLR family must not emit `R : T`, because that constraint is
+strictly stronger: Kotlin admits `T = Int`, `R = Int?`, while the CLR row does
+not. Natural and semantic slots, the portable helper, and Kotlin and ordinary
+C# implementations therefore keep a genuine unconstrained CLR `R`. If FIR
+narrows a final `R : Primitive?` value to the non-null primitive within the
+body, codegen recovers that proven use from the open slot with
+`box !!R; unbox.any primitive`. It does not change the declaration constraint
+or the representation of unrelated generic values.
+
 An admitted owner-relative abstract method `<R : T>(R): T` erases its
 executable CLR `R : T` constraint while KLIB retains that relationship. For a
 final non-generic Kotlin implementation with a closed owner argument, the
