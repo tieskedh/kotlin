@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-non-null-method-constraint-2026-08-21.md`](reified-generic-interface-non-null-method-constraint-2026-08-21.md)
+  records `<R : Any>` on a reified-interface default, authoritative Kotlin/KLIB
+  nullability, physically unconstrained CLR slots/helper/overrides, and ordinary
+  Kotlin/C# execution across reference and value substitutions.
 - [`reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md`](reified-generic-interface-prepared-external-inherited-owner-relative-implementation-2026-08-21.md)
   records consumer-side reuse of a producer-prepared external owner-relative
   family, exact MethodRef/MethodImpl composition without member copying, and

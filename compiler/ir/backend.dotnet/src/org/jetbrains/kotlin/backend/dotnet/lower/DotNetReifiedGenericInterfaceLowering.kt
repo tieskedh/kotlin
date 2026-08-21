@@ -1645,7 +1645,9 @@ private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
                 (simpleBound.classifier as? IrTypeParameterSymbol)?.owner === ownerParameter
     } == true
     val hasSupportedBounds = when {
-        methodBounds.singleOrNull()?.isNullableAny() == true -> true
+        methodBounds.singleOrNull()?.let { bound ->
+            bound.isNullableAny() || bound.isAny()
+        } == true -> true
         hasDirectOwnerRelativeBound -> true
         else -> {
             val selfBounds = methodBounds.count { bound ->
