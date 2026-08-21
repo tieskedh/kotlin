@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-nominal-method-constraints-2026-08-21.md`](reified-generic-interface-nominal-method-constraints-2026-08-21.md)
+  records the first nominal-only class-plus-interface method constraint,
+  structural admission without a self-bound, exact slot/helper metadata, and
+  Kotlin/C# execution on Framework and .NET 10.
 - [`reified-generic-interface-multiple-method-constraints-2026-08-21.md`](reified-generic-interface-multiple-method-constraints-2026-08-21.md)
   records the first composed recursive and nominal method constraints, exact
   slot/helper metadata, order-independent C# authoring, and Framework/.NET 10

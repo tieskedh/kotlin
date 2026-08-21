@@ -618,9 +618,9 @@ verification, and work state.
   constraint operation, and preserve receiver and argument identity.
   Reflection independently proves both interface slots plus the two-parameter
   helper retain the exact self-bound. All four candidate and four erased
-  epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. The multiple-
-  interface extension is recorded below; further special, owner-relative,
-  nullable, nominal-only, and other constructed constraints, inheritance,
+  epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. The multiple-bound
+  and nominal-only/class-bound extensions are recorded below; further special,
+  owner-relative, nullable, and other constructed constraints, inheritance,
   overloads, and mixed members remain separate gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md`](docs/archive/reified-generic-interface-constrained-method-generic-default-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
@@ -646,11 +646,37 @@ verification, and work state.
   body on both runtimes, retain receiver/value identity, and execute both bound
   operations once. Reflection verifies both unordered constraints on both
   interface slots and on the helper. All four candidate and four erased epoch-
-  off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. Further special, class,
-  owner-relative, nullable, nominal-only, and other constructed constraints,
-  inheritance, overloads, and mixed members remain separate gates. Evidence
-  is archived in
+  off PSI/LightTree, Framework 4.8/.NET 10 lanes pass. The nominal-only and
+  class-bound extension is recorded below; further special, owner-relative,
+  nullable, and other constructed constraints, inheritance, overloads, and
+  mixed members remain separate gates. Evidence is archived in
   [`docs/archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md`](docs/archive/reified-generic-interface-multiple-method-constraints-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
+- A method-generic producer root no longer needs a constructed
+  `R : Consumer<R>` self-bound merely to preserve ordinary nominal constraints.
+  A nonempty method-bound set may now contain direct public non-generic nominal
+  interfaces and at most one non-final class, optionally together with the
+  admitted self-bound. The first nominal-only proof uses Kotlin source order
+  `R : Marker, R : Base`. Natural `<R>(R): T`, semantic `<R>(R): object`, and
+  portable helper `<T, R>(object, R): T` MethodDefs each retain the exact
+  `Base` and `Marker` GenericParamConstraint rows; class-first metadata and C#
+  `where R : Base, Marker` spelling are canonicalization, not a semantic change.
+  The structural gate excludes `Any`, declaration-erased `Number` and
+  `CharSequence`, generic or nullable classifiers, final classes, and non-public
+  declarations. Kotlin and ordinary C# implementations inherit the default,
+  while another C# class overrides only the natural constrained method. Exact
+  and Kotlin-widened calls converge on the selected body on Framework 4.8 and
+  .NET 10, preserve receiver/value identity, and execute both constraint
+  operations; reflection independently proves both bounds on both slots and the
+  helper. All four candidate and four erased epoch-off PSI/LightTree/runtime
+  lanes pass. Owner-relative `R : T` stays closed because a semantic capability
+  with unconstrained `R` cannot call an ordinary C# `where R : T` override
+  without reflection, IL weaving, or changing the actual method argument type.
+  Evidence is archived in
+  [`docs/archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md`](docs/archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and

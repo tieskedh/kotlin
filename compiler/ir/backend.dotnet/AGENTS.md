@@ -1283,13 +1283,16 @@ See the
   types. Keep this reopening production-inert until its complete atomic gate
   replaces the accepted erased ABI. See
   [the reopening draft](docs/decisions/draft-adr-reified-generic-interface-owner.md).
-  A rehearsal-admitted method self-bound may compose with direct public non-
-  generic nominal interface bounds only when every natural, semantic, helper,
-  and forwarding MethodDef retains the complete exact constraint set on its
-  own method GenericParam. GenericParamConstraint row and C# `where`-clause
-  order are not semantic: C# authoring must compare recursive constraint types
-  as an exact multiset. An order difference must not make a normal C# override
-  disappear and route a portable bridge directly to the Kotlin default helper.
+  A rehearsal-admitted method parameter may carry direct public non-generic
+  nominal interface bounds and at most one non-final class bound, optionally
+  together with one admitted constructed self-bound, only when every natural,
+  semantic, helper, and forwarding MethodDef retains the complete exact
+  constraint set on its own method GenericParam. Declaration-erased Kotlin
+  classifiers are not nominal evidence. GenericParamConstraint row and C#
+  `where`-clause order are not semantic: C# authoring must compare recursive
+  constraint types as an exact multiset. An order difference must not make a
+  normal C# override disappear and route a portable bridge directly to the
+  Kotlin default helper.
   Imported CLR generic interfaces remain native: keep one semantic owner backed
   by the selected generic TypeDef, preserve platform flexibility through FIR2IR,
   and bind Kotlin implementations to its exact constructed slots. Resolved

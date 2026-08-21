@@ -134,6 +134,10 @@ public interface RehearsalSeparateMethodConstraintMarker {
     public fun mark(): Int
 }
 
+public open class RehearsalSeparateMethodConstraintBase {
+    public open fun baseMark(): Int = 0
+}
+
 private var rehearsalSeparateMultiConstrainedDefaultReadCount: Int = 0
 
 public interface RehearsalSeparateMultiConstrainedDefaultProducer<out T> {
@@ -161,6 +165,37 @@ public class RehearsalSeparateMultiConstrainedDefaultReader {
 
     public fun same(
         producer: RehearsalSeparateMultiConstrainedDefaultProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
+private var rehearsalSeparateNominalConstrainedDefaultReadCount: Int = 0
+
+public interface RehearsalSeparateNominalConstrainedDefaultProducer<out T> {
+    @Suppress("UNCHECKED_CAST")
+    public fun <R> produceNominalConstrainedDefault(value: R): T
+            where R : RehearsalSeparateMethodConstraintMarker,
+                  R : RehearsalSeparateMethodConstraintBase {
+        value.mark()
+        value.baseMark()
+        rehearsalSeparateNominalConstrainedDefaultReadCount += 1
+        return 9000 as T
+    }
+}
+
+public fun rehearsalSeparateNominalConstrainedDefaultReadCount(): Int =
+    rehearsalSeparateNominalConstrainedDefaultReadCount
+
+public class RehearsalSeparateNominalConstrainedDefaultReader {
+    public fun <R> read(
+        producer: RehearsalSeparateNominalConstrainedDefaultProducer<Any?>,
+        value: R,
+    ): Any? where R : RehearsalSeparateMethodConstraintMarker,
+                  R : RehearsalSeparateMethodConstraintBase =
+        producer.produceNominalConstrainedDefault(value)
+
+    public fun same(
+        producer: RehearsalSeparateNominalConstrainedDefaultProducer<Any?>,
         expected: Any?,
     ): Boolean = producer === expected
 }
@@ -538,6 +573,9 @@ public class RehearsalSeparateConstrainedDefaultMethodGenericProducerValue :
 public class RehearsalSeparateMultiConstrainedDefaultProducerValue :
     RehearsalSeparateMultiConstrainedDefaultProducer<Int>
 
+public class RehearsalSeparateNominalConstrainedDefaultProducerValue :
+    RehearsalSeparateNominalConstrainedDefaultProducer<Int>
+
 public interface RehearsalSeparateInvariantPropertyCellChild<T> :
     RehearsalSeparateInvariantPropertyCell<T> {
     public var childPropertyCellValue: T
@@ -633,12 +671,16 @@ public class RehearsalSeparateAbstractMethodGenericProducerValue<T>(private val 
 }
 
 public class RehearsalSeparateKotlinMethodConstraintValue :
+    RehearsalSeparateMethodConstraintBase(),
     RehearsalSeparateConsumer<RehearsalSeparateKotlinMethodConstraintValue>,
     RehearsalSeparateMethodConstraintMarker {
     public var count: Int = 0
         private set
 
     public var markCount: Int = 0
+        private set
+
+    public var baseMarkCount: Int = 0
         private set
 
     public override fun consume(value: RehearsalSeparateKotlinMethodConstraintValue) {
@@ -649,6 +691,11 @@ public class RehearsalSeparateKotlinMethodConstraintValue :
     public override fun mark(): Int {
         markCount += 1
         return markCount
+    }
+
+    public override fun baseMark(): Int {
+        baseMarkCount += 1
+        return baseMarkCount
     }
 }
 
@@ -910,6 +957,30 @@ fun box(): String {
         rehearsalSeparateMultiConstrainedDefaultReadCount() != 2
     ) {
         return "fail: separate broad multi-constrained method-generic default"
+    }
+    val nominalConstrainedDefaultValue = RehearsalSeparateKotlinMethodConstraintValue()
+    val exactNominalConstrainedDefault:
+            RehearsalSeparateNominalConstrainedDefaultProducer<Int> =
+        RehearsalSeparateNominalConstrainedDefaultProducerValue()
+    if (exactNominalConstrainedDefault.produceNominalConstrainedDefault(
+            nominalConstrainedDefaultValue,
+        ) != 9000
+    ) {
+        return "fail: separate exact nominal-constrained method-generic default"
+    }
+    val broadNominalConstrainedDefault:
+            RehearsalSeparateNominalConstrainedDefaultProducer<Any?> =
+        exactNominalConstrainedDefault
+    if (RehearsalSeparateNominalConstrainedDefaultReader().read(
+            broadNominalConstrainedDefault,
+            nominalConstrainedDefaultValue,
+        ) != 9000 ||
+        broadNominalConstrainedDefault !== exactNominalConstrainedDefault ||
+        nominalConstrainedDefaultValue.markCount != 2 ||
+        nominalConstrainedDefaultValue.baseMarkCount != 2 ||
+        rehearsalSeparateNominalConstrainedDefaultReadCount() != 2
+    ) {
+        return "fail: separate broad nominal-constrained method-generic default"
     }
     val exactDefaultConsumer: RehearsalSeparateDefaultConsumer<Any?> =
         RehearsalSeparateDefaultConsumerValue()
