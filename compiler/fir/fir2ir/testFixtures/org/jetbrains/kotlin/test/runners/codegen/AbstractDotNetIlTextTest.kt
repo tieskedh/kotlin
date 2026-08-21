@@ -4848,6 +4848,16 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class
+                RehearsalSeparateCSharpDerivedInheritedOwnerRelativeMethodGenericProducer :
+                    RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer
+            {
+                public override string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return "InheritedDerived:" + typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
             public sealed partial class
                 RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer :
                     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>
@@ -7363,6 +7373,89 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "open closed owner-relative implementation lost its overridable " +
                             "unconstrained C# entry");
+                    RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer
+                        inheritedOwnerRelativeProducer =
+                            new RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        inheritedOwnerRelativeNaturalView = inheritedOwnerRelativeProducer;
+                    if (inheritedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>("inherited-base") !=
+                            "inherited-base" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(inheritedOwnerRelativeProducer, 71),
+                            71) ||
+                        !ownerRelativeReader.same(
+                            inheritedOwnerRelativeProducer,
+                            inheritedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "inherited Kotlin owner-relative implementation lost its base " +
+                            "natural or semantic route");
+                    RehearsalSeparateCSharpDerivedInheritedOwnerRelativeMethodGenericProducer
+                        derivedInheritedOwnerRelativeProducer =
+                            new RehearsalSeparateCSharpDerivedInheritedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        derivedInheritedOwnerRelativeNaturalView =
+                            derivedInheritedOwnerRelativeProducer;
+                    if (derivedInheritedOwnerRelativeProducer
+                            .produceOwnerRelativeGeneric<int>(73) !=
+                            "InheritedDerived:Int32:73" ||
+                        derivedInheritedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<int>(79) !=
+                            "InheritedDerived:Int32:79" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                derivedInheritedOwnerRelativeProducer,
+                                83),
+                            "InheritedDerived:Int32:83") ||
+                        !ownerRelativeReader.same(
+                            derivedInheritedOwnerRelativeProducer,
+                            derivedInheritedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "inherited owner-relative capability bypassed the ordinary C# " +
+                            "typed override");
+                    System.Reflection.MethodInfo inheritedOwnerRelativeSource =
+                        typeof(RehearsalSeparateInheritedOwnerRelativeMethodGenericProducer)
+                            .GetMethod("produceOwnerRelativeGeneric");
+                    Type[] inheritedOwnerRelativeSourceParameters =
+                        inheritedOwnerRelativeSource.GetGenericArguments();
+                    if (inheritedOwnerRelativeSource.DeclaringType !=
+                            typeof(RehearsalSeparateInheritedOwnerRelativeMethodGenericBase) ||
+                        !inheritedOwnerRelativeSource.IsPublic ||
+                        !inheritedOwnerRelativeSource.IsVirtual ||
+                        inheritedOwnerRelativeSource.IsFinal ||
+                        inheritedOwnerRelativeSource.ReturnType != typeof(string) ||
+                        inheritedOwnerRelativeSourceParameters.Length != 1 ||
+                        inheritedOwnerRelativeSourceParameters[0]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        inheritedOwnerRelativeSource.GetParameters().Length != 1 ||
+                        inheritedOwnerRelativeSource.GetParameters()[0].ParameterType !=
+                            inheritedOwnerRelativeSourceParameters[0])
+                        throw new InvalidOperationException(
+                            "inherited owner-relative implementation copied or constrained its " +
+                            "base-owned C# entry");
+                    RehearsalSeparateFinalInheritedOwnerRelativeMethodGenericProducer
+                        finalInheritedOwnerRelativeProducer =
+                            new RehearsalSeparateFinalInheritedOwnerRelativeMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
+                        finalInheritedOwnerRelativeNaturalView =
+                            finalInheritedOwnerRelativeProducer;
+                    if (finalInheritedOwnerRelativeNaturalView
+                            .produceOwnerRelativeGeneric<string>("final-inherited-base") !=
+                            "final-inherited-base" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                finalInheritedOwnerRelativeProducer,
+                                89),
+                            89) ||
+                        !ownerRelativeReader.same(
+                            finalInheritedOwnerRelativeProducer,
+                            finalInheritedOwnerRelativeProducer) ||
+                        typeof(RehearsalSeparateFinalInheritedOwnerRelativeMethodGenericProducer)
+                            .GetMethod("produceOwnerRelativeGeneric").DeclaringType !=
+                            typeof(RehearsalSeparateInheritedOwnerRelativeMethodGenericBase))
+                        throw new InvalidOperationException(
+                            "final inherited binding duplicated or bypassed the shared base " +
+                            "owner-relative family");
                     RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer
                         derivedOwnerRelativeProducer =
                             new RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer();

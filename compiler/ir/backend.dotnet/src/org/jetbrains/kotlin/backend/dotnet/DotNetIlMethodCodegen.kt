@@ -849,9 +849,10 @@ internal class DotNetIlMethodCodegen(
 
     /**
      * Keeps raw Kotlin output semantics and the natural C# override slot coherent without
-     * reflection. On this exact Kotlin declaration both virtual targets are unchanged. A direct
-     * foreign subclass changes only the typed target; a Kotlin subclass changes both because the
-     * compiler emits its paired semantic hook as well.
+     * reflection. The typed, semantic, and probe methods remain one family on their real owner;
+     * an interface-capability dispatcher may live on a local non-generic descendant which first
+     * binds an inherited method. A direct foreign subclass changes only the typed target; a Kotlin
+     * subclass changes both because the compiler emits its paired semantic hook as well.
      */
     private fun emitGenericOwnerDirectForeignOverrideDispatch(
         dispatch: DotNetGenericOwnerDirectForeignOverrideDispatch,
@@ -869,18 +870,33 @@ internal class DotNetIlMethodCodegen(
         val semanticInfo = checkNotNull(availableFunctions[dispatch.semanticHook]) {
             "Direct foreign override dispatch lacks its semantic MethodDef"
         }
-        check(typedInfo.owner == functionInfo.owner && semanticInfo.owner == functionInfo.owner &&
+        val probeInfo = checkNotNull(availableFunctions[dispatch.foreignOverrideProbe]) {
+            "Direct foreign override dispatch lacks its virtual probe MethodDef"
+        }
+        val dispatcherOwner = function.parent as? IrClass
+        val familyOwner = dispatch.typedEntry.parent as? IrClass
+        val familyMembersShareOwner = familyOwner != null &&
+                dispatch.semanticHook.parent == familyOwner &&
+                dispatch.foreignOverrideProbe.parent == familyOwner
+        val familyIsOnDispatcherAncestry = dispatcherOwner != null && familyOwner != null &&
+                (dispatcherOwner == familyOwner || dispatcherOwner.isSubclassOf(familyOwner))
+        val crossesNonGenericInheritance = typedInfo.owner != functionInfo.owner
+        check(typedInfo.owner == semanticInfo.owner && typedInfo.owner == probeInfo.owner &&
+                familyMembersShareOwner && familyIsOnDispatcherAncestry &&
+                (!crossesNonGenericInheritance ||
+                        typedInfo.owner.typeParameterCount == 0 &&
+                        functionInfo.owner.typeParameterCount == 0) &&
                 dispatch.typedEntry.typeParameters.size == function.typeParameters.size &&
                 dispatch.semanticHook.typeParameters.size == function.typeParameters.size &&
                 function.typeParameters.size <= 1) {
             "Direct foreign override dispatch must compare one supported local owner family"
         }
-        val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
-            functionInfo.owner.ilTypeRef
+        fun DotNetIlFunctionInfo.openOwnerToken(): String = if (owner.typeParameterCount == 0) {
+            owner.ilTypeRef
         } else {
             DotNetIlValueType.GenericInstance(
-                functionInfo.owner,
-                List(functionInfo.owner.typeParameterCount) { index ->
+                owner,
+                List(owner.typeParameterCount) { index ->
                     DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
                 },
             ).nameInSignature
@@ -890,12 +906,9 @@ internal class DotNetIlMethodCodegen(
         }
         fun DotNetIlFunctionInfo.reference(target: IrSimpleFunction): String = renderMethodReference(
             physicalMethodName ?: target.dotNetIlMethodName(),
-            ownerToken = ownerToken,
+            ownerToken = openOwnerToken(),
             methodInstantiation = methodInstantiation,
         )
-        val probeInfo = checkNotNull(availableFunctions[dispatch.foreignOverrideProbe]) {
-            "Direct foreign override dispatch lacks its virtual probe MethodDef"
-        }
         val probeReference = probeInfo.reference(dispatch.foreignOverrideProbe)
         val typedReturn = (typedInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
         check(typedInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
@@ -922,7 +935,7 @@ internal class DotNetIlMethodCodegen(
             typedInfo.renderCallInstruction(
                 typedInfo.physicalMethodName ?: dispatch.typedEntry.dotNetIlMethodName(),
                 virtual = true,
-                ownerToken = ownerToken,
+                ownerToken = typedInfo.openOwnerToken(),
                 methodInstantiation = methodInstantiation,
             ),
             pops = signature.parameterTypes.size,
@@ -940,7 +953,7 @@ internal class DotNetIlMethodCodegen(
             semanticInfo.renderCallInstruction(
                 semanticInfo.physicalMethodName ?: dispatch.semanticHook.dotNetIlMethodName(),
                 virtual = true,
-                ownerToken = ownerToken,
+                ownerToken = semanticInfo.openOwnerToken(),
                 methodInstantiation = methodInstantiation,
             ),
             pops = signature.parameterTypes.size,
