@@ -4391,6 +4391,24 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
                     expectedDeclaredOwner =
+                        "RehearsalSeparateNonNullDefaultProducer`1",
+                    expectedMemberName = "produceNonNullDefault",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable non-null default probe")
+                    },
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
                         "RehearsalSeparateAbstractMethodGenericProducer`1",
                     expectedMemberName = "produceAbstractGeneric",
                     expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
@@ -4748,6 +4766,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     value.mark();
                     value.baseMark();
                     return 10000;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpNonNullDefaultProducer :
+                RehearsalSeparateNonNullDefaultProducer<string>
+            {
+            }
+
+            public sealed partial class RehearsalSeparateCSharpNonNullDefaultOverrideProducer :
+                RehearsalSeparateNonNullDefaultProducer<string>
+            {
+                public string produceNonNullDefault<R>(R value)
+                {
+                    return "CSharpOverride:" + typeof(R).Name + ":" + value.ToString();
                 }
             }
 
@@ -7013,6 +7045,126 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         !hasNominalHelperBaseBound || !hasNominalHelperMarkerBound)
                         throw new InvalidOperationException(
                             "nominal-constrained helper lost a class/interface bound");
+                    RehearsalSeparateCSharpNonNullDefaultProducer nonNullDefaultProducer =
+                        new RehearsalSeparateCSharpNonNullDefaultProducer();
+                    RehearsalSeparateNonNullDefaultProducer<string> nonNullDefaultProducerView =
+                        nonNullDefaultProducer;
+                    RehearsalSeparateNonNullDefaultReader nonNullDefaultReader =
+                        new RehearsalSeparateNonNullDefaultReader();
+                    if (nonNullDefaultProducerView.produceNonNullDefault<int>(43) !=
+                            "NonNull:43" ||
+                        !object.Equals(
+                            nonNullDefaultReader.read<string>(
+                                nonNullDefaultProducer,
+                                "csharp"),
+                            "NonNull:csharp") ||
+                        !nonNullDefaultReader.same(
+                            nonNullDefaultProducer,
+                            nonNullDefaultProducer) ||
+                        libKt.rehearsalSeparateNonNullDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "non-null default lost its body or identity");
+                    RehearsalSeparateCSharpNonNullDefaultOverrideProducer
+                        nonNullDefaultOverrideProducer =
+                            new RehearsalSeparateCSharpNonNullDefaultOverrideProducer();
+                    if (nonNullDefaultOverrideProducer.produceNonNullDefault<int>(47) !=
+                            "CSharpOverride:Int32:47" ||
+                        !object.Equals(
+                            nonNullDefaultReader.read<string>(
+                                nonNullDefaultOverrideProducer,
+                                "override"),
+                            "CSharpOverride:String:override") ||
+                        !nonNullDefaultReader.same(
+                            nonNullDefaultOverrideProducer,
+                            nonNullDefaultOverrideProducer) ||
+                        libKt.rehearsalSeparateNonNullDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "non-null default bypassed the C# override");
+                    int nonNullDefaultSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpNonNullDefaultProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalNonNullOwner = candidate ==
+                            typeof(RehearsalSeparateNonNullDefaultProducer<string>);
+                        System.Reflection.MethodInfo[] nonNullMethods =
+                            candidate.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                        if (nonNullMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "non-null default owner did not expose one slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo nonNullMethod = nonNullMethods[0];
+                        Type[] nonNullParameters = nonNullMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] nonNullValues =
+                            nonNullMethod.GetParameters();
+                        if (nonNullParameters.Length != 1 ||
+                            nonNullValues.Length != 1 ||
+                            nonNullValues[0].ParameterType != nonNullParameters[0] ||
+                            nonNullMethod.ReturnType !=
+                                (isNaturalNonNullOwner ? typeof(string) : typeof(object)) ||
+                            nonNullParameters[0].GenericParameterAttributes !=
+                                System.Reflection.GenericParameterAttributes.None ||
+                            nonNullParameters[0].GetGenericParameterConstraints().Length != 0)
+                            throw new InvalidOperationException(
+                                "non-null default slot invented a CLR constraint");
+                        nonNullDefaultSlotCount++;
+                    }
+                    if (nonNullDefaultSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "non-null default family did not expose two exact slots");
+                    System.Reflection.MethodInfo nonNullDefaultHelper = null;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateNonNullDefaultProducer<>)
+                             .Assembly.GetTypes())
+                    {
+                        foreach (System.Reflection.MethodInfo candidateMethod in
+                             candidate.GetMethods(
+                                 System.Reflection.BindingFlags.Public |
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Static |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                        {
+                            if (candidateMethod.Name != "produceNonNullDefault")
+                                continue;
+                            if (nonNullDefaultHelper != null)
+                                throw new InvalidOperationException(
+                                    "non-null default exposed duplicate helpers");
+                            nonNullDefaultHelper = candidateMethod;
+                        }
+                    }
+                    if (nonNullDefaultHelper == null)
+                        throw new InvalidOperationException(
+                            "non-null default lost its portable helper");
+                    Type[] nonNullHelperParameters =
+                        nonNullDefaultHelper.GetGenericArguments();
+                    System.Reflection.ParameterInfo[] nonNullHelperValues =
+                        nonNullDefaultHelper.GetParameters();
+                    if (nonNullHelperParameters.Length != 2 ||
+                        nonNullHelperValues.Length != 2 ||
+                        nonNullDefaultHelper.ReturnType != nonNullHelperParameters[0] ||
+                        nonNullHelperValues[0].ParameterType != typeof(object) ||
+                        nonNullHelperValues[1].ParameterType != nonNullHelperParameters[1] ||
+                        nonNullHelperParameters[1].GenericParameterAttributes !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        nonNullHelperParameters[1]
+                            .GetGenericParameterConstraints().Length != 0)
+                        throw new InvalidOperationException(
+                            "non-null default helper invented a CLR constraint");
+                    System.Reflection.MethodInfo kotlinNonNullOverride =
+                        typeof(RehearsalSeparateNonNullDefaultOverrideProducerValue)
+                            .GetMethod("produceNonNullDefault");
+                    Type[] kotlinNonNullOverrideParameters =
+                        kotlinNonNullOverride.GetGenericArguments();
+                    if (kotlinNonNullOverrideParameters.Length != 1 ||
+                        kotlinNonNullOverrideParameters[0].GenericParameterAttributes !=
+                            System.Reflection.GenericParameterAttributes.None ||
+                        kotlinNonNullOverrideParameters[0]
+                            .GetGenericParameterConstraints().Length != 0)
+                        throw new InvalidOperationException(
+                            "Kotlin non-null override invented a CLR constraint");
                     RehearsalSeparateCSharpAbstractMethodGenericProducer
                         abstractMethodGenericProducer =
                             new RehearsalSeparateCSharpAbstractMethodGenericProducer();
@@ -9071,6 +9223,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpNominalConstrainedDefaultOverrideProducer" in generated) {
             "The C# authoring tool did not generate the nominal-constrained override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpNonNullDefaultProducer" in generated) {
+            "The C# authoring tool did not generate the non-null default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpNonNullDefaultOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the non-null default override bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpAbstractMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the abstract method-generic bridge:\n$generated"

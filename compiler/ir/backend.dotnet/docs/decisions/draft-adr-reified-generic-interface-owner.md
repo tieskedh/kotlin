@@ -435,6 +435,17 @@ production-inert and deliberately narrow. Only one child-owned member with the
 admitted producer-output shape and one independent consumer root are proven.
 Broader member surfaces or changed variance require separate complete proofs.
 
+An explicit Kotlin method bound `<R : Any>` is physically unconstrained on the
+CLR, consistently with
+[`non-null-generic-upper-bound.md`](non-null-generic-upper-bound.md). Kotlin
+source and KLIB retain the non-null rule. A CLR `class` constraint would reject
+valid Kotlin value substitutions, while `struct`, `new()`, or a nominal
+`System.Object` constraint would reject other valid substitutions or state a
+different contract. Natural and semantic interface slots, portable helpers,
+Kotlin overrides, and ordinary C# overrides therefore all use the same
+unconstrained CLR method GenericParam. The semantic capability changes only
+owner-dependent carriers; it must not invent a stronger constraint on `R`.
+
 An admitted owner-relative abstract method `<R : T>(R): T` erases its
 executable CLR `R : T` constraint while KLIB retains that relationship. For a
 final non-generic Kotlin implementation with a closed owner argument, the
