@@ -396,6 +396,18 @@ the same C# source property, portable helper, or DIM. In particular, C# authors 
 override only the natural property and never need to name the semantic capability. Getter and
 setter conversions are checked independently at that method boundary.
 
+An admitted invariant root may contain more than one complete abstract mutable
+property. The natural interface keeps one independent CLR Property row and
+typed `!T` getter/setter pair per Kotlin property; the semantic capability keeps
+four regular methods for two properties and does not fabricate Property rows.
+The optional natural foreign fallback therefore generalizes by structure, not
+member count: partition the entire manifest by source property name and require
+exactly one abstract getter and setter with the proven natural/semantic shapes
+in every group. Only then may an ordinary non-partial C# class implement all
+properties as normal auto-properties without generated capability source.
+Incomplete groups, mixed methods/properties, defaults, overrides, intersections,
+or wrong-shape policies still require generated adaptation or remain closed.
+
 A rehearsal-admitted owner- and method-generic member keeps method parameters
 generic on both views. For the bounded `<R>(R): T` family, the natural slot is
 `<R>(R): T`, the non-generic semantic capability is `<R>(R): object`, and the
