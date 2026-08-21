@@ -1143,10 +1143,16 @@ internal static class KotlinImplementationEmitter
         else if (resolved.Member.DefaultKind == KotlinDefaultKind.DimWithHelper &&
                  resolved.RequiresDimAdapter)
         {
-            body = DimMethodBody(
-                authoringContract,
-                resolved,
-                diagnostics);
+            body = resolved.Locator.Role == KotlinSlotRole.Erased &&
+                   !resolved.Member.ErasedOwnerRelativeConstraints.IsEmpty
+                ? DefaultHelperMethodBody(
+                    authoringContract,
+                    resolved,
+                    diagnostics)
+                : DimMethodBody(
+                    authoringContract,
+                    resolved,
+                    diagnostics);
             if (body == null)
                 return;
         }
@@ -1165,53 +1171,12 @@ internal static class KotlinImplementationEmitter
                         diagnostics);
                     return;
                 case KotlinDefaultKind.PortableHelper:
-                    KotlinMethodLocator? helper =
-                        resolved.Member.Slots.SingleOrDefault(slot =>
-                            slot.Role == KotlinSlotRole.Helper);
-                    string arguments = string.Join(
-                        ", ",
-                        new[] { "this" }.Concat(
-                            physicalMethod.Parameters.Select(
-                                (_, index) => "p" + index)));
-                    if (helper == null ||
-                        !TryHelperCall(
-                            resolved.MemberAssembly,
-                            helper,
-                            HelperTypeArguments(resolved, physicalMethod, helper),
-                            arguments,
-                            out string call,
-                            out IMethodSymbol? helperMethod))
-                    {
-                        diagnostics.Add(Diagnostic.Create(
-                            Diagnostics.MalformedManifest,
-                            authoringContract.Declaration.Identifier.GetLocation(),
-                            resolved.MemberAssembly.Identity.Name,
-                            $"helper locator for '{resolved.Member.LogicalKey}' cannot be emitted"));
+                    body = DefaultHelperMethodBody(
+                        authoringContract,
+                        resolved,
+                        diagnostics);
+                    if (body == null)
                         return;
-                    }
-                    if (physicalMethod.ReturnsVoid)
-                    {
-                        body = "{ " + call + "; }";
-                    }
-                    else if (TryConvertExpression(
-                                 authoringContract.Compilation,
-                                 helperMethod!.ReturnType,
-                                 physicalMethod.ReturnType,
-                                 call,
-                                 out string helperResult))
-                    {
-                        body = "{ return " + helperResult + "; }";
-                    }
-                    else
-                    {
-                        ReportUnsupportedConversion(
-                            authoringContract,
-                            resolved,
-                            helperMethod!.ReturnType,
-                            physicalMethod.ReturnType,
-                            diagnostics);
-                        return;
-                    }
                     break;
                 case KotlinDefaultKind.DimWithHelper:
                     return;
@@ -1221,6 +1186,58 @@ internal static class KotlinImplementationEmitter
         }
 
         EmitExplicitMethod(physicalMethod, body, output, methodName);
+    }
+
+    private static string? DefaultHelperMethodBody(
+        AuthoringContract authoringContract,
+        ResolvedMember resolved,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        IMethodSymbol physicalMethod = resolved.Method;
+        KotlinMethodLocator? helper =
+            resolved.Member.Slots.SingleOrDefault(slot =>
+                slot.Role == KotlinSlotRole.Helper);
+        string arguments = string.Join(
+            ", ",
+            new[] { "this" }.Concat(
+                physicalMethod.Parameters.Select(
+                    (_, index) => "p" + index)));
+        if (helper == null ||
+            !TryHelperCall(
+                resolved.MemberAssembly,
+                helper,
+                HelperTypeArguments(
+                    resolved,
+                    physicalMethod,
+                    helper,
+                    authoringContract.Compilation),
+                arguments,
+                out string call,
+                out IMethodSymbol? helperMethod))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.MalformedManifest,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                resolved.MemberAssembly.Identity.Name,
+                $"helper locator for '{resolved.Member.LogicalKey}' cannot be emitted"));
+            return null;
+        }
+        if (physicalMethod.ReturnsVoid)
+            return "{ " + call + "; }";
+        if (TryConvertExpression(
+                authoringContract.Compilation,
+                helperMethod!.ReturnType,
+                physicalMethod.ReturnType,
+                call,
+                out string helperResult))
+            return "{ return " + helperResult + "; }";
+        ReportUnsupportedConversion(
+            authoringContract,
+            resolved,
+            helperMethod!.ReturnType,
+            physicalMethod.ReturnType,
+            diagnostics);
+        return null;
     }
 
     private static void EmitExplicitMethod(
@@ -2108,12 +2125,27 @@ internal static class KotlinImplementationEmitter
     private static ImmutableArray<ITypeSymbol> HelperTypeArguments(
         ResolvedMember resolved,
         IMethodSymbol physicalMethod,
-        KotlinMethodLocator helper)
+        KotlinMethodLocator helper,
+        Compilation? compilation = null)
     {
         ImmutableArray<ITypeSymbol> methodArguments =
             physicalMethod.TypeParameters.Cast<ITypeSymbol>().ToImmutableArray();
+        ImmutableArray<ITypeSymbol> ownerArguments = resolved.OwnerTypeArguments;
+        if (compilation != null &&
+            resolved.Locator.Role == KotlinSlotRole.Erased &&
+            !resolved.Member.ErasedOwnerRelativeConstraints.IsEmpty)
+        {
+            var widenedOwnerArguments = ownerArguments.ToBuilder();
+            foreach (KotlinErasedOwnerRelativeConstraint constraint in
+                     resolved.Member.ErasedOwnerRelativeConstraints)
+            {
+                widenedOwnerArguments[constraint.OwnerTypeParameterIndex] =
+                    compilation.GetSpecialType(SpecialType.System_Object);
+            }
+            ownerArguments = widenedOwnerArguments.ToImmutable();
+        }
         ImmutableArray<ITypeSymbol> allArguments =
-            resolved.OwnerTypeArguments.AddRange(methodArguments);
+            ownerArguments.AddRange(methodArguments);
         if (helper.GenericArity == allArguments.Length)
             return allArguments;
         if (helper.GenericArity == methodArguments.Length)

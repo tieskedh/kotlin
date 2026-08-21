@@ -746,14 +746,39 @@ verification, and work state.
   Reflection proves covariance, typed `T` results, `R` value parameters, and
   zero physical constraints on both slots and the Kotlin override. All four
   candidate and four erased epoch-off PSI/LightTree, Framework 4.8/.NET 10
-  lanes pass. Defaults, nested or multiple relative bounds, nullable bounds,
-  mixed members, and inherited owner-relative forms remain closed. Evidence is
+  lanes pass. Nested or multiple relative bounds, nullable bounds, mixed
+  members, and inherited owner-relative forms remain closed; the direct
+  default form is recorded next. Evidence is
   archived in
   [`docs/archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md`](docs/archive/reified-generic-interface-owner-relative-method-constraint-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and
   the unchanged up-to-date six-test `dotnet.ir` model root.
+- The same direct owner-relative family may now own one Kotlin default body.
+  Framework and .NET 10 share one authoritative helper body; the modern natural
+  DIM is a typed wrapper, while the Kotlin semantic bridge closes owner `T` at
+  `object` and retains the actual method `R`. Natural and semantic interface
+  MethodDefs, Kotlin overrides, and ordinary C# methods remain generic in that
+  `R` and carry no illegal or stronger CLR `R : T` constraint. Generated C#
+  adapters close the helper at the exact owner argument for natural calls and
+  at `object` for the recorded semantic owner-relative route. An ordinary C#
+  implementation can inherit the default or override only the natural generic
+  method. Generic Kotlin class implementations now expose their planned class
+  dispatcher to the interface bridge, and the allocation-free foreign-
+  override probe carries the same method GenericParam. Direct and widened
+  calls therefore observe a normal C# override even after a separate
+  `lib` -> `middle` -> `leaf` Kotlin chain. Reflection pins two generic slots,
+  zero constraints, typed/object results, and helper `<T, R>` order. The four
+  candidate and four production-inverse PSI/LightTree, Framework 4.8/.NET 10
+  lanes pass with zero failures, errors, or skips. The final normal production
+  aggregate directly audits 190 XML suites and 2,287 tests: 187 FIR suites/
+  2,155 tests, two integration suites/126 tests, and the unchanged six-test
+  `dotnet.ir` model root, with zero failures, errors, or skips. A non-generic
+  Kotlin implementor of the abstract sibling remains an explicit next gate rather
+  than permission to degrade the interface or unrelated state to `object`.
+  Evidence is archived in
+  [`docs/archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](docs/archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

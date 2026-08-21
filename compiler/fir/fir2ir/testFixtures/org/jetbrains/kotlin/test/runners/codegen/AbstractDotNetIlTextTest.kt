@@ -4427,6 +4427,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner =
+                        "RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer`1",
+                    expectedMemberName = "produceOwnerRelativeDefaultGeneric",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable owner-relative default probe")
+                    },
+                    expectedErasedOwnerRelativeConstraints = listOf(0 to 0),
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner = "RehearsalSeparateInvariantProducer`1",
                     expectedMemberName = "produceInvariant",
                     expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
@@ -4786,6 +4805,50 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 RehearsalSeparateOwnerRelativeMethodGenericProducer<string>
             {
                 public string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
+            public sealed class RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer :
+                RehearsalSeparateOwnerRelativeMethodGenericProducerValue<string>
+            {
+                public RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer() :
+                    base("base-owner-relative")
+                {
+                }
+
+                public override string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return "Derived:" + typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
+            public sealed class RehearsalSeparateCSharpDerivedLeafOwnerRelativeMethodGenericProducer :
+                RehearsalSeparateLeafOwnerRelativeMethodGenericProducer<string>
+            {
+                public RehearsalSeparateCSharpDerivedLeafOwnerRelativeMethodGenericProducer() :
+                    base("leaf-base-owner-relative")
+                {
+                }
+
+                public override string produceOwnerRelativeGeneric<R>(R value)
+                {
+                    return "LeafDerived:" + typeof(R).Name + ":" + value.ToString();
+                }
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer :
+                    RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>
+            {
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericOverrideProducer :
+                    RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>
+            {
+                public string produceOwnerRelativeDefaultGeneric<R>(R value)
                 {
                     return typeof(R).Name + ":" + value.ToString();
                 }
@@ -7081,6 +7144,190 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             .GetGenericParameterConstraints().Length != 0)
                         throw new InvalidOperationException(
                             "Kotlin owner-relative override retained a stronger CLR constraint");
+                    RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer
+                        derivedOwnerRelativeProducer =
+                            new RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer();
+                    if (derivedOwnerRelativeProducer.produceOwnerRelativeGeneric<int>(31) !=
+                            "Derived:Int32:31" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                derivedOwnerRelativeProducer,
+                                "foreign-owner-relative"),
+                            "Derived:String:foreign-owner-relative") ||
+                        !ownerRelativeReader.same(
+                            derivedOwnerRelativeProducer,
+                            derivedOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "owner-relative capability bypassed the derived C# override");
+                    RehearsalSeparateCSharpDerivedLeafOwnerRelativeMethodGenericProducer
+                        derivedLeafOwnerRelativeProducer =
+                            new RehearsalSeparateCSharpDerivedLeafOwnerRelativeMethodGenericProducer();
+                    if (derivedLeafOwnerRelativeProducer.produceOwnerRelativeGeneric<int>(37) !=
+                            "LeafDerived:Int32:37" ||
+                        !object.Equals(
+                            ownerRelativeReader.read(
+                                derivedLeafOwnerRelativeProducer,
+                                "foreign-leaf-owner-relative"),
+                            "LeafDerived:String:foreign-leaf-owner-relative") ||
+                        !ownerRelativeReader.same(
+                            derivedLeafOwnerRelativeProducer,
+                            derivedLeafOwnerRelativeProducer))
+                        throw new InvalidOperationException(
+                            "owner-relative capability bypassed the separately compiled " +
+                            "Kotlin leaf and derived C# override");
+                    System.Reflection.MethodInfo ownerRelativeLeafProbe = null;
+                    foreach (System.Reflection.MethodInfo candidate in
+                         typeof(RehearsalSeparateLeafOwnerRelativeMethodGenericProducer<>)
+                             .GetMethods(
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Instance |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                    {
+                        if (candidate.ReturnType != typeof(bool) ||
+                            candidate.GetParameters().Length != 0)
+                            continue;
+                        if (ownerRelativeLeafProbe != null)
+                            throw new InvalidOperationException(
+                                "owner-relative Kotlin leaf exposed duplicate foreign probes");
+                        ownerRelativeLeafProbe = candidate;
+                    }
+                    Type ownerRelativeLeafProbeBase = ownerRelativeLeafProbe == null
+                        ? null
+                        : ownerRelativeLeafProbe.GetBaseDefinition().DeclaringType;
+                    if (ownerRelativeLeafProbe == null ||
+                        !ownerRelativeLeafProbe.IsGenericMethodDefinition ||
+                        ownerRelativeLeafProbe.GetGenericArguments().Length != 1 ||
+                        ownerRelativeLeafProbe.GetGenericArguments()[0]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        ownerRelativeLeafProbeBase == null ||
+                        !ownerRelativeLeafProbeBase.IsGenericType ||
+                        ownerRelativeLeafProbeBase.GetGenericTypeDefinition() !=
+                            typeof(RehearsalSeparateOwnerRelativeMethodGenericProducerValue<>))
+                        throw new InvalidOperationException(
+                            "owner-relative Kotlin leaf lost its generic external probe slot: " +
+                            (ownerRelativeLeafProbe == null
+                                ? "missing"
+                                : "generic=" + ownerRelativeLeafProbe.IsGenericMethodDefinition +
+                                  ", arity=" + ownerRelativeLeafProbe.GetGenericArguments().Length +
+                                  ", constraints=" + ownerRelativeLeafProbe.GetGenericArguments()[0]
+                                      .GetGenericParameterConstraints().Length +
+                                  ", base=" + ownerRelativeLeafProbeBase));
+                    RehearsalSeparateOwnerRelativeDefaultMethodGenericReader
+                        ownerRelativeDefaultReader =
+                            new RehearsalSeparateOwnerRelativeDefaultMethodGenericReader();
+                    RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer
+                        ownerRelativeDefaultProducer =
+                            new RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer();
+                    RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>
+                        ownerRelativeDefaultNaturalView = ownerRelativeDefaultProducer;
+                    if (ownerRelativeDefaultNaturalView
+                            .produceOwnerRelativeDefaultGeneric<string>(
+                                "natural-owner-relative-default") !=
+                            "natural-owner-relative-default" ||
+                        !object.Equals(
+                            ownerRelativeDefaultReader.read(
+                                ownerRelativeDefaultProducer,
+                                23),
+                            23) ||
+                        !ownerRelativeDefaultReader.same(
+                            ownerRelativeDefaultProducer,
+                            ownerRelativeDefaultProducer) ||
+                        libKt.rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "owner-relative generic default lost its body or widened view");
+                    RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericOverrideProducer
+                        ownerRelativeDefaultOverrideProducer =
+                            new RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericOverrideProducer();
+                    if (ownerRelativeDefaultOverrideProducer
+                            .produceOwnerRelativeDefaultGeneric<int>(29) != "Int32:29" ||
+                        !object.Equals(
+                            ownerRelativeDefaultReader.read(
+                                ownerRelativeDefaultOverrideProducer,
+                                "semantic-owner-relative-default"),
+                            "String:semantic-owner-relative-default") ||
+                        !ownerRelativeDefaultReader.same(
+                            ownerRelativeDefaultOverrideProducer,
+                            ownerRelativeDefaultOverrideProducer) ||
+                        libKt.rehearsalSeparateOwnerRelativeDefaultMethodGenericReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "owner-relative generic default bypassed the C# override");
+                    int ownerRelativeDefaultSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalOwnerRelativeDefault = candidate ==
+                            typeof(RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<string>);
+                        System.Reflection.MethodInfo[] ownerRelativeDefaultMethods =
+                            candidate.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                        if (ownerRelativeDefaultMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "owner-relative default owner did not expose one slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo ownerRelativeDefaultMethod =
+                            ownerRelativeDefaultMethods[0];
+                        Type[] ownerRelativeDefaultParameters =
+                            ownerRelativeDefaultMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] ownerRelativeDefaultValues =
+                            ownerRelativeDefaultMethod.GetParameters();
+                        if (ownerRelativeDefaultParameters.Length != 1 ||
+                            ownerRelativeDefaultParameters[0]
+                                .GetGenericParameterConstraints().Length != 0 ||
+                            ownerRelativeDefaultValues.Length != 1 ||
+                            ownerRelativeDefaultValues[0].ParameterType !=
+                                ownerRelativeDefaultParameters[0] ||
+                            ownerRelativeDefaultMethod.ReturnType !=
+                                (isNaturalOwnerRelativeDefault ? typeof(string) : typeof(object)))
+                            throw new InvalidOperationException(
+                                "owner-relative default slot lost its generic signature");
+                        ownerRelativeDefaultSlotCount++;
+                    }
+                    if (ownerRelativeDefaultSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "owner-relative default family did not expose two exact slots");
+                    System.Reflection.MethodInfo ownerRelativeDefaultHelper = null;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<>)
+                             .Assembly.GetTypes())
+                    {
+                        foreach (System.Reflection.MethodInfo candidateMethod in
+                             candidate.GetMethods(
+                                 System.Reflection.BindingFlags.Public |
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Static |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                        {
+                            if (candidateMethod.Name != "produceOwnerRelativeDefaultGeneric")
+                                continue;
+                            if (ownerRelativeDefaultHelper != null)
+                                throw new InvalidOperationException(
+                                    "owner-relative default exposed duplicate helpers");
+                            ownerRelativeDefaultHelper = candidateMethod;
+                        }
+                    }
+                    if (ownerRelativeDefaultHelper == null)
+                        throw new InvalidOperationException(
+                            "owner-relative default lost its portable helper");
+                    Type[] ownerRelativeDefaultHelperParameters =
+                        ownerRelativeDefaultHelper.GetGenericArguments();
+                    System.Reflection.ParameterInfo[] ownerRelativeDefaultHelperValues =
+                        ownerRelativeDefaultHelper.GetParameters();
+                    if (ownerRelativeDefaultHelperParameters.Length != 2 ||
+                        ownerRelativeDefaultHelperParameters[0]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        ownerRelativeDefaultHelperParameters[1]
+                            .GetGenericParameterConstraints().Length != 0 ||
+                        ownerRelativeDefaultHelperValues.Length != 2 ||
+                        ownerRelativeDefaultHelperValues[0].ParameterType != typeof(object) ||
+                        ownerRelativeDefaultHelperValues[1].ParameterType !=
+                            ownerRelativeDefaultHelperParameters[1] ||
+                        ownerRelativeDefaultHelper.ReturnType !=
+                            ownerRelativeDefaultHelperParameters[0])
+                        throw new InvalidOperationException(
+                            "owner-relative default helper lost T/R order or physical erasure");
                     RehearsalSeparateCSharpDerivedDefaultConsumer derivedDefaultConsumer =
                         new RehearsalSeparateCSharpDerivedDefaultConsumer();
                     RehearsalSeparateDefaultConsumer<object> derivedDefaultConsumerView =
@@ -8435,6 +8682,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpOwnerRelativeMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the owner-relative method-generic bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericProducer" in generated) {
+            "The C# authoring tool did not generate the owner-relative default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpOwnerRelativeDefaultMethodGenericOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the owner-relative default override bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpMethodConstraintValue" in generated) {
             "The C# authoring tool did not generate the method-constraint value bridge:\n$generated"
