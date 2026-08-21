@@ -851,9 +851,10 @@ internal class DotNetIlMethodCodegen(
     ) {
         check(function is IrSimpleFunction &&
                 function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER &&
-                signature.parameterTypes.size == 1 &&
+                signature.parameterTypes.size in 1..2 &&
                 signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
-            "Direct foreign override dispatch requires an object-returning no-input capability dispatcher"
+            "Direct foreign override dispatch requires an object-returning capability dispatcher " +
+                    "with at most one explicit input"
         }
         val typedInfo = checkNotNull(availableFunctions[dispatch.typedEntry]) {
             "Direct foreign override dispatch lacks its typed MethodDef"
@@ -862,8 +863,10 @@ internal class DotNetIlMethodCodegen(
             "Direct foreign override dispatch lacks its semantic MethodDef"
         }
         check(typedInfo.owner == functionInfo.owner && semanticInfo.owner == functionInfo.owner &&
-                dispatch.typedEntry.typeParameters.isEmpty() && dispatch.semanticHook.typeParameters.isEmpty()) {
-            "Direct foreign override dispatch must compare one non-generic local owner family"
+                dispatch.typedEntry.typeParameters.size == function.typeParameters.size &&
+                dispatch.semanticHook.typeParameters.size == function.typeParameters.size &&
+                function.typeParameters.size <= 1) {
+            "Direct foreign override dispatch must compare one supported local owner family"
         }
         val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
             functionInfo.owner.ilTypeRef
@@ -875,21 +878,27 @@ internal class DotNetIlMethodCodegen(
                 },
             ).nameInSignature
         }
+        val methodInstantiation = function.typeParameters.indices.map { index ->
+            DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+        }
         fun DotNetIlFunctionInfo.reference(target: IrSimpleFunction): String = renderMethodReference(
             physicalMethodName ?: target.dotNetIlMethodName(),
             ownerToken = ownerToken,
+            methodInstantiation = methodInstantiation,
         )
         val probeInfo = checkNotNull(availableFunctions[dispatch.foreignOverrideProbe]) {
             "Direct foreign override dispatch lacks its virtual probe MethodDef"
         }
         val probeReference = probeInfo.reference(dispatch.foreignOverrideProbe)
         val typedReturn = (typedInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
-        check(typedInfo.signature.parameterTypes.size == 1 && probeInfo.signature.parameterTypes.size == 1 &&
-                semanticInfo.signature.parameterTypes.size == 1 &&
+        check(typedInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
+                probeInfo.signature.parameterTypes.size == 1 &&
+                semanticInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
+                dispatch.foreignOverrideProbe.typeParameters.size == function.typeParameters.size &&
                 typedReturn is DotNetIlValueType.TypeParameter &&
                 probeInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 semanticInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
-            "Direct foreign override dispatch requires paired () -> !T and () -> object slots"
+            "Direct foreign override dispatch requires matching typed and semantic slots"
         }
 
         // The virtual probe belongs to the most-derived Kotlin declaration. It reports whether a
@@ -900,13 +909,15 @@ internal class DotNetIlMethodCodegen(
         methodContext.emitBranch("brfalse", semanticLabel, pops = 1)
 
         methodContext.emit("ldarg.0", pushes = 1)
+        if (signature.parameterTypes.size == 2) methodContext.emit("ldarg.1", pushes = 1)
         methodContext.emit(
             typedInfo.renderCallInstruction(
                 typedInfo.physicalMethodName ?: dispatch.typedEntry.dotNetIlMethodName(),
                 virtual = true,
                 ownerToken = ownerToken,
+                methodInstantiation = methodInstantiation,
             ),
-            pops = 1,
+            pops = signature.parameterTypes.size,
             pushes = 1,
         )
         methodContext.emit("box ${typedReturn.nameInSignature}", pops = 1, pushes = 1)
@@ -914,13 +925,15 @@ internal class DotNetIlMethodCodegen(
 
         methodContext.emitLabel(semanticLabel)
         methodContext.emit("ldarg.0", pushes = 1)
+        if (signature.parameterTypes.size == 2) methodContext.emit("ldarg.1", pushes = 1)
         methodContext.emit(
             semanticInfo.renderCallInstruction(
                 semanticInfo.physicalMethodName ?: dispatch.semanticHook.dotNetIlMethodName(),
                 virtual = true,
                 ownerToken = ownerToken,
+                methodInstantiation = methodInstantiation,
             ),
-            pops = 1,
+            pops = signature.parameterTypes.size,
             pushes = 1,
         )
         methodContext.emitReturn(pops = 1)
@@ -936,9 +949,11 @@ internal class DotNetIlMethodCodegen(
         val typedInfo = checkNotNull(availableFunctions[typedEntry]) {
             "A generic-owner foreign override probe lacks its typed MethodDef"
         }
-        check(typedInfo.owner == functionInfo.owner && typedEntry.typeParameters.isEmpty() &&
-                typedInfo.signature.parameterTypes.size == 1) {
-            "A generic-owner foreign override probe must target one no-input local member"
+        check(typedInfo.owner == functionInfo.owner &&
+                typedEntry.typeParameters.size == function.typeParameters.size &&
+                function.typeParameters.size <= 1 &&
+                typedInfo.signature.parameterTypes.size in 1..2) {
+            "A generic-owner foreign override probe must target one supported local member"
         }
         val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
             functionInfo.owner.ilTypeRef
@@ -950,9 +965,13 @@ internal class DotNetIlMethodCodegen(
                 },
             ).nameInSignature
         }
+        val methodInstantiation = function.typeParameters.indices.map { index ->
+            DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+        }
         val typedReference = typedInfo.renderMethodReference(
             typedInfo.physicalMethodName ?: typedEntry.dotNetIlMethodName(),
             ownerToken = ownerToken,
+            methodInstantiation = methodInstantiation,
         )
         methodContext.emit("ldarg.0", pushes = 1)
         methodContext.emit("ldvirtftn $typedReference", pops = 1, pushes = 1)

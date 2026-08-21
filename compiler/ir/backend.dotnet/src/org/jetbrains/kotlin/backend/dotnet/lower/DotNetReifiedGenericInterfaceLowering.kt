@@ -1477,16 +1477,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
         ) {
             return false
         }
-        if (hasDefaultImplementation && typeParameters.any { methodParameter ->
-                methodParameter.superTypes.any { bound ->
-                    bound.isDotNetOwnerDependentConstraint(parent as IrClass)
-                }
-            }
-        ) {
-            // A helper-backed owner-relative body needs its own cross-profile proof. Keep this
-            // abstract gate from silently admitting portable helper and DIM placement as well.
-            return false
-        }
         return hasDirectMethodGenericProducerSignature(
             ownerParameter,
             { constraintOwner -> constraintOwner.isDirectMethodConstraintConsumerRoot() },
