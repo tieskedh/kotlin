@@ -330,9 +330,10 @@ verification, and work state.
   Missing/ambiguous foreign constructions and accessor exceptions retain the
   surface-40 dispatcher behavior. PSI/LightTree execution on Framework 4.8 and
   .NET 10 passes the eight-test rehearsal matrix and the same eight-test epoch-
-  off inverse with zero failures, errors, or skips. Defaults, inheritance,
-  broader property families, mixed/multiple parameters, constraints, and value-
-  class substitutions remain separate gates. Evidence is archived in
+  off inverse with zero failures, errors, or skips. The homogeneous multiple-
+  property root extension is recorded below; defaults, inheritance around that
+  broader root, mixed members/parameters, constraints, and value-class
+  substitutions remain separate gates. Evidence is archived in
   [`docs/archive/generic-owner-invariant-property-cell-2026-08-20.md`](docs/archive/generic-owner-invariant-property-cell-2026-08-20.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests
@@ -677,6 +678,30 @@ verification, and work state.
   without reflection, IL weaving, or changing the actual method argument type.
   Evidence is archived in
   [`docs/archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md`](docs/archive/reified-generic-interface-nominal-method-constraints-2026-08-21.md).
+  The final normal production aggregate directly audits 190 XML suites and
+  2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
+  suites/2,155 tests, two freshly written integration suites/126 tests, and
+  the unchanged up-to-date six-test `dotnet.ir` model root.
+- An invariant reified generic-interface root may now own one or more complete
+  abstract mutable property families instead of exactly one. The first
+  composition proof uses two independent `var T` properties. Its natural CLR
+  interface exposes two real `Property<T>` rows and four `!T` accessor slots; a
+  generic Kotlin implementation retains two distinct physical `!T` backing
+  fields. Exact/open access stays typed. Star/output reads and input writes use
+  object only at their individual operation boundary and preserve one receiver
+  identity; they do not erase either property, field, interface construction,
+  or unrelated generic state. Ordinary non-partial C# `string` and `object`
+  implementations supply two normal auto-properties and require no compiler-
+  ABI interface. The authoring analyzer now recognizes an arbitrary nonempty
+  manifest only when every member partitions by source property name into one
+  exact abstract getter/setter pair; method bundles retain their previous one-
+  producer/optional-consumer limit, and mixed or incomplete shapes stay closed.
+  Reflection verifies both Property rows, all four typed slots, both Kotlin
+  `!T` fields, and operation-local projected signatures. All four candidate and
+  four erased epoch-off PSI/LightTree, Framework 4.8/.NET 10 lanes pass.
+  Defaulted, inherited, nullable, covariant, mixed, and constrained multiple-
+  property roots remain separate gates. Evidence is archived in
+  [`docs/archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md`](docs/archive/reified-generic-interface-multiple-invariant-properties-2026-08-21.md).
   The final normal production aggregate directly audits 190 XML suites and
   2,287 tests with zero failures, errors, or skips: 187 freshly written FIR
   suites/2,155 tests, two freshly written integration suites/126 tests, and

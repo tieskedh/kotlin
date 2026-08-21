@@ -248,6 +248,12 @@ public interface RehearsalSeparateInvariantPropertyCell<T> {
     public var propertyCellValue: T
 }
 
+public interface RehearsalSeparateDualInvariantPropertyCell<T> {
+    public var primaryPropertyCellValue: T
+
+    public var secondaryPropertyCellValue: T
+}
+
 public fun rehearsalSeparateStarInvariantProduce(
     producer: RehearsalSeparateInvariantProducer<*>,
 ): Any? = producer.produceInvariant()
@@ -299,6 +305,35 @@ public fun <T> rehearsalSeparateOpenInvariantPropertyCellIdentity(
     cell: RehearsalSeparateInvariantPropertyCell<T>,
 ): RehearsalSeparateInvariantPropertyCell<T> = cell
 
+public fun rehearsalSeparateStarDualInvariantPropertyCellPrimaryRead(
+    cell: RehearsalSeparateDualInvariantPropertyCell<*>,
+): Any? = cell.primaryPropertyCellValue
+
+public fun rehearsalSeparateStarDualInvariantPropertyCellSecondaryRead(
+    cell: RehearsalSeparateDualInvariantPropertyCell<*>,
+): Any? = cell.secondaryPropertyCellValue
+
+public fun rehearsalSeparateProjectedDualInvariantPropertyCellPrimaryRead(
+    cell: RehearsalSeparateDualInvariantPropertyCell<out Any?>,
+): Any? = cell.primaryPropertyCellValue
+
+public fun rehearsalSeparateProjectedDualInvariantPropertyCellSecondaryRead(
+    cell: RehearsalSeparateDualInvariantPropertyCell<out Any?>,
+): Any? = cell.secondaryPropertyCellValue
+
+public fun rehearsalSeparateProjectedDualInvariantPropertyCellWrite(
+    cell: RehearsalSeparateDualInvariantPropertyCell<in String>,
+    primary: String,
+    secondary: String,
+) {
+    cell.primaryPropertyCellValue = primary
+    cell.secondaryPropertyCellValue = secondary
+}
+
+public fun <T> rehearsalSeparateOpenDualInvariantPropertyCellIdentity(
+    cell: RehearsalSeparateDualInvariantPropertyCell<T>,
+): RehearsalSeparateDualInvariantPropertyCell<T> = cell
+
 public class RehearsalSeparateInvariantCellValue<T>(private var value: T) :
     RehearsalSeparateInvariantCell<T> {
     public override fun readCell(): T = value
@@ -311,6 +346,11 @@ public class RehearsalSeparateInvariantCellValue<T>(private var value: T) :
 public class RehearsalSeparateInvariantPropertyCellValue<T>(
     override var propertyCellValue: T,
 ) : RehearsalSeparateInvariantPropertyCell<T>
+
+public class RehearsalSeparateDualInvariantPropertyCellValue<T>(
+    override var primaryPropertyCellValue: T,
+    override var secondaryPropertyCellValue: T,
+) : RehearsalSeparateDualInvariantPropertyCell<T>
 
 public class RehearsalSeparateConsumerValue<T>(initial: T) :
     RehearsalSeparateConsumer<T> {
@@ -1151,6 +1191,69 @@ fun box(): String {
         ) != 71
     ) {
         return "fail: separate projected invariant property cell box mutation"
+    }
+    val dualInvariantPropertyCell: RehearsalSeparateDualInvariantPropertyCell<String> =
+        RehearsalSeparateDualInvariantPropertyCellValue(
+            "separate-dual-primary",
+            "separate-dual-secondary",
+        )
+    dualInvariantPropertyCell.primaryPropertyCellValue = "separate-dual-exact-primary"
+    dualInvariantPropertyCell.secondaryPropertyCellValue = "separate-dual-exact-secondary"
+    val projectedOutputDualInvariantPropertyCell:
+            RehearsalSeparateDualInvariantPropertyCell<out Any?> =
+        dualInvariantPropertyCell
+    if (rehearsalSeparateProjectedDualInvariantPropertyCellPrimaryRead(
+            projectedOutputDualInvariantPropertyCell,
+        ) != "separate-dual-exact-primary" ||
+        rehearsalSeparateProjectedDualInvariantPropertyCellSecondaryRead(
+            projectedOutputDualInvariantPropertyCell,
+        ) != "separate-dual-exact-secondary" ||
+        rehearsalSeparateStarDualInvariantPropertyCellPrimaryRead(
+            projectedOutputDualInvariantPropertyCell,
+        ) != "separate-dual-exact-primary" ||
+        rehearsalSeparateStarDualInvariantPropertyCellSecondaryRead(
+            projectedOutputDualInvariantPropertyCell,
+        ) != "separate-dual-exact-secondary" ||
+        projectedOutputDualInvariantPropertyCell !== dualInvariantPropertyCell
+    ) {
+        return "fail: separate projected dual invariant property cell read"
+    }
+    val projectedInputDualInvariantPropertyCell:
+            RehearsalSeparateDualInvariantPropertyCell<in String> =
+        dualInvariantPropertyCell
+    rehearsalSeparateProjectedDualInvariantPropertyCellWrite(
+        projectedInputDualInvariantPropertyCell,
+        "separate-dual-projected-primary",
+        "separate-dual-projected-secondary",
+    )
+    if (dualInvariantPropertyCell.primaryPropertyCellValue !=
+            "separate-dual-projected-primary" ||
+        dualInvariantPropertyCell.secondaryPropertyCellValue !=
+            "separate-dual-projected-secondary" ||
+        projectedInputDualInvariantPropertyCell !== dualInvariantPropertyCell ||
+        rehearsalSeparateOpenDualInvariantPropertyCellIdentity(
+            dualInvariantPropertyCell,
+        ) !== dualInvariantPropertyCell
+    ) {
+        return "fail: separate projected dual invariant property cell write"
+    }
+    val broadDualInvariantPropertyCell:
+            RehearsalSeparateDualInvariantPropertyCell<Any?> =
+        RehearsalSeparateDualInvariantPropertyCellValue(
+            "separate-dual-broad-primary",
+            "separate-dual-broad-secondary",
+        )
+    rehearsalSeparateProjectedDualInvariantPropertyCellWrite(
+        broadDualInvariantPropertyCell,
+        "separate-dual-broad-projected-primary",
+        "separate-dual-broad-projected-secondary",
+    )
+    if (broadDualInvariantPropertyCell.primaryPropertyCellValue !=
+            "separate-dual-broad-projected-primary" ||
+        broadDualInvariantPropertyCell.secondaryPropertyCellValue !=
+            "separate-dual-broad-projected-secondary"
+    ) {
+        return "fail: separate broad dual invariant property cell write"
     }
     val invariantPropertyCellChild: RehearsalSeparateInvariantPropertyCellChild<String> =
         RehearsalSeparateInvariantPropertyCellChildValue(
