@@ -779,6 +779,29 @@ verification, and work state.
   than permission to degrade the interface or unrelated state to `object`.
   Evidence is archived in
   [`docs/archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md`](docs/archive/reified-generic-interface-owner-relative-method-default-2026-08-21.md).
+- A final non-generic Kotlin class may now implement the abstract owner-relative
+  sibling without narrowing a legal widened method construction to the class's
+  closed owner argument. Its one authoritative Kotlin body moves to a private
+  unconstrained `<R>(R): object` semantic twin. The public class method remains
+  the closed typed C# entry, while separate private natural and semantic
+  MethodImpls forward the actual `R` to that same body; only the natural result
+  is adapted back to the closed owner result. Semantic bodies are cached per
+  Kotlin target, but natural MethodImpls are emitted per physical interface
+  slot, so one override may implement two independent reified roots without
+  losing either slot or duplicating the body. Separate `lib` -> `middle` -> C#
+  consumption covers closed `String`, `Int`, nullable `String`, and dual-root
+  implementations. Exact natural calls, legal widened Kotlin calls, null,
+  boxing, identity, and both interface maps execute on Framework 4.8 and .NET
+  10 with both FIR parsers. The four candidate, four explicit epoch-off, and
+  four property-absent lanes pass with zero failures, errors, or skips. The
+  final normal production aggregate directly audits 190 XML suites and 2,287
+  tests with zero failures, errors, or skips: 187 FIR suites/2,155 tests, two
+  integration suites/126 tests, and the unchanged six-test `dotnet.ir` root.
+  Open non-generic implementations, inherited non-generic bodies, overloads,
+  and broader parameter graphs remain explicit gates; in particular, the
+  private semantic twin is not an override-family solution. Evidence is
+  archived in
+  [`docs/archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md`](docs/archive/reified-generic-interface-closed-owner-relative-implementation-2026-08-21.md).
 - Latest compiler-work audit: nine lowering-local external-declaration
   resolvers rebuilt the same three immutable library indexes during every
   ordinary backend compilation. `DotNetBackendContext` now builds one

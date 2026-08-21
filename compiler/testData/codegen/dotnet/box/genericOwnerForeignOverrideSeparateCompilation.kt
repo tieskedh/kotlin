@@ -252,6 +252,10 @@ public interface RehearsalSeparateOwnerRelativeMethodGenericProducer<out T> {
     public fun <R : @UnsafeVariance T> produceOwnerRelativeGeneric(value: R): T
 }
 
+public interface RehearsalSeparateSecondaryOwnerRelativeMethodGenericProducer<out T> {
+    public fun <R : @UnsafeVariance T> produceOwnerRelativeGeneric(value: R): T
+}
+
 public class RehearsalSeparateOwnerRelativeMethodGenericReader {
     public fun <R> read(
         producer: RehearsalSeparateOwnerRelativeMethodGenericProducer<Any?>,
@@ -260,6 +264,18 @@ public class RehearsalSeparateOwnerRelativeMethodGenericReader {
 
     public fun same(
         producer: RehearsalSeparateOwnerRelativeMethodGenericProducer<Any?>,
+        expected: Any?,
+    ): Boolean = producer === expected
+}
+
+public class RehearsalSeparateSecondaryOwnerRelativeMethodGenericReader {
+    public fun <R> read(
+        producer: RehearsalSeparateSecondaryOwnerRelativeMethodGenericProducer<Any?>,
+        value: R,
+    ): Any? = producer.produceOwnerRelativeGeneric(value)
+
+    public fun same(
+        producer: RehearsalSeparateSecondaryOwnerRelativeMethodGenericProducer<Any?>,
         expected: Any?,
     ): Boolean = producer === expected
 }
@@ -822,6 +838,27 @@ public open class RehearsalSeparateOwnerRelativeMethodGenericProducerValue<T>(pr
     public override fun <R : T> produceOwnerRelativeGeneric(value: R): T = value
 }
 
+public class RehearsalSeparateClosedOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String> {
+    public override fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
+}
+
+public class RehearsalSeparateClosedIntOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<Int> {
+    public override fun <R : Int> produceOwnerRelativeGeneric(value: R): Int = value
+}
+
+public class RehearsalSeparateClosedNullableOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String?> {
+    public override fun <R : String?> produceOwnerRelativeGeneric(value: R): String? = value
+}
+
+public class RehearsalSeparateClosedDualOwnerRelativeMethodGenericProducer :
+    RehearsalSeparateOwnerRelativeMethodGenericProducer<String>,
+    RehearsalSeparateSecondaryOwnerRelativeMethodGenericProducer<String> {
+    public override fun <R : String> produceOwnerRelativeGeneric(value: R): String = value
+}
+
 public class RehearsalSeparateOwnerRelativeDefaultMethodGenericProducerValue<T> :
     RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<T>
 
@@ -1090,6 +1127,38 @@ fun box(): String {
         )
     ) {
         return "fail: separate broad owner-relative method-generic producer"
+    }
+    val exactClosedOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateClosedOwnerRelativeMethodGenericProducer()
+    if (exactClosedOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-closed-owner-relative",
+        ) != "exact-closed-owner-relative"
+    ) {
+        return "fail: separate exact closed owner-relative method-generic producer"
+    }
+    val exactClosedIntOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<Int> =
+        RehearsalSeparateClosedIntOwnerRelativeMethodGenericProducer()
+    if (exactClosedIntOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(73) != 73) {
+        return "fail: separate exact closed Int owner-relative method-generic producer"
+    }
+    val exactClosedNullableOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String?> =
+        RehearsalSeparateClosedNullableOwnerRelativeMethodGenericProducer()
+    if (exactClosedNullableOwnerRelativeMethodGeneric
+            .produceOwnerRelativeGeneric<String?>(null) != null
+    ) {
+        return "fail: separate exact closed nullable owner-relative method-generic producer"
+    }
+    val exactClosedDualOwnerRelativeMethodGeneric:
+            RehearsalSeparateOwnerRelativeMethodGenericProducer<String> =
+        RehearsalSeparateClosedDualOwnerRelativeMethodGenericProducer()
+    if (exactClosedDualOwnerRelativeMethodGeneric.produceOwnerRelativeGeneric(
+            "exact-closed-dual-owner-relative",
+        ) != "exact-closed-dual-owner-relative"
+    ) {
+        return "fail: separate exact closed dual owner-relative method-generic producer"
     }
     val exactOwnerRelativeDefaultMethodGeneric:
             RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<String> =
