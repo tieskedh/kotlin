@@ -4340,6 +4340,24 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
                     expectedDeclaredOwner =
+                        "RehearsalSeparateMultiConstrainedDefaultProducer`1",
+                    expectedMemberName = "produceMultiConstrainedDefault",
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "object",
+                    expectedSemanticParameterTypes = listOf("!!0"),
+                    expectedNaturalReturnType = "!0",
+                    expectedNaturalParameterTypes = listOf("!!0"),
+                    expectedMethodGenericArity = 1,
+                    expectedDefaultKind = when (target) {
+                        DotNetTarget.NET48 -> DotNetCSharpDefaultKind.PORTABLE_HELPER
+                        DotNetTarget.NET10_0 -> DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                        DotNetTarget.NETSTANDARD_2_0 ->
+                            error("netstandard2.0 has no executable multi-constraint default probe")
+                    },
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner =
                         "RehearsalSeparateAbstractMethodGenericProducer`1",
                     expectedMemberName = "produceAbstractGeneric",
                     expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
@@ -4578,6 +4596,25 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed partial class RehearsalSeparateCSharpMultiConstrainedDefaultProducer :
+                RehearsalSeparateMultiConstrainedDefaultProducer<int>
+            {
+            }
+
+            public sealed partial class
+                RehearsalSeparateCSharpMultiConstrainedDefaultOverrideProducer :
+                    RehearsalSeparateMultiConstrainedDefaultProducer<int>
+            {
+                public int produceMultiConstrainedDefault<R>(R value)
+                    where R : RehearsalSeparateMethodConstraintMarker,
+                              RehearsalSeparateConsumer<R>
+                {
+                    value.consume(value);
+                    value.mark();
+                    return 8000;
+                }
+            }
+
             public sealed partial class RehearsalSeparateCSharpAbstractMethodGenericProducer :
                 RehearsalSeparateAbstractMethodGenericProducer<int>
             {
@@ -4588,9 +4625,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
             }
 
             public sealed partial class RehearsalSeparateCSharpMethodConstraintValue :
-                RehearsalSeparateConsumer<RehearsalSeparateCSharpMethodConstraintValue>
+                RehearsalSeparateConsumer<RehearsalSeparateCSharpMethodConstraintValue>,
+                RehearsalSeparateMethodConstraintMarker
             {
                 public int Count;
+                public int MarkCount;
 
                 public void consume(RehearsalSeparateCSharpMethodConstraintValue value)
                 {
@@ -4598,6 +4637,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "method-generic constraint value lost identity");
                     Count++;
+                }
+
+                public int mark()
+                {
+                    MarkCount++;
+                    return MarkCount;
                 }
             }
 
@@ -6163,6 +6208,182 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             constrainedDefaultHelperParameters[1])
                         throw new InvalidOperationException(
                             "constrained default helper lost its method self bound");
+                    RehearsalSeparateCSharpMethodConstraintValue
+                        multiConstrainedDefaultValue =
+                            new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateCSharpMultiConstrainedDefaultProducer
+                        multiConstrainedDefaultProducer =
+                            new RehearsalSeparateCSharpMultiConstrainedDefaultProducer();
+                    RehearsalSeparateMultiConstrainedDefaultProducer<int>
+                        multiConstrainedDefaultProducerView =
+                            multiConstrainedDefaultProducer;
+                    RehearsalSeparateMultiConstrainedDefaultReader
+                        multiConstrainedDefaultReader =
+                            new RehearsalSeparateMultiConstrainedDefaultReader();
+                    if (multiConstrainedDefaultProducerView
+                            .produceMultiConstrainedDefault(
+                                multiConstrainedDefaultValue) != 7000 ||
+                        !object.Equals(
+                            multiConstrainedDefaultReader.read(
+                                multiConstrainedDefaultProducer,
+                                multiConstrainedDefaultValue),
+                            7000) ||
+                        !multiConstrainedDefaultReader.same(
+                            multiConstrainedDefaultProducer,
+                            multiConstrainedDefaultProducer) ||
+                        multiConstrainedDefaultValue.Count != 2 ||
+                        multiConstrainedDefaultValue.MarkCount != 2 ||
+                        libKt.rehearsalSeparateMultiConstrainedDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "multi-constrained default lost its body or identity");
+                    RehearsalSeparateCSharpMethodConstraintValue
+                        multiConstrainedDefaultOverrideValue =
+                            new RehearsalSeparateCSharpMethodConstraintValue();
+                    RehearsalSeparateCSharpMultiConstrainedDefaultOverrideProducer
+                        multiConstrainedDefaultOverrideProducer =
+                            new RehearsalSeparateCSharpMultiConstrainedDefaultOverrideProducer();
+                    if (multiConstrainedDefaultOverrideProducer
+                            .produceMultiConstrainedDefault(
+                                multiConstrainedDefaultOverrideValue) != 8000 ||
+                        !object.Equals(
+                            multiConstrainedDefaultReader.read(
+                                multiConstrainedDefaultOverrideProducer,
+                                multiConstrainedDefaultOverrideValue),
+                            8000) ||
+                        !multiConstrainedDefaultReader.same(
+                            multiConstrainedDefaultOverrideProducer,
+                            multiConstrainedDefaultOverrideProducer) ||
+                        multiConstrainedDefaultOverrideValue.Count != 2 ||
+                        multiConstrainedDefaultOverrideValue.MarkCount != 2 ||
+                        libKt.rehearsalSeparateMultiConstrainedDefaultReadCount() != 2)
+                        throw new InvalidOperationException(
+                            "multi-constrained default bypassed the C# override");
+                    int multiConstrainedDefaultSlotCount = 0;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateCSharpMultiConstrainedDefaultProducer)
+                             .GetInterfaces())
+                    {
+                        bool isNaturalMultiConstraintOwner = candidate ==
+                            typeof(RehearsalSeparateMultiConstrainedDefaultProducer<int>);
+                        System.Reflection.MethodInfo[] multiConstrainedMethods =
+                            candidate.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Instance |
+                                System.Reflection.BindingFlags.DeclaredOnly);
+                        if (multiConstrainedMethods.Length != 1)
+                            throw new InvalidOperationException(
+                                "multi-constrained default owner did not expose one declared slot: " +
+                                candidate.FullName);
+                        System.Reflection.MethodInfo multiConstrainedMethod =
+                            multiConstrainedMethods[0];
+                        Type[] multiConstrainedParameters =
+                            multiConstrainedMethod.GetGenericArguments();
+                        System.Reflection.ParameterInfo[] multiConstrainedValues =
+                            multiConstrainedMethod.GetParameters();
+                        if (multiConstrainedParameters.Length != 1 ||
+                            multiConstrainedValues.Length != 1 ||
+                            multiConstrainedValues[0].ParameterType !=
+                                multiConstrainedParameters[0] ||
+                            multiConstrainedMethod.ReturnType !=
+                                (isNaturalMultiConstraintOwner ? typeof(int) : typeof(object)))
+                            throw new InvalidOperationException(
+                                "multi-constrained default slot lost its generic signature");
+                        Type[] multiConstrainedBounds =
+                            multiConstrainedParameters[0].GetGenericParameterConstraints();
+                        bool hasMultiConsumerBound = false;
+                        bool hasMultiMarkerBound = false;
+                        foreach (Type bound in multiConstrainedBounds)
+                        {
+                            if (bound == typeof(RehearsalSeparateMethodConstraintMarker))
+                            {
+                                hasMultiMarkerBound = true;
+                                continue;
+                            }
+                            if (bound.IsGenericType &&
+                                bound.GetGenericTypeDefinition() ==
+                                    typeof(RehearsalSeparateConsumer<>) &&
+                                bound.GetGenericArguments()[0] == multiConstrainedParameters[0])
+                            {
+                                hasMultiConsumerBound = true;
+                                continue;
+                            }
+                            throw new InvalidOperationException(
+                                "multi-constrained default slot exposed an unexpected bound: " +
+                                bound.ToString());
+                        }
+                        if (multiConstrainedBounds.Length != 2 ||
+                            !hasMultiConsumerBound || !hasMultiMarkerBound)
+                            throw new InvalidOperationException(
+                                "multi-constrained default slot lost an unordered bound");
+                        multiConstrainedDefaultSlotCount++;
+                    }
+                    if (multiConstrainedDefaultSlotCount != 2)
+                        throw new InvalidOperationException(
+                            "multi-constrained default family did not expose two exact slots");
+                    System.Reflection.MethodInfo multiConstrainedDefaultHelper = null;
+                    foreach (Type candidate in
+                         typeof(RehearsalSeparateMultiConstrainedDefaultProducer<>)
+                             .Assembly.GetTypes())
+                    {
+                        foreach (System.Reflection.MethodInfo candidateMethod in
+                             candidate.GetMethods(
+                                 System.Reflection.BindingFlags.Public |
+                                 System.Reflection.BindingFlags.NonPublic |
+                                 System.Reflection.BindingFlags.Static |
+                                 System.Reflection.BindingFlags.DeclaredOnly))
+                        {
+                            if (candidateMethod.Name != "produceMultiConstrainedDefault")
+                                continue;
+                            if (multiConstrainedDefaultHelper != null)
+                                throw new InvalidOperationException(
+                                    "multi-constrained default exposed duplicate helpers");
+                            multiConstrainedDefaultHelper = candidateMethod;
+                        }
+                    }
+                    if (multiConstrainedDefaultHelper == null)
+                        throw new InvalidOperationException(
+                            "multi-constrained default lost its portable helper");
+                    Type[] multiConstrainedHelperParameters =
+                        multiConstrainedDefaultHelper.GetGenericArguments();
+                    System.Reflection.ParameterInfo[] multiConstrainedHelperValues =
+                        multiConstrainedDefaultHelper.GetParameters();
+                    if (multiConstrainedHelperParameters.Length != 2 ||
+                        multiConstrainedHelperValues.Length != 2 ||
+                        multiConstrainedDefaultHelper.ReturnType !=
+                            multiConstrainedHelperParameters[0] ||
+                        multiConstrainedHelperValues[0].ParameterType != typeof(object) ||
+                        multiConstrainedHelperValues[1].ParameterType !=
+                            multiConstrainedHelperParameters[1])
+                        throw new InvalidOperationException(
+                            "multi-constrained helper lost owner/method parameter order");
+                    Type[] multiConstrainedHelperBounds =
+                        multiConstrainedHelperParameters[1].GetGenericParameterConstraints();
+                    bool hasMultiHelperConsumerBound = false;
+                    bool hasMultiHelperMarkerBound = false;
+                    foreach (Type bound in multiConstrainedHelperBounds)
+                    {
+                        if (bound == typeof(RehearsalSeparateMethodConstraintMarker))
+                        {
+                            hasMultiHelperMarkerBound = true;
+                            continue;
+                        }
+                        if (bound.IsGenericType &&
+                            bound.GetGenericTypeDefinition() ==
+                                typeof(RehearsalSeparateConsumer<>) &&
+                            bound.GetGenericArguments()[0] ==
+                                multiConstrainedHelperParameters[1])
+                        {
+                            hasMultiHelperConsumerBound = true;
+                            continue;
+                        }
+                        throw new InvalidOperationException(
+                            "multi-constrained helper exposed an unexpected bound: " +
+                            bound.ToString());
+                    }
+                    if (multiConstrainedHelperBounds.Length != 2 ||
+                        !hasMultiHelperConsumerBound || !hasMultiHelperMarkerBound)
+                        throw new InvalidOperationException(
+                            "multi-constrained helper lost an unordered bound");
                     RehearsalSeparateCSharpAbstractMethodGenericProducer
                         abstractMethodGenericProducer =
                             new RehearsalSeparateCSharpAbstractMethodGenericProducer();
@@ -7561,6 +7782,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpConstrainedDefaultMethodGenericOverrideProducer" in generated) {
             "The C# authoring tool did not generate the constrained default override bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpMultiConstrainedDefaultProducer" in generated) {
+            "The C# authoring tool did not generate the multi-constrained default bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpMultiConstrainedDefaultOverrideProducer" in generated) {
+            "The C# authoring tool did not generate the multi-constrained default override bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpAbstractMethodGenericProducer" in generated) {
             "The C# authoring tool did not generate the abstract method-generic bridge:\n$generated"
