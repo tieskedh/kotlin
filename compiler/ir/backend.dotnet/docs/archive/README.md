@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-owner-relative-method-constraint-2026-08-21.md`](reified-generic-interface-owner-relative-method-constraint-2026-08-21.md)
+  records one abstract direct `R : T` method bound, its deliberate executable
+  CLR erasure, preserved actual method `R`, ordinary C# authoring, and widened
+  Kotlin dispatch on Framework and .NET 10.
 - [`reified-generic-interface-read-only-property-child-2026-08-21.md`](reified-generic-interface-read-only-property-child-2026-08-21.md)
   records one exact covariant read-only property-inheritance edge, independent
   parent/child Property ownership and `!T` fields, ordinary partial C# property
