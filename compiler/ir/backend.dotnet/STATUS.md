@@ -48,7 +48,26 @@ verification, and work state.
   selection fails closed before emission if a named self-describing capability
   assembly is absent.
 
-  The first general multi-member root prerequisite is now closed as well.
+  The first constructed owner-dependent result is now closed without a stdlib
+  or declaration-name exception. A covariant root may return one already-
+  admitted covariant interface constructed over its own parameter, so the
+  rehearsal emits natural `Iterable<T>.iterator(): Iterator<T>`-shaped
+  metadata. Exact Kotlin and ordinary C# calls return the truthful nested CLR
+  construction. Its declaration-semantic slot uses `object`, because it must
+  preserve either Kotlin's sibling capability or an ordinary C# `Iterator<T>`
+  which has no compiler capability, without a wrapper or identity change.
+  Exact nested state remains typed. Only a concrete outer state slot which can
+  actually contain a Kotlin-legal, CLR-unnameable covariant nested view becomes
+  semantic; a dedicated semantic-result route prevents that hostile value from
+  globally erasing either owner. ABI/runtime surface 44 publishes the
+  `CONSTRUCTED_INTERFACE_PRODUCER` role, and separate Kotlin/C# execution
+  validates natural calls, widened calls, hostile nested state, and identity.
+  Twelve focused candidate/explicit-off/property-absent lanes are green across
+  PSI and LightTree on Framework 4.8 and .NET 10. The final aggregate evidence
+  is recorded in
+  [`docs/archive/reified-generic-interface-constructed-result-family-2026-08-22.md`](docs/archive/reified-generic-interface-constructed-result-family-2026-08-22.md).
+
+  The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
   primitive queries. The proof's cursor-like owner emits natural `bool`/`!T`
@@ -4425,11 +4444,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    `I<T>` plus declaration-semantic capability is now emitted and consumed:
    one direct `T` producer composes owner-independent primitive queries, and
    ABI 43 plus the C# authoring record carry both members across a producer
-   boundary without an `Iterator` or stdlib switch. Next close constructed
-   owner-dependent member results such as
-   `Iterable<T>.iterator(): Iterator<T>`, then the broader inputs/properties
-   required by `Collection<T>` and `Set<T>`; do not add a `Map`, `Set`, or
-   `Sequence` representation exception. Then continue the complete
+   boundary without an `Iterator` or stdlib switch. ABI 44 now closes the next
+   constructed-result composition: an admitted `Iterable<T>`-shaped root
+   returns the natural admitted `Iterator<T>` construction, while only a
+   concrete CLR-unnameable nested value transition selects the object-domain
+   state and semantic-result capability. Exact nested state remains typed; no
+   wrapper, shadow state, global owner erasure, or stdlib switch was added.
+   Next close the broader inputs/properties required by `Collection<T>` and
+   `Set<T>`; do not add a `Map`, `Set`, or `Sequence` representation exception.
+   Then continue the complete
    Runtime/Stdlib owner graph and its
    residual capability joins, covariant returns, and intrinsic state
    requirements before executing representative products and exact inverse

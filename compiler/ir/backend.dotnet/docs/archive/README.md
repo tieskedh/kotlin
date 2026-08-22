@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-constructed-result-family-2026-08-22.md`](reified-generic-interface-constructed-result-family-2026-08-22.md)
+  records the first `Iterable<T>.iterator(): Iterator<T>`-shaped natural CLR
+  result, operation-local semantic result/state escape hatch, ordinary C#
+  implementation, ABI 44 role, and twelve-lane/full-gate evidence.
 - [`reified-generic-interface-owner-independent-query-family-2026-08-22.md`](reified-generic-interface-owner-independent-query-family-2026-08-22.md)
   records the first general multi-member covariant CLR interface, its one
   owner-dependent producer plus owner-independent primitive query grammar,

@@ -42,6 +42,12 @@ public interface RehearsalSeparateGeneralCursor<out T> {
     public fun nextGeneral(): T
 }
 
+// Constructed-result prerequisite for Iterable/Collection/Set. The nested cursor must remain a
+// natural Cursor<T> when exact and use only its already-published semantic capability when broad.
+public interface RehearsalSeparateGeneralIterable<out T> {
+    public fun generalIterator(): RehearsalSeparateGeneralCursor<T>
+}
+
 public interface RehearsalSeparateSecondaryProducer<out T> {
     public fun produceSecondary(): T
 }
@@ -544,6 +550,18 @@ public class RehearsalSeparateGeneralCursorReader {
     ): Boolean = cursor === expected
 }
 
+public class RehearsalSeparateGeneralIterableReader {
+    public fun read(iterable: RehearsalSeparateGeneralIterable<Any?>): Any? {
+        val cursor = iterable.generalIterator()
+        return if (cursor.hasGeneralNext()) cursor.nextGeneral() else null
+    }
+
+    public fun returnsSameCursor(
+        iterable: RehearsalSeparateGeneralIterable<Any?>,
+        expected: Any?,
+    ): Boolean = iterable.generalIterator() === expected
+}
+
 public class RehearsalSeparateNestedBox<T>(initial: T) {
     private var value: T = initial
 
@@ -890,6 +908,12 @@ public class RehearsalSeparateGeneralCursorValue<T>(private val value: T) :
     public override fun nextGeneral(): T = value
 }
 
+public class RehearsalSeparateGeneralIterableValue<T>(
+    private val cursor: RehearsalSeparateGeneralCursor<T>,
+) : RehearsalSeparateGeneralIterable<T> {
+    public override fun generalIterator(): RehearsalSeparateGeneralCursor<T> = cursor
+}
+
 public class RehearsalSeparateAbstractMethodGenericProducerValue<T>(private val value: T) :
     RehearsalSeparateAbstractMethodGenericProducer<T> {
     public override fun <R> produceAbstractGeneric(value: R): T = this.value
@@ -1176,6 +1200,29 @@ fun box(): String {
         !RehearsalSeparateGeneralCursorReader().same(broadGeneralCursor, exactGeneralCursor)
     ) {
         return "fail: separate mixed general cursor family"
+    }
+    val exactGeneralIterable: RehearsalSeparateGeneralIterable<Int> =
+        RehearsalSeparateGeneralIterableValue(exactGeneralCursor)
+    val broadGeneralIterable: RehearsalSeparateGeneralIterable<Any?> = exactGeneralIterable
+    if (exactGeneralIterable.generalIterator() !== exactGeneralCursor ||
+        RehearsalSeparateGeneralIterableReader().read(broadGeneralIterable) != 33 ||
+        !RehearsalSeparateGeneralIterableReader().returnsSameCursor(
+            broadGeneralIterable,
+            exactGeneralCursor,
+        )
+    ) {
+        return "fail: separate constructed general iterable result"
+    }
+    val semanticNestedGeneralIterable =
+        RehearsalSeparateGeneralIterableValue<Any?>(broadGeneralCursor)
+    if (semanticNestedGeneralIterable.generalIterator() !== exactGeneralCursor ||
+        RehearsalSeparateGeneralIterableReader().read(semanticNestedGeneralIterable) != 33 ||
+        !RehearsalSeparateGeneralIterableReader().returnsSameCursor(
+            semanticNestedGeneralIterable,
+            exactGeneralCursor,
+        )
+    ) {
+        return "fail: separate semantic nested general iterable state"
     }
     val readOnlyPropertyChild: RehearsalSeparateReadOnlyPropertyChild<String> =
         RehearsalSeparateReadOnlyPropertyChildValue(

@@ -169,6 +169,7 @@ enum class DotNetGenericOwnerPropertyAccessorKind {
 enum class DotNetGenericOwnerSemanticHookReason {
     GENERAL_WIDENED_BODY,
     PAIRED_OPEN_OUTPUT_STATE,
+    PAIRED_SEMANTIC_STATE_OUTPUT,
     ABSTRACT_BROAD_PROPERTY_OBLIGATION,
     INHERITED_SEMANTIC_OVERRIDE,
     INTERNAL_SEMANTIC_REACHABILITY,
@@ -1584,6 +1585,7 @@ enum class DotNetGenericOwnerCallReceiverProvenance {
 enum class DotNetGenericOwnerCallRouteRequirement {
     EXACT_TYPED_ENTRY,
     SEMANTIC_CAPABILITY,
+    SEMANTIC_RESULT_CAPABILITY,
     MISSING_CAPABILITY,
     PRODUCER_ERASED_OWNER,
     EXTERNAL_FAMILY_RECORD_REQUIRED,
@@ -1613,6 +1615,10 @@ data class DotNetGenericOwnerCallRouteSnapshot(
             routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
                     receiverProvenance != DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
         ) { "a semantic generic-owner capability cannot replace a proven exact typed entry" }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY ||
+                    receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "a semantic-result capability requires exact receiver-construction provenance" }
     }
 }
 
@@ -1640,6 +1646,10 @@ data class DotNetGenericOwnerCallRouteManifestRecord(
             routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
                     receiverProvenance != DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
         ) { "a semantic application route cannot replace a proven exact typed entry" }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY ||
+                    receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "a semantic-result application route requires exact construction provenance" }
     }
 }
 
@@ -3311,6 +3321,10 @@ fun DotNetGenericOwnerCallRouteSnapshot.resolveExternalPhysicalFamilyRoute(
     }
     val resolvedRequirement = physicalFamilies.singleOrNull()?.let { family ->
         when {
+            receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION &&
+                    DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT in
+                    family.semanticHookReasons ->
+                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
             receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION ->
                 DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY
             DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in family.roles ->

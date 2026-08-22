@@ -542,12 +542,28 @@ a Kotlin widened view on the same object. Admission is independent of source
 names, packages, and library ownership. See
 [`../archive/reified-generic-interface-owner-independent-query-family-2026-08-22.md`](../archive/reified-generic-interface-owner-independent-query-family-2026-08-22.md).
 
-This proof does not admit constructed owner-dependent member results. A future
-`Iterable<T>.iterator(): Iterator<T>` family must decide its natural versus
-semantic result from the concrete construction without globally erasing either
-owner or an enclosing generic state slot. Inputs, properties, defaults,
-overloads, extra producer members, and mixed/multiple type parameters remain
-separate gates.
+The first constructed owner-dependent result is now admitted. A structural
+covariant root may return one already-admitted covariant interface constructed
+invariantly over the outer owner parameter. The natural interface retains that
+exact nested `I<!T>` result. Its declaration-semantic slot returns `object`,
+not the nested compiler capability: an ordinary foreign implementation may
+return only a natural nested `I<T>`, and converting it to a capability would
+require a forbidden adapter or identity change.
+
+This does not make every enclosing generic slot semantic. An exact nested
+construction remains typed. Only a state slot whose concrete producer graph
+admits a Kotlin-legal but CLR-unnameable covariant nested view joins to the
+object domain. `PAIRED_SEMANTIC_STATE_OUTPUT` records that body/state fact, and
+an exact-receiver `SEMANTIC_RESULT_CAPABILITY` route reads the raw value before
+the natural typed entry performs its CLR-view check. The new route is distinct
+from a semantic receiver: a downstream fallback may not erase an already-
+proven typed route merely because a semantic sibling exists. ABI/runtime
+surface 44 publishes the structural `CONSTRUCTED_INTERFACE_PRODUCER` role.
+See
+[`../archive/reified-generic-interface-constructed-result-family-2026-08-22.md`](../archive/reified-generic-interface-constructed-result-family-2026-08-22.md).
+
+Inputs, broader properties, defaults, overloads, extra producer members, and
+mixed/multiple type parameters remain separate gates.
 
 ## Remaining gates
 
