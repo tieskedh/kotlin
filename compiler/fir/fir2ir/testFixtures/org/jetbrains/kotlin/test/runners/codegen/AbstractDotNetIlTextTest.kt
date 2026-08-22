@@ -483,6 +483,14 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-foreign-override"),
         )
+        validateGenericOwnerExactInterfaceInputsCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-exact-interface-inputs"),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4109,6 +4117,8 @@ private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE"
+private const val GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -9516,6 +9526,298 @@ private fun validateGenericOwnerForeignCSharpOverride(
         val assemblyFileName = dependencyEntry.second
         val staged = directory.resolve(assemblyFileName)
         if (dependency.canonicalFile != staged.canonicalFile) dependency.copyTo(staged, overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the first producer-recorded invariant exact generic-interface sibling through the
+ * supported C# source-authoring path. Authored C# names only the natural Kotlin interface and
+ * its ordinary typed members; the generator must add both compiler ABI views without exposing
+ * either of their names to the user source.
+ */
+private fun validateGenericOwnerExactInterfaceInputsCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The exact-interface C# authoring probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) {
+        if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            val resource = checkNotNull(
+                DotNetManagedResourceReader.read(
+                    producer,
+                    DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+                )
+            ) {
+                "The exact-interface producer has no C# implementation manifest"
+            }
+            val manifest = DotNetCSharpImplementationManifestCodec.decodeManagedResource(
+                resource.content
+            )
+            val cursor = checkNotNull(manifest.interfaces.singleOrNull { contract ->
+                contract.declaredOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                        "ExactInputCursor`1"
+            }) {
+                "The exact-interface manifest has no unique cursor contract: " +
+                        manifest.interfaces.map { contract -> contract.declaredOwnerPath }
+            }
+            check(cursor.exactOwnerPath == null && cursor.members.size == 2 &&
+                    cursor.members.all { member ->
+                        member.authoringView == DotNetCSharpInterfaceView.DECLARED
+                    }) {
+                "The declaration-safe cursor unexpectedly acquired an exact C# authoring view"
+            }
+            val family = checkNotNull(manifest.interfaces.singleOrNull { contract ->
+                contract.declaredOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                        "ExactInputFamily`1"
+            }) {
+                "The exact-interface manifest has no unique family contract: " +
+                        manifest.interfaces.map { contract -> contract.declaredOwnerPath }
+            }
+            check(family.sourceAuthoringSupported && family.unsupportedReasons.isEmpty() &&
+                    family.exactOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                        "ExactInputFamily__KotlinExact`1" &&
+                    family.exactOwnerPath != family.declaredOwnerPath &&
+                    family.exactOwnerPath != family.canonicalOwnerPath) {
+                "The hostile input family did not publish one distinct exact authoring owner"
+            }
+            check(family.members.size == 3) {
+                "The exact-interface manifest copied, lost, or duplicated declared members"
+            }
+            val acceptsAll = checkNotNull(family.members.singleOrNull { member ->
+                member.sourceName == "acceptsAll"
+            }) {
+                "The exact-interface manifest has no unique acceptsAll member: " +
+                        family.members.map { member -> member.sourceName to member.kind }
+            }
+            check(acceptsAll.authoringView == DotNetCSharpInterfaceView.EXACT &&
+                    acceptsAll.slots.mapTo(linkedSetOf()) { slot -> slot.role } ==
+                        linkedSetOf(
+                            DotNetCSharpSlotRole.ERASED,
+                            DotNetCSharpSlotRole.EXACT,
+                        )) {
+                "The broad nested input did not select exactly one exact typed authoring slot"
+            }
+            val semantic = acceptsAll.slots.single { slot ->
+                slot.role == DotNetCSharpSlotRole.ERASED
+            }
+            val exact = acceptsAll.slots.single { slot ->
+                slot.role == DotNetCSharpSlotRole.EXACT
+            }
+            check(semantic.ownerPath == family.canonicalOwnerPath &&
+                    semantic.returnType == "bool" &&
+                    semantic.parameterTypes == listOf("object")) {
+                "The exact input lost its object-domain Kotlin semantic slot: $semantic"
+            }
+            check(exact.ownerPath == family.exactOwnerPath &&
+                    exact.returnType == "bool" &&
+                    exact.parameterTypes.singleOrNull()?.let { parameter ->
+                        "ExactInputFamily`1" in parameter &&
+                                "__KotlinExact" !in parameter &&
+                                "!0" in parameter
+                    } == true) {
+                "The exact C# slot did not retain the natural nested interface signature: $exact"
+            }
+            check(family.members.filterNot { member -> member === acceptsAll }.all { member ->
+                member.authoringView == DotNetCSharpInterfaceView.DECLARED &&
+                        member.slots.any { slot ->
+                            slot.role == DotNetCSharpSlotRole.DECLARED &&
+                                    slot.ownerPath == family.declaredOwnerPath
+                        }
+            }) {
+                "Declaration-safe family members were unnecessarily moved to the exact owner"
+            }
+        }
+        return
+    }
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The exact-interface C# authoring probe lacks its separately compiled libraries"
+    }
+    val source = directory.resolve("ExactInterfaceInputsConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.exact.inputs;
+
+            public sealed partial class CSharpExactStringFamily :
+                ExactInputFamily<string>
+            {
+                public string Value { get; }
+
+                public CSharpExactStringFamily(string value)
+                {
+                    Value = value;
+                }
+
+                public bool hasExactNext() => true;
+
+                public string nextExact() => Value;
+
+                public ExactInputCursor<string> exactCursor() => this;
+
+                public bool acceptsAll(ExactInputFamily<string> values) =>
+                    object.Equals(values.nextExact(), Value);
+
+                public bool hasExactValues() => true;
+            }
+
+            public sealed partial class CSharpExactObjectFamily :
+                ExactInputFamily<object>
+            {
+                public object Value { get; }
+
+                public CSharpExactObjectFamily(object value)
+                {
+                    Value = value;
+                }
+
+                public bool hasExactNext() => true;
+
+                public object nextExact() => Value;
+
+                public ExactInputCursor<object> exactCursor() => this;
+
+                public bool acceptsAll(ExactInputFamily<object> values) =>
+                    object.Equals(values.nextExact(), Value);
+
+                public bool hasExactValues() => true;
+            }
+
+            public sealed partial class CSharpExactIntFamily :
+                ExactInputFamily<int>
+            {
+                public int Value { get; }
+
+                public CSharpExactIntFamily(int value)
+                {
+                    Value = value;
+                }
+
+                public bool hasExactNext() => true;
+
+                public int nextExact() => Value;
+
+                public ExactInputCursor<int> exactCursor() => this;
+
+                public bool acceptsAll(ExactInputFamily<int> values) =>
+                    values.nextExact() == Value;
+
+                public bool hasExactValues() => true;
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    var value = new CSharpExactStringFamily("csharp-exact");
+                    var sameValue = new CSharpExactStringFamily("csharp-exact");
+                    var reader = new ExactInputFamilyReader();
+                    if (value.nextExact() != "csharp-exact" ||
+                        !object.ReferenceEquals(value.exactCursor(), value) ||
+                        !value.acceptsAll(sameValue) ||
+                        !value.hasExactNext() ||
+                        !value.hasExactValues())
+                        throw new InvalidOperationException(
+                            "the ordinary exact C# surface did not dispatch");
+                    if (!object.Equals(reader.read(value), "csharp-exact") ||
+                        !reader.acceptsAll(value, sameValue) ||
+                        !reader.same(value, value))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed the generated exact C# bridge");
+
+                    var broad = new CSharpExactObjectFamily("object-value");
+                    var different = new CSharpExactStringFamily("different");
+                    if (broad.acceptsAll(different) ||
+                        reader.acceptsAll(broad, different))
+                        throw new InvalidOperationException(
+                            "the generated broad bridge changed nested-input semantics");
+                    var exactInt = new CSharpExactIntFamily(37);
+                    if (!exactInt.acceptsAll(new CSharpExactIntFamily(37)) ||
+                        !object.Equals(reader.read(exactInt), 37))
+                        throw new InvalidOperationException(
+                            "the generated value-type exact bridge did not dispatch");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The exact-interface C# authoring probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "ExactInterfaceInputsConsumer.exe"
+        else "ExactInterfaceInputsConsumer.dll"
+    )
+    val generatedDirectory = directory.resolve("generated-${target.description}")
+    val references = listOf(lib, middle, runtime, stdlib)
+    val authoringTooling = genericOwnerCSharpAuthoringTooling()
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the exact-interface authoring probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+            analyzers = listOf(authoringTooling),
+            generatedFilesDirectory = generatedDirectory,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the exact-interface authoring probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+            analyzers = listOf(authoringTooling),
+            generatedFilesDirectory = generatedDirectory,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable exact-interface authoring probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    val generated = generatedDirectory.walkTopDown()
+        .filter { file ->
+            file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+        }
+        .joinToString("\n", transform = File::readText)
+    check("partial class CSharpExactStringFamily" in generated &&
+            "partial class CSharpExactObjectFamily" in generated &&
+            "partial class CSharpExactIntFamily" in generated &&
+            "ExactInputFamily__KotlinExact" in generated) {
+        "The C# authoring tool did not generate the invariant exact interface bridge:\n$generated"
+    }
+    check("KotlinSemantic" !in source.readText() && "__KotlinExact" !in source.readText()) {
+        "Authored C# source must not name either compiler-owned interface ABI"
+    }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
     }
     executeSnapshotConsumer(target, consumer, directory)
 }

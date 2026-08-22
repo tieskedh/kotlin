@@ -66,6 +66,10 @@ internal enum class DotNetGenericInterfaceMemberView {
     EXACT,
 }
 
+/** Stable local spelling only; consumers bind the producer-recorded physical path. */
+internal fun dotNetExactGenericInterfaceName(naturalName: String, parameterCount: Int): String =
+    naturalName + "__KotlinExact" + parameterCount.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
+
 internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfaceView
     get() = when (this) {
         DotNetGenericInterfaceMemberView.DECLARED -> DotNetGenericInterfaceView.DECLARED
