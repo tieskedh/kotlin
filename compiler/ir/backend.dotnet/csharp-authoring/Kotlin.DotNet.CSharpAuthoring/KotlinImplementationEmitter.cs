@@ -193,7 +193,10 @@ internal static class KotlinImplementationEmitter
                     Diagnostics.MalformedManifest,
                     authoringContract.Declaration.Identifier.GetLocation(),
                     semanticBinding.Bound.Reference.Assembly.Identity.Name,
-                    $"authoring locator for '{semanticMember.LogicalKey}' does not resolve uniquely"));
+                    $"authoring locator for '{semanticMember.LogicalKey}' does not resolve uniquely: " +
+                    DescribeMethodResolution(
+                        semanticBinding.Bound.Reference.Assembly,
+                        authoringLocator!)));
                 continue;
             }
             foreach (KotlinMethodLocator locator in physicalSlots)
@@ -1814,6 +1817,31 @@ internal static class KotlinImplementationEmitter
             : null;
     }
 
+    private static string DescribeMethodResolution(
+        IAssemblySymbol assembly,
+        KotlinMethodLocator locator)
+    {
+        INamedTypeSymbol? owner = ResolveType(assembly, locator.OwnerPath);
+        if (owner == null)
+            return "owner was not found";
+        string[] candidates = owner.GetMembers(locator.MethodName)
+            .OfType<IMethodSymbol>()
+            .Select(method =>
+            {
+                bool hasSignature = TryPhysicalSignatureType(
+                    method.ReturnType,
+                    method.ContainingAssembly,
+                    method.ReturnsVoid,
+                    out string returnType);
+                return method.ToDisplayString() + " [return=" +
+                    (hasSignature ? returnType : "<unsupported>") + "]";
+            })
+            .ToArray();
+        return candidates.Length == 0
+            ? "no methods with the recorded name"
+            : string.Join("; ", candidates);
+    }
+
     private static bool MethodMatchesLocator(
         IMethodSymbol method,
         KotlinMethodLocator locator)
@@ -1970,7 +1998,9 @@ internal static class KotlinImplementationEmitter
         string current = IlIdentifier(type.MetadataName);
         if (type.ContainingType != null)
             return PhysicalTypeReference(type.ContainingType) + "/" + current;
-        string namespaceName = type.ContainingNamespace?.ToDisplayString() ?? "";
+        string namespaceName = type.ContainingNamespace?.IsGlobalNamespace == true
+            ? ""
+            : type.ContainingNamespace?.ToDisplayString() ?? "";
         return IlIdentifier(
             namespaceName.Length == 0
                 ? type.MetadataName

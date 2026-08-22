@@ -4205,14 +4205,15 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
             semantic.genericArity == expectedMethodGenericArity &&
             semantic.returnType == expectedSemanticReturnType &&
             semantic.parameterTypes == expectedSemanticParameterTypes) {
-        "The declaration-semantic interface slot is not the expected object-domain capability"
+        "The declaration-semantic interface slot is not the expected object-domain capability: " +
+                semantic
     }
     check(natural.ownerPath == contract.declaredOwnerPath &&
             natural.propertyName == expectedNaturalPropertyName &&
             natural.genericArity == expectedMethodGenericArity &&
             natural.returnType == expectedNaturalReturnType &&
             natural.parameterTypes == expectedNaturalParameterTypes) {
-        "The natural generic-interface slot did not retain its CLR owner parameter"
+        "The natural generic-interface slot did not retain its CLR owner parameter: $natural"
     }
     member.slots.singleOrNull { slot -> slot.role == DotNetCSharpSlotRole.HELPER }
         ?.let { helper ->
@@ -4276,6 +4277,14 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     expectedDeclaredOwner = "RehearsalSeparateGeneralCursor`1",
                     expectedMemberName = "nextGeneral",
                     expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateGeneralIterable`1",
+                    expectedMemberName = "generalIterator",
+                    expectedNaturalReturnType =
+                        "class 'RehearsalSeparateGeneralCursor`1'<!0>",
                     expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
                 )
                 validateReifiedGenericInterfaceCSharpManifest(
@@ -4691,6 +4700,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public int nextGeneral()
                 {
                     return 35;
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpGeneralIterable :
+                RehearsalSeparateGeneralIterable<int>
+            {
+                public readonly RehearsalSeparateCSharpGeneralCursor Cursor =
+                    new RehearsalSeparateCSharpGeneralCursor();
+
+                public RehearsalSeparateGeneralCursor<int> generalIterator()
+                {
+                    return Cursor;
                 }
             }
 
@@ -5257,6 +5278,17 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         !generalCursorReader.same(generalCursor, generalCursor))
                         throw new InvalidOperationException(
                             "mixed general cursor family lost C# dispatch or identity");
+                    RehearsalSeparateCSharpGeneralIterable generalIterable =
+                        new RehearsalSeparateCSharpGeneralIterable();
+                    RehearsalSeparateGeneralIterableReader generalIterableReader =
+                        new RehearsalSeparateGeneralIterableReader();
+                    if (!object.ReferenceEquals(
+                            generalIterable.generalIterator(), generalIterable.Cursor) ||
+                        !object.Equals(generalIterableReader.read(generalIterable), 35) ||
+                        !generalIterableReader.returnsSameCursor(
+                            generalIterable, generalIterable.Cursor))
+                        throw new InvalidOperationException(
+                            "constructed general iterable result lost C# dispatch or identity");
                     RehearsalSeparateCSharpInvariantProducer invariantProducer =
                         new RehearsalSeparateCSharpInvariantProducer();
                     if (invariantProducer.produceInvariant() !=
@@ -9388,6 +9420,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
         }
         check("partial class RehearsalSeparateCSharpGeneralCursor" in generated) {
             "The C# authoring tool did not generate the mixed general cursor bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpGeneralIterable" in generated) {
+            "The C# authoring tool did not generate the constructed iterable bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpChildProducer" in generated) {
             "The C# authoring tool did not generate the foreign subinterface implementation bridge:\n$generated"
