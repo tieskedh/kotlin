@@ -3166,8 +3166,9 @@ internal class DotNetIlExpressionCodegen(
      * implementation of the natural `I<T>`. The runtime selects exactly one constructed natural
      * interface or rejects an ambiguous multi-construction object. The admitted foreign shapes
      * are deliberately bounded to a value-result producer, a declaration-invariant
-     * one-object-input Unit member, or the exact sibling's one-natural-input Boolean member;
-     * overloads and broader signatures remain outside this path.
+     * one-object-input Unit member, the exact sibling's one-natural-input Boolean member, or an
+     * upstream-authorized one-T-input Boolean barrier; overloads and broader signatures remain
+     * outside this path.
      */
     private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
         call: IrCall,
@@ -3231,8 +3232,23 @@ internal class DotNetIlExpressionCodegen(
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 naturalInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean)
-        if (!isProducer && !isConsumer && !isExactInputBoolean) return false
-        val hasValueResult = isProducer || isExactInputBoolean
+        val wrongShapePolicy = typeMapper.genericOwnerWrongShapePolicy(source)
+        val isFixedBarrierBoolean = regularArguments.size == 1 &&
+                interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
+                naturalInterfaceOwner != null &&
+                naturalInfo.signature.parameterTypes[1].isNaturalOwnerParameter() &&
+                semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
+                semanticInfo.signature.returnType ==
+                    DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
+                naturalInfo.signature.returnType ==
+                    DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
+                wrongShapePolicy?.checkedParameterCount == 1 &&
+                wrongShapePolicy.fallback == DotNetCSharpWrongShapeFallback.FALSE &&
+                wrongShapePolicy.fallbackParameterIndex == null
+        if (!isProducer && !isConsumer && !isExactInputBoolean && !isFixedBarrierBoolean) {
+            return false
+        }
+        val hasValueResult = isProducer || isExactInputBoolean || isFixedBarrierBoolean
         val resultNarrowing = if (hasValueResult) {
             val resultType = expectedType ?: return false
             when (resultType) {
@@ -3248,7 +3264,7 @@ internal class DotNetIlExpressionCodegen(
             }
             null
         }
-        val foreignSelectionOwner = if (isExactInputBoolean) {
+        val foreignSelectionOwner = if (isExactInputBoolean || isFixedBarrierBoolean) {
             checkNotNull(naturalInterfaceOwner)
         } else {
             naturalInfo.owner
@@ -3340,10 +3356,19 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         methodContext.emit(
-            if (isExactInputBoolean) {
-                DotNetGenericInterfaceRuntime.invokeUniqueConcreteUnaryMemberCallInstruction(coreLibraryReference)
-            } else {
-                DotNetGenericInterfaceRuntime.invokeUniqueMemberCallInstruction(coreLibraryReference)
+            when {
+                isExactInputBoolean ->
+                    DotNetGenericInterfaceRuntime.invokeUniqueConcreteUnaryMemberCallInstruction(
+                        coreLibraryReference
+                    )
+                isFixedBarrierBoolean ->
+                    DotNetGenericInterfaceRuntime
+                        .invokeUniqueTypeArgumentUnaryMemberWithFalseBarrierCallInstruction(
+                            coreLibraryReference
+                        )
+                else -> DotNetGenericInterfaceRuntime.invokeUniqueMemberCallInstruction(
+                    coreLibraryReference
+                )
             },
             pops = 4,
             pushes = 1,

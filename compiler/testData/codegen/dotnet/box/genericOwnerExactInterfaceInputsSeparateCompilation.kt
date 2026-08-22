@@ -11,10 +11,14 @@ public interface ExactInputCursor<out T> {
     public fun nextExact(): T
 }
 
-public interface ExactInputFamily<out T> : ExactInputCursor<T> {
+// The erased Runtime Collection parent supplies Kotlin's authoritative fixed contains barrier
+// while this rehearsal family owns its new CLR-generic natural/exact/semantic views.
+public interface ExactInputFamily<out T> : ExactInputCursor<T>, Collection<T> {
     public val exactSize: Int
 
     public fun exactCursor(): ExactInputCursor<T>
+
+    public override fun contains(element: @UnsafeVariance T): Boolean
 
     public fun acceptsAll(values: ExactInputFamily<@UnsafeVariance T>): Boolean
 
@@ -30,6 +34,9 @@ public class ExactInputFamilyReader {
     ): Boolean = receiver.acceptsAll(values)
 
     public fun size(value: ExactInputFamily<Any?>): Int = value.exactSize
+
+    public fun contains(value: ExactInputFamily<Any?>, candidate: Any?): Boolean =
+        value.contains(candidate)
 
     public fun same(value: ExactInputFamily<Any?>, expected: Any?): Boolean = value === expected
 }
@@ -48,6 +55,18 @@ public class ExactInputValue<T>(private val current: T) : ExactInputFamily<T> {
     public override fun nextExact(): T = current
 
     public override fun exactCursor(): ExactInputCursor<T> = this
+
+    public override val size: Int
+        get() = 1
+
+    public override fun isEmpty(): Boolean = false
+
+    public override fun iterator(): Iterator<T> = listOf(current).iterator()
+
+    public override fun contains(element: T): Boolean = element == current
+
+    public override fun containsAll(elements: Collection<T>): Boolean =
+        elements.all { element -> element == current }
 
     public override fun acceptsAll(values: ExactInputFamily<T>): Boolean =
         values.nextExact() == current
@@ -70,6 +89,9 @@ fun box(): String {
     if (reader.read(wide) != 37) return "constructed result"
     if (!exact.acceptsAll(ExactInputValue(37))) return "exact nested input"
     if (reader.acceptsAll(wide, ExactInputValue("wrong"))) return "semantic nested input"
+    if (!reader.contains(wide, 37) || reader.contains(wide, "wrong")) {
+        return "fixed barrier input"
+    }
     if (!wide.hasExactNext() || !wide.hasExactValues() || reader.size(wide) != 1) {
         return "primitive queries"
     }

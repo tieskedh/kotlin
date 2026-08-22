@@ -143,6 +143,8 @@ internal class DotNetIlEmitter(
     private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
     private val genericOwnerReflectionCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerWrongShapePolicies:
+            Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = emptyMap(),
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -640,6 +642,7 @@ internal class DotNetIlEmitter(
             }.toMap(),
             genericOwnerCapabilityCallTargets = genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets = genericOwnerForeignDispatchCallTargets,
+            genericOwnerWrongShapePolicies = genericOwnerWrongShapePolicies,
             genericOwnerCapabilityDeclarations = genericOwnerCapabilityDeclarations,
             genericOwnerCapabilityBearingDeclarations = genericOwnerCapabilityBearingDeclarations,
             genericOwnerForeignDispatchDeclarations = genericOwnerForeignDispatchDeclarations,
@@ -1823,6 +1826,12 @@ internal class DotNetIlEmitter(
                                 } else {
                                     emptyMap()
                                 },
+                                genericOwnerCSharpWrongShapePolicies =
+                                    if (genericOwnerRehearsal) {
+                                        genericOwnerWrongShapePolicies
+                                    } else {
+                                        emptyMap()
+                                    },
                             )
                         )
             )
