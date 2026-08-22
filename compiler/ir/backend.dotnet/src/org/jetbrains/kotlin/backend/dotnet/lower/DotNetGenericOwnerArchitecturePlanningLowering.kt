@@ -113,6 +113,7 @@ import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.types.isUnit
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
@@ -474,6 +475,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 semanticHooksByPrototype[prototype] = hook
                 context.genericOwnerCapabilityDeclarations += hook
                 context.genericOwnerCapabilityDeclarations += hook.parameters.drop(1)
+                if (source.returnType.containsReifiedVariantOwnerApplicationOf(owner)) {
+                    // A semantic Nested<T> result may be either a Kotlin capability-bearing
+                    // implementation or the natural I<T> returned by an ordinary C# override.
+                    // Only object is an honest common carrier for both physical shapes.
+                    context.genericOwnerForeignDispatchDeclarations += hook
+                }
             }
         }
         semanticHooksBySource.entries.forEach { entry ->
@@ -745,6 +752,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 context.genericOwnerCapabilityDeclarations += slot
                 context.genericOwnerCapabilityDeclarations += slot.parameters.drop(1)
+                val returnsForeignInterfaceConstruction =
+                    source.returnType.containsReifiedVariantOwnerApplicationOf(owner)
+                if (returnsForeignInterfaceConstruction) {
+                    context.genericOwnerForeignDispatchDeclarations += slot
+                }
                 slotsBySource[source] = slot
                 context.genericOwnerCapabilitySlots[source] = slot
 
@@ -800,6 +812,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 context.genericOwnerCapabilityDeclarations += dispatcher
                 context.genericOwnerCapabilityDeclarations += dispatcher.parameters.drop(1)
+                if (returnsForeignInterfaceConstruction) {
+                    context.genericOwnerForeignDispatchDeclarations += dispatcher
+                }
                 context.genericOwnerCapabilityDispatchers[source] = dispatcher
                 val semanticHook = semanticHooksBySource[source]
                 val foreignOverrideProbe = foreignOverrideProbesBySource[source]
@@ -810,6 +825,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     // natural typed slot. The emitter calls the most-derived Kotlin probe without
                     // reflection or allocation; that probe identifies a still-later foreign typed
                     // override, while the ordinary Kotlin/base path keeps the raw semantic hook.
+                    // Both branches must therefore share the object carrier promised by this
+                    // specialized emitter route, even when later interface admission makes the
+                    // logical result (for example Set<Any?>) CLR-reference-shaped on its own.
+                    context.genericOwnerForeignDispatchDeclarations += semanticHook
+                    context.genericOwnerForeignDispatchDeclarations += slot
+                    context.genericOwnerForeignDispatchDeclarations += dispatcher
                     context.genericOwnerDirectForeignOverrideDispatches[dispatcher] =
                         org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectForeignOverrideDispatch(
                             typedEntry = source,
@@ -2154,7 +2175,18 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
             return methodSubstitutor.substitute(ownerType)
         }
-        prototype.returnType = prototypeType(source.returnType)
+        prototype.returnType = if (
+            role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+            source.returnType.containsReifiedVariantOwnerApplicationOf(owner)
+        ) {
+            // A semantic Nested<T> result can be either Kotlin's capability-bearing object or
+            // an ordinary foreign natural I<T>. Object is the only carrier shared by both. Keep
+            // that decision in IR as well as metadata so generated forwarding bodies never try
+            // the impossible intermediate conversion Nested<!T> -> Nested<object>.
+            context.irBuiltIns.anyNType
+        } else {
+            prototypeType(source.returnType)
+        }
         source.parameters
             .filter { parameter -> parameter.kind != IrParameterKind.DispatchReceiver }
             .forEach { parameter ->
@@ -2270,6 +2302,14 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val hasBroadInput = parameters.any { parameter ->
             parameter.kind != IrParameterKind.DispatchReceiver &&
                     !parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)
+        } || allOverridden().any { overridden ->
+            val interfaceOwner = (overridden.parent as? IrClass)
+                ?.takeIf { candidate -> candidate.kind == ClassKind.INTERFACE }
+                ?: return@any false
+            overridden.parameters.any { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver &&
+                        !parameter.type.isLegalAtOwnerVariance(interfaceOwner, TypePolarity.IN)
+            }
         }
         if (!hasBroadInput) return DotNetGenericOwnerMemberPolicy.STRICT_TYPED
         return if (specialBridgeMethods.findSpecialWithOverride(this, includeSelf = true) != null) {

@@ -173,9 +173,12 @@ enum class DotNetPublishedGenericInterfaceMemberRole {
     PROPERTY_SETTER,
 }
 
-private val DotNetPublishedGenericInterfaceMemberRole.requiresExactInputView: Boolean
+internal val DotNetPublishedGenericInterfaceMemberRole.requiresExactInputView: Boolean
     get() = this == DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT ||
             this == DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
+
+internal val DotNetPublishedGenericInterfaceFamilyContract.requiresExactInputView: Boolean
+    get() = declaredMembers.any { member -> member.role.requiresExactInputView }
 
 /** Whether the classifier owns a capability TypeDef or reuses one direct parent's capability. */
 enum class DotNetPublishedGenericInterfaceCapabilityBindingKind {
@@ -2560,17 +2563,21 @@ internal class DotNetExternalDeclarations(
         val logicalKey = logicalKeys.keyOrNull(logicalDeclaration, "F") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
-        val containingClass = (function.parent as? IrClass)?.let { classInfoOrNull(it, typeMapper) }
-        val owner = if (containingClass?.physicalPathComponents() == declaration.ownerPath) {
-            containingClass
-        } else {
-            require(!declaration.isInstance) {
-                "external instance function '$logicalKey' is bound outside its containing CLR class"
-            }
-            facadeInfoByPhysicalIdentity.getOrPut(
-                bound.library.artifact.assemblyName to declaration.ownerPath
-            ) {
-                buildClassInfo(bound.library.artifact.assemblyName, declaration.ownerPath, emptyList())
+        val containingIrClass = function.parent as? IrClass
+        val containingClass = containingIrClass?.let { classInfoOrNull(it, typeMapper) }
+        val exactContainingClass = containingIrClass?.let(::exactClassInfoOrNull)
+        val owner = when (declaration.ownerPath) {
+            containingClass?.physicalPathComponents() -> checkNotNull(containingClass)
+            exactContainingClass?.physicalPathComponents() -> checkNotNull(exactContainingClass)
+            else -> {
+                require(!declaration.isInstance) {
+                    "external instance function '$logicalKey' is bound outside its containing CLR class family"
+                }
+                facadeInfoByPhysicalIdentity.getOrPut(
+                    bound.library.artifact.assemblyName to declaration.ownerPath
+                ) {
+                    buildClassInfo(bound.library.artifact.assemblyName, declaration.ownerPath, emptyList())
+                }
             }
         }
         val logicalSignature = function.dotNetSignature(
@@ -3000,8 +3007,12 @@ internal fun collectDotNetLibraryDeclarations(
             )
         } else {
             val canonicalOwnerPath = genericInterface.canonicalClassInfo.physicalPathComponents()
-            require(genericInterface.canonicalClassInfo.typeParameterCount == 0) {
-                "generic interface '${irClass.render()}' cannot publish a CLR-generic canonical owner"
+            require(genericInterface.canonicalClassInfo.typeParameterCount == 0 ||
+                    genericInterface.canonicalClassInfo.typeParameterCount == irClass.typeParameters.size
+            ) {
+                "generic interface '${irClass.render()}' has partial physical arity " +
+                        "${genericInterface.canonicalClassInfo.typeParameterCount}; " +
+                        "expected 0 or ${irClass.typeParameters.size}"
             }
             require(canonicalOwnerPath == classInfo.physicalPathComponents()) {
                 "generic interface '${irClass.render()}' has a canonical CLR owner inconsistent with its class index"
@@ -3014,7 +3025,9 @@ internal fun collectDotNetLibraryDeclarations(
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
                     valueClassAbi = valueClassAbi,
-                    genericOwnerAbi = null,
+                    genericOwnerAbi = genericOwnerAbi.takeIf {
+                        genericInterface.canonicalClassInfo.typeParameterCount > 0
+                    },
                 )
             )
         }
@@ -3320,7 +3333,7 @@ internal fun collectDotNetLibraryDeclarations(
             ownerPath = ownerInfo.physicalPathComponents(),
             capabilityAssemblyName = capabilityInfo.assemblyName ?: currentAssemblyName,
             capabilityOwnerPath = capabilityInfo.physicalPathComponents(),
-            exactOwnerPath = null,
+            exactOwnerPath = genericInterfaces[owner]?.exactClassInfo?.physicalPathComponents(),
             contract = contract,
         )
         contract.declaredMembers.forEach { member ->

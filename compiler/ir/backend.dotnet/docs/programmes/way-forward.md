@@ -1210,12 +1210,30 @@ assembly with invariant parameters of the recorded arity and exposes it as the
 exact type-mapping view. This closes identity reconstruction, not TypeDef
 emission or member binding.
 
-Next encode those roles in the generic-interface planner, materialize the exact
-TypeDef and MethodImpls, and extend the C# authoring contract. Physical export
-presentation and truthful non-partial C# behavior remain open. Then close the
-property composition needed by `Collection<T>` and `Set<T>`. Defaults,
-overloads, diamonds, and mixed or multiple type parameters remain later gates
-before the full surface.
+Those roles are now encoded in the generic-interface planner and materialized
+by normal Kotlin lowering/CIL emission. The producer-recorded invariant exact
+TypeDef inherits the natural covariant view and owns only the members which are
+illegal on that view. Its typed nested signatures continue to name the natural
+generic family, while the non-generic capability alone accepts Kotlin-wide
+object-domain arguments. Kotlin implementations retain producer-proven `!T`
+state and implement the natural, exact, and semantic MethodImpls on one object
+across separate compilation. A later semantic lowering may not degrade these
+proven typed signatures.
+
+The real C# authoring manifest now selects a declared or exact typed slot per
+member and records the exact owner. The supported Roslyn generator adds both
+compiler-owned interfaces to a partial implementation, while authored C# names
+only the ordinary typed members. That path executes on Framework 4.8 and .NET
+10, including reference covariance and a value-type exact construction. The
+Runtime built-in collection mapping remains explicitly excluded, so this
+checkpoint cannot accidentally half-migrate `Collection` or `Set`.
+
+Next close physical export presentation and truthful precompiled/non-partial
+C# behavior for an exact-input family; a natural-interface-only binary cannot
+silently be treated as if it supplied the hidden semantic body. Then close the
+property composition and remaining member grammar needed by `Collection<T>`
+and `Set<T>`. Defaults, overloads, diamonds, and mixed or multiple type
+parameters remain later gates before the full surface.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

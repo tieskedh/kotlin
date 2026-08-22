@@ -493,6 +493,9 @@ internal class DotNetIlEmitter(
             }
             val isErasedGenericInterface = irClass.isDotNetGenericInterfaceDeclaration &&
                     irClass !in reifiedGenericInterfaces
+            val reifiedInterfaceFamily = publishedGenericInterfaceFamilies[irClass]
+                ?.takeIf { irClass in reifiedGenericInterfaces }
+            val requiresExactInterface = reifiedInterfaceFamily?.requiresExactInputView == true
             val isErasedGenericClass = irClass.isDotNetGenericClassDeclaration &&
                     (!genericOwnerRehearsal ||
                             genericOwnerArchitecturePlans[irClass]
@@ -516,8 +519,19 @@ internal class DotNetIlEmitter(
                         else -> List(irClass.typeParameters.size) { Variance.INVARIANT }
                     },
                 )
-                declaredClassInfo = null
-                exactClassInfo = null
+                declaredClassInfo = classInfo.takeIf { reifiedInterfaceFamily != null }
+                exactClassInfo = if (requiresExactInterface) {
+                    DotNetIlClassInfo(
+                        dotNetExactGenericInterfaceName(
+                            disambiguatedBaseName,
+                            irClass.typeParameters.size,
+                        ),
+                        enclosingClass = enclosingClassInfo,
+                        typeParameterVariances = List(irClass.typeParameters.size) { Variance.INVARIANT },
+                    )
+                } else {
+                    null
+                }
                 val candidateRefs = listOfNotNull(
                     classInfo.ilTypeRef,
                     declaredClassInfo?.ilTypeRef,
@@ -537,9 +551,11 @@ internal class DotNetIlEmitter(
                 collisionSuffix++
             }
             availableClasses[irClass] = classInfo
-            if (isErasedGenericInterface) {
+            if (isErasedGenericInterface || reifiedInterfaceFamily != null) {
                 genericInterfaces[irClass] = DotNetGenericInterfaceInfo(
                     canonicalClassInfo = classInfo,
+                    declaredClassInfo = declaredClassInfo,
+                    exactClassInfo = exactClassInfo,
                 )
             } else if (isErasedGenericClass) {
                 genericClasses[irClass] = DotNetGenericClassInfo(classInfo)
@@ -642,10 +658,25 @@ internal class DotNetIlEmitter(
         val declaredGenericTypeMapper = typeMapper.declaredGenericInterfaceView()
         val exactGenericTypeMapper = typeMapper.exactGenericInterfaceView()
         val declaredGenericSignatureTypeMapper = typeMapper.declaredGenericInterfaceSignatureView()
-        val exactGenericSignatureTypeMapper = typeMapper.exactGenericInterfaceSignatureView()
+        // EXACT selects the invariant declaring TypeDef, not a recursively exactified Kotlin
+        // signature. A member such as Exact<T>.acceptsAll(Natural<T>) lives on the exact owner but
+        // still accepts the ordinary natural view, which every exact implementation inherits.
+        val exactGenericSignatureTypeMapper = typeMapper.declaredGenericInterfaceSignatureView()
 
         fun memberTypeMapper(member: IrSimpleFunction): DotNetIlTypeMapper {
-            val interfaceView = when (member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull) {
+            val sourceOwner = member.parent as? IrClass
+            val sourceInfo = sourceOwner?.let(genericInterfaces::get)
+            val sourceView = if (
+                sourceOwner != null && sourceInfo?.exactClassInfo != null &&
+                member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull == null
+            ) {
+                typeMapper.genericInterfaceMemberView(member, sourceOwner)
+            } else {
+                null
+            }
+            val interfaceView = when (
+                member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull ?: sourceView
+            ) {
                 DotNetGenericInterfaceMemberView.DECLARED -> declaredGenericSignatureTypeMapper
                 DotNetGenericInterfaceMemberView.EXACT -> exactGenericSignatureTypeMapper
                 null -> typeMapper
@@ -745,9 +776,11 @@ internal class DotNetIlEmitter(
                     DotNetGenericInterfaceView.DECLARED,
                 )
             }
-            declaredClassInfo.interfaces =
-                (listOf(DotNetIlValueType.UserClass(ownInterfaceInfo.canonicalClassInfo)) + declaredSupers)
-                    .distinct()
+            if (declaredClassInfo !== ownInterfaceInfo.canonicalClassInfo) {
+                declaredClassInfo.interfaces =
+                    (listOf(DotNetIlValueType.UserClass(ownInterfaceInfo.canonicalClassInfo)) + declaredSupers)
+                        .distinct()
+            }
 
             ownInterfaceInfo.exactClassInfo?.let { exactInfo ->
                 val exactSupers = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
@@ -986,7 +1019,7 @@ internal class DotNetIlEmitter(
                         )
                     }
                 }
-                val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
+                val membersByIlOwnerAndIdentity = hashMapOf<String, MutableMap<String, IrSimpleFunction>>()
                 for (member in irClass.dotNetMemberFunctions().sortedBy { it.isOriginallyLocalDeclaration }) {
                     // Member intrinsics have the same declaration-ownership contract as the
                     // already handled top-level/property intrinsics. In particular,
@@ -1039,8 +1072,25 @@ internal class DotNetIlEmitter(
                         throw e
                     }
                     checkOverrideKeepsIlReturnType(member, signature, signatureMapper)
+                    val genericInterfaceInfo = genericInterfaces[irClass]
+                    val sourceMemberView = if (
+                        genericInterfaceInfo?.exactClassInfo != null &&
+                        member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull == null
+                    ) {
+                        typeMapper.genericInterfaceMemberView(member, irClass)
+                    } else {
+                        null
+                    }
+                    val physicalOwner = when (sourceMemberView) {
+                        DotNetGenericInterfaceMemberView.DECLARED ->
+                            genericInterfaceInfo?.declaredClassInfo ?: classInfo
+                        DotNetGenericInterfaceMemberView.EXACT ->
+                            genericInterfaceInfo?.exactClassInfo ?: classInfo
+                        null -> classInfo
+                    }
                     val physicalMethodName = when {
-                        irClass in genericInterfaces -> member.dotNetGenericInterfaceCanonicalMethodName()
+                        genericInterfaceInfo?.canonicalClassInfo?.typeParameterCount == 0 ->
+                            member.dotNetGenericInterfaceCanonicalMethodName()
                         else -> member.dotNetAbiMethodNameOrNull(
                             isErasedGenericClass = typeMapper::isErasedGenericClass,
                         )
@@ -1048,6 +1098,9 @@ internal class DotNetIlEmitter(
                     // CLR method identity includes the generic ARITY (see
                     // dotNetIlGenericAritySuffix), for member methods as well as the facade gate
                     // below (genmemberprobe_s1).
+                    val membersByIlIdentity = membersByIlOwnerAndIdentity.getOrPut(physicalOwner.ilTypeRef) {
+                        hashMapOf()
+                    }
                     val ilIdentity = member.reserveLocalFunctionIlIdentity(
                         signature,
                         membersByIlIdentity,
@@ -1060,7 +1113,7 @@ internal class DotNetIlEmitter(
                         )
                     }
                     availableFunctions[member] = DotNetIlFunctionInfo(
-                        classInfo,
+                        physicalOwner,
                         signature,
                         physicalMethodName,
                     )
@@ -2836,7 +2889,7 @@ internal class DotNetIlEmitter(
         val renderedProperties = mutableListOf<String>()
         var hasClassInitializer = false
         val declaredSignatureTypeMapper = declaredGenericTypeMapper.declaredGenericInterfaceSignatureView()
-        val exactSignatureTypeMapper = exactGenericTypeMapper.exactGenericInterfaceSignatureView()
+        val exactSignatureTypeMapper = exactGenericTypeMapper.declaredGenericInterfaceSignatureView()
         // A class only refines the physical owner/signature of its own members while that
         // class is being rendered. Copying the complete module-wide function table here made
         // product builds quadratic in the number of classes (and repeated the copy for every
@@ -2860,6 +2913,15 @@ internal class DotNetIlEmitter(
             // SafeContinuation.compareAndSetResult) must not reappear merely because class
             // bodies are rendered by walking their IR declarations a second time.
             if (intrinsicMethods.getIntrinsic(member.symbol)?.excludesDeclarationFromCodegen == true) return
+            if (irClass.isInterface && splitGenericInfo?.exactClassInfo != null &&
+                member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull == null &&
+                typeMapper.genericInterfaceMemberView(member, irClass) ==
+                DotNetGenericInterfaceMemberView.EXACT
+            ) {
+                // A CLR-variant TypeDef cannot legally declare this input. Its sole typed home is
+                // the invariant sibling rendered after the natural interface below.
+                return
+            }
             val memberTypeMapper = typeMapperForMember(member)
             val memberInfo = DotNetIlFunctionInfo(
                 classInfo,
@@ -3074,7 +3136,11 @@ internal class DotNetIlEmitter(
                 // stage-2 constrained `<(class 'Base', class 'Mark') 'T'>`, or the interface
                 // variance form `<+ 'T'>` / `<- 'T'>` (genprobe_s8, genconstraintprobe_s1,
                 // genifaceprobe_s1).
-                genericParameters = (if (splitGenericInfo == null && genericClassInfo == null) {
+                genericParameters = (if (
+                    (splitGenericInfo == null ||
+                            splitGenericInfo.canonicalClassInfo.typeParameterCount > 0) &&
+                    genericClassInfo == null
+                ) {
                     irClass.typeParameters
                 } else {
                     emptyList()
@@ -3086,8 +3152,112 @@ internal class DotNetIlEmitter(
                     ),
                 coreLibraryReference = coreLibrary.reference,
             ).generate(this)
+            splitGenericInfo?.exactClassInfo?.let { exactClassInfo ->
+                append(
+                    renderExactGenericInterfaceView(
+                        irClass = irClass,
+                        classInfo = exactClassInfo,
+                        availableFunctions = availableFunctions,
+                        intrinsicMethods = intrinsicMethods,
+                        exactTypeMapper = exactGenericTypeMapper,
+                        facadeClassInfoByFile = facadeClassInfoByFile,
+                    )
+                )
+            }
         }
         return RenderedClass(physicalIlText)
+    }
+
+    /** Emits the invariant typed-input sibling of one natural reified CLR interface. */
+    private fun renderExactGenericInterfaceView(
+        irClass: IrClass,
+        classInfo: DotNetIlClassInfo,
+        availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+        intrinsicMethods: DotNetIlIntrinsicMethods,
+        exactTypeMapper: DotNetIlTypeMapper,
+        facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
+    ): String {
+        val signatureTypeMapper = exactTypeMapper.declaredGenericInterfaceSignatureView()
+        val viewFunctions = availableFunctions.toMutableMap()
+        val renderedMethods = mutableListOf<String>()
+        val renderedProperties = mutableListOf<String>()
+
+        fun renderMember(member: IrSimpleFunction): IrSimpleFunction? {
+            if (intrinsicMethods.getIntrinsic(member.symbol)?.excludesDeclarationFromCodegen == true ||
+                DotNetGenericInterfaceMemberView.EXACT !in
+                exactTypeMapper.genericInterfaceMemberViews(member, irClass)
+            ) {
+                return null
+            }
+            val recordedInfo = availableFunctions[member]
+            val memberInfo = DotNetIlFunctionInfo(
+                classInfo,
+                member.dotNetSignature(signatureTypeMapper),
+                recordedInfo?.physicalMethodName,
+            )
+            viewFunctions[member] = memberInfo
+            renderedMethods += DotNetIlMethodCodegen(
+                function = member,
+                functionInfo = memberInfo,
+                isEntryPoint = false,
+                availableFunctions = viewFunctions,
+                intrinsicMethods = intrinsicMethods,
+                typeMapper = signatureTypeMapper,
+                facadeClassInfoByFile = facadeClassInfoByFile,
+            ).render().ilText
+            return member
+        }
+
+        for (declaration in irClass.declarations) {
+            when (declaration) {
+                is IrSimpleFunction -> if (!declaration.isFakeOverride) renderMember(declaration)
+                is IrProperty -> if (!declaration.isFakeOverride) {
+                    val getter = declaration.getter?.takeUnless { it.isFakeOverride }
+                    val setter = declaration.setter?.takeUnless { it.isFakeOverride }
+                    val renderedGetter = getter?.let(::renderMember)
+                    val renderedSetter = setter?.let(::renderMember)
+                    if (renderedGetter != null || renderedSetter != null) {
+                        renderedProperties += renderPropertyBlock(
+                            declaration,
+                            renderedGetter,
+                            renderedSetter,
+                            viewFunctions,
+                            signatureTypeMapper,
+                        )
+                    }
+                }
+                else -> Unit
+            }
+        }
+
+        return buildString {
+            DotNetIlClassCodegen(
+                classInfo.ilClassName,
+                renderedMethods,
+                renderedProperties = renderedProperties,
+                renderedAttributes = irClass.dotNetPhysicalTypeAttributes(signatureTypeMapper),
+                isNested = classInfo.isNested,
+                nestedVisibility = irClass.dotNetNestedTypeVisibility(),
+                exported = !irClass.isOriginallyLocalDeclaration &&
+                        (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
+                isAbstract = true,
+                isInterface = true,
+                interfaceRefs = classInfo.interfaces.map { interfaceType ->
+                    when (interfaceType) {
+                        is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
+                        is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature
+                        else -> error(
+                            "Internal .NET backend error: non-class exact interface type $interfaceType"
+                        )
+                    }
+                }.distinct(),
+                genericParameters = irClass.typeParameters.renderDotNetIlGenericParameters(
+                    signatureTypeMapper,
+                    varianceOverrides = List(irClass.typeParameters.size) { Variance.INVARIANT },
+                ),
+                coreLibraryReference = coreLibrary.reference,
+            ).generate(this)
+        }
     }
 
     /**
