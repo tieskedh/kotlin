@@ -1,6 +1,8 @@
 plugins {
     id("common-configuration")
     id("test-federation-convention")
+    id("project-tests-convention")
+    id("test-inputs-check")
     id("com.autonomousapps.dependency-analysis")
     kotlin("jvm")
 }
@@ -22,13 +24,21 @@ dependencies {
     implementation(project(":core:descriptors"))
 
     compileOnly(intellijCore())
+
+    testImplementation(kotlinTest("junit5"))
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 optInToUnsafeDuringIrConstructionAPI()
 
 sourceSets {
     "main" { projectDefault() }
-    "test" {}
+    "test" { projectDefault() }
+}
+
+projectTests {
+    testTask()
 }
 
 tasks.named<ProcessResources>("processResources") {
@@ -187,6 +197,7 @@ tasks.register("dotNetTest") {
     group = "verification"
     description = "Runs the strict Kotlin/.NET semantic, IL, CLI, and library-integration gates."
     dependsOn(
+        "test",
         ":dotnet:dotnet.ir:test",
         ":compiler:fir:fir2ir:dotNetTest",
         ":compiler:tests-integration:dn",

@@ -93,11 +93,16 @@ verification, and work state.
   producer record is accepted. The same atomic payload carries natural,
   semantic, and exact paths, so a separate consumer never reconstructs a
   generated name. Existing families retain no exact owner. This records but
-  does not yet emit the third TypeDef or admit a broad-input Kotlin owner. The
-  full target aggregate exits zero; direct XML audit covers 190 suites and
-  2,288 tests with zero failures, errors, or skips. The 187 FIR suites/2,155
-  tests and two integration suites/127 tests are fresh, while the unchanged
-  six-test `dotnet.ir` root remains up-to-date. See
+  does not yet emit the third TypeDef or admit a broad-input Kotlin owner. A
+  separate consumer now reconstructs the recorded owner from the producer
+  assembly/path with exactly the recorded invariant arity; the type mapper
+  exposes it as the exact view and never infers a generated name. A new
+  backend-local test makes that internal boundary directly executable. The
+  full target aggregate exits zero; direct XML audit covers 191 suites and
+  2,289 tests with zero failures, errors, or skips. The 187 FIR suites/2,155
+  tests and two integration suites/127 tests are fresh, while the one-test
+  backend resolver suite and unchanged six-test `dotnet.ir` root remain up-to-
+  date. See
   [`docs/archive/reified-generic-interface-exact-input-family-record-2026-08-22.md`](docs/archive/reified-generic-interface-exact-input-family-record-2026-08-22.md).
 
   The preceding general multi-member root prerequisite is closed as well.
@@ -4488,11 +4493,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    product preserves exact typed calls, CLR-legal reference covariance,
    value-type semantic widening, fixed candidate barriers, nested semantic
    behavior, and identity on both runtimes. ABI 45 now records the invariant
-   exact TypeDef and both broad-input policies in that atomic physical family.
-   Next materialize the split in the planner, MethodImpl emission, and C#
-   authoring contract, then close the remaining properties required by
-   `Collection<T>` and `Set<T>`; do not add a `Map`, `Set`, or `Sequence`
-   representation exception. Then continue the complete
+   exact TypeDef and both broad-input policies in that atomic physical family,
+   and separate consumers reconstruct its invariant CLR identity solely from
+   the producer record. Next materialize the split in the planner, MethodImpl
+   emission, and C# authoring contract, then close the remaining properties
+   required by `Collection<T>` and `Set<T>`; do not add a `Map`, `Set`, or
+   `Sequence` representation exception. Then continue the complete
    Runtime/Stdlib owner graph and its
    residual capability joins, covariant returns, and intrinsic state
    requirements before executing representative products and exact inverse
