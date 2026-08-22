@@ -85,6 +85,21 @@ verification, and work state.
   remain the next gate. See
   [`docs/archive/reified-generic-interface-broad-input-composition-2026-08-22.md`](docs/archive/reified-generic-interface-broad-input-composition-2026-08-22.md).
 
+  ABI/runtime surface 45 now records the exact-input sibling required by that
+  result. `BROAD_FIXED_BARRIER_INPUT` and `BROAD_NESTED_SEMANTIC_INPUT` are
+  structural, name-independent member roles. A published family carrying
+  either role must name one distinct invariant exact TypeDef of the same arity;
+  a missing, unsolicited, aliased, or arity-mismatched owner fails before the
+  producer record is accepted. The same atomic payload carries natural,
+  semantic, and exact paths, so a separate consumer never reconstructs a
+  generated name. Existing families retain no exact owner. This records but
+  does not yet emit the third TypeDef or admit a broad-input Kotlin owner. The
+  full target aggregate exits zero; direct XML audit covers 190 suites and
+  2,288 tests with zero failures, errors, or skips. The 187 FIR suites/2,155
+  tests and two integration suites/127 tests are fresh, while the unchanged
+  six-test `dotnet.ir` root remains up-to-date. See
+  [`docs/archive/reified-generic-interface-exact-input-family-record-2026-08-22.md`](docs/archive/reified-generic-interface-exact-input-family-record-2026-08-22.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -4468,15 +4483,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    concrete CLR-unnameable nested value transition selects the object-domain
    state and semantic-result capability. Exact nested state remains typed; no
    wrapper, shadow state, global owner erasure, or stdlib switch was added.
-   The next CLR-legality proof now establishes that broad direct and nested
+   The next CLR-legality proof establishes that broad direct and nested
    inputs cannot remain on one covariant interface. Its executable three-view
    product preserves exact typed calls, CLR-legal reference covariance,
    value-type semantic widening, fixed candidate barriers, nested semantic
-   behavior, and identity on both runtimes. Next encode that general split in
-   the planner, physical-family record, MethodImpl emission, and C# authoring
-   contract, then close the remaining properties required by `Collection<T>`
-   and `Set<T>`; do not add a `Map`, `Set`, or `Sequence` representation
-   exception. Then continue the complete
+   behavior, and identity on both runtimes. ABI 45 now records the invariant
+   exact TypeDef and both broad-input policies in that atomic physical family.
+   Next materialize the split in the planner, MethodImpl emission, and C#
+   authoring contract, then close the remaining properties required by
+   `Collection<T>` and `Set<T>`; do not add a `Map`, `Set`, or `Sequence`
+   representation exception. Then continue the complete
    Runtime/Stdlib owner graph and its
    residual capability joins, covariant returns, and intrinsic state
    requirements before executing representative products and exact inverse

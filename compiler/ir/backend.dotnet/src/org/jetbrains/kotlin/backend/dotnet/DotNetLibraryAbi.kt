@@ -166,10 +166,16 @@ enum class DotNetPublishedGenericInterfaceMemberRole {
     PRODUCER,
     CONSTRUCTED_INTERFACE_PRODUCER,
     CONSUMER,
+    BROAD_FIXED_BARRIER_INPUT,
+    BROAD_NESTED_SEMANTIC_INPUT,
     OWNER_INDEPENDENT_QUERY,
     PROPERTY_GETTER,
     PROPERTY_SETTER,
 }
+
+private val DotNetPublishedGenericInterfaceMemberRole.requiresExactInputView: Boolean
+    get() = this == DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT ||
+            this == DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
 
 /** Whether the classifier owns a capability TypeDef or reuses one direct parent's capability. */
 enum class DotNetPublishedGenericInterfaceCapabilityBindingKind {
@@ -565,6 +571,7 @@ sealed interface DotNetPhysicalDeclaration {
         override val ownerPath: List<String>,
         val capabilityAssemblyName: String,
         val capabilityOwnerPath: List<String>,
+        val exactOwnerPath: List<String>? = null,
         val contract: DotNetPublishedGenericInterfaceFamilyContract,
     ) : DotNetPhysicalDeclaration {
         init {
@@ -573,6 +580,21 @@ sealed interface DotNetPhysicalDeclaration {
             }
             require(capabilityAssemblyName.matches(Regex("[A-Za-z_][A-Za-z0-9_.-]*"))) {
                 "published generic-interface family '${contract.logicalOwnerKey}' has an invalid assembly"
+            }
+            val requiresExactInputView = contract.declaredMembers.any { member ->
+                member.role.requiresExactInputView
+            }
+            require((exactOwnerPath != null) == requiresExactInputView) {
+                "published generic-interface family '${contract.logicalOwnerKey}' has an inconsistent exact input view"
+            }
+            require(exactOwnerPath == null ||
+                    exactOwnerPath.isNotEmpty() && exactOwnerPath != ownerPath && exactOwnerPath != capabilityOwnerPath
+            ) {
+                "published generic-interface family '${contract.logicalOwnerKey}' has an invalid exact input owner"
+            }
+            require(exactOwnerPath == null ||
+                    exactOwnerPath.last().endsWith("`${contract.genericArity}")) {
+                "published generic-interface family '${contract.logicalOwnerKey}' has an arity-mismatched exact input owner"
             }
         }
     }
@@ -667,13 +689,13 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "44"
+    const val ABI_VERSION = "45"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
     const val PHYSICAL_NAME_GRAMMAR_VERSION = "3"
     const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
-    const val CURRENT_RUNTIME_SURFACE_LEVEL = 44
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 45
     const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
     const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"
@@ -1364,6 +1386,7 @@ object DotNetLibraryAbiCodec {
         val roots = contract.rootLogicalOwnerKeys
         val parents = contract.directParents
         val members = contract.declaredMembers
+        val exactOwner = exactOwnerPath.orEmpty()
         return listOf(
             "H",
             contract.logicalOwnerKey,
@@ -1375,10 +1398,11 @@ object DotNetLibraryAbiCodec {
             ownerPath.size.toString(),
             capabilityAssemblyName,
             capabilityOwnerPath.size.toString(),
+            exactOwner.size.toString(),
             roots.size.toString(),
             parents.size.toString(),
             members.size.toString(),
-        ) + ownerPath + capabilityOwnerPath + roots +
+        ) + ownerPath + capabilityOwnerPath + exactOwner + roots +
                 parents.flatMap { parent ->
                     listOf(parent.logicalOwnerKey, parent.parameterMapping.joinToString(","))
                 } + members.flatMap { member ->
@@ -1390,7 +1414,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily {
-        require(fields.size >= 16) {
+        require(fields.size >= 17) {
             "published generic-interface family '$logicalKey' has an incomplete physical contract"
         }
         fun positiveCount(index: Int, role: String): Int = fields[index].toIntOrNull().also { count ->
@@ -1417,18 +1441,23 @@ object DotNetLibraryAbiCodec {
         )
         val ownerSize = positiveCount(7, "natural-owner path")
         val capabilitySize = positiveCount(9, "capability-owner path")
-        val rootCount = positiveCount(10, "root")
-        val parentCount = nonNegativeCount(11, "parent")
-        val memberCount = nonNegativeCount(12, "member")
-        val expectedSize = 13 + ownerSize + capabilitySize + rootCount + parentCount * 2 + memberCount * 2
+        val exactOwnerSize = nonNegativeCount(10, "exact-owner path")
+        val rootCount = positiveCount(11, "root")
+        val parentCount = nonNegativeCount(12, "parent")
+        val memberCount = nonNegativeCount(13, "member")
+        val expectedSize = 14 + ownerSize + capabilitySize + exactOwnerSize +
+                rootCount + parentCount * 2 + memberCount * 2
         require(fields.size == expectedSize) {
             "published generic-interface family '$logicalKey' has an inconsistent physical payload"
         }
-        var offset = 13
+        var offset = 14
         fun take(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
         val ownerPath = take(ownerSize).requireOwnerPath(logicalKey, "published natural owner")
         val capabilityOwnerPath = take(capabilitySize)
             .requireOwnerPath(logicalKey, "published capability owner")
+        val exactOwnerPath = take(exactOwnerSize)
+            .takeIf { path -> path.isNotEmpty() }
+            ?.requireOwnerPath(logicalKey, "published exact input owner")
         val roots = take(rootCount)
         val parents = List(parentCount) {
             val parentKey = fields[offset++]
@@ -1453,6 +1482,7 @@ object DotNetLibraryAbiCodec {
             ownerPath = ownerPath,
             capabilityAssemblyName = fields[8],
             capabilityOwnerPath = capabilityOwnerPath,
+            exactOwnerPath = exactOwnerPath,
             contract = DotNetPublishedGenericInterfaceFamilyContract(
                 logicalOwnerKey = fields[1],
                 genericArity = genericArity,
@@ -3266,6 +3296,7 @@ internal fun collectDotNetLibraryDeclarations(
             ownerPath = ownerInfo.physicalPathComponents(),
             capabilityAssemblyName = capabilityInfo.assemblyName ?: currentAssemblyName,
             capabilityOwnerPath = capabilityInfo.physicalPathComponents(),
+            exactOwnerPath = null,
             contract = contract,
         )
         contract.declaredMembers.forEach { member ->

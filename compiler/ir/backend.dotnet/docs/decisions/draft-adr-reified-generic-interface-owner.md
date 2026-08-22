@@ -562,8 +562,18 @@ surface 44 publishes the structural `CONSTRUCTED_INTERFACE_PRODUCER` role.
 See
 [`../archive/reified-generic-interface-constructed-result-family-2026-08-22.md`](../archive/reified-generic-interface-constructed-result-family-2026-08-22.md).
 
-Inputs, broader properties, defaults, overloads, extra producer members, and
-mixed/multiple type parameters remain separate gates.
+The first broad-input prerequisite is now part of the atomic producer record.
+ABI/runtime surface 45 adds `BROAD_FIXED_BARRIER_INPUT` and
+`BROAD_NESTED_SEMANTIC_INPUT` member roles plus the invariant exact TypeDef's
+physical owner path. Either role without that owner, or that owner without
+either role, is invalid; natural, semantic, and exact owners must be distinct,
+and the exact metadata arity must match the logical owner. Consumers therefore
+never reconstruct or guess the third view. This records the physical identity
+but does not yet emit it or admit the owner. See
+[`../archive/reified-generic-interface-exact-input-family-record-2026-08-22.md`](../archive/reified-generic-interface-exact-input-family-record-2026-08-22.md).
+
+Broad-input emission, broader properties, defaults, overloads, extra producer
+members, and mixed/multiple type parameters remain separate gates.
 
 ## Remaining gates
 

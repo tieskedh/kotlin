@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-exact-input-family-record-2026-08-22.md`](reified-generic-interface-exact-input-family-record-2026-08-22.md)
+  records ABI 45's atomic invariant-exact TypeDef identity and broad direct/
+  nested member roles, including missing, unsolicited, aliased, and arity-
+  mismatched fail-closed validation.
 - [`reified-generic-interface-broad-input-composition-2026-08-22.md`](reified-generic-interface-broad-input-composition-2026-08-22.md)
   records the CLR-illegal single covariant input surface and the executable
   three-view exact/read/semantic composition for `Collection<T>`-shaped direct

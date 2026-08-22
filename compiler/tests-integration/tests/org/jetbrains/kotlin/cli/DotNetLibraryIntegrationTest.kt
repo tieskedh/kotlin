@@ -212,6 +212,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPortablePhysicalAbiDifference
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetValueClassAbi
 import org.jetbrains.kotlin.config.DotNetTarget
@@ -10274,6 +10279,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         foreignOverrideProbeMethodName =
                             "member__KotlinForeignOverrideProbe__1234",
                     ),
+            "H:C:sample/GenericOwner" to
+                    DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+                        ownerPath = listOf("sample.GenericOwner`2"),
+                        capabilityAssemblyName = "sample.CapabilityAssembly",
+                        capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                        exactOwnerPath = listOf("sample.IGenericOwnerKotlinExact`2"),
+                        contract = broadInputFamilyContract(
+                            DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
+                        ),
+                    ),
             "S:F:sample/consumeGenericOwner" to
                     DotNetPhysicalDeclaration.GenericOwnerFunctionCarrier(
                         ownerPath = listOf("sample.LibraryKt"),
@@ -10356,6 +10371,49 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
+            DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+                ownerPath = listOf("sample.GenericOwner`2"),
+                capabilityAssemblyName = "sample.CapabilityAssembly",
+                capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                contract = broadInputFamilyContract(
+                    DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT
+                ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+                ownerPath = listOf("sample.GenericOwner`2"),
+                capabilityAssemblyName = "sample.CapabilityAssembly",
+                capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                exactOwnerPath = listOf("sample.GenericOwner`2"),
+                contract = broadInputFamilyContract(
+                    DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT
+                ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+                ownerPath = listOf("sample.GenericOwner`2"),
+                capabilityAssemblyName = "sample.CapabilityAssembly",
+                capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                exactOwnerPath = listOf("sample.IGenericOwnerKotlinExact`1"),
+                contract = broadInputFamilyContract(
+                    DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
+                ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
+                ownerPath = listOf("sample.GenericOwner`2"),
+                capabilityAssemblyName = "sample.CapabilityAssembly",
+                capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                exactOwnerPath = listOf("sample.IGenericOwnerKotlinExact`2"),
+                contract = broadInputFamilyContract(
+                    DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
+                ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
             DotNetGenericOwnerAbi(
                 capabilityAssemblyName = "sample.CapabilityAssembly",
                 capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
@@ -10386,6 +10444,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
         )
     }
+
+    private fun broadInputFamilyContract(
+        role: DotNetPublishedGenericInterfaceMemberRole,
+    ): DotNetPublishedGenericInterfaceFamilyContract =
+        DotNetPublishedGenericInterfaceFamilyContract(
+            logicalOwnerKey = "C:sample/GenericOwner",
+            genericArity = 2,
+            kind = DotNetPublishedGenericInterfaceFamilyKind.ROOT,
+            rootLogicalOwnerKeys = listOf("C:sample/GenericOwner"),
+            directParents = emptyList(),
+            lineageDepth = 0,
+            declaredMembers = listOf(
+                DotNetPublishedGenericInterfaceMemberContract(
+                    logicalMemberKey = "F:sample/GenericOwner/member",
+                    role = role,
+                )
+            ),
+            capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
+            reusedParentLogicalOwnerKey = null,
+        )
 
     @Test
     fun testDllManifestExposesOnlyNonGenericInterfacesWithoutKlib() {
