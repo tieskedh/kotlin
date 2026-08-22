@@ -1200,12 +1200,18 @@ dispatch, an incompatible fixed-barrier candidate returns the authoritative
 result, and an incompatible nested candidate reaches the semantic body without
 wrapping or changing identity on Framework 4.8 and .NET 10.
 
-Next encode those three roles in the generic-interface planner, physical-family
-artifact, MethodImpl emission, and C# authoring contract. This is still a
-pre-ABI structural proof: physical names/export presentation and truthful
-non-partial C# behavior remain open. Then close the property composition needed
-by `Collection<T>` and `Set<T>`. Defaults, overloads, diamonds, and mixed or
-multiple type parameters remain later gates before the full surface.
+ABI/runtime surface 45 now records the third physical identity atomically. The
+family artifact names the invariant exact TypeDef and distinguishes fixed-
+barrier direct input from nested semantic input. Missing, unsolicited, aliased,
+or arity-mismatched exact owners fail closed. No consumer derives this TypeDef
+from a name, and no existing family silently acquires it.
+
+Next encode those roles in the generic-interface planner, materialize the exact
+TypeDef and MethodImpls, and extend the C# authoring contract. Physical export
+presentation and truthful non-partial C# behavior remain open. Then close the
+property composition needed by `Collection<T>` and `Set<T>`. Defaults,
+overloads, diamonds, and mixed or multiple type parameters remain later gates
+before the full surface.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
