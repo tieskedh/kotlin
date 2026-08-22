@@ -93,17 +93,51 @@ verification, and work state.
   producer record is accepted. The same atomic payload carries natural,
   semantic, and exact paths, so a separate consumer never reconstructs a
   generated name. Existing families retain no exact owner. This records but
-  does not yet emit the third TypeDef or admit a broad-input Kotlin owner. A
-  separate consumer now reconstructs the recorded owner from the producer
-  assembly/path with exactly the recorded invariant arity; the type mapper
-  exposes it as the exact view and never infers a generated name. A new
-  backend-local test makes that internal boundary directly executable. The
+  did not yet emit the third TypeDef or admit a broad-input Kotlin owner at
+  that checkpoint. A separate consumer reconstructs the recorded owner from
+  the producer assembly/path with exactly the recorded invariant arity; the
+  type mapper exposes it as the exact view and never infers a generated name.
+  A backend-local test makes that internal boundary directly executable. The
   full target aggregate exits zero; direct XML audit covers 191 suites and
   2,289 tests with zero failures, errors, or skips. The 187 FIR suites/2,155
   tests and two integration suites/127 tests are fresh, while the one-test
   backend resolver suite and unchanged six-test `dotnet.ir` root remain up-to-
   date. See
   [`docs/archive/reified-generic-interface-exact-input-family-record-2026-08-22.md`](docs/archive/reified-generic-interface-exact-input-family-record-2026-08-22.md).
+
+  The matching materialization gate is now closed without a collection,
+  package, or declaration-name exception. An admitted covariant family emits
+  its natural `I<out T>`, an invariant `I__KotlinExact<T>` which inherits the
+  natural view and owns only CLR-illegal input members, and the non-generic
+  Kotlin semantic capability. Exact member signatures retain natural nested
+  constructions such as `Family<T>`; they do not recursively substitute the
+  compiler exact sibling. Kotlin implementations use one object, one producer-
+  proven `!T` field, typed natural/exact MethodImpls, and object-domain routing
+  only for the nested input and constructed result whose widened Kotlin views
+  the CLR cannot name. Inherited broad-input contracts now participate in the
+  generic-class semantic-body plan, and later signature routing cannot degrade
+  a producer-proven natural or exact member back to `object`.
+
+  The exact physical path and per-member declared/exact authoring view are also
+  present in the real C# implementation manifest. The supported Roslyn source
+  generator automatically adds both compiler ABI interfaces, so a partial C#
+  class writes only ordinary typed `I<T>`-shaped members and never names either
+  `__KotlinExact` or `KotlinSemantic`. Separate Kotlin libraries, hostile
+  widened Kotlin calls, reference covariance, value-type exact construction,
+  generated C# implementations, and receiver/argument identity execute on
+  Framework 4.8 and .NET 10. Runtime collection mappings remain deliberately
+  gated: this proves the general physical family before changing the source-
+  built Runtime/Stdlib graph. Public presentation and truthful precompiled/non-
+  partial C# behavior for the exact-input member remain the next interop gate.
+  The final full aggregate exits zero; direct XML audit covers 191 suites and
+  2,293 tests with zero failures, errors, or skips. The 187 FIR suites/2,159
+  tests, two integration suites/127 tests, and one-test backend resolver suite
+  are fresh; the unchanged six-test `dotnet.ir` root remains up-to-date. The
+  first aggregate exposed and the final head fixes an over-strict external-
+  stub origin check: cross-module inline IR retains default/synthetic/lambda
+  origins but must still bind producer-recorded physical functions.
+  See
+  [`docs/archive/reified-generic-interface-exact-input-materialization-2026-08-22.md`](docs/archive/reified-generic-interface-exact-input-materialization-2026-08-22.md).
 
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input

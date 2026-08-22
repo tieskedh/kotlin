@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.VariableRemapper
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerFunctionInputEntry
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
@@ -21,6 +22,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceParentContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
@@ -139,6 +141,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
     private val finalRoutingOnly: Boolean = false,
 ) : ModuleLoweringPass {
     private val externalDeclarations = context.externalDeclarationsForLowering()
+    private val specialBridgeMethods = SpecialBridgeMethods(context)
 
     private data class ReifiedInterfaceChildShape(
         val parents: List<IrClass>,
@@ -161,6 +164,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         members: List<IrSimpleFunction>,
     ): List<DotNetPublishedGenericInterfaceMemberContract>? {
         val parameter = typeParameters.singleOrNull() ?: return null
+        val owner = this
         return buildList {
             for (member in members) {
                 val property = member.correspondingPropertySymbol?.owner
@@ -174,6 +178,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER
                     member.isDirectConstructedInterfaceProducerMember(parameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
+                    member.isBroadFixedBarrierInputMember(parameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT
+                    member.isBroadNestedSemanticInputMember(owner, parameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
                     member.isDirectConsumerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.CONSUMER
                     member.isOwnerIndependentPrimitiveQuery() ->
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
@@ -548,6 +556,80 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
 
+        fun IrType.containsReifiedInterfaceApplication(): Boolean {
+            val simpleType = this as? IrSimpleType ?: return false
+            if (reifiedInterfaceOwnerOrNull() != null) return true
+            return simpleType.arguments.any { argument ->
+                (argument as? IrTypeProjection)?.type
+                    ?.containsReifiedInterfaceApplication() == true
+            }
+        }
+
+        if (!finalRoutingOnly) {
+            // Generic-class planning deliberately precedes generic-interface admission. Once the
+            // latter has selected a natural I<T>, upgrade an already-planned semantic interface
+            // result to the only carrier shared by Kotlin capability objects and an ordinary
+            // foreign implementation of the natural interface. This must update the IR carrier,
+            // not merely its later physical mapping: otherwise a generated body first attempts
+            // the invalid Nested<!T> -> Nested<object> conversion and only then returns object.
+            // The typed source entry is not part of this set and retains its exact constructed
+            // result, including its intentional object -> Nested<!T> boundary check.
+            val widenedSemanticResults = linkedMapOf<IrSimpleFunction, IrType>()
+            context.genericOwnerArchitecturePlans.values
+                .filter(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
+                .forEach { plan ->
+                    plan.memberFamilies.keys
+                        .filter { source ->
+                            source.returnType.containsReifiedInterfaceApplication()
+                        }
+                        .forEach { source ->
+                            listOfNotNull(
+                                context.genericOwnerSemanticHooks[source],
+                                context.genericOwnerCapabilitySlots[source],
+                                context.genericOwnerCapabilityDispatchers[source],
+                            ).forEach { semanticMember ->
+                                context.genericOwnerForeignDispatchDeclarations += semanticMember
+                                if (!semanticMember.returnType.isNullableAny()) {
+                                    widenedSemanticResults.putIfAbsent(
+                                        semanticMember,
+                                        semanticMember.returnType,
+                                    )
+                                    semanticMember.returnType = context.irBuiltIns.anyNType
+                                }
+                            }
+                        }
+                }
+            if (widenedSemanticResults.isNotEmpty()) {
+                irModule.acceptVoid(object : IrVisitorVoid() {
+                    override fun visitElement(element: IrElement) {
+                        element.acceptChildrenVoid(this)
+                    }
+
+                    override fun visitCall(expression: IrCall) {
+                        if (expression.symbol.owner in widenedSemanticResults) {
+                            expression.type = context.irBuiltIns.anyNType
+                        }
+                        expression.acceptChildrenVoid(this)
+                    }
+
+                    override fun visitReturn(expression: IrReturn) {
+                        val oldReturnType = widenedSemanticResults[expression.returnTargetSymbol.owner]
+                        if (oldReturnType != null) {
+                            var value = expression.value
+                            while (value is IrTypeOperatorCall &&
+                                value.operator == IrTypeOperator.IMPLICIT_CAST &&
+                                (value.type == oldReturnType || value.typeOperand == oldReturnType)
+                            ) {
+                                value = value.argument
+                            }
+                            expression.value = value
+                        }
+                        expression.acceptChildrenVoid(this)
+                    }
+                })
+            }
+        }
+
         fun IrCall.checkNotNullArgumentOrNull(): IrExpression? =
             takeIf { call -> call.symbol == context.irBuiltIns.checkNotNullSymbol }
                 ?.arguments
@@ -762,12 +844,21 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 is IrValueParameter -> parent as? IrSimpleFunction
                 else -> null
             } ?: return false
+            val isFunctionOrItsParameter = this === function ||
+                    this is IrValueParameter && parent === function
+            if (isFunctionOrItsParameter &&
+                function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null
+            ) {
+                // A typed MethodImpl adapter is the physical declaration of one natural or exact
+                // interface slot. Final value routing may classify values in its body, but it
+                // must never rewrite the adapter's own signature to the semantic carrier.
+                return true
+            }
             val owner = function.parent as? IrClass ?: return false
             if (owner.kind == ClassKind.INTERFACE &&
                 (owner in context.reifiedGenericInterfaces ||
                         externalDeclarations.hasReifiedGenericInterface(owner)) &&
-                this === function &&
-                function.returnType.reifiedInterfaceOwnerOrNull() != null
+                isFunctionOrItsParameter
             ) {
                 return true
             }
@@ -1129,9 +1220,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                     !receiver.provesExactPhysicalInterfaceView(receiver.type))
                     else -> receiver.type.potentialSemanticInterfaceOwnerOrNull() != null
                 }
-                if (finalRoutingOnly && usesSemanticCarrier &&
-                    sourceOwner?.isDotNetGenericClassDeclaration == true
-                ) {
+                val requiresPublishedGenericOwnerCapability = sourceOwner != null && (
+                        context.genericOwnerArchitecturePlans[sourceOwner]
+                            ?.memberFamilies
+                            ?.get(source)
+                            ?.roles
+                            ?.contains(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) == true ||
+                                externalDeclarations.genericOwnerMemberFamilyOrNull(source) != null
+                        )
+                if (finalRoutingOnly && usesSemanticCarrier && requiresPublishedGenericOwnerCapability) {
                     check(slot != null) {
                         "Internal .NET backend error: late semantic call to " +
                                 "'${sourceOwner.name}.${source.name}' lacks its published capability slot"
@@ -1245,6 +1342,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
         slotsBySource: MutableMap<IrSimpleFunction, IrSimpleFunction>,
     ) {
         for (source in sources) {
+            val owner = source.parent as IrClass
+            val ownerParameter = owner.typeParameters.single()
+            val returnsConstructedInterface =
+                source.isDirectConstructedInterfaceProducerMember(ownerParameter)
+            val acceptsNestedSemanticInput =
+                source.isBroadNestedSemanticInputMember(owner, ownerParameter)
             val logicalRoot = context.preLoweringDeclarationKeys[source]
                 ?: "$ownerIdentity.${source.name.asString()}"
             val physicalName = dotNetGenericOwnerPhysicalMemberName(
@@ -1262,7 +1365,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 returnType = context.irBuiltIns.anyNType
             }.apply {
                 parameters += createDispatchReceiverParameterWithClassParent()
-                val ownerParameter = (source.parent as IrClass).typeParameters.single()
                 val copiedMethodParameters = copyTypeParametersFrom(source)
                 val methodSubstitutor = IrTypeSubstitutor(
                     source.typeParameters.zip(copiedMethodParameters).associate { pair ->
@@ -1287,13 +1389,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
                     type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
                 )
-                returnType = semanticType(source.returnType)
+                returnType = if (returnsConstructedInterface) {
+                    context.irBuiltIns.anyNType
+                } else {
+                    semanticType(source.returnType)
+                }
                 source.parameters.filter { parameter -> parameter.kind == IrParameterKind.Regular }
                     .forEach { parameter ->
                         parameters += parameter.copyTo(
                             this,
-                            type = semanticType(parameter.type),
-                            varargElementType = parameter.varargElementType?.let(::semanticType),
+                            type = if (acceptsNestedSemanticInput) {
+                                context.irBuiltIns.anyNType
+                            } else {
+                                semanticType(parameter.type)
+                            },
+                            varargElementType = if (acceptsNestedSemanticInput) {
+                                null
+                            } else {
+                                parameter.varargElementType?.let(::semanticType)
+                            },
                             defaultValue = null,
                         )
                     }
@@ -1302,6 +1416,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
             context.genericOwnerCapabilitySlots[source] = slot
             context.genericOwnerCapabilityDeclarations += slot
             context.genericOwnerCapabilityDeclarations += slot.parameters
+            if (returnsConstructedInterface) {
+                context.genericOwnerForeignDispatchDeclarations += slot
+            }
         }
     }
 
@@ -1360,7 +1477,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val members = when (parameter.variance) {
             Variance.OUT_VARIANCE -> {
                 val properties = declaredInterfaceProperties()
-                when {
+                directCovariantBroadInputCompositionMembersOrNull(parameter) ?: when {
                     properties.isEmpty() -> declaredInterfaceMembers().takeIf { declared ->
                         declared.size <= 1 &&
                                 declared.all { member -> member.isDirectProducerMember(parameter) }
@@ -1401,6 +1518,46 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
         return ReifiedInterfaceChildShape(parents, members)
+    }
+
+    /**
+     * First CLR-legal broad-input family. The grammar is semantic and structural: one nested
+     * covariant producer, an optional upstream-defined fixed barrier, one same-owner nested
+     * semantic input, and one or more owner-independent primitive queries. Requiring the nested
+     * input makes the invariant exact sibling independently reachable before the Runtime-owned
+     * Collection graph migrates; Collection later adds its fixed-candidate policy to this same
+     * representation. The direct parent check remains in [reifiedInterfaceChildShapeOrNull], so
+     * this admits no orphan physical family.
+     */
+    private fun IrClass.directCovariantBroadInputCompositionMembersOrNull(
+        parameter: IrTypeParameter,
+    ): List<IrSimpleFunction>? {
+        if (parameter.variance != Variance.OUT_VARIANCE) return null
+        if (DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(this)) {
+            // The structural grammar intentionally matches Common Collection, but its current
+            // TypeDef is still produced by Kotlin.Runtime's handwritten erased epoch. Reifying
+            // only its source declaration would make lowering and the runtime assembly disagree.
+            // Admit ordinary Kotlin/library owners here; migrate the runtime-owned family only
+            // together with its Runtime TypeDefs and mapped-member table.
+            return null
+        }
+        val members = declaredInterfaceMembers()
+        val constructedProducers = members.filter { member ->
+            member.isDirectConstructedInterfaceProducerMember(parameter)
+        }
+        val fixedBarrierInputs = members.filter { member ->
+            member.isBroadFixedBarrierInputMember(parameter)
+        }
+        val nestedSemanticInputs = members.filter { member ->
+            member.isBroadNestedSemanticInputMember(this, parameter)
+        }
+        val queries = members.filter { member -> member.isOwnerIndependentPrimitiveQuery() }
+        return members.takeIf {
+            constructedProducers.size == 1 && fixedBarrierInputs.size <= 1 &&
+                    nestedSemanticInputs.size == 1 && queries.isNotEmpty() &&
+                    members.size == constructedProducers.size + fixedBarrierInputs.size +
+                    nestedSemanticInputs.size + queries.size
+        }
     }
 
     private fun IrClass.isFirstReifiedInterfaceCandidate(): Boolean {
@@ -1655,6 +1812,40 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return inputParameter?.owner === parameter
     }
 
+    private fun IrSimpleFunction.isBroadFixedBarrierInputMember(
+        parameter: IrTypeParameter,
+    ): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT || body != null ||
+            this in context.interfaceDefaultImplementations || correspondingPropertySymbol != null || isSuspend ||
+            typeParameters.isNotEmpty() || parameters.size != 2
+        ) {
+            return false
+        }
+        val input = parameters.singleOrNull { it.kind == IrParameterKind.Regular } ?: return false
+        val inputParameter = (input.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        val special = specialBridgeMethods.findSpecialWithOverride(this, includeSelf = true)?.second
+            ?: return false
+        return inputParameter?.owner === parameter && special.argumentsToCheck == 1
+    }
+
+    private fun IrSimpleFunction.isBroadNestedSemanticInputMember(
+        owner: IrClass,
+        parameter: IrTypeParameter,
+    ): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT || body != null ||
+            this in context.interfaceDefaultImplementations || correspondingPropertySymbol != null || isSuspend ||
+            typeParameters.isNotEmpty() || returnType != context.irBuiltIns.booleanType || parameters.size != 2
+        ) {
+            return false
+        }
+        val input = parameters.singleOrNull { it.kind == IrParameterKind.Regular } ?: return false
+        val inputType = input.type as? IrSimpleType ?: return false
+        if (inputType.isMarkedNullable() || (inputType.classifier as? IrClassSymbol)?.owner !== owner) return false
+        val argument = inputType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+        val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        return argument.variance == Variance.INVARIANT && argumentParameter?.owner === parameter
+    }
+
     private fun IrClass.hasFirstReifiedProducerOwnerShape(): Boolean {
         if (!hasFirstReifiedInterfaceOwnerShape()) return false
         return typeParameters.single().variance == Variance.OUT_VARIANCE
@@ -1760,13 +1951,31 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
         fun semanticType(type: IrType): IrType = methodSubstitutor.substitute(
             type.semanticInterfaceSlotType(ownerParameter, context.irBuiltIns.anyNType)
         )
-        returnType = semanticType(source.returnType)
+        returnType = if (publishedMemberRole ==
+            DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
+        ) {
+            context.irBuiltIns.anyNType
+        } else {
+            semanticType(source.returnType)
+        }
         source.parameters.filter { parameter -> parameter.kind == IrParameterKind.Regular }
             .forEach { parameter ->
                 parameters += parameter.copyTo(
                     this,
-                    type = semanticType(parameter.type),
-                    varargElementType = parameter.varargElementType?.let(::semanticType),
+                    type = if (publishedMemberRole ==
+                        DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
+                    ) {
+                        context.irBuiltIns.anyNType
+                    } else {
+                        semanticType(parameter.type)
+                    },
+                    varargElementType = if (publishedMemberRole ==
+                        DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
+                    ) {
+                        null
+                    } else {
+                        parameter.varargElementType?.let(::semanticType)
+                    },
                     defaultValue = null,
                 )
             }
