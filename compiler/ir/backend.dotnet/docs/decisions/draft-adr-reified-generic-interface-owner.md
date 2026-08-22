@@ -569,7 +569,9 @@ physical owner path. Either role without that owner, or that owner without
 either role, is invalid; natural, semantic, and exact owners must be distinct,
 and the exact metadata arity must match the logical owner. Consumers therefore
 never reconstruct or guess the third view. This records the physical identity
-but does not yet emit it or admit the owner. See
+and the external resolver now reconstructs its invariant CLR ClassInfo from
+the producer assembly/path/arity without a naming convention. It does not yet
+emit the exact TypeDef or admit the owner. See
 [`../archive/reified-generic-interface-exact-input-family-record-2026-08-22.md`](../archive/reified-generic-interface-exact-input-family-record-2026-08-22.md).
 
 Broad-input emission, broader properties, defaults, overloads, extra producer
