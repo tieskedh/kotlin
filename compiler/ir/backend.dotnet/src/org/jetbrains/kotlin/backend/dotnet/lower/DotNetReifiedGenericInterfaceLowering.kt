@@ -7,10 +7,14 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.VariableRemapper
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeDefaultValueKind
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
+import org.jetbrains.kotlin.backend.common.lower.SpecialMethodWithDefaultInfo
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerFunctionInputEntry
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
@@ -149,6 +153,17 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val declaredMembers: List<IrSimpleFunction>,
     )
 
+    private fun IrClass.isCanonicalOnlyRuntimeGenericInterface(): Boolean {
+        if (!DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(this)) return false
+        val info = DotNetRuntimeTypes.genericInterfaceInfoFor(this) ?: return false
+        return info.declaredClassInfo == null && info.exactClassInfo == null
+    }
+
+    private fun IrSimpleFunction.fixedBarrierProviderOwnerOrNull(): IrClass? =
+        specialBridgeMethods.findSpecialWithOverride(this, includeSelf = true)
+            ?.first
+            ?.parent as? IrClass
+
     private fun IrClass.requiredPublishedLogicalKey(role: String): String =
         context.preLoweringDeclarationKeys[this]
             ?: fqNameWhenAvailable?.asString()
@@ -218,7 +233,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
             ?: return null
         if (contract.declaredMembers != declaredMembers) return null
         val parentContracts = mutableListOf<DotNetPublishedGenericInterfaceFamilyContract>()
-        val expectedParents = owner.dotNetDirectInterfaceTypes().map { parentType ->
+        val erasedRuntimeParents = mutableListOf<IrClass>()
+        val expectedParents = owner.dotNetDirectInterfaceTypes().mapNotNull { parentType ->
             val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
             val mapping = parentType.arguments.map { argument ->
                 val projection = argument as? IrTypeProjection ?: return null
@@ -228,10 +244,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 owner.typeParameters.indexOf(parameter.owner).takeIf { index -> index >= 0 } ?: return null
             }
             if (mapping != mapping.indices.toList()) return null
+            if (parent.isCanonicalOnlyRuntimeGenericInterface()) {
+                erasedRuntimeParents += parent
+                return@mapNotNull null
+            }
             val parentContract = publishedFamilyOrNull(parent, visiting + owner) ?: return null
             parentContracts += parentContract
             DotNetPublishedGenericInterfaceParentContract(parentContract.logicalOwnerKey, mapping)
         }.sortedBy { parent -> parent.logicalOwnerKey }
+        if (erasedRuntimeParents.isNotEmpty()) {
+            val provider = erasedRuntimeParents.singleOrNull() ?: return null
+            val parameter = owner.typeParameters.single()
+            if (owner.declaredInterfaceMembers().none { member ->
+                    member.isBroadFixedBarrierInputMember(parameter) &&
+                            member.fixedBarrierProviderOwnerOrNull() === provider
+                }
+            ) {
+                return null
+            }
+        }
         if (contract.directParents != expectedParents) return null
         val expectedRoots = if (parentContracts.isEmpty()) {
             listOf(contract.logicalOwnerKey)
@@ -1353,6 +1384,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
         for (source in sources) {
             val owner = source.parent as IrClass
             val ownerParameter = owner.typeParameters.single()
+            if (source.isBroadFixedBarrierInputMember(ownerParameter)) {
+                val policy = checkNotNull(
+                    specialBridgeMethods.findSpecialWithOverride(source, includeSelf = true)?.second
+                ) {
+                    "Internal .NET backend error: fixed-barrier interface member has no upstream policy"
+                }
+                context.genericOwnerWrongShapePolicies[source] = policy.toDotNetWrongShapePolicy()
+            }
             val returnsConstructedInterface =
                 source.isDirectConstructedInterfaceProducerMember(ownerParameter)
             val acceptsNestedSemanticInput =
@@ -1504,13 +1543,31 @@ internal class DotNetReifiedGenericInterfaceLowering(
             Variance.IN_VARIANCE -> null
         } ?: return null
         val parentTypes = dotNetDirectInterfaceTypes().takeIf { it.isNotEmpty() } ?: return null
-        val parents = parentTypes.map { parentType ->
+        val parents = mutableListOf<IrClass>()
+        val erasedRuntimeParents = mutableListOf<IrClass>()
+        parentTypes.forEach { parentType ->
             val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
             val argument = parentType.arguments.singleOrNull() as? IrTypeProjection ?: return null
             val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-            parent.takeIf {
-                argument.variance == Variance.INVARIANT && argumentParameter?.owner === parameter
-            } ?: return null
+            if (argument.variance != Variance.INVARIANT || argumentParameter?.owner !== parameter) {
+                return null
+            }
+            if (parent.isCanonicalOnlyRuntimeGenericInterface()) {
+                erasedRuntimeParents += parent
+            } else {
+                parents += parent
+            }
+        }
+        if (parents.isEmpty()) return null
+        if (erasedRuntimeParents.isNotEmpty()) {
+            val provider = erasedRuntimeParents.singleOrNull() ?: return null
+            if (parameter.variance != Variance.OUT_VARIANCE || members.none { member ->
+                    member.isBroadFixedBarrierInputMember(parameter) &&
+                            member.fixedBarrierProviderOwnerOrNull() === provider
+                }
+            ) {
+                return null
+            }
         }
         if (parameter.variance == Variance.INVARIANT) {
             val parent = parents.singleOrNull() ?: return null
@@ -1944,6 +2001,14 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
         ?.singleOrNull { member -> member.logicalMemberKey == binding.family.logicalMemberKey }
         ?.role
         ?: error("External reified-interface member '${source.name}' has no published member role")
+    if (publishedMemberRole == DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT) {
+        val policy = checkNotNull(
+            SpecialBridgeMethods(context).findSpecialWithOverride(source, includeSelf = true)?.second
+        ) {
+            "External fixed-barrier interface member '${source.name}' has no upstream policy"
+        }
+        context.genericOwnerWrongShapePolicies[source] = policy.toDotNetWrongShapePolicy()
+    }
     val ownerRelativeBounds = source.dotNetDirectOwnerRelativeMethodBoundsOrNull(owner)
         ?: error("External reified-interface member '${source.name}' has unsupported owner-relative bounds")
     context.irFactory.buildFun {
@@ -2021,6 +2086,19 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
         )
     }
 }
+
+private fun SpecialMethodWithDefaultInfo.toDotNetWrongShapePolicy(): DotNetCSharpWrongShapePolicy =
+    DotNetCSharpWrongShapePolicy(
+        checkedParameterCount = argumentsToCheck,
+        fallback = when (defaultValueKind) {
+            SpecialBridgeDefaultValueKind.FALSE -> DotNetCSharpWrongShapeFallback.FALSE
+            SpecialBridgeDefaultValueKind.NULL -> DotNetCSharpWrongShapeFallback.NULL
+            SpecialBridgeDefaultValueKind.MINUS_ONE -> DotNetCSharpWrongShapeFallback.MINUS_ONE
+            SpecialBridgeDefaultValueKind.SECOND_ARGUMENT -> DotNetCSharpWrongShapeFallback.ARGUMENT
+        },
+        fallbackParameterIndex = argumentsToCheck
+            .takeIf { defaultValueKind == SpecialBridgeDefaultValueKind.SECOND_ARGUMENT },
+    )
 
 private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     ownerParameter: IrTypeParameter,

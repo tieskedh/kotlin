@@ -600,8 +600,27 @@ object join or invokes the raw getter through its unique natural construction,
 then restores the primitive result. No owner state becomes `object`. See
 [`../archive/reified-generic-interface-owner-independent-property-2026-08-22.md`](../archive/reified-generic-interface-owner-independent-property-2026-08-22.md).
 
-Broad-input emission, broader properties, defaults, overloads, extra producer
-members, and mixed/multiple type parameters remain separate gates.
+ABI/runtime surface 48 admits the optional fixed-barrier member in the same
+family. The rule is not “a direct `T` input returns false”: one directly
+declared member must resolve through Common `SpecialBridgeMethods` to exactly
+one canonical-only Runtime generic-interface parent. That parent remains
+ordinary KLIB and CLR inheritance and is not copied into the reified-family
+ancestry record. Separate consumers revalidate the logical parent, the exact
+provider, and the upstream policy.
+
+The exact sibling retains the typed `!T` parameter. The Kotlin generic-class
+capability dispatcher checks the upstream barrier before its first
+`object -> T` narrowing. The C# manifest carries the same policy to generated
+adapters. For an ordinary precompiled C# implementation, the bounded runtime
+fallback selects one natural construction, resolves the concrete method by
+that construction's first type argument, and applies the upstream result
+before invoking the typed method. None of these widened boundaries changes
+the owner's producer-proven `!T` field or its normal typed call route. See
+[`../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md).
+
+Runtime/Stdlib collection TypeDef migration, broader properties, defaults,
+overloads, extra producer members, and mixed/multiple type parameters remain
+separate gates.
 
 ## Remaining gates
 
@@ -618,10 +637,11 @@ must cover:
    and broader input-bearing child/interface compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
-4. broad and `@UnsafeVariance` inputs, parameterized casts beyond the bounded
-   warning-bearing covariant producer proof, mixed-control-flow cast returns,
-   classifier-derived fields, and broader input parameters crossing separately
-   compiled exact-looking boundaries;
+4. broad and `@UnsafeVariance` inputs beyond the upstream-defined fixed
+   one-argument barrier and nested-input family, parameterized casts beyond the
+   bounded warning-bearing covariant producer proof, mixed-control-flow cast
+   returns, classifier-derived fields, and broader input parameters crossing
+   separately compiled exact-looking boundaries;
 5. Kotlin/C# properties beyond the exact mutable invariant cell and the broad-
    family owner-independent read-only primitive getter, broader
    default families (including multiple members, properties, generic methods,
