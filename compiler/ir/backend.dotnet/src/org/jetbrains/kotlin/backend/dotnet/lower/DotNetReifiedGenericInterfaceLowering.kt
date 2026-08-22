@@ -110,7 +110,9 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  *
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
- * returning its owner parameter directly, one covariant root `<R>(R) -> T` whose member is
+ * returning its owner parameter directly, a covariant cursor-like root combining exactly one
+ * such producer with one or more owner-independent no-input primitive queries, one covariant root
+ * `<R>(R) -> T` whose member is
  * abstract or has a default implementation and whose method parameter has either the universal
  * bound, direct non-generic nominal bounds, one direct self-bound on an admitted consumer root,
  * or that self-bound together with nominal bounds, plus an abstract root with one direct
@@ -169,6 +171,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             member.isDirectMethodGenericProducerMember(parameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER
                     member.isDirectConsumerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.CONSUMER
+                    member.isOwnerIndependentPrimitiveQuery() ->
+                        DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
                     else -> return null
                 }
                 val logicalMemberKey = context.preLoweringDeclarationKeys[member]
@@ -1356,7 +1360,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
             Variance.OUT_VARIANCE -> members.singleOrNull()?.let { member ->
                 member.isDirectProducerMember(parameter) ||
                         member.isDirectMethodGenericProducerMember(parameter)
-            } == true
+            } == true ||
+                        members.isCovariantProducerQueryFamily(parameter)
             Variance.IN_VARIANCE -> members.singleOrNull()?.isDirectConsumerMember(parameter) == true
             Variance.INVARIANT ->
                 members.singleOrNull()?.isDirectProducerMember(parameter) == true ||
@@ -1470,6 +1475,38 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val resultParameter = resultType.classifier as? IrTypeParameterSymbol
         return resultParameter?.owner === parameter
     }
+
+    /**
+     * Admits the first ordinary multi-member CLR family needed by `Iterator<T>` without using a
+     * stdlib name. Exactly one member carries the covariant owner parameter. Every other member
+     * is an abstract, owner-independent, no-input primitive query, so its natural and semantic
+     * signatures are identical and neither nested carriers nor input adaptation are implied.
+     */
+    private fun List<IrSimpleFunction>.isCovariantProducerQueryFamily(
+        parameter: IrTypeParameter,
+    ): Boolean =
+        count { member -> member.isDirectAbstractProducerMember(parameter) } == 1 &&
+                any { member -> member.isOwnerIndependentPrimitiveQuery() } &&
+                all { member ->
+                    member.isDirectAbstractProducerMember(parameter) ||
+                            member.isOwnerIndependentPrimitiveQuery()
+                }
+
+    private fun IrSimpleFunction.isDirectAbstractProducerMember(
+        parameter: IrTypeParameter,
+    ): Boolean =
+        this !in context.interfaceDefaultImplementations && isDirectProducerMember(parameter)
+
+    private fun IrSimpleFunction.isOwnerIndependentPrimitiveQuery(): Boolean =
+        visibility == DescriptorVisibilities.PUBLIC &&
+                modality == Modality.ABSTRACT &&
+                body == null &&
+                correspondingPropertySymbol == null &&
+                !isSuspend &&
+                typeParameters.isEmpty() &&
+                parameters.singleOrNull()?.kind == IrParameterKind.DispatchReceiver &&
+                !returnType.isMarkedNullable() &&
+                returnType.isPrimitiveType()
 
     private fun IrSimpleFunction.isDirectMethodGenericProducerMember(
         ownerParameter: IrTypeParameter,

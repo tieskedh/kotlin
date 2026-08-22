@@ -1168,6 +1168,26 @@ supported Roslyn generator, so partial C# implementations author only the
 natural member while Kotlin widened calls still reach that member on both
 profiles.
 
+The first required general multi-member root is now green without a stdlib
+exception. A structural covariant owner may combine exactly one abstract
+no-input direct `T` producer with one or more abstract owner-independent
+no-input non-null primitive queries. The natural CLR interface retains `!T`
+and primitive results; its semantic sibling widens only the producer result to
+`object`. ABI/runtime surface 43 publishes the owner-independent-query member
+role, and the C# authoring contract requires an ordinary partial C# class to
+write only the natural members. Kotlin exact and widened calls plus identity
+execute through a separate producer on Framework 4.8 and .NET 10. This closes
+the direct `Iterator<T>` member grammar, not the stdlib owner graph.
+
+Next close the constructed owner-dependent result needed by
+`Iterable<T>.iterator(): Iterator<T>`. The proof must select a truthful natural
+constructed result where possible, a declaration-semantic carrier only where
+necessary, and the same producer-owned family under separate compilation. It
+must not globally widen `Iterable<T>`, `Iterator<T>`, or an enclosing generic
+state slot merely because one semantic view exists. Collection inputs,
+properties, defaults, overloads, diamonds, and mixed/multiple type parameters
+remain later gates before the full `Collection<T>`/`Set<T>` surface.
+
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
 reuses the parent's capability and member family; it does not acquire a second
@@ -1701,7 +1721,8 @@ compiler-ABI adapters serve both Kotlin-widened views without changing object
 identity. See
 [`../archive/reified-generic-interface-read-only-property-child-2026-08-21.md`](../archive/reified-generic-interface-read-only-property-child-2026-08-21.md).
 
-With that typed contract consolidated, continue with other constructed method
+With that typed contract consolidated, continue with constructed
+owner-dependent member results, then other constructed method
 constraints, multiple read-only property
 inheritance, diamonds, reabstraction, changed-
 argument and deeper/multiple inheritance, broader input-bearing inheritance,
