@@ -14,6 +14,14 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-precompiled-exact-input-2026-08-22.md`](reified-generic-interface-precompiled-exact-input-2026-08-22.md)
+  records the typed Kotlin class entry and separately compiled non-partial C#
+  exact-input convention, exact overload resolution, missing-member fail-
+  closed behavior, ABI/runtime surface 46, and full-gate evidence.
+- [`reified-generic-interface-exact-input-materialization-2026-08-22.md`](reified-generic-interface-exact-input-materialization-2026-08-22.md)
+  records emission of the natural, invariant exact, and semantic views on one
+  object, typed `!T` storage, producer-recorded separate compilation, and the
+  generated partial C# authoring path.
 - [`reified-generic-interface-exact-input-family-record-2026-08-22.md`](reified-generic-interface-exact-input-family-record-2026-08-22.md)
   records ABI 45's atomic invariant-exact TypeDef identity and broad direct/
   nested member roles, including missing, unsolicited, aliased, and arity-

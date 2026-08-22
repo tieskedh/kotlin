@@ -3165,8 +3165,9 @@ internal class DotNetIlExpressionCodegen(
      * Keeps the direct semantic capability as the fast path while admitting an ordinary foreign
      * implementation of the natural `I<T>`. The runtime selects exactly one constructed natural
      * interface or rejects an ambiguous multi-construction object. The admitted foreign shapes
-     * are deliberately bounded to an object-result producer or a declaration-invariant
-     * one-object-input Unit member; overloads and broader signatures remain outside this path.
+     * are deliberately bounded to a value-result producer, a declaration-invariant
+     * one-object-input Unit member, or the exact sibling's one-natural-input Boolean member;
+     * overloads and broader signatures remain outside this path.
      */
     private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
         call: IrCall,
@@ -3202,10 +3203,15 @@ internal class DotNetIlExpressionCodegen(
             this is DotNetIlValueType.TypeParameter && index == 0 && !isMethodParameter
         val naturalResultType =
             (naturalInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(sourceOwner)
+        val naturalInterfaceOwner = interfaceInfo?.declaredClassInfo
+            ?: interfaceInfo?.canonicalClassInfo
+        val exactInputType = naturalInfo.signature.parameterTypes.getOrNull(1)
+            as? DotNetIlValueType.GenericInstance
         val isProducer = regularArguments.isEmpty() &&
                 semanticInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Object) &&
-                naturalResultType?.isNaturalOwnerParameter() == true
+                naturalResultType != null
         val isConsumer = regularArguments.size == 1 &&
                 sourceOwner.typeParameters.singleOrNull()?.variance ==
                     org.jetbrains.kotlin.types.Variance.INVARIANT &&
@@ -3213,8 +3219,19 @@ internal class DotNetIlExpressionCodegen(
                 semanticInfo.signature.returnType == DotNetIlReturnType.Void &&
                 naturalInfo.signature.parameterTypes[1].isNaturalOwnerParameter() &&
                 naturalInfo.signature.returnType == DotNetIlReturnType.Void
-        if (!isProducer && !isConsumer) return false
-        val resultNarrowing = if (isProducer) {
+        val isExactInputBoolean = regularArguments.size == 1 &&
+                interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
+                naturalInterfaceOwner != null &&
+                exactInputType?.classInfo?.ilTypeRef == naturalInterfaceOwner.ilTypeRef &&
+                exactInputType.arguments.singleOrNull()?.isNaturalOwnerParameter() == true &&
+                semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
+                semanticInfo.signature.returnType ==
+                    DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
+                naturalInfo.signature.returnType ==
+                    DotNetIlReturnType.Value(DotNetIlValueType.Boolean)
+        if (!isProducer && !isConsumer && !isExactInputBoolean) return false
+        val hasValueResult = isProducer || isExactInputBoolean
+        val resultNarrowing = if (hasValueResult) {
             val resultType = expectedType ?: return false
             when (resultType) {
                 DotNetIlValueType.Object -> null
@@ -3229,11 +3246,17 @@ internal class DotNetIlExpressionCodegen(
             }
             null
         }
+        val foreignSelectionOwner = if (isExactInputBoolean) {
+            checkNotNull(naturalInterfaceOwner)
+        } else {
+            naturalInfo.owner
+        }
         semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         naturalInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
+        foreignSelectionOwner.assemblyName?.let(typeMapper::recordAssemblyReference)
         emitReifiedGenericInterfaceForeignReceiver(
             receiver,
-            naturalInfo.owner,
+            foreignSelectionOwner,
         )
         val receiverSlot = spillToSyntheticLocal(
             DotNetIlValueType.Object,
@@ -3252,7 +3275,7 @@ internal class DotNetIlExpressionCodegen(
             capabilityType,
             "<reifiedGenericInterfaceCapability>",
         )
-        val resultSlot = if (isProducer) {
+        val resultSlot = if (hasValueResult) {
             methodContext.declareSyntheticLocal(
                 DotNetIlValueType.Object,
                 "<reifiedGenericInterfaceForeignResult>",
@@ -3279,8 +3302,17 @@ internal class DotNetIlExpressionCodegen(
                 ownerToken = semanticInfo.owner.ilTypeRef,
             ),
             pops = semanticInfo.signature.parameterTypes.size,
-            pushes = if (isProducer) 1 else 0,
+            pushes = if (hasValueResult) 1 else 0,
         )
+        if (isExactInputBoolean) {
+            // Both branches join through the runtime helper's object result. Preserve that one
+            // stack shape when the direct capability returns an unboxed CLR Boolean.
+            methodContext.emit(
+                "box ${DotNetIlValueType.Boolean.nameInSignature}",
+                pops = 1,
+                pushes = 1,
+            )
+        }
         resultSlot?.let { slot ->
             methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
         }
@@ -3288,7 +3320,7 @@ internal class DotNetIlExpressionCodegen(
 
         methodContext.emitLabel(foreignLabel)
         methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
-        emitSystemTypeOrNull(naturalInfo.owner.ilTypeRef)
+        emitSystemTypeOrNull(foreignSelectionOwner.ilTypeRef)
         methodContext.emit(
             "ldstr ${(naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()).toIlStringLiteral()}",
             pushes = 1,
@@ -3306,7 +3338,11 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         methodContext.emit(
-            DotNetGenericInterfaceRuntime.invokeUniqueMemberCallInstruction(coreLibraryReference),
+            if (isExactInputBoolean) {
+                DotNetGenericInterfaceRuntime.invokeUniqueConcreteUnaryMemberCallInstruction(coreLibraryReference)
+            } else {
+                DotNetGenericInterfaceRuntime.invokeUniqueMemberCallInstruction(coreLibraryReference)
+            },
             pops = 4,
             pushes = 1,
         )

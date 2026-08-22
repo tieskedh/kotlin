@@ -865,22 +865,28 @@ internal class DotNetReifiedGenericInterfaceLowering(
             if (owner.kind != ClassKind.INTERFACE &&
                 owner.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
                 function.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
-                this === function &&
                 externalDeclarations.genericOwnerMemberFamilyOrNull(function) != null &&
-                function.returnType.reifiedInterfaceOwnerOrNull() != null
+                isFunctionOrItsParameter
             ) {
-                // This producer-recorded source MethodDef is the natural constructed-result
-                // entry. Semantic hooks and capability dispatchers have separate physical
-                // records and must not change its return signature.
+                // This producer-recorded source MethodDef is the natural typed entry. Semantic
+                // hooks and capability dispatchers have separate physical records and must not
+                // change either its result or parameter signatures in a later consumer.
                 return true
             }
             val family = context.genericOwnerArchitecturePlans[owner]
                 ?.takeIf(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
                 ?.memberFamilies
                 ?.get(function)
-            return this === function && family != null &&
-                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in family.roles &&
-                    function.returnType.reifiedInterfaceOwnerOrNull() != null
+            if (family != null &&
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in family.roles &&
+                isFunctionOrItsParameter
+            ) {
+                // The planner has already split the source entry from its object-domain hook.
+                // Keep every source signature position on the natural CLR entry; otherwise this
+                // later value-routing pass would collapse a proven typed C# method back to object.
+                return true
+            }
+            return false
         }
 
         fun recordSemanticDeclaration(
