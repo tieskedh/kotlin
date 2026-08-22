@@ -9594,7 +9594,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                     family.exactOwnerPath != family.canonicalOwnerPath) {
                 "The hostile input family did not publish one distinct exact authoring owner"
             }
-            check(family.members.size == 3) {
+            check(family.members.size == 4) {
                 "The exact-interface manifest copied, lost, or duplicated declared members"
             }
             val acceptsAll = checkNotNull(family.members.singleOrNull { member ->
@@ -9630,6 +9630,24 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                                 "!0" in parameter
                     } == true) {
                 "The exact C# slot did not retain the natural nested interface signature: $exact"
+            }
+            val exactSize = checkNotNull(family.members.singleOrNull { member ->
+                member.sourceName == "exactSize"
+            }) {
+                "The exact-interface manifest has no unique exactSize property: " +
+                        family.members.map { member -> member.sourceName to member.kind }
+            }
+            check(exactSize.kind == DotNetCSharpMemberKind.PROPERTY_GETTER &&
+                    exactSize.authoringView == DotNetCSharpInterfaceView.DECLARED &&
+                    exactSize.slots.singleOrNull { slot ->
+                        slot.role == DotNetCSharpSlotRole.DECLARED
+                    }?.let { slot ->
+                        slot.ownerPath == family.declaredOwnerPath &&
+                                slot.propertyName == "exactSize" &&
+                                slot.returnType == "int32" &&
+                                slot.parameterTypes.isEmpty()
+                    } == true) {
+                "The owner-independent property lost its natural C# Property row: $exactSize"
             }
             check(family.members.filterNot { member -> member === acceptsAll }.all { member ->
                 member.authoringView == DotNetCSharpInterfaceView.DECLARED &&
@@ -9667,6 +9685,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public bool hasExactNext() => true;
 
+                public int exactSize => 1;
+
                 public string nextExact() => Value;
 
                 public ExactInputCursor<string> exactCursor() => this;
@@ -9689,6 +9709,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public bool hasExactNext() => true;
 
+                public int exactSize => 1;
+
                 public object nextExact() => Value;
 
                 public ExactInputCursor<object> exactCursor() => this;
@@ -9710,6 +9732,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                 }
 
                 public bool hasExactNext() => true;
+
+                public int exactSize => 1;
 
                 public int nextExact() => Value;
 
@@ -9748,7 +9772,9 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         !object.ReferenceEquals(value.exactCursor(), value) ||
                         !value.acceptsAll(sameValue) ||
                         !value.hasExactNext() ||
-                        !value.hasExactValues())
+                        !value.hasExactValues() ||
+                        value.exactSize != 1 ||
+                        reader.size(value) != 1)
                         throw new InvalidOperationException(
                             "the ordinary exact C# surface did not dispatch");
                     if (!object.Equals(reader.read(value), "csharp-exact") ||
@@ -9765,13 +9791,15 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                             "the generated broad bridge changed nested-input semantics");
                     var exactInt = new CSharpExactIntFamily(37);
                     if (!exactInt.acceptsAll(new CSharpExactIntFamily(37)) ||
-                        !object.Equals(reader.read(exactInt), 37))
+                        !object.Equals(reader.read(exactInt), 37) ||
+                        reader.size(exactInt) != 1)
                         throw new InvalidOperationException(
                             "the generated value-type exact bridge did not dispatch");
 
                     var kotlinValue = new ExactInputValue<string>("kotlin-exact");
                     if (!kotlinValue.acceptsAll(
-                            new CSharpExactStringFamily("kotlin-exact")))
+                            new CSharpExactStringFamily("kotlin-exact")) ||
+                        kotlinValue.exactSize != 1)
                         throw new InvalidOperationException(
                             "the Kotlin implementation did not expose its natural typed class entry");
 
@@ -9782,6 +9810,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         !raw.acceptsAll(rawPeer) || raw.AcceptCalls != 1 ||
                         raw.BroadAcceptCalls != 0 ||
                         !object.Equals(reader.read(raw), "raw-exact") ||
+                        reader.size(raw) != 1 ||
                         !ReaderAcceptsAll(reader, raw, rawPeer, "precompiled raw exact input") ||
                         raw.AcceptCalls != 2 || raw.BroadAcceptCalls != 0 ||
                         !reader.same(raw, raw))
@@ -9835,6 +9864,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public bool hasExactNext() => true;
 
+                public int exactSize => 1;
+
                 public string nextExact() => Value;
 
                 public ExactInputCursor<string> exactCursor() => this;
@@ -9864,6 +9895,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                 }
 
                 public bool hasExactNext() => true;
+
+                public int exactSize => 1;
 
                 public string nextExact() => Value;
 

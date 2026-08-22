@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-owner-independent-property-2026-08-22.md`](reified-generic-interface-owner-independent-property-2026-08-22.md)
+  records ABI/runtime surface 47's read-only primitive Property role, natural
+  CLR Property row, method-only semantic capability, raw C# getter fallback,
+  and full-gate evidence.
 - [`reified-generic-interface-precompiled-exact-input-2026-08-22.md`](reified-generic-interface-precompiled-exact-input-2026-08-22.md)
   records the typed Kotlin class entry and separately compiled non-partial C#
   exact-input convention, exact overload resolution, missing-member fail-

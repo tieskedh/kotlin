@@ -589,6 +589,17 @@ method fails closed, and the compiler never attributes an arbitrary semantic
 body to the raw class. See
 [`../archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md`](../archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md).
 
+ABI/runtime surface 47 admits one owner-independent read-only primitive
+property getter inside that same broad-input family. Its producer role is
+distinct from a method query. The natural covariant interface and Kotlin
+implementation own the ordinary CLR Property row and typed getter; the
+semantic capability owns only a method slot with the same primitive carrier.
+Generated and non-partial precompiled C# implementations author one ordinary
+property. A widened Kotlin call boxes the capability result only for the local
+object join or invokes the raw getter through its unique natural construction,
+then restores the primitive result. No owner state becomes `object`. See
+[`../archive/reified-generic-interface-owner-independent-property-2026-08-22.md`](../archive/reified-generic-interface-owner-independent-property-2026-08-22.md).
+
 Broad-input emission, broader properties, defaults, overloads, extra producer
 members, and mixed/multiple type parameters remain separate gates.
 
@@ -611,7 +622,8 @@ must cover:
    warning-bearing covariant producer proof, mixed-control-flow cast returns,
    classifier-derived fields, and broader input parameters crossing separately
    compiled exact-looking boundaries;
-5. Kotlin/C# properties beyond the exact mutable invariant cell, broader
+5. Kotlin/C# properties beyond the exact mutable invariant cell and the broad-
+   family owner-independent read-only primitive getter, broader
    default families (including multiple members, properties, generic methods,
    diamonds, and reabstraction), hostile inheritance beyond the proven
    external default -> generic Kotlin override -> ordinary C# subclass chain,

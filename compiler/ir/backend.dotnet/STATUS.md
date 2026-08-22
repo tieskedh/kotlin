@@ -173,6 +173,34 @@ verification, and work state.
   `Collection<T>` and `Set<T>`, without a built-in special case. See
   [`docs/archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md`](docs/archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md).
 
+  Property composition has now entered the same structural family. ABI/runtime
+  surface 47 records `OWNER_INDEPENDENT_PROPERTY_GETTER` separately from a
+  primitive method query. The admitted member is one abstract, public, read-
+  only, non-null primitive property getter. The natural covariant interface
+  and Kotlin implementation retain a real CLR Property row and public
+  `int32 get_exactSize()`; the invariant exact sibling inherits it rather than
+  copying it, and the semantic capability owns only a compiler method slot.
+  Generic implementation state remains one `!T` field.
+
+  Generated and separately compiled non-partial C# implementations write one
+  ordinary `int exactSize => 1` property. Direct C# syntax and Kotlin exact
+  calls use the natural getter. A widened Kotlin reader keeps capability
+  dispatch as the fast path and invokes `get_exactSize` through the unique
+  natural construction for a raw implementation. The local object-result join
+  boxes the capability's `int32` and unboxes the selected result; it does not
+  alter the public signature or owner storage.
+
+  PSI and LightTree are green on Framework 4.8 and .NET 10, as is the prior C#
+  foreign-override family. The final full aggregate exits zero; direct XML
+  audit covers 191 suites and 2,293 tests with zero failures, errors, or skips.
+  The 187 FIR suites/2,159 tests, two integration suites/127 tests, and one-test
+  backend resolver suite are fresh; the unchanged six-test `dotnet.ir` model
+  root remains up-to-date. Runtime/Stdlib mappings remain gated. Next the same
+  emitted family must combine its optional fixed-barrier direct input with the
+  existing nested semantic input and property before `Collection<T>` or
+  `Set<T>` is considered. See
+  [`docs/archive/reified-generic-interface-owner-independent-property-2026-08-22.md`](docs/archive/reified-generic-interface-owner-independent-property-2026-08-22.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

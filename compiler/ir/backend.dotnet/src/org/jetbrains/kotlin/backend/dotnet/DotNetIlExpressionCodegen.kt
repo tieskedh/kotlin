@@ -3203,15 +3203,17 @@ internal class DotNetIlExpressionCodegen(
             this is DotNetIlValueType.TypeParameter && index == 0 && !isMethodParameter
         val naturalResultType =
             (naturalInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        val semanticResultType =
+            (semanticInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
         val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(sourceOwner)
         val naturalInterfaceOwner = interfaceInfo?.declaredClassInfo
             ?: interfaceInfo?.canonicalClassInfo
         val exactInputType = naturalInfo.signature.parameterTypes.getOrNull(1)
             as? DotNetIlValueType.GenericInstance
-        val isProducer = regularArguments.isEmpty() &&
-                semanticInfo.signature.returnType ==
-                    DotNetIlReturnType.Value(DotNetIlValueType.Object) &&
-                naturalResultType != null
+        val isProducer = regularArguments.isEmpty() && naturalResultType != null &&
+                semanticResultType != null &&
+                (semanticResultType == DotNetIlValueType.Object ||
+                        semanticResultType == naturalResultType)
         val isConsumer = regularArguments.size == 1 &&
                 sourceOwner.typeParameters.singleOrNull()?.variance ==
                     org.jetbrains.kotlin.types.Variance.INVARIANT &&
@@ -3304,11 +3306,11 @@ internal class DotNetIlExpressionCodegen(
             pops = semanticInfo.signature.parameterTypes.size,
             pushes = if (hasValueResult) 1 else 0,
         )
-        if (isExactInputBoolean) {
+        if (hasValueResult && semanticResultType != DotNetIlValueType.Object) {
             // Both branches join through the runtime helper's object result. Preserve that one
-            // stack shape when the direct capability returns an unboxed CLR Boolean.
+            // stack shape when a declaration-independent query returns an unboxed CLR value.
             methodContext.emit(
-                "box ${DotNetIlValueType.Boolean.nameInSignature}",
+                "box ${checkNotNull(semanticResultType).nameInSignature}",
                 pops = 1,
                 pushes = 1,
             )

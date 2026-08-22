@@ -169,6 +169,7 @@ enum class DotNetPublishedGenericInterfaceMemberRole {
     BROAD_FIXED_BARRIER_INPUT,
     BROAD_NESTED_SEMANTIC_INPUT,
     OWNER_INDEPENDENT_QUERY,
+    OWNER_INDEPENDENT_PROPERTY_GETTER,
     PROPERTY_GETTER,
     PROPERTY_SETTER,
 }
@@ -692,13 +693,13 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "46"
+    const val ABI_VERSION = "47"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
     const val PHYSICAL_NAME_GRAMMAR_VERSION = "3"
     const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
-    const val CURRENT_RUNTIME_SURFACE_LEVEL = 46
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 47
     const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
     const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"

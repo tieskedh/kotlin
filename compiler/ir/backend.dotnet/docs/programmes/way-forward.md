@@ -1239,10 +1239,23 @@ adjacent `object` overload cannot win. A missing method fails closed, and a raw
 class is never treated as if it supplied an arbitrary hidden semantic body.
 ABI/runtime surface 46 owns this bounded fallback.
 
-Next close property composition and the remaining structural member grammar
-needed by `Collection<T>` and `Set<T>`, still without a built-in, package, or
-declaration-name exception. Defaults, general overload sets, diamonds, and
-mixed or multiple type parameters remain later gates before the full surface.
+The first property composition is now closed without a built-in, package, or
+declaration-name exception. ABI/runtime surface 47 records an abstract read-
+only owner-independent non-null primitive property getter separately from a
+method query. The natural covariant interface and Kotlin implementation retain
+one real CLR Property row and public typed getter; the non-generic semantic
+capability owns only its compiler method slot. Generated and precompiled/non-
+partial C# implementations author ordinary property syntax. Widened Kotlin
+dispatch preserves the capability fast path and otherwise invokes the raw C#
+getter through its unique natural construction, boxing only at the local
+reflection join before returning the primitive result.
+
+Next materialize the optional fixed-barrier direct input in the same general
+family as the nested semantic input and property: the structural equivalent of
+`contains(T)` plus `containsAll(Collection<T>)`. Only after that combined
+natural/exact/semantic product is closed should the Runtime-owned
+`Collection<T>`/`Set<T>` graph be considered. Defaults, general overload sets,
+diamonds, and mixed or multiple type parameters remain later gates.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
