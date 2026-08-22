@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-owner-independent-query-family-2026-08-22.md`](reified-generic-interface-owner-independent-query-family-2026-08-22.md)
+  records the first general multi-member covariant CLR interface, its one
+  owner-dependent producer plus owner-independent primitive query grammar,
+  ordinary C# implementation, ABI 43 role, and twelve-lane/full-gate evidence.
 - [`reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md`](reified-generic-interface-nullable-owner-relative-method-constraint-2026-08-22.md)
   records `<R : T?>` on a reified-interface default, authoritative Kotlin/KLIB
   nullability, deliberately absent CLR `R : T`, nullable-primitive body
