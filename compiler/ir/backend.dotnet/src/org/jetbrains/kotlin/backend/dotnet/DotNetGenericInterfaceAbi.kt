@@ -26,10 +26,11 @@ import org.jetbrains.kotlin.types.Variance
  * The physical CLR identity and any independently truthful mapped host capabilities of one
  * logical Kotlin generic interface.
  *
- * An ordinary Kotlin-owned interface has only [canonicalClassInfo], its non-generic erased
- * runtime identity. [declaredClassInfo] and [exactClassInfo] are reserved for explicit mappings
- * such as Common `Comparable<T>` to `System.IComparable<T>`; they are not implicit siblings of
- * Kotlin declarations and never redefine Kotlin cast or dispatch identity.
+ * An erased Kotlin-owned interface has only [canonicalClassInfo]. Explicit host mappings such as
+ * Common `Comparable<T>` may add independently truthful declared/exact capabilities. A reified
+ * Kotlin-owned interface instead uses its natural CLR `I<T>` as both canonical and declared view
+ * and may add one producer-recorded invariant exact-input sibling. Its separate semantic
+ * capability remains authoritative for Kotlin views which CLR variance cannot name.
  */
 internal data class DotNetGenericInterfaceInfo(
     val canonicalClassInfo: DotNetIlClassInfo,

@@ -1114,7 +1114,12 @@ internal class DotNetIlTypeMapper private constructor(
             ?: run {
                 val canonical = externalDeclarations.classInfoOrNull(irClass, canonicalGenericInterfaceView())
                     ?: return null
-                DotNetGenericInterfaceInfo(canonical)
+                val exact = externalDeclarations.exactClassInfoOrNull(irClass)
+                DotNetGenericInterfaceInfo(
+                    canonicalClassInfo = canonical,
+                    declaredClassInfo = canonical.takeIf { exact != null },
+                    exactClassInfo = exact,
+                )
             }).also(::recordAssemblyReferences)
 
     fun externalObjectInstanceOwnerInfoOrNull(field: IrField): DotNetIlClassInfo? {
