@@ -48,7 +48,26 @@ verification, and work state.
   selection fails closed before emission if a named self-describing capability
   assembly is absent.
 
-  The structural root rule remains unchanged.
+  The first general multi-member root prerequisite is now closed as well.
+  A public top-level covariant owner may combine exactly one abstract no-input
+  `T` producer with one or more abstract owner-independent no-input non-null
+  primitive queries. The proof's cursor-like owner emits natural `bool`/`!T`
+  methods and semantic `bool`/`object` siblings. Exact Kotlin and ordinary C#
+  calls remain natural; a Kotlin value-type widening crosses only the producer
+  result and preserves receiver identity. Ordinary partial C# implements only
+  the two natural members. ABI/runtime surface 43 publishes the new
+  `OWNER_INDEPENDENT_QUERY` role so a separate consumer validates the complete
+  two-member family rather than inferring it from names or current KLIB shape.
+  The rule contains no `Iterator`, collection, stdlib, or package switch.
+  Twelve focused candidate/explicit-off/property-absent lanes are green across
+  PSI and LightTree on Framework 4.8 and .NET 10. The full aggregate exits zero;
+  direct audit covers 190 XML suites and 2,287 tests with zero failures,
+  errors, or skips. The 187 FIR suites/2,155 tests and two integration suites/
+  126 tests were freshly written; the unchanged six-test `dotnet.ir` root
+  remained up-to-date. See
+  [`docs/archive/reified-generic-interface-owner-independent-query-family-2026-08-22.md`](docs/archive/reified-generic-interface-owner-independent-query-family-2026-08-22.md).
+
+  The original single-producer root remains admitted.
   Any public top-level `Producer<out T>` shape with one abstract no-input
   `T`-result member becomes a natural covariant CLR `Producer<T>` plus one
   non-generic declaration-semantic capability. Exact final substitutions use
@@ -4402,10 +4421,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    bindings behind the test-only rehearsal epoch. The source-built Stdlib has
    now reached the generic-interface boundary at `AbstractMap<K, V>.keys`:
    treating the erased `Set<K>` carrier as permanently canonical would merely
-   preserve an obsolete constraint. Next emit and consume the general natural
-   `I<T>` plus declaration-semantic capability family, including its versioned
-   C# authoring record; do not add a `Map`, `Set`, or `Sequence` representation
-   exception. Then continue the complete Runtime/Stdlib owner graph and its
+   preserve an obsolete constraint. The first general multi-member natural
+   `I<T>` plus declaration-semantic capability is now emitted and consumed:
+   one direct `T` producer composes owner-independent primitive queries, and
+   ABI 43 plus the C# authoring record carry both members across a producer
+   boundary without an `Iterator` or stdlib switch. Next close constructed
+   owner-dependent member results such as
+   `Iterable<T>.iterator(): Iterator<T>`, then the broader inputs/properties
+   required by `Collection<T>` and `Set<T>`; do not add a `Map`, `Set`, or
+   `Sequence` representation exception. Then continue the complete
+   Runtime/Stdlib owner graph and its
    residual capability joins, covariant returns, and intrinsic state
    requirements before executing representative products and exact inverse
    rollback for the next go/no-go decision.

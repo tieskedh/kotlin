@@ -523,6 +523,32 @@ new family from KLIB shape alone. Generic bases or binding owners, overloads,
 multiple method/value parameters, broader bounds, and mixed member families
 remain independent gates.
 
+A general multi-member covariant root is now admitted for the first
+`Iterator<T>`-like grammar. It contains exactly one abstract no-input member
+returning the owner parameter directly and one or more abstract no-input
+non-null primitive queries whose signatures do not mention that parameter.
+The natural CLR interface owns every ordinary member. Its declaration-semantic
+capability duplicates the query with the same primitive carrier and widens
+only the producer result to `object`. The duplicate query is a receiver-domain
+slot, not an erased value representation: exact execution continues to call
+the natural member and no state becomes `object` because the semantic sibling
+exists.
+
+ABI 43 records an `OWNER_INDEPENDENT_QUERY` role alongside the producer role.
+A separate consumer conjunctively validates KLIB shape, the published family,
+both member-family records, and capability ownership. Ordinary partial C#
+implements only the natural query and producer; generated compiler ABI adapts
+a Kotlin widened view on the same object. Admission is independent of source
+names, packages, and library ownership. See
+[`../archive/reified-generic-interface-owner-independent-query-family-2026-08-22.md`](../archive/reified-generic-interface-owner-independent-query-family-2026-08-22.md).
+
+This proof does not admit constructed owner-dependent member results. A future
+`Iterable<T>.iterator(): Iterator<T>` family must decide its natural versus
+semantic result from the concrete construction without globally erasing either
+owner or an enclosing generic state slot. Inputs, properties, defaults,
+overloads, extra producer members, and mixed/multiple type parameters remain
+separate gates.
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
@@ -530,8 +556,8 @@ must cover:
 
 1. general member-declaring children beyond one producer-output slot, the
    exact one-level invariant-property child, or its one-consumer sibling,
-   and the bounded second consumer edge, including multiple members, overloads,
-   changed arguments, multiple parents, and deeper inheritance;
+   and the bounded second consumer edge, including multiple child members,
+   overloads, changed arguments, multiple parents, and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
    method root, exact mutable-property root, exact one-level property child,
    and exact property-root consumer child, mixed or multiple type parameters,

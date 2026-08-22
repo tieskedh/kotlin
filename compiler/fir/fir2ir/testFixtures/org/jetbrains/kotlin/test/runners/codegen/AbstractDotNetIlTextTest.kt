@@ -4264,6 +4264,22 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 validateReifiedGenericInterfaceCSharpManifest(producer)
                 validateReifiedGenericInterfaceCSharpManifest(
                     producer,
+                    expectedDeclaredOwner = "RehearsalSeparateGeneralCursor`1",
+                    expectedMemberName = "hasGeneralNext",
+                    expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                    expectedSemanticReturnType = "bool",
+                    expectedNaturalReturnType = "bool",
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
+                    expectedDeclaredOwner = "RehearsalSeparateGeneralCursor`1",
+                    expectedMemberName = "nextGeneral",
+                    expectedContractMemberCount = 2,
+                    expectedVariance = DotNetCSharpTypeParameterVariance.OUT,
+                )
+                validateReifiedGenericInterfaceCSharpManifest(
+                    producer,
                     expectedDeclaredOwner = "RehearsalSeparateSecondaryProducer`1",
                     expectedMemberName = "produceSecondary",
                 )
@@ -4661,6 +4677,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public string produce()
                 {
                     return "csharp-interface";
+                }
+            }
+
+            public sealed partial class RehearsalSeparateCSharpGeneralCursor :
+                RehearsalSeparateGeneralCursor<int>
+            {
+                public bool hasGeneralNext()
+                {
+                    return true;
+                }
+
+                public int nextGeneral()
+                {
+                    return 35;
                 }
             }
 
@@ -5218,6 +5248,15 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!reader.same(producer, producer))
                         throw new InvalidOperationException(
                             "the generated C# interface bridge changed object identity");
+                    RehearsalSeparateCSharpGeneralCursor generalCursor =
+                        new RehearsalSeparateCSharpGeneralCursor();
+                    RehearsalSeparateGeneralCursorReader generalCursorReader =
+                        new RehearsalSeparateGeneralCursorReader();
+                    if (!generalCursor.hasGeneralNext() || generalCursor.nextGeneral() != 35 ||
+                        !object.Equals(generalCursorReader.read(generalCursor), 35) ||
+                        !generalCursorReader.same(generalCursor, generalCursor))
+                        throw new InvalidOperationException(
+                            "mixed general cursor family lost C# dispatch or identity");
                     RehearsalSeparateCSharpInvariantProducer invariantProducer =
                         new RehearsalSeparateCSharpInvariantProducer();
                     if (invariantProducer.produceInvariant() !=
@@ -9346,6 +9385,9 @@ private fun validateGenericOwnerForeignCSharpOverride(
             .joinToString("\n", transform = File::readText)
         check("RehearsalSeparateProducer" in generated) {
             "The C# authoring tool did not generate the real Kotlin interface bridge:\n$generated"
+        }
+        check("partial class RehearsalSeparateCSharpGeneralCursor" in generated) {
+            "The C# authoring tool did not generate the mixed general cursor bridge:\n$generated"
         }
         check("partial class RehearsalSeparateCSharpChildProducer" in generated) {
             "The C# authoring tool did not generate the foreign subinterface implementation bridge:\n$generated"
