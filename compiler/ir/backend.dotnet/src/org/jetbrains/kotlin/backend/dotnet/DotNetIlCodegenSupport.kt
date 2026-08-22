@@ -696,7 +696,6 @@ private enum class DotNetGenericInterfaceMapping(
     DECLARED(DotNetGenericInterfaceView.DECLARED, false),
     EXACT(DotNetGenericInterfaceView.EXACT, false),
     DECLARED_SIGNATURE(DotNetGenericInterfaceView.DECLARED, true),
-    EXACT_SIGNATURE(DotNetGenericInterfaceView.EXACT, true),
 }
 
 /**
@@ -966,7 +965,10 @@ internal class DotNetIlTypeMapper private constructor(
         withGenericInterfaceMapping(DotNetGenericInterfaceMapping.DECLARED_SIGNATURE)
 
     fun exactGenericInterfaceSignatureView(): DotNetIlTypeMapper =
-        withGenericInterfaceMapping(DotNetGenericInterfaceMapping.EXACT_SIGNATURE)
+        // EXACT chooses the MethodDef's declaring interface. Types occurring in that MethodDef
+        // retain their natural declared view: Exact<T>.accepts(Natural<T>) is CLR-legal and lets
+        // ordinary C# source implement the Kotlin signature without naming compiler ABI types.
+        withGenericInterfaceMapping(DotNetGenericInterfaceMapping.DECLARED_SIGNATURE)
 
     fun genericInterfaceSignatureView(view: DotNetGenericInterfaceMemberView): DotNetIlTypeMapper =
         when (view) {
@@ -975,7 +977,7 @@ internal class DotNetIlTypeMapper private constructor(
         }
 
     fun isErasedGenericInterface(irClass: IrClass): Boolean =
-        irClass.isInterface && (genericInterfaces.containsKey(irClass) ||
+        irClass.isInterface && (genericInterfaces[irClass]?.canonicalClassInfo?.typeParameterCount == 0 ||
                 DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass, classifierInfo(irClass)) ||
                 externalDeclarations.hasGenericInterface(irClass))
 
