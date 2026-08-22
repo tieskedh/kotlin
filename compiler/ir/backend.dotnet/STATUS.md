@@ -237,6 +237,38 @@ verification, and work state.
   normal route. See
   [`docs/archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](docs/archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md).
 
+  ABI/runtime surface 49 now provides the first real Runtime-owned dependency
+  of that collection graph. Additive covariant `Iterator<T>` and `Iterable<T>`
+  TypeDefs sit beside the accepted erased semantic identities. Only the
+  generic-owner rehearsal exposes their declared views to type mapping;
+  explicit-off products retain the production erased ABI. Exact Kotlin
+  implementations directly name both constructed interfaces, retain one `!T`
+  state field, and return `Iterator<T>` from the typed `Iterable<T>` slot.
+  Value-type covariance crosses the erased semantic slot only at the widened
+  operation and preserves the same receiver.
+
+  Ordinary non-partial C# implements only the natural generic interfaces and
+  their `HasNext`, `Next`, and `GetIterator` members. It needs no source
+  generator, wrapper, erased Runtime interface, or compiler semantic
+  capability. The same executable proof reflects Kotlin-emitted reference and
+  value constructions plus their generic fields. It also freezes a loader-
+  critical invariant discovered by the first product: a compiler-generated
+  non-generic semantic capability must never inherit a constructed generic
+  interface. The real object carries that interface directly; both the
+  emitter's structural graph and final `implements` render enforce the rule.
+
+  PSI and LightTree are green on Framework 4.8 and .NET 10, two explicit-off
+  products are green, and the preceding exact/semantic interface family is
+  green in all four lanes. The final full aggregate exits zero. Direct XML
+  audit covers 190 freshly written suites/2,291 tests with zero failures,
+  errors, or skips: 187 FIR suites/2,163 tests, two integration suites/127
+  tests, and the one-test backend resolver suite. The unchanged green six-test
+  `dotnet.ir` model root makes the target total 191 suites/2,297 tests. Public
+  exported Kotlin type-use remains erased until the atomic collection
+  migration, so an independently valid C# `Iterator<T>` is not falsely claimed
+  to cross every old Kotlin API boundary yet. See
+  [`docs/archive/runtime-reified-iterator-foundation-2026-08-23.md`](docs/archive/runtime-reified-iterator-foundation-2026-08-23.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

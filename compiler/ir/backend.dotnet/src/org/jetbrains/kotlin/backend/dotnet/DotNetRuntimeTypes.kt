@@ -106,16 +106,32 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
-    private fun runtimeInterface(canonicalName: String): DotNetGenericInterfaceInfo =
+    private fun runtimeInterface(
+        canonicalName: String,
+        hasRehearsalDeclaredView: Boolean = false,
+    ): DotNetGenericInterfaceInfo =
         DotNetGenericInterfaceInfo(
             canonicalClassInfo = DotNetIlClassInfo(
                 ilClassName = canonicalName,
                 assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
             ),
+            declaredClassInfo = if (hasRehearsalDeclaredView) {
+                DotNetIlClassInfo(
+                    ilClassName = "$canonicalName`1",
+                    typeParameterVariances = listOf(Variance.OUT_VARIANCE),
+                    assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+                )
+            } else {
+                null
+            },
+            isDeclaredViewStableInTypedSignatures = hasRehearsalDeclaredView,
         )
 
     private val iteratorGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.Iterator")
+        runtimeInterface(
+            "Kotlin.Collections.Iterator",
+            hasRehearsalDeclaredView = true,
+        )
     private val iteratorBase = iteratorGenericInterfaceInfo.canonicalClassInfo
     val iteratorType = DotNetIlValueType.UserClass(iteratorBase)
 
@@ -135,7 +151,10 @@ internal object DotNetRuntimeTypes {
     val mutableListIteratorType = DotNetIlValueType.UserClass(mutableListIteratorBase)
 
     private val iterableGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.Iterable")
+        runtimeInterface(
+            "Kotlin.Collections.Iterable",
+            hasRehearsalDeclaredView = true,
+        )
     private val iterableBase = iterableGenericInterfaceInfo.canonicalClassInfo
     val iterableType = DotNetIlValueType.UserClass(iterableBase)
 
@@ -224,6 +243,7 @@ internal object DotNetRuntimeTypes {
 
     private data class RuntimeGenericInterfaceMethodNames(
         val canonical: String,
+        val typed: String? = null,
         val property: String? = null,
     )
 
@@ -233,8 +253,8 @@ internal object DotNetRuntimeTypes {
     )
 
     private val iteratorMethods = mapOf(
-        "hasNext" to RuntimeGenericInterfaceMethodNames("HasNext"),
-        "next" to RuntimeGenericInterfaceMethodNames("Next"),
+        "hasNext" to RuntimeGenericInterfaceMethodNames("HasNext", typed = "HasNext"),
+        "next" to RuntimeGenericInterfaceMethodNames("Next", typed = "Next"),
     )
     private val listIteratorMethods = iteratorMethods + mapOf(
         "hasPrevious" to RuntimeGenericInterfaceMethodNames("HasPrevious"),
@@ -253,7 +273,7 @@ internal object DotNetRuntimeTypes {
         "add" to RuntimeGenericInterfaceMethodNames("Add"),
     )
     private val iterableMethods = mapOf(
-        "iterator" to RuntimeGenericInterfaceMethodNames("GetIterator"),
+        "iterator" to RuntimeGenericInterfaceMethodNames("GetIterator", typed = "GetIterator"),
     )
     private val mutableIterableMethods = iterableMethods
     private val collectionMethods = iterableMethods + mapOf(
@@ -674,7 +694,19 @@ internal object DotNetRuntimeTypes {
     fun genericInterfaceInfoFor(
         irClass: IrClass,
         classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
-    ): DotNetGenericInterfaceInfo? = genericInterfaceDescriptorFor(irClass, classifierInfo)?.info
+        includeRehearsalDeclaredViews: Boolean = false,
+    ): DotNetGenericInterfaceInfo? {
+        val info = genericInterfaceDescriptorFor(irClass, classifierInfo)?.info ?: return null
+        return if (includeRehearsalDeclaredViews || info.declaredClassInfo == null) {
+            info
+        } else {
+            info.copy(
+                declaredClassInfo = null,
+                exactClassInfo = null,
+                isDeclaredViewStableInTypedSignatures = false,
+            )
+        }
+    }
 
     /** Runtime-owned erased interfaces plus profile-mapped Common interfaces handled by codegen. */
     fun hasBuiltInGenericInterfaceMapping(
@@ -729,7 +761,7 @@ internal object DotNetRuntimeTypes {
         genericInterfaceMethodNamesOrNull(function)?.canonical
 
     fun genericInterfaceTypedMethodNameOrNull(function: IrSimpleFunction): String? =
-        null
+        genericInterfaceMethodNamesOrNull(function)?.typed
 
     fun genericInterfacePropertyNameOrNull(function: IrSimpleFunction): String? =
         genericInterfaceMethodNamesOrNull(function)?.property
