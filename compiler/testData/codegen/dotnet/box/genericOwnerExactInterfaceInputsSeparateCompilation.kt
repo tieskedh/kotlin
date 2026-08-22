@@ -12,6 +12,8 @@ public interface ExactInputCursor<out T> {
 }
 
 public interface ExactInputFamily<out T> : ExactInputCursor<T> {
+    public val exactSize: Int
+
     public fun exactCursor(): ExactInputCursor<T>
 
     public fun acceptsAll(values: ExactInputFamily<@UnsafeVariance T>): Boolean
@@ -27,6 +29,8 @@ public class ExactInputFamilyReader {
         values: ExactInputFamily<Any?>,
     ): Boolean = receiver.acceptsAll(values)
 
+    public fun size(value: ExactInputFamily<Any?>): Int = value.exactSize
+
     public fun same(value: ExactInputFamily<Any?>, expected: Any?): Boolean = value === expected
 }
 
@@ -36,6 +40,9 @@ public class ExactInputFamilyReader {
 package generic.owner.exact.inputs
 
 public class ExactInputValue<T>(private val current: T) : ExactInputFamily<T> {
+    public override val exactSize: Int
+        get() = 1
+
     public override fun hasExactNext(): Boolean = true
 
     public override fun nextExact(): T = current
@@ -63,6 +70,8 @@ fun box(): String {
     if (reader.read(wide) != 37) return "constructed result"
     if (!exact.acceptsAll(ExactInputValue(37))) return "exact nested input"
     if (reader.acceptsAll(wide, ExactInputValue("wrong"))) return "semantic nested input"
-    if (!wide.hasExactNext() || !wide.hasExactValues()) return "primitive queries"
+    if (!wide.hasExactNext() || !wide.hasExactValues() || reader.size(wide) != 1) {
+        return "primitive queries"
+    }
     return "OK"
 }

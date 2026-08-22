@@ -114,8 +114,9 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * Admission is intentionally independent of declaration names and library ownership. The first
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
  * returning its owner parameter directly, a covariant cursor-like root combining exactly one
- * such producer with one or more owner-independent no-input primitive queries, one covariant root
- * returning one already-admitted covariant interface constructed over its owner parameter, one
+ * such producer with owner-independent no-input primitive queries or read-only property getters,
+ * one covariant root returning one already-admitted covariant interface constructed over its
+ * owner parameter, one
  * covariant root `<R>(R) -> T` whose member is
  * abstract or has a default implementation and whose method parameter has either the universal
  * bound, direct non-generic nominal bounds, one direct self-bound on an admitted consumer root,
@@ -183,6 +184,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     member.isBroadNestedSemanticInputMember(owner, parameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
                     member.isDirectConsumerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.CONSUMER
+                    member.isOwnerIndependentPrimitivePropertyGetter() ->
+                        DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_PROPERTY_GETTER
                     member.isOwnerIndependentPrimitiveQuery() ->
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
                     else -> return null
@@ -1529,8 +1532,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
     /**
      * First CLR-legal broad-input family. The grammar is semantic and structural: one nested
      * covariant producer, an optional upstream-defined fixed barrier, one same-owner nested
-     * semantic input, and one or more owner-independent primitive queries. Requiring the nested
-     * input makes the invariant exact sibling independently reachable before the Runtime-owned
+     * semantic input, and one or more owner-independent primitive queries or read-only property
+     * getters. Requiring the nested input makes the invariant exact sibling independently
+     * reachable before the Runtime-owned
      * Collection graph migrates; Collection later adds its fixed-candidate policy to this same
      * representation. The direct parent check remains in [reifiedInterfaceChildShapeOrNull], so
      * this admits no orphan physical family.
@@ -1557,7 +1561,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val nestedSemanticInputs = members.filter { member ->
             member.isBroadNestedSemanticInputMember(this, parameter)
         }
-        val queries = members.filter { member -> member.isOwnerIndependentPrimitiveQuery() }
+        val queries = members.filter { member ->
+            member.isOwnerIndependentPrimitiveQuery() ||
+                    member.isOwnerIndependentPrimitivePropertyGetter()
+        }
         return members.takeIf {
             constructedProducers.size == 1 && fixedBarrierInputs.size <= 1 &&
                     nestedSemanticInputs.size == 1 && queries.isNotEmpty() &&
@@ -1740,6 +1747,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 parameters.singleOrNull()?.kind == IrParameterKind.DispatchReceiver &&
                 !returnType.isMarkedNullable() &&
                 returnType.isPrimitiveType()
+
+    private fun IrSimpleFunction.isOwnerIndependentPrimitivePropertyGetter(): Boolean {
+        val property = correspondingPropertySymbol?.owner ?: return false
+        return property.getter === this && !property.isVar && property.setter == null &&
+                visibility == DescriptorVisibilities.PUBLIC &&
+                modality == Modality.ABSTRACT && body == null && !isSuspend &&
+                typeParameters.isEmpty() &&
+                parameters.singleOrNull()?.kind == IrParameterKind.DispatchReceiver &&
+                !returnType.isMarkedNullable() && returnType.isPrimitiveType()
+    }
 
     /**
      * Admits the first nested natural result required by `Iterable<T>.iterator()` only after the
