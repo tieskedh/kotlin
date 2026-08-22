@@ -67,6 +67,24 @@ verification, and work state.
   is recorded in
   [`docs/archive/reified-generic-interface-constructed-result-family-2026-08-22.md`](docs/archive/reified-generic-interface-constructed-result-family-2026-08-22.md).
 
+  The next broad-input CLR-legality proof is now green. Both supported C#
+  compilers reject direct `T` and nested covariant-`T` inputs on one covariant
+  interface with `CS1961`. A structural three-view product instead combines a
+  covariant read interface, invariant exact-input interface, and non-generic
+  semantic capability on one object. Compatible `contains`/`containsAll`
+  calls retain typed virtual dispatch; an incompatible fixed-barrier candidate
+  returns `false`, while an incompatible nested candidate reaches the semantic
+  body with its original identity. Reference covariance, value-type semantic
+  widening, and `T = object` collision freedom execute on Framework 4.8 and
+  .NET 10. The full target aggregate exits zero; direct XML audit covers 190
+  suites and 2,288 tests with zero failures, errors, or skips. The two
+  integration suites/127 tests are fresh, while the unchanged 187 FIR suites/
+  2,155 tests and six-test `dotnet.ir` root remain up-to-date from the preceding
+  green checkpoint. This is pre-ABI evidence: the compiler planner, physical
+  family, MethodImpls, C# authoring contract, and production collection graph
+  remain the next gate. See
+  [`docs/archive/reified-generic-interface-broad-input-composition-2026-08-22.md`](docs/archive/reified-generic-interface-broad-input-composition-2026-08-22.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -4450,9 +4468,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    concrete CLR-unnameable nested value transition selects the object-domain
    state and semantic-result capability. Exact nested state remains typed; no
    wrapper, shadow state, global owner erasure, or stdlib switch was added.
-   Next close the broader inputs/properties required by `Collection<T>` and
-   `Set<T>`; do not add a `Map`, `Set`, or `Sequence` representation exception.
-   Then continue the complete
+   The next CLR-legality proof now establishes that broad direct and nested
+   inputs cannot remain on one covariant interface. Its executable three-view
+   product preserves exact typed calls, CLR-legal reference covariance,
+   value-type semantic widening, fixed candidate barriers, nested semantic
+   behavior, and identity on both runtimes. Next encode that general split in
+   the planner, physical-family record, MethodImpl emission, and C# authoring
+   contract, then close the remaining properties required by `Collection<T>`
+   and `Set<T>`; do not add a `Map`, `Set`, or `Sequence` representation
+   exception. Then continue the complete
    Runtime/Stdlib owner graph and its
    residual capability joins, covariant returns, and intrinsic state
    requirements before executing representative products and exact inverse
