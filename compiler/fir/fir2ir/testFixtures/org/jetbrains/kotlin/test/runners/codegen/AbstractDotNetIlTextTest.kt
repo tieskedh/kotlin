@@ -492,6 +492,14 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-exact-interface-inputs"),
         )
+        validateGenericOwnerRuntimeIteratorCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-runtime-iterator"),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4120,6 +4128,8 @@ private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE"
 private const val GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -10106,6 +10116,212 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
     check("KotlinSemantic" !in source.readText() && "__KotlinExact" !in source.readText()) {
         "Authored C# source must not name either compiler-owned interface ABI"
     }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the first Runtime-owned generic-interface dependency slice with unassisted C# source.
+ * The public Runtime interfaces are independently implementable; Kotlin implementations carry
+ * the erased semantic view and the constructed CLR view on the same object without allowing the
+ * compiler-generated semantic capability to inherit a constructed generic obligation.
+ */
+private fun validateGenericOwnerRuntimeIteratorCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime iterator C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime iterator C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime iterator C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeIteratorConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.runtime.iterator;
+
+            public sealed class NaturalIterator<T> : Kotlin.Collections.Iterator<T>
+            {
+                private readonly T value;
+                private bool consumed;
+
+                public NaturalIterator(T value)
+                {
+                    this.value = value;
+                }
+
+                public bool HasNext() => !consumed;
+
+                public T Next()
+                {
+                    if (consumed) throw new InvalidOperationException("iterator consumed");
+                    consumed = true;
+                    return value;
+                }
+            }
+
+            public sealed class NaturalIterable<T> : Kotlin.Collections.Iterable<T>
+            {
+                private readonly T value;
+
+                public NaturalIterable(T value)
+                {
+                    this.value = value;
+                }
+
+                public Kotlin.Collections.Iterator<T> GetIterator() =>
+                    new NaturalIterator<T>(value);
+            }
+
+            public static class Program
+            {
+                private static void AssertCovariant(Type openInterface)
+                {
+                    var attributes = openInterface.GetGenericArguments()[0]
+                        .GenericParameterAttributes & GenericParameterAttributes.VarianceMask;
+                    if (attributes != GenericParameterAttributes.Covariant)
+                        throw new InvalidOperationException(openInterface + " is not covariant");
+                }
+
+                private static void AssertSemanticCapabilityHasNoConstructedParent(
+                    Type owner,
+                    Type forbiddenGenericParent)
+                {
+                    var semantic = Array.Find(
+                        owner.GetInterfaces(),
+                        candidate => candidate.Name.IndexOf(
+                            "KotlinSemantic",
+                            StringComparison.Ordinal) >= 0);
+                    if (semantic == null)
+                        throw new InvalidOperationException(owner + " has no semantic capability");
+                    foreach (var parent in semantic.GetInterfaces())
+                    {
+                        if (parent.IsGenericType &&
+                            parent.GetGenericTypeDefinition() == forbiddenGenericParent)
+                            throw new InvalidOperationException(
+                                semantic + " inherited a constructed generic parent");
+                    }
+                }
+
+                public static int Main()
+                {
+                    AssertCovariant(typeof(Kotlin.Collections.Iterator<>));
+                    AssertCovariant(typeof(Kotlin.Collections.Iterable<>));
+                    if (typeof(Kotlin.Collections.Iterable<>).GetMethod("GetIterator").ReturnType !=
+                        typeof(Kotlin.Collections.Iterator<>).MakeGenericType(
+                            typeof(Kotlin.Collections.Iterable<>).GetGenericArguments()[0]))
+                        throw new InvalidOperationException(
+                            "Iterable<T>.GetIterator did not retain Iterator<T>");
+
+                    var natural = new NaturalIterator<string>("natural");
+                    Kotlin.Collections.Iterator<object> widenedNatural = natural;
+                    if (!widenedNatural.HasNext() ||
+                        !object.Equals(widenedNatural.Next(), "natural") ||
+                        (object)natural is Kotlin.Collections.Iterator)
+                        throw new InvalidOperationException(
+                            "ordinary C# Iterator<T> authoring acquired a compiler ABI dependency");
+                    var naturalIterable = new NaturalIterable<int>(31);
+                    if (naturalIterable.GetIterator().Next() != 31 ||
+                        (object)naturalIterable is Kotlin.Collections.Iterable)
+                        throw new InvalidOperationException(
+                            "ordinary C# Iterable<T> authoring acquired a compiler ABI dependency");
+
+                    var kotlinString = iteratorImplementationKt.stringIterator("kotlin");
+                    var typedString = kotlinString as Kotlin.Collections.Iterator<string>;
+                    if (typedString == null || !typedString.HasNext() || typedString.Next() != "kotlin")
+                        throw new InvalidOperationException(
+                            "the Kotlin iterator lost its natural CLR construction");
+                    var kotlinInt = iteratorImplementationKt.intIterator(47);
+                    var typedInt = kotlinInt as Kotlin.Collections.Iterator<int>;
+                    if (typedInt == null || typedInt.Next() != 47)
+                        throw new InvalidOperationException(
+                            "the Kotlin value iterator lost its natural CLR construction");
+                    var kotlinIterable = iteratorImplementationKt.stringIterable("nested");
+                    var typedIterable = kotlinIterable as Kotlin.Collections.Iterable<string>;
+                    if (typedIterable == null || typedIterable.GetIterator().Next() != "nested")
+                        throw new InvalidOperationException(
+                            "the Kotlin iterable lost its typed nested result");
+
+                    var iteratorField = typeof(RuntimeIteratorValue<>).GetField(
+                        "value",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    var iterableField = typeof(RuntimeIterableValue<>).GetField(
+                        "value",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (iteratorField == null || !iteratorField.FieldType.IsGenericParameter ||
+                        iterableField == null || !iterableField.FieldType.IsGenericParameter)
+                        throw new InvalidOperationException(
+                            "the Runtime dependency slice did not retain !T storage");
+                    AssertSemanticCapabilityHasNoConstructedParent(
+                        typeof(RuntimeIteratorValue<>),
+                        typeof(Kotlin.Collections.Iterator<>));
+                    AssertSemanticCapabilityHasNoConstructedParent(
+                        typeof(RuntimeIterableValue<>),
+                        typeof(Kotlin.Collections.Iterable<>));
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeIteratorConsumer.exe"
+        else "RuntimeIteratorConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime iterator probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime iterator probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime iterator probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->
         dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
     }

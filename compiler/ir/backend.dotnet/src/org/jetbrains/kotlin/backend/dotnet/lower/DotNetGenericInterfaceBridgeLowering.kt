@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceMemberView
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberView
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectForeignOverrideDispatch
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -364,17 +365,23 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     ?: interfaceClass.name.asString(),
                 slotIdentity = slot.dotNetGenericInterfaceCanonicalSlotId(),
                 typedSubstitutor = typedSubstitutor,
-                typedViews = if (
-                    interfaceClass.isDotNetComparableClass() &&
-                    !isErasedKotlinCarrier(irClass)
-                ) {
-                    // Comparable is an explicit BCL mapping rather than an ordinary
-                    // Kotlin-owned generic-interface sibling. A non-generic implementor can
-                    // truthfully name its exact IComparable<T> capability; an erased generic
-                    // class cannot and must not fabricate IComparable<object>.
-                    listOf(DotNetGenericInterfaceMemberView.DECLARED)
-                } else {
-                    emptyList()
+                typedViews = when {
+                    isErasedKotlinCarrier(irClass) -> emptyList()
+                    interfaceClass.isDotNetComparableClass() -> {
+                        // Comparable is an explicit BCL mapping rather than an ordinary
+                        // Kotlin-owned generic-interface sibling.
+                        listOf(DotNetGenericInterfaceMemberView.DECLARED)
+                    }
+                    DotNetRuntimeTypes.genericInterfaceInfoFor(
+                        interfaceClass,
+                        includeRehearsalDeclaredViews =
+                            context.configuration.dotNetGenericOwnerRehearsal,
+                    )?.declaredClassInfo != null ->
+                        slot.dotNetGenericInterfaceMemberViews(
+                            interfaceClass,
+                            isErasedKotlinCarrier,
+                        )
+                    else -> emptyList()
                 },
             )
             if (interfaceClass in context.reifiedGenericInterfaces ||

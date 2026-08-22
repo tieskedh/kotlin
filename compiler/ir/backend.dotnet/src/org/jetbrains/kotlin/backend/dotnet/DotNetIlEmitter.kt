@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_EN
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_FAILURE_STATE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
@@ -740,7 +741,9 @@ internal class DotNetIlEmitter(
                 // `C<T> : I<T>`. Mapping it to `I<object>` would invent a distinct obligation and
                 // still would not represent `I<String>` or `I<int>`. The canonical interface keeps
                 // Kotlin dispatch. A genuinely closed edge such as `C<T> : I<String>` is retained.
-                val typedInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
+                val typedInterfaces = if (
+                    irClass.origin == DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
+                ) emptyList() else irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
                     if (
                         typeMapper.isErasedGenericClass(irClass) &&
                         interfaceType.referencesTypeParameterOf(irClass)
@@ -2811,7 +2814,10 @@ internal class DotNetIlEmitter(
             }
         } + externalGenericOwnerCapabilitySuperTypes[irClass].orEmpty()).distinct()
         val splitGenericInfo = genericInterfaces[irClass]
-        val directTypedInterfaceTypes = if (splitGenericInfo == null) {
+        val directTypedInterfaceTypes = if (
+            splitGenericInfo == null &&
+            irClass.origin != DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
+        ) {
             irClass.dotNetDirectInterfaceTypes().mapNotNull { superInterfaceType ->
                 if (
                     physicalTypeMapper.isErasedGenericClass(irClass) &&

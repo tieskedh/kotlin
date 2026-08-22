@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-iterator-foundation-2026-08-23.md`](runtime-reified-iterator-foundation-2026-08-23.md)
+  records ABI/runtime surface 49's additive Runtime-owned `Iterator<T>` and
+  `Iterable<T>` identities, typed nested result/storage, ordinary C# authoring,
+  semantic-capability isolation, and the remaining atomic collection boundary.
 - [`reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](reified-generic-interface-fixed-barrier-composition-2026-08-22.md)
   records ABI/runtime surface 48's upstream-authorized `contains(T)` barrier,
   mixed reified/erased Runtime parent validation, typed Kotlin and C# paths,
