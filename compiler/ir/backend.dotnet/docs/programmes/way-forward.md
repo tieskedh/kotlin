@@ -1191,8 +1191,20 @@ receive a Kotlin-legal, CLR-unnameable nested covariant view becomes semantic,
 and a dedicated exact-receiver semantic-result route reads it without globally
 widening either generic owner.
 
-Next close the broader input and property compositions required by
-`Collection<T>` and `Set<T>`. Defaults, overloads, diamonds, and mixed or
+The CLR-legality gate for the first broader input composition is now closed.
+Both C# compilers reject direct or nested `T` inputs on one covariant
+interface. A name-independent executable proof instead composes one covariant
+read view, one invariant exact-input view, and one non-generic semantic view.
+The same object supplies all views. Compatible calls retain typed virtual
+dispatch, an incompatible fixed-barrier candidate returns the authoritative
+result, and an incompatible nested candidate reaches the semantic body without
+wrapping or changing identity on Framework 4.8 and .NET 10.
+
+Next encode those three roles in the generic-interface planner, physical-family
+artifact, MethodImpl emission, and C# authoring contract. This is still a
+pre-ABI structural proof: physical names/export presentation and truthful
+non-partial C# behavior remain open. Then close the property composition needed
+by `Collection<T>` and `Set<T>`. Defaults, overloads, diamonds, and mixed or
 multiple type parameters remain later gates before the full surface.
 
 The physical choice is also closed over a transparent same-product covariant

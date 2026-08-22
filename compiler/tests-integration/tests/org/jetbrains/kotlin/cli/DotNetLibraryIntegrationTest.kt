@@ -28234,6 +28234,316 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testCovariantGenericInterfaceBroadInputComposition() {
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(modernCSharp != null, "Modern C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val directory = File(tmpdir, "covariant-interface-broad-input").apply { mkdirs() }
+
+        val illegalSource = directory.resolve("Illegal.cs").apply {
+            writeText(
+                """
+                public interface IIllegalDirect<out T>
+                {
+                    bool Contains(T candidate);
+                }
+
+                public interface IIllegalNested<out T>
+                {
+                    bool ContainsAll(IIllegalNested<T> candidates);
+                }
+                """.trimIndent()
+            )
+        }
+        val producerSource = directory.resolve("Producer.cs").apply {
+            writeText(
+                """
+                namespace GenericOwner.Inputs
+                {
+                    // The CLR-legal covariant view contains only producer positions.
+                    public interface IReadView<out T>
+                    {
+                        T Read();
+                    }
+
+                    // Exact input operations live on an invariant sibling. It inherits the
+                    // read view, so one implementation and one object satisfy both views.
+                    public interface IExactView<T> : IReadView<T>
+                    {
+                        bool Contains(T candidate);
+                        bool ContainsAll(IExactView<T> candidates);
+                    }
+
+                    // Kotlin-unnameable widened inputs use a non-generic capability. The
+                    // nested argument remains the original object rather than a wrapper.
+                    public interface ISemanticView
+                    {
+                        object ReadSemantic();
+                        bool ContainsCandidate(object candidate);
+                        bool ContainsAllCandidates(ISemanticView candidates);
+                    }
+
+                    public abstract class ViewBase<T> : IExactView<T>, ISemanticView
+                    {
+                        public abstract T Read();
+                        public abstract bool Contains(T candidate);
+                        public abstract bool ContainsAll(IExactView<T> candidates);
+
+                        protected virtual object ReadSemanticCore()
+                        {
+                            return Read();
+                        }
+
+                        protected virtual bool ContainsAllSemanticCore(ISemanticView candidates)
+                        {
+                            return false;
+                        }
+
+                        private static bool IsCompatibleCandidate(object candidate)
+                        {
+                            if (candidate != null) return candidate is T;
+                            return object.ReferenceEquals(default(T), null);
+                        }
+
+                        object ISemanticView.ReadSemantic()
+                        {
+                            return ReadSemanticCore();
+                        }
+
+                        bool ISemanticView.ContainsCandidate(object candidate)
+                        {
+                            // Collection.contains has a fixed type-safe barrier: a wrong
+                            // candidate returns false and never enters an arbitrary body.
+                            return IsCompatibleCandidate(candidate) && Contains((T)candidate);
+                        }
+
+                        bool ISemanticView.ContainsAllCandidates(ISemanticView candidates)
+                        {
+                            IExactView<T> exact = candidates as IExactView<T>;
+                            return exact != null
+                                ? ContainsAll(exact)
+                                : ContainsAllSemanticCore(candidates);
+                        }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerSource = directory.resolve("Consumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using GenericOwner.Inputs;
+
+                public sealed class IntView : ViewBase<int>
+                {
+                    public int ContainsCalls;
+                    public int ExactAllCalls;
+                    public int SemanticAllCalls;
+                    public object ExpectedExact;
+                    public object ExpectedSemantic;
+
+                    public override int Read()
+                    {
+                        return 7;
+                    }
+
+                    public override bool Contains(int candidate)
+                    {
+                        ContainsCalls++;
+                        return candidate == 7;
+                    }
+
+                    public override bool ContainsAll(IExactView<int> candidates)
+                    {
+                        ExactAllCalls++;
+                        return object.ReferenceEquals(candidates, ExpectedExact);
+                    }
+
+                    protected override bool ContainsAllSemanticCore(ISemanticView candidates)
+                    {
+                        SemanticAllCalls++;
+                        return object.ReferenceEquals(candidates, ExpectedSemantic);
+                    }
+                }
+
+                public sealed class StringView : ViewBase<string>
+                {
+                    private readonly string value;
+
+                    public StringView(string value)
+                    {
+                        this.value = value;
+                    }
+
+                    public override string Read()
+                    {
+                        return value;
+                    }
+
+                    public override bool Contains(string candidate)
+                    {
+                        return value == candidate;
+                    }
+
+                    public override bool ContainsAll(IExactView<string> candidates)
+                    {
+                        return object.ReferenceEquals(this, candidates);
+                    }
+                }
+
+                public sealed class ObjectView : ViewBase<object>
+                {
+                    public override object Read()
+                    {
+                        return "object";
+                    }
+
+                    public override bool Contains(object candidate)
+                    {
+                        return object.Equals(candidate, "object");
+                    }
+
+                    public override bool ContainsAll(IExactView<object> candidates)
+                    {
+                        return object.ReferenceEquals(this, candidates);
+                    }
+
+                    protected override bool ContainsAllSemanticCore(ISemanticView candidates)
+                    {
+                        return object.ReferenceEquals(this, candidates);
+                    }
+                }
+
+                public static class BroadInputCompositionProbe
+                {
+                    public static int Main()
+                    {
+                        IntView integers = new IntView();
+                        IExactView<int> exactIntegers = integers;
+                        IReadView<int> readIntegers = integers;
+                        ISemanticView semanticIntegers = integers;
+                        if (!object.ReferenceEquals(exactIntegers, readIntegers) ||
+                            !object.ReferenceEquals(readIntegers, semanticIntegers)) return 1;
+                        if (readIntegers.Read() != 7 ||
+                            !object.Equals(semanticIntegers.ReadSemantic(), 7)) return 2;
+
+                        if (!exactIntegers.Contains(7) || integers.ContainsCalls != 1) return 3;
+                        if (!semanticIntegers.ContainsCandidate(7) || integers.ContainsCalls != 2) return 4;
+                        if (semanticIntegers.ContainsCandidate("wrong") || integers.ContainsCalls != 2) return 5;
+                        if (semanticIntegers.ContainsCandidate(null) || integers.ContainsCalls != 2) return 6;
+
+                        IntView exactCandidates = new IntView();
+                        integers.ExpectedExact = exactCandidates;
+                        if (!exactIntegers.ContainsAll(exactCandidates) || integers.ExactAllCalls != 1) return 7;
+                        if (!semanticIntegers.ContainsAllCandidates(exactCandidates) ||
+                            integers.ExactAllCalls != 2 || integers.SemanticAllCalls != 0) return 8;
+
+                        StringView broadCandidates = new StringView("wide");
+                        integers.ExpectedSemantic = broadCandidates;
+                        if (!semanticIntegers.ContainsAllCandidates(broadCandidates) ||
+                            integers.ExactAllCalls != 2 || integers.SemanticAllCalls != 1) return 9;
+                        if (!object.ReferenceEquals(integers.ExpectedSemantic, broadCandidates)) return 10;
+
+                        // CLR covariance covers reference substitutions on the read view.
+                        IExactView<string> exactStrings = broadCandidates;
+                        IReadView<object> widenedStrings = exactStrings;
+                        if (!object.ReferenceEquals(exactStrings, widenedStrings) ||
+                            !object.Equals(widenedStrings.Read(), "wide")) return 11;
+
+                        // CLR variance does not box value-type substitutions. The semantic
+                        // capability covers that Kotlin widening without changing identity.
+                        if ((readIntegers as object) is IReadView<object>) return 12;
+                        if (!object.ReferenceEquals(readIntegers, semanticIntegers)) return 13;
+
+                        // T=object must not create a MethodDef/source collision between the
+                        // exact method and the explicit non-generic capability method.
+                        ObjectView objects = new ObjectView();
+                        IExactView<object> exactObjects = objects;
+                        ISemanticView semanticObjects = objects;
+                        if (!exactObjects.Contains("object") || !semanticObjects.ContainsCandidate("object")) return 14;
+                        if (!exactObjects.ContainsAll(objects) || !semanticObjects.ContainsAllCandidates(objects)) return 15;
+                        if (!object.ReferenceEquals(exactObjects, semanticObjects)) return 16;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+
+        val frameworkIllegal = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            illegalSource,
+            directory.resolve("Illegal4.dll"),
+        )
+        assertNotEquals(0, frameworkIllegal.exitCode, frameworkIllegal.output)
+        assertTrue(frameworkIllegal.output.lineSequence().count { "CS1961" in it } >= 2) {
+            frameworkIllegal.output
+        }
+        val frameworkProducer = directory.resolve("Producer4.dll")
+        val frameworkProducerCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            producerSource,
+            frameworkProducer,
+        )
+        assertEquals(0, frameworkProducerCompile.exitCode, frameworkProducerCompile.output)
+        val frameworkExecutable = directory.resolve("Consumer4.exe")
+        val frameworkConsumerCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            consumerSource,
+            frameworkExecutable,
+            frameworkProducer,
+            target = "exe",
+        )
+        assertEquals(0, frameworkConsumerCompile.exitCode, frameworkConsumerCompile.output)
+        val frameworkProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable)
+        )
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkOutput = frameworkProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, frameworkProcess.waitFor(), frameworkOutput)
+
+        val modernIllegal = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            illegalSource,
+            directory.resolve("Illegal10.dll"),
+        )
+        assertNotEquals(0, modernIllegal.exitCode, modernIllegal.output)
+        assertTrue(modernIllegal.output.lineSequence().count { "CS1961" in it } >= 2) {
+            modernIllegal.output
+        }
+        val modernProducer = directory.resolve("Producer10.dll")
+        val modernProducerCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            producerSource,
+            modernProducer,
+        )
+        assertEquals(0, modernProducerCompile.exitCode, modernProducerCompile.output)
+        val modernExecutable = directory.resolve("Consumer10.dll")
+        val modernConsumerCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            consumerSource,
+            modernExecutable,
+            modernProducer,
+            target = "exe",
+        )
+        assertEquals(0, modernConsumerCompile.exitCode, modernConsumerCompile.output)
+        directory.resolve("Consumer10.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            modernExecutable,
+            directory,
+            "CoreCLR covariant generic-interface broad-input composition failed",
+        )
+    }
+
+    @Test
     fun testNet48AssemblerMatrix() {
         val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
         val modernIlasm = DotNetIlAssembler.findModernIlasm()

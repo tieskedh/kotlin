@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-broad-input-composition-2026-08-22.md`](reified-generic-interface-broad-input-composition-2026-08-22.md)
+  records the CLR-illegal single covariant input surface and the executable
+  three-view exact/read/semantic composition for `Collection<T>`-shaped direct
+  and nested broad inputs on Framework 4.8 and .NET 10.
 - [`reified-generic-interface-constructed-result-family-2026-08-22.md`](reified-generic-interface-constructed-result-family-2026-08-22.md)
   records the first `Iterable<T>.iterator(): Iterator<T>`-shaped natural CLR
   result, operation-local semantic result/state escape hatch, ordinary C#
