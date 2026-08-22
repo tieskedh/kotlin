@@ -1228,12 +1228,21 @@ only the ordinary typed members. That path executes on Framework 4.8 and .NET
 Runtime built-in collection mapping remains explicitly excluded, so this
 checkpoint cannot accidentally half-migrate `Collection` or `Set`.
 
-Next close physical export presentation and truthful precompiled/non-partial
-C# behavior for an exact-input family; a natural-interface-only binary cannot
-silently be treated as if it supplied the hidden semantic body. Then close the
-property composition and remaining member grammar needed by `Collection<T>`
-and `Set<T>`. Defaults, overloads, diamonds, and mixed or multiple type
-parameters remain later gates before the full surface.
+The exact-input export and ordinary precompiled/non-partial C# boundary is now
+closed. A Kotlin implementation exposes the ordinary typed class member as its
+sole natural C# entry; its object-domain semantic hook is a separate compiler
+ABI member and cannot degrade that public signature. A raw C# class which
+implements only the natural covariant interface may supply the compatible
+exact-input operation as an ordinary public typed method. Kotlin selects its
+unique natural construction and the exact concrete parameter signature, so an
+adjacent `object` overload cannot win. A missing method fails closed, and a raw
+class is never treated as if it supplied an arbitrary hidden semantic body.
+ABI/runtime surface 46 owns this bounded fallback.
+
+Next close property composition and the remaining structural member grammar
+needed by `Collection<T>` and `Set<T>`, still without a built-in, package, or
+declaration-name exception. Defaults, general overload sets, diamonds, and
+mixed or multiple type parameters remain later gates before the full surface.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

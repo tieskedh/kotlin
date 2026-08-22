@@ -139,6 +139,40 @@ verification, and work state.
   See
   [`docs/archive/reified-generic-interface-exact-input-materialization-2026-08-22.md`](docs/archive/reified-generic-interface-exact-input-materialization-2026-08-22.md).
 
+  The exact-input public and ordinary foreign boundary is now closed as well.
+  A Kotlin implementation keeps the producer-planned public
+  `acceptsAll(Family<T>)` source MethodDef; its protected object-domain semantic
+  hook and private capability dispatcher remain separate compiler ABI. The
+  consumer reconstructs the same typed parameter from producer data, so a
+  later semantic routing pass cannot collapse the natural C# entry to
+  `object`. The implementation still stores its state in one `!T` field.
+
+  A separately compiled, sealed, non-partial C# class implements only the
+  natural covariant interface and ordinary public methods. It names neither
+  the invariant exact sibling nor the semantic capability and receives no
+  source generator. Kotlin compatible dispatch selects exactly one natural
+  construction and resolves the concrete public method by its exact
+  `Family<string>` parameter; an adjacent `object` overload is not selected.
+  The public Kotlin typed member also accepts that raw family as its argument;
+  calls made by the moved semantic body retain the capability fast path and
+  use the natural foreign fallback when the argument has no capability.
+  A raw class which omits the exact-input method fails closed with
+  `MissingMethodException` rather than acquiring an invented semantic body.
+  Constructed producer results now use the same bounded foreign fallback, and
+  the capability Boolean result is boxed before its object-domain join.
+  ABI/runtime surface 46 owns the new helper and cache discriminator.
+
+  All four exact-input lanes and the prior C# foreign-override rehearsal are
+  green across PSI and LightTree on Framework 4.8 and .NET 10. The final full
+  aggregate exits zero; direct XML audit covers 191 suites and 2,293 tests with
+  zero failures, errors, or skips. The 187 FIR suites/2,159 tests, two
+  integration suites/127 tests, and one-test backend resolver suite are fresh;
+  the unchanged six-test `dotnet.ir` model root remains up-to-date. Runtime and
+  Stdlib collection mappings remain gated. The next general gate is property
+  composition and remaining structural member grammar needed by
+  `Collection<T>` and `Set<T>`, without a built-in special case. See
+  [`docs/archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md`](docs/archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

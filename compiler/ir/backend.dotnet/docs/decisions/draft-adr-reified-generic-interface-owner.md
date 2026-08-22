@@ -562,17 +562,32 @@ surface 44 publishes the structural `CONSTRUCTED_INTERFACE_PRODUCER` role.
 See
 [`../archive/reified-generic-interface-constructed-result-family-2026-08-22.md`](../archive/reified-generic-interface-constructed-result-family-2026-08-22.md).
 
-The first broad-input prerequisite is now part of the atomic producer record.
-ABI/runtime surface 45 adds `BROAD_FIXED_BARRIER_INPUT` and
+The first broad-input family is now materialized from its atomic producer
+record. ABI/runtime surface 45 adds `BROAD_FIXED_BARRIER_INPUT` and
 `BROAD_NESTED_SEMANTIC_INPUT` member roles plus the invariant exact TypeDef's
 physical owner path. Either role without that owner, or that owner without
 either role, is invalid; natural, semantic, and exact owners must be distinct,
 and the exact metadata arity must match the logical owner. Consumers therefore
-never reconstruct or guess the third view. This records the physical identity
-and the external resolver now reconstructs its invariant CLR ClassInfo from
-the producer assembly/path/arity without a naming convention. It does not yet
-emit the exact TypeDef or admit the owner. See
-[`../archive/reified-generic-interface-exact-input-family-record-2026-08-22.md`](../archive/reified-generic-interface-exact-input-family-record-2026-08-22.md).
+never reconstruct or guess the third view. The exact TypeDef inherits the
+natural covariant view and owns only CLR-illegal input members. Its nested
+typed signature continues to name the natural `I<!T>`, while only the
+non-generic semantic capability accepts the object-domain input. Kotlin
+implementations retain one producer-proven `!T` field and implement all three
+views on one object. See
+[`../archive/reified-generic-interface-exact-input-materialization-2026-08-22.md`](../archive/reified-generic-interface-exact-input-materialization-2026-08-22.md).
+
+ABI/runtime surface 46 closes the matching public and ordinary foreign
+boundary. The Kotlin class source member remains the public typed
+`acceptsAll(I<!T>)` entry; a later semantic-routing pass may not replace its
+parameter with `object`. Its protected semantic hook is a separate compiler
+ABI MethodDef. A separately compiled non-partial C# class may implement only
+the natural interface and provide that compatible operation as an ordinary
+public typed method. The bounded foreign path selects exactly one natural
+construction and resolves the concrete method by the exact constructed
+parameter type, so an `object` overload cannot be substituted. Absence of that
+method fails closed, and the compiler never attributes an arbitrary semantic
+body to the raw class. See
+[`../archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md`](../archive/reified-generic-interface-precompiled-exact-input-2026-08-22.md).
 
 Broad-input emission, broader properties, defaults, overloads, extra producer
 members, and mixed/multiple type parameters remain separate gates.
@@ -601,7 +616,8 @@ must cover:
    diamonds, and reabstraction), hostile inheritance beyond the proven
    external default -> generic Kotlin override -> ordinary C# subclass chain,
    and ordinary foreign implementations beyond the proven producer, consumer,
-   invariant-cell, and one contravariant default shapes;
+   invariant-cell, exact-input method convention, and one contravariant default
+   shapes;
 6. same-object identity and dispatch across deeper separate Kotlin and C#
    assembly graphs, including classifier-derived fields and non-final or
    multi-input parameters;

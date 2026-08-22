@@ -9723,6 +9723,22 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
             public static class Program
             {
+                private static bool ReaderAcceptsAll(
+                    ExactInputFamilyReader reader,
+                    object receiver,
+                    object values,
+                    string stage)
+                {
+                    try
+                    {
+                        return reader.acceptsAll(receiver, values);
+                    }
+                    catch (Exception exception)
+                    {
+                        throw new InvalidOperationException(stage, exception);
+                    }
+                }
+
                 public static int Main()
                 {
                     var value = new CSharpExactStringFamily("csharp-exact");
@@ -9736,7 +9752,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         throw new InvalidOperationException(
                             "the ordinary exact C# surface did not dispatch");
                     if (!object.Equals(reader.read(value), "csharp-exact") ||
-                        !reader.acceptsAll(value, sameValue) ||
+                        !ReaderAcceptsAll(reader, value, sameValue, "generated string exact input") ||
                         !reader.same(value, value))
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed the generated exact C# bridge");
@@ -9744,7 +9760,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                     var broad = new CSharpExactObjectFamily("object-value");
                     var different = new CSharpExactStringFamily("different");
                     if (broad.acceptsAll(different) ||
-                        reader.acceptsAll(broad, different))
+                        ReaderAcceptsAll(reader, broad, different, "generated broad semantic input"))
                         throw new InvalidOperationException(
                             "the generated broad bridge changed nested-input semantics");
                     var exactInt = new CSharpExactIntFamily(37);
@@ -9752,6 +9768,39 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         !object.Equals(reader.read(exactInt), 37))
                         throw new InvalidOperationException(
                             "the generated value-type exact bridge did not dispatch");
+
+                    var kotlinValue = new ExactInputValue<string>("kotlin-exact");
+                    if (!kotlinValue.acceptsAll(
+                            new CSharpExactStringFamily("kotlin-exact")))
+                        throw new InvalidOperationException(
+                            "the Kotlin implementation did not expose its natural typed class entry");
+
+                    var raw = new RawExactStringFamily("raw-exact");
+                    var rawPeer = new RawExactStringFamily("raw-exact");
+                    if (!kotlinValue.acceptsAll(
+                            new RawExactStringFamily("kotlin-exact")) ||
+                        !raw.acceptsAll(rawPeer) || raw.AcceptCalls != 1 ||
+                        raw.BroadAcceptCalls != 0 ||
+                        !object.Equals(reader.read(raw), "raw-exact") ||
+                        !ReaderAcceptsAll(reader, raw, rawPeer, "precompiled raw exact input") ||
+                        raw.AcceptCalls != 2 || raw.BroadAcceptCalls != 0 ||
+                        !reader.same(raw, raw))
+                        throw new InvalidOperationException(
+                            "Kotlin dispatch did not bind the ordinary precompiled C# methods");
+
+                    var missing = new RawMissingExactStringFamily("missing-exact");
+                    bool missingRejected = false;
+                    try
+                    {
+                        reader.acceptsAll(missing, rawPeer);
+                    }
+                    catch (MissingMethodException)
+                    {
+                        missingRejected = true;
+                    }
+                    if (!missingRejected)
+                        throw new InvalidOperationException(
+                            "a precompiled C# implementation without the exact input body did not fail closed");
                     return 0;
                 }
             }
@@ -9766,12 +9815,100 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
     check(runtime.isFile && stdlib.isFile) {
         "The exact-interface C# authoring probe lacks reusable Runtime/Stdlib artifacts"
     }
+    val rawSource = directory.resolve("RawExactInterfaceInputs.cs").apply {
+        writeText(
+            """
+            using generic.owner.exact.inputs;
+
+            public sealed class RawExactStringFamily : ExactInputFamily<string>
+            {
+                public string Value { get; }
+
+                public int AcceptCalls { get; private set; }
+
+                public int BroadAcceptCalls { get; private set; }
+
+                public RawExactStringFamily(string value)
+                {
+                    Value = value;
+                }
+
+                public bool hasExactNext() => true;
+
+                public string nextExact() => Value;
+
+                public ExactInputCursor<string> exactCursor() => this;
+
+                public bool acceptsAll(ExactInputFamily<string> values)
+                {
+                    AcceptCalls++;
+                    return object.Equals(values.nextExact(), Value);
+                }
+
+                public bool acceptsAll(object values)
+                {
+                    BroadAcceptCalls++;
+                    return false;
+                }
+
+                public bool hasExactValues() => true;
+            }
+
+            public sealed class RawMissingExactStringFamily : ExactInputFamily<string>
+            {
+                public string Value { get; }
+
+                public RawMissingExactStringFamily(string value)
+                {
+                    Value = value;
+                }
+
+                public bool hasExactNext() => true;
+
+                public string nextExact() => Value;
+
+                public ExactInputCursor<string> exactCursor() => this;
+
+                public bool hasExactValues() => true;
+            }
+            """.trimIndent()
+        )
+    }
+    val rawAssembly = directory.resolve("RawExactInterfaceInputs.dll")
+    val rawCompilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the raw exact-interface probe"
+            },
+            rawSource,
+            rawAssembly,
+            references = listOf(lib, runtime, stdlib),
+            executable = false,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the raw exact-interface probe"
+            },
+            rawSource,
+            rawAssembly,
+            references = listOf(lib, runtime, stdlib),
+            executable = false,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable raw exact-interface probe")
+    }
+    check(rawCompilation.exitCode == 0) {
+        "An ordinary precompiled C# implementation must need no authoring generator:\n" +
+                rawCompilation.output
+    }
     val consumer = directory.resolve(
         if (target == DotNetTarget.NET48) "ExactInterfaceInputsConsumer.exe"
         else "ExactInterfaceInputsConsumer.dll"
     )
     val generatedDirectory = directory.resolve("generated-${target.description}")
-    val references = listOf(lib, middle, runtime, stdlib)
+    val references = listOf(lib, middle, rawAssembly, runtime, stdlib)
     val authoringTooling = genericOwnerCSharpAuthoringTooling()
     val compilation = when (target) {
         DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
