@@ -24,12 +24,14 @@ internal object DotNetGenericInterfaceRuntime {
   {
     .field assembly initonly $typeType 'openDefinition'
     .field assembly initonly string 'methodName'
+    .field assembly initonly bool 'concreteUnaryMethod'
     .field assembly initonly $methodType 'method'
     .field assembly initonly $entryType 'next'
 
     .method assembly hidebysig specialname rtspecialname instance void .ctor(
         $typeType 'openDefinition',
         string 'methodName',
+        bool 'concreteUnaryMethod',
         $methodType 'method',
         $entryType 'next') cil managed
     {
@@ -44,6 +46,9 @@ internal object DotNetGenericInterfaceRuntime {
       stfld string Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'methodName'
       ldarg.0
       ldarg.3
+      stfld bool Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'concreteUnaryMethod'
+      ldarg.0
+      ldarg.s 'method'
       stfld $methodType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'method'
       ldarg.0
       ldarg.s 'next'
@@ -396,13 +401,14 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
-    .method public hidebysig static object 'InvokeUniqueMember'(
+    .method private hidebysig static object 'InvokeUniqueMemberCore'(
         object 'instance',
         $typeType 'openDefinition',
         string 'methodName',
-        object[] 'arguments') cil managed
+        object[] 'arguments',
+        bool 'concreteUnaryMethod') cil managed
     {
-      .maxstack 5
+      .maxstack 6
       .locals init (
         [0] $typeType[] 'interfaces',
         [1] int32 'index',
@@ -446,6 +452,10 @@ internal object DotNetGenericInterfaceRuntime {
         ldarg.2
         call bool ${coreLibraryReference}System.String::op_Equality(string, string)
         brfalse.s GIF_CacheContinue
+        ldloc.s 9
+        ldfld bool Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'concreteUnaryMethod'
+        ldarg.s 'concreteUnaryMethod'
+        bne.un.s GIF_CacheContinue
         ldloc.s 9
         ldfld $methodType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'method'
         stloc.s 4
@@ -507,23 +517,41 @@ internal object DotNetGenericInterfaceRuntime {
         newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor(string)
         throw
     GIF_ConstructionReady:
+        ldarg.s 'concreteUnaryMethod'
+        brtrue.s GIF_ResolveConcreteMethod
         ldloc.2
         ldarg.2
         callvirt instance $methodType ${coreLibraryReference}System.Type::GetMethod(string)
         stloc.s 4
+        br.s GIF_MethodResolved
+    GIF_ResolveConcreteMethod:
+        ldloc.s 7
+        ldarg.2
+        ldc.i4.1
+        newarr ${coreLibraryReference}System.Type
+        dup
+        ldc.i4.0
+        ldloc.2
+        stelem.ref
+        callvirt instance $methodType ${coreLibraryReference}System.Type::GetMethod(
+            string,
+            $typeType[])
+        stloc.s 4
+    GIF_MethodResolved:
         ldloc.s 4
         brtrue.s GIF_CacheStore
-        ldstr "The selected CLR generic interface has no required method"
+        ldstr "The selected CLR generic implementation has no unique required method"
         newobj instance void ${coreLibraryReference}System.MissingMethodException::.ctor(string)
         throw
       GIF_CacheStore:
         ldloc.s 8
         ldarg.1
         ldarg.2
+        ldarg.s 'concreteUnaryMethod'
         ldloc.s 4
         ldloc.s 8
         ldfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
-        newobj instance void $entryType::.ctor($typeType, string, $methodType, $entryType)
+        newobj instance void $entryType::.ctor($typeType, string, bool, $methodType, $entryType)
         stfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
         leave.s GIF_MethodReady
       }
@@ -565,6 +593,48 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
+    .method public hidebysig static object 'InvokeUniqueMember'(
+        object 'instance',
+        $typeType 'openDefinition',
+        string 'methodName',
+        object[] 'arguments') cil managed
+    {
+      .maxstack 5
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      ldarg.3
+      ldc.i4.0
+      call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
+          object,
+          $typeType,
+          string,
+          object[],
+          bool)
+      ret
+    }
+
+    .method public hidebysig static object 'InvokeUniqueConcreteUnaryMember'(
+        object 'instance',
+        $typeType 'openDefinition',
+        string 'methodName',
+        object[] 'arguments') cil managed
+    {
+      .maxstack 5
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      ldarg.3
+      ldc.i4.1
+      call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
+          object,
+          $typeType,
+          string,
+          object[],
+          bool)
+      ret
+    }
+
     .method public hidebysig static object 'InvokeUniqueProducer'(
         object 'instance',
         $typeType 'openDefinition',
@@ -596,6 +666,12 @@ internal object DotNetGenericInterfaceRuntime {
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueMember".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type, string, object[])"
+
+    fun invokeUniqueConcreteUnaryMemberCallInstruction(coreLibraryReference: String): String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"InvokeUniqueConcreteUnaryMember".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type, string, object[])"
 
     fun isOpenGenericInterfaceInstanceCallInstruction(coreLibraryReference: String): String =

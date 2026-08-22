@@ -475,6 +475,17 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 semanticHooksByPrototype[prototype] = hook
                 context.genericOwnerCapabilityDeclarations += hook
                 context.genericOwnerCapabilityDeclarations += hook.parameters.drop(1)
+                source.parameters.drop(1).zip(hook.parameters.drop(1)).forEach { pair ->
+                    val sourceParameter = pair.first
+                    val hookParameter = pair.second
+                    if (sourceParameter.type.containsReifiedVariantOwnerApplicationOf(owner)) {
+                        // The semantic hook's object carrier may receive either a Kotlin
+                        // capability or an ordinary foreign natural I<T> through the public
+                        // typed entry. Calls made by the moved body must therefore keep the
+                        // capability fast path but retain unique-natural foreign dispatch.
+                        context.genericOwnerForeignDispatchDeclarations += hookParameter
+                    }
+                }
                 if (source.returnType.containsReifiedVariantOwnerApplicationOf(owner)) {
                     // A semantic Nested<T> result may be either a Kotlin capability-bearing
                     // implementation or the natural I<T> returned by an ordinary C# override.
@@ -2190,10 +2201,24 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         source.parameters
             .filter { parameter -> parameter.kind != IrParameterKind.DispatchReceiver }
             .forEach { parameter ->
+                val carriesVariantOwnerConstruction =
+                    role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                            parameter.type.containsReifiedVariantOwnerApplicationOf(owner)
                 prototype.parameters += parameter.copyTo(
                     prototype,
-                    type = prototypeType(parameter.type),
-                    varargElementType = parameter.varargElementType?.let(::prototypeType),
+                    type = if (carriesVariantOwnerConstruction) {
+                        // A Kotlin-wide nested input can carry either a capability-bearing
+                        // implementation or an ordinary foreign natural I<T>. Do not invent the
+                        // physically unrelated I<object> construction before entering the hook.
+                        context.irBuiltIns.anyNType
+                    } else {
+                        prototypeType(parameter.type)
+                    },
+                    varargElementType = if (carriesVariantOwnerConstruction) {
+                        null
+                    } else {
+                        parameter.varargElementType?.let(::prototypeType)
+                    },
                     defaultValue = null,
                 )
             }
