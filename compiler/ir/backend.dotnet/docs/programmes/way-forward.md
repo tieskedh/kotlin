@@ -1204,7 +1204,11 @@ ABI/runtime surface 45 now records the third physical identity atomically. The
 family artifact names the invariant exact TypeDef and distinguishes fixed-
 barrier direct input from nested semantic input. Missing, unsolicited, aliased,
 or arity-mismatched exact owners fail closed. No consumer derives this TypeDef
-from a name, and no existing family silently acquires it.
+from a name, and no existing family silently acquires it. The separate-
+consumer resolver now binds that producer-recorded path in the producer
+assembly with invariant parameters of the recorded arity and exposes it as the
+exact type-mapping view. This closes identity reconstruction, not TypeDef
+emission or member binding.
 
 Next encode those roles in the generic-interface planner, materialize the exact
 TypeDef and MethodImpls, and extend the C# authoring contract. Physical export

@@ -39,22 +39,39 @@ payload before they can misparse it. Round-trip coverage includes a two-
 parameter owner to prove that the rule is not accidentally fixed to arity one,
 plus missing, unsolicited, and arity-mismatched exact-owner negatives.
 
+## Separate-consumer resolution
+
+The external declaration resolver now reconstructs that exact TypeDef directly
+from the producer record. It binds the producer assembly and recorded owner
+path, creates exactly the recorded number of invariant CLR parameters, and
+caches that physical identity for the consumer compilation. It neither derives
+a `__KotlinExact` name nor re-examines the current KLIB member shape to invent
+an owner.
+
+For an external reified family carrying this record, the type mapper exposes
+the natural `I<T>` as the declared view and the recorded invariant sibling as
+the exact view. Existing erased families and reified families without a broad
+input record do not acquire an exact view. A backend-local resolver test covers
+assembly/path binding, arity-two invariance, identity reuse, and absence for an
+unrecorded owner.
+
 ## Verification
 
 The focused physical-owner round-trip test is green, including missing,
-unsolicited, aliased, and arity-mismatched exact-owner negatives. The complete
-`dotNetTest` aggregate then exits zero. Direct XML audit reports 190 suites and
-2,288 tests with zero failures, errors, or skips. The 187 FIR suites/2,155
-tests and two integration suites/127 tests are freshly written by that run;
-the unchanged six-test `dotnet.ir` root remains up-to-date from the preceding
-green checkpoint.
+unsolicited, aliased, and arity-mismatched exact-owner negatives. The new
+backend-local resolver test is green as well. The complete `dotNetTest`
+aggregate then exits zero. Direct XML audit reports 191 suites and 2,289 tests
+with zero failures, errors, or skips. The 187 FIR suites/2,155 tests and two
+integration suites/127 tests are freshly written by that run; the one-test
+backend resolver suite and unchanged six-test `dotnet.ir` root remain up-to-
+date from their preceding focused green checkpoints.
 
 ## Boundary and next gate
 
-This checkpoint records the required third physical identity; it does not emit
-that TypeDef or admit a broad-input Kotlin owner. Existing published families
-continue to encode no exact owner, and production remains erased. The next
-feature must materialize the invariant exact interface, keep illegal input
-members off the natural covariant TypeDef, publish exact and semantic slots,
-and prove Kotlin/C# implementation and dispatch across separate compilation on
-Framework 4.8 and .NET 10.
+This checkpoint records and resolves the required third physical identity; it
+does not emit that TypeDef or admit a broad-input Kotlin owner. Existing
+published families continue to encode no exact owner, and production remains
+erased. The next feature must materialize the invariant exact interface, keep
+illegal input members off the natural covariant TypeDef, publish exact and
+semantic slots, and prove Kotlin/C# implementation and dispatch across
+separate compilation on Framework 4.8 and .NET 10.

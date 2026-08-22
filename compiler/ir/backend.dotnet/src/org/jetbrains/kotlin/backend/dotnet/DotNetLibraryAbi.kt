@@ -2213,6 +2213,7 @@ internal class DotNetExternalDeclarations(
         index.publishedGenericInterfaceFamiliesByLogicalKey
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
+    private val genericOwnerExactInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val classLinksInProgress = hashSetOf<String>()
     private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
     private val logicalKeys = DotNetLibraryAbiKeyCache()
@@ -2455,8 +2456,31 @@ internal class DotNetExternalDeclarations(
         return classInfoOrNull(irClass, typeMapper)?.let(::DotNetGenericClassInfo)
     }
 
-    /** Kotlin-owned runtime classifiers do not have an alternate exact CLR owner. */
-    fun exactClassInfoOrNull(@Suppress("UNUSED_PARAMETER") irClass: IrClass): DotNetIlClassInfo? = null
+    /**
+     * Producer-recorded invariant CLR owner for an external reified interface's exact input view.
+     *
+     * The path is compiler ABI. A consumer must never infer it from the Kotlin name because the
+     * producer is authoritative for both physical placement and assembly identity.
+     */
+    fun exactClassInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
+        if (!hasReifiedGenericInterface(irClass)) return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
+        return exactGenericInterfaceOwnerInfoOrNull(logicalKey)
+    }
+
+    /** Logical-key entry used by ABI tests before an external IR classifier has been deserialized. */
+    internal fun exactGenericInterfaceOwnerInfoOrNull(logicalOwnerKey: String): DotNetIlClassInfo? {
+        genericOwnerExactInfoByLogicalKey[logicalOwnerKey]?.let { return it }
+        val bound = publishedGenericInterfaceFamiliesByLogicalKey[logicalOwnerKey] ?: return null
+        val exactOwnerPath = bound.family.exactOwnerPath ?: return null
+        val exactInfo = buildClassInfo(
+            bound.library.artifact.assemblyName,
+            exactOwnerPath,
+            List(bound.family.contract.genericArity) { Variance.INVARIANT },
+        )
+        genericOwnerExactInfoByLogicalKey[logicalOwnerKey] = exactInfo
+        return exactInfo
+    }
 
     fun staticInitializationOrNull(irClass: IrClass): DotNetBoundStaticInitialization? {
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
