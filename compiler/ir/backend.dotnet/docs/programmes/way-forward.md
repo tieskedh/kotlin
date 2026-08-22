@@ -1261,6 +1261,35 @@ remain `!T`; only widened candidate input crosses `object`, and a wrong shape
 returns the upstream result before the typed body is called. See
 [`../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md).
 
+The collection dependency graph now has its first source-built Runtime
+foundation. ABI/runtime surface 49 adds covariant natural `Iterator<T>` and
+`Iterable<T>` TypeDefs alongside their erased semantic identities. In the
+generic-owner rehearsal, compiler-emitted implementations carry the natural
+and erased MethodImpl bundles on one object, retain `!T` state, and preserve
+the constructed `Iterator<T>` result of `Iterable<T>`. Exact calls use the CLR-
+typed route; only a Kotlin-legal construction which the CLR cannot name crosses
+the local erased fallback.
+
+An ordinary non-partial C# class independently implements either natural
+interface with only `HasNext`, `Next`, or `GetIterator`. The executable proof
+requires neither generator nor compiler capability. A loader failure also
+closed a general composition hole: a non-generic compiler semantic capability
+must not inherit a constructed generic interface in either the emitter's
+structural graph or its final `implements` list. The real implementation object
+owns that construction directly. Framework 4.8, .NET 10, both frontends,
+explicit-off products, and the preceding exact-interface family are green.
+The final aggregate exits zero; direct XML audit covers 190 freshly written
+suites/2,291 tests with zero failures, errors, or skips, plus the unchanged
+green six-test `dotnet.ir` model root for 191 suites/2,297 tests target-wide.
+See
+[`../archive/runtime-reified-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-iterator-foundation-2026-08-23.md).
+
+This is deliberately not a half-cutover of exported Kotlin signatures. The
+rehearsal-off ABI remains erased, and a pure natural C# implementation is not
+claimed to satisfy every old erased Kotlin API boundary. The atomic collection
+migration must move those type-use boundaries coherently rather than require
+C# to implement a compiler bridge.
+
 Next derive and migrate the smallest atomic Runtime `Collection<T>`/Stdlib
 `Set<T>` producer graph onto this general family. The migration must preserve
 Common declaration semantics, source-built Runtime/Stdlib ownership, ordinary

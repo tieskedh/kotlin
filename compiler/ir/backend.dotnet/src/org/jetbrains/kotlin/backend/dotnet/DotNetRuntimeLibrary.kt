@@ -1335,6 +1335,20 @@ $fixedFunctionTypesIl
             }
           }
 
+          // Additive natural CLR view selected by the generic-owner rehearsal. The erased
+          // Iterator above remains the Kotlin semantic capability until the atomic collection
+          // cutover; Kotlin implementations carry both MethodImpl bundles on one object.
+          .class interface public abstract auto ansi 'Iterator`1'<+ T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T Next() cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi ListIterator
                  implements Kotlin.Collections.Iterator
           {
@@ -1399,6 +1413,13 @@ $fixedFunctionTypesIl
           .class interface public abstract auto ansi Iterable
           {
             .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi 'Iterable`1'<+ T>
+          {
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.Iterator`1'<!T> GetIterator() cil managed
             {
             }
           }

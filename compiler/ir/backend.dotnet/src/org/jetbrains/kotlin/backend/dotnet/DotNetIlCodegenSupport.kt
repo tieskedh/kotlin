@@ -1119,7 +1119,11 @@ internal class DotNetIlTypeMapper private constructor(
     fun genericInterfaceInfoOrNull(irClass: IrClass): DotNetGenericInterfaceInfo? =
         if (!irClass.isInterface) null else (genericInterfaces[irClass]
             ?: comparableInterfaceInfo.takeIf { classifierInfo(irClass).isComparable }
-            ?: DotNetRuntimeTypes.genericInterfaceInfoFor(irClass, classifierInfo(irClass))
+            ?: DotNetRuntimeTypes.genericInterfaceInfoFor(
+                irClass,
+                classifierInfo(irClass),
+                includeRehearsalDeclaredViews = genericOwnerRehearsal,
+            )
             ?: run {
                 val canonical = externalDeclarations.classInfoOrNull(irClass, canonicalGenericInterfaceView())
                     ?: return null
@@ -1192,7 +1196,11 @@ internal class DotNetIlTypeMapper private constructor(
      */
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
         val classifierInfo = classifierInfo(irClass)
-        val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass, classifierInfo)
+        val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(
+            irClass,
+            classifierInfo,
+            includeRehearsalDeclaredViews = genericOwnerRehearsal,
+        )
         val mappedComparableInfo = comparableInterfaceInfo.takeIf { classifierInfo.isComparable }
         val genericClassInfo = genericClassInfoOrNull(irClass)
         return (genericClassInfo?.classInfo ?: when (genericInterfaceMapping.physicalView) {
@@ -1902,16 +1910,18 @@ internal class DotNetIlTypeMapper private constructor(
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
         val genericClassInfo = genericClassInfoOrNull(irClass)
         if (genericClassInfo != null) return DotNetIlValueType.UserClass(genericClassInfo.classInfo)
+        val genericInterfaceInfo = genericInterfaceInfoOrNull(irClass)
         if (
             isErasedGenericInterface(irClass) &&
             (genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL ||
-                    genericInterfaceMapping.canonicalizeNestedInterfaces)
+                    genericInterfaceMapping.canonicalizeNestedInterfaces &&
+                    genericInterfaceInfo?.isDeclaredViewStableInTypedSignatures != true)
         ) {
             // The first arm is Kotlin's universal storage identity. The second is the carrier of
             // a member on a typed outer capability: type parameters remain typed elsewhere in
             // that signature, but a nested Kotlin interface is not itself a guaranteed typed
             // capability.
-            val canonical = genericInterfaceInfoOrNull(irClass)?.canonicalClassInfo
+            val canonical = genericInterfaceInfo?.canonicalClassInfo
                 ?: classInfoOrNull(irClass)
                 ?: return null
             return DotNetIlValueType.UserClass(canonical)

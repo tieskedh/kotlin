@@ -618,6 +618,33 @@ before invoking the typed method. None of these widened boundaries changes
 the owner's producer-proven `!T` field or its normal typed call route. See
 [`../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md).
 
+ABI/runtime surface 49 instantiates the first two Runtime-owned members of the
+future collection graph without changing the production mapping. The Runtime
+contains additive covariant `Iterator<T>` and `Iterable<T>` identities; the
+generic-owner rehearsal alone exposes those declared views to the compiler.
+Every truthful compiler-emitted implementation directly owns its constructed
+InterfaceImpl and private typed MethodImpl bundle in addition to the erased
+semantic bundle. A typed `Iterable<T>` signature may retain its nested
+`Iterator<T>` result because this Runtime mapping explicitly promises that
+implementation closure. Other split interfaces remain canonicalized when that
+promise is absent.
+
+The compiler semantic capability is not a second typed owner. It may inherit
+erased semantic parents but must never acquire `Iterator<object>`,
+`Iterable<object>`, or another constructed generic interface. Both the
+assignability pre-pass and final TypeDef render enforce this. The real object
+owns `Iterator<!T>`/`Iterable<!T>` and keeps producer-proven state as `!T`;
+only an unnameable widened Kotlin operation uses the erased slot.
+
+Natural Runtime authoring is independently valid C#: a non-partial class
+implements only `Iterator<T>` or `Iterable<T>` and their ordinary members. No
+generator, wrapper, erased interface, or compiler capability is part of that
+contract. Exported Kotlin type-use remains on the erased ABI outside the
+rehearsal, however, and must migrate coherently with the atomic collection
+graph before natural-only C# values are promised across every Kotlin API
+boundary. See
+[`../archive/runtime-reified-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-iterator-foundation-2026-08-23.md).
+
 Runtime/Stdlib collection TypeDef migration, broader properties, defaults,
 overloads, extra producer members, and mixed/multiple type parameters remain
 separate gates.

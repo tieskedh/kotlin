@@ -36,6 +36,15 @@ internal data class DotNetGenericInterfaceInfo(
     val canonicalClassInfo: DotNetIlClassInfo,
     val declaredClassInfo: DotNetIlClassInfo? = null,
     val exactClassInfo: DotNetIlClassInfo? = null,
+    /**
+     * Whether another typed interface signature may retain this interface's declared
+     * construction instead of falling back to its canonical semantic identity.
+     *
+     * Most split mappings cannot make that promise: the outer member may return an arbitrary
+     * Kotlin implementation which owns only the canonical view. Runtime-owned families opt in
+     * only after every Kotlin implementation is given the declared MethodImpl bundle.
+     */
+    val isDeclaredViewStableInTypedSignatures: Boolean = false,
 ) {
     val mostSpecificCapabilityView: DotNetGenericInterfaceView?
         get() = when {
