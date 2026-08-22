@@ -1179,14 +1179,21 @@ write only the natural members. Kotlin exact and widened calls plus identity
 execute through a separate producer on Framework 4.8 and .NET 10. This closes
 the direct `Iterator<T>` member grammar, not the stdlib owner graph.
 
-Next close the constructed owner-dependent result needed by
-`Iterable<T>.iterator(): Iterator<T>`. The proof must select a truthful natural
-constructed result where possible, a declaration-semantic carrier only where
-necessary, and the same producer-owned family under separate compilation. It
-must not globally widen `Iterable<T>`, `Iterator<T>`, or an enclosing generic
-state slot merely because one semantic view exists. Collection inputs,
-properties, defaults, overloads, diamonds, and mixed/multiple type parameters
-remain later gates before the full `Collection<T>`/`Set<T>` surface.
+The constructed owner-dependent result needed by
+`Iterable<T>.iterator(): Iterator<T>` is now green without a stdlib exception.
+A structural covariant root may return one already-admitted covariant
+interface constructed over its own parameter. The natural result remains the
+truthful `Iterator<!T>` construction. Its declaration-semantic slot is
+`object`, so one boundary can preserve either Kotlin's sibling capability or
+an ordinary C# `Iterator<T>` with no compiler capability and no wrapper. Exact
+nested state remains typed. Only a concrete state slot which can actually
+receive a Kotlin-legal, CLR-unnameable nested covariant view becomes semantic,
+and a dedicated exact-receiver semantic-result route reads it without globally
+widening either generic owner.
+
+Next close the broader input and property compositions required by
+`Collection<T>` and `Set<T>`. Defaults, overloads, diamonds, and mixed or
+multiple type parameters remain later gates before the full surface.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

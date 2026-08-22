@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerFunctionInputEntry
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
@@ -112,7 +113,8 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * tranche accepts a public covariant or invariant producer with one abstract no-input member
  * returning its owner parameter directly, a covariant cursor-like root combining exactly one
  * such producer with one or more owner-independent no-input primitive queries, one covariant root
- * `<R>(R) -> T` whose member is
+ * returning one already-admitted covariant interface constructed over its owner parameter, one
+ * covariant root `<R>(R) -> T` whose member is
  * abstract or has a default implementation and whose method parameter has either the universal
  * bound, direct non-generic nominal bounds, one direct self-bound on an admitted consumer root,
  * or that self-bound together with nominal bounds, plus an abstract root with one direct
@@ -170,6 +172,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     member.isDirectProducerMember(parameter) ||
                             member.isDirectMethodGenericProducerMember(parameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+                    member.isDirectConstructedInterfaceProducerMember(parameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
                     member.isDirectConsumerMember(parameter) -> DotNetPublishedGenericInterfaceMemberRole.CONSUMER
                     member.isOwnerIndependentPrimitiveQuery() ->
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
@@ -316,9 +320,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
         if (!finalRoutingOnly) {
-            for (owner in genericInterfaces.filter { candidate ->
-                candidate.isFirstReifiedInterfaceCandidate()
-            }) {
+            fun publishRoot(owner: IrClass) {
                 val file = checkNotNull(owner.fileOrNull) {
                     "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
                 }
@@ -346,6 +348,26 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                 )
             }
+
+            // Preserve the old root-admission snapshot. Re-evaluating every historical grammar
+            // after publishing one family could accidentally admit an unrelated hostile owner.
+            // Only the new constructed-result grammar needs a dependency fixpoint.
+            genericInterfaces.filter { owner -> owner.isFirstReifiedInterfaceCandidate() }
+                .forEach(::publishRoot)
+            var rootChanged: Boolean
+            do {
+                rootChanged = false
+                for (owner in genericInterfaces) {
+                    if (owner in context.reifiedGenericInterfaces ||
+                        !owner.hasDirectConstructedInterfaceProducerMember() ||
+                        !owner.isFirstReifiedInterfaceCandidate()
+                    ) {
+                        continue
+                    }
+                    publishRoot(owner)
+                    rootChanged = true
+                }
+            } while (rootChanged)
 
             // The physical choice is closed over interface inheritance. Otherwise an arity-zero Child
             // would have to name an already-reified Parent<T> without owning a CLR T, which is
@@ -734,11 +756,51 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return !producer.isInterface && producer in localClasses
         }
 
+        fun IrDeclaration.isNaturalReifiedInterfaceSignatureDeclaration(): Boolean {
+            val function = when (this) {
+                is IrSimpleFunction -> this
+                is IrValueParameter -> parent as? IrSimpleFunction
+                else -> null
+            } ?: return false
+            val owner = function.parent as? IrClass ?: return false
+            if (owner.kind == ClassKind.INTERFACE &&
+                (owner in context.reifiedGenericInterfaces ||
+                        externalDeclarations.hasReifiedGenericInterface(owner)) &&
+                this === function &&
+                function.returnType.reifiedInterfaceOwnerOrNull() != null
+            ) {
+                return true
+            }
+            if (owner.kind != ClassKind.INTERFACE &&
+                owner.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
+                function.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
+                this === function &&
+                externalDeclarations.genericOwnerMemberFamilyOrNull(function) != null &&
+                function.returnType.reifiedInterfaceOwnerOrNull() != null
+            ) {
+                // This producer-recorded source MethodDef is the natural constructed-result
+                // entry. Semantic hooks and capability dispatchers have separate physical
+                // records and must not change its return signature.
+                return true
+            }
+            val family = context.genericOwnerArchitecturePlans[owner]
+                ?.takeIf(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
+                ?.memberFamilies
+                ?.get(function)
+            return this === function && family != null &&
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in family.roles &&
+                    function.returnType.reifiedInterfaceOwnerOrNull() != null
+        }
+
         fun recordSemanticDeclaration(
             declaration: IrDeclaration,
             type: IrType,
             exactProducer: IrExpression? = null,
         ) {
+            // The source member is the natural CLR contract. Its paired capability slot carries
+            // broad Kotlin views independently; recording the source signature as a semantic
+            // occurrence would degrade a constructed result such as Cursor<T> to object.
+            if (declaration.isNaturalReifiedInterfaceSignatureDeclaration()) return
             type.genericOwnerValueClassCarrierDeclarationOrNull()?.let { backingField ->
                 if (backingField in context.genericOwnerCapabilityDeclarations) {
                     context.genericOwnerCapabilityDeclarations += declaration
@@ -1008,6 +1070,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 expression.acceptChildrenVoid(this)
                 val source = expression.symbol.owner.let { candidate ->
                     candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
+                }
+                if (source.origin == DOTNET_GENERIC_OWNER_SEMANTIC_HOOK) {
+                    // This is already a planner-selected physical call from the typed wrapper or
+                    // capability dispatcher to its semantic body. A nested reified-interface
+                    // result may make the call expression look broad, but it must not recursively
+                    // request another capability slot for the hook itself.
+                    return
                 }
                 recordExternalFunctionCarrier(source)
                 // The physical carrier is part of the callable ABI, so a separately compiled
@@ -1359,6 +1428,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return when (parameter.variance) {
             Variance.OUT_VARIANCE -> members.singleOrNull()?.let { member ->
                 member.isDirectProducerMember(parameter) ||
+                        member.isDirectConstructedInterfaceProducerMember(parameter) ||
                         member.isDirectMethodGenericProducerMember(parameter)
             } == true ||
                         members.isCovariantProducerQueryFamily(parameter)
@@ -1508,6 +1578,42 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 !returnType.isMarkedNullable() &&
                 returnType.isPrimitiveType()
 
+    /**
+     * Admits the first nested natural result required by `Iterable<T>.iterator()` only after the
+     * result interface has a producer-published natural/capability family of its own.
+     */
+    private fun IrClass.hasDirectConstructedInterfaceProducerMember(): Boolean {
+        val ownerParameter = typeParameters.singleOrNull() ?: return false
+        return declaredInterfaceMembers().singleOrNull()
+            ?.isDirectConstructedInterfaceProducerMember(ownerParameter) == true
+    }
+
+    private fun IrSimpleFunction.isDirectConstructedInterfaceProducerMember(
+        ownerParameter: IrTypeParameter,
+    ): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC ||
+            modality != Modality.ABSTRACT || body != null ||
+            this in context.interfaceDefaultImplementations ||
+            correspondingPropertySymbol != null || isSuspend ||
+            typeParameters.isNotEmpty() ||
+            parameters.singleOrNull()?.kind != IrParameterKind.DispatchReceiver
+        ) {
+            return false
+        }
+        val resultType = returnType as? IrSimpleType ?: return false
+        if (resultType.isMarkedNullable()) return false
+        val resultOwner = (resultType.classifier as? IrClassSymbol)?.owner ?: return false
+        val resultParameter = resultOwner.typeParameters.singleOrNull() ?: return false
+        if (!resultOwner.isInterface || resultParameter.variance != Variance.OUT_VARIANCE ||
+            publishedFamilyOrNull(resultOwner) == null
+        ) {
+            return false
+        }
+        val argument = resultType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+        val argumentParameter = (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        return argument.variance == Variance.INVARIANT && argumentParameter?.owner === ownerParameter
+    }
+
     private fun IrSimpleFunction.isDirectMethodGenericProducerMember(
         ownerParameter: IrTypeParameter,
     ): Boolean {
@@ -1619,6 +1725,11 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
     }
     val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
         ?: error("External reified-interface member '${source.name}' has no producer semantic family")
+    val publishedMemberRole = externalDeclarations.publishedGenericInterfaceFamilyOrNull(owner)
+        ?.declaredMembers
+        ?.singleOrNull { member -> member.logicalMemberKey == binding.family.logicalMemberKey }
+        ?.role
+        ?: error("External reified-interface member '${source.name}' has no published member role")
     val ownerRelativeBounds = source.dotNetDirectOwnerRelativeMethodBoundsOrNull(owner)
         ?: error("External reified-interface member '${source.name}' has unsupported owner-relative bounds")
     context.irFactory.buildFun {
@@ -1661,6 +1772,15 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
             }
         context.genericOwnerCapabilityDeclarations += this
         context.genericOwnerCapabilityDeclarations += parameters
+        if (publishedMemberRole ==
+            DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
+        ) {
+            // The producer's semantic slot returns object so it can preserve an ordinary foreign
+            // nested I<T> which does not implement Kotlin's sibling capability. Reconstruct that
+            // same carrier from the published structural role; choosing the nested capability in
+            // this consumer would create an incompatible MethodRef across assembly boundaries.
+            context.genericOwnerForeignDispatchDeclarations += this
+        }
         context.externalGenericOwnerPhysicalSlots[this] = DotNetBoundGenericOwnerPhysicalSlot(
             binding.library,
             binding.family,

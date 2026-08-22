@@ -276,7 +276,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         // capability interface.
         val privateCapabilityOwners = callRoutes.asSequence()
             .filter { route ->
-                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
+                route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
+                        route.routeRequirement ==
+                        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
             }
             .map(DotNetGenericOwnerCallRoutePlan::calleeOwner)
             .toSet()
@@ -976,7 +978,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
 
         callRoutes.forEach { route ->
-            if (route.routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY) {
+            if (route.routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY &&
+                route.routeRequirement !=
+                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
+            ) {
                 return@forEach
             }
             val source = route.callee.let { candidate ->
@@ -1121,7 +1126,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             context.genericOwnerCapabilityCallTargets[route.call] = slot
         }
         val missing = callRoutes.filter { route ->
-            route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY &&
+            (route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
+                    route.routeRequirement ==
+                    DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY) &&
                     route.call !in context.genericOwnerCapabilityCallTargets &&
                     context.genericOwnerArchitecturePlans[route.calleeOwner]
                         ?.isReifiedByGenericOwnerRehearsal == true
@@ -1187,6 +1194,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
             val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
                 ?: return@forEachIndexed
+            val exactResultNeedsSemanticRoute =
+                source.returnType.containsReifiedVariantOwnerApplicationOf(route.calleeOwner) &&
+                        binding.family.semanticHookMethodName != null
             val externalDefault = context.externalDefaultArgumentDispatchers[route.call.symbol.owner]
             if (externalDefault != null) {
                 val physicalMethodName = binding.family.defaultCapabilityMethodName
@@ -1208,31 +1218,33 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 return@forEachIndexed
             }
             if (route.receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION) {
-                if (route.call.superQualifierSymbol == null) return@forEachIndexed
-                val semanticOwnerPath = binding.family.semanticHookOwnerPath
-                    ?: return@forEachIndexed
-                val semanticMethodName = binding.family.semanticHookMethodName
-                    ?: return@forEachIndexed
-                val semanticSlot = externalSemanticSlots.getOrPut(source) {
-                    createDetachedPrototypeMember(
-                        owner = route.calleeOwner,
-                        source = source,
-                        role = DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
-                        memberIndex = index,
-                    ).function.also { prototype ->
-                        context.genericOwnerCapabilityDeclarations += prototype
-                        context.genericOwnerCapabilityDeclarations += prototype.parameters.drop(1)
-                        context.externalGenericOwnerPhysicalSlots[prototype] =
-                            DotNetBoundGenericOwnerPhysicalSlot(
-                                binding.library,
-                                binding.family,
-                                semanticOwnerPath,
-                                semanticMethodName,
-                            )
+                if (route.call.superQualifierSymbol != null) {
+                    val semanticOwnerPath = binding.family.semanticHookOwnerPath
+                        ?: return@forEachIndexed
+                    val semanticMethodName = binding.family.semanticHookMethodName
+                        ?: return@forEachIndexed
+                    val semanticSlot = externalSemanticSlots.getOrPut(source) {
+                        createDetachedPrototypeMember(
+                            owner = route.calleeOwner,
+                            source = source,
+                            role = DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                            memberIndex = index,
+                        ).function.also { prototype ->
+                            context.genericOwnerCapabilityDeclarations += prototype
+                            context.genericOwnerCapabilityDeclarations += prototype.parameters.drop(1)
+                            context.externalGenericOwnerPhysicalSlots[prototype] =
+                                DotNetBoundGenericOwnerPhysicalSlot(
+                                    binding.library,
+                                    binding.family,
+                                    semanticOwnerPath,
+                                    semanticMethodName,
+                                )
+                        }
                     }
+                    context.genericOwnerCapabilityCallTargets[route.call] = semanticSlot
+                    return@forEachIndexed
                 }
-                context.genericOwnerCapabilityCallTargets[route.call] = semanticSlot
-                return@forEachIndexed
+                if (!exactResultNeedsSemanticRoute) return@forEachIndexed
             }
             val slot = externalSlots.getOrPut(source) {
                 createDetachedPrototypeMember(
@@ -1247,6 +1259,13 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     // external C<T>; its implicit receiver must therefore be remapped to the
                     // producer's non-generic capability as well as its explicit value slots.
                     context.genericOwnerCapabilityDeclarations += prototype.parameters
+                    if (exactResultNeedsSemanticRoute) {
+                        // The producer's projected Nested<T> capability result is an object
+                        // carrier: it may contain either Kotlin's sibling capability or an
+                        // ordinary foreign natural construction. Reconstruct that same MethodRef
+                        // result instead of narrowing it to the nested capability in this DLL.
+                        context.genericOwnerForeignDispatchDeclarations += prototype
+                    }
                     context.externalGenericOwnerPhysicalSlots[prototype] =
                         DotNetBoundGenericOwnerPhysicalSlot(
                             binding.library,
@@ -1521,6 +1540,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
                 if (semanticStateWriteFields.isNotEmpty() && member in openOutputs) {
                     add(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE)
+                }
+                if (member.returnType.containsReifiedVariantOwnerApplicationOf(owner) &&
+                    memberAccesses.getValue(member).transitiveReads.any(semanticStateWriteFields::contains)
+                ) {
+                    // A final output can need the same split as an open output. In particular,
+                    // Nested<T> state may admit a covariantly widened Nested<A> carrier which is
+                    // not the CLR construction Nested<!T>. Keep the body/state in the semantic
+                    // hook and let the natural typed entry perform the exact CLR view cast.
+                    add(DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT)
                 }
                 if (member in abstractBroadPropertyGetters) {
                     add(DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION)
@@ -2191,6 +2219,24 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         return false
     }
 
+    private fun IrType.containsReifiedVariantOwnerApplicationOf(owner: IrClass): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        val classifier = (simpleType.classifier as? IrClassSymbol)?.owner
+        if (classifier != null &&
+            (classifier in context.reifiedGenericInterfaces ||
+                    externalDeclarations.hasReifiedGenericInterface(classifier)) &&
+            classifier.typeParameters.zip(simpleType.arguments).any { pair ->
+                pair.first.variance != Variance.INVARIANT &&
+                        (pair.second as? IrTypeProjection)?.type?.referencesGenericOwnerParameter(owner) == true
+            }
+        ) {
+            return true
+        }
+        return simpleType.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.containsReifiedVariantOwnerApplicationOf(owner) == true
+        }
+    }
+
     private fun IrType.toGenericOwnerSemanticType(owner: IrClass): IrType {
         val ownerErasure = IrTypeSubstitutor(
             owner.genericOwnerParameters().associate { parameter ->
@@ -2399,9 +2445,17 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         } else {
                             receiverProvenance(target.receiver)
                         }
+                        val exactResultNeedsSemanticRoute =
+                            target.callee.returnType.containsReifiedVariantOwnerApplicationOf(target.owner) &&
+                                    target.localFamily?.roles?.contains(
+                                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+                                    ) == true
                         val requirement = when {
                             target.localFamily == null ->
                                 DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED
+                            provenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION &&
+                                    exactResultNeedsSemanticRoute ->
+                                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
                             provenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION -> {
                                 check(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in target.localFamily.roles) {
                                     "Internal .NET backend error: an exact generic-owner call lacks a typed entry"
@@ -2953,8 +3007,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 function.parameters.forEach { parameter ->
                     if (parameter.kind == IrParameterKind.DispatchReceiver) return@forEach
                     val isTypedOwnerInput = parameter.type.referencesGenericOwnerParameter(owner) && when {
-                        isOwnerConstructor -> true
-                        member != null -> parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)
+                        isOwnerConstructor ->
+                            !parameter.type.containsReifiedVariantOwnerApplicationOf(owner)
+                        member != null ->
+                            parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN) &&
+                                    !parameter.type.containsReifiedVariantOwnerApplicationOf(owner)
                         else -> false
                     }
                     addProvenance(

@@ -334,11 +334,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             } else {
                 null
             }
-            val genericOwnerRelativeSemanticTarget = if (hasOwnerRelativeMethodBound) {
-                context.genericOwnerCapabilityDispatchers[implementation]
-            } else {
-                null
-            }
+            // A reified class owner may already have selected an object-domain dispatcher for
+            // this implementation (for example a Nested<T> result backed by semantic state).
+            // The interface capability must compose with that stronger decision instead of
+            // calling the public typed entry and narrowing the result too early.
+            val genericOwnerSemanticTarget = context.genericOwnerCapabilityDispatchers[implementation]
             if ((implementation.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true &&
                 !implementationIsDefault
             ) {
@@ -403,7 +403,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                             // MethodImpls. Reusing the base's private dispatcher would violate
                             // CLR accessibility even though the base family itself is shared.
                             (plan.target in nonGenericOwnerRelativeImplementations ||
-                                    genericOwnerRelativeSemanticTarget == null)
+                                    genericOwnerSemanticTarget == null)
                         ) {
                             createNonGenericOwnerRelativeImplementation(
                                 plan,
@@ -413,7 +413,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         } else {
                             null
                         }
-                        val semanticTarget = genericOwnerRelativeSemanticTarget
+                        val semanticTarget = genericOwnerSemanticTarget
                             ?: nonGenericImplementation?.semanticImplementation
                             ?: plan.target
                         val capabilityBridge = createForwardingBridge(
