@@ -34,6 +34,14 @@ public interface RehearsalSeparateProducer<out T> {
     public fun produce(): T
 }
 
+// First general-family prerequisite for Iterable/Collection/Set: one covariant owner combines
+// an owner-independent operation with an owner-dependent producer operation.
+public interface RehearsalSeparateGeneralCursor<out T> {
+    public fun hasGeneralNext(): Boolean
+
+    public fun nextGeneral(): T
+}
+
 public interface RehearsalSeparateSecondaryProducer<out T> {
     public fun produceSecondary(): T
 }
@@ -526,6 +534,16 @@ public class RehearsalSeparateProducerReader {
         producer === expected
 }
 
+public class RehearsalSeparateGeneralCursorReader {
+    public fun read(cursor: RehearsalSeparateGeneralCursor<Any?>): Any? =
+        if (cursor.hasGeneralNext()) cursor.nextGeneral() else null
+
+    public fun same(
+        cursor: RehearsalSeparateGeneralCursor<Any?>,
+        expected: Any?,
+    ): Boolean = cursor === expected
+}
+
 public class RehearsalSeparateNestedBox<T>(initial: T) {
     private var value: T = initial
 
@@ -865,6 +883,13 @@ public class RehearsalSeparateProducerValue<T>(private val value: T) :
     public override fun produce(): T = value
 }
 
+public class RehearsalSeparateGeneralCursorValue<T>(private val value: T) :
+    RehearsalSeparateGeneralCursor<T> {
+    public override fun hasGeneralNext(): Boolean = true
+
+    public override fun nextGeneral(): T = value
+}
+
 public class RehearsalSeparateAbstractMethodGenericProducerValue<T>(private val value: T) :
     RehearsalSeparateAbstractMethodGenericProducer<T> {
     public override fun <R> produceAbstractGeneric(value: R): T = this.value
@@ -1143,6 +1168,15 @@ fun box(): String {
         return "fail: separate broad producer"
     }
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
+    val exactGeneralCursor: RehearsalSeparateGeneralCursor<Int> =
+        RehearsalSeparateGeneralCursorValue(33)
+    val broadGeneralCursor: RehearsalSeparateGeneralCursor<Any?> = exactGeneralCursor
+    if (!exactGeneralCursor.hasGeneralNext() || exactGeneralCursor.nextGeneral() != 33 ||
+        RehearsalSeparateGeneralCursorReader().read(broadGeneralCursor) != 33 ||
+        !RehearsalSeparateGeneralCursorReader().same(broadGeneralCursor, exactGeneralCursor)
+    ) {
+        return "fail: separate mixed general cursor family"
+    }
     val readOnlyPropertyChild: RehearsalSeparateReadOnlyPropertyChild<String> =
         RehearsalSeparateReadOnlyPropertyChildValue(
             "separate-read-only-parent",
