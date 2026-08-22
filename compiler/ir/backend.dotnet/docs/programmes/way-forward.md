@@ -1250,12 +1250,24 @@ dispatch preserves the capability fast path and otherwise invokes the raw C#
 getter through its unique natural construction, boxing only at the local
 reflection join before returning the primitive result.
 
-Next materialize the optional fixed-barrier direct input in the same general
-family as the nested semantic input and property: the structural equivalent of
-`contains(T)` plus `containsAll(Collection<T>)`. Only after that combined
-natural/exact/semantic product is closed should the Runtime-owned
-`Collection<T>`/`Set<T>` graph be considered. Defaults, general overload sets,
-diamonds, and mixed or multiple type parameters remain later gates.
+The optional fixed-barrier direct input is now materialized in that same
+general family. One canonical-only Runtime generic-interface parent may
+supply the authoritative `SpecialBridgeMethods` policy, but only when the
+direct member resolves to that exact parent. It remains ordinary KLIB/CLR
+inheritance rather than a fabricated reified-family ancestor. ABI/runtime
+surface 48 carries the policy to Kotlin capability dispatch, generated C#
+adapters, and a bounded precompiled-C# fallback. Exact calls and owner state
+remain `!T`; only widened candidate input crosses `object`, and a wrong shape
+returns the upstream result before the typed body is called. See
+[`../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](../archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md).
+
+Next derive and migrate the smallest atomic Runtime `Collection<T>`/Stdlib
+`Set<T>` producer graph onto this general family. The migration must preserve
+Common declaration semantics, source-built Runtime/Stdlib ownership, ordinary
+C# authoring, one identity, and typed CLR storage/calls as the normal route.
+Do not pull mutable collections, Map, defaults, arbitrary overload sets, or
+multiple owner parameters into that commit unless the product graph proves
+they are inseparable.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

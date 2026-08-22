@@ -705,6 +705,13 @@ internal object DotNetRuntimeTypes {
     fun supportsCSharpSourceAuthoring(irClass: IrClass): Boolean =
         DotNetClassifierInfo.derive(irClass).isCharSequence
 
+    /** Runtime interfaces whose ordinary CLR TypeDef fully exposes inherited C# obligations. */
+    fun supportsCSharpInheritedSourceAuthoring(irClass: IrClass): Boolean {
+        if (supportsCSharpSourceAuthoring(irClass)) return true
+        val info = genericInterfaceDescriptorFor(irClass)?.info ?: return false
+        return info.declaredClassInfo == null && info.exactClassInfo == null
+    }
+
     /** The non-generic implementation capability for the classified CharSequence carrier. */
     fun charSequenceImplementationClassInfo(irClass: IrClass): DotNetIlClassInfo? =
         charSequenceClass.takeIf { DotNetClassifierInfo.derive(irClass).isCharSequence }
