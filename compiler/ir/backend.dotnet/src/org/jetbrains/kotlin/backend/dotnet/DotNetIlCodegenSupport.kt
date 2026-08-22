@@ -738,6 +738,8 @@ internal class DotNetIlTypeMapper private constructor(
     private val genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction>,
     private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction>,
+    private val genericOwnerWrongShapePolicies:
+            Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy>,
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration>,
     private val genericOwnerCapabilityBearingDeclarations: Set<IrDeclaration>,
     private val genericOwnerForeignDispatchDeclarations: Set<IrDeclaration>,
@@ -769,6 +771,8 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
         genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
+        genericOwnerWrongShapePolicies:
+                Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = emptyMap(),
         genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
         genericOwnerCapabilityBearingDeclarations: Set<IrDeclaration> = emptySet(),
         genericOwnerForeignDispatchDeclarations: Set<IrDeclaration> = emptySet(),
@@ -805,6 +809,7 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerReflectionCapabilities,
         genericOwnerCapabilityCallTargets,
         genericOwnerForeignDispatchCallTargets,
+        genericOwnerWrongShapePolicies,
         genericOwnerCapabilityDeclarations,
         genericOwnerCapabilityBearingDeclarations,
         genericOwnerForeignDispatchDeclarations,
@@ -838,6 +843,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets,
+            genericOwnerWrongShapePolicies,
             genericOwnerCapabilityDeclarations,
             genericOwnerCapabilityBearingDeclarations,
             genericOwnerForeignDispatchDeclarations,
@@ -894,6 +900,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets,
+            genericOwnerWrongShapePolicies,
             genericOwnerCapabilityDeclarations,
             genericOwnerCapabilityBearingDeclarations,
             genericOwnerForeignDispatchDeclarations,
@@ -1410,6 +1417,10 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericOwnerForeignDispatchCallTarget(call: IrCall): IrSimpleFunction? =
         genericOwnerForeignDispatchCallTargets[call]
+
+    fun genericOwnerWrongShapePolicy(function: IrSimpleFunction): DotNetCSharpWrongShapePolicy? =
+        genericOwnerWrongShapePolicies[function]
+            ?: function.allOverridden().firstNotNullOfOrNull(genericOwnerWrongShapePolicies::get)
 
     /** Resolves a producer-recorded semantic carrier without inferring whether a slot selected it. */
     fun genericOwnerSemanticCapabilityTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {

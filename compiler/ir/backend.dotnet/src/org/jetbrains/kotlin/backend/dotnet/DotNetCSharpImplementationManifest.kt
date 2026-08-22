@@ -923,6 +923,7 @@ internal fun collectDotNetCSharpImplementationManifest(
     reifiedGenericInterfaces: Set<IrClass>,
     genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
+    genericOwnerCSharpWrongShapePolicies: Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy>,
 ): DotNetCSharpImplementationManifest {
     fun IrClass.isCSharpSourceAuthorableInterface(): Boolean {
         if (!isInterface || fileOrNull !in files || this !in preLoweringDeclarationKeys) return false
@@ -997,7 +998,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                         library.artifact.assemblyName.equals(externalParentAssembly, ignoreCase = true)
                     }
                     val isRuntimeManifestParent =
-                        superInterface?.let(DotNetRuntimeTypes::supportsCSharpSourceAuthoring) == true
+                        superInterface?.let(DotNetRuntimeTypes::supportsCSharpInheritedSourceAuthoring) == true
                     if (
                         !isSameAssemblyParent &&
                         !isExternalKotlinLibraryParent &&
@@ -1153,7 +1154,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                         } else {
                             null
                         },
-                        wrongShapePolicy = null,
+                        wrongShapePolicy = genericOwnerCSharpWrongShapePolicies[source],
                         erasedOwnerRelativeConstraints = erasedOwnerRelativeConstraints,
                         overriddenLogicalMemberKeys = overriddenLogicalMemberKeys(source),
                         slots = slots,

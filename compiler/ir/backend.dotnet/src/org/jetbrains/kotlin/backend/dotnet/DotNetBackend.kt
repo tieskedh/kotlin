@@ -229,6 +229,8 @@ object DotNetBackend {
                         context.externalGenericOwnerCapabilitySupertypeProviders,
                     genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
                     genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
+                    genericOwnerWrongShapePolicies =
+                        context.genericOwnerWrongShapePolicies,
                     genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                     genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
                     genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
@@ -367,6 +369,8 @@ object DotNetBackend {
                     context.externalGenericOwnerCapabilitySupertypeProviders,
                 genericOwnerReflectionCapabilityInterfaces = context.genericOwnerReflectionCapabilityInterfaces,
                 genericOwnerCapabilitySlots = context.genericOwnerCapabilitySlots,
+                genericOwnerWrongShapePolicies =
+                    context.genericOwnerWrongShapePolicies,
                 genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                 genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
                 genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,

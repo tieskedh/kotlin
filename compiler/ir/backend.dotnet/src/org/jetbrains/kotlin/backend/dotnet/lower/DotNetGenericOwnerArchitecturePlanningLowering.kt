@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.common.defaultArgumentsOriginalFunction
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
+import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.common.ir.moveBodyTo
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
@@ -63,6 +64,8 @@ import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irImplicitCast
 import org.jetbrains.kotlin.ir.builders.irInt
+import org.jetbrains.kotlin.ir.builders.irIfThen
+import org.jetbrains.kotlin.ir.builders.irIs
 import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -799,11 +802,42 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     }
                     body = context.createIrBuilder(symbol).irBlockBody {
                         val target = semanticHooksBySource[source] ?: source
+                        val sourceMethodSubstitution = source.typeParameters.zip(dispatcherTypeParameters)
+                            .associate { pair -> pair.first.symbol to pair.second.symbol.defaultType }
+                        val sourceMethodSubstitutor =
+                            IrTypeSubstitutor(sourceMethodSubstitution, allowEmptySubstitution = true)
                         val targetMethodSubstitution = target.typeParameters.zip(dispatcherTypeParameters)
                             .associate { pair -> pair.first.symbol to pair.second.symbol.defaultType }
                         val targetMethodSubstitutor =
                             IrTypeSubstitutor(targetMethodSubstitution, allowEmptySubstitution = true)
                         fun targetType(type: IrType): IrType = targetMethodSubstitutor.substitute(type)
+                        specialBridgeMethods.findSpecialWithOverride(source, includeSelf = true)
+                            ?.second
+                            ?.let { info ->
+                                val dispatcherParameters = this@dispatcher.parameters.drop(1)
+                                val sourceParameters = source.parameters.drop(1)
+                                if (info.argumentsToCheck > dispatcherParameters.size ||
+                                    info.argumentsToCheck > sourceParameters.size
+                                ) {
+                                    error(
+                                        "Internal .NET backend error: generic-owner special " +
+                                                "dispatcher argument count mismatch"
+                                    )
+                                }
+                                repeat(info.argumentsToCheck) { index ->
+                                    val parameter = dispatcherParameters[index]
+                                    val checkedType = sourceMethodSubstitutor.substitute(
+                                        sourceParameters[index].type
+                                    )
+                                    if (parameter.type != checkedType) {
+                                        +irIfThen(
+                                            context.irBuiltIns.unitType,
+                                            irNot(irIs(irGet(parameter), checkedType)),
+                                            irReturn(info.defaultValueGenerator(this@dispatcher)),
+                                        )
+                                    }
+                                }
+                            }
                         val call = irCall(target.symbol, targetType(target.returnType)).apply {
                             arguments[0] = irGet(this@dispatcher.parameters[0])
                             dispatcherTypeParameters.forEachIndexed { index, parameter ->

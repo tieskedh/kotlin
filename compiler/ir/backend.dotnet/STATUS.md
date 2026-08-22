@@ -201,6 +201,42 @@ verification, and work state.
   `Set<T>` is considered. See
   [`docs/archive/reified-generic-interface-owner-independent-property-2026-08-22.md`](docs/archive/reified-generic-interface-owner-independent-property-2026-08-22.md).
 
+  The optional fixed barrier is now composed into that same emitted family.
+  `ExactInputFamily<out T>` retains its reified cursor parent and may also
+  inherit the current canonical-only Runtime `Collection<T>` mapping solely
+  when a directly declared member resolves through upstream
+  `SpecialBridgeMethods` to that exact parent. The Runtime parent remains a
+  KLIB plus ordinary CLR `InterfaceImpl` fact; it is not fabricated as another
+  reified-family ancestor. A separate consumer revalidates the parent/provider
+  relationship rather than trusting the published member role alone.
+
+  The exact sibling owns the typed `bool contains(!T)` slot. Kotlin exact and
+  ordinary C# calls remain typed, and the Kotlin implementation's sole state
+  field remains `!T`. Only a widened semantic call carries the candidate as
+  `object`. The generic-class dispatcher performs the authoritative upstream
+  type barrier before narrowing; an incompatible candidate returns `false`.
+  The C# manifest publishes the same one-argument `FALSE` policy, so generated
+  partial implementations also check before entering their typed method.
+
+  A separately compiled non-partial C# implementation names neither compiler
+  ABI interface. The bounded fallback selects one natural construction,
+  resolves and caches the ordinary concrete method by that construction's
+  first CLR type argument, returns `false` before invocation for a wrong
+  candidate, and invokes the typed C# body exactly once for a compatible one.
+  ABI/runtime surface 48 owns the mixed-parent interpretation, policy flow,
+  runtime resolver kind, and helper.
+
+  The feature proof and prior C# foreign-override proof are green under PSI
+  and LightTree on Framework 4.8 and .NET 10. The final full aggregate exits
+  zero. Direct XML audit covers 190 freshly written suites/2,287 tests with
+  zero failures, errors, or skips; the unchanged six-test `dotnet.ir` root
+  makes the target total 191 suites/2,293 tests, all green. Runtime/Stdlib
+  collection TypeDefs remain deliberately unmigrated. The next bounded gate
+  is the smallest atomic Runtime `Collection<T>`/Stdlib `Set<T>` migration on
+  this general representation, keeping typed CLR storage and calls as the
+  normal route. See
+  [`docs/archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](docs/archive/reified-generic-interface-fixed-barrier-composition-2026-08-22.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

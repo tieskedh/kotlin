@@ -187,7 +187,12 @@ enum class DotNetPublishedGenericInterfaceCapabilityBindingKind {
     REUSED_PARENT,
 }
 
-/** One exact direct logical parent and its parent-parameter to child-parameter mapping. */
+/**
+ * One exact direct reified-family parent and its parent-parameter to child-parameter mapping.
+ *
+ * A canonical-only Runtime generic interface remains authoritative in KLIB plus ordinary CLR
+ * InterfaceImpl metadata; it is not a second reified family and therefore is not copied here.
+ */
 data class DotNetPublishedGenericInterfaceParentContract(
     val logicalOwnerKey: String,
     val parameterMapping: List<Int>,
@@ -693,13 +698,13 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "47"
+    const val ABI_VERSION = "48"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
     const val PHYSICAL_NAME_GRAMMAR_VERSION = "3"
     const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
-    const val CURRENT_RUNTIME_SURFACE_LEVEL = 47
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 48
     const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
     const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"

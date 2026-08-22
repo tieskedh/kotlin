@@ -24,14 +24,14 @@ internal object DotNetGenericInterfaceRuntime {
   {
     .field assembly initonly $typeType 'openDefinition'
     .field assembly initonly string 'methodName'
-    .field assembly initonly bool 'concreteUnaryMethod'
+    .field assembly initonly int32 'unaryResolutionKind'
     .field assembly initonly $methodType 'method'
     .field assembly initonly $entryType 'next'
 
     .method assembly hidebysig specialname rtspecialname instance void .ctor(
         $typeType 'openDefinition',
         string 'methodName',
-        bool 'concreteUnaryMethod',
+        int32 'unaryResolutionKind',
         $methodType 'method',
         $entryType 'next') cil managed
     {
@@ -46,7 +46,7 @@ internal object DotNetGenericInterfaceRuntime {
       stfld string Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'methodName'
       ldarg.0
       ldarg.3
-      stfld bool Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'concreteUnaryMethod'
+      stfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryResolutionKind'
       ldarg.0
       ldarg.s 'method'
       stfld $methodType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'method'
@@ -406,9 +406,9 @@ internal object DotNetGenericInterfaceRuntime {
         $typeType 'openDefinition',
         string 'methodName',
         object[] 'arguments',
-        bool 'concreteUnaryMethod') cil managed
+        int32 'unaryResolutionKind') cil managed
     {
-      .maxstack 6
+      .maxstack 7
       .locals init (
         [0] $typeType[] 'interfaces',
         [1] int32 'index',
@@ -419,7 +419,9 @@ internal object DotNetGenericInterfaceRuntime {
         [6] object 'result',
         [7] $typeType 'runtimeType',
         [8] $stateType 'state',
-        [9] $entryType 'entry'
+        [9] $entryType 'entry',
+        [10] $typeType 'expectedParameterType',
+        [11] object 'fixedBarrierValue'
       )
       ldarg.0
       brtrue.s GIF_InstanceReady
@@ -453,8 +455,8 @@ internal object DotNetGenericInterfaceRuntime {
         call bool ${coreLibraryReference}System.String::op_Equality(string, string)
         brfalse.s GIF_CacheContinue
         ldloc.s 9
-        ldfld bool Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'concreteUnaryMethod'
-        ldarg.s 'concreteUnaryMethod'
+        ldfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryResolutionKind'
+        ldarg.s 'unaryResolutionKind'
         bne.un.s GIF_CacheContinue
         ldloc.s 9
         ldfld $methodType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'method'
@@ -517,7 +519,7 @@ internal object DotNetGenericInterfaceRuntime {
         newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor(string)
         throw
     GIF_ConstructionReady:
-        ldarg.s 'concreteUnaryMethod'
+        ldarg.s 'unaryResolutionKind'
         brtrue.s GIF_ResolveConcreteMethod
         ldloc.2
         ldarg.2
@@ -531,7 +533,17 @@ internal object DotNetGenericInterfaceRuntime {
         newarr ${coreLibraryReference}System.Type
         dup
         ldc.i4.0
+        ldarg.s 'unaryResolutionKind'
+        ldc.i4.1
+        beq.s GIF_ConcreteInterfaceParameter
         ldloc.2
+        callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
+        ldc.i4.0
+        ldelem.ref
+        br.s GIF_ConcreteParameterReady
+    GIF_ConcreteInterfaceParameter:
+        ldloc.2
+    GIF_ConcreteParameterReady:
         stelem.ref
         callvirt instance $methodType ${coreLibraryReference}System.Type::GetMethod(
             string,
@@ -547,11 +559,11 @@ internal object DotNetGenericInterfaceRuntime {
         ldloc.s 8
         ldarg.1
         ldarg.2
-        ldarg.s 'concreteUnaryMethod'
+        ldarg.s 'unaryResolutionKind'
         ldloc.s 4
         ldloc.s 8
         ldfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
-        newobj instance void $entryType::.ctor($typeType, string, bool, $methodType, $entryType)
+        newobj instance void $entryType::.ctor($typeType, string, int32, $methodType, $entryType)
         stfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
         leave.s GIF_MethodReady
       }
@@ -563,6 +575,39 @@ internal object DotNetGenericInterfaceRuntime {
       }
 
     GIF_MethodReady:
+      ldarg.s 'unaryResolutionKind'
+      ldc.i4.2
+      bne.un.s GIF_Invoke
+      ldloc.s 4
+      callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
+      ldc.i4.0
+      ldelem.ref
+      callvirt instance $typeType ${coreLibraryReference}System.Reflection.ParameterInfo::get_ParameterType()
+      stloc.s 10
+      ldarg.3
+      ldc.i4.0
+      ldelem.ref
+      stloc.s 11
+      ldloc.s 11
+      brtrue.s GIF_TestFixedBarrierValue
+      ldloc.s 10
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsValueType()
+      brfalse.s GIF_Invoke
+      ldloc.s 10
+      call $typeType ${coreLibraryReference}System.Nullable::GetUnderlyingType($typeType)
+      brtrue.s GIF_Invoke
+      br.s GIF_FixedBarrierFallback
+    GIF_TestFixedBarrierValue:
+      ldloc.s 10
+      ldloc.s 11
+      callvirt instance bool ${coreLibraryReference}System.Type::IsInstanceOfType(object)
+      brtrue.s GIF_Invoke
+    GIF_FixedBarrierFallback:
+      ldc.i4.0
+      box ${coreLibraryReference}System.Boolean
+      ret
+    GIF_Invoke:
+      nop
       .try
       {
         ldloc.s 4
@@ -610,7 +655,7 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
-          bool)
+          int32)
       ret
     }
 
@@ -631,7 +676,28 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
-          bool)
+          int32)
+      ret
+    }
+
+    .method public hidebysig static object 'InvokeUniqueTypeArgumentUnaryMemberWithFalseBarrier'(
+        object 'instance',
+        $typeType 'openDefinition',
+        string 'methodName',
+        object[] 'arguments') cil managed
+    {
+      .maxstack 5
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      ldarg.3
+      ldc.i4.2
+      call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
+          object,
+          $typeType,
+          string,
+          object[],
+          int32)
       ret
     }
 
@@ -672,6 +738,14 @@ internal object DotNetGenericInterfaceRuntime {
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueConcreteUnaryMember".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type, string, object[])"
+
+    fun invokeUniqueTypeArgumentUnaryMemberWithFalseBarrierCallInstruction(
+        coreLibraryReference: String,
+    ): String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"InvokeUniqueTypeArgumentUnaryMemberWithFalseBarrier".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type, string, object[])"
 
     fun isOpenGenericInterfaceInstanceCallInstruction(coreLibraryReference: String): String =

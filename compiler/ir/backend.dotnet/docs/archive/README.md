@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-fixed-barrier-composition-2026-08-22.md`](reified-generic-interface-fixed-barrier-composition-2026-08-22.md)
+  records ABI/runtime surface 48's upstream-authorized `contains(T)` barrier,
+  mixed reified/erased Runtime parent validation, typed Kotlin and C# paths,
+  ordinary precompiled C# fallback, and full-gate evidence.
 - [`reified-generic-interface-owner-independent-property-2026-08-22.md`](reified-generic-interface-owner-independent-property-2026-08-22.md)
   records ABI/runtime surface 47's read-only primitive Property role, natural
   CLR Property row, method-only semantic capability, raw C# getter fallback,

@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceView
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
@@ -9594,7 +9595,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                     family.exactOwnerPath != family.canonicalOwnerPath) {
                 "The hostile input family did not publish one distinct exact authoring owner"
             }
-            check(family.members.size == 4) {
+            check(family.members.size == 5) {
                 "The exact-interface manifest copied, lost, or duplicated declared members"
             }
             val acceptsAll = checkNotNull(family.members.singleOrNull { member ->
@@ -9649,7 +9650,43 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                     } == true) {
                 "The owner-independent property lost its natural C# Property row: $exactSize"
             }
-            check(family.members.filterNot { member -> member === acceptsAll }.all { member ->
+            val contains = checkNotNull(family.members.singleOrNull { member ->
+                member.sourceName == "contains"
+            }) {
+                "The exact-interface manifest has no unique fixed-barrier input: " +
+                        family.members.map { member -> member.sourceName to member.kind }
+            }
+            check(contains.kind == DotNetCSharpMemberKind.METHOD &&
+                    contains.authoringView == DotNetCSharpInterfaceView.EXACT &&
+                    contains.wrongShapePolicy?.let { policy ->
+                        policy.checkedParameterCount == 1 &&
+                                policy.fallback == DotNetCSharpWrongShapeFallback.FALSE &&
+                                policy.fallbackParameterIndex == null
+                    } == true &&
+                    contains.slots.mapTo(linkedSetOf()) { slot -> slot.role } ==
+                        linkedSetOf(
+                            DotNetCSharpSlotRole.ERASED,
+                            DotNetCSharpSlotRole.EXACT,
+                        ) &&
+                    contains.slots.single { slot ->
+                        slot.role == DotNetCSharpSlotRole.ERASED
+                    }.let { slot ->
+                        slot.ownerPath == family.canonicalOwnerPath &&
+                                slot.returnType == "bool" &&
+                                slot.parameterTypes == listOf("object")
+                    } &&
+                    contains.slots.single { slot ->
+                        slot.role == DotNetCSharpSlotRole.EXACT
+                    }.let { slot ->
+                        slot.ownerPath == family.exactOwnerPath &&
+                                slot.returnType == "bool" &&
+                                slot.parameterTypes == listOf("!0")
+                    }) {
+                "The fixed-barrier input did not select the exact typed C# slot: $contains"
+            }
+            check(family.members.filterNot { member ->
+                member === acceptsAll || member === contains
+            }.all { member ->
                 member.authoringView == DotNetCSharpInterfaceView.DECLARED &&
                         member.slots.any { slot ->
                             slot.role == DotNetCSharpSlotRole.DECLARED &&
@@ -9687,9 +9724,22 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public int exactSize => 1;
 
+                public int Size => 1;
+
+                public bool IsEmpty() => false;
+
+                public bool ContainsErased(object element) =>
+                    element is string && contains((string)element);
+
+                public Kotlin.Collections.Iterator GetIterator() => null;
+
+                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+
                 public string nextExact() => Value;
 
                 public ExactInputCursor<string> exactCursor() => this;
+
+                public bool contains(string element) => element == Value;
 
                 public bool acceptsAll(ExactInputFamily<string> values) =>
                     object.Equals(values.nextExact(), Value);
@@ -9711,9 +9761,21 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public int exactSize => 1;
 
+                public int Size => 1;
+
+                public bool IsEmpty() => false;
+
+                public bool ContainsErased(object element) => contains(element);
+
+                public Kotlin.Collections.Iterator GetIterator() => null;
+
+                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+
                 public object nextExact() => Value;
 
                 public ExactInputCursor<object> exactCursor() => this;
+
+                public bool contains(object element) => object.Equals(element, Value);
 
                 public bool acceptsAll(ExactInputFamily<object> values) =>
                     object.Equals(values.nextExact(), Value);
@@ -9735,9 +9797,22 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public int exactSize => 1;
 
+                public int Size => 1;
+
+                public bool IsEmpty() => false;
+
+                public bool ContainsErased(object element) =>
+                    element is int && contains((int)element);
+
+                public Kotlin.Collections.Iterator GetIterator() => null;
+
+                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+
                 public int nextExact() => Value;
 
                 public ExactInputCursor<int> exactCursor() => this;
+
+                public bool contains(int element) => element == Value;
 
                 public bool acceptsAll(ExactInputFamily<int> values) =>
                     values.nextExact() == Value;
@@ -9765,12 +9840,18 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public static int Main()
                 {
+                    if (!Array.Exists(
+                            typeof(ExactInputFamily<string>).GetInterfaces(),
+                            parent => parent == typeof(Kotlin.Collections.Collection)))
+                        throw new InvalidOperationException(
+                            "the natural CLR family lost its erased Runtime Collection parent");
                     var value = new CSharpExactStringFamily("csharp-exact");
                     var sameValue = new CSharpExactStringFamily("csharp-exact");
                     var reader = new ExactInputFamilyReader();
                     if (value.nextExact() != "csharp-exact" ||
                         !object.ReferenceEquals(value.exactCursor(), value) ||
                         !value.acceptsAll(sameValue) ||
+                        !value.contains("csharp-exact") ||
                         !value.hasExactNext() ||
                         !value.hasExactValues() ||
                         value.exactSize != 1 ||
@@ -9778,6 +9859,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         throw new InvalidOperationException(
                             "the ordinary exact C# surface did not dispatch");
                     if (!object.Equals(reader.read(value), "csharp-exact") ||
+                        !reader.contains(value, "csharp-exact") ||
+                        reader.contains(value, 42) ||
                         !ReaderAcceptsAll(reader, value, sameValue, "generated string exact input") ||
                         !reader.same(value, value))
                         throw new InvalidOperationException(
@@ -9791,6 +9874,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                             "the generated broad bridge changed nested-input semantics");
                     var exactInt = new CSharpExactIntFamily(37);
                     if (!exactInt.acceptsAll(new CSharpExactIntFamily(37)) ||
+                        !reader.contains(exactInt, 37) ||
+                        reader.contains(exactInt, "wrong") ||
                         !object.Equals(reader.read(exactInt), 37) ||
                         reader.size(exactInt) != 1)
                         throw new InvalidOperationException(
@@ -9811,6 +9896,9 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         raw.BroadAcceptCalls != 0 ||
                         !object.Equals(reader.read(raw), "raw-exact") ||
                         reader.size(raw) != 1 ||
+                        !reader.contains(raw, "raw-exact") ||
+                        reader.contains(raw, 42) ||
+                        raw.ContainsCalls != 1 ||
                         !ReaderAcceptsAll(reader, raw, rawPeer, "precompiled raw exact input") ||
                         raw.AcceptCalls != 2 || raw.BroadAcceptCalls != 0 ||
                         !reader.same(raw, raw))
@@ -9857,6 +9945,8 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public int BroadAcceptCalls { get; private set; }
 
+                public int ContainsCalls { get; private set; }
+
                 public RawExactStringFamily(string value)
                 {
                     Value = value;
@@ -9866,9 +9956,26 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public int exactSize => 1;
 
+                public int Size => 1;
+
+                public bool IsEmpty() => false;
+
+                public bool ContainsErased(object element) =>
+                    element is string && contains((string)element);
+
+                public Kotlin.Collections.Iterator GetIterator() => null;
+
+                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+
                 public string nextExact() => Value;
 
                 public ExactInputCursor<string> exactCursor() => this;
+
+                public bool contains(string element)
+                {
+                    ContainsCalls++;
+                    return element == Value;
+                }
 
                 public bool acceptsAll(ExactInputFamily<string> values)
                 {
@@ -9898,9 +10005,22 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public int exactSize => 1;
 
+                public int Size => 1;
+
+                public bool IsEmpty() => false;
+
+                public bool ContainsErased(object element) =>
+                    element is string && contains((string)element);
+
+                public Kotlin.Collections.Iterator GetIterator() => null;
+
+                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+
                 public string nextExact() => Value;
 
                 public ExactInputCursor<string> exactCursor() => this;
+
+                public bool contains(string element) => element == Value;
 
                 public bool hasExactValues() => true;
             }

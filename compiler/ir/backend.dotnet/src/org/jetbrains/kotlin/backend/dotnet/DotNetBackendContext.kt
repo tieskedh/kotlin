@@ -214,6 +214,9 @@ internal class DotNetBackendContext(
     val genericOwnerReflectionCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Rehearsal-only logical member to its producer-owned capability Interface MethodDef. */
     val genericOwnerCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Upstream special-bridge policy required by semantic adapters and foreign dispatch. */
+    val genericOwnerWrongShapePolicies:
+        MutableMap<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = linkedMapOf()
     /** External reified-interface member to its producer-bound, un-emitted semantic slot stub. */
     val externalReifiedGenericInterfaceCapabilitySlots:
         MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
