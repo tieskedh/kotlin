@@ -489,6 +489,16 @@ inherited Collection candidate-input convention, trimming, NativeAOT,
 performance, and tooling remain open gates. See the
 [`surface 54 archive`](../archive/runtime-reified-mutable-collection-2026-08-23.md).
 
+Surface 55 composes natural invariant `MutableSet<T>` over natural `Set<T>`
+and `MutableCollection<T>`. The child redeclares its mutable iterator and
+mutation slots, while both child and mutable-collection bulk MethodDefs reuse
+the same relative generic input. CLR interface maps prove both Kotlin paths;
+one warnings-as-errors C# method implements both contracts. The Kotlin set
+keeps one identity and `!T` state. Widened read-only Set candidate inputs remain
+the separate covariant-parent gate rather than forcing the invariant child or
+its state into the object domain. See the
+[`surface 55 archive`](../archive/runtime-reified-mutable-set-2026-08-23.md).
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common

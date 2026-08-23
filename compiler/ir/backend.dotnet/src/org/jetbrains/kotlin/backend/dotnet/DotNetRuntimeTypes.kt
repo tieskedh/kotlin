@@ -248,7 +248,12 @@ internal object DotNetRuntimeTypes {
     val setType = DotNetIlValueType.UserClass(setBase)
 
     private val mutableSetGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.MutableSet")
+        runtimeInterface(
+            "Kotlin.Collections.MutableSet",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+            declaredVariance = Variance.INVARIANT,
+        )
     private val mutableSetBase = mutableSetGenericInterfaceInfo.canonicalClassInfo
     val mutableSetType = DotNetIlValueType.UserClass(mutableSetBase)
 
@@ -327,6 +332,10 @@ internal object DotNetRuntimeTypes {
             collectionGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredMutableCollection = openRuntimeInterfaceType(
+            mutableCollectionGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
         val exactCollection = openRuntimeInterfaceType(
             collectionGenericInterfaceInfo,
             DotNetGenericInterfaceView.EXACT,
@@ -359,6 +368,10 @@ internal object DotNetRuntimeTypes {
         setGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
             declaredSet,
             exactCollection,
+        )
+        mutableSetGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(
+            declaredSet,
+            declaredMutableCollection,
         )
         listGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredCollection)
         listGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
