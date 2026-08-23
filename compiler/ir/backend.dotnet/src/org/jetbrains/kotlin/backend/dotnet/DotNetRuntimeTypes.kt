@@ -39,12 +39,14 @@ import org.jetbrains.kotlin.types.Variance
  * KProperty0/1/2 and their mutable variants use the same erased-identity rule and inherit the
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
- * Kotlin read-only and mutable Iterable, Iterator, Collection, and List families use one
- * declaration-erased interface each.
- * Their object-shaped slots preserve identity across Kotlin projections and value/reference
- * constructions without a second CLR-generic capability ABI. The five currently supported
- * primitive Iterator subclasses still alias the erased Iterator identity until their ordinary
- * stdlib classes are produced. CLR collection interfaces remain explicit interop concerns.
+ * The generic-owner rehearsal adds natural CLR-generic views for the complete read-only
+ * Iterator/Iterable/Collection/Set/ListIterator/List closure. Exact siblings own input members
+ * which cannot legally appear on a covariant CLR interface, while the accepted arity-zero
+ * identities remain declaration-semantic capabilities. Mutable collection families retain their
+ * declaration-erased mappings until their complete dependency gate is selected. The five
+ * currently supported primitive Iterator subclasses still alias the erased Iterator identity
+ * until their ordinary stdlib classes are produced. CLR collection interfaces remain explicit
+ * interop concerns.
  */
 internal object DotNetRuntimeTypes {
     val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
@@ -149,7 +151,11 @@ internal object DotNetRuntimeTypes {
     val iteratorType = DotNetIlValueType.UserClass(iteratorBase)
 
     private val listIteratorGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.ListIterator")
+        runtimeInterface(
+            "Kotlin.Collections.ListIterator",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val listIteratorBase = listIteratorGenericInterfaceInfo.canonicalClassInfo
     private val listIteratorType = DotNetIlValueType.UserClass(listIteratorBase)
 
@@ -193,7 +199,12 @@ internal object DotNetRuntimeTypes {
     val mutableCollectionType = DotNetIlValueType.UserClass(mutableCollectionBase)
 
     private val listGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.List")
+        runtimeInterface(
+            "Kotlin.Collections.List",
+            hasRehearsalDeclaredView = true,
+            hasRehearsalExactView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val listBase = listGenericInterfaceInfo.canonicalClassInfo
     val listType = DotNetIlValueType.UserClass(listBase)
 
@@ -276,6 +287,14 @@ internal object DotNetRuntimeTypes {
             iterableGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredIterator = openRuntimeInterfaceType(
+            iteratorGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val declaredListIterator = openRuntimeInterfaceType(
+            listIteratorGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
         val declaredCollection = openRuntimeInterfaceType(
             collectionGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
@@ -288,6 +307,11 @@ internal object DotNetRuntimeTypes {
             setGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredList = openRuntimeInterfaceType(
+            listGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        listIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         collectionGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterable)
         collectionGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
             declaredCollection,
@@ -296,6 +320,11 @@ internal object DotNetRuntimeTypes {
         setGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredCollection)
         setGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
             declaredSet,
+            exactCollection,
+        )
+        listGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredCollection)
+        listGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
+            declaredList,
             exactCollection,
         )
     }
@@ -319,10 +348,10 @@ internal object DotNetRuntimeTypes {
         "next" to RuntimeGenericInterfaceMethodNames("Next", typed = "Next"),
     )
     private val listIteratorMethods = iteratorMethods + mapOf(
-        "hasPrevious" to RuntimeGenericInterfaceMethodNames("HasPrevious"),
-        "previous" to RuntimeGenericInterfaceMethodNames("Previous"),
-        "nextIndex" to RuntimeGenericInterfaceMethodNames("NextIndex"),
-        "previousIndex" to RuntimeGenericInterfaceMethodNames("PreviousIndex"),
+        "hasPrevious" to RuntimeGenericInterfaceMethodNames("HasPrevious", typed = "HasPrevious"),
+        "previous" to RuntimeGenericInterfaceMethodNames("Previous", typed = "Previous"),
+        "nextIndex" to RuntimeGenericInterfaceMethodNames("NextIndex", typed = "NextIndex"),
+        "previousIndex" to RuntimeGenericInterfaceMethodNames("PreviousIndex", typed = "PreviousIndex"),
     )
     private val mutableIteratorMethods = mapOf(
         "remove" to RuntimeGenericInterfaceMethodNames("Remove"),
@@ -366,18 +395,27 @@ internal object DotNetRuntimeTypes {
         "clear" to RuntimeGenericInterfaceMethodNames("Clear"),
     )
     private val listMethods = collectionMethods + mapOf(
-        // List is outside the atomic Runtime Collection/Set rehearsal and retains its accepted
-        // canonical nested-Collection parameter until that complete family migrates.
-        "containsAll" to RuntimeGenericInterfaceMethodNames("ContainsAll"),
-        "get" to RuntimeGenericInterfaceMethodNames("Get"),
+        // Canonical List owns its historical Collection-shaped slot in addition to the inherited
+        // Collection(object) semantic slot. The exact sibling uses natural Collection<T>.
+        "containsAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "ContainsAll",
+            typed = "ContainsAll",
+            foreignCollectionContainsAllFallback = true,
+        ),
+        "get" to RuntimeGenericInterfaceMethodNames("Get", typed = "Get"),
         "indexOf" to RuntimeGenericInterfaceMethodNames(
             canonical = "IndexOfErased",
+            typed = "IndexOf",
         ),
         "lastIndexOf" to RuntimeGenericInterfaceMethodNames(
             canonical = "LastIndexOfErased",
+            typed = "LastIndexOf",
         ),
-        "listIterator" to RuntimeGenericInterfaceMethodNames("GetListIterator"),
-        "subList" to RuntimeGenericInterfaceMethodNames("SubList"),
+        "listIterator" to RuntimeGenericInterfaceMethodNames(
+            "GetListIterator",
+            typed = "GetListIterator",
+        ),
+        "subList" to RuntimeGenericInterfaceMethodNames("SubList", typed = "SubList"),
     )
     private val mutableListMethods = mapOf(
         "add" to RuntimeGenericInterfaceMethodNames("Add"),
