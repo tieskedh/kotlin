@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-mutable-iterator-foundation-2026-08-23.md`](runtime-reified-mutable-iterator-foundation-2026-08-23.md)
+  records ABI/runtime surface 52's covariant natural `MutableIterator<T>` and
+  `MutableIterable<T>` dependency foundation, declaration-independent Unit
+  dispatch, typed `!T` fields, and the ordinary C# natural return bridge.
 - [`runtime-reified-list-family-2026-08-23.md`](runtime-reified-list-family-2026-08-23.md)
   records ABI/runtime surface 51's natural/exact/semantic Runtime `List<T>`
   and `ListIterator<T>` closure, both iterator overloads, fixed `-1` candidate

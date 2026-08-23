@@ -1319,12 +1319,29 @@ Canonical and natural nested results join without a wrapper or identity change.
 See
 [`../archive/runtime-reified-list-family-2026-08-23.md`](../archive/runtime-reified-list-family-2026-08-23.md).
 
-Next recompute the smallest complete Common dependency family after the
-read-only List closure. Keep mutable collections, Map, defaults, broader
-overload families, and multiple owner parameters on their current mappings
-unless that dependency proof selects one of them atomically. The natural CLR
-route and typed state remain the default; a semantic capability is an
-evidence-backed escape hatch, not the first implementation choice.
+ABI/runtime surface 52 selects the smallest closed mutable dependency
+foundation. Natural covariant `MutableIterator<T>` extends `Iterator<T>` with
+declaration-independent `remove()`. Natural covariant `MutableIterable<T>`
+extends `Iterable<T>` and narrows its iterator result to
+`MutableIterator<T>`. Kotlin implementations preserve one identity and true
+`!T` fields; a value-type widening uses the existing semantic capability only
+at the operation whose constructed view the CLR cannot name.
+
+The general foreign dispatcher now admits declaration-independent Unit
+members, allowing a natural-only C# `Remove()` without a compiler interface.
+The narrowed mutable iterator and inherited read-only iterator results are two
+ordinary CLR slots. Portable C# implements the public narrowed member and one
+explicit natural base-interface forwarder; no generator or erased/exact/
+semantic contract is involved. See
+[`../archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md).
+
+Next recompute the smallest complete Common dependency family after this
+foundation. Keep `MutableListIterator`, input-bearing mutable collections,
+Map, defaults, broader overload families, and multiple owner parameters on
+their current mappings unless that dependency proof selects one of them
+atomically. The natural CLR route and typed state remain the default; a
+semantic capability is an evidence-backed escape hatch, not the first
+implementation choice.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
