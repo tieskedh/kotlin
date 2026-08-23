@@ -10,6 +10,7 @@ enum class Domain {
     Wasm,
     Js,
     Native,
+    DotNet,
     CoreLibs,
     AnalysisApi,
     BuildToolsApi,
@@ -71,6 +72,13 @@ internal object NativeDomainInfo : DomainInfo {
     override val domain = Domain.Native
     override val include: List<String> = listOf("compiler/ir/backend.native", "compiler/ir/ir.objcinterop", "compiler/ir/serialization.native", "native", "kotlin-native")
     override val exclude: List<String> = listOf("native/swift")
+    override val fullyAffectedBy: List<DomainInfo> by lazy { listOf(CoreLibsDomainInfo, CompilerInfrastructureDomainInfo, FrontendDomainInfo, CommonBackendDomainInfo) }
+}
+
+internal object DotNetDomainInfo : DomainInfo {
+    override val domain = Domain.DotNet
+    override val include: List<String> = listOf("compiler/cli/cli-dotnet", "compiler/config.dotnet", "compiler/dotnet.imports", "compiler/frontend.common.dotnet", "compiler/ir/backend.dotnet", "compiler/ir/serialization.dotnet", "dotnet")
+    override val exclude: List<String> = listOf()
     override val fullyAffectedBy: List<DomainInfo> by lazy { listOf(CoreLibsDomainInfo, CompilerInfrastructureDomainInfo, FrontendDomainInfo, CommonBackendDomainInfo) }
 }
 
@@ -154,6 +162,7 @@ val allDomainInfos: List<DomainInfo> by lazy {
         WasmDomainInfo,
         JsDomainInfo,
         NativeDomainInfo,
+        DotNetDomainInfo,
         CoreLibsDomainInfo,
         AnalysisApiDomainInfo,
         BuildToolsApiDomainInfo,
