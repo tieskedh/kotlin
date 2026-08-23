@@ -1304,12 +1304,27 @@ member use selects the semantic or natural view. PSI/LightTree and Framework
 4.8/.NET 10 Kotlin/C# execution are green. See
 [`../archive/runtime-reified-collection-set-family-2026-08-23.md`](../archive/runtime-reified-collection-set-family-2026-08-23.md).
 
-Next recompute the smallest complete Common dependency family after
-Collection/Set. Keep `List<T>`, mutable collections, Map, defaults, overload
-families, and multiple owner parameters on their current mappings unless that
-dependency proof selects one of them atomically. The natural CLR route and
-typed state remain the default; a semantic capability is an evidence-backed
-escape hatch, not the first implementation choice.
+ABI/runtime surface 51 now closes the next complete read-only dependency
+family. Natural covariant `ListIterator<T>` extends `Iterator<T>`. Natural
+covariant `List<T>` extends `Collection<T>` with typed indexed reads, both
+`listIterator` overloads, and recursive `subList`; its invariant exact sibling
+owns candidate inputs and index queries. Kotlin implementations retain real
+`!T` fields, while Kotlin-only value-type widening crosses the existing
+semantic view only at the operation which needs it.
+
+Natural-only C# implementations name no exact or semantic compiler interface.
+The general foreign dispatcher resolves overloads by name plus arity and uses
+the recorded fixed wrong-shape result (`false` or `-1`) before typed invocation.
+Canonical and natural nested results join without a wrapper or identity change.
+See
+[`../archive/runtime-reified-list-family-2026-08-23.md`](../archive/runtime-reified-list-family-2026-08-23.md).
+
+Next recompute the smallest complete Common dependency family after the
+read-only List closure. Keep mutable collections, Map, defaults, broader
+overload families, and multiple owner parameters on their current mappings
+unless that dependency proof selects one of them atomically. The natural CLR
+route and typed state remain the default; a semantic capability is an
+evidence-backed escape hatch, not the first implementation choice.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

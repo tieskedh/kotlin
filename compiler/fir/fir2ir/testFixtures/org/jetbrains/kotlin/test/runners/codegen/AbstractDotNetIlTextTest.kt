@@ -508,6 +508,14 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-runtime-collection-set"),
         )
+        validateGenericOwnerRuntimeListCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-runtime-list"),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4140,6 +4148,8 @@ private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_LIST_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_LIST_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -10571,6 +10581,316 @@ private fun validateGenericOwnerRuntimeCollectionSetCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime Collection/Set probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the complete read-only Runtime List/ListIterator closure from ordinary C#. Natural
+ * covariant interfaces contain only output-safe members; exact-candidate inputs are ordinary
+ * public methods on the implementing class and never require a compiler-owned interface.
+ */
+private fun validateGenericOwnerRuntimeListCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_LIST_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime List C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime List C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime List C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeListConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Reflection;
+            using generic.owner.runtime.list;
+
+            public sealed class NaturalListIterator<T> : Kotlin.Collections.ListIterator<T>
+            {
+                private readonly T[] values;
+                private int index;
+
+                public NaturalListIterator(T[] values, int index)
+                {
+                    this.values = values;
+                    this.index = index;
+                }
+
+                public bool HasNext() => index < values.Length;
+
+                public T Next()
+                {
+                    if (!HasNext()) throw new InvalidOperationException("iterator consumed");
+                    return values[index++];
+                }
+
+                public bool HasPrevious() => index > 0;
+
+                public T Previous()
+                {
+                    if (!HasPrevious()) throw new InvalidOperationException("iterator at start");
+                    return values[--index];
+                }
+
+                public int NextIndex() => index;
+                public int PreviousIndex() => index - 1;
+            }
+
+            public sealed class NaturalList<T> : Kotlin.Collections.List<T>
+            {
+                private readonly T[] values;
+
+                public NaturalList(params T[] values)
+                {
+                    this.values = values;
+                }
+
+                public int ContainsCalls { get; private set; }
+                public int ContainsAllCalls { get; private set; }
+                public int IndexOfCalls { get; private set; }
+                public int LastIndexOfCalls { get; private set; }
+                public int Size => values.Length;
+                public bool IsEmpty() => values.Length == 0;
+                public Kotlin.Collections.Iterator<T> GetIterator() =>
+                    new NaturalListIterator<T>(values, 0);
+                public T Get(int index) => values[index];
+                public Kotlin.Collections.ListIterator<T> GetListIterator() =>
+                    new NaturalListIterator<T>(values, 0);
+                public Kotlin.Collections.ListIterator<T> GetListIterator(int index) =>
+                    new NaturalListIterator<T>(values, index);
+
+                public Kotlin.Collections.List<T> SubList(int fromIndex, int toIndex)
+                {
+                    var result = new T[toIndex - fromIndex];
+                    Array.Copy(values, fromIndex, result, 0, result.Length);
+                    return new NaturalList<T>(result);
+                }
+
+                public bool Contains(T value)
+                {
+                    ContainsCalls++;
+                    return IndexOfCore(value) >= 0;
+                }
+
+                public bool ContainsAll(Kotlin.Collections.Collection<T> elements)
+                {
+                    ContainsAllCalls++;
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext())
+                    {
+                        if (IndexOfCore(iterator.Next()) < 0) return false;
+                    }
+                    return true;
+                }
+
+                public int IndexOf(T value)
+                {
+                    IndexOfCalls++;
+                    return IndexOfCore(value);
+                }
+
+                public int LastIndexOf(T value)
+                {
+                    LastIndexOfCalls++;
+                    for (var index = values.Length - 1; index >= 0; index--)
+                    {
+                        if (EqualityComparer<T>.Default.Equals(values[index], value)) return index;
+                    }
+                    return -1;
+                }
+
+                private int IndexOfCore(T value)
+                {
+                    for (var index = 0; index < values.Length; index++)
+                    {
+                        if (EqualityComparer<T>.Default.Equals(values[index], value)) return index;
+                    }
+                    return -1;
+                }
+            }
+
+            public static class Program
+            {
+                private static void AssertCovariant(Type openInterface)
+                {
+                    var attributes = openInterface.GetGenericArguments()[0]
+                        .GenericParameterAttributes & GenericParameterAttributes.VarianceMask;
+                    if (attributes != GenericParameterAttributes.Covariant)
+                        throw new InvalidOperationException(openInterface + " is not covariant");
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == typeof(Kotlin.Collections.List) ||
+                            contract == typeof(Kotlin.Collections.Collection) ||
+                            contract == typeof(Kotlin.Collections.Iterable) ||
+                            contract == typeof(Kotlin.Collections.ListIterator) ||
+                            contract == typeof(Kotlin.Collections.Iterator))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired a compiler ABI dependency: " + contract);
+                    }
+                }
+
+                private static void AssertTypedFields(Type owner)
+                {
+                    foreach (var name in new[] { "first", "second" })
+                    {
+                        var field = owner.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (field == null || !field.FieldType.IsGenericParameter)
+                            throw new InvalidOperationException(owner + "." + name + " did not retain !T");
+                    }
+                }
+
+                private static bool HasOpenInterface(Type owner, Type expected)
+                {
+                    return Array.Exists(owner.GetInterfaces(), contract =>
+                        contract.IsGenericType &&
+                        contract.GetGenericTypeDefinition() == expected);
+                }
+
+                public static int Main()
+                {
+                    AssertCovariant(typeof(Kotlin.Collections.List<>));
+                    AssertCovariant(typeof(Kotlin.Collections.ListIterator<>));
+                    if (!HasOpenInterface(
+                            typeof(Kotlin.Collections.List<>),
+                            typeof(Kotlin.Collections.Collection<>)) ||
+                        !HasOpenInterface(
+                            typeof(Kotlin.Collections.ListIterator<>),
+                            typeof(Kotlin.Collections.Iterator<>)) ||
+                        !HasOpenInterface(
+                            typeof(Kotlin.Collections.List__KotlinExact<>),
+                            typeof(Kotlin.Collections.List<>)) ||
+                        !HasOpenInterface(
+                            typeof(Kotlin.Collections.List__KotlinExact<>),
+                            typeof(Kotlin.Collections.Collection__KotlinExact<>)))
+                        throw new InvalidOperationException("Runtime List generic graph is incomplete");
+
+                    var strings = new NaturalList<string>("alpha", "beta");
+                    AssertNaturalOnly(strings);
+                    Kotlin.Collections.List<object> widenedStrings = strings;
+                    if ((string)listApiKt.exactListGet<string>(strings, 1) != "beta" ||
+                        (string)listApiKt.widenedListGet(widenedStrings, 0) != "alpha")
+                        throw new InvalidOperationException("foreign reference List<T> get failed");
+
+                    var ints = new NaturalList<int>(11, 13);
+                    AssertNaturalOnly(ints);
+                    if ((int)listApiKt.exactListGet<int>(ints, 0) != 11 ||
+                        (int)listApiKt.widenedListGet(ints, 1) != 13)
+                        throw new InvalidOperationException("foreign value List<T> get failed");
+                    if (!listApiKt.widenedListContains(ints, 13) ||
+                        listApiKt.widenedListContains(ints, "13") ||
+                        ints.ContainsCalls != 1)
+                        throw new InvalidOperationException("List.contains barrier failed");
+                    if (listApiKt.widenedListIndexOf(ints, 13) != 1 ||
+                        listApiKt.widenedListIndexOf(ints, "13") != -1 ||
+                        ints.IndexOfCalls != 1)
+                        throw new InvalidOperationException("List.indexOf -1 barrier failed");
+                    if (listApiKt.widenedListLastIndexOf(ints, 11) != 0 ||
+                        listApiKt.widenedListLastIndexOf(ints, "11") != -1 ||
+                        ints.LastIndexOfCalls != 1)
+                        throw new InvalidOperationException("List.lastIndexOf -1 barrier failed");
+
+                    var sameInts = new NaturalList<int>(11, 13);
+                    var stringsAsNumbers = new NaturalList<string>("11", "13");
+                    var emptyStrings = new NaturalList<string>();
+                    if (!listApiKt.widenedListContainsAll(ints, sameInts) ||
+                        ints.ContainsAllCalls != 1 ||
+                        listApiKt.widenedListContainsAll(ints, stringsAsNumbers) ||
+                        !listApiKt.widenedListContainsAll(ints, emptyStrings) ||
+                        ints.ContainsAllCalls != 1)
+                        throw new InvalidOperationException("List.containsAll fallback failed");
+
+                    var initialIterator = listApiKt.widenedListIterator(ints)
+                        as Kotlin.Collections.ListIterator<int>;
+                    if (initialIterator == null || initialIterator.Next() != 11)
+                        throw new InvalidOperationException(
+                            "ListIterator<T> zero-argument dispatch failed");
+                    AssertNaturalOnly(initialIterator);
+
+                    var iterator = listApiKt.widenedListIterator(ints, 2)
+                        as Kotlin.Collections.ListIterator<int>;
+                    if (iterator == null || iterator.Previous() != 13 ||
+                        iterator.NextIndex() != 1 || iterator.PreviousIndex() != 0)
+                        throw new InvalidOperationException("ListIterator<T> dispatch failed");
+                    AssertNaturalOnly(iterator);
+
+                    var subList = listApiKt.widenedSubList(ints, 1, 2);
+                    if ((int)listApiKt.widenedListGet(subList, 0) != 13)
+                        throw new InvalidOperationException("recursive List<T> dispatch failed");
+
+                    AssertTypedFields(typeof(RuntimeListValue<>));
+                    var kotlinIterator = listApiKt.exactListIterator<int>(
+                        new RuntimeListValue<int>(17, 19), 2);
+                    AssertTypedFields(kotlinIterator.GetType().GetGenericTypeDefinition());
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeListConsumer.exe"
+        else "RuntimeListConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime List probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime List probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime List probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

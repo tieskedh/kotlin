@@ -1193,7 +1193,9 @@ $createExceptionBody
   // exposed as Kotlin Array identity; this class supplies the complete Kotlin List surface.
   .class private auto ansi beforefieldinit ReflectionAnnotationList
          extends ${coreLibraryReference}System.Object
-         implements Kotlin.Collections.List
+         implements Kotlin.Collections.List,
+                    class 'Kotlin.Collections.List`1'<object>,
+                    class 'Kotlin.Collections.List__KotlinExact`1'<object>
   {
     .field private initonly object[] '_items'
     .field private initonly int32 '_from'
@@ -1243,6 +1245,8 @@ $createExceptionBody
     {
       .override method instance int32 Kotlin.Collections.List::'get_Size'()
       .override method instance int32 Kotlin.Collections.Collection::'get_Size'()
+      .override method instance int32 class 'Kotlin.Collections.List`1'<object>::'get_Size'()
+      .override method instance int32 class 'Kotlin.Collections.Collection`1'<object>::'get_Size'()
       .maxstack 1
       ldarg.0
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
@@ -1253,6 +1257,8 @@ $createExceptionBody
     {
       .override method instance bool Kotlin.Collections.List::'IsEmpty'()
       .override method instance bool Kotlin.Collections.Collection::'IsEmpty'()
+      .override method instance bool class 'Kotlin.Collections.List`1'<object>::'IsEmpty'()
+      .override method instance bool class 'Kotlin.Collections.Collection`1'<object>::'IsEmpty'()
       .maxstack 2
       ldarg.0
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
@@ -1264,6 +1270,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance object 'Get'(int32 'index') cil managed
     {
       .override method instance object Kotlin.Collections.List::'Get'(int32)
+      .override method instance !0 class 'Kotlin.Collections.List`1'<object>::'Get'(int32)
       .maxstack 3
       ldarg.1
       ldc.i4.0
@@ -1289,6 +1296,8 @@ $createExceptionBody
     {
       .override method instance bool Kotlin.Collections.List::'ContainsErased'(object)
       .override method instance bool Kotlin.Collections.Collection::'ContainsErased'(object)
+      .override method instance bool class 'Kotlin.Collections.List__KotlinExact`1'<object>::'Contains'(!0)
+      .override method instance bool class 'Kotlin.Collections.Collection__KotlinExact`1'<object>::'Contains'(!0)
       .maxstack 2
       ldarg.0
       ldarg.1
@@ -1303,6 +1312,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance int32 'IndexOfErased'(object 'element') cil managed
     {
       .override method instance int32 Kotlin.Collections.List::'IndexOfErased'(object)
+      .override method instance int32 class 'Kotlin.Collections.List__KotlinExact`1'<object>::'IndexOf'(!0)
       .maxstack 2
       .locals init ([0] int32 'index')
       ldc.i4.0
@@ -1334,6 +1344,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance int32 'LastIndexOfErased'(object 'element') cil managed
     {
       .override method instance int32 Kotlin.Collections.List::'LastIndexOfErased'(object)
+      .override method instance int32 class 'Kotlin.Collections.List__KotlinExact`1'<object>::'LastIndexOf'(!0)
       .maxstack 2
       .locals init ([0] int32 'index')
       ldarg.0
@@ -1389,6 +1400,34 @@ $createExceptionBody
       ret
     }
 
+    .method private hidebysig newslot virtual final instance bool 'ContainsAllTyped'(
+        class 'Kotlin.Collections.Collection`1'<object> 'elements') cil managed
+    {
+      .override method instance bool class 'Kotlin.Collections.List__KotlinExact`1'<object>::'ContainsAll'(
+          class 'Kotlin.Collections.Collection`1'<!0>)
+      .override method instance bool class 'Kotlin.Collections.Collection__KotlinExact`1'<object>::'ContainsAll'(
+          class 'Kotlin.Collections.Collection`1'<!0>)
+      .maxstack 2
+      .locals init ([0] class 'Kotlin.Collections.Iterator`1'<object> 'iterator')
+      ldarg.1
+      callvirt instance class 'Kotlin.Collections.Iterator`1'<!0> class 'Kotlin.Collections.Collection`1'<object>::'GetIterator'()
+      stloc.0
+    RAL_ContainsAllTypedNext:
+      ldloc.0
+      callvirt instance bool class 'Kotlin.Collections.Iterator`1'<object>::'HasNext'()
+      brfalse RAL_ContainsAllTypedTrue
+      ldarg.0
+      ldloc.0
+      callvirt instance !0 class 'Kotlin.Collections.Iterator`1'<object>::'Next'()
+      call instance bool Kotlin.Runtime.Internal.ReflectionAnnotationList::'ContainsErased'(object)
+      brtrue RAL_ContainsAllTypedNext
+      ldc.i4.0
+      ret
+    RAL_ContainsAllTypedTrue:
+      ldc.i4.1
+      ret
+    }
+
     .method private hidebysig newslot virtual final instance bool 'ContainsAll'(
         object 'elements') cil managed
     {
@@ -1407,6 +1446,19 @@ $createExceptionBody
       .override method instance class Kotlin.Collections.Iterator Kotlin.Collections.List::'GetIterator'()
       .override method instance class Kotlin.Collections.Iterator Kotlin.Collections.Collection::'GetIterator'()
       .override method instance class Kotlin.Collections.Iterator Kotlin.Collections.Iterable::'GetIterator'()
+      .maxstack 2
+      ldarg.0
+      ldc.i4.0
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationIterator::.ctor(
+          class Kotlin.Runtime.Internal.ReflectionAnnotationList, int32)
+      ret
+    }
+
+    .method private hidebysig newslot virtual final instance class 'Kotlin.Collections.Iterator`1'<object> 'GetIteratorTyped'() cil managed
+    {
+      .override method instance class 'Kotlin.Collections.Iterator`1'<!0> class 'Kotlin.Collections.List`1'<object>::'GetIterator'()
+      .override method instance class 'Kotlin.Collections.Iterator`1'<!0> class 'Kotlin.Collections.Collection`1'<object>::'GetIterator'()
+      .override method instance class 'Kotlin.Collections.Iterator`1'<!0> class 'Kotlin.Collections.Iterable`1'<object>::'GetIterator'()
       .maxstack 2
       ldarg.0
       ldc.i4.0
@@ -1448,6 +1500,39 @@ $createExceptionBody
       throw
     }
 
+    .method private hidebysig newslot virtual final instance class 'Kotlin.Collections.ListIterator`1'<object> 'GetListIteratorTyped'() cil managed
+    {
+      .override method instance class 'Kotlin.Collections.ListIterator`1'<!0> class 'Kotlin.Collections.List`1'<object>::'GetListIterator'()
+      .maxstack 2
+      ldarg.0
+      ldc.i4.0
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationIterator::.ctor(
+          class Kotlin.Runtime.Internal.ReflectionAnnotationList, int32)
+      ret
+    }
+
+    .method private hidebysig newslot virtual final instance class 'Kotlin.Collections.ListIterator`1'<object> 'GetListIteratorTyped'(
+        int32 'index') cil managed
+    {
+      .override method instance class 'Kotlin.Collections.ListIterator`1'<!0> class 'Kotlin.Collections.List`1'<object>::'GetListIterator'(int32)
+      .maxstack 2
+      ldarg.1
+      ldc.i4.0
+      blt RAL_ListIteratorTypedOutOfBounds
+      ldarg.1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bgt RAL_ListIteratorTypedOutOfBounds
+      ldarg.0
+      ldarg.1
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationIterator::.ctor(
+          class Kotlin.Runtime.Internal.ReflectionAnnotationList, int32)
+      ret
+    RAL_ListIteratorTypedOutOfBounds:
+      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+      throw
+    }
+
     .method public hidebysig newslot virtual final instance class Kotlin.Collections.List 'SubList'(
         int32 'fromIndex', int32 'toIndex') cil managed
     {
@@ -1475,6 +1560,37 @@ $createExceptionBody
       newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[], int32, int32)
       ret
     RAL_SubListOutOfBounds:
+      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+      throw
+    }
+
+    .method private hidebysig newslot virtual final instance class 'Kotlin.Collections.List`1'<object> 'SubListTyped'(
+        int32 'fromIndex', int32 'toIndex') cil managed
+    {
+      .override method instance class 'Kotlin.Collections.List`1'<!0> class 'Kotlin.Collections.List`1'<object>::'SubList'(int32, int32)
+      .maxstack 4
+      ldarg.1
+      ldc.i4.0
+      blt RAL_SubListTypedOutOfBounds
+      ldarg.2
+      ldarg.1
+      blt RAL_SubListTypedOutOfBounds
+      ldarg.2
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bgt RAL_SubListTypedOutOfBounds
+      ldarg.0
+      ldfld object[] Kotlin.Runtime.Internal.ReflectionAnnotationList::'_items'
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_from'
+      ldarg.1
+      add
+      ldarg.2
+      ldarg.1
+      sub
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[], int32, int32)
+      ret
+    RAL_SubListTypedOutOfBounds:
       newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
       throw
     }
@@ -1630,7 +1746,9 @@ $createExceptionBody
   .class private sealed auto ansi beforefieldinit ReflectionAnnotationIterator
          extends ${coreLibraryReference}System.Object
          implements Kotlin.Collections.ListIterator,
-                    Kotlin.Collections.Iterator
+                    Kotlin.Collections.Iterator,
+                    class 'Kotlin.Collections.ListIterator`1'<object>,
+                    class 'Kotlin.Collections.Iterator`1'<object>
   {
     .field private initonly class Kotlin.Runtime.Internal.ReflectionAnnotationList '_list'
     .field private int32 '_index'
@@ -1654,6 +1772,8 @@ $createExceptionBody
     {
       .override method instance bool Kotlin.Collections.ListIterator::'HasNext'()
       .override method instance bool Kotlin.Collections.Iterator::'HasNext'()
+      .override method instance bool class 'Kotlin.Collections.ListIterator`1'<object>::'HasNext'()
+      .override method instance bool class 'Kotlin.Collections.Iterator`1'<object>::'HasNext'()
       .maxstack 2
       ldarg.0
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
@@ -1668,6 +1788,8 @@ $createExceptionBody
     {
       .override method instance object Kotlin.Collections.ListIterator::'Next'()
       .override method instance object Kotlin.Collections.Iterator::'Next'()
+      .override method instance !0 class 'Kotlin.Collections.ListIterator`1'<object>::'Next'()
+      .override method instance !0 class 'Kotlin.Collections.Iterator`1'<object>::'Next'()
       .maxstack 3
       .locals init ([0] int32 'index')
       ldarg.0
@@ -1694,6 +1816,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance bool 'HasPrevious'() cil managed
     {
       .override method instance bool Kotlin.Collections.ListIterator::'HasPrevious'()
+      .override method instance bool class 'Kotlin.Collections.ListIterator`1'<object>::'HasPrevious'()
       .maxstack 2
       ldarg.0
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
@@ -1705,6 +1828,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance object 'Previous'() cil managed
     {
       .override method instance object Kotlin.Collections.ListIterator::'Previous'()
+      .override method instance !0 class 'Kotlin.Collections.ListIterator`1'<object>::'Previous'()
       .maxstack 3
       .locals init ([0] int32 'index')
       ldarg.0
@@ -1731,6 +1855,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance int32 'NextIndex'() cil managed
     {
       .override method instance int32 Kotlin.Collections.ListIterator::'NextIndex'()
+      .override method instance int32 class 'Kotlin.Collections.ListIterator`1'<object>::'NextIndex'()
       .maxstack 1
       ldarg.0
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
@@ -1740,6 +1865,7 @@ $createExceptionBody
     .method public hidebysig newslot virtual final instance int32 'PreviousIndex'() cil managed
     {
       .override method instance int32 Kotlin.Collections.ListIterator::'PreviousIndex'()
+      .override method instance int32 class 'Kotlin.Collections.ListIterator`1'<object>::'PreviousIndex'()
       .maxstack 2
       ldarg.0
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'

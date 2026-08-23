@@ -665,8 +665,19 @@ the empty incompatible input returns true. Open nested producer results use
 the next member dispatch, preserving identity without an adapter. See
 [`../archive/runtime-reified-collection-set-family-2026-08-23.md`](../archive/runtime-reified-collection-set-family-2026-08-23.md).
 
-List, mutable collections, Map, broader properties, defaults, overloads, extra
-producer members, and mixed/multiple type parameters remain separate gates.
+ABI/runtime surface 51 extends that same representation to the complete
+read-only List closure. Natural covariant `ListIterator<T>` and `List<T>` own
+their output-safe and declaration-independent members. The invariant exact
+List sibling owns candidate inputs and index queries. The runtime dispatcher
+resolves the two `listIterator` forms by name plus arity and carries the
+recorded fixed wrong-shape value, including `-1`, without a List-specific
+compiler branch. Kotlin implementations retain `!T` fields and ordinary C#
+implements only the natural interfaces. See
+[`../archive/runtime-reified-list-family-2026-08-23.md`](../archive/runtime-reified-list-family-2026-08-23.md).
+
+Mutable collections, Map, broader properties/defaults/overload families,
+extra producer members, and mixed/multiple type parameters remain separate
+gates.
 
 ## Remaining gates
 

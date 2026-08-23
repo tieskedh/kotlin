@@ -314,6 +314,38 @@ verification, and work state.
   fully lowered signature. See
   [`docs/archive/runtime-reified-collection-set-family-2026-08-23.md`](docs/archive/runtime-reified-collection-set-family-2026-08-23.md).
 
+  ABI/runtime surface 51 now closes the complete read-only Runtime List
+  dependency family. Covariant natural `ListIterator<T>` extends
+  `Iterator<T>`, and covariant natural `List<T>` extends `Collection<T>` with
+  typed `get`, both `listIterator` overloads, and recursive `subList`. Its
+  invariant exact sibling owns `contains`, `containsAll`, `indexOf`, and
+  `lastIndexOf`. Kotlin implementations retain their element fields as real
+  `!T`; natural, exact, and arity-zero semantic views remain MethodImpl bundles
+  on that one object.
+
+  The foreign dispatcher now resolves ordinary natural-interface members by
+  name plus argument count and rejects same-name/same-arity ambiguity. This is
+  a general overload rule rather than a List declaration exception. Fixed
+  candidate barriers carry their recorded fallback value, so List index
+  queries return `-1` on an incompatible candidate without entering a typed C#
+  method, while Collection's existing `false` behavior remains unchanged.
+  Declaration-independent inputs admit typed `get`, `listIterator`, and
+  `subList` routing; joined canonical/natural reference results keep identity
+  through `object` only until their next actual member dispatch.
+
+  A separately compiled sealed, non-partial C# implementation names only
+  `List<T>`/`ListIterator<T>` and ordinary public members. It has no exact,
+  erased, or generated capability obligation. The hostile proof executes both
+  iterator overloads, reference covariance, value-type Kotlin widening,
+  compatible and incompatible inputs, recursive sub-lists, identity, and
+  reflected Kotlin `!T` fields under both frontends on Framework 4.8 and .NET
+  10. The final full aggregate exits zero. Direct XML audit covers 190 freshly
+  written suites/2,299 tests with zero failures, errors, or skips: 187 FIR
+  suites/2,171 tests, two integration suites/127 tests, and the one-test
+  backend resolver suite. The unchanged green six-test `dotnet.ir` root makes
+  the target total 191 suites/2,305 tests. See
+  [`docs/archive/runtime-reified-list-family-2026-08-23.md`](docs/archive/runtime-reified-list-family-2026-08-23.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -2994,7 +3026,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Runtime reified Collection/Set family passed every constituent of the
+The Runtime reified List/ListIterator family passed every constituent of the
 strict target gate. The normal aggregate command remains:
 
 ```text
@@ -3003,12 +3035,12 @@ strict target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-23. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the final surface-50 head. Direct audit of all freshly written result roots
-covers 190 XML suites and 2,295 tests; the unchanged green `dotnet.ir` model
-root brings the complete target inventory to 191 suites and 2,301 tests:
+for the final surface-51 head. Direct audit of all freshly written result roots
+covers 190 XML suites and 2,299 tests; the unchanged green `dotnet.ir` model
+root brings the complete target inventory to 191 suites and 2,305 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,167 FIR, IL-text, and box tests
+- 2,171 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 1 backend resolver test
 - zero failures, errors, or skips
@@ -4707,8 +4739,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    Runtime Collection/Set family, including true `!T` implementation fields,
    compatible typed calls, Kotlin value-type widening, and natural-only C#
    input/iterator dispatch without wrappers or compiler-interface obligations.
-   Recompute the next complete Common dependency family from this head. Do not
-   add a List, mutable collection, Map, Set, or Sequence representation
+   Surface 51 now closes the complete read-only List/ListIterator dependency
+   family with the same general natural/exact/semantic rules, both overloads,
+   fixed `-1` barriers, and typed Kotlin implementation fields. Recompute the
+   next complete Common dependency family from this head. Do not add a mutable
+   collection, Map, Sequence, or other declaration-specific representation
    exception; extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse
    rollback for the next go/no-go decision.
