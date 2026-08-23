@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-list-family-2026-08-23.md`](runtime-reified-list-family-2026-08-23.md)
+  records ABI/runtime surface 51's natural/exact/semantic Runtime `List<T>`
+  and `ListIterator<T>` closure, both iterator overloads, fixed `-1` candidate
+  barriers, true `!T` implementation state, and natural-only C# authoring.
 - [`runtime-reified-collection-set-family-2026-08-23.md`](runtime-reified-collection-set-family-2026-08-23.md)
   records ABI/runtime surface 50's natural/exact/semantic Runtime
   `Collection<T>` and `Set<T>` family, real `!T` implementation state,
