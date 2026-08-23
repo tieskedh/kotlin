@@ -1911,6 +1911,45 @@ $fixedFunctionTypesIl
             }
           }
 
+          // MutableSet redeclares the complete mutation family over the invariant natural
+          // construction. Its two natural parents form the first mutable collection diamond;
+          // relative bulk inputs retain the same U : T slot grammar as MutableCollection.
+          .class interface public abstract auto ansi 'MutableSet`1'<T>
+                 implements class 'Kotlin.Collections.Set`1'<!T>,
+                            class 'Kotlin.Collections.MutableCollection`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.MutableIterator`1'<!T> GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Add(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Remove(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RetainAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi Map
           {
             .class nested public interface abstract auto ansi Entry
