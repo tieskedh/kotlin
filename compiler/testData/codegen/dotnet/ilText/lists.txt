@@ -503,12 +503,13 @@ IL_whenNext_1:
     callvirt instance bool 'PairList'::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
     ret
   }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-containsAll-3db9b5bd21e43fcf9c1bef255b7353e1>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-containsAll-3db9b5bd21e43fcf9c1bef255b7353e1>'(object 'elements') cil managed
   {
-    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsAll'(object)
     .maxstack 2
     ldarg.0
     ldarg.1
+    castclass class [Kotlin.Runtime]'Kotlin.Collections.Collection'
     callvirt instance bool 'PairList'::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
     ret
   }

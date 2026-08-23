@@ -82,6 +82,51 @@ import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 
+/**
+ * A canonical bridge's MethodDef must have the exact physical slot signature. Its synthetic IR
+ * still keeps the implementing-class dispatch receiver and a body-friendly type graph, so retain
+ * that receiver while taking the observable return and regular parameters from the canonical
+ * declaration. This matters for Runtime dependency slots such as
+ * `Iterable.GetIterator(): Iterator`, whose canonical result is narrower than object.
+ */
+private fun IrSimpleFunction.dotNetCanonicalBridgeSignature(
+    typeMapper: DotNetIlTypeMapper,
+): DotNetIlMethodSignature {
+    val canonicalMapper = typeMapper.canonicalGenericInterfaceSignatureView()
+    val bridgeSignature = dotNetSignature(canonicalMapper)
+    if (origin != DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) return bridgeSignature
+    // Value-class lowering retains the synthetic origin on its static `-impl` helper after it has
+    // deliberately removed every MethodImpl arrow. Such a helper no longer owns a canonical slot;
+    // its own fully lowered signature is authoritative.
+    if (overriddenSymbols.isEmpty()) return bridgeSignature
+    val slotSignatures = overriddenSymbols.map { overridden ->
+        canonicalMapper.referencedFunctionInfoOrNull(overridden.owner)?.signature
+            ?: overridden.owner.dotNetSignature(canonicalMapper)
+    }.distinct()
+    check(slotSignatures.size == 1) {
+        val slots = overriddenSymbols.joinToString { overridden ->
+            val owner = (overridden.owner.parent as? IrClass)?.name?.asString() ?: "<unknown>"
+            val signature = canonicalMapper.referencedFunctionInfoOrNull(overridden.owner)?.signature
+                ?: overridden.owner.dotNetSignature(canonicalMapper)
+            "$owner.${overridden.owner.name.asString()}: $signature"
+        }
+        "Internal .NET backend error: canonical generic-interface bridge '${name.asString()}' " +
+                "has incompatible physical slots: $slots"
+    }
+    val slotSignature = slotSignatures.single()
+    check(bridgeSignature.hasThis && slotSignature.hasThis &&
+            bridgeSignature.parameterTypes.size == slotSignature.parameterTypes.size
+    ) {
+        "Internal .NET backend error: canonical generic-interface bridge changed its physical arity"
+    }
+    return DotNetIlMethodSignature(
+        returnType = slotSignature.returnType,
+        parameterTypes = listOf(bridgeSignature.parameterTypes.first()) +
+                slotSignature.parameterTypes.drop(1),
+        hasThis = true,
+    )
+}
+
 internal class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
     private val assemblyName: String,
@@ -661,6 +706,8 @@ internal class DotNetIlEmitter(
         )
         val declaredGenericTypeMapper = typeMapper.declaredGenericInterfaceView()
         val exactGenericTypeMapper = typeMapper.exactGenericInterfaceView()
+        val canonicalGenericSignatureTypeMapper =
+            typeMapper.canonicalGenericInterfaceSignatureView()
         val declaredGenericSignatureTypeMapper = typeMapper.declaredGenericInterfaceSignatureView()
         // EXACT selects the invariant declaring TypeDef, not a recursively exactified Kotlin
         // signature. A member such as Exact<T>.acceptsAll(Natural<T>) lives on the exact owner but
@@ -718,7 +765,7 @@ internal class DotNetIlEmitter(
             }
             val canonicalInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
                 try {
-                    typeMapper.toDotNetIlImplementedInterfaceType(interfaceType)
+                    canonicalGenericSignatureTypeMapper.toDotNetIlImplementedInterfaceType(interfaceType)
                 } catch (_: DotNetIlUnsupportedException) {
                     null
                 }
@@ -1072,7 +1119,11 @@ internal class DotNetIlEmitter(
                     }
                     val signatureMapper = memberTypeMapper(member)
                     val signature = try {
-                        member.dotNetSignature(signatureMapper)
+                        if (member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
+                            member.dotNetCanonicalBridgeSignature(signatureMapper)
+                        } else {
+                            member.dotNetSignature(signatureMapper)
+                        }
                     } catch (e: DotNetIlUnsupportedException) {
                         if (member.isReifiedInlinePhysicalRemainder()) continue
                         throw e
@@ -2785,19 +2836,20 @@ internal class DotNetIlEmitter(
         // like the base class above: an evicted interface takes every implementing class and
         // every sub-interface down with it, each warned with a reason carrying the interface's
         // own reason (the interface arm of the inheritance cascade).
+        val directInterfaceTypeMapper = typeMapper.canonicalGenericInterfaceSignatureView()
         val interfaceTypes = (irClass.dotNetDirectInterfaceTypes().mapNotNull { superInterfaceType ->
             val superInterface = (superInterfaceType.classifier as IrClassSymbol).owner
             // SuspendFunctionN is a logical builtin, not a separately emitted CLR TypeDef. JVM
             // likewise maps it to the continuation-shaped FunctionN+1 carrier while retaining
             // the logical supertype. All ordinary interfaces still require a live declaration.
             if (!superInterfaceType.isSuspendFunction() && !superInterfaceType.isKSuspendFunction()) {
-                physicalTypeMapper.classInfoOrNull(superInterface) ?: dotNetUnsupported(
+                directInterfaceTypeMapper.classInfoOrNull(superInterface) ?: dotNetUnsupported(
                     "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
                             "'${superInterface.diagnosticName()}' could not be compiled: " +
                             (classSkipReasons[superInterface] ?: "the interface is not available in this module")
                 )
             }
-            val interfaceType = physicalTypeMapper.toDotNetIlImplementedInterfaceType(superInterfaceType)
+            val interfaceType = directInterfaceTypeMapper.toDotNetIlImplementedInterfaceType(superInterfaceType)
                 ?: dotNetUnsupported(
                     "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
                             "instantiation '${superInterfaceType.render()}' could not be compiled: " +
@@ -2940,7 +2992,11 @@ internal class DotNetIlEmitter(
             val memberTypeMapper = typeMapperForMember(member)
             val memberInfo = DotNetIlFunctionInfo(
                 classInfo,
-                member.dotNetSignature(memberTypeMapper),
+                if (member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
+                    member.dotNetCanonicalBridgeSignature(memberTypeMapper)
+                } else {
+                    member.dotNetSignature(memberTypeMapper)
+                },
                 classFunctions[member]?.physicalMethodName,
             )
             classFunctions.putLocal(member, memberInfo)

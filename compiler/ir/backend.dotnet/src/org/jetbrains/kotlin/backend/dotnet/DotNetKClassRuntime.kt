@@ -1368,7 +1368,6 @@ $createExceptionBody
         class Kotlin.Collections.Collection 'elements') cil managed
     {
       .override method instance bool Kotlin.Collections.List::'ContainsAll'(class Kotlin.Collections.Collection)
-      .override method instance bool Kotlin.Collections.Collection::'ContainsAll'(class Kotlin.Collections.Collection)
       .maxstack 2
       .locals init ([0] class Kotlin.Collections.Iterator 'iterator')
       ldarg.1
@@ -1387,6 +1386,19 @@ $createExceptionBody
       ret
     RAL_ContainsAllTrue:
       ldc.i4.1
+      ret
+    }
+
+    .method private hidebysig newslot virtual final instance bool 'ContainsAll'(
+        object 'elements') cil managed
+    {
+      .override method instance bool Kotlin.Collections.Collection::'ContainsAll'(object)
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      castclass Kotlin.Collections.Collection
+      call instance bool Kotlin.Runtime.Internal.ReflectionAnnotationList::'ContainsAll'(
+          class Kotlin.Collections.Collection)
       ret
     }
 

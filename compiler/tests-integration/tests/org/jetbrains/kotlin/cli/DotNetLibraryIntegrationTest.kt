@@ -13857,7 +13857,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   ldloc.1
                   ldloc.2
                   callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsAll'(
-                    class [Kotlin.Runtime]'Kotlin.Collections.Collection'
+                    object
                   )
                   brfalse IL_failure
                   ldloc.1
@@ -42759,7 +42759,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   }
 
                   .method public hidebysig newslot virtual final instance bool ContainsAll(
-                      class [Kotlin.Runtime]'Kotlin.Collections.Collection' elements) cil managed
+                      object elements) cil managed
                   {
                     .maxstack 1
                     ldc.i4.0

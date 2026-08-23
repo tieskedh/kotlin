@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-collection-set-family-2026-08-23.md`](runtime-reified-collection-set-family-2026-08-23.md)
+  records ABI/runtime surface 50's natural/exact/semantic Runtime
+  `Collection<T>` and `Set<T>` family, real `!T` implementation state,
+  natural-only C# authoring, and Kotlin-correct incompatible `containsAll`
+  fallback.
 - [`runtime-reified-iterator-foundation-2026-08-23.md`](runtime-reified-iterator-foundation-2026-08-23.md)
   records ABI/runtime surface 49's additive Runtime-owned `Iterator<T>` and
   `Iterable<T>` identities, typed nested result/storage, ordinary C# authoring,
