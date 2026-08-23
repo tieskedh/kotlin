@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-mutable-collection-2026-08-23.md`](runtime-reified-mutable-collection-2026-08-23.md)
+  records ABI/runtime surface 54's invariant natural `MutableCollection<T>`,
+  relative method-generic bulk inputs, value-type widening, true `!T` state,
+  and ordinary C# static mutation contract.
 - [`runtime-reified-mutable-list-iterator-2026-08-23.md`](runtime-reified-mutable-list-iterator-2026-08-23.md)
   records ABI/runtime surface 53's invariant natural
   `MutableListIterator<T>`, typed input/output slots, operation-local projection

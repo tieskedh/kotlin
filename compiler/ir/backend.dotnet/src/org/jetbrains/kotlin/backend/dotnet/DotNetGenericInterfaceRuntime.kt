@@ -555,7 +555,10 @@ internal object DotNetGenericInterfaceRuntime {
         throw
     GIF_ConstructionReady:
       ldarg.s 'unaryResolutionKind'
-      brtrue.s GIF_ResolveConcreteMethod
+      ldc.i4.4
+      beq GIF_ResolveRelativeGenericMethod
+      ldarg.s 'unaryResolutionKind'
+      brtrue GIF_ResolveConcreteMethod
       ldloc.2
       callvirt instance $methodType[] ${coreLibraryReference}System.Type::GetMethods()
       stloc.s 13
@@ -568,7 +571,7 @@ internal object DotNetGenericInterfaceRuntime {
       ldloc.s 13
       ldlen
       conv.i4
-      bge.s GIF_MethodResolved
+      bge GIF_MethodResolved
       ldloc.s 13
       ldloc.s 14
       ldelem.ref
@@ -598,6 +601,72 @@ internal object DotNetGenericInterfaceRuntime {
       add
       stloc.s 14
       br.s GIF_MethodSearchNext
+    GIF_ResolveRelativeGenericMethod:
+      ldloc.2
+      callvirt instance $methodType[] ${coreLibraryReference}System.Type::GetMethods()
+      stloc.s 13
+      ldc.i4.0
+      stloc.s 14
+      ldnull
+      stloc.s 4
+    GIF_RelativeMethodSearchNext:
+      ldloc.s 14
+      ldloc.s 13
+      ldlen
+      conv.i4
+      bge.s GIF_RelativeMethodSearchComplete
+      ldloc.s 13
+      ldloc.s 14
+      ldelem.ref
+      stloc.s 15
+      ldloc.s 15
+      callvirt instance string ${coreLibraryReference}System.Reflection.MemberInfo::get_Name()
+      ldarg.2
+      call bool ${coreLibraryReference}System.String::op_Equality(string, string)
+      brfalse.s GIF_RelativeMethodSearchContinue
+      ldloc.s 15
+      callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
+      ldlen
+      conv.i4
+      ldloc.s 12
+      bne.un.s GIF_RelativeMethodSearchContinue
+      ldloc.s 15
+      callvirt instance bool ${coreLibraryReference}System.Reflection.MethodInfo::get_IsGenericMethodDefinition()
+      brfalse.s GIF_RelativeMethodSearchContinue
+      ldloc.s 15
+      callvirt instance $typeType[] ${coreLibraryReference}System.Reflection.MethodInfo::GetGenericArguments()
+      ldlen
+      conv.i4
+      ldc.i4.1
+      bne.un.s GIF_RelativeMethodSearchContinue
+      ldloc.s 4
+      brfalse.s GIF_RelativeMethodSearchSelect
+      ldstr "The selected CLR generic implementation has multiple required generic overloads with the same arity"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RelativeMethodSearchSelect:
+      ldloc.s 15
+      stloc.s 4
+    GIF_RelativeMethodSearchContinue:
+      ldloc.s 14
+      ldc.i4.1
+      add
+      stloc.s 14
+      br.s GIF_RelativeMethodSearchNext
+    GIF_RelativeMethodSearchComplete:
+      ldloc.s 4
+      brfalse.s GIF_MethodResolved
+      ldloc.s 4
+      ldc.i4.1
+      newarr ${coreLibraryReference}System.Type
+      dup
+      ldc.i4.0
+      ldarg.s 'unaryParameterOpenDefinition'
+      stelem.ref
+      callvirt instance $methodType ${coreLibraryReference}System.Reflection.MethodInfo::MakeGenericMethod(
+          $typeType[])
+      stloc.s 4
+      br GIF_MethodResolved
     GIF_ResolveConcreteMethod:
         ldloc.s 7
         ldarg.2
@@ -924,6 +993,32 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
+    .method public hidebysig static object 'InvokeUniqueRelativeGenericInput'(
+        object 'instance',
+        $typeType 'openDefinition',
+        $typeType 'methodArgument',
+        string 'methodName',
+        object[] 'arguments') cil managed
+    {
+      .maxstack 7
+      ldarg.0
+      ldarg.1
+      ldarg.3
+      ldarg.s 'arguments'
+      ldc.i4.4
+      ldarg.2
+      ldnull
+      call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
+          object,
+          $typeType,
+          string,
+          object[],
+          int32,
+          $typeType,
+          object)
+      ret
+    }
+
     .method public hidebysig static object 'InvokeUniqueProducer'(
         object 'instance',
         $typeType 'openDefinition',
@@ -975,6 +1070,13 @@ internal object DotNetGenericInterfaceRuntime {
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueCollectionContainsAll".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type, " +
+                "class ${coreLibraryReference}System.Type, string, object[])"
+
+    fun invokeUniqueRelativeGenericInputCallInstruction(coreLibraryReference: String): String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"InvokeUniqueRelativeGenericInput".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type, " +
                 "class ${coreLibraryReference}System.Type, string, object[])"
 
