@@ -1451,13 +1451,50 @@ $fixedFunctionTypesIl
             {
             }
 
-            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(object elements) cil managed
             {
             }
 
             .property instance int32 Size()
             {
               .get instance int32 Kotlin.Collections.Collection::get_Size()
+            }
+          }
+
+          // Natural and exact-input CLR views selected as one atomic family by the generic-owner
+          // rehearsal. The erased Collection above remains its declaration-semantic capability.
+          .class interface public abstract auto ansi 'Collection`1'<+ T>
+                 implements class 'Kotlin.Collections.Iterable`1'<!T>
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.Iterator`1'<!T> GetIterator() cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 'Kotlin.Collections.Collection`1'::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'Collection__KotlinExact`1'<T>
+                 implements class 'Kotlin.Collections.Collection`1'<!T>,
+                            class 'Kotlin.Collections.Iterable`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool Contains(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(
+                class 'Kotlin.Collections.Collection`1'<!T> elements) cil managed
+            {
             }
           }
 
@@ -1623,13 +1660,48 @@ $fixedFunctionTypesIl
             {
             }
 
-            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(object elements) cil managed
             {
             }
 
             .property instance int32 Size()
             {
               .get instance int32 Kotlin.Collections.Set::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'Set`1'<+ T>
+                 implements class 'Kotlin.Collections.Collection`1'<!T>
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.Iterator`1'<!T> GetIterator() cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 'Kotlin.Collections.Set`1'::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'Set__KotlinExact`1'<T>
+                 implements class 'Kotlin.Collections.Set`1'<!T>,
+                            class 'Kotlin.Collections.Collection__KotlinExact`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool Contains(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(
+                class 'Kotlin.Collections.Collection`1'<!T> elements) cil managed
+            {
             }
           }
 

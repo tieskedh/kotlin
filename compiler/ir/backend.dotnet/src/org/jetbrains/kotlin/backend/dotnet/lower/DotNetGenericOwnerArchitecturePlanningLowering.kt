@@ -38,6 +38,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequire
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerMemberFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
@@ -1032,8 +1033,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                                 ?: candidate.resolveFakeOverrideMaybeAbstract()
                                 ?: candidate
                             if (source.producerProvenTypedStateGetterBackingFieldOrNull() == null) {
-                                semanticHooksBySource[source]?.let { semanticHook ->
-                                    context.genericOwnerCapabilityCallTargets[expression] = semanticHook
+                                (semanticHooksBySource[source] ?: slotsBySource[source])?.let { semanticTarget ->
+                                    context.genericOwnerCapabilityCallTargets[expression] = semanticTarget
                                 }
                             }
                         }
@@ -2315,7 +2316,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val classifier = (simpleType.classifier as? IrClassSymbol)?.owner
         if (classifier != null &&
             (classifier in context.reifiedGenericInterfaces ||
-                    externalDeclarations.hasReifiedGenericInterface(classifier)) &&
+                    externalDeclarations.hasReifiedGenericInterface(classifier) ||
+                    DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(classifier)) &&
             classifier.typeParameters.zip(simpleType.arguments).any { pair ->
                 pair.first.variance != Variance.INVARIANT &&
                         (pair.second as? IrTypeProjection)?.type?.referencesGenericOwnerParameter(owner) == true

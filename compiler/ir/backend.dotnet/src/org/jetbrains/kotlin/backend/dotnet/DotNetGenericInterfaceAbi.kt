@@ -45,6 +45,13 @@ internal data class DotNetGenericInterfaceInfo(
      * only after every Kotlin implementation is given the declared MethodImpl bundle.
      */
     val isDeclaredViewStableInTypedSignatures: Boolean = false,
+    /**
+     * Whether ordinary rehearsal type occurrences use [declaredClassInfo] while the canonical
+     * view remains the declaration-semantic capability. Runtime-owned families need this split:
+     * their accepted arity-zero TypeDef cannot disappear until the atomic rollback decision,
+     * yet exact Kotlin and C# boundaries must name the natural constructed interface.
+     */
+    val usesDeclaredViewByDefaultInRehearsal: Boolean = false,
 ) {
     val mostSpecificCapabilityView: DotNetGenericInterfaceView?
         get() = when {

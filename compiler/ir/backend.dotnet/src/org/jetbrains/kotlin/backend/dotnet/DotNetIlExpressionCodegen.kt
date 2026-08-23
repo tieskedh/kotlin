@@ -3187,12 +3187,18 @@ internal class DotNetIlExpressionCodegen(
                         mappedNaturalType(receiver) == DotNetIlValueType.Object
             }
             ?: return false
+        val runtimeSemanticOwner = (semanticSlot.parent as? IrClass)?.takeIf { owner ->
+            typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(semanticSlot) != null
+        }
         val semanticInfo = availableFunctions[semanticSlot]
             ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
             ?: return false
-        val naturalInfo = availableFunctions[source]
-            ?: typeMapper.referencedFunctionInfoOrNull(source)
-            ?: return false
+        val naturalInfo = if (runtimeSemanticOwner != null) {
+            val memberView = typeMapper.genericInterfaceMemberView(semanticSlot, runtimeSemanticOwner)
+            typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(semanticSlot, memberView)
+        } else {
+            availableFunctions[source] ?: typeMapper.referencedFunctionInfoOrNull(source)
+        } ?: return false
         if (semanticInfo.owner.typeParameterCount != 0 ||
             naturalInfo.owner.typeParameterCount != 1 ||
             semanticInfo.signature.parameterTypes.size != call.arguments.size ||
@@ -3211,10 +3217,15 @@ internal class DotNetIlExpressionCodegen(
             ?: interfaceInfo?.canonicalClassInfo
         val exactInputType = naturalInfo.signature.parameterTypes.getOrNull(1)
             as? DotNetIlValueType.GenericInstance
+        val usesRuntimeTypeArgumentFalseBarrier =
+            DotNetRuntimeTypes.genericInterfaceUsesForeignTypeArgumentFalseBarrier(source)
+        val usesRuntimeCollectionContainsAllFallback =
+            DotNetRuntimeTypes.genericInterfaceUsesForeignCollectionContainsAllFallback(source)
         val isProducer = regularArguments.isEmpty() && naturalResultType != null &&
                 semanticResultType != null &&
                 (semanticResultType == DotNetIlValueType.Object ||
-                        semanticResultType == naturalResultType)
+                        semanticResultType == naturalResultType ||
+                        semanticResultType.isDotNetAssignableTo(DotNetIlValueType.Object))
         val isConsumer = regularArguments.size == 1 &&
                 sourceOwner.typeParameters.singleOrNull()?.variance ==
                     org.jetbrains.kotlin.types.Variance.INVARIANT &&
@@ -3225,8 +3236,9 @@ internal class DotNetIlExpressionCodegen(
         val isExactInputBoolean = regularArguments.size == 1 &&
                 interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
                 naturalInterfaceOwner != null &&
-                exactInputType?.classInfo?.ilTypeRef == naturalInterfaceOwner.ilTypeRef &&
-                exactInputType.arguments.singleOrNull()?.isNaturalOwnerParameter() == true &&
+                (exactInputType?.classInfo?.ilTypeRef == naturalInterfaceOwner.ilTypeRef ||
+                        usesRuntimeCollectionContainsAllFallback) &&
+                exactInputType?.arguments?.singleOrNull()?.isNaturalOwnerParameter() == true &&
                 semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
                 semanticInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
@@ -3242,9 +3254,10 @@ internal class DotNetIlExpressionCodegen(
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 naturalInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
-                wrongShapePolicy?.checkedParameterCount == 1 &&
-                wrongShapePolicy.fallback == DotNetCSharpWrongShapeFallback.FALSE &&
-                wrongShapePolicy.fallbackParameterIndex == null
+                (usesRuntimeTypeArgumentFalseBarrier ||
+                        (wrongShapePolicy?.checkedParameterCount == 1 &&
+                                wrongShapePolicy.fallback == DotNetCSharpWrongShapeFallback.FALSE &&
+                                wrongShapePolicy.fallbackParameterIndex == null))
         if (!isProducer && !isConsumer && !isExactInputBoolean && !isFixedBarrierBoolean) {
             return false
         }
@@ -3272,6 +3285,9 @@ internal class DotNetIlExpressionCodegen(
         semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         naturalInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         foreignSelectionOwner.assemblyName?.let(typeMapper::recordAssemblyReference)
+        if (usesRuntimeCollectionContainsAllFallback) {
+            exactInputType?.classInfo?.assemblyName?.let(typeMapper::recordAssemblyReference)
+        }
         emitReifiedGenericInterfaceForeignReceiver(
             receiver,
             foreignSelectionOwner,
@@ -3322,7 +3338,9 @@ internal class DotNetIlExpressionCodegen(
             pops = semanticInfo.signature.parameterTypes.size,
             pushes = if (hasValueResult) 1 else 0,
         )
-        if (hasValueResult && semanticResultType != DotNetIlValueType.Object) {
+        if (hasValueResult && semanticResultType != DotNetIlValueType.Object &&
+            !checkNotNull(semanticResultType).isDotNetAssignableTo(DotNetIlValueType.Object)
+        ) {
             // Both branches join through the runtime helper's object result. Preserve that one
             // stack shape when a declaration-independent query returns an unboxed CLR value.
             methodContext.emit(
@@ -3339,6 +3357,9 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitLabel(foreignLabel)
         methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
         emitSystemTypeOrNull(foreignSelectionOwner.ilTypeRef)
+        if (usesRuntimeCollectionContainsAllFallback) {
+            emitSystemTypeOrNull(checkNotNull(exactInputType).classInfo.ilTypeRef)
+        }
         methodContext.emit(
             "ldstr ${(naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()).toIlStringLiteral()}",
             pushes = 1,
@@ -3357,6 +3378,10 @@ internal class DotNetIlExpressionCodegen(
         }
         methodContext.emit(
             when {
+                usesRuntimeCollectionContainsAllFallback ->
+                    DotNetGenericInterfaceRuntime.invokeUniqueCollectionContainsAllCallInstruction(
+                        coreLibraryReference
+                    )
                 isExactInputBoolean ->
                     DotNetGenericInterfaceRuntime.invokeUniqueConcreteUnaryMemberCallInstruction(
                         coreLibraryReference
@@ -3370,7 +3395,7 @@ internal class DotNetIlExpressionCodegen(
                     coreLibraryReference
                 )
             },
-            pops = 4,
+            pops = if (usesRuntimeCollectionContainsAllFallback) 5 else 4,
             pushes = 1,
         )
         if (resultSlot != null) {
@@ -3393,7 +3418,11 @@ internal class DotNetIlExpressionCodegen(
 
     private fun genericOwnerCapabilitySlotOrNull(source: IrSimpleFunction): IrSimpleFunction? =
         genericOwnerCapabilitySlots[source]
-            ?: source.allOverridden().firstNotNullOfOrNull(genericOwnerCapabilitySlots::get)
+            ?: typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(source)
+            ?: source.allOverridden().firstNotNullOfOrNull { overridden ->
+                genericOwnerCapabilitySlots[overridden]
+                    ?: typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(overridden)
+            }
 
     private fun genericOwnerObjectCarrierCallReturnTypeOrNull(
         call: IrCall,
@@ -3407,7 +3436,28 @@ internal class DotNetIlExpressionCodegen(
         val semanticInfo = availableFunctions[semanticSlot]
             ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
             ?: return null
-        return (semanticInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        val semanticReturnType = (semanticInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+            ?: return null
+        val runtimeSemanticOwner = (semanticSlot.parent as? IrClass)?.takeIf { owner ->
+            typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(semanticSlot) != null &&
+                    typeMapper.isRuntimeReifiedGenericInterface(owner)
+        }
+        if (call.arguments.size == 1 && runtimeSemanticOwner != null) {
+            val memberView = typeMapper.genericInterfaceMemberView(semanticSlot, runtimeSemanticOwner)
+            val naturalReturnType = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
+                semanticSlot,
+                memberView,
+            )?.signature?.returnType.let { it as? DotNetIlReturnType.Value }?.type
+            if (naturalReturnType != null && naturalReturnType != semanticReturnType &&
+                naturalReturnType.isDotNetReferenceShaped() && semanticReturnType.isDotNetReferenceShaped()
+            ) {
+                // The capability branch returns the canonical reference while a natural-only
+                // foreign implementation returns I<T>. Their common identity-preserving carrier
+                // is object; the next actual member use performs capability-or-natural dispatch.
+                return DotNetIlValueType.Object
+            }
+        }
+        return semanticReturnType
     }
 
     /**
@@ -3513,7 +3563,8 @@ internal class DotNetIlExpressionCodegen(
     private fun IrExpression.readsGenericOwnerForeignDispatchDeclaration(): Boolean = when (this) {
         is IrGetValue -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
         is IrGetField -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
-        is IrCall -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner)
+        is IrCall -> typeMapper.isGenericOwnerForeignDispatchDeclaration(symbol.owner) ||
+                typeMapper.genericOwnerForeignDispatchCallTarget(this) != null
         is IrTypeOperatorCall -> when (operator) {
             IrTypeOperator.CAST,
             IrTypeOperator.SAFE_CAST,
@@ -3583,6 +3634,12 @@ internal class DotNetIlExpressionCodegen(
             ),
         )
         val memberView = typeMapper.genericInterfaceMemberView(callee, interfaceClass)
+        val usesRuntimeTypeArgumentFalseBarrier =
+            DotNetRuntimeTypes.genericInterfaceUsesForeignTypeArgumentFalseBarrier(callee)
+        val usesRuntimeCollectionContainsAllFallback =
+            DotNetRuntimeTypes.genericInterfaceUsesForeignCollectionContainsAllFallback(callee)
+        val runtimeForeignNaturalOwner = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
+            ?.declaredClassInfo
         val capabilitySignatureMapper = when (memberView) {
             DotNetGenericInterfaceMemberView.DECLARED -> declaredGenericSignatureTypeMapper
             DotNetGenericInterfaceMemberView.EXACT -> exactGenericSignatureTypeMapper
@@ -3597,6 +3654,13 @@ internal class DotNetIlExpressionCodegen(
         } ?: return false
         val capabilityMethodInstantiation = methodInstantiation(capabilitySignatureMapper) ?: return false
         val capabilitySignature = callee.dotNetSignature(capabilitySignatureMapper)
+        val runtimeCollectionParameterOwner = capabilitySignature.parameterTypes.getOrNull(1)
+            .let { it as? DotNetIlValueType.GenericInstance }
+            ?.classInfo
+        val hasRuntimeForeignInputFallback = runtimeForeignNaturalOwner != null &&
+                (usesRuntimeTypeArgumentFalseBarrier ||
+                        (usesRuntimeCollectionContainsAllFallback &&
+                                runtimeCollectionParameterOwner != null))
         val capabilityParameterTypes = capabilitySignature.parameterTypes.map { parameterType ->
             parameterType.substituteDotNetTypeParameters(
                 capabilityReceiverType.arguments,
@@ -3631,11 +3695,21 @@ internal class DotNetIlExpressionCodegen(
             }
         }
 
-        emitExpression(receiver, canonicalReceiverType)
-        val receiverSlot = spillToSyntheticLocal(canonicalReceiverType, "<genericInterfaceReceiver>")
+        // The ordinary rehearsal boundary may already be the natural I<T>, while the fallback
+        // sibling is the arity-zero semantic interface. Spill through object so neither view is
+        // asserted before its own `isinst`; the receiver is still evaluated exactly once.
+        emitExpression(receiver, DotNetIlValueType.Object)
+        val receiverSlot = spillToSyntheticLocal(
+            DotNetIlValueType.Object,
+            "<genericInterfaceReceiver>",
+        )
         val capabilitySlot = methodContext.declareSyntheticLocal(
             capabilityReceiverType,
             "<genericInterfaceCapability>",
+        )
+        val canonicalSlot = methodContext.declareSyntheticLocal(
+            canonicalReceiverType,
+            "<genericInterfaceCanonical>",
         )
         val resultSlot = expectedType?.let { resultType ->
             methodContext.declareSyntheticLocal(resultType, "<genericInterfaceResult>")
@@ -3672,6 +3746,12 @@ internal class DotNetIlExpressionCodegen(
 
         methodContext.emitLabel(fallbackLabel)
         methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        methodContext.emit("isinst ${canonicalReceiverType.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emit(storeLocalInstruction(canonicalSlot.index), pops = 1)
+        methodContext.emit(loadLocalInstruction(canonicalSlot.index), pushes = 1)
+        val missingCanonicalLabel = methodContext.nextLabel("genericInterfaceMissingCanonical")
+        methodContext.emitBranch("brfalse", missingCanonicalLabel, pops = 1)
+        methodContext.emit(loadLocalInstruction(canonicalSlot.index), pushes = 1)
         emitArguments(
             call.arguments.drop(1),
             canonical.parameterTypes.drop(1),
@@ -3689,6 +3769,57 @@ internal class DotNetIlExpressionCodegen(
         )
         canonicalResultCoercion?.let(::emitWideningCoercion)
         resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+        methodContext.emitGoto(joinLabel)
+
+        methodContext.emitLabel(missingCanonicalLabel)
+        if (hasRuntimeForeignInputFallback) {
+            methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+            emitSystemTypeOrNull(checkNotNull(runtimeForeignNaturalOwner).ilTypeRef)
+            if (usesRuntimeCollectionContainsAllFallback) {
+                emitSystemTypeOrNull(checkNotNull(runtimeCollectionParameterOwner).ilTypeRef)
+            }
+            methodContext.emit(
+                "ldstr ${typeMapper.genericInterfaceTypedMethodName(callee).toIlStringLiteral()}",
+                pushes = 1,
+            )
+            val regularArguments = call.arguments.drop(1)
+            methodContext.emit("ldc.i4.${regularArguments.size}", pushes = 1)
+            methodContext.emit("newarr ${coreLibraryReference}System.Object", pops = 1, pushes = 1)
+            regularArguments.forEachIndexed { index, argument ->
+                methodContext.emit("dup", pops = 1, pushes = 2)
+                methodContext.emit("ldc.i4.$index", pushes = 1)
+                emitExpression(argument, DotNetIlValueType.Object)
+                methodContext.emit("stelem.ref", pops = 3)
+            }
+            methodContext.emit(
+                if (usesRuntimeCollectionContainsAllFallback) {
+                    DotNetGenericInterfaceRuntime.invokeUniqueCollectionContainsAllCallInstruction(
+                        coreLibraryReference
+                    )
+                } else {
+                    DotNetGenericInterfaceRuntime
+                        .invokeUniqueTypeArgumentUnaryMemberWithFalseBarrierCallInstruction(
+                            coreLibraryReference
+                        )
+                },
+                pops = if (usesRuntimeCollectionContainsAllFallback) 5 else 4,
+                pushes = 1,
+            )
+            val foreignResultType = expectedType ?: error(
+                "Internal .NET backend error: Runtime input fallback lost its Boolean result"
+            )
+            if (foreignResultType != DotNetIlValueType.Object) {
+                methodContext.emit(
+                    checkNotNull(foreignResultType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)),
+                    pops = 1,
+                    pushes = 1,
+                )
+            }
+            resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+            methodContext.emitGoto(joinLabel)
+        } else {
+            emitThrowClassCastException()
+        }
 
         methodContext.emitLabel(joinLabel)
         resultSlot?.let { slot -> methodContext.emit(loadLocalInstruction(slot.index), pushes = 1) }

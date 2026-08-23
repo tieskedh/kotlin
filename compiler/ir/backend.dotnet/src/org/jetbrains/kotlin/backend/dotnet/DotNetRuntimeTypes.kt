@@ -109,6 +109,8 @@ internal object DotNetRuntimeTypes {
     private fun runtimeInterface(
         canonicalName: String,
         hasRehearsalDeclaredView: Boolean = false,
+        hasRehearsalExactView: Boolean = false,
+        usesDeclaredViewByDefaultInRehearsal: Boolean = false,
     ): DotNetGenericInterfaceInfo =
         DotNetGenericInterfaceInfo(
             canonicalClassInfo = DotNetIlClassInfo(
@@ -124,13 +126,24 @@ internal object DotNetRuntimeTypes {
             } else {
                 null
             },
+            exactClassInfo = if (hasRehearsalExactView) {
+                DotNetIlClassInfo(
+                    ilClassName = dotNetExactGenericInterfaceName(canonicalName, 1),
+                    typeParameterVariances = listOf(Variance.INVARIANT),
+                    assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+                )
+            } else {
+                null
+            },
             isDeclaredViewStableInTypedSignatures = hasRehearsalDeclaredView,
+            usesDeclaredViewByDefaultInRehearsal = usesDeclaredViewByDefaultInRehearsal,
         )
 
     private val iteratorGenericInterfaceInfo =
         runtimeInterface(
             "Kotlin.Collections.Iterator",
             hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
         )
     private val iteratorBase = iteratorGenericInterfaceInfo.canonicalClassInfo
     val iteratorType = DotNetIlValueType.UserClass(iteratorBase)
@@ -154,6 +167,7 @@ internal object DotNetRuntimeTypes {
         runtimeInterface(
             "Kotlin.Collections.Iterable",
             hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
         )
     private val iterableBase = iterableGenericInterfaceInfo.canonicalClassInfo
     val iterableType = DotNetIlValueType.UserClass(iterableBase)
@@ -164,7 +178,12 @@ internal object DotNetRuntimeTypes {
     val mutableIterableType = DotNetIlValueType.UserClass(mutableIterableBase)
 
     private val collectionGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.Collection")
+        runtimeInterface(
+            "Kotlin.Collections.Collection",
+            hasRehearsalDeclaredView = true,
+            hasRehearsalExactView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val collectionBase = collectionGenericInterfaceInfo.canonicalClassInfo
     private val collectionType = DotNetIlValueType.UserClass(collectionBase)
 
@@ -188,7 +207,12 @@ internal object DotNetRuntimeTypes {
     val mutableListType = DotNetIlValueType.UserClass(mutableListBase)
 
     private val setGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.Set")
+        runtimeInterface(
+            "Kotlin.Collections.Set",
+            hasRehearsalDeclaredView = true,
+            hasRehearsalExactView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val setBase = setGenericInterfaceInfo.canonicalClassInfo
     val setType = DotNetIlValueType.UserClass(setBase)
 
@@ -225,6 +249,14 @@ internal object DotNetRuntimeTypes {
     private val mutableMapEntryBase = mutableMapEntryGenericInterfaceInfo.canonicalClassInfo
     val mutableMapEntryType = DotNetIlValueType.UserClass(mutableMapEntryBase)
 
+    private fun openRuntimeInterfaceType(
+        info: DotNetGenericInterfaceInfo,
+        view: DotNetGenericInterfaceView,
+    ): DotNetIlValueType.GenericInstance = DotNetIlValueType.GenericInstance(
+        checkNotNull(info.classInfo(view)),
+        listOf(DotNetIlValueType.TypeParameter(index = 0, isMethodParameter = false)),
+    )
+
     init {
         listIteratorBase.interfaces = listOf(iteratorType)
         mutableIteratorBase.interfaces = listOf(iteratorType)
@@ -239,12 +271,42 @@ internal object DotNetRuntimeTypes {
         mutableSetBase.interfaces = listOf(setType, mutableCollectionType)
         mutableMapBase.interfaces = listOf(mapType)
         mutableMapEntryBase.interfaces = listOf(mapEntryType)
+
+        val declaredIterable = openRuntimeInterfaceType(
+            iterableGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val declaredCollection = openRuntimeInterfaceType(
+            collectionGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val exactCollection = openRuntimeInterfaceType(
+            collectionGenericInterfaceInfo,
+            DotNetGenericInterfaceView.EXACT,
+        )
+        val declaredSet = openRuntimeInterfaceType(
+            setGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        collectionGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterable)
+        collectionGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
+            declaredCollection,
+            declaredIterable,
+        )
+        setGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredCollection)
+        setGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
+            declaredSet,
+            exactCollection,
+        )
     }
 
     private data class RuntimeGenericInterfaceMethodNames(
         val canonical: String,
         val typed: String? = null,
         val property: String? = null,
+        val canonicalObjectParameterIndices: Set<Int> = emptySet(),
+        val foreignTypeArgumentFalseBarrier: Boolean = false,
+        val foreignCollectionContainsAllFallback: Boolean = false,
     )
 
     private data class RuntimeGenericInterfaceDescriptor(
@@ -279,13 +341,21 @@ internal object DotNetRuntimeTypes {
     private val collectionMethods = iterableMethods + mapOf(
         "get_size" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Size",
+            typed = "get_Size",
             property = "Size",
         ),
-        "isEmpty" to RuntimeGenericInterfaceMethodNames("IsEmpty"),
+        "isEmpty" to RuntimeGenericInterfaceMethodNames("IsEmpty", typed = "IsEmpty"),
         "contains" to RuntimeGenericInterfaceMethodNames(
             canonical = "ContainsErased",
+            typed = "Contains",
+            foreignTypeArgumentFalseBarrier = true,
         ),
-        "containsAll" to RuntimeGenericInterfaceMethodNames("ContainsAll"),
+        "containsAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "ContainsAll",
+            typed = "ContainsAll",
+            canonicalObjectParameterIndices = setOf(0),
+            foreignCollectionContainsAllFallback = true,
+        ),
     )
     private val mutableCollectionMethods = mutableIterableMethods + mapOf(
         "add" to RuntimeGenericInterfaceMethodNames("Add"),
@@ -296,6 +366,9 @@ internal object DotNetRuntimeTypes {
         "clear" to RuntimeGenericInterfaceMethodNames("Clear"),
     )
     private val listMethods = collectionMethods + mapOf(
+        // List is outside the atomic Runtime Collection/Set rehearsal and retains its accepted
+        // canonical nested-Collection parameter until that complete family migrates.
+        "containsAll" to RuntimeGenericInterfaceMethodNames("ContainsAll"),
         "get" to RuntimeGenericInterfaceMethodNames("Get"),
         "indexOf" to RuntimeGenericInterfaceMethodNames(
             canonical = "IndexOfErased",
@@ -704,9 +777,14 @@ internal object DotNetRuntimeTypes {
                 declaredClassInfo = null,
                 exactClassInfo = null,
                 isDeclaredViewStableInTypedSignatures = false,
+                usesDeclaredViewByDefaultInRehearsal = false,
             )
         }
     }
+
+    /** Runtime families whose natural constructed view is the ordinary rehearsal carrier. */
+    fun usesDeclaredViewByDefaultInRehearsal(irClass: IrClass): Boolean =
+        genericInterfaceDescriptorFor(irClass)?.info?.usesDeclaredViewByDefaultInRehearsal == true
 
     /** Runtime-owned erased interfaces plus profile-mapped Common interfaces handled by codegen. */
     fun hasBuiltInGenericInterfaceMapping(
@@ -766,6 +844,18 @@ internal object DotNetRuntimeTypes {
     fun genericInterfacePropertyNameOrNull(function: IrSimpleFunction): String? =
         genericInterfaceMethodNamesOrNull(function)?.property
 
+    /** Zero-based regular parameters whose canonical Runtime MethodDef uses `object`. */
+    fun genericInterfaceCanonicalObjectParameterIndices(function: IrSimpleFunction): Set<Int> =
+        genericInterfaceMethodNamesOrNull(function)?.canonicalObjectParameterIndices.orEmpty()
+
+    /** A natural-only foreign implementation must reject an incompatible candidate with `false`. */
+    fun genericInterfaceUsesForeignTypeArgumentFalseBarrier(function: IrSimpleFunction): Boolean =
+        genericInterfaceMethodNamesOrNull(function)?.foreignTypeArgumentFalseBarrier == true
+
+    /** `containsAll` needs an element-wise fallback when two natural constructions cannot unify. */
+    fun genericInterfaceUsesForeignCollectionContainsAllFallback(function: IrSimpleFunction): Boolean =
+        genericInterfaceMethodNamesOrNull(function)?.foreignCollectionContainsAllFallback == true
+
     fun genericInterfaceFunctionInfoOrNull(
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
@@ -773,9 +863,23 @@ internal object DotNetRuntimeTypes {
         val interfaceClass = function.parent as? IrClass ?: return null
         val descriptor = genericInterfaceDescriptorFor(interfaceClass, typeMapper.classifierInfo(interfaceClass)) ?: return null
         val physicalMethodName = descriptor.methods[function.dotNetIlMethodName()]?.canonical ?: return null
+        val mappedSignature = function.dotNetSignature(typeMapper.canonicalGenericInterfaceSignatureView())
+        val objectParameters = descriptor.methods[function.dotNetIlMethodName()]
+            ?.canonicalObjectParameterIndices
+            .orEmpty()
+        val parameterOffset = if (mappedSignature.hasThis) 1 else 0
+        val canonicalSignature = if (objectParameters.isEmpty()) {
+            mappedSignature
+        } else {
+            mappedSignature.copy(
+                parameterTypes = mappedSignature.parameterTypes.mapIndexed { index, type ->
+                    if (index - parameterOffset in objectParameters) DotNetIlValueType.Object else type
+                },
+            )
+        }
         return DotNetIlFunctionInfo(
             descriptor.info.canonicalClassInfo,
-            function.dotNetSignature(typeMapper),
+            canonicalSignature,
             physicalMethodName,
         )
     }

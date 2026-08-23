@@ -500,6 +500,14 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-runtime-iterator"),
         )
+        validateGenericOwnerRuntimeCollectionSetCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-runtime-collection-set"),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4130,6 +4138,8 @@ private const val GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -10320,6 +10330,247 @@ private fun validateGenericOwnerRuntimeIteratorCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime iterator probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves that the Runtime Collection/Set family remains naturally authorable from C#. The
+ * covariant public interfaces expose only output-safe members; ordinary public Contains(T) and
+ * ContainsAll(Collection<T>) methods supply the input convention without making a foreign class
+ * implement either Kotlin's arity-zero semantic capability or its invariant exact sibling.
+ */
+private fun validateGenericOwnerRuntimeCollectionSetCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime Collection/Set C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime Collection/Set C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime Collection/Set C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeCollectionSetConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Reflection;
+            using generic.owner.runtime.collectionset;
+
+            public sealed class NaturalIterator<T> : Kotlin.Collections.Iterator<T>
+            {
+                private readonly T[] values;
+                private int index;
+
+                public NaturalIterator(T[] values)
+                {
+                    this.values = values;
+                }
+
+                public bool HasNext() => index < values.Length;
+
+                public T Next()
+                {
+                    if (!HasNext()) throw new InvalidOperationException("iterator consumed");
+                    return values[index++];
+                }
+            }
+
+            public class NaturalCollection<T> : Kotlin.Collections.Collection<T>
+            {
+                private readonly T[] values;
+
+                public NaturalCollection(params T[] values)
+                {
+                    this.values = values;
+                }
+
+                public int ContainsAllCalls { get; private set; }
+                public int Size => values.Length;
+                public bool IsEmpty() => values.Length == 0;
+                public Kotlin.Collections.Iterator<T> GetIterator() =>
+                    new NaturalIterator<T>(values);
+
+                public bool Contains(T value)
+                {
+                    foreach (var candidate in values)
+                    {
+                        if (EqualityComparer<T>.Default.Equals(candidate, value)) return true;
+                    }
+                    return false;
+                }
+
+                public bool ContainsAll(Kotlin.Collections.Collection<T> elements)
+                {
+                    ContainsAllCalls++;
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext())
+                    {
+                        if (!Contains(iterator.Next())) return false;
+                    }
+                    return true;
+                }
+            }
+
+            public sealed class NaturalSet<T> : NaturalCollection<T>, Kotlin.Collections.Set<T>
+            {
+                public NaturalSet(params T[] values) : base(values) {}
+            }
+
+            public static class Program
+            {
+                private static void AssertCovariant(Type openInterface)
+                {
+                    var attributes = openInterface.GetGenericArguments()[0]
+                        .GenericParameterAttributes & GenericParameterAttributes.VarianceMask;
+                    if (attributes != GenericParameterAttributes.Covariant)
+                        throw new InvalidOperationException(openInterface + " is not covariant");
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == typeof(Kotlin.Collections.Collection) ||
+                            contract == typeof(Kotlin.Collections.Set))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired a compiler ABI dependency: " + contract);
+                    }
+                }
+
+                private static void AssertTypedFields(Type owner)
+                {
+                    foreach (var name in new[] { "first", "second" })
+                    {
+                        var field = owner.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (field == null || !field.FieldType.IsGenericParameter)
+                            throw new InvalidOperationException(owner + "." + name + " did not retain !T");
+                    }
+                }
+
+                public static int Main()
+                {
+                    AssertCovariant(typeof(Kotlin.Collections.Collection<>));
+                    AssertCovariant(typeof(Kotlin.Collections.Set<>));
+                    if (!Array.Exists(
+                            typeof(Kotlin.Collections.Set<>).GetInterfaces(),
+                            contract => contract.IsGenericType &&
+                                contract.GetGenericTypeDefinition() ==
+                                    typeof(Kotlin.Collections.Collection<>)))
+                        throw new InvalidOperationException("Set<T> lost Collection<T>");
+
+                    var strings = new NaturalCollection<string>("alpha", "beta");
+                    AssertNaturalOnly(strings);
+                    Kotlin.Collections.Collection<object> widenedStrings = strings;
+                    if (!collectionSetApiKt.exactCollectionContains(strings, "beta") ||
+                        !collectionSetApiKt.widenedCollectionContains(widenedStrings, "alpha") ||
+                        collectionSetApiKt.widenedCollectionContains(widenedStrings, 17))
+                        throw new InvalidOperationException("foreign reference Collection<T> dispatch failed");
+
+                    var ints = new NaturalCollection<int>(11, 13);
+                    var sameInts = new NaturalCollection<int>(11, 13);
+                    var mixedStrings = new NaturalCollection<string>("11", "13");
+                    var emptyStrings = new NaturalCollection<string>();
+                    if (!collectionSetApiKt.sameCollection(ints, ints) ||
+                        !collectionSetApiKt.widenedCollectionContains(ints, 13) ||
+                        collectionSetApiKt.widenedCollectionContains(ints, "13"))
+                        throw new InvalidOperationException("foreign value Collection<T> dispatch failed");
+                    if (!collectionSetApiKt.widenedCollectionContainsAll(ints, sameInts) ||
+                        ints.ContainsAllCalls != 1)
+                        throw new InvalidOperationException("compatible ContainsAll did not use C#");
+                    if (collectionSetApiKt.widenedCollectionContainsAll(ints, mixedStrings) ||
+                        !collectionSetApiKt.widenedCollectionContainsAll(ints, emptyStrings) ||
+                        ints.ContainsAllCalls != 1)
+                        throw new InvalidOperationException("semantic Collection.containsAll fallback failed");
+                    var intIterator = collectionSetApiKt.exactCollectionIterator<int>(ints)
+                        as Kotlin.Collections.Iterator<int>;
+                    if (intIterator == null || intIterator.Next() != 11)
+                        throw new InvalidOperationException("foreign Collection iterator failed");
+
+                    var set = new NaturalSet<int>(17, 19);
+                    var sameSet = new NaturalCollection<int>(17, 19);
+                    AssertNaturalOnly(set);
+                    if (!collectionSetApiKt.sameSet(set, set) ||
+                        !collectionSetApiKt.widenedSetContains(set, 19) ||
+                        collectionSetApiKt.widenedSetContains(set, "19"))
+                        throw new InvalidOperationException("foreign Set<T> dispatch failed");
+                    if (!collectionSetApiKt.widenedSetContainsAll(set, sameSet) ||
+                        set.ContainsAllCalls != 1 ||
+                        collectionSetApiKt.widenedSetContainsAll(set, mixedStrings) ||
+                        !collectionSetApiKt.widenedSetContainsAll(set, emptyStrings) ||
+                        set.ContainsAllCalls != 1)
+                        throw new InvalidOperationException("semantic Set.containsAll fallback failed");
+                    var setIterator = collectionSetApiKt.exactSetIterator<int>(set)
+                        as Kotlin.Collections.Iterator<int>;
+                    if (setIterator == null || setIterator.Next() != 17)
+                        throw new InvalidOperationException("foreign Set iterator failed");
+
+                    AssertTypedFields(typeof(RuntimeCollectionValue<>));
+                    AssertTypedFields(typeof(RuntimeSetValue<>));
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeCollectionSetConsumer.exe"
+        else "RuntimeCollectionSetConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime Collection/Set probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime Collection/Set probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime Collection/Set probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

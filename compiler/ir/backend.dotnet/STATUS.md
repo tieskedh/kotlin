@@ -269,6 +269,51 @@ verification, and work state.
   to cross every old Kotlin API boundary yet. See
   [`docs/archive/runtime-reified-iterator-foundation-2026-08-23.md`](docs/archive/runtime-reified-iterator-foundation-2026-08-23.md).
 
+  ABI/runtime surface 50 now migrates the first atomic input-bearing Runtime
+  collection family. Natural covariant `Collection<T>` and `Set<T>` own their
+  CLR-legal output/query members, while invariant exact siblings own only
+  `Contains(T)` and `ContainsAll(Collection<T>)`. The accepted arity-zero
+  interfaces remain Kotlin semantic capabilities; neither the natural
+  interface nor an ordinary C# implementation inherits them. Kotlin
+  implementations carry all selected views on one object and retain both
+  implementation fields as real `!T` storage.
+
+  Exact calls and CLR reference covariance remain natural typed operations.
+  Kotlin-only value-type widening and incompatible nested collection inputs
+  cross the semantic capability only at the operation which requires it. A
+  moved `containsAll` semantic body now routes its nested `contains` through
+  the already-planned false-barrier dispatcher instead of unboxing the
+  candidate prematurely. Canonical bridges take their observable MethodDef
+  signature from the actual canonical slot, and a separate consumer retains a
+  producer-recorded natural carrier rather than re-planning an external stub.
+
+  A separately compiled sealed, non-partial C# class implements only
+  `Collection<T>` or `Set<T>` plus ordinary public `Contains(T)` and
+  `ContainsAll(Collection<T>)` methods. It names no exact sibling, arity-zero
+  capability, generated semantic interface, or source-generator bridge. A
+  compatible `containsAll` invokes the C# method directly; an incompatible
+  construction iterates the original elements and applies the `contains`
+  barrier, preserving the required `true` result for an empty mixed input.
+  Open iterator results join canonical and natural reference views through
+  `object` until the next actual member dispatch, without a wrapper or identity
+  change.
+
+  PSI and LightTree Kotlin/C# products are green on Framework 4.8 and .NET 10.
+  The proof covers reference covariance, value-type Kotlin widening, exact and
+  semantic calls, compatible/direct and incompatible/empty `containsAll`,
+  inherited C# method discovery, iterator joins, identity, and reflected `!T`
+  fields. The final full aggregate exits zero. Direct XML audit covers 190
+  freshly written suites/2,295 tests with zero failures, errors, or skips: 187
+  FIR suites/2,167 tests, two integration suites/127 tests, and the one-test
+  backend resolver suite. The unchanged green six-test `dotnet.ir` model root
+  makes the target total 191 suites/2,301 tests. The aggregate also closed two
+  adjacent physical-ABI regressions: the hand-written Runtime List now owns
+  separate MethodImpls for `List.ContainsAll(Collection)` and the broad
+  `Collection.ContainsAll(object)` slot, while a value-class static `-impl`
+  helper whose MethodImpl arrows were deliberately removed retains its own
+  fully lowered signature. See
+  [`docs/archive/runtime-reified-collection-set-family-2026-08-23.md`](docs/archive/runtime-reified-collection-set-family-2026-08-23.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -2949,22 +2994,23 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The CharSequence min/max aggregate head passed every constituent of
-the strict target gate. The normal aggregate command remains:
+The Runtime reified Collection/Set family passed every constituent of the
+strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate plus explicit model-suite freshness rerun completed
-successfully on 2026-08-18. Backend, FIR2IR, stdlib product,
-Framework/CoreCLR, Roslyn, and integration inputs were executed for the final
-semantic head. Direct audit of all three freshly written result roots covers
-190 XML files and 2,274 tests:
+The latest aggregate completed successfully on 2026-08-23. Backend, FIR2IR,
+stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
+for the final surface-50 head. Direct audit of all freshly written result roots
+covers 190 XML suites and 2,295 tests; the unchanged green `dotnet.ir` model
+root brings the complete target inventory to 191 suites and 2,301 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,143 FIR, IL-text, and box tests
-- 125 generated CLI and library-integration tests
+- 2,167 FIR, IL-text, and box tests
+- 127 generated CLI and library-integration tests
+- 1 backend resolver test
 - zero failures, errors, or skips
 
 The earlier profile-specialized generic-array-fill aggregate and explicit
@@ -4652,20 +4698,19 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    concrete CLR-unnameable nested value transition selects the object-domain
    state and semantic-result capability. Exact nested state remains typed; no
    wrapper, shadow state, global owner erasure, or stdlib switch was added.
-   The next CLR-legality proof establishes that broad direct and nested
-   inputs cannot remain on one covariant interface. Its executable three-view
-   product preserves exact typed calls, CLR-legal reference covariance,
-   value-type semantic widening, fixed candidate barriers, nested semantic
-   behavior, and identity on both runtimes. ABI 45 now records the invariant
-   exact TypeDef and both broad-input policies in that atomic physical family,
-   and separate consumers reconstruct its invariant CLR identity solely from
-   the producer record. Next materialize the split in the planner, MethodImpl
-   emission, and C# authoring contract, then close the remaining properties
-   required by `Collection<T>` and `Set<T>`; do not add a `Map`, `Set`, or
-   `Sequence` representation exception. Then continue the complete
-   Runtime/Stdlib owner graph and its
-   residual capability joins, covariant returns, and intrinsic state
-   requirements before executing representative products and exact inverse
+   The broad-input proof established that direct and nested inputs cannot
+   remain on one covariant interface. ABI surfaces 45 through 48 then recorded
+   and materialized its natural, invariant-exact, and semantic member family,
+   ordinary generated and non-partial C# authoring, property/query composition,
+   and the authoritative fixed candidate barrier. Surface 49 added the natural
+   Runtime Iterator/Iterable dependency. Surface 50 now closes the atomic
+   Runtime Collection/Set family, including true `!T` implementation fields,
+   compatible typed calls, Kotlin value-type widening, and natural-only C#
+   input/iterator dispatch without wrappers or compiler-interface obligations.
+   Recompute the next complete Common dependency family from this head. Do not
+   add a List, mutable collection, Map, Set, or Sequence representation
+   exception; extend the same structural rules only when the selected family
+   is complete. Then execute representative products and exact inverse
    rollback for the next go/no-go decision.
 2. The dependency recomputation after eager windowing selected and completed
    both the exact seven-declaration Iterable/Sequence-consumer closure and the

@@ -1284,19 +1284,32 @@ green six-test `dotnet.ir` model root for 191 suites/2,297 tests target-wide.
 See
 [`../archive/runtime-reified-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-iterator-foundation-2026-08-23.md).
 
-This is deliberately not a half-cutover of exported Kotlin signatures. The
-rehearsal-off ABI remains erased, and a pure natural C# implementation is not
-claimed to satisfy every old erased Kotlin API boundary. The atomic collection
-migration must move those type-use boundaries coherently rather than require
-C# to implement a compiler bridge.
+That atomic collection gate is now closed at ABI/runtime surface 50.
+`Collection<out T>` and `Set<out T>` are natural covariant Runtime interfaces
+whose output/query members remain directly CLR-typed. Their invariant exact
+siblings own only `contains(T)` and `containsAll(Collection<T>)`; the existing
+arity-zero interfaces remain semantic capabilities and are not parents of the
+natural C# surface. Kotlin implementations keep one identity and true `!T`
+fields. Exact calls and CLR reference covariance are natural, while value-type
+widening and incompatible nested inputs cross semantic routing only at the
+operation which needs it.
 
-Next derive and migrate the smallest atomic Runtime `Collection<T>`/Stdlib
-`Set<T>` producer graph onto this general family. The migration must preserve
-Common declaration semantics, source-built Runtime/Stdlib ownership, ordinary
-C# authoring, one identity, and typed CLR storage/calls as the normal route.
-Do not pull mutable collections, Map, defaults, arbitrary overload sets, or
-multiple owner parameters into that commit unless the product graph proves
-they are inseparable.
+A separately compiled non-partial C# implementation names only the natural
+interface and ordinary public input methods. Compatible `containsAll` calls
+that C# method directly. An incompatible physical construction iterates the
+original elements and applies the Kotlin `contains` barrier, so an empty mixed
+collection still returns `true`; no wrapper or compiler interface is imposed
+on C#. Open iterator results join through `object` until their next actual
+member use selects the semantic or natural view. PSI/LightTree and Framework
+4.8/.NET 10 Kotlin/C# execution are green. See
+[`../archive/runtime-reified-collection-set-family-2026-08-23.md`](../archive/runtime-reified-collection-set-family-2026-08-23.md).
+
+Next recompute the smallest complete Common dependency family after
+Collection/Set. Keep `List<T>`, mutable collections, Map, defaults, overload
+families, and multiple owner parameters on their current mappings unless that
+dependency proof selects one of them atomically. The natural CLR route and
+typed state remain the default; a semantic capability is an evidence-backed
+escape hatch, not the first implementation choice.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
