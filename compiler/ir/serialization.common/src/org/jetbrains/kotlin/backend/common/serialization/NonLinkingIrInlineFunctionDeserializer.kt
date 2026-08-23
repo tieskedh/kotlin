@@ -287,6 +287,10 @@ class NonLinkingIrInlineFunctionDeserializer(
                 }
             }
         }
+
+        val inlineFunctionSignatures: Set<IdSignature>
+            get() = signatureToFile.keys
+
         private val supportingFiles = when {
             supportingMainIr != null -> List(supportingMainIr.irFileCount) { fileIndex ->
                 FileDeserializer(supportingMainIr, fileIndex, containsPreparedInlineFunctionCopies = false)
