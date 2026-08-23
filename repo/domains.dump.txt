@@ -48,6 +48,7 @@ CompilerInfrastructure:
  - core/deserialization.common.jvm
  - core/language.model
  - core/language.targets
+ - core/language.targets.dotnet
  - core/language.targets.jvm
  - core/language.version-settings
  - core/names
@@ -149,6 +150,15 @@ Native:
  - native/objcexport-header-generator
  - native/unsafe-mem
  - native/utils
+
+DotNet:
+ - compiler/cli/cli-dotnet
+ - compiler/config.dotnet
+ - compiler/dotnet.imports
+ - compiler/frontend.common.dotnet
+ - compiler/ir/backend.dotnet
+ - compiler/ir/serialization.dotnet
+ - dotnet
 
 CoreLibs:
  - libraries/kotlin.test

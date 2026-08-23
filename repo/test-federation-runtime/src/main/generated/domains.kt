@@ -11,6 +11,7 @@ enum class Domain {
     Wasm,
     Js,
     Native,
+    DotNet,
     CoreLibs,
     AnalysisApi,
     BuildToolsApi,

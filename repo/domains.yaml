@@ -142,6 +142,21 @@ Native:
     - Frontend
     - CommonBackend
 
+DotNet:
+  include:
+    - "compiler/cli/cli-dotnet"
+    - "compiler/config.dotnet"
+    - "compiler/dotnet.imports"
+    - "compiler/frontend.common.dotnet"
+    - "compiler/ir/backend.dotnet"
+    - "compiler/ir/serialization.dotnet"
+    - "dotnet"
+  fullyAffectedBy:
+    - CoreLibs
+    - CompilerInfrastructure
+    - Frontend
+    - CommonBackend
+
 CoreLibs:
   include:
     - "libraries/stdlib"
