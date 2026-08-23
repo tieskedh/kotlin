@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-mutable-set-2026-08-23.md`](runtime-reified-mutable-set-2026-08-23.md)
+  records ABI/runtime surface 55's invariant natural `MutableSet<T>` diamond,
+  dual MutableSet/MutableCollection MethodImpl binding, typed state, and one-
+  MethodDef ordinary C# implementation proof.
 - [`runtime-reified-mutable-collection-2026-08-23.md`](runtime-reified-mutable-collection-2026-08-23.md)
   records ABI/runtime surface 54's invariant natural `MutableCollection<T>`,
   relative method-generic bulk inputs, value-type widening, true `!T` state,

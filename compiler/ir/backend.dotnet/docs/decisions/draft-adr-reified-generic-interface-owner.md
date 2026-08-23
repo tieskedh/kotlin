@@ -708,9 +708,20 @@ Collection candidate-input protocol, trimming, NativeAOT, performance, or
 tooling gates. See
 [`../archive/runtime-reified-mutable-collection-2026-08-23.md`](../archive/runtime-reified-mutable-collection-2026-08-23.md).
 
-`MutableList`, `MutableSet`, Map, broader properties/defaults/overload
-families, extra producer members, and mixed/multiple type parameters remain
-separate gates.
+ABI/runtime surface 55 adds natural invariant `MutableSet<T>` above natural
+`Set<T>` and `MutableCollection<T>`. Its source-redeclared iterator and
+mutation slots remain MethodDefs on the child. Both the child and mutable-
+collection parent bulk slots retain `<U : T>(Collection<U>)`; CLR interface
+maps prove their Kotlin MethodImpls and the one-method ordinary C# binding.
+
+No exact sibling is added for the invariant child and no MutableSet-specific
+compiler rule is introduced. Calls through a widened covariant Set parent keep
+the already admitted candidate-input route because that parent still cannot
+honestly place `T` in its natural CLR input surface. See
+[`../archive/runtime-reified-mutable-set-2026-08-23.md`](../archive/runtime-reified-mutable-set-2026-08-23.md).
+
+`MutableList`, Map, broader properties/defaults/overload families, extra
+producer members, and mixed/multiple type parameters remain separate gates.
 
 ## Remaining gates
 
