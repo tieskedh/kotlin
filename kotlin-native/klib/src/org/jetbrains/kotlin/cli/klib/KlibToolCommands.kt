@@ -200,13 +200,16 @@ internal class DumpIrInlinableFunctions(output: KlibToolOutput, args: ParsedArgu
         val symbolTable = SymbolTable(idSignaturer, IrFactoryImpl)
 
         val moduleDeserializer = NonLinkingIrInlineFunctionDeserializer.ModuleDeserializer(
-                inlinableFunctionsIr = inlinableFunctionsIr,
+                ir = inlinableFunctionsIr,
+                supportingMainIr = null,
+                containsPreparedInlineFunctionCopies = true,
                 detachedSymbolTable = symbolTable,
                 irInterner = IrInterningService(),
                 irFactory = symbolTable.irFactory,
                 anyNType = symbolTable.referenceClass(StandardClassIds.Any.toIdSignature()).defaultTypeWithoutArguments.makeNullable(),
                 unitType = symbolTable.referenceClass(StandardClassIds.Unit.toIdSignature()).defaultTypeWithoutArguments,
                 nothingType = symbolTable.referenceClass(StandardClassIds.Nothing.toIdSignature()).defaultTypeWithoutArguments,
+                externalSymbolResolver = null,
         )
 
         val dummyIrFile = IrFileImpl(
@@ -221,7 +224,7 @@ internal class DumpIrInlinableFunctions(output: KlibToolOutput, args: ParsedArgu
                 referenceRenderingStrategy = DumpIrReferenceRenderingAsSignatureStrategy(KonanManglerIr)
         )
 
-        val irDumps: List<String> = moduleDeserializer.reversedSignatureIndex.keys.mapNotNull { signature: IdSignature ->
+        val irDumps: List<String> = moduleDeserializer.inlineFunctionSignatures.mapNotNull { signature: IdSignature ->
             val preprocessedFunction = moduleDeserializer.deserializeInlineFunction(signature, dummyIrFile, dummyIrFile.module)
                     ?: return@mapNotNull null
             val irDump = preprocessedFunction.dumpOrFail(dumpOptions)
