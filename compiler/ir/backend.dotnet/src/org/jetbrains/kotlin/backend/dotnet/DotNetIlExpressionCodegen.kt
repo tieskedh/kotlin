@@ -3219,10 +3219,10 @@ internal class DotNetIlExpressionCodegen(
      * Keeps the direct semantic capability as the fast path while admitting an ordinary foreign
      * implementation of the natural `I<T>`. The runtime selects exactly one constructed natural
      * interface or rejects an ambiguous multi-construction object. The admitted foreign shapes
-     * are deliberately bounded to a value-result member with declaration-independent inputs, a
-     * declaration-invariant one-object-input Unit member, the exact sibling's one-natural-input
-     * Boolean member, or an upstream-authorized one-T-input fixed barrier; same-arity overload
-     * ambiguity and broader signatures remain outside this path.
+     * are deliberately bounded to a value-result or Unit member with declaration-independent
+     * inputs, a declaration-invariant one-object-input Unit member, the exact sibling's
+     * one-natural-input Boolean member, or an upstream-authorized one-T-input fixed barrier;
+     * same-arity overload ambiguity and broader signatures remain outside this path.
      */
     private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
         call: IrCall,
@@ -3295,6 +3295,9 @@ internal class DotNetIlExpressionCodegen(
                 (semanticResultType == DotNetIlValueType.Object ||
                         semanticResultType == naturalResultType ||
                         semanticResultType.isDotNetAssignableTo(DotNetIlValueType.Object))
+        val isDeclarationIndependentUnit = hasDeclarationIndependentInputs &&
+                semanticInfo.signature.returnType == DotNetIlReturnType.Void &&
+                naturalInfo.signature.returnType == DotNetIlReturnType.Void
         val isConsumer = regularArguments.size == 1 &&
                 sourceOwner.typeParameters.singleOrNull()?.variance ==
                     org.jetbrains.kotlin.types.Variance.INVARIANT &&
@@ -3331,7 +3334,9 @@ internal class DotNetIlExpressionCodegen(
                             DotNetIlReturnType.Value(fixedBarrierResultType) &&
                         naturalInfo.signature.returnType ==
                             DotNetIlReturnType.Value(fixedBarrierResultType))
-        if (!isProducer && !isConsumer && !isExactInputBoolean && !isFixedBarrier) {
+        if (!isProducer && !isDeclarationIndependentUnit && !isConsumer &&
+            !isExactInputBoolean && !isFixedBarrier
+        ) {
             return false
         }
         val hasValueResult = isProducer || isExactInputBoolean || isFixedBarrier
