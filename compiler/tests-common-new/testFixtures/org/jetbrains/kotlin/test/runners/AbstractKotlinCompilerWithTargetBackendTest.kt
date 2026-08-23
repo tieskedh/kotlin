@@ -67,5 +67,5 @@ abstract class AbstractKotlinCompilerNativeTest : AbstractKotlinCompilerWithTarg
 abstract class AbstractKotlinCompilerJKlibTest : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.JKLIB)
 
 @OptIn(UnspecifiedTargetBackend::class)
-@AffectedByCompiler
+@AffectedByDotNet
 abstract class AbstractKotlinCompilerDotNetTest : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET)

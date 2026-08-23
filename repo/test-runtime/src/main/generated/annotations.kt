@@ -54,6 +54,13 @@ annotation class AffectedByJs
 annotation class AffectedByNative
 
 /**
+* Will mark tests as 'affected by' the given domain [Domain.DotNet].
+* Such tests will run, additionally, for all commits affecting the DotNet domain.
+*/
+@Tag("affectedBy:DotNet")
+annotation class AffectedByDotNet
+
+/**
 * Will mark tests as 'affected by' the given domain [Domain.CoreLibs].
 * Such tests will run, additionally, for all commits affecting the CoreLibs domain.
 */
@@ -131,6 +138,7 @@ fun affectedByAnnotationOf(domain: Domain) = when (domain) {
     Domain.Wasm -> AffectedByWasm::class
     Domain.Js -> AffectedByJs::class
     Domain.Native -> AffectedByNative::class
+    Domain.DotNet -> AffectedByDotNet::class
     Domain.CoreLibs -> AffectedByCoreLibs::class
     Domain.AnalysisApi -> AffectedByAnalysisApi::class
     Domain.BuildToolsApi -> AffectedByBuildToolsApi::class
