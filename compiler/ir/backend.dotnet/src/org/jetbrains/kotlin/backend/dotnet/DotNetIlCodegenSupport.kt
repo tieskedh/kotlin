@@ -692,6 +692,7 @@ private enum class DotNetGenericInterfaceMapping(
     val physicalView: DotNetGenericInterfaceView,
     val canonicalizeNestedInterfaces: Boolean,
 ) {
+    DEFAULT(DotNetGenericInterfaceView.CANONICAL, false),
     CANONICAL(DotNetGenericInterfaceView.CANONICAL, false),
     DECLARED(DotNetGenericInterfaceView.DECLARED, false),
     EXACT(DotNetGenericInterfaceView.EXACT, false),
@@ -798,7 +799,7 @@ internal class DotNetIlTypeMapper private constructor(
         genericInterfaces,
         genericClasses,
         dotNetComparableInterfaceInfo(coreLibrary),
-        DotNetGenericInterfaceMapping.CANONICAL,
+        DotNetGenericInterfaceMapping.DEFAULT,
         DotNetClassifierInfoCache(),
         mutableMapOf(),
         mutableMapOf(),
@@ -953,6 +954,16 @@ internal class DotNetIlTypeMapper private constructor(
     private fun canonicalGenericInterfaceView(): DotNetIlTypeMapper =
         withGenericInterfaceMapping(DotNetGenericInterfaceMapping.CANONICAL)
 
+    private fun effectiveGenericInterfaceView(irClass: IrClass?): DotNetGenericInterfaceView =
+        if (irClass != null &&
+            genericInterfaceMapping == DotNetGenericInterfaceMapping.DEFAULT &&
+            isRuntimeReifiedGenericInterface(irClass)
+        ) {
+            DotNetGenericInterfaceView.DECLARED
+        } else {
+            genericInterfaceMapping.physicalView
+        }
+
     fun declaredGenericInterfaceView(): DotNetIlTypeMapper =
         withGenericInterfaceMapping(DotNetGenericInterfaceMapping.DECLARED)
 
@@ -987,6 +998,11 @@ internal class DotNetIlTypeMapper private constructor(
         irClass.isInterface && (genericInterfaces[irClass]?.canonicalClassInfo?.typeParameterCount == 0 ||
                 DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass, classifierInfo(irClass)) ||
                 externalDeclarations.hasGenericInterface(irClass))
+
+    /** Erasure relevant inside a typed outer signature, not the semantic capability identity. */
+    fun isErasedGenericInterfaceInTypedSignature(irClass: IrClass): Boolean =
+        isErasedGenericInterface(irClass) &&
+                genericInterfaceInfoOrNull(irClass)?.isDeclaredViewStableInTypedSignatures != true
 
     /** A rehearsal-selected Kotlin `I<T>` whose one natural CLR owner has a semantic capability. */
     fun isReifiedGenericInterface(irClass: IrClass): Boolean =
@@ -1105,16 +1121,22 @@ internal class DotNetIlTypeMapper private constructor(
         member: IrSimpleFunction,
         interfaceClass: IrClass,
     ): DotNetGenericInterfaceMemberView =
-        member.dotNetGenericInterfaceMemberView(interfaceClass, ::isErasedGenericInterface)
+        member.dotNetGenericInterfaceMemberView(
+            interfaceClass,
+            ::isErasedGenericInterfaceInTypedSignature,
+        )
 
     fun genericInterfaceMemberViews(
         member: IrSimpleFunction,
         interfaceClass: IrClass,
     ): List<DotNetGenericInterfaceMemberView> =
-        member.dotNetGenericInterfaceMemberViews(interfaceClass, ::isErasedGenericInterface)
+        member.dotNetGenericInterfaceMemberViews(
+            interfaceClass,
+            ::isErasedGenericInterfaceInTypedSignature,
+        )
 
     fun isClrLegalDeclaredGenericInterfaceSupertype(type: IrType, owner: IrClass): Boolean =
-        type.isDotNetClrLegalDeclaredSupertype(owner, ::isErasedGenericInterface)
+        type.isDotNetClrLegalDeclaredSupertype(owner, ::isErasedGenericInterfaceInTypedSignature)
 
     fun genericInterfaceInfoOrNull(irClass: IrClass): DotNetGenericInterfaceInfo? =
         if (!irClass.isInterface) null else (genericInterfaces[irClass]
@@ -1158,6 +1180,35 @@ internal class DotNetIlTypeMapper private constructor(
             },
             ::isErasedGenericClass,
         )
+
+    /** One explicitly selected Runtime family whose arity-zero owner is its semantic sibling. */
+    fun isRuntimeReifiedGenericInterface(irClass: IrClass): Boolean =
+        genericOwnerRehearsal &&
+                DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(irClass)
+
+    fun runtimeReifiedGenericInterfaceSemanticSlotOrNull(
+        function: IrSimpleFunction,
+    ): IrSimpleFunction? = function.takeIf { candidate ->
+        val owner = candidate.parent as? IrClass ?: return@takeIf false
+        isRuntimeReifiedGenericInterface(owner) &&
+                DotNetRuntimeTypes.genericInterfaceCanonicalMethodNameOrNull(candidate) != null
+    }
+
+    /** Physical member information for one Runtime declared/exact sibling. */
+    fun genericInterfaceCapabilityFunctionInfoOrNull(
+        function: IrSimpleFunction,
+        view: DotNetGenericInterfaceMemberView,
+    ): DotNetIlFunctionInfo? {
+        val owner = function.parent as? IrClass ?: return null
+        val ownerInfo = genericInterfaceInfoOrNull(owner) ?: return null
+        val physicalOwner = ownerInfo.classInfo(view.physicalView) ?: return null
+        val signatureMapper = genericInterfaceSignatureView(view)
+        return DotNetIlFunctionInfo(
+            physicalOwner,
+            function.dotNetSignature(signatureMapper),
+            genericInterfaceTypedMethodName(function),
+        )
+    }
 
     /**
      * Maps the OUTERMOST interface to one typed capability while mapping each logical type
@@ -1203,7 +1254,7 @@ internal class DotNetIlTypeMapper private constructor(
         )
         val mappedComparableInfo = comparableInterfaceInfo.takeIf { classifierInfo.isComparable }
         val genericClassInfo = genericClassInfoOrNull(irClass)
-        return (genericClassInfo?.classInfo ?: when (genericInterfaceMapping.physicalView) {
+        return (genericClassInfo?.classInfo ?: when (effectiveGenericInterfaceView(irClass)) {
             DotNetGenericInterfaceView.CANONICAL ->
                 genericInterfaces[irClass]?.canonicalClassInfo
                     ?: mappedComparableInfo?.canonicalClassInfo
@@ -1452,7 +1503,7 @@ internal class DotNetIlTypeMapper private constructor(
     fun genericOwnerNaturalRuntimeClassifierInfoOrNull(type: IrType): DotNetIlClassInfo? {
         val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
         genericOwnerCapabilityInfoOrNull(owner) ?: return null
-        return classInfoOrNull(owner)
+        return genericInterfaceInfoOrNull(owner)?.declaredClassInfo ?: classInfoOrNull(owner)
     }
 
     private fun genericOwnerCapabilityTypeOrNull(
@@ -1487,6 +1538,11 @@ internal class DotNetIlTypeMapper private constructor(
     private fun genericOwnerCapabilityInfoOrNull(owner: IrClass): DotNetIlClassInfo? {
         val capability = genericOwnerCapabilities[owner]
             ?: externalDeclarations.genericOwnerCapabilityInfoOrNull(owner)
+            ?: DotNetRuntimeTypes.genericInterfaceInfoFor(
+                owner,
+                classifierInfo(owner),
+                includeRehearsalDeclaredViews = true,
+            )?.canonicalClassInfo?.takeIf { isRuntimeReifiedGenericInterface(owner) }
             ?: return null
         recordAssemblyReference(capability)
         classInfoOrNull(owner)?.let { canonical ->
@@ -1913,7 +1969,7 @@ internal class DotNetIlTypeMapper private constructor(
         val genericInterfaceInfo = genericInterfaceInfoOrNull(irClass)
         if (
             isErasedGenericInterface(irClass) &&
-            (genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL ||
+            (effectiveGenericInterfaceView(irClass) == DotNetGenericInterfaceView.CANONICAL ||
                     genericInterfaceMapping.canonicalizeNestedInterfaces &&
                     genericInterfaceInfo?.isDeclaredViewStableInTypedSignatures != true)
         ) {
@@ -2034,9 +2090,9 @@ internal class DotNetIlTypeMapper private constructor(
             ?.takeIf(::isErasedGenericInterface)
         val parentGenericClass = (typeParameter.parent as? IrClass)
             ?.takeIf(::isErasedGenericClass)
-        if (
-            genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
-            parentGenericInterface != null
+        if (parentGenericInterface != null &&
+            effectiveGenericInterfaceView(parentGenericInterface) ==
+                DotNetGenericInterfaceView.CANONICAL
         ) {
             return DotNetIlValueType.Object
         }
@@ -2091,7 +2147,8 @@ internal class DotNetIlTypeMapper private constructor(
         if (parameterOwner != null) {
             if (isErasedGenericClass(parameterOwner)) return true
             if (
-                genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
+                effectiveGenericInterfaceView(parameterOwner) ==
+                    DotNetGenericInterfaceView.CANONICAL &&
                 isErasedGenericInterface(parameterOwner)
             ) {
                 return true

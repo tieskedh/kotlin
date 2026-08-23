@@ -148,6 +148,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
     private val externalDeclarations = context.externalDeclarationsForLowering()
     private val specialBridgeMethods = SpecialBridgeMethods(context)
 
+    private fun IrClass.isReifiedInterfaceForCurrentEpoch(): Boolean =
+        this in context.reifiedGenericInterfaces ||
+                externalDeclarations.hasReifiedGenericInterface(this) ||
+                (context.configuration.dotNetGenericOwnerRehearsal &&
+                        DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(this))
+
     private data class ReifiedInterfaceChildShape(
         val parents: List<IrClass>,
         val declaredMembers: List<IrSimpleFunction>,
@@ -534,10 +540,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
         fun IrType.reifiedInterfaceOwnerOrNull(): IrClass? =
             ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
-                ?.takeIf { candidate ->
-                    candidate in context.reifiedGenericInterfaces ||
-                            externalDeclarations.hasReifiedGenericInterface(candidate)
-                }
+                ?.takeIf { candidate -> candidate.isReifiedInterfaceForCurrentEpoch() }
 
         fun IrType.potentialSemanticInterfaceOwnerOrNull(): IrClass? {
             val simpleType = this as? IrSimpleType ?: return null
@@ -725,8 +728,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val isErasedKotlinOwner = when {
                     classifier.isInterface ->
                         classifier.isDotNetGenericInterfaceDeclaration &&
-                                classifier !in context.reifiedGenericInterfaces &&
-                                !externalDeclarations.hasReifiedGenericInterface(classifier)
+                                !classifier.isReifiedInterfaceForCurrentEpoch()
                     classifier.isDotNetGenericClassDeclaration ->
                         context.genericOwnerArchitecturePlans[classifier]
                             ?.isReifiedByGenericOwnerRehearsal == false ||
@@ -890,8 +892,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
             val owner = function.parent as? IrClass ?: return false
             if (owner.kind == ClassKind.INTERFACE &&
-                (owner in context.reifiedGenericInterfaces ||
-                        externalDeclarations.hasReifiedGenericInterface(owner)) &&
+                owner.isReifiedInterfaceForCurrentEpoch() &&
                 isFunctionOrItsParameter
             ) {
                 return true
@@ -1168,8 +1169,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val isNaturalReifiedInterfaceReceiver =
                     declaration.kind == IrParameterKind.DispatchReceiver &&
                             sourceOwner?.isInterface == true &&
-                            (sourceOwner in context.reifiedGenericInterfaces ||
-                                    externalDeclarations.hasReifiedGenericInterface(sourceOwner))
+                            sourceOwner.isReifiedInterfaceForCurrentEpoch()
                 if (!isNaturalReifiedInterfaceReceiver) {
                     recordSemanticDeclaration(declaration, declaration.type)
                 }
@@ -1211,14 +1211,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
                 recordExternalFunctionCarrier(source)
                 // The physical carrier is part of the callable ABI, so a separately compiled
-                // caller must derive the same decision from its external declaration stub. The
-                // producer module has already published explicitly selected non-natural views;
-                // recording the called stub here prevents the consumer from naming a constructed
-                // CLR interface which the published method deliberately does not accept.
-                recordSemanticDeclaration(source, source.returnType)
-                source.parameters
-                    .filter { parameter -> parameter.kind == IrParameterKind.Regular }
-                    .forEach { parameter -> recordSemanticDeclaration(parameter, parameter.type) }
+                // caller must consume the producer decision rather than re-plan an external stub
+                // from the caller's uses. A published carrier record above marks every selected
+                // non-natural slot; absence of such a record means that the producer MethodDef is
+                // natural. Reclassifying an exact external `Iterator<Int>` merely because this
+                // caller later widens it would bind the call as `object` even though the producer
+                // exported `Iterator<int>`.
+                if (source.origin != IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB) {
+                    recordSemanticDeclaration(source, source.returnType)
+                    source.parameters
+                        .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                        .forEach { parameter -> recordSemanticDeclaration(parameter, parameter.type) }
+                }
                 val classifierInputEntry = context.genericOwnerFunctionInputEntries[source]
                     ?: externalDeclarations.genericOwnerFunctionInputEntryOrNull(source)?.let { binding ->
                         materializeExternalGenericOwnerFunctionInputEntry(
