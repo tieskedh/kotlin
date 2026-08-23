@@ -7,16 +7,19 @@ verification, and work state.
 ## Current branch
 
 - Branch: `dotnet`
-- Upstream base: exact reviewed upstream commit `d78e4a4c14`
-- Last integration checkpoint: the complete 170-commit range after
-  `0e8c5f3f53` was audited by subject, paths, shared contract, and target-owned
-  reverse dependencies, then integrated by rebase on 2026-08-11. All 462
-  target commits remain present: range-diff classified 460 patches as
-  identical and exactly two inline patches as context-adjusted for upstream's
-  shared `IrErrorModuleFragment`; no target patch was added or removed. The
-  nine shared paths, architectural directions, stat-cache-only IL false
-  positives, and post-rebase verification are recorded in
-  [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
+- Upstream base: exact reviewed upstream commit
+  `f444263529ee3aaa7b657364979a5669030fbfa4`.
+- Last integration checkpoint: the complete 461-commit upstream range after
+  `d78e4a4c1465c00475b8019654b5905124dc30a6` was audited by subject, paths,
+  shared contract, and target-owned reverse dependencies, then integrated by
+  rebase on 2026-08-23/24. All 603 target commits remain present: range-diff
+  classifies 600 patches as identical and exactly three as context-adjusted;
+  no target patch was added or removed. Separate adaptations register the
+  `DotNet` Test Federation domain, follow Common's value-class implementation
+  sources, and restore the shared KLIB inline-dump consumer. The exact range,
+  one textual conflict, semantic audit, verification, rollback ref, and
+  remaining external MSVC lifecycle-generation gate are recorded in
+  [`docs/archive/upstream-sync-2026-08-24.md`](docs/archive/upstream-sync-2026-08-24.md).
 - Cross-cutting semantic boundary: Kotlin remains authoritative when CLR RTTI
   is stronger, except for a deliberately accepted pre-ABI entry in the
   breaking-change ledger. Warnings, suppression, `@UnsafeVariance`, and
@@ -3145,18 +3148,18 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Runtime reified MutableSet family passed every constituent of the
-strict target gate. The normal aggregate command remains:
+The rebased Runtime reified MutableSet head and all three post-rebase shared-
+contract adaptations passed every constituent of the strict target gate. The
+normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed successfully on 2026-08-23. Backend, FIR2IR,
+The latest aggregate completed successfully on 2026-08-24. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the final surface-55 head. Direct audit of all freshly written result roots
-covers 190 XML suites and 2,315 tests; the unchanged green `dotnet.ir` model
-root brings the complete target inventory to 191 suites and 2,321 tests:
+for the adapted surface-55 head. Direct audit of the result roots covers the
+complete target inventory of 191 suites and 2,321 tests:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,187 FIR, IL-text, and box tests
