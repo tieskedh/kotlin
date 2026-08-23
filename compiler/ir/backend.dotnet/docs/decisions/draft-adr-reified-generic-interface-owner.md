@@ -692,7 +692,23 @@ calls and Kotlin implementation state remain typed. An ordinary non-partial C#
 implementation names only `MutableListIterator<T>`. See
 [`../archive/runtime-reified-mutable-list-iterator-2026-08-23.md`](../archive/runtime-reified-mutable-list-iterator-2026-08-23.md).
 
-Input-bearing mutable collections, Map, broader properties/defaults/overload
+ABI/runtime surface 54 adds natural invariant `MutableCollection<T>`. Exact
+element mutation uses `T`; bulk inputs use a physical method parameter
+`<U : T>(Collection<U>)`. This is the first selected nested-input shape which
+retains Kotlin value-type subtyping without CLR interface covariance, owner
+erasure, or an object field. The Kotlin/KLIB member stays non-generic, and the
+relative parameter is a compiler-recorded physical slot fact.
+
+Both the Runtime slot and Kotlin MethodImpl carry `U : T`. Ordinary C# names
+only `MutableCollection<T>` and its natural parents, and Roslyn statically
+checks every selected mutation member. A natural-only foreign object behind an
+unnameable projected Kotlin receiver may use the bounded generic-method
+fallback for that operation. This does not close the earlier inherited
+Collection candidate-input protocol, trimming, NativeAOT, performance, or
+tooling gates. See
+[`../archive/runtime-reified-mutable-collection-2026-08-23.md`](../archive/runtime-reified-mutable-collection-2026-08-23.md).
+
+`MutableList`, `MutableSet`, Map, broader properties/defaults/overload
 families, extra producer members, and mixed/multiple type parameters remain
 separate gates.
 

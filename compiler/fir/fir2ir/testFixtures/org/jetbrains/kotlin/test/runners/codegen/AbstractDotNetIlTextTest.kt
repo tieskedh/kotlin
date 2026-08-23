@@ -536,6 +536,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-mutable-list-iterator"
             ),
         )
+        validateGenericOwnerRuntimeMutableCollectionCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-mutable-collection"
+            ),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4174,6 +4184,8 @@ private const val GENERIC_OWNER_RUNTIME_MUTABLE_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -10502,6 +10514,22 @@ private fun validateGenericOwnerRuntimeCollectionSetCSharp(
                     }
                 }
 
+                private static void AssertKotlinRelativeBulkImplementation(string name)
+                {
+                    var owner = typeof(RuntimeMutableCollectionValue<>);
+                    var ownerParameter = owner.GetGenericArguments()[0];
+                    foreach (var method in owner.GetMethods(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                    {
+                        if (method.Name != name || !method.IsGenericMethodDefinition) continue;
+                        var parameter = method.GetGenericArguments()[0];
+                        var constraints = parameter.GetGenericParameterConstraints();
+                        if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
+                    }
+                    throw new InvalidOperationException(
+                        name + " Kotlin implementation lost U : T");
+                }
+
                 private static void AssertTypedFields(Type owner)
                 {
                     foreach (var name in new[] { "first", "second" })
@@ -11418,6 +11446,293 @@ private fun validateGenericOwnerRuntimeMutableListIteratorCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime mutable list iterator probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves that an ordinary C# implementation can satisfy the invariant Runtime
+ * MutableCollection contract statically, including a value-type Kotlin widening through the
+ * physical `<U : T>(Collection<U>)` bulk slots. No adapter or semantic interface is required.
+ */
+private fun validateGenericOwnerRuntimeMutableCollectionCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE_MARKER !in
+            testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime mutable collection C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime mutable collection C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime mutable collection C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMutableCollectionConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Reflection;
+            using generic.owner.runtime.mutable.collection;
+
+            public sealed class NaturalIterator<T> : Kotlin.Collections.Iterator<T>
+            {
+                private readonly T[] values;
+                private int index;
+
+                public NaturalIterator(T[] values) { this.values = values; }
+                public bool HasNext() => index < values.Length;
+                public T Next()
+                {
+                    if (!HasNext()) throw new InvalidOperationException("iterator consumed");
+                    return values[index++];
+                }
+            }
+
+            public sealed class NaturalMutableIterator<T> :
+                Kotlin.Collections.MutableIterator<T>
+            {
+                private readonly T[] values;
+                private int index;
+
+                public NaturalMutableIterator(T[] values) { this.values = values; }
+                public bool HasNext() => index < values.Length;
+                public T Next()
+                {
+                    if (!HasNext()) throw new InvalidOperationException("iterator consumed");
+                    return values[index++];
+                }
+                public void Remove() { }
+            }
+
+            public sealed class NaturalCollection<T> : Kotlin.Collections.Collection<T>
+            {
+                private readonly T[] values;
+
+                public NaturalCollection(params T[] values) { this.values = values; }
+                public int Size => values.Length;
+                public bool IsEmpty() => values.Length == 0;
+                public Kotlin.Collections.Iterator<T> GetIterator() =>
+                    new NaturalIterator<T>(values);
+                public bool Contains(T value) => Array.IndexOf(values, value) >= 0;
+                public bool ContainsAll(Kotlin.Collections.Collection<T> elements)
+                {
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext())
+                    {
+                        if (!Contains(iterator.Next())) return false;
+                    }
+                    return true;
+                }
+            }
+
+            public sealed class NaturalMutableCollection<T> :
+                Kotlin.Collections.MutableCollection<T>
+            {
+                private readonly List<T> values = new List<T>();
+
+                public NaturalMutableCollection(T value) { values.Add(value); }
+                public object LastBulk { get; private set; }
+                public T Current => values.Count == 0 ? default(T) : values[values.Count - 1];
+                public int Size => values.Count;
+                public bool IsEmpty() => values.Count == 0;
+                public bool Contains(T value) => values.Contains(value);
+                public bool ContainsAll(Kotlin.Collections.Collection<T> elements)
+                {
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext())
+                    {
+                        if (!Contains(iterator.Next())) return false;
+                    }
+                    return true;
+                }
+                public Kotlin.Collections.MutableIterator<T> GetIterator() =>
+                    new NaturalMutableIterator<T>(values.ToArray());
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Iterable<T>.GetIterator() => GetIterator();
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Collection<T>.GetIterator() => GetIterator();
+                public bool Add(T value)
+                {
+                    values.Add(value);
+                    return true;
+                }
+                public bool Remove(T value) => values.Remove(value);
+                public bool AddAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var iterator = elements.GetIterator();
+                    var changed = false;
+                    while (iterator.HasNext())
+                    {
+                        values.Add(iterator.Next());
+                        changed = true;
+                    }
+                    return changed;
+                }
+                public bool RemoveAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var iterator = elements.GetIterator();
+                    var changed = false;
+                    while (iterator.HasNext()) changed = values.Remove(iterator.Next()) || changed;
+                    return changed;
+                }
+                public bool RetainAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var retained = new List<T>();
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext()) retained.Add(iterator.Next());
+                    var changed = values.RemoveAll(value => !retained.Contains(value)) != 0;
+                    return changed;
+                }
+                public void Clear() => values.Clear();
+            }
+
+            public static class Program
+            {
+                private static void AssertRelativeBulkMethod(string name)
+                {
+                    var owner = typeof(Kotlin.Collections.MutableCollection<>);
+                    var method = owner.GetMethod(name);
+                    if (method == null || !method.IsGenericMethodDefinition)
+                        throw new InvalidOperationException(name + " is not method-generic");
+                    var parameter = method.GetGenericArguments()[0];
+                    var constraints = parameter.GetGenericParameterConstraints();
+                    if (constraints.Length != 1 || constraints[0] != owner.GetGenericArguments()[0])
+                        throw new InvalidOperationException(name + " lost U : T");
+                    var input = method.GetParameters()[0].ParameterType;
+                    if (!input.IsGenericType ||
+                        input.GetGenericTypeDefinition() !=
+                            typeof(Kotlin.Collections.Collection<>) ||
+                        input.GetGenericArguments()[0] != parameter)
+                        throw new InvalidOperationException(name + " lost Collection<U>");
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == typeof(Kotlin.Collections.MutableCollection) ||
+                            contract == typeof(Kotlin.Collections.Collection) ||
+                            contract == typeof(Kotlin.Collections.MutableIterable) ||
+                            contract == typeof(Kotlin.Collections.Iterable))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired a compiler ABI dependency: " +
+                                contract);
+                    }
+                }
+
+                public static int Main()
+                {
+                    var owner = typeof(Kotlin.Collections.MutableCollection<>);
+                    var variance = owner.GetGenericArguments()[0].GenericParameterAttributes &
+                        GenericParameterAttributes.VarianceMask;
+                    if (variance != GenericParameterAttributes.None)
+                        throw new InvalidOperationException("MutableCollection<T> is not invariant");
+                    AssertRelativeBulkMethod("AddAll");
+                    AssertRelativeBulkMethod("RemoveAll");
+                    AssertRelativeBulkMethod("RetainAll");
+                    AssertKotlinRelativeBulkImplementation("AddAll");
+                    AssertKotlinRelativeBulkImplementation("RemoveAll");
+                    AssertKotlinRelativeBulkImplementation("RetainAll");
+
+                    var collection = new NaturalMutableCollection<object>("initial");
+                    AssertNaturalOnly(collection);
+                    var ints = new NaturalCollection<int>(61);
+                    if (!mutableCollectionApiKt.widenedValueAddAll(collection, ints) ||
+                        !object.ReferenceEquals(collection.LastBulk, ints) ||
+                        (int)collection.Current != 61)
+                        throw new InvalidOperationException("foreign value addAll failed");
+                    var projected = new NaturalCollection<int>(64);
+                    if (!mutableCollectionApiKt.projectedAddAll(collection, projected) ||
+                        !object.ReferenceEquals(collection.LastBulk, projected) ||
+                        (int)collection.Current != 64)
+                        throw new InvalidOperationException("foreign projected addAll failed");
+                    if (!mutableCollectionApiKt.widenedValueRemoveAll(
+                            collection,
+                            new NaturalCollection<int>(64)))
+                        throw new InvalidOperationException("foreign value removeAll failed");
+                    collection.Add(62);
+                    if (!mutableCollectionApiKt.widenedValueRetainAll(
+                            collection,
+                            new NaturalCollection<int>(63)) ||
+                        !collection.IsEmpty())
+                        throw new InvalidOperationException("foreign value retainAll failed");
+                    collection.Add("clear");
+                    mutableCollectionApiKt.starClear(collection);
+                    if (!collection.IsEmpty() ||
+                        !mutableCollectionApiKt.sameMutableCollection(collection, collection))
+                        throw new InvalidOperationException("foreign clear/identity failed");
+
+                    var field = typeof(RuntimeMutableCollectionValue<>).GetField(
+                        "value",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (field == null || !field.FieldType.IsGenericParameter)
+                        throw new InvalidOperationException("Kotlin value field did not retain !T");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMutableCollectionConsumer.exe"
+        else "RuntimeMutableCollectionConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime mutable collection probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime mutable collection probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime mutable collection probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->
