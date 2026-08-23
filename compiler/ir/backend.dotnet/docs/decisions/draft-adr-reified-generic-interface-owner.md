@@ -675,9 +675,18 @@ compiler branch. Kotlin implementations retain `!T` fields and ordinary C#
 implements only the natural interfaces. See
 [`../archive/runtime-reified-list-family-2026-08-23.md`](../archive/runtime-reified-list-family-2026-08-23.md).
 
-Mutable collections, Map, broader properties/defaults/overload families,
-extra producer members, and mixed/multiple type parameters remain separate
-gates.
+ABI/runtime surface 52 adds natural covariant `MutableIterator<T>` and
+`MutableIterable<T>` over the existing read-only dependency graph. The
+declaration-independent `remove()` Unit member uses the general natural-only
+foreign dispatcher. The narrowed `MutableIterable<T>` result and inherited
+`Iterable<T>` result remain two honest natural CLR slots; portable C# writes
+one explicit natural base forwarder but no compiler capability. Kotlin
+implementations retain one identity and `!T` fields. See
+[`../archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md).
+
+`MutableListIterator`, input-bearing mutable collections, Map, broader
+properties/defaults/overload families, extra producer members, and mixed/
+multiple type parameters remain separate gates.
 
 ## Remaining gates
 

@@ -40,9 +40,10 @@ import org.jetbrains.kotlin.types.Variance
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
  * The generic-owner rehearsal adds natural CLR-generic views for the complete read-only
- * Iterator/Iterable/Collection/Set/ListIterator/List closure. Exact siblings own input members
- * which cannot legally appear on a covariant CLR interface, while the accepted arity-zero
- * identities remain declaration-semantic capabilities. Mutable collection families retain their
+ * Iterator/Iterable/Collection/Set/ListIterator/List closure and its MutableIterator/
+ * MutableIterable dependency foundation. Exact siblings own input members which cannot legally
+ * appear on a covariant CLR interface, while the accepted arity-zero identities remain
+ * declaration-semantic capabilities. Input-bearing mutable collection families retain their
  * declaration-erased mappings until their complete dependency gate is selected. The five
  * currently supported primitive Iterator subclasses still alias the erased Iterator identity
  * until their ordinary stdlib classes are produced. CLR collection interfaces remain explicit
@@ -160,7 +161,11 @@ internal object DotNetRuntimeTypes {
     private val listIteratorType = DotNetIlValueType.UserClass(listIteratorBase)
 
     private val mutableIteratorGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.MutableIterator")
+        runtimeInterface(
+            "Kotlin.Collections.MutableIterator",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val mutableIteratorBase = mutableIteratorGenericInterfaceInfo.canonicalClassInfo
     val mutableIteratorType = DotNetIlValueType.UserClass(mutableIteratorBase)
 
@@ -179,7 +184,11 @@ internal object DotNetRuntimeTypes {
     val iterableType = DotNetIlValueType.UserClass(iterableBase)
 
     private val mutableIterableGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.MutableIterable")
+        runtimeInterface(
+            "Kotlin.Collections.MutableIterable",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val mutableIterableBase = mutableIterableGenericInterfaceInfo.canonicalClassInfo
     val mutableIterableType = DotNetIlValueType.UserClass(mutableIterableBase)
 
@@ -311,7 +320,9 @@ internal object DotNetRuntimeTypes {
             listGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        mutableIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         listIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
+        mutableIterableGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterable)
         collectionGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterable)
         collectionGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
             declaredCollection,
@@ -354,7 +365,7 @@ internal object DotNetRuntimeTypes {
         "previousIndex" to RuntimeGenericInterfaceMethodNames("PreviousIndex", typed = "PreviousIndex"),
     )
     private val mutableIteratorMethods = mapOf(
-        "remove" to RuntimeGenericInterfaceMethodNames("Remove"),
+        "remove" to RuntimeGenericInterfaceMethodNames("Remove", typed = "Remove"),
     )
     private val mutableListIteratorMethods = mapOf(
         "hasNext" to RuntimeGenericInterfaceMethodNames("HasNext"),

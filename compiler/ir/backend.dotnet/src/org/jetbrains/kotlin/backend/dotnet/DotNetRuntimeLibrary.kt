@@ -1413,6 +1413,16 @@ $fixedFunctionTypesIl
             }
           }
 
+          // remove() is independent of T, so the complete natural MutableIterator remains
+          // covariant and composes directly with the natural Iterator<T> foundation.
+          .class interface public abstract auto ansi 'MutableIterator`1'<+ T>
+                 implements class 'Kotlin.Collections.Iterator`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance void Remove() cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi MutableListIterator
                  implements Kotlin.Collections.ListIterator,
                             Kotlin.Collections.MutableIterator
@@ -1456,6 +1466,16 @@ $fixedFunctionTypesIl
                  implements Kotlin.Collections.Iterable
           {
             .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableIterator GetIterator() cil managed
+            {
+            }
+          }
+
+          // This narrower result is a second ordinary CLR interface slot beside the inherited
+          // Iterable<T>.GetIterator() slot. Kotlin implementations provide both MethodImpls.
+          .class interface public abstract auto ansi 'MutableIterable`1'<+ T>
+                 implements class 'Kotlin.Collections.Iterable`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.MutableIterator`1'<!T> GetIterator() cil managed
             {
             }
           }

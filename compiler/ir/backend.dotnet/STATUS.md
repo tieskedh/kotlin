@@ -346,6 +346,38 @@ verification, and work state.
   the target total 191 suites/2,305 tests. See
   [`docs/archive/runtime-reified-list-family-2026-08-23.md`](docs/archive/runtime-reified-list-family-2026-08-23.md).
 
+  ABI/runtime surface 52 now adds the smallest complete mutable dependency
+  foundation. Covariant natural `MutableIterator<T>` extends `Iterator<T>`;
+  its `remove()` member is independent of `T`. Covariant natural
+  `MutableIterable<T>` extends `Iterable<T>` and returns
+  `MutableIterator<T>`. The arity-zero identities remain semantic capabilities
+  for Kotlin-only views, while compiler-emitted implementations retain one
+  identity and real `!T` element fields.
+
+  Natural-only foreign dispatch now admits `Unit` members whose complete input
+  list is declaration-independent. This general structural rule gives ordinary
+  C# `MutableIterator<T>.Remove()` the same capability-or-natural dispatch as
+  typed producer members without adding a mutable declaration switch. Exact
+  calls and reference covariance remain direct; value-type widening crosses
+  semantic routing only at `next`, `remove`, or the nested iterator result.
+
+  The family also freezes the first Runtime covariant-result interface
+  composition. `MutableIterable<T>.GetIterator()` and inherited
+  `Iterable<T>.GetIterator()` are two natural CLR slots with different return
+  types. Kotlin emits both MethodImpls. Ordinary C# implements the narrowed
+  public member plus one explicit natural base-interface forwarder; it names no
+  erased/exact/generated compiler interface and needs no generator or wrapper.
+
+  The hostile Kotlin/C# proof executes under PSI and LightTree on Framework 4.8
+  and .NET 10. It covers exact and widened reference/value calls, `remove`,
+  nested mutable iterators, covariance, identity, the natural return bridge,
+  and reflected `!T` fields. The final full aggregate exits zero. Direct XML
+  audit covers 190 freshly written suites/2,303 tests with zero failures,
+  errors, or skips: 187 FIR suites/2,175 tests, two integration suites/127
+  tests, and the one-test backend resolver suite. The unchanged green six-test
+  `dotnet.ir` root makes the target total 191 suites/2,309 tests. See
+  [`docs/archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md`](docs/archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3026,8 +3058,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Runtime reified List/ListIterator family passed every constituent of the
-strict target gate. The normal aggregate command remains:
+The Runtime reified MutableIterator/MutableIterable foundation passed every
+constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -3035,12 +3067,12 @@ strict target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-23. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the final surface-51 head. Direct audit of all freshly written result roots
-covers 190 XML suites and 2,299 tests; the unchanged green `dotnet.ir` model
-root brings the complete target inventory to 191 suites and 2,305 tests:
+for the final surface-52 head. Direct audit of all freshly written result roots
+covers 190 XML suites and 2,303 tests; the unchanged green `dotnet.ir` model
+root brings the complete target inventory to 191 suites and 2,309 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,171 FIR, IL-text, and box tests
+- 2,175 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 1 backend resolver test
 - zero failures, errors, or skips
@@ -4741,7 +4773,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    input/iterator dispatch without wrappers or compiler-interface obligations.
    Surface 51 now closes the complete read-only List/ListIterator dependency
    family with the same general natural/exact/semantic rules, both overloads,
-   fixed `-1` barriers, and typed Kotlin implementation fields. Recompute the
+   fixed `-1` barriers, and typed Kotlin implementation fields. Surface 52 now
+   adds the closed covariant MutableIterator/MutableIterable foundation,
+   declaration-independent Unit dispatch, and the honest two-slot natural CLR
+   return graph without a compiler-interface obligation for C#. Recompute the
    next complete Common dependency family from this head. Do not add a mutable
    collection, Map, Sequence, or other declaration-specific representation
    exception; extend the same structural rules only when the selected family
