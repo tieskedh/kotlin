@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-mutable-list-iterator-2026-08-23.md`](runtime-reified-mutable-list-iterator-2026-08-23.md)
+  records ABI/runtime surface 53's invariant natural
+  `MutableListIterator<T>`, typed input/output slots, operation-local projection
+  boundary, `!T` state, and ordinary C# implementation proof.
 - [`runtime-reified-mutable-iterator-foundation-2026-08-23.md`](runtime-reified-mutable-iterator-foundation-2026-08-23.md)
   records ABI/runtime surface 52's covariant natural `MutableIterator<T>` and
   `MutableIterable<T>` dependency foundation, declaration-independent Unit

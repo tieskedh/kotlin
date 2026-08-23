@@ -41,10 +41,10 @@ import org.jetbrains.kotlin.types.Variance
  *
  * The generic-owner rehearsal adds natural CLR-generic views for the complete read-only
  * Iterator/Iterable/Collection/Set/ListIterator/List closure and its MutableIterator/
- * MutableIterable dependency foundation. Exact siblings own input members which cannot legally
- * appear on a covariant CLR interface, while the accepted arity-zero identities remain
- * declaration-semantic capabilities. Input-bearing mutable collection families retain their
- * declaration-erased mappings until their complete dependency gate is selected. The five
+ * MutableIterable/MutableListIterator dependency family. Exact siblings own input members which
+ * cannot legally appear on a covariant CLR interface, while the accepted arity-zero identities
+ * remain declaration-semantic capabilities. Input-bearing mutable collection families retain
+ * their declaration-erased mappings until their complete dependency gate is selected. The five
  * currently supported primitive Iterator subclasses still alias the erased Iterator identity
  * until their ordinary stdlib classes are produced. CLR collection interfaces remain explicit
  * interop concerns.
@@ -170,7 +170,11 @@ internal object DotNetRuntimeTypes {
     val mutableIteratorType = DotNetIlValueType.UserClass(mutableIteratorBase)
 
     private val mutableListIteratorGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.MutableListIterator")
+        runtimeInterface(
+            "Kotlin.Collections.MutableListIterator",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+        )
     private val mutableListIteratorBase = mutableListIteratorGenericInterfaceInfo.canonicalClassInfo
     val mutableListIteratorType = DotNetIlValueType.UserClass(mutableListIteratorBase)
 
@@ -304,6 +308,10 @@ internal object DotNetRuntimeTypes {
             listIteratorGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredMutableIterator = openRuntimeInterfaceType(
+            mutableIteratorGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
         val declaredCollection = openRuntimeInterfaceType(
             collectionGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
@@ -322,6 +330,10 @@ internal object DotNetRuntimeTypes {
         )
         mutableIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         listIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
+        mutableListIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(
+            declaredListIterator,
+            declaredMutableIterator,
+        )
         mutableIterableGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterable)
         collectionGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterable)
         collectionGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
@@ -368,11 +380,11 @@ internal object DotNetRuntimeTypes {
         "remove" to RuntimeGenericInterfaceMethodNames("Remove", typed = "Remove"),
     )
     private val mutableListIteratorMethods = mapOf(
-        "hasNext" to RuntimeGenericInterfaceMethodNames("HasNext"),
-        "next" to RuntimeGenericInterfaceMethodNames("Next"),
-        "remove" to RuntimeGenericInterfaceMethodNames("Remove"),
-        "set" to RuntimeGenericInterfaceMethodNames("Set"),
-        "add" to RuntimeGenericInterfaceMethodNames("Add"),
+        "hasNext" to RuntimeGenericInterfaceMethodNames("HasNext", typed = "HasNext"),
+        "next" to RuntimeGenericInterfaceMethodNames("Next", typed = "Next"),
+        "remove" to RuntimeGenericInterfaceMethodNames("Remove", typed = "Remove"),
+        "set" to RuntimeGenericInterfaceMethodNames("Set", typed = "Set"),
+        "add" to RuntimeGenericInterfaceMethodNames("Add", typed = "Add"),
     )
     private val iterableMethods = mapOf(
         "iterator" to RuntimeGenericInterfaceMethodNames("GetIterator", typed = "GetIterator"),

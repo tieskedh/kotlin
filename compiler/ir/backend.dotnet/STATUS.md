@@ -378,6 +378,33 @@ verification, and work state.
   `dotnet.ir` root makes the target total 191 suites/2,309 tests. See
   [`docs/archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md`](docs/archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md).
 
+  ABI/runtime surface 53 now adds invariant natural
+  `MutableListIterator<T>`. It inherits the natural `ListIterator<T>` and
+  `MutableIterator<T>` graph and owns typed `Next(): T`, `Set(T)`, and `Add(T)`
+  slots on one CLR construction. Declaration invariance allows inputs and
+  outputs to share the natural interface, so this family needs no exact
+  sibling. Kotlin implementations preserve one identity and a real `!T` field.
+
+  Exact/open operations remain natural CLR calls. Star reads and input-
+  projected writes cross the existing semantic capability only for the
+  individual operation which the invariant CLR construction cannot name. An
+  ordinary non-partial C# implementation names only
+  `MutableListIterator<T>`; the unique-natural-construction fallback admits its
+  star and projected calls without a generator, wrapper, or compiler-interface
+  obligation. The reflective fallback remains subject to static-protocol,
+  trimming, NativeAOT, and tooling production gates.
+
+  The hostile Kotlin/C# proof is green under PSI and LightTree on Framework 4.8
+  and .NET 10. It covers exact/star reads, exact and projected reference/value
+  writes, remove, identity, the natural parent graph, and reflected `!T` state.
+  Twenty selected stable-sorting and member-reflection regressions are also
+  green. The final full aggregate exits zero. Direct XML audit covers 190
+  freshly written suites/2,307 tests with zero failures, errors, or skips: 187
+  FIR suites/2,179 tests, two integration suites/127 tests, and the one-test
+  backend resolver suite. The unchanged green six-test `dotnet.ir` root makes
+  the target total 191 suites/2,313 tests. See
+  [`docs/archive/runtime-reified-mutable-list-iterator-2026-08-23.md`](docs/archive/runtime-reified-mutable-list-iterator-2026-08-23.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3058,8 +3085,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Runtime reified MutableIterator/MutableIterable foundation passed every
-constituent of the strict target gate. The normal aggregate command remains:
+The Runtime reified MutableListIterator family passed every constituent of the
+strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -3067,12 +3094,12 @@ constituent of the strict target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-23. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the final surface-52 head. Direct audit of all freshly written result roots
-covers 190 XML suites and 2,303 tests; the unchanged green `dotnet.ir` model
-root brings the complete target inventory to 191 suites and 2,309 tests:
+for the final surface-53 head. Direct audit of all freshly written result roots
+covers 190 XML suites and 2,307 tests; the unchanged green `dotnet.ir` model
+root brings the complete target inventory to 191 suites and 2,313 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,175 FIR, IL-text, and box tests
+- 2,179 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 1 backend resolver test
 - zero failures, errors, or skips
@@ -4773,13 +4800,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    input/iterator dispatch without wrappers or compiler-interface obligations.
    Surface 51 now closes the complete read-only List/ListIterator dependency
    family with the same general natural/exact/semantic rules, both overloads,
-   fixed `-1` barriers, and typed Kotlin implementation fields. Surface 52 now
-   adds the closed covariant MutableIterator/MutableIterable foundation,
+   fixed `-1` barriers, and typed Kotlin implementation fields. Surface 52 adds
+   the closed covariant MutableIterator/MutableIterable foundation,
    declaration-independent Unit dispatch, and the honest two-slot natural CLR
-   return graph without a compiler-interface obligation for C#. Recompute the
-   next complete Common dependency family from this head. Do not add a mutable
-   collection, Map, Sequence, or other declaration-specific representation
-   exception; extend the same structural rules only when the selected family
+   return graph without a compiler-interface obligation for C#. Surface 53
+   adds invariant natural MutableListIterator input/output slots with no exact
+   sibling and keeps projections operation-local. Recompute the next complete
+   Common dependency family from this head. Do not add a mutable collection,
+   Map, Sequence, or other declaration-specific representation exception;
+   extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse
    rollback for the next go/no-go decision.
 2. The dependency recomputation after eager windowing selected and completed
