@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`upstream-sync-2026-08-24.md`](upstream-sync-2026-08-24.md)
+  records the pinned 461-commit upstream integration, preservation of all 603
+  target patches, three bounded semantic adaptations, strict target evidence,
+  and the remaining external MSVC lifecycle-generation gate.
 - [`runtime-reified-mutable-set-2026-08-23.md`](runtime-reified-mutable-set-2026-08-23.md)
   records ABI/runtime surface 55's invariant natural `MutableSet<T>` diamond,
   dual MutableSet/MutableCollection MethodImpl binding, typed state, and one-
