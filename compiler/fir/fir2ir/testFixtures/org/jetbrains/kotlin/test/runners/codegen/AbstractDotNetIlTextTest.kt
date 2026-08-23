@@ -546,6 +546,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-mutable-collection"
             ),
         )
+        validateGenericOwnerRuntimeMutableSetCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-mutable-set"
+            ),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4186,6 +4196,8 @@ private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE_MARKE
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -11733,6 +11745,343 @@ private fun validateGenericOwnerRuntimeMutableCollectionCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime mutable collection probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves that one ordinary C# MutableSet implementation satisfies both natural parent
+ * branches and the redeclared relative bulk slots without a compiler-interface obligation.
+ */
+private fun validateGenericOwnerRuntimeMutableSetCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime mutable set C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime mutable set C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime mutable set C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMutableSetConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Reflection;
+            using generic.owner.runtime.mutable.set;
+
+            public sealed class NaturalMutableSet<T> : Kotlin.Collections.MutableSet<T>
+            {
+                private readonly List<T> values = new List<T>();
+
+                public NaturalMutableSet(T value) { values.Add(value); }
+                public object LastBulk { get; private set; }
+                public T Current => values.Count == 0 ? default(T) : values[values.Count - 1];
+                public int Size => values.Count;
+                public bool IsEmpty() => values.Count == 0;
+                public bool Contains(T value) => values.Contains(value);
+                public bool ContainsAll(Kotlin.Collections.Collection<T> elements)
+                {
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext())
+                    {
+                        if (!Contains(iterator.Next())) return false;
+                    }
+                    return true;
+                }
+
+                private sealed class Cursor : Kotlin.Collections.MutableIterator<T>
+                {
+                    private readonly NaturalMutableSet<T> owner;
+                    private readonly T[] snapshot;
+                    private int index;
+                    private bool canRemove;
+                    private T last;
+
+                    public Cursor(NaturalMutableSet<T> owner)
+                    {
+                        this.owner = owner;
+                        snapshot = owner.values.ToArray();
+                    }
+
+                    public bool HasNext() => index < snapshot.Length;
+                    public T Next()
+                    {
+                        if (!HasNext()) throw new InvalidOperationException("iterator consumed");
+                        last = snapshot[index++];
+                        canRemove = true;
+                        return last;
+                    }
+                    public void Remove()
+                    {
+                        if (!canRemove) throw new InvalidOperationException("no current element");
+                        canRemove = false;
+                        owner.Remove(last);
+                    }
+                }
+
+                public Kotlin.Collections.MutableIterator<T> GetIterator() => new Cursor(this);
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Iterable<T>.GetIterator() => GetIterator();
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Collection<T>.GetIterator() => GetIterator();
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Set<T>.GetIterator() => GetIterator();
+
+                public bool Add(T value)
+                {
+                    if (values.Contains(value)) return false;
+                    values.Add(value);
+                    return true;
+                }
+                public bool Remove(T value) => values.Remove(value);
+                public bool AddAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var iterator = elements.GetIterator();
+                    var changed = false;
+                    while (iterator.HasNext()) changed = Add(iterator.Next()) || changed;
+                    return changed;
+                }
+                public bool RemoveAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var iterator = elements.GetIterator();
+                    var changed = false;
+                    while (iterator.HasNext()) changed = Remove(iterator.Next()) || changed;
+                    return changed;
+                }
+                public bool RetainAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var retained = new List<T>();
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext()) retained.Add(iterator.Next());
+                    return values.RemoveAll(value => !retained.Contains(value)) != 0;
+                }
+                public void Clear() => values.Clear();
+            }
+
+            public static class Program
+            {
+                private static void AssertRelativeBulkMethod(Type owner, string name)
+                {
+                    MethodInfo selected = null;
+                    foreach (var candidate in owner.GetMethods())
+                    {
+                        if (candidate.DeclaringType != owner || candidate.Name != name) continue;
+                        if (selected != null) throw new InvalidOperationException(name + " ambiguous");
+                        selected = candidate;
+                    }
+                    if (selected == null || !selected.IsGenericMethodDefinition)
+                        throw new InvalidOperationException(name + " is not declared method-generic");
+                    var parameter = selected.GetGenericArguments()[0];
+                    var constraints = parameter.GetGenericParameterConstraints();
+                    if (constraints.Length != 1 || constraints[0] != owner.GetGenericArguments()[0])
+                        throw new InvalidOperationException(name + " lost U : T");
+                    var input = selected.GetParameters()[0].ParameterType;
+                    if (!input.IsGenericType ||
+                        input.GetGenericTypeDefinition() != typeof(Kotlin.Collections.Collection<>) ||
+                        input.GetGenericArguments()[0] != parameter)
+                        throw new InvalidOperationException(name + " lost Collection<U>");
+                }
+
+                private static void AssertKotlinRelativeBulkImplementation(string name)
+                {
+                    var owner = typeof(RuntimeMutableSetValue<>);
+                    var ownerParameter = owner.GetGenericArguments()[0];
+                    foreach (var method in owner.GetMethods(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                    {
+                        if (method.Name != name || !method.IsGenericMethodDefinition) continue;
+                        var parameter = method.GetGenericArguments()[0];
+                        var constraints = parameter.GetGenericParameterConstraints();
+                        if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
+                    }
+                    throw new InvalidOperationException(
+                        name + " Kotlin implementation lost U : T");
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == typeof(Kotlin.Collections.MutableSet) ||
+                            contract == typeof(Kotlin.Collections.Set) ||
+                            contract == typeof(Kotlin.Collections.MutableCollection) ||
+                            contract == typeof(Kotlin.Collections.Collection) ||
+                            contract == typeof(Kotlin.Collections.MutableIterable) ||
+                            contract == typeof(Kotlin.Collections.Iterable))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired a compiler ABI dependency: " +
+                                contract);
+                    }
+                }
+
+                private static MethodInfo AssertBulkInterfaceMap(
+                    Type implementation,
+                    Type contract,
+                    string name)
+                {
+                    var mapping = implementation.GetInterfaceMap(contract);
+                    MethodInfo selected = null;
+                    for (var index = 0; index < mapping.InterfaceMethods.Length; index++)
+                    {
+                        var method = mapping.InterfaceMethods[index];
+                        if (method.DeclaringType != contract || method.Name != name) continue;
+                        if (selected != null)
+                            throw new InvalidOperationException(contract + "." + name + " ambiguous");
+                        selected = mapping.TargetMethods[index];
+                    }
+                    if (selected == null || !selected.IsGenericMethodDefinition)
+                        throw new InvalidOperationException(contract + "." + name + " is unmapped");
+                    return selected;
+                }
+
+                public static int Main()
+                {
+                    var owner = typeof(Kotlin.Collections.MutableSet<>);
+                    var variance = owner.GetGenericArguments()[0].GenericParameterAttributes &
+                        GenericParameterAttributes.VarianceMask;
+                    if (variance != GenericParameterAttributes.None)
+                        throw new InvalidOperationException("MutableSet<T> is not invariant");
+                    var hasSet = false;
+                    var hasMutableCollection = false;
+                    foreach (var contract in owner.GetInterfaces())
+                    {
+                        if (!contract.IsGenericType) continue;
+                        var definition = contract.GetGenericTypeDefinition();
+                        hasSet = hasSet || definition == typeof(Kotlin.Collections.Set<>);
+                        hasMutableCollection = hasMutableCollection ||
+                            definition == typeof(Kotlin.Collections.MutableCollection<>);
+                    }
+                    if (!hasSet || !hasMutableCollection)
+                        throw new InvalidOperationException("MutableSet<T> lost its natural diamond");
+                    AssertRelativeBulkMethod(owner, "AddAll");
+                    AssertRelativeBulkMethod(owner, "RemoveAll");
+                    AssertRelativeBulkMethod(owner, "RetainAll");
+                    AssertKotlinRelativeBulkImplementation("AddAll");
+                    AssertKotlinRelativeBulkImplementation("RemoveAll");
+                    AssertKotlinRelativeBulkImplementation("RetainAll");
+                    var kotlinOwner = typeof(RuntimeMutableSetValue<object>);
+                    AssertBulkInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableSet<object>),
+                        "AddAll");
+                    AssertBulkInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableCollection<object>),
+                        "AddAll");
+
+                    var set = new NaturalMutableSet<object>("initial");
+                    AssertNaturalOnly(set);
+                    var csharpSetTarget = AssertBulkInterfaceMap(
+                        set.GetType(),
+                        typeof(Kotlin.Collections.MutableSet<object>),
+                        "AddAll");
+                    var csharpCollectionTarget = AssertBulkInterfaceMap(
+                        set.GetType(),
+                        typeof(Kotlin.Collections.MutableCollection<object>),
+                        "AddAll");
+                    if (csharpSetTarget != csharpCollectionTarget)
+                        throw new InvalidOperationException(
+                            "C# emitted duplicate bulk implementations for the diamond");
+                    mutableSetApiKt.starSetClear(set);
+                    var direct = mutableSetImplementationKt.intCollection(71);
+                    if (!mutableSetApiKt.widenedSetValueAddAll(set, direct) ||
+                        !object.ReferenceEquals(set.LastBulk, direct) ||
+                        (int)set.Current != 71)
+                        throw new InvalidOperationException("foreign mutable-set route failed");
+                    if ((int)mutableSetApiKt.firstMutableSetElement(set) != 71)
+                        throw new InvalidOperationException("foreign mutable iterator failed");
+                    mutableSetApiKt.starSetClear(set);
+                    var parent = mutableSetImplementationKt.intCollection(72);
+                    if (!mutableSetApiKt.widenedCollectionValueAddAll(set, parent) ||
+                        !object.ReferenceEquals(set.LastBulk, parent) ||
+                        (int)set.Current != 72)
+                        throw new InvalidOperationException("foreign collection diamond failed");
+                    mutableSetApiKt.starSetClear(set);
+                    var projected = mutableSetImplementationKt.intCollection(73);
+                    if (!mutableSetApiKt.projectedSetAddAll(set, projected) ||
+                        !object.ReferenceEquals(set.LastBulk, projected) ||
+                        (int)set.Current != 73)
+                        throw new InvalidOperationException("foreign projected set failed");
+                    if (!mutableSetApiKt.widenedReadOnlySetContains(set, 73) ||
+                        mutableSetApiKt.widenedReadOnlySetContains(set, "wrong"))
+                        throw new InvalidOperationException("foreign read-only parent failed");
+                    mutableSetApiKt.starSetClear(set);
+                    if (!set.IsEmpty() || !mutableSetApiKt.sameMutableSet(set, set))
+                        throw new InvalidOperationException("foreign clear/identity failed");
+
+                    var field = typeof(RuntimeMutableSetValue<>).GetField(
+                        "value",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (field == null || !field.FieldType.IsGenericParameter)
+                        throw new InvalidOperationException("Kotlin set field did not retain !T");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMutableSetConsumer.exe"
+        else "RuntimeMutableSetConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime mutable set probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime mutable set probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime mutable set probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

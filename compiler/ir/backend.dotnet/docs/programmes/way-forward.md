@@ -1368,10 +1368,23 @@ remain trimming, NativeAOT, static-protocol, performance, and tooling gates.
 See
 [`../archive/runtime-reified-mutable-collection-2026-08-23.md`](../archive/runtime-reified-mutable-collection-2026-08-23.md).
 
+ABI/runtime surface 55 selects invariant natural `MutableSet<T>`. It extends
+the existing natural `Set<T>` and `MutableCollection<T>` parents and redeclares
+the mutable iterator and complete mutation family. Kotlin emits MethodImpls for
+both MutableSet and MutableCollection bulk slots; CLR interface maps prove the
+diamond. Ordinary C# names only `MutableSet<T>`, and one generic bulk method
+satisfies both natural contracts.
+
+The family reuses the relative-generic-input grammar without a declaration
+switch and retains a real `!T` field. Widened read-only `Set<T>` candidate
+inputs remain on the earlier exact/semantic or bounded foreign path; the
+invariant child does not retroactively make CLR covariance accept inputs. See
+[`../archive/runtime-reified-mutable-set-2026-08-23.md`](../archive/runtime-reified-mutable-set-2026-08-23.md).
+
 Next recompute the smallest complete Common dependency family after surface
-54. Keep `MutableList`, `MutableSet`, Map, defaults, broader overload families,
-and multiple owner parameters on their current mappings unless that dependency
-proof selects one atomically. The natural CLR route and typed state remain the
+55. Keep `MutableList`, Map, defaults, broader overload families, and multiple
+owner parameters on their current mappings unless that dependency proof
+selects one atomically. The natural CLR route and typed state remain the
 default; a semantic capability is an evidence-backed escape hatch, not the
 first implementation choice.
 
