@@ -82,14 +82,17 @@ sourceSets {
     "testFixtures" { projectDefault() }
 }
 
-fun Test.configure(configureJUnit: JUnitPlatformOptions.() -> Unit = {}) {
+fun Test.configure(
+    domain: Domain = Domain.Jvm,
+    configureJUnit: JUnitPlatformOptions.() -> Unit = {},
+) {
     javaLauncher = project.getToolchainLauncherFor(JdkMajorVersion.JDK_1_8)
     useJUnitPlatform {
         configureJUnit()
     }
 
     @OptIn(DelicateTestFederationApi::class)
-    testFederationDomains = listOf(Domain.Jvm)
+    testFederationDomains = listOf(domain)
 }
 
 val dotNetTestPlatformProfiles = linkedMapOf(
@@ -210,7 +213,7 @@ projectTests {
         defineJDKEnvVariables = listOf(JdkMajorVersion.JDK_1_8),
         skipInLocalBuild = false,
     ) {
-        configure {
+        configure(domain = Domain.DotNet) {
             dependsOn(dotNetTestPlatformTasks)
             val genericOwnerRehearsal = providers.gradleProperty(
                 "kotlin.dotnet.genericOwnerRehearsal",
