@@ -526,6 +526,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-mutable-iterator"
             ),
         )
+        validateGenericOwnerRuntimeMutableListIteratorCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-mutable-list-iterator"
+            ),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4162,6 +4172,8 @@ private const val GENERIC_OWNER_RUNTIME_LIST_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_LIST_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MUTABLE_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_ITERATOR_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -11160,6 +11172,252 @@ private fun validateGenericOwnerRuntimeMutableIteratorCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime mutable iterator probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the invariant Runtime MutableListIterator family from ordinary C#. Exact reads and
+ * writes use the natural interface, while star reads and input projections select that same
+ * unique natural construction only at the operation boundary.
+ */
+private fun validateGenericOwnerRuntimeMutableListIteratorCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MUTABLE_LIST_ITERATOR_CSHARP_PROBE_MARKER !in
+            testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime mutable list iterator C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime mutable list iterator C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime mutable list iterator C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMutableListIteratorConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.runtime.mutable.list.iterator;
+
+            public sealed class NaturalMutableListIterator<T> :
+                Kotlin.Collections.MutableListIterator<T>
+            {
+                private T value;
+                private bool cursor;
+                private bool removed;
+
+                public NaturalMutableListIterator(T value)
+                {
+                    this.value = value;
+                }
+
+                public T Current => value;
+                public bool Removed => removed;
+                public bool HasNext() => !cursor && !removed;
+
+                public T Next()
+                {
+                    if (!HasNext()) throw new InvalidOperationException("no next element");
+                    cursor = true;
+                    return value;
+                }
+
+                public bool HasPrevious() => cursor && !removed;
+
+                public T Previous()
+                {
+                    if (!HasPrevious())
+                        throw new InvalidOperationException("no previous element");
+                    cursor = false;
+                    return value;
+                }
+
+                public int NextIndex() => cursor ? 1 : 0;
+                public int PreviousIndex() => cursor ? 0 : -1;
+
+                public void Remove()
+                {
+                    if (!cursor || removed)
+                        throw new InvalidOperationException("invalid remove");
+                    removed = true;
+                }
+
+                public void Set(T element)
+                {
+                    if (!cursor || removed)
+                        throw new InvalidOperationException("invalid set");
+                    value = element;
+                }
+
+                public void Add(T element)
+                {
+                    value = element;
+                    cursor = true;
+                    removed = false;
+                }
+            }
+
+            public static class Program
+            {
+                private static void AssertInvariant(Type openInterface)
+                {
+                    var attributes = openInterface.GetGenericArguments()[0]
+                        .GenericParameterAttributes & GenericParameterAttributes.VarianceMask;
+                    if (attributes != GenericParameterAttributes.None)
+                        throw new InvalidOperationException(openInterface + " is not invariant");
+                }
+
+                private static bool HasOpenInterface(Type owner, Type expected)
+                {
+                    return Array.Exists(owner.GetInterfaces(), contract =>
+                        contract.IsGenericType &&
+                        contract.GetGenericTypeDefinition() == expected);
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == typeof(Kotlin.Collections.MutableListIterator) ||
+                            contract == typeof(Kotlin.Collections.ListIterator) ||
+                            contract == typeof(Kotlin.Collections.MutableIterator) ||
+                            contract == typeof(Kotlin.Collections.Iterator))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired a compiler ABI dependency: " +
+                                contract);
+                    }
+                }
+
+                private static void AssertTypedValueField(Type owner)
+                {
+                    var field = owner.GetField(
+                        "value",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (field == null || !field.FieldType.IsGenericParameter)
+                        throw new InvalidOperationException(owner + ".value did not retain !T");
+                }
+
+                public static int Main()
+                {
+                    AssertInvariant(typeof(Kotlin.Collections.MutableListIterator<>));
+                    if (!HasOpenInterface(
+                            typeof(Kotlin.Collections.MutableListIterator<>),
+                            typeof(Kotlin.Collections.ListIterator<>)) ||
+                        !HasOpenInterface(
+                            typeof(Kotlin.Collections.MutableListIterator<>),
+                            typeof(Kotlin.Collections.MutableIterator<>)))
+                        throw new InvalidOperationException(
+                            "Runtime mutable list iterator generic graph is incomplete");
+
+                    var exact = new NaturalMutableListIterator<string>("reference");
+                    AssertNaturalOnly(exact);
+                    if (mutableListIteratorApiKt.exactMutableListNext<string>(exact) !=
+                            "reference")
+                        throw new InvalidOperationException("foreign exact next failed");
+                    mutableListIteratorApiKt.exactMutableListSet<string>(exact, "set");
+                    mutableListIteratorApiKt.exactMutableListAdd<string>(exact, "add");
+                    if (exact.Current != "add")
+                        throw new InvalidOperationException("foreign exact input failed");
+                    mutableListIteratorApiKt.starMutableListRemove(exact);
+                    if (!exact.Removed)
+                        throw new InvalidOperationException("foreign star remove failed");
+
+                    var projected = new NaturalMutableListIterator<string>("projected");
+                    AssertNaturalOnly(projected);
+                    if ((string)mutableListIteratorApiKt.starMutableListNext(projected) !=
+                            "projected")
+                        throw new InvalidOperationException("foreign star next failed");
+                    mutableListIteratorApiKt.projectedMutableListSet<string>(
+                        projected,
+                        "projected set");
+                    mutableListIteratorApiKt.projectedMutableListAdd<string>(
+                        projected,
+                        "projected add");
+                    if (projected.Current != "projected add" ||
+                        !mutableListIteratorApiKt.sameMutableListIterator(
+                            projected,
+                            projected))
+                        throw new InvalidOperationException(
+                            "foreign projected reference input failed");
+
+                    var ints = new NaturalMutableListIterator<int>(60);
+                    AssertNaturalOnly(ints);
+                    if ((int)mutableListIteratorApiKt.starMutableListNext(ints) != 60)
+                        throw new InvalidOperationException("foreign value star next failed");
+                    mutableListIteratorApiKt.projectedMutableListSet<int>(ints, 61);
+                    mutableListIteratorApiKt.projectedMutableListAdd<int>(ints, 62);
+                    if (ints.Current != 62 ||
+                        !mutableListIteratorApiKt.sameMutableListIterator(ints, ints))
+                        throw new InvalidOperationException(
+                            "foreign projected value input failed");
+                    mutableListIteratorApiKt.starMutableListRemove(ints);
+                    if (!ints.Removed)
+                        throw new InvalidOperationException("foreign value remove failed");
+
+                    AssertTypedValueField(typeof(RuntimeMutableListIteratorValue<>));
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMutableListIteratorConsumer.exe"
+        else "RuntimeMutableListIteratorConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime mutable list iterator probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime mutable list iterator probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime mutable list iterator probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->
