@@ -684,9 +684,17 @@ one explicit natural base forwarder but no compiler capability. Kotlin
 implementations retain one identity and `!T` fields. See
 [`../archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-mutable-iterator-foundation-2026-08-23.md).
 
-`MutableListIterator`, input-bearing mutable collections, Map, broader
-properties/defaults/overload families, extra producer members, and mixed/
-multiple type parameters remain separate gates.
+ABI/runtime surface 53 adds natural invariant `MutableListIterator<T>` over the
+existing two natural parent interfaces. Its `T` result and `T` inputs live on
+one natural construction and need no exact sibling. Star reads and input-
+projected writes use the semantic capability only at the operation; exact/open
+calls and Kotlin implementation state remain typed. An ordinary non-partial C#
+implementation names only `MutableListIterator<T>`. See
+[`../archive/runtime-reified-mutable-list-iterator-2026-08-23.md`](../archive/runtime-reified-mutable-list-iterator-2026-08-23.md).
+
+Input-bearing mutable collections, Map, broader properties/defaults/overload
+families, extra producer members, and mixed/multiple type parameters remain
+separate gates.
 
 ## Remaining gates
 

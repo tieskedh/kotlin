@@ -1448,6 +1448,33 @@ $fixedFunctionTypesIl
             }
           }
 
+          // MutableListIterator is declaration-invariant, so its natural CLR construction can
+          // own both typed reads and typed mutation inputs without an exact sibling.
+          .class interface public abstract auto ansi 'MutableListIterator`1'<T>
+                 implements class 'Kotlin.Collections.ListIterator`1'<!T>,
+                            class 'Kotlin.Collections.MutableIterator`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T Next() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Remove() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Set(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Add(!T element) cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi Iterable
           {
             .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
