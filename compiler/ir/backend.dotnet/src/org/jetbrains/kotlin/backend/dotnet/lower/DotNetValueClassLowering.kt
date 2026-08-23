@@ -166,6 +166,10 @@ internal class DotNetValueClassReturnTargetLowering(
         }
 
         if (!implementation.isGeneratedValueClassImplementation(valueClass)) return
+        val implementationSource: IrFunction =
+            implementation.dotNetValueClassImplementationSourceOrNull()
+                ?: implementation.dotNetValueClassConstructorImplementationSourceOrNull()
+                ?: return
         val underlyingField = getInlineClassBackingField(valueClass)
         irBody.transformChildrenVoid(object : IrElementTransformerVoid() {
             override fun visitGetField(expression: IrGetField) =
@@ -180,20 +184,13 @@ internal class DotNetValueClassReturnTargetLowering(
 
             override fun visitReturn(expression: IrReturn): IrReturn {
                 expression.transformChildrenVoid(this)
-                val sourceTarget = expression.returnTargetSymbol.owner as? IrFunction ?: return expression
-                if (sourceTarget.parent == valueClass && sourceTarget.valueClassImplementationName(valueClass) == implementation.name) {
+                if (expression.returnTargetSymbol.owner === implementationSource) {
                     expression.returnTargetSymbol = implementation.symbol
                 }
                 return expression
             }
         })
     }
-
-    private fun IrFunction.valueClassImplementationName(valueClass: IrClass): Name {
-        val implementationName = valueClass.name.asString() + "__" + name.asString() + "-impl"
-        return if (name.isSpecial) Name.special("<$implementationName>") else Name.identifier(implementationName)
-    }
-
 }
 
 private fun IrSimpleFunction.isGeneratedValueClassImplementation(valueClass: IrClass): Boolean {
