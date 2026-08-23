@@ -405,6 +405,38 @@ verification, and work state.
   the target total 191 suites/2,313 tests. See
   [`docs/archive/runtime-reified-mutable-list-iterator-2026-08-23.md`](docs/archive/runtime-reified-mutable-list-iterator-2026-08-23.md).
 
+  ABI/runtime surface 54 now adds invariant natural
+  `MutableCollection<T>` over the natural `Collection<T>` and
+  `MutableIterable<T>` parents. Exact element inputs remain `T`. The three
+  nested bulk inputs use physical method parameters
+  `<U : T>(Collection<U>)`, so `Collection<int>` can enter
+  `MutableCollection<object>` without erasing the owner, nested argument, or
+  the Kotlin implementation's true `!T` field. The Kotlin declaration and
+  reflection identity remain the ordinary non-generic bulk member.
+
+  The compiler records this as a general relative-generic-input slot shape,
+  not a collection-name codegen branch. Both Runtime interface and Kotlin
+  MethodImpl carry `U : T`. Ordinary calls are statically bound generic CLR
+  interface calls. Only a natural-only foreign object behind an unnameable
+  projected Kotlin receiver uses the bounded unique-generic-method fallback;
+  it rejects ambiguity and constraint failure. That fallback and the earlier
+  inherited Collection candidate-input convention remain explicit trimming,
+  NativeAOT, static-protocol, performance, and tooling gates.
+
+  A sealed non-partial C# class names only `MutableCollection<T>` and its
+  natural parents. Roslyn warnings-as-errors statically checks every selected
+  mutation slot; no exact/semantic compiler interface, partial class,
+  generator, wrapper, or adapter is required. The hostile three-module proof
+  covers exact mutation, reference/value bulk widening, projection,
+  remove/retain/clear, identity, and reflected `!T` state under PSI and
+  LightTree on Framework 4.8 and .NET 10. The six-family Runtime regression
+  selection is 24/24 green. The final full aggregate exits zero. Direct XML
+  audit covers 190 freshly written suites/2,311 tests with zero failures,
+  errors, or skips: 187 FIR suites/2,183 tests, two integration suites/127
+  tests, and the one-test backend resolver suite. The unchanged green six-test
+  `dotnet.ir` root makes the target total 191 suites/2,317 tests. See
+  [`docs/archive/runtime-reified-mutable-collection-2026-08-23.md`](docs/archive/runtime-reified-mutable-collection-2026-08-23.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3085,7 +3117,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Runtime reified MutableListIterator family passed every constituent of the
+The Runtime reified MutableCollection family passed every constituent of the
 strict target gate. The normal aggregate command remains:
 
 ```text
@@ -3094,12 +3126,12 @@ strict target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-23. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the final surface-53 head. Direct audit of all freshly written result roots
-covers 190 XML suites and 2,307 tests; the unchanged green `dotnet.ir` model
-root brings the complete target inventory to 191 suites and 2,313 tests:
+for the final surface-54 head. Direct audit of all freshly written result roots
+covers 190 XML suites and 2,311 tests; the unchanged green `dotnet.ir` model
+root brings the complete target inventory to 191 suites and 2,317 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,179 FIR, IL-text, and box tests
+- 2,183 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 1 backend resolver test
 - zero failures, errors, or skips
@@ -4805,9 +4837,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    declaration-independent Unit dispatch, and the honest two-slot natural CLR
    return graph without a compiler-interface obligation for C#. Surface 53
    adds invariant natural MutableListIterator input/output slots with no exact
-   sibling and keeps projections operation-local. Recompute the next complete
-   Common dependency family from this head. Do not add a mutable collection,
-   Map, Sequence, or other declaration-specific representation exception;
+   sibling and keeps projections operation-local. Surface 54 adds invariant
+   natural MutableCollection, statically checked method-generic bulk inputs,
+   value-type relative widening, and typed Kotlin state without global owner
+   erasure. Recompute the next complete Common dependency family from this
+   head. Do not add MutableList, MutableSet, Map, Sequence, or another
+   declaration-specific representation exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse
    rollback for the next go/no-go decision.

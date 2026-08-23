@@ -470,6 +470,25 @@ future atomic CLR-generic owner model. No further erased-owner leaf tranche is
 selected before the complete Kotlin-emitter/inverse-rollback rehearsal reaches
 its next go/no-go checkpoint.
 
+### CLR-generic MutableCollection rehearsal
+
+The atomic generic-owner rehearsal has now reached invariant natural
+`MutableCollection<T>` without changing the production-erased decision below.
+Its exact element operations use `T`, while `addAll`, `removeAll`, and
+`retainAll` have physical CLR slots `<U : T>(Collection<U>)`. That relative
+method parameter preserves a nested `Collection<int>` when Kotlin widens it
+into `MutableCollection<Any?>`; neither the owner nor its true `!T` state is
+therefore forced to `object`.
+
+This is one structural relative-generic-input rule rather than a collection
+codegen exception. The Kotlin declaration and KLIB member remain non-generic.
+Ordinary C# implements the natural interface and its selected mutation members
+under normal Roslyn checking. Only an unnameable projected view of a
+capability-free foreign object uses the bounded runtime fallback. The prior
+inherited Collection candidate-input convention, trimming, NativeAOT,
+performance, and tooling remain open gates. See the
+[`surface 54 archive`](../archive/runtime-reified-mutable-collection-2026-08-23.md).
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common

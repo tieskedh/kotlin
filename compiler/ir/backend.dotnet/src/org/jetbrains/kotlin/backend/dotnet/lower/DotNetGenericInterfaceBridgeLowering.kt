@@ -47,6 +47,7 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
+import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
@@ -86,6 +87,7 @@ import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.types.Variance
 
 internal val DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE")
@@ -1202,6 +1204,10 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         plan: BridgePlan,
         memberView: DotNetGenericInterfaceMemberView,
     ): IrSimpleFunction {
+        DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(plan.slot)
+            ?.let { inputIndex ->
+                return createRelativeGenericInputTypedBridge(plan, memberView, inputIndex)
+            }
         val viewName = memberView.name.lowercase()
             .replaceFirstChar(Char::uppercaseChar)
         return createForwardingBridge(
@@ -1217,6 +1223,101 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             bridgeTypeTransform = plan.typedSubstitutor::substitute,
             ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
         )
+    }
+
+    /**
+     * Materializes the CLR-only `<U : T>(Collection<U>)` slot used by an invariant natural
+     * interface for a nested covariant Kotlin input. The logical Kotlin member deliberately has
+     * no method parameter. Its producer-proven semantic hook owns the one body which can accept
+     * a value-type widening such as `Collection<Int> -> Collection<Any?>`; the physical bridge
+     * retains the original collection object and adds only the CLR method-parameter shape.
+     */
+    private fun createRelativeGenericInputTypedBridge(
+        plan: BridgePlan,
+        memberView: DotNetGenericInterfaceMemberView,
+        inputIndex: Int,
+    ): IrSimpleFunction {
+        if (memberView != DotNetGenericInterfaceMemberView.DECLARED ||
+            plan.slot.typeParameters.isNotEmpty() ||
+            plan.interfaceClass.typeParameters.size != 1
+        ) {
+            dotNetUnsupported(
+                "relative collection input '${plan.slot.name}' requires one invariant declared owner"
+            )
+        }
+        val slotParameters = plan.slot.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        val sourceParameter = slotParameters.getOrNull(inputIndex)
+            ?: dotNetUnsupported(
+                "relative collection input '${plan.slot.name}' has no selected parameter"
+            )
+        if (slotParameters.size != 1) {
+            dotNetUnsupported(
+                "relative collection input '${plan.slot.name}' requires one regular parameter"
+            )
+        }
+        val semanticTarget = context.genericOwnerSemanticHooks[plan.target]
+            ?: dotNetUnsupported(
+                "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
+                        "requires a producer-proven semantic hook"
+            )
+        val semanticParameters = semanticTarget.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        val semanticParameter = semanticParameters.singleOrNull()
+            ?.takeIf { parameter -> parameter.type.isNullableAny() }
+            ?: dotNetUnsupported(
+                "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
+                        "does not have one object-domain semantic parameter"
+            )
+        val viewName = memberView.name.lowercase().replaceFirstChar(Char::uppercaseChar)
+        return plan.implementingClass.addFunction {
+            startOffset = plan.target.startOffset
+            endOffset = plan.target.endOffset
+            origin = DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE
+            name = Name.special(
+                "<GenericInterface${viewName}RelativeGenericInputBridge-${plan.interfaceIdentity}-" +
+                        "${plan.slot.name.asString()}-${plan.slotIdentity}>"
+            )
+            visibility = DescriptorVisibilities.PRIVATE
+            modality = Modality.FINAL
+            returnType = plan.typedSubstitutor.substitute(plan.slot.returnType)
+        }.apply bridge@{
+            overriddenSymbols = listOf(plan.slot.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            val relativeParameter = addTypeParameter {
+                name = Name.identifier("U")
+                variance = Variance.INVARIANT
+                superTypes += plan.typedSubstitutor.substitute(
+                    plan.interfaceClass.typeParameters.single().symbol.defaultType
+                )
+            }
+            val relativeSubstitutor = IrTypeSubstitutor(
+                mapOf(
+                    plan.interfaceClass.typeParameters.single().symbol to
+                            relativeParameter.symbol.defaultType
+                ),
+                allowEmptySubstitution = false,
+            )
+            addValueParameter(
+                sourceParameter.name.asString(),
+                relativeSubstitutor.substitute(sourceParameter.type),
+            )
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val call = irCall(semanticTarget.symbol, semanticTarget.returnType).apply {
+                    arguments[0] = irGet(this@bridge.parameters[0])
+                    arguments[1] = irImplicitCast(
+                        irGet(this@bridge.parameters[1]),
+                        semanticParameter.type,
+                    )
+                }
+                +irReturn(
+                    if (call.type == this@bridge.returnType) call
+                    else irImplicitCast(call, this@bridge.returnType)
+                )
+            }
+        }
     }
 
     /**

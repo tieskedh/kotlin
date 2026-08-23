@@ -1203,9 +1203,39 @@ internal class DotNetIlTypeMapper private constructor(
         val ownerInfo = genericInterfaceInfoOrNull(owner) ?: return null
         val physicalOwner = ownerInfo.classInfo(view.physicalView) ?: return null
         val signatureMapper = genericInterfaceSignatureView(view)
+        val sourceSignature = function.dotNetSignature(signatureMapper)
+        val relativeInputIndex =
+            DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(function)
+        val signature = if (relativeInputIndex == null) {
+            sourceSignature
+        } else {
+            val physicalIndex = relativeInputIndex + if (sourceSignature.hasThis) 1 else 0
+            val sourceInput = sourceSignature.parameterTypes.getOrNull(physicalIndex)
+                as? DotNetIlValueType.GenericInstance
+                ?: dotNetUnsupported(
+                    "relative generic-interface input '${function.name}' is not a generic construction"
+                )
+            sourceSignature.copy(
+                parameterTypes = sourceSignature.parameterTypes.mapIndexed { index, type ->
+                    if (index == physicalIndex) {
+                        DotNetIlValueType.GenericInstance(
+                            sourceInput.classInfo,
+                            listOf(
+                                DotNetIlValueType.TypeParameter(
+                                    index = 0,
+                                    isMethodParameter = true,
+                                )
+                            ),
+                        )
+                    } else {
+                        type
+                    }
+                },
+            )
+        }
         return DotNetIlFunctionInfo(
             physicalOwner,
-            function.dotNetSignature(signatureMapper),
+            signature,
             genericInterfaceTypedMethodName(function),
         )
     }

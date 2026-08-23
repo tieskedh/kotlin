@@ -114,6 +114,7 @@ internal object DotNetRuntimeTypes {
         hasRehearsalDeclaredView: Boolean = false,
         hasRehearsalExactView: Boolean = false,
         usesDeclaredViewByDefaultInRehearsal: Boolean = false,
+        declaredVariance: Variance = Variance.OUT_VARIANCE,
     ): DotNetGenericInterfaceInfo =
         DotNetGenericInterfaceInfo(
             canonicalClassInfo = DotNetIlClassInfo(
@@ -123,7 +124,7 @@ internal object DotNetRuntimeTypes {
             declaredClassInfo = if (hasRehearsalDeclaredView) {
                 DotNetIlClassInfo(
                     ilClassName = "$canonicalName`1",
-                    typeParameterVariances = listOf(Variance.OUT_VARIANCE),
+                    typeParameterVariances = listOf(declaredVariance),
                     assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
                 )
             } else {
@@ -174,6 +175,7 @@ internal object DotNetRuntimeTypes {
             "Kotlin.Collections.MutableListIterator",
             hasRehearsalDeclaredView = true,
             usesDeclaredViewByDefaultInRehearsal = true,
+            declaredVariance = Variance.INVARIANT,
         )
     private val mutableListIteratorBase = mutableListIteratorGenericInterfaceInfo.canonicalClassInfo
     val mutableListIteratorType = DotNetIlValueType.UserClass(mutableListIteratorBase)
@@ -207,7 +209,12 @@ internal object DotNetRuntimeTypes {
     private val collectionType = DotNetIlValueType.UserClass(collectionBase)
 
     private val mutableCollectionGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.MutableCollection")
+        runtimeInterface(
+            "Kotlin.Collections.MutableCollection",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+            declaredVariance = Variance.INVARIANT,
+        )
     private val mutableCollectionBase = mutableCollectionGenericInterfaceInfo.canonicalClassInfo
     val mutableCollectionType = DotNetIlValueType.UserClass(mutableCollectionBase)
 
@@ -312,6 +319,10 @@ internal object DotNetRuntimeTypes {
             mutableIteratorGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredMutableIterable = openRuntimeInterfaceType(
+            mutableIterableGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
         val declaredCollection = openRuntimeInterfaceType(
             collectionGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
@@ -340,6 +351,10 @@ internal object DotNetRuntimeTypes {
             declaredCollection,
             declaredIterable,
         )
+        mutableCollectionGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(
+            declaredCollection,
+            declaredMutableIterable,
+        )
         setGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredCollection)
         setGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(
             declaredSet,
@@ -359,6 +374,7 @@ internal object DotNetRuntimeTypes {
         val canonicalObjectParameterIndices: Set<Int> = emptySet(),
         val foreignTypeArgumentFalseBarrier: Boolean = false,
         val foreignCollectionContainsAllFallback: Boolean = false,
+        val relativeGenericInputParameterIndex: Int? = null,
     )
 
     private data class RuntimeGenericInterfaceDescriptor(
@@ -410,12 +426,24 @@ internal object DotNetRuntimeTypes {
         ),
     )
     private val mutableCollectionMethods = mutableIterableMethods + mapOf(
-        "add" to RuntimeGenericInterfaceMethodNames("Add"),
-        "remove" to RuntimeGenericInterfaceMethodNames("RemoveErased"),
-        "addAll" to RuntimeGenericInterfaceMethodNames("AddAll"),
-        "removeAll" to RuntimeGenericInterfaceMethodNames("RemoveAll"),
-        "retainAll" to RuntimeGenericInterfaceMethodNames("RetainAll"),
-        "clear" to RuntimeGenericInterfaceMethodNames("Clear"),
+        "add" to RuntimeGenericInterfaceMethodNames("Add", typed = "Add"),
+        "remove" to RuntimeGenericInterfaceMethodNames("RemoveErased", typed = "Remove"),
+        "addAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "AddAll",
+            typed = "AddAll",
+            relativeGenericInputParameterIndex = 0,
+        ),
+        "removeAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "RemoveAll",
+            typed = "RemoveAll",
+            relativeGenericInputParameterIndex = 0,
+        ),
+        "retainAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "RetainAll",
+            typed = "RetainAll",
+            relativeGenericInputParameterIndex = 0,
+        ),
+        "clear" to RuntimeGenericInterfaceMethodNames("Clear", typed = "Clear"),
     )
     private val listMethods = collectionMethods + mapOf(
         // Canonical List owns its historical Collection-shaped slot in addition to the inherited
@@ -916,6 +944,14 @@ internal object DotNetRuntimeTypes {
     /** `containsAll` needs an element-wise fallback when two natural constructions cannot unify. */
     fun genericInterfaceUsesForeignCollectionContainsAllFallback(function: IrSimpleFunction): Boolean =
         genericInterfaceMethodNamesOrNull(function)?.foreignCollectionContainsAllFallback == true
+
+    /**
+     * One nested covariant input whose natural invariant owner represents Kotlin subtyping as a
+     * physical method parameter `U : T`. The source declaration remains non-generic; this is a
+     * CLR slot-shape fact and must not leak into Kotlin reflection or KLIB identity.
+     */
+    fun genericInterfaceRelativeGenericInputParameterIndex(function: IrSimpleFunction): Int? =
+        genericInterfaceMethodNamesOrNull(function)?.relativeGenericInputParameterIndex
 
     fun genericInterfaceFunctionInfoOrNull(
         function: IrSimpleFunction,

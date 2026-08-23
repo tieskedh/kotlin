@@ -1350,12 +1350,30 @@ and tooling visibility; a passing rehearsal does not by itself freeze an
 unrestricted reflective ABI. See
 [`../archive/runtime-reified-mutable-list-iterator-2026-08-23.md`](../archive/runtime-reified-mutable-list-iterator-2026-08-23.md).
 
+ABI/runtime surface 54 selects invariant natural `MutableCollection<T>` over
+the existing natural `Collection<T>` and `MutableIterable<T>` graph. Exact
+element operations remain typed. Each bulk input is a physical CLR generic
+method `<U : T>(Collection<U>)`; this admits Kotlin value-type widening without
+making the owner, nested input, or implementation field an object carrier.
+The source/KLIB member remains non-generic.
+
+The compiler represents this as a general relative-generic-input member fact.
+Ordinary Kotlin and C# calls use the natural generic interface directly. A
+capability-free C# object behind an unnameable projected Kotlin receiver uses
+the bounded unique-generic-method fallback only for that operation. Runtime
+and Kotlin implementation MethodDefs both retain `U : T`; C# needs no partial
+class, generator, exact/semantic interface, wrapper, or adapter. The earlier
+inherited Collection candidate-input protocol and this projected fallback
+remain trimming, NativeAOT, static-protocol, performance, and tooling gates.
+See
+[`../archive/runtime-reified-mutable-collection-2026-08-23.md`](../archive/runtime-reified-mutable-collection-2026-08-23.md).
+
 Next recompute the smallest complete Common dependency family after surface
-53. Keep input-bearing mutable collections, Map, defaults, broader overload
-families, and multiple owner parameters on their current mappings unless that
-dependency proof selects one of them atomically. The natural CLR route and
-typed state remain the default; a semantic capability is an evidence-backed
-escape hatch, not the first implementation choice.
+54. Keep `MutableList`, `MutableSet`, Map, defaults, broader overload families,
+and multiple owner parameters on their current mappings unless that dependency
+proof selects one atomically. The natural CLR route and typed state remain the
+default; a semantic capability is an evidence-backed escape hatch, not the
+first implementation choice.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

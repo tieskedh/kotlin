@@ -649,7 +649,10 @@ internal class DotNetIlMethodCodegen(
                 )
         }
         val ownerToken = DotNetIlValueType.GenericInstance(capabilityInfo, arguments).nameInSignature
-        val overrideInfo = DotNetIlFunctionInfo(
+        val overrideInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
+            overridden,
+            memberView,
+        ) ?: DotNetIlFunctionInfo(
             capabilityInfo,
             overridden.dotNetSignature(signatureMapper),
         )

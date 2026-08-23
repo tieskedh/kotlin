@@ -1606,6 +1606,45 @@ $fixedFunctionTypesIl
             }
           }
 
+          // The invariant natural owner keeps element operations typed. Bulk collection inputs
+          // use a physical method parameter U : T: unlike CLR interface variance, that relative
+          // constraint also admits Kotlin's Collection<int> -> Collection<object> widening.
+          .class interface public abstract auto ansi 'MutableCollection`1'<T>
+                 implements class 'Kotlin.Collections.Collection`1'<!T>,
+                            class 'Kotlin.Collections.MutableIterable`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.MutableIterator`1'<!T> GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Add(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Remove(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RetainAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi List
                  implements Kotlin.Collections.Collection
           {
