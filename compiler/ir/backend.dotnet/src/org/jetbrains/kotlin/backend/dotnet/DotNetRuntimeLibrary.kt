@@ -1336,8 +1336,8 @@ $fixedFunctionTypesIl
           }
 
           // Additive natural CLR view selected by the generic-owner rehearsal. The erased
-          // Iterator above remains the Kotlin semantic capability until the atomic collection
-          // cutover; Kotlin implementations carry both MethodImpl bundles on one object.
+          // Iterator above remains the Kotlin semantic capability; Kotlin implementations carry
+          // both MethodImpl bundles on one object.
           .class interface public abstract auto ansi 'Iterator`1'<+ T>
           {
             .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
@@ -1365,6 +1365,34 @@ $fixedFunctionTypesIl
             }
 
             .method public hidebysig newslot abstract virtual instance object Previous() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 NextIndex() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 PreviousIndex() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi 'ListIterator`1'<+ T>
+                 implements class 'Kotlin.Collections.Iterator`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T Next() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool HasPrevious() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T Previous() cil managed
             {
             }
 
@@ -1581,6 +1609,65 @@ $fixedFunctionTypesIl
             .property instance int32 Size()
             {
               .get instance int32 Kotlin.Collections.List::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'List`1'<+ T>
+                 implements class 'Kotlin.Collections.Collection`1'<!T>
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.Iterator`1'<!T> GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T Get(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.ListIterator`1'<!T> GetListIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.ListIterator`1'<!T> GetListIterator(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.List`1'<!T> SubList(int32 fromIndex, int32 toIndex) cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 'Kotlin.Collections.List`1'::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'List__KotlinExact`1'<T>
+                 implements class 'Kotlin.Collections.List`1'<!T>,
+                            class 'Kotlin.Collections.Collection__KotlinExact`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool Contains(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(
+                class 'Kotlin.Collections.Collection`1'<!T> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 IndexOf(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 LastIndexOf(!T element) cil managed
+            {
             }
           }
 
