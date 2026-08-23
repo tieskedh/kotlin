@@ -645,9 +645,28 @@ graph before natural-only C# values are promised across every Kotlin API
 boundary. See
 [`../archive/runtime-reified-iterator-foundation-2026-08-23.md`](../archive/runtime-reified-iterator-foundation-2026-08-23.md).
 
-Runtime/Stdlib collection TypeDef migration, broader properties, defaults,
-overloads, extra producer members, and mixed/multiple type parameters remain
-separate gates.
+ABI/runtime surface 50 applies that dependency foundation to the first atomic
+input-bearing Runtime family. Natural covariant `Collection<T>` and `Set<T>`
+own only CLR-legal output/query members. Their invariant exact siblings own
+`Contains(T)` and `ContainsAll(Collection<T>)`; the accepted arity-zero owners
+remain declaration-semantic capabilities and are never inherited by a pure C#
+implementation. Kotlin implementations carry all selected views on one object
+and retain producer-proven fields as `!T`.
+
+An ordinary non-partial C# implementation authors only the natural interface
+plus public input methods. A unique-construction runtime fallback invokes
+those methods when neither exact nor semantic Kotlin view exists. `Contains`
+applies the upstream fixed false barrier before typed invocation. A compatible
+`ContainsAll` preserves the ordinary C# method; an incompatible construction
+uses the original natural Iterable/Iterator objects and applies `Contains`
+element by element. This is a semantic requirement rather than a convenience:
+the empty incompatible input returns true. Open nested producer results use
+`object` as the common carrier of canonical and natural reference views until
+the next member dispatch, preserving identity without an adapter. See
+[`../archive/runtime-reified-collection-set-family-2026-08-23.md`](../archive/runtime-reified-collection-set-family-2026-08-23.md).
+
+List, mutable collections, Map, broader properties, defaults, overloads, extra
+producer members, and mixed/multiple type parameters remain separate gates.
 
 ## Remaining gates
 

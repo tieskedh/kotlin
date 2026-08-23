@@ -212,7 +212,9 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         fun isErasedKotlinCarrier(irClass: IrClass): Boolean =
             (isMappedKotlinGenericInterface(irClass) &&
                     irClass !in context.reifiedGenericInterfaces &&
-                    !externalDeclarations.hasReifiedGenericInterface(irClass)) ||
+                    !externalDeclarations.hasReifiedGenericInterface(irClass) &&
+                    !(context.configuration.dotNetGenericOwnerRehearsal &&
+                            DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(irClass))) ||
                     isErasedKotlinGenericClass(irClass) ||
                     externalDeclarations.hasGenericClass(irClass)
         for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
@@ -1126,11 +1128,28 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         isMappedKotlinGenericInterface: (IrClass) -> Boolean,
         isErasedKotlinCarrier: (IrClass) -> Boolean,
     ): IrSimpleFunction {
+        // A generic-class owner may already have split the authoritative Kotlin body into an
+        // object-domain semantic hook. The canonical interface is precisely that semantic view:
+        // forwarding it back through the typed source entry would reintroduce an early
+        // `Collection<object> -> Collection<!T>` cast for widened nested inputs. Exact/declared
+        // bridges below continue to target the natural source member.
+        val canonicalTarget = context.genericOwnerSemanticHooks[plan.target] ?: plan.target
         val canonicalSubstitution = plan.interfaceClass.typeParameters.associate { typeParameter ->
             typeParameter.symbol to context.irBuiltIns.anyNType
         }
         val canonicalSubstitutor = IrTypeSubstitutor(canonicalSubstitution, allowEmptySubstitution = true)
+        val canonicalObjectParameterTypes =
+            DotNetRuntimeTypes.genericInterfaceCanonicalObjectParameterIndices(plan.slot)
+                .mapNotNull { index ->
+                    plan.slot.parameters
+                        .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                        .getOrNull(index)
+                        ?.type
+                }
         fun canonicalType(type: IrType): IrType {
+            if (canonicalObjectParameterTypes.any { parameterType -> parameterType == type }) {
+                return context.irBuiltIns.anyNType
+            }
             if (!type.referencesTypeParameterOf(plan.interfaceClass)) return type
             val simpleType = type as? IrSimpleType
                 ?: return context.irBuiltIns.anyNType
@@ -1138,11 +1157,15 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             if (directParameter?.owner?.parent == plan.interfaceClass) return context.irBuiltIns.anyNType
             val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
             return if (
-                carrier?.let(isErasedKotlinCarrier) == true
+                carrier?.let(isErasedKotlinCarrier) == true ||
+                carrier?.let(DotNetRuntimeTypes::usesDeclaredViewByDefaultInRehearsal) == true
             ) {
                 // Both carriers have one erased physical identity. Substitute the interface
                 // parameter out of the synthetic bridge IR while preserving the nested carrier;
                 // the type mapper then selects the canonical interface or erased class owner.
+                // The selected Runtime dependency slice likewise has an explicit canonical
+                // identity next to its natural CLR construction, so it can retain the nested
+                // classifier instead of losing `Iterable.GetIterator(): Iterator` to object.
                 canonicalSubstitutor.substitute(type)
             } else {
                 // A genuinely reified CLR carrier or array depending on an erased interface
@@ -1154,7 +1177,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         return createForwardingBridge(
             irClass = plan.implementingClass,
             slot = plan.slot,
-            target = plan.target,
+            target = canonicalTarget,
             origin = DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE,
             bridgeName = "<GenericInterfaceCanonicalBridge-${plan.interfaceIdentity}-" +
                     "${plan.slot.name.asString()}-${plan.slotIdentity}>",
