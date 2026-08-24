@@ -1488,6 +1488,25 @@ target aggregate covers 191 suites/2,337 tests with zero failures, errors, or
 skips. It deliberately does not select `MutableMap<K,V>`. See
 [`../archive/runtime-reified-map-2026-08-24.md`](../archive/runtime-reified-map-2026-08-24.md).
 
+The first dependency recomputation after surface 59 ran the actual source-built
+Stdlib product before admitting another declaration and closed its first
+plan-to-materialization gap. Exact same-owner calls whose private result member
+requires an object-domain read now bind directly to that member's private
+semantic hook. The compiler does not add a capability interface slot, widen
+visibility, pass through the checked natural wrapper, or introduce a Sequence/
+collection exception. A focused Iterator-shaped regression fails at the
+planner when that direct binding is removed and executes on both profiles when
+it is present.
+
+The full source product consequently passes all ten former missing private
+routes and now reaches final value routing. Its next failure is an attempted
+external-function-carrier lookup which asks the Kotlin mangler for a local or
+generated Comparator-bearing function after its IR type graph has been
+rewritten. Close the authority boundary between local materialized declarations
+and producer-recorded external function carriers without a Comparator or
+stdlib exception; then rerun the product and recompute the next complete
+declaration family.
+
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
 reuses the parent's capability and member family; it does not acquire a second
