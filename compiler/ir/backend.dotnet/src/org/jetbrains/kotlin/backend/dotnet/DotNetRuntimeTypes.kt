@@ -45,8 +45,9 @@ import org.jetbrains.kotlin.types.Variance
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
  * The generic-owner rehearsal adds natural CLR-generic views for the complete read-only
- * Iterator/Iterable/Collection/Set/ListIterator/List closure and its MutableIterator/
- * MutableIterable/MutableListIterator/MutableCollection/MutableSet/MutableList dependency graph.
+ * Iterator/Iterable/Collection/Set/ListIterator/List/Map closure and its MutableIterator/
+ * MutableIterable/MutableListIterator/MutableCollection/MutableSet/MutableList dependency graph,
+ * together with natural Entry and MutableEntry values.
  * Exact siblings own input members which cannot legally appear on a covariant CLR interface,
  * while the accepted arity-zero identities remain declaration-semantic capabilities. The five
  * currently supported primitive Iterator subclasses still alias the erased Iterator identity
@@ -271,7 +272,16 @@ internal object DotNetRuntimeTypes {
     val mutableSetType = DotNetIlValueType.UserClass(mutableSetBase)
 
     private val mapGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.Map")
+        runtimeInterface(
+            "Kotlin.Collections.Map",
+            hasRehearsalDeclaredView = true,
+            hasRehearsalExactView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+            declaredVariances = listOf(
+                Variance.INVARIANT,
+                Variance.OUT_VARIANCE,
+            ),
+        )
     private val mapBase = mapGenericInterfaceInfo.canonicalClassInfo
     val mapType = DotNetIlValueType.UserClass(mapBase)
 
@@ -389,6 +399,10 @@ internal object DotNetRuntimeTypes {
             listGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredMap = openRuntimeInterfaceType(
+            mapGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
         mutableIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         listIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         mutableListIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(
@@ -423,6 +437,7 @@ internal object DotNetRuntimeTypes {
             declaredList,
             declaredMutableCollection,
         )
+        mapGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(declaredMap)
     }
 
     private data class RuntimeGenericInterfaceMethodNames(
@@ -559,22 +574,37 @@ internal object DotNetRuntimeTypes {
     private val mapMethods = mapOf(
         "get_size" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Size",
+            typed = "get_Size",
             property = "Size",
         ),
-        "isEmpty" to RuntimeGenericInterfaceMethodNames("IsEmpty"),
-        "containsKey" to RuntimeGenericInterfaceMethodNames("ContainsKeyErased"),
-        "containsValue" to RuntimeGenericInterfaceMethodNames("ContainsValueErased"),
-        "get" to RuntimeGenericInterfaceMethodNames("GetErased"),
+        "isEmpty" to RuntimeGenericInterfaceMethodNames("IsEmpty", typed = "IsEmpty"),
+        "containsKey" to RuntimeGenericInterfaceMethodNames(
+            canonical = "ContainsKeyErased",
+            typed = "ContainsKey",
+            foreignTypeArgumentFalseBarrier = true,
+        ),
+        "containsValue" to RuntimeGenericInterfaceMethodNames(
+            canonical = "ContainsValueErased",
+            typed = "ContainsValue",
+            foreignTypeArgumentFalseBarrier = true,
+        ),
+        "get" to RuntimeGenericInterfaceMethodNames(
+            canonical = "GetErased",
+            typed = "Get",
+        ),
         "get_keys" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Keys",
+            typed = "get_Keys",
             property = "Keys",
         ),
         "get_values" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Values",
+            typed = "get_Values",
             property = "Values",
         ),
         "get_entries" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Entries",
+            typed = "get_Entries",
             property = "Entries",
         ),
     )

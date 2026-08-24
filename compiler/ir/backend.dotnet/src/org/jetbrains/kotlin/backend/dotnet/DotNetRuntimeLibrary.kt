@@ -2114,6 +2114,79 @@ $fixedFunctionTypesIl
             }
           }
 
+          // Mixed-variance natural Map keeps every CLR-representable slot typed. The nullable
+          // V? lookup result remains object because one unconstrained CLR V cannot alternate
+          // between a reference and Nullable<V>. Only the covariant-V input lives on the
+          // invariant exact sibling below.
+          .class interface public abstract auto ansi 'Map`2'<K, + V>
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsKey(!K key) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Get(!K key) cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance
+                class 'Kotlin.Collections.Set`1'<!K> get_Keys() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance
+                class 'Kotlin.Collections.Collection`1'<!V> get_Values() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance
+                class 'Kotlin.Collections.Set`1'<class Kotlin.Collections.Map/'Entry`2'<!K, !V>>
+                get_Entries() cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 'Kotlin.Collections.Map`2'::get_Size()
+            }
+
+            .property instance class 'Kotlin.Collections.Set`1'<!K> Keys()
+            {
+              .get instance class 'Kotlin.Collections.Set`1'<!K>
+                'Kotlin.Collections.Map`2'::get_Keys()
+            }
+
+            .property instance class 'Kotlin.Collections.Collection`1'<!V> Values()
+            {
+              .get instance class 'Kotlin.Collections.Collection`1'<!V>
+                'Kotlin.Collections.Map`2'::get_Values()
+            }
+
+            .property instance
+                class 'Kotlin.Collections.Set`1'<class Kotlin.Collections.Map/'Entry`2'<!K, !V>>
+                Entries()
+            {
+              .get instance
+                class 'Kotlin.Collections.Set`1'<class Kotlin.Collections.Map/'Entry`2'<!K, !V>>
+                'Kotlin.Collections.Map`2'::get_Entries()
+            }
+          }
+
+          .class interface public abstract auto ansi 'Map__KotlinExact`2'<K, V>
+                 implements class 'Kotlin.Collections.Map`2'<!K, !V>
+          {
+            .method public hidebysig newslot abstract virtual instance bool ContainsValue(!V 'value') cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi MutableMap
                  implements Kotlin.Collections.Map
           {

@@ -564,8 +564,8 @@ verification, and work state.
   routes, and late semantic reachability no longer degrades
   `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN` fields. Foreign argument vectors box
   value carriers before `stelem.ref`; canonical Collection input is entered
-  only after a runtime guard; and the existing `containsAll` helper now records
-  its actual nine-slot maximum stack.
+  only after a runtime guard; and the existing `containsAll` helper recorded
+  its then-actual nine-slot maximum stack.
 
   Four focused rehearsal lanes and four production-erased inverse lanes are
   green across PSI, LightTree, Framework 4.8, and .NET 10. The complete
@@ -577,6 +577,47 @@ verification, and work state.
   `dotnet.ir` root. Production remains atomically erased outside rehearsal.
   See
   [`docs/archive/runtime-reified-mutable-map-entry-2026-08-24.md`](docs/archive/runtime-reified-mutable-map-entry-2026-08-24.md).
+
+  ABI/runtime surface 59 now adds the first parentless mixed-variance,
+  multiple-owner-parameter lookup family and instantiates it as natural
+  `Map<K,out V>`. Admission is structural: exactly one invariant and one
+  covariant parameter, no parents, two key-input barriers, one value-input
+  barrier, one owner-independent primitive property, one primitive query, and
+  three read-only constructed-interface properties covering K, V, and their
+  ordered pair.
+  Every constructed result must compose only already published covariant
+  natural families. Missing or additional members, defaults, mutable
+  properties, unsupported result classifiers, and different variance vectors
+  reject the complete family.
+
+  `ContainsKey(!K)` and the typed Set/Collection/Entry views remain on the
+  natural interface. Covariant `ContainsValue(!V)` lives only on an invariant
+  exact sibling. `Get(!K): object` is the honest open-nullable carrier because
+  one unconstrained CLR V cannot represent both nullable references and
+  `Nullable<V>`; it does not erase the Map owner or its state. Kotlin
+  implementations retain independent `!0` and `!1` fields. Star, projection,
+  value-type-widened, and foreign natural-only operations cross only their
+  semantic slot, without a wrapper or second identity.
+
+  An ordinary sealed non-partial C# class implements only natural
+  `Map<string,int>` and the accepted public value-candidate convention. Exact,
+  widened, and star Kotlin calls execute on that same object. BK-1 checks both
+  Map arguments at warning-bearing `as`/`as?` boundaries, including an
+  explicit cast used as a lookup receiver, while retaining legal V covariance.
+  Foreign fixed barriers carry the applicable owner-parameter index through
+  the runtime cache instead of assuming argument zero; the extra dispatcher
+  argument raises the existing `containsAll` helper's verified maximum stack
+  to ten.
+
+  Four focused rehearsal lanes, four production-erased inverse lanes, and the
+  complete eleven-family Runtime selection under both modes are green across
+  PSI, LightTree, Framework 4.8, and .NET 10. The final full aggregate exits
+  zero. Direct XML audit covers 191 suites/2,337 tests with zero failures,
+  errors, or skips: 187 FIR suites/2,203 tests and two integration suites/127
+  tests are fresh; the one-test backend resolver and unchanged six-test
+  `dotnet.ir` root remain up-to-date. Production remains atomically erased
+  outside rehearsal. See
+  [`docs/archive/runtime-reified-map-2026-08-24.md`](docs/archive/runtime-reified-map-2026-08-24.md).
 
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
@@ -4999,9 +5040,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    checks across both arguments. Surface 58 adds the dependency-minimal
    invariant `MutableMap.MutableEntry<K,V>` child with typed input/output
    mutation and closes the general paired classifier-input and inherited
-   relative-input Runtime regressions without selecting MutableMap. Recompute
-   the next complete Common dependency family from this head. Do not add Map,
-   Sequence, or another
+   relative-input Runtime regressions without selecting MutableMap. Surface 59
+   adds the complete parentless mixed-variance Map lookup family, keeps typed
+   K/V state and constructed views, and isolates only the covariant-value input
+   and open-nullable lookup carriers. Recompute the next complete Common
+   dependency family from this head. Do not add MutableMap, Sequence, or another
    declaration-specific representation exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse

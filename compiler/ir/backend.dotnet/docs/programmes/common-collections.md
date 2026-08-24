@@ -558,6 +558,28 @@ producer-proven typed fields, and fixes value boxing plus the Runtime
 target inventory is green. See the
 [`surface 58 archive`](../archive/runtime-reified-mutable-map-entry-2026-08-24.md).
 
+The following dependency recomputation selected and completed mixed-variance
+`Map<K,out V>` as surface 59. Its structural eight-member grammar combines an
+invariant key, covariant value, Boolean key/value probes, nullable value lookup,
+one owner-independent primitive property, one primitive query, and natural
+read-only Set/Collection/Entry results covering K, V, and K/V. Only already
+published covariant natural result families are admitted; the lowering contains
+no Map-name switch.
+
+Natural Map retains `ContainsKey(!K)` and all three typed constructed views.
+The invariant exact sibling owns `ContainsValue(!V)`. The nullable lookup uses
+`object Get(!K)` because an unconstrained CLR V cannot uniformly denote both a
+nullable reference and `Nullable<V>`, but Kotlin implementations still keep
+independent `!0` key and `!1` value fields. Thus the exceptional carrier is
+operation-local and does not turn Map, List, or nested generic state into
+object storage. Exact/widened/star Kotlin calls, including an explicit unsafe
+cast used as a lookup receiver, and an ordinary natural-only C# class preserve
+one receiver and view identity. The four rehearsal lanes, four
+production-erased inverse lanes, complete eleven-family Runtime selection, and
+strict 191-suite/2,337-test target inventory are green. `MutableMap<K,V>`
+remains unselected. See the
+[`surface 59 archive`](../archive/runtime-reified-map-2026-08-24.md).
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common

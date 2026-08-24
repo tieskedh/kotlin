@@ -199,6 +199,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val directInputOutputParameter = parameters.singleOrNull { parameter ->
                     member.isDirectInputOutputMember(parameter)
                 }
+                val fixedBarrierParameter = parameters.singleOrNull { parameter ->
+                    member.isBroadFixedBarrierInputMember(parameter)
+                }
                 val role = when {
                     property?.getter === member && directProducerParameter != null ->
                         DotNetPublishedGenericInterfaceMemberRole.PROPERTY_GETTER
@@ -209,10 +212,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             singleParameter != null &&
                             member.isDirectMethodGenericProducerMember(singleParameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER
-                    singleParameter != null &&
-                            member.isDirectConstructedInterfaceProducerMember(singleParameter) ->
+                    member.isConstructedInterfaceProducerMember(owner) ->
                         DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
-                    singleParameter != null && member.isBroadFixedBarrierInputMember(singleParameter) ->
+                    fixedBarrierParameter != null ->
                         DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT
                     singleParameter != null &&
                             member.isBroadNestedSemanticInputMember(owner, singleParameter) ->
@@ -251,7 +253,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (owner in visiting || !owner.hasLogicalReifiedInterfaceOwnerShape()) return null
         if (owner.typeParameters.size > 1) {
             val hasSupportedShape = if (owner.dotNetDirectInterfaceTypes().isEmpty()) {
-                owner.directCovariantParameterPropertyVectorOrNull() != null
+                owner.directCovariantParameterPropertyVectorOrNull() != null ||
+                        owner.directMixedParameterLookupFamilyMembersOrNull() != null
             } else {
                 owner.directInvariantParameterInputOutputChildShapeOrNull() != null
             }
@@ -431,7 +434,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 rootChanged = false
                 for (owner in genericInterfaces) {
                     if (owner in context.reifiedGenericInterfaces ||
-                        !owner.hasDirectConstructedInterfaceProducerMember() ||
+                        !(owner.hasDirectConstructedInterfaceProducerMember() ||
+                                owner.typeParameters.size > 1) ||
                         !owner.isFirstReifiedInterfaceCandidate()
                     ) {
                         continue
@@ -617,16 +621,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     }
         }
 
-        fun IrType.reifiedCovariantInterfaceOwnerOrNull(): IrClass? {
-            val owner = reifiedInterfaceOwnerOrNull() ?: return null
-            return owner.takeIf { candidate ->
-                candidate.typeParameters.isNotEmpty() &&
-                        candidate.typeParameters.all { parameter ->
-                            parameter.variance == Variance.OUT_VARIANCE
-                        }
-            }
-        }
-
         fun IrType.containsReifiedInterfaceApplication(): Boolean {
             val simpleType = this as? IrSimpleType ?: return false
             if (reifiedInterfaceOwnerOrNull() != null) return true
@@ -709,7 +703,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
         fun IrExpression.classifierErasedInterfaceOwnerOrNull(): IrClass? = when (this) {
             is IrCall -> checkNotNullArgumentOrNull()?.classifierErasedInterfaceOwnerOrNull()
-                ?: type.reifiedCovariantInterfaceOwnerOrNull().takeIf {
+                ?: type.reifiedInterfaceOwnerOrNull().takeIf {
                     symbol.owner in context.genericOwnerForeignDispatchDeclarations ||
                             externalDeclarations.genericOwnerFunctionCarrierOrNull(symbol.owner)
                                 ?.carrier?.returnCarrier == DotNetGenericOwnerFunctionCarrierKind.OBJECT
@@ -717,7 +711,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
             is IrTypeOperatorCall -> when (operator) {
                 IrTypeOperator.CAST,
                 IrTypeOperator.SAFE_CAST,
-                    -> typeOperand.reifiedCovariantInterfaceOwnerOrNull()
+                    -> typeOperand.reifiedInterfaceOwnerOrNull()
                 IrTypeOperator.IMPLICIT_CAST,
                 IrTypeOperator.IMPLICIT_NOTNULL,
                     -> argument.classifierErasedInterfaceOwnerOrNull()
@@ -854,7 +848,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         ((operator == IrTypeOperator.CAST ||
                                 operator == IrTypeOperator.SAFE_CAST ||
                                 operator == IrTypeOperator.IMPLICIT_CAST) &&
-                                type.reifiedCovariantInterfaceOwnerOrNull() != null)
+                                type.reifiedInterfaceOwnerOrNull() != null)
             else -> false
         }
 
@@ -1039,7 +1033,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
 
         fun IrType.isNaturalClassifierInput(function: IrSimpleFunction): Boolean {
-            val owner = reifiedCovariantInterfaceOwnerOrNull() ?: return false
+            val owner = reifiedInterfaceOwnerOrNull() ?: return false
             val arguments = (this as? IrSimpleType)?.arguments ?: return false
             if (arguments.size != owner.typeParameters.size ||
                 arguments.any { argument ->
@@ -1076,7 +1070,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         fun IrSimpleFunction.classifierInputParameterIndicesOrEmpty(): List<Int> {
             if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.FINAL || body == null ||
                 isFakeOverride || isSuspend ||
-                correspondingPropertySymbol != null || returnType.reifiedCovariantInterfaceOwnerOrNull() != null ||
+                correspondingPropertySymbol != null || returnType.reifiedInterfaceOwnerOrNull() != null ||
                 parameters.any { parameter ->
                     parameter.kind != IrParameterKind.DispatchReceiver &&
                             parameter.kind != IrParameterKind.Regular ||
@@ -1500,9 +1494,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val owner = source.parent as IrClass
             val ownerParameters = owner.typeParameters
             val singleOwnerParameter = ownerParameters.singleOrNull()
-            if (singleOwnerParameter != null &&
-                source.isBroadFixedBarrierInputMember(singleOwnerParameter)
-            ) {
+            val fixedBarrierParameter = ownerParameters.singleOrNull { parameter ->
+                source.isBroadFixedBarrierInputMember(parameter)
+            }
+            if (fixedBarrierParameter != null) {
                 val policy = checkNotNull(
                     specialBridgeMethods.findSpecialWithOverride(source, includeSelf = true)?.second
                 ) {
@@ -1510,9 +1505,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
                 context.genericOwnerWrongShapePolicies[source] = policy.toDotNetWrongShapePolicy()
             }
-            val returnsConstructedInterface =
-                singleOwnerParameter != null &&
-                        source.isDirectConstructedInterfaceProducerMember(singleOwnerParameter)
+            val returnsConstructedInterface = source.isConstructedInterfaceProducerMember(owner)
             val acceptsNestedSemanticInput =
                 singleOwnerParameter != null &&
                         source.isBroadNestedSemanticInputMember(owner, singleOwnerParameter)
@@ -1759,7 +1752,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val hasSupportedPhysicalPlacement = parent is IrFile ||
                     DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(this)
             return hasSupportedPhysicalPlacement && dotNetDirectInterfaceTypes().isEmpty() &&
-                    directCovariantParameterPropertyVectorOrNull() != null
+                    (directCovariantParameterPropertyVectorOrNull() != null ||
+                            directMixedParameterLookupFamilyMembersOrNull() != null)
         }
         if (!hasFirstReifiedInterfaceOwnerShape()) return false
         if (parent !is IrFile || dotNetDirectInterfaceTypes().isNotEmpty()) return false
@@ -1832,6 +1826,147 @@ internal class DotNetReifiedGenericInterfaceLowering(
             members.size == getters.size && members.toSet() == getters.toSet() &&
                     producedParameters.toSet().size == parameters.size
         }
+    }
+
+    /**
+     * Admits the first mixed-variance, multiple-parameter lookup family. The invariant parameter
+     * is the lookup key and the covariant parameter is the produced value, but neither source
+     * names nor declaration order assign those meanings. The member graph itself must contain
+     * exactly one fixed-barrier Boolean probe for each parameter, one invariant-parameter lookup
+     * returning the nullable covariant parameter, the two owner-independent primitive queries,
+     * and three read-only constructed views covering the invariant parameter, the covariant
+     * parameter, and their ordered pair.
+     *
+     * Every constructed result is composed solely from already published covariant natural
+     * interfaces. This keeps those results typed while the semantic capability widens only the
+     * individual operation whose Kotlin view the CLR cannot name.
+     */
+    private fun IrClass.directMixedParameterLookupFamilyMembersOrNull(): List<IrSimpleFunction>? {
+        if (!hasLogicalReifiedInterfaceOwnerShape() || typeParameters.size != 2 ||
+            dotNetDirectInterfaceTypes().isNotEmpty()
+        ) {
+            return null
+        }
+        val invariantParameter = typeParameters.singleOrNull { parameter ->
+            parameter.variance == Variance.INVARIANT
+        } ?: return null
+        val covariantParameter = typeParameters.singleOrNull { parameter ->
+            parameter.variance == Variance.OUT_VARIANCE
+        } ?: return null
+        if (typeParameters.any { parameter -> parameter.variance == Variance.IN_VARIANCE }) {
+            return null
+        }
+
+        val members = declaredInterfaceMembers()
+        val invariantBarriers = members.filter { member ->
+            member.isBroadFixedBarrierInputMember(invariantParameter)
+        }
+        val covariantBarriers = members.filter { member ->
+            member.isBroadFixedBarrierInputMember(covariantParameter)
+        }
+        val invariantBooleanProbe = invariantBarriers.singleOrNull { member ->
+            member.returnType == context.irBuiltIns.booleanType
+        } ?: return null
+        val invariantNullableLookup = invariantBarriers.singleOrNull { member ->
+            member.returnType.isDirectNullableProducerOf(covariantParameter)
+        } ?: return null
+        val covariantBooleanProbe = covariantBarriers.singleOrNull { member ->
+            member.returnType == context.irBuiltIns.booleanType
+        } ?: return null
+        if (invariantBarriers.size != 2 || covariantBarriers.size != 1) return null
+
+        val primitivePropertyGetters = members.filter { member ->
+            member.isOwnerIndependentPrimitivePropertyGetter()
+        }
+        val primitiveQueries = members.filter { member -> member.isOwnerIndependentPrimitiveQuery() }
+        if (primitivePropertyGetters.size != 1 || primitiveQueries.size != 1) return null
+
+        val constructedPropertyGetters = members.mapNotNull { member ->
+            val property = member.correspondingPropertySymbol?.owner ?: return@mapNotNull null
+            if (property.getter !== member || property.isVar || property.setter != null) {
+                return@mapNotNull null
+            }
+            member.constructedInterfaceProducerParameterIndicesOrNull(this)
+                ?.let { indices -> member to indices }
+        }
+        val invariantIndex = typeParameters.indexOf(invariantParameter)
+        val covariantIndex = typeParameters.indexOf(covariantParameter)
+        val expectedVectors = setOf(
+            listOf(invariantIndex),
+            listOf(covariantIndex),
+            typeParameters.indices.toList(),
+        )
+        if (constructedPropertyGetters.size != 3 ||
+            constructedPropertyGetters.map { pair -> pair.second }.toSet() != expectedVectors
+        ) {
+            return null
+        }
+
+        val classified = setOf(
+            invariantBooleanProbe,
+            invariantNullableLookup,
+            covariantBooleanProbe,
+        ) + primitivePropertyGetters + primitiveQueries +
+                constructedPropertyGetters.map { pair -> pair.first }
+        return members.takeIf { candidates ->
+            candidates.size == 8 && candidates.toSet() == classified
+        }
+    }
+
+    private fun IrType.isDirectNullableProducerOf(parameter: IrTypeParameter): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        return simpleType.isMarkedNullable() &&
+                (simpleType.classifier as? IrTypeParameterSymbol)?.owner === parameter
+    }
+
+    private fun IrSimpleFunction.isConstructedInterfaceProducerMember(owner: IrClass): Boolean =
+        constructedInterfaceProducerParameterIndicesOrNull(owner) != null
+
+    private fun IrSimpleFunction.constructedInterfaceProducerParameterIndicesOrNull(
+        owner: IrClass,
+    ): List<Int>? {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
+            body != null || this in context.interfaceDefaultImplementations || isSuspend ||
+            typeParameters.isNotEmpty() ||
+            parameters.singleOrNull()?.kind != IrParameterKind.DispatchReceiver
+        ) {
+            return null
+        }
+        return returnType.constructedInterfaceProducerParameterIndicesOrNull(owner)
+    }
+
+    private fun IrType.constructedInterfaceProducerParameterIndicesOrNull(
+        owner: IrClass,
+    ): List<Int>? {
+        val simpleType = this as? IrSimpleType ?: return null
+        if (simpleType.isMarkedNullable()) return null
+        val resultOwner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
+        val resultContract = publishedFamilyOrNull(resultOwner) ?: return null
+        if (resultOwner.typeParameters.size != simpleType.arguments.size ||
+            resultContract.genericArity != resultOwner.typeParameters.size ||
+            resultOwner.typeParameters.any { parameter ->
+                parameter.variance != Variance.OUT_VARIANCE
+            }
+        ) {
+            return null
+        }
+        val indices = mutableListOf<Int>()
+        simpleType.arguments.forEach { argument ->
+            val projection = argument as? IrTypeProjection ?: return null
+            if (projection.variance != Variance.INVARIANT) return null
+            val argumentType = projection.type as? IrSimpleType ?: return null
+            val directParameter = (argumentType.classifier as? IrTypeParameterSymbol)?.owner
+            if (directParameter?.parent === owner) {
+                if (argumentType.isMarkedNullable()) return null
+                val index = owner.typeParameters.indexOf(directParameter)
+                if (index < 0) return null
+                indices += index
+            } else {
+                indices += argumentType.constructedInterfaceProducerParameterIndicesOrNull(owner)
+                    ?: return null
+            }
+        }
+        return indices.takeIf { it.isNotEmpty() }
     }
 
     /**
