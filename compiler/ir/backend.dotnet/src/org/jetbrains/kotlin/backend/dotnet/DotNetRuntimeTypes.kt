@@ -9,10 +9,15 @@ import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isKFunction
@@ -41,10 +46,9 @@ import org.jetbrains.kotlin.types.Variance
  *
  * The generic-owner rehearsal adds natural CLR-generic views for the complete read-only
  * Iterator/Iterable/Collection/Set/ListIterator/List closure and its MutableIterator/
- * MutableIterable/MutableListIterator dependency family. Exact siblings own input members which
- * cannot legally appear on a covariant CLR interface, while the accepted arity-zero identities
- * remain declaration-semantic capabilities. Input-bearing mutable collection families retain
- * their declaration-erased mappings until their complete dependency gate is selected. The five
+ * MutableIterable/MutableListIterator/MutableCollection/MutableSet/MutableList dependency graph.
+ * Exact siblings own input members which cannot legally appear on a covariant CLR interface,
+ * while the accepted arity-zero identities remain declaration-semantic capabilities. The five
  * currently supported primitive Iterator subclasses still alias the erased Iterator identity
  * until their ordinary stdlib classes are produced. CLR collection interfaces remain explicit
  * interop concerns.
@@ -233,7 +237,12 @@ internal object DotNetRuntimeTypes {
     private val enumEntriesBase = enumEntriesGenericInterfaceInfo.canonicalClassInfo
 
     private val mutableListGenericInterfaceInfo =
-        runtimeInterface("Kotlin.Collections.MutableList")
+        runtimeInterface(
+            "Kotlin.Collections.MutableList",
+            hasRehearsalDeclaredView = true,
+            usesDeclaredViewByDefaultInRehearsal = true,
+            declaredVariance = Variance.INVARIANT,
+        )
     private val mutableListBase = mutableListGenericInterfaceInfo.canonicalClassInfo
     val mutableListType = DotNetIlValueType.UserClass(mutableListBase)
 
@@ -378,6 +387,10 @@ internal object DotNetRuntimeTypes {
             declaredList,
             exactCollection,
         )
+        mutableListGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(
+            declaredList,
+            declaredMutableCollection,
+        )
     }
 
     private data class RuntimeGenericInterfaceMethodNames(
@@ -387,7 +400,7 @@ internal object DotNetRuntimeTypes {
         val canonicalObjectParameterIndices: Set<Int> = emptySet(),
         val foreignTypeArgumentFalseBarrier: Boolean = false,
         val foreignCollectionContainsAllFallback: Boolean = false,
-        val relativeGenericInputParameterIndex: Int? = null,
+        val hasRelativeGenericInput: Boolean = false,
     )
 
     private data class RuntimeGenericInterfaceDescriptor(
@@ -444,17 +457,17 @@ internal object DotNetRuntimeTypes {
         "addAll" to RuntimeGenericInterfaceMethodNames(
             canonical = "AddAll",
             typed = "AddAll",
-            relativeGenericInputParameterIndex = 0,
+            hasRelativeGenericInput = true,
         ),
         "removeAll" to RuntimeGenericInterfaceMethodNames(
             canonical = "RemoveAll",
             typed = "RemoveAll",
-            relativeGenericInputParameterIndex = 0,
+            hasRelativeGenericInput = true,
         ),
         "retainAll" to RuntimeGenericInterfaceMethodNames(
             canonical = "RetainAll",
             typed = "RetainAll",
-            relativeGenericInputParameterIndex = 0,
+            hasRelativeGenericInput = true,
         ),
         "clear" to RuntimeGenericInterfaceMethodNames("Clear", typed = "Clear"),
     )
@@ -482,16 +495,31 @@ internal object DotNetRuntimeTypes {
         "subList" to RuntimeGenericInterfaceMethodNames("SubList", typed = "SubList"),
     )
     private val mutableListMethods = mapOf(
-        "add" to RuntimeGenericInterfaceMethodNames("Add"),
-        "remove" to RuntimeGenericInterfaceMethodNames("RemoveErased"),
-        "addAll" to RuntimeGenericInterfaceMethodNames("AddAll"),
-        "removeAll" to RuntimeGenericInterfaceMethodNames("RemoveAll"),
-        "retainAll" to RuntimeGenericInterfaceMethodNames("RetainAll"),
-        "clear" to RuntimeGenericInterfaceMethodNames("Clear"),
-        "set" to RuntimeGenericInterfaceMethodNames("Set"),
-        "removeAt" to RuntimeGenericInterfaceMethodNames("RemoveAt"),
-        "listIterator" to RuntimeGenericInterfaceMethodNames("GetListIterator"),
-        "subList" to RuntimeGenericInterfaceMethodNames("SubList"),
+        "add" to RuntimeGenericInterfaceMethodNames("Add", typed = "Add"),
+        "remove" to RuntimeGenericInterfaceMethodNames("RemoveErased", typed = "Remove"),
+        "addAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "AddAll",
+            typed = "AddAll",
+            hasRelativeGenericInput = true,
+        ),
+        "removeAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "RemoveAll",
+            typed = "RemoveAll",
+            hasRelativeGenericInput = true,
+        ),
+        "retainAll" to RuntimeGenericInterfaceMethodNames(
+            canonical = "RetainAll",
+            typed = "RetainAll",
+            hasRelativeGenericInput = true,
+        ),
+        "clear" to RuntimeGenericInterfaceMethodNames("Clear", typed = "Clear"),
+        "set" to RuntimeGenericInterfaceMethodNames("Set", typed = "Set"),
+        "removeAt" to RuntimeGenericInterfaceMethodNames("RemoveAt", typed = "RemoveAt"),
+        "listIterator" to RuntimeGenericInterfaceMethodNames(
+            "GetListIterator",
+            typed = "GetListIterator",
+        ),
+        "subList" to RuntimeGenericInterfaceMethodNames("SubList", typed = "SubList"),
     )
     private val setMethods = collectionMethods
     private val mutableSetMethods = mutableCollectionMethods
@@ -959,12 +987,43 @@ internal object DotNetRuntimeTypes {
         genericInterfaceMethodNamesOrNull(function)?.foreignCollectionContainsAllFallback == true
 
     /**
-     * One nested covariant input whose natural invariant owner represents Kotlin subtyping as a
-     * physical method parameter `U : T`. The source declaration remains non-generic; this is a
-     * CLR slot-shape fact and must not leak into Kotlin reflection or KLIB identity.
+     * The unique nested covariant input whose natural invariant owner represents Kotlin subtyping
+     * as a physical method parameter `U : T`. Independent parameters may surround that input, so
+     * overloads do not acquire a position-specific declaration exception. The source declaration
+     * remains non-generic; this is a CLR slot-shape fact and must not leak into Kotlin reflection
+     * or KLIB identity.
      */
-    fun genericInterfaceRelativeGenericInputParameterIndex(function: IrSimpleFunction): Int? =
-        genericInterfaceMethodNamesOrNull(function)?.relativeGenericInputParameterIndex
+    fun genericInterfaceRelativeGenericInputParameterIndex(function: IrSimpleFunction): Int? {
+        if (genericInterfaceMethodNamesOrNull(function)?.hasRelativeGenericInput != true) return null
+        val owner = function.parent as? IrClass ?: return null
+        val ownerParameter = owner.typeParameters.singleOrNull() ?: return null
+        val candidates = function.parameters
+            .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+            .mapIndexedNotNull { index, parameter ->
+                val inputType = parameter.type as? IrSimpleType ?: return@mapIndexedNotNull null
+                if (inputType.isMarkedNullable()) return@mapIndexedNotNull null
+                val inputOwner = (inputType.classifier as? IrClassSymbol)?.owner
+                    ?: return@mapIndexedNotNull null
+                if (inputOwner.typeParameters.singleOrNull()?.variance != Variance.OUT_VARIANCE ||
+                    !usesDeclaredViewByDefaultInRehearsal(inputOwner)
+                ) {
+                    return@mapIndexedNotNull null
+                }
+                val argument = inputType.arguments.singleOrNull() as? IrTypeProjection
+                    ?: return@mapIndexedNotNull null
+                val argumentParameter =
+                    (argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+                index.takeIf {
+                    argument.variance == Variance.INVARIANT &&
+                            argumentParameter?.owner === ownerParameter
+                }
+            }
+        return candidates.singleOrNull()
+            ?: dotNetUnsupported(
+                "relative generic-interface input '${function.name}' does not have exactly " +
+                        "one nested covariant owner-relative parameter"
+            )
+    }
 
     fun genericInterfaceFunctionInfoOrNull(
         function: IrSimpleFunction,

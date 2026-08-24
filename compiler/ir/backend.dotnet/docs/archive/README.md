@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-mutable-list-2026-08-24.md`](runtime-reified-mutable-list-2026-08-24.md)
+  records ABI/runtime surface 56's invariant natural `MutableList<T>`,
+  position-independent relative inputs, mixed typed mutation grammar, true
+  `!T` state, ordinary C# implementation proof, and Runtime epoch correction.
 - [`upstream-sync-2026-08-24.md`](upstream-sync-2026-08-24.md)
   records the pinned 461-commit upstream integration, preservation of all 603
   target patches, three bounded semantic adaptations, strict target evidence,
