@@ -234,6 +234,8 @@ object DotNetBackend {
                     genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                     genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
                     genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
+                    genericOwnerFunctionInputEntryObjectParameters =
+                        context.genericOwnerFunctionInputEntryObjectParameters,
                     genericOwnerDirectForeignOverrideDispatches =
                         context.genericOwnerDirectForeignOverrideDispatches,
                     genericOwnerForeignOverrideProbeTargets = context.genericOwnerForeignOverrideProbeTargets,
@@ -374,6 +376,8 @@ object DotNetBackend {
                 genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                 genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
                 genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
+                genericOwnerFunctionInputEntryObjectParameters =
+                    context.genericOwnerFunctionInputEntryObjectParameters,
                 genericOwnerDirectForeignOverrideDispatches =
                     context.genericOwnerDirectForeignOverrideDispatches,
                 genericOwnerForeignOverrideProbeTargets = context.genericOwnerForeignOverrideProbeTargets,

@@ -231,6 +231,9 @@ internal class DotNetBackendContext(
     val genericOwnerCapabilityDispatchers: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Natural function to its compiler-owned classifier-derived object-input entry. */
     val genericOwnerFunctionInputEntries: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Source parameter indices whose object carrier is owned exclusively by the paired entry. */
+    val genericOwnerFunctionInputEntryObjectParameters: MutableMap<IrSimpleFunction, Set<Int>> =
+        linkedMapOf()
     /** Concrete admitted capability dispatchers which preserve a direct foreign typed override. */
     val genericOwnerDirectForeignOverrideDispatches:
         MutableMap<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = linkedMapOf()

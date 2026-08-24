@@ -772,6 +772,28 @@ natural construction independently from that semantic carrier and use the
 same recursive compatibility predicate for all owner arguments. See
 [`../archive/runtime-reified-map-entry-2026-08-24.md`](../archive/runtime-reified-map-entry-2026-08-24.md).
 
+ABI/runtime surface 58 selects the first multiple-parameter invariant child.
+A public owner with two or more invariant nullable-`Any`-bounded parameters
+may extend exactly one already selected covariant producer-property root only
+through an equal-arity identity substitution. It may declare exactly one
+abstract non-null input/output member whose argument and result are the same
+direct owner parameter. The natural child inherits every parent `!n` getter
+and retains the mutation as `!n -> !n`; its owned semantic capability inherits
+the parent capability and widens only that direct operation to
+`object -> object`. Any changed/reordered/fixed argument, second parent,
+additional member, property, default, nullable slot, or deeper lineage is
+outside this family.
+
+`MutableMap.MutableEntry<K,V> : Map.Entry<K,V>` is the Runtime instantiation.
+Its natural invariant arity-two TypeDef is nested under the accepted arity-zero
+MutableMap metadata container and implements the natural covariant Entry with
+the same `!0,!1` arguments. This does not select `MutableMap<K,V>`. Kotlin
+implementations retain typed key and mutable value fields; ordinary non-partial
+C# implements only the natural inherited getters and `SetValue(V): V`.
+The exact implementation checkpoint and the dual-entry/relative-input
+regressions it closed are recorded in
+[`../archive/runtime-reified-mutable-map-entry-2026-08-24.md`](../archive/runtime-reified-mutable-map-entry-2026-08-24.md).
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal

@@ -304,6 +304,16 @@ internal object DotNetRuntimeTypes {
             ilClassName = "MutableEntry",
             enclosingClass = mutableMapBase,
         ),
+        declaredClassInfo = DotNetIlClassInfo(
+            ilClassName = "MutableEntry`2",
+            enclosingClass = mutableMapBase,
+            typeParameterVariances = listOf(
+                Variance.INVARIANT,
+                Variance.INVARIANT,
+            ),
+        ),
+        isDeclaredViewStableInTypedSignatures = true,
+        usesDeclaredViewByDefaultInRehearsal = true,
     )
     private val mutableMapEntryBase = mutableMapEntryGenericInterfaceInfo.canonicalClassInfo
     val mutableMapEntryType = DotNetIlValueType.UserClass(mutableMapEntryBase)
@@ -599,7 +609,10 @@ internal object DotNetRuntimeTypes {
         ),
     )
     private val mutableMapEntryMethods = mapOf(
-        "setValue" to RuntimeGenericInterfaceMethodNames("SetValue"),
+        "setValue" to RuntimeGenericInterfaceMethodNames(
+            canonical = "SetValue",
+            typed = "SetValue",
+        ),
     )
 
     private val genericInterfaceDescriptorsByFqName = mapOf(

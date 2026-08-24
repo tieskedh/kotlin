@@ -576,6 +576,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-map-entry"
             ),
         )
+        validateGenericOwnerRuntimeMutableMapEntryCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-mutable-map-entry"
+            ),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4222,6 +4232,8 @@ private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MUTABLE_MAP_ENTRY_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_MAP_ENTRY_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -10550,22 +10562,6 @@ private fun validateGenericOwnerRuntimeCollectionSetCSharp(
                     }
                 }
 
-                private static void AssertKotlinRelativeBulkImplementation(string name)
-                {
-                    var owner = typeof(RuntimeMutableCollectionValue<>);
-                    var ownerParameter = owner.GetGenericArguments()[0];
-                    foreach (var method in owner.GetMethods(
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                    {
-                        if (method.Name != name || !method.IsGenericMethodDefinition) continue;
-                        var parameter = method.GetGenericArguments()[0];
-                        var constraints = parameter.GetGenericParameterConstraints();
-                        if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
-                    }
-                    throw new InvalidOperationException(
-                        name + " Kotlin implementation lost U : T");
-                }
-
                 private static void AssertTypedFields(Type owner)
                 {
                     foreach (var name in new[] { "first", "second" })
@@ -11688,6 +11684,22 @@ private fun validateGenericOwnerRuntimeMutableCollectionCSharp(
                     }
                 }
 
+                private static void AssertKotlinRelativeBulkImplementation(string name)
+                {
+                    var owner = typeof(RuntimeMutableCollectionValue<>);
+                    var ownerParameter = owner.GetGenericArguments()[0];
+                    foreach (var method in owner.GetMethods(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                    {
+                        if (method.Name != name || !method.IsGenericMethodDefinition) continue;
+                        var parameter = method.GetGenericArguments()[0];
+                        var constraints = parameter.GetGenericParameterConstraints();
+                        if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
+                    }
+                    throw new InvalidOperationException(
+                        name + " Kotlin implementation lost U : T");
+                }
+
                 public static int Main()
                 {
                     var owner = typeof(Kotlin.Collections.MutableCollection<>);
@@ -11710,7 +11722,7 @@ private fun validateGenericOwnerRuntimeMutableCollectionCSharp(
                         (int)collection.Current != 61)
                         throw new InvalidOperationException("foreign value addAll failed");
                     var projected = new NaturalCollection<int>(64);
-                    if (!mutableCollectionApiKt.projectedAddAll(collection, projected) ||
+                    if (!mutableCollectionApiKt.projectedAddAll<int>(collection, projected) ||
                         !object.ReferenceEquals(collection.LastBulk, projected) ||
                         (int)collection.Current != 64)
                         throw new InvalidOperationException("foreign projected addAll failed");
@@ -12350,21 +12362,21 @@ private fun validateGenericOwnerRuntimeMutableListCSharp(
                 private static void AssertKotlinRelativeBulkImplementation(
                     string name,
                     int parameterCount)
-                {
-                    var owner = typeof(RuntimeMutableListValue<>);
-                    var ownerParameter = owner.GetGenericArguments()[0];
-                    foreach (var method in owner.GetMethods(
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                     {
-                        if (method.Name != name || !method.IsGenericMethodDefinition ||
-                            method.GetParameters().Length != parameterCount) continue;
-                        var parameter = method.GetGenericArguments()[0];
-                        var constraints = parameter.GetGenericParameterConstraints();
-                        if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
+                        var owner = typeof(RuntimeMutableListValue<>);
+                        var ownerParameter = owner.GetGenericArguments()[0];
+                        foreach (var method in owner.GetMethods(
+                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                        {
+                            if (method.Name != name || !method.IsGenericMethodDefinition ||
+                                method.GetParameters().Length != parameterCount) continue;
+                            var parameter = method.GetGenericArguments()[0];
+                            var constraints = parameter.GetGenericParameterConstraints();
+                            if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
+                        }
+                        throw new InvalidOperationException(
+                            name + "/" + parameterCount + " Kotlin implementation lost U : T");
                     }
-                    throw new InvalidOperationException(
-                        name + "/" + parameterCount + " Kotlin implementation lost U : T");
-                }
 
                 private static MethodInfo AssertInterfaceMap(
                     Type implementation,
@@ -12832,6 +12844,311 @@ private fun validateGenericOwnerRuntimeMapEntryCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime Map.Entry probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the invariant multiple-parameter input/output child and its Runtime MutableEntry
+ * instantiation without making the enclosing MutableMap generic.
+ */
+private fun validateGenericOwnerRuntimeMutableMapEntryCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MUTABLE_MAP_ENTRY_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime MutableMap.MutableEntry C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime MutableMap.MutableEntry C# probe lacks its Kotlin libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime MutableMap.MutableEntry C# probe lacks Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMutableMapEntryConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.runtime.mutable.map.entry;
+
+            public sealed class NaturalMutablePair<K, V> : MutablePair<K, V>
+            {
+                private V secondValue;
+
+                public NaturalMutablePair(K firstValue, V secondValue)
+                {
+                    first = firstValue;
+                    this.secondValue = secondValue;
+                }
+
+                public K first { get; }
+                public V second => secondValue;
+
+                public V replaceSecond(V value)
+                {
+                    var previous = secondValue;
+                    secondValue = value;
+                    return previous;
+                }
+            }
+
+            public sealed class NaturalMutableEntry<K, V> :
+                Kotlin.Collections.MutableMap.MutableEntry<K, V>
+            {
+                private V currentValue;
+
+                public NaturalMutableEntry(K key, V value)
+                {
+                    Key = key;
+                    currentValue = value;
+                }
+
+                public K Key { get; }
+                public V Value => currentValue;
+
+                public V SetValue(V value)
+                {
+                    var previous = currentValue;
+                    currentValue = value;
+                    return previous;
+                }
+            }
+
+            public static class Program
+            {
+                private static void AssertInvariantPair(Type owner, string role)
+                {
+                    if (!owner.IsInterface || !owner.IsGenericTypeDefinition ||
+                        owner.GetGenericArguments().Length != 2)
+                        throw new InvalidOperationException(role + " is not an arity-two interface");
+                    foreach (var parameter in owner.GetGenericArguments())
+                    {
+                        var variance = parameter.GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask;
+                        if (variance != GenericParameterAttributes.None)
+                            throw new InvalidOperationException(role + " lost invariance");
+                    }
+                }
+
+                private static void AssertIdentityParent(Type child, Type parent, string role)
+                {
+                    var childArguments = child.GetGenericArguments();
+                    foreach (var contract in child.GetInterfaces())
+                    {
+                        if (!contract.IsGenericType ||
+                            contract.GetGenericTypeDefinition() != parent) continue;
+                        var arguments = contract.GetGenericArguments();
+                        if (arguments.Length == childArguments.Length)
+                        {
+                            var identical = true;
+                            for (var index = 0; index < arguments.Length; index++)
+                                identical &= arguments[index] == childArguments[index];
+                            if (identical) return;
+                        }
+                    }
+                    throw new InvalidOperationException(role + " lost its identity parent");
+                }
+
+                private static void AssertInputOutput(Type owner, string name, int parameterIndex)
+                {
+                    var method = owner.GetMethod(name);
+                    if (method == null || method.GetParameters().Length != 1 ||
+                        !method.ReturnType.IsGenericParameter ||
+                        method.ReturnType.GenericParameterPosition != parameterIndex ||
+                        method.GetParameters()[0].ParameterType != method.ReturnType)
+                        throw new InvalidOperationException(owner + "." + name +
+                            " is not a typed input/output slot");
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            (!contract.IsGenericType &&
+                                (contract.Name == "MutablePair" ||
+                                 contract.Name == "PairSource" ||
+                                 contract.Name == "MutableEntry" ||
+                                 contract.Name == "Entry")))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired compiler ABI: " + contract);
+                    }
+                }
+
+                private static void AssertTypedFields(Type owner, params string[] names)
+                {
+                    for (var index = 0; index < names.Length; index++)
+                    {
+                        var field = owner.GetField(
+                            names[index],
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (field == null || !field.FieldType.IsGenericParameter ||
+                            field.FieldType.GenericParameterPosition != index)
+                            throw new InvalidOperationException(
+                                owner + "." + names[index] + " did not retain !" + index);
+                    }
+                }
+
+                private static void AssertMappedMethod(
+                    Type implementation,
+                    Type contract,
+                    string name)
+                {
+                    var mapping = implementation.GetInterfaceMap(contract);
+                    for (var index = 0; index < mapping.InterfaceMethods.Length; index++)
+                    {
+                        if (mapping.InterfaceMethods[index].Name == name &&
+                            mapping.TargetMethods[index].ReturnType ==
+                                mapping.InterfaceMethods[index].ReturnType)
+                            return;
+                    }
+                    throw new InvalidOperationException(contract + "." + name + " is unmapped");
+                }
+
+                private static void AssertRuntimeSurface()
+                {
+                    var found = false;
+                    foreach (AssemblyMetadataAttribute metadata in
+                        typeof(Kotlin.Collections.MutableMap.MutableEntry<,>)
+                            .Assembly.GetCustomAttributes(
+                                typeof(AssemblyMetadataAttribute),
+                                false))
+                    {
+                        if (metadata.Key != "Kotlin.RuntimeSurfaceLevel") continue;
+                        int level;
+                        if (!int.TryParse(metadata.Value, out level) || level < 58)
+                            throw new InvalidOperationException(
+                                "MutableEntry<K,V> published with stale Runtime surface " +
+                                metadata.Value);
+                        found = true;
+                    }
+                    if (!found)
+                        throw new InvalidOperationException("Runtime surface metadata is absent");
+                }
+
+                public static int Main()
+                {
+                    var pairOwner = typeof(MutablePair<,>);
+                    var pairParent = typeof(PairSource<,>);
+                    var entryOwner = typeof(Kotlin.Collections.MutableMap.MutableEntry<,>);
+                    var entryParent = typeof(Kotlin.Collections.Map.Entry<,>);
+                    AssertInvariantPair(pairOwner, "MutablePair<K,V>");
+                    AssertInvariantPair(entryOwner, "MutableEntry<K,V>");
+                    AssertIdentityParent(pairOwner, pairParent, "MutablePair<K,V>");
+                    AssertIdentityParent(entryOwner, entryParent, "MutableEntry<K,V>");
+                    AssertInputOutput(pairOwner, "replaceSecond", 1);
+                    AssertInputOutput(entryOwner, "SetValue", 1);
+                    if (entryOwner.DeclaringType != typeof(Kotlin.Collections.MutableMap) ||
+                        typeof(Kotlin.Collections.MutableMap).IsGenericType ||
+                        entryOwner.Assembly.GetType("Kotlin.Collections.MutableMap`2") != null)
+                        throw new InvalidOperationException(
+                            "MutableEntry selected a speculative MutableMap owner");
+                    AssertRuntimeSurface();
+
+                    var pair = new NaturalMutablePair<int, string>(65, "foreign pair");
+                    AssertNaturalOnly(pair);
+                    if ((int)mutableEntryApiKt.pairFirst(pair) != 65 ||
+                        (string)mutableEntryApiKt.pairSecond(pair) != "foreign pair" ||
+                        (string)mutableEntryApiKt.replacePair(pair, "pair next") !=
+                            "foreign pair" ||
+                        (string)pair.second != "pair next" ||
+                        !mutableEntryApiKt.samePair(pair, pair))
+                        throw new InvalidOperationException(
+                            "foreign MutablePair<K,V> dispatch failed");
+
+                    var entry = new NaturalMutableEntry<int, string>(66, "foreign entry");
+                    AssertNaturalOnly(entry);
+                    if ((int)mutableEntryApiKt.entryKey(entry) != 66 ||
+                        (string)mutableEntryApiKt.entryValue(entry) != "foreign entry" ||
+                        (string)mutableEntryApiKt.replaceEntry(entry, "entry next") !=
+                            "foreign entry" ||
+                        (string)entry.Value != "entry next" ||
+                        !mutableEntryApiKt.sameEntry(entry, entry))
+                        throw new InvalidOperationException(
+                            "foreign MutableEntry<K,V> dispatch failed");
+
+                    var valueEntry = new NaturalMutableEntry<string, int>("value key", 67);
+                    if ((int)mutableEntryApiKt.replaceIntEntry(valueEntry, 68) != 67 ||
+                        valueEntry.Value != 68)
+                        throw new InvalidOperationException(
+                            "foreign value MutableEntry<K,V> dispatch failed");
+
+                    var pairImplementation = typeof(MutablePairValue<,>);
+                    var entryImplementation = typeof(RuntimeMutableEntryValue<,>);
+                    AssertTypedFields(pairImplementation, "firstState", "secondState");
+                    AssertTypedFields(entryImplementation, "keyState", "valueState");
+                    AssertMappedMethod(
+                        pairImplementation.MakeGenericType(typeof(object), typeof(string)),
+                        typeof(MutablePair<object, string>),
+                        "replaceSecond");
+                    AssertMappedMethod(
+                        entryImplementation.MakeGenericType(typeof(object), typeof(string)),
+                        typeof(Kotlin.Collections.MutableMap.MutableEntry<object, string>),
+                        "SetValue");
+                    AssertMappedMethod(
+                        entryImplementation.MakeGenericType(typeof(object), typeof(string)),
+                        typeof(Kotlin.Collections.Map.Entry<object, string>),
+                        "get_Key");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMutableMapEntryConsumer.exe"
+        else "RuntimeMutableMapEntryConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime MutableEntry probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime MutableEntry probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime MutableEntry probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

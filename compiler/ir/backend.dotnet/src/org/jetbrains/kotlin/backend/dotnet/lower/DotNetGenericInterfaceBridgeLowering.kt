@@ -95,6 +95,9 @@ internal val DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE: IrDeclarationOrigin =
 internal val DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE")
 
+internal val DOTNET_GENERIC_INTERFACE_DECLARED_RELATIVE_GENERIC_INPUT_BRIDGE: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DECLARED_RELATIVE_GENERIC_INPUT_BRIDGE")
+
 internal val DOTNET_GENERIC_INTERFACE_EXACT_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_EXACT_BRIDGE")
 
@@ -112,10 +115,15 @@ private val DOTNET_REIFIED_GENERIC_INTERFACE_EXTERNAL_OWNER_RELATIVE_FAMILY_MEMB
 
 internal val IrDeclarationOrigin.dotNetGenericInterfaceBridgeMemberViewOrNull: DotNetGenericInterfaceMemberView?
     get() = when (this) {
-        DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE -> DotNetGenericInterfaceMemberView.DECLARED
+        DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE,
+        DOTNET_GENERIC_INTERFACE_DECLARED_RELATIVE_GENERIC_INPUT_BRIDGE,
+        -> DotNetGenericInterfaceMemberView.DECLARED
         DOTNET_GENERIC_INTERFACE_EXACT_BRIDGE -> DotNetGenericInterfaceMemberView.EXACT
         else -> null
     }
+
+internal val IrDeclarationOrigin.isDotNetGenericInterfaceRelativeGenericInputBridge: Boolean
+    get() = this == DOTNET_GENERIC_INTERFACE_DECLARED_RELATIVE_GENERIC_INPUT_BRIDGE
 
 internal val IrDeclarationOrigin.isDotNetGenericInterfaceBridge: Boolean
     get() = this == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE ||
@@ -136,6 +144,14 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         linkedMapOf<IrSimpleFunction, NonGenericOwnerRelativeImplementation>()
     private val openNonGenericOwnerRelativeCapabilities = linkedMapOf<IrClass, IrClass>()
     private val openNonGenericOwnerRelativeDispatchers = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
+    private val relativeGenericInputTypedBridges =
+        linkedMapOf<RelativeGenericInputBridgeKey, IrSimpleFunction>()
+
+    private data class RelativeGenericInputBridgeKey(
+        val owner: IrClass,
+        val target: IrSimpleFunction,
+        val inputIndex: Int,
+    )
 
     private data class NonGenericOwnerRelativeImplementation(
         val familyOwner: IrClass,
@@ -1063,7 +1079,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             if (!visited.add(current)) continue
             if (current.declarations.filterIsInstance<IrSimpleFunction>().any { bridge ->
                     bridge.origin.dotNetGenericInterfaceBridgeMemberViewOrNull == view &&
-                            bridge.overriddenSymbols.singleOrNull() == plan.slot.symbol
+                            plan.slot.symbol in bridge.overriddenSymbols
                 } || externalDeclarations.genericInterfaceViewBridgeOrNull(
                     current,
                     plan.slot,
@@ -1090,7 +1106,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     }
                 }
         fun IrSimpleFunction.implements(view: DotNetInterfaceDefaultPromotionView): Boolean {
-            if (overriddenSymbols.singleOrNull() != plan.slot.symbol) return false
+            if (plan.slot.symbol !in overriddenSymbols) return false
             return when (view) {
                 DotNetInterfaceDefaultPromotionView.CANONICAL ->
                     origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
@@ -1283,11 +1299,52 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 )
             }
         }
+        val bridgeKey = RelativeGenericInputBridgeKey(
+            plan.implementingClass,
+            plan.target,
+            inputIndex,
+        )
+        relativeGenericInputTypedBridges[bridgeKey]?.let { existing ->
+            val existingRelativeParameter = existing.typeParameters.singleOrNull()
+                ?: error("Internal .NET backend error: coalesced relative input bridge lost U")
+            val candidateBound = plan.typedSubstitutor.substitute(
+                plan.interfaceClass.typeParameters.single().symbol.defaultType
+            )
+            val existingBound = existingRelativeParameter.superTypes.singleOrNull()
+            val relativeSubstitutor = IrTypeSubstitutor(
+                mapOf(
+                    plan.interfaceClass.typeParameters.single().symbol to
+                            existingRelativeParameter.symbol.defaultType
+                ),
+                allowEmptySubstitution = false,
+            )
+            val candidateParameterTypes = slotParameters.mapIndexed { index, parameter ->
+                if (index == inputIndex) relativeSubstitutor.substitute(parameter.type)
+                else plan.typedSubstitutor.substitute(parameter.type)
+            }
+            val existingParameterTypes = existing.parameters
+                .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                .map { parameter -> parameter.type }
+            val candidateReturnType = plan.typedSubstitutor.substitute(plan.slot.returnType)
+            if (existingBound != candidateBound ||
+                existingParameterTypes != candidateParameterTypes ||
+                existing.returnType != candidateReturnType
+            ) {
+                dotNetUnsupported(
+                    "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
+                            "has inherited natural slots with different physical shapes"
+                )
+            }
+            if (plan.slot.symbol !in existing.overriddenSymbols) {
+                existing.overriddenSymbols += plan.slot.symbol
+            }
+            return existing
+        }
         val viewName = memberView.name.lowercase().replaceFirstChar(Char::uppercaseChar)
         return plan.implementingClass.addFunction {
             startOffset = plan.target.startOffset
             endOffset = plan.target.endOffset
-            origin = DOTNET_GENERIC_INTERFACE_DECLARED_BRIDGE
+            origin = DOTNET_GENERIC_INTERFACE_DECLARED_RELATIVE_GENERIC_INPUT_BRIDGE
             name = Name.special(
                 "<GenericInterface${viewName}RelativeGenericInputBridge-${plan.interfaceIdentity}-" +
                         "${plan.slot.name.asString()}-${plan.slotIdentity}>"
@@ -1338,7 +1395,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     else irImplicitCast(call, this@bridge.returnType)
                 )
             }
-        }
+        }.also { bridge -> relativeGenericInputTypedBridges[bridgeKey] = bridge }
     }
 
     /**

@@ -749,6 +749,7 @@ internal class DotNetIlTypeMapper private constructor(
             Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot>,
     private val externalGenericOwnerFunctionInputEntries:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry>,
+    private val genericOwnerNaturalFunctionInputDeclarations: Set<IrDeclaration>,
     private val erasedValueClassMethodParameters: Set<IrTypeParameter>,
     private val genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean,
     val stdlibAssemblyName: String?,
@@ -782,6 +783,7 @@ internal class DotNetIlTypeMapper private constructor(
                 Map<IrSimpleFunction, DotNetBoundGenericOwnerPhysicalSlot> = emptyMap(),
         externalGenericOwnerFunctionInputEntries:
                 Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry> = emptyMap(),
+        genericOwnerNaturalFunctionInputDeclarations: Set<IrDeclaration> = emptySet(),
         erasedValueClassMethodParameters: Set<IrTypeParameter> = emptySet(),
         genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean = { false },
         stdlibAssemblyName: String? = DotNetStdlibLibrary.ASSEMBLY_NAME,
@@ -817,6 +819,7 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerReflectionCapabilityDeclarations,
         externalGenericOwnerPhysicalSlots,
         externalGenericOwnerFunctionInputEntries,
+        genericOwnerNaturalFunctionInputDeclarations,
         erasedValueClassMethodParameters,
         genericArgumentHasProperClrValueSubtype,
         stdlibAssemblyName,
@@ -851,6 +854,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries,
+            genericOwnerNaturalFunctionInputDeclarations,
             erasedValueClassMethodParameters,
             genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName,
@@ -908,6 +912,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries,
+            genericOwnerNaturalFunctionInputDeclarations,
             erasedValueClassMethodParameters + copiedParameters,
             genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName,
@@ -1383,10 +1388,12 @@ internal class DotNetIlTypeMapper private constructor(
         val localStdlibFunction = {
             DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this, stdlibAssemblyName)
         }
-        val libraryFunction = if (stdlibAssemblyName == null) {
-            localStdlibFunction() ?: externalDeclarations.functionInfoOrNull(function, this)
-        } else {
-            externalDeclarations.functionInfoOrNull(function, this) ?: localStdlibFunction()
+        val libraryFunction = {
+            if (stdlibAssemblyName == null) {
+                localStdlibFunction() ?: externalDeclarations.functionInfoOrNull(function, this)
+            } else {
+                externalDeclarations.functionInfoOrNull(function, this) ?: localStdlibFunction()
+            }
         }
         return (DotNetRuntimeTypes.enumFunctionInfoOrNull(function, this)
             ?: DotNetRuntimeTypes.reflectionFunctionInfoOrNull(function, this)
@@ -1399,7 +1406,7 @@ internal class DotNetIlTypeMapper private constructor(
             ?: externalGenericOwnerFunctionInputEntries[function]?.let { binding ->
                 externalDeclarations.genericOwnerFunctionInputEntryInfo(function, binding, this)
             }
-            ?: libraryFunction
+            ?: libraryFunction()
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
         }
@@ -1554,6 +1561,7 @@ internal class DotNetIlTypeMapper private constructor(
         declaration: IrDeclaration,
         type: IrType,
     ): DotNetIlValueType? {
+        if (declaration in genericOwnerNaturalFunctionInputDeclarations) return null
         val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
         if (declaration in genericOwnerForeignDispatchDeclarations) {
             return DotNetIlValueType.Object

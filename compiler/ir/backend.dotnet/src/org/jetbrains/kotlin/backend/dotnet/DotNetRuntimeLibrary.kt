@@ -2125,6 +2125,16 @@ $fixedFunctionTypesIl
               }
             }
 
+            // Additive invariant natural CLR child over the selected Map.Entry<K,V> root.
+            // The erased nested MutableEntry above remains the Kotlin semantic capability.
+            .class nested public interface abstract auto ansi 'MutableEntry`2'<K, V>
+                   implements class Kotlin.Collections.Map/'Entry`2'<!K, !V>
+            {
+              .method public hidebysig newslot abstract virtual instance !V SetValue(!V newValue) cil managed
+              {
+              }
+            }
+
             .method public hidebysig newslot abstract virtual instance object PutErased(object key, object 'value') cil managed
             {
             }
