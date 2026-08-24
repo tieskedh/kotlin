@@ -566,6 +566,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-mutable-list"
             ),
         )
+        validateGenericOwnerRuntimeMapEntryCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-map-entry"
+            ),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4210,6 +4220,8 @@ private const val GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -12557,6 +12569,269 @@ private fun validateGenericOwnerRuntimeMutableListCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime mutable list probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the first multiple-owner-parameter property vector and its nested Runtime Map.Entry
+ * instantiation without requiring ordinary C# to implement a Kotlin compiler capability.
+ */
+private fun validateGenericOwnerRuntimeMapEntryCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime Map.Entry C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime Map.Entry C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime Map.Entry C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMapEntryConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.runtime.map.entry;
+
+            public sealed class NaturalPair<K, V> : PairSource<K, V>
+            {
+                public NaturalPair(K firstValue, V secondValue)
+                {
+                    first = firstValue;
+                    second = secondValue;
+                }
+
+                public K first { get; }
+                public V second { get; }
+            }
+
+            public sealed class NaturalEntry<K, V> : Kotlin.Collections.Map.Entry<K, V>
+            {
+                public NaturalEntry(K key, V value)
+                {
+                    Key = key;
+                    Value = value;
+                }
+
+                public K Key { get; }
+                public V Value { get; }
+            }
+
+            public static class Program
+            {
+                private static void AssertCovariantPair(Type owner, string role)
+                {
+                    if (!owner.IsInterface || !owner.IsGenericTypeDefinition ||
+                        owner.GetGenericArguments().Length != 2)
+                        throw new InvalidOperationException(role + " is not an arity-two interface");
+                    foreach (var parameter in owner.GetGenericArguments())
+                    {
+                        var variance = parameter.GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask;
+                        if (variance != GenericParameterAttributes.Covariant)
+                            throw new InvalidOperationException(role + " lost covariance");
+                    }
+                }
+
+                private static void AssertNaturalOnly(object value, Type erasedRuntimeEntry)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == erasedRuntimeEntry ||
+                            (!contract.IsGenericType && contract.Name == "PairSource"))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired compiler ABI: " + contract);
+                    }
+                }
+
+                private static void AssertTypedFields(Type owner, params string[] names)
+                {
+                    for (var index = 0; index < names.Length; index++)
+                    {
+                        var field = owner.GetField(
+                            names[index],
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (field == null || !field.FieldType.IsGenericParameter ||
+                            field.FieldType.GenericParameterPosition != index)
+                            throw new InvalidOperationException(
+                                owner + "." + names[index] + " did not retain !" + index);
+                    }
+                }
+
+                private static void AssertMappedGetter(
+                    Type implementation,
+                    Type contract,
+                    string name)
+                {
+                    var mapping = implementation.GetInterfaceMap(contract);
+                    for (var index = 0; index < mapping.InterfaceMethods.Length; index++)
+                    {
+                        if (mapping.InterfaceMethods[index].Name == name &&
+                            mapping.TargetMethods[index].ReturnType ==
+                                mapping.InterfaceMethods[index].ReturnType)
+                            return;
+                    }
+                    throw new InvalidOperationException(contract + "." + name + " is unmapped");
+                }
+
+                private static void AssertRuntimeSurface()
+                {
+                    var found = false;
+                    foreach (AssemblyMetadataAttribute metadata in
+                        typeof(Kotlin.Collections.Map.Entry<,>).Assembly.GetCustomAttributes(
+                            typeof(AssemblyMetadataAttribute),
+                            false))
+                    {
+                        if (metadata.Key != "Kotlin.RuntimeSurfaceLevel") continue;
+                        int level;
+                        if (!int.TryParse(metadata.Value, out level) || level < 57)
+                            throw new InvalidOperationException(
+                                "Map.Entry<K,V> published with stale Runtime surface " +
+                                metadata.Value);
+                        found = true;
+                    }
+                    if (!found)
+                        throw new InvalidOperationException("Runtime surface metadata is absent");
+                }
+
+                public static int Main()
+                {
+                    var pairOwner = typeof(PairSource<,>);
+                    var entryOwner = typeof(Kotlin.Collections.Map.Entry<,>);
+                    var erasedEntry = typeof(Kotlin.Collections.Map.Entry);
+                    AssertCovariantPair(pairOwner, "PairSource<K,V>");
+                    AssertCovariantPair(entryOwner, "Map.Entry<K,V>");
+                    if (pairOwner.Assembly.GetType(
+                            "generic.owner.runtime.map.entry.RepeatedPairSource`2") != null ||
+                        pairOwner.Assembly.GetType(
+                            "generic.owner.runtime.map.entry.ExtraPairSource`2") != null)
+                        throw new InvalidOperationException(
+                            "incomplete producer-property vector was reified");
+                    AssertRuntimeSurface();
+                    if (entryOwner.DeclaringType != typeof(Kotlin.Collections.Map) ||
+                        typeof(Kotlin.Collections.Map).IsGenericType ||
+                        entryOwner.Assembly.GetType("Kotlin.Collections.Map`2") != null)
+                        throw new InvalidOperationException(
+                            "Entry selected a speculative natural Map owner");
+
+                    PairSource<string, string> referencePair =
+                        new NaturalPair<string, string>("first", "second");
+                    PairSource<object, object> widenedPair = referencePair;
+                    if ((string)widenedPair.first != "first" ||
+                        (string)widenedPair.second != "second")
+                        throw new InvalidOperationException("CLR pair covariance failed");
+
+                    Kotlin.Collections.Map.Entry<string, string> referenceEntry =
+                        new NaturalEntry<string, string>("key", "value");
+                    Kotlin.Collections.Map.Entry<object, object> widenedEntry = referenceEntry;
+                    if ((string)widenedEntry.Key != "key" ||
+                        (string)widenedEntry.Value != "value")
+                        throw new InvalidOperationException("CLR Entry covariance failed");
+
+                    var valuePair = new NaturalPair<int, string>(59, "foreign pair");
+                    AssertNaturalOnly(valuePair, erasedEntry);
+                    if ((int)entryApiKt.pairFirst(valuePair) != 59 ||
+                        (string)entryApiKt.pairSecond(valuePair) != "foreign pair" ||
+                        (int)entryApiKt.starPairFirst(valuePair) != 59 ||
+                        !entryApiKt.samePair(valuePair, valuePair))
+                        throw new InvalidOperationException(
+                            "foreign value PairSource dispatch failed");
+
+                    var valueEntry = new NaturalEntry<int, string>(60, "foreign entry");
+                    AssertNaturalOnly(valueEntry, erasedEntry);
+                    if ((int)entryApiKt.entryKey(valueEntry) != 60 ||
+                        (string)entryApiKt.entryValue(valueEntry) != "foreign entry" ||
+                        (int)entryApiKt.starEntryKey(valueEntry) != 60 ||
+                        !entryApiKt.sameEntry(valueEntry, valueEntry))
+                        throw new InvalidOperationException(
+                            "foreign value Map.Entry dispatch failed");
+                    if (!entryApiKt.isEntry(valueEntry) ||
+                        entryApiKt.isNotEntry(valueEntry) ||
+                        entryApiKt.isEntry(valuePair))
+                        throw new InvalidOperationException(
+                            "foreign Map.Entry classifier policy diverged");
+                    if (entryApiKt.safeStringEntry(valueEntry) != null ||
+                        !entryApiKt.hardStringEntryFails(valueEntry) ||
+                        !object.ReferenceEquals(entryApiKt.broadEntry(valueEntry), valueEntry))
+                        throw new InvalidOperationException(
+                            "foreign Map.Entry cast policy diverged");
+
+                    var pairImplementation = typeof(PairValue<,>);
+                    var entryImplementation = typeof(RuntimeEntryValue<,>);
+                    AssertTypedFields(pairImplementation, "firstState", "secondState");
+                    AssertTypedFields(entryImplementation, "keyState", "valueState");
+                    AssertMappedGetter(
+                        pairImplementation.MakeGenericType(typeof(object), typeof(string)),
+                        typeof(PairSource<object, string>),
+                        "get_first");
+                    AssertMappedGetter(
+                        entryImplementation.MakeGenericType(typeof(object), typeof(string)),
+                        typeof(Kotlin.Collections.Map.Entry<object, string>),
+                        "get_Key");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMapEntryConsumer.exe"
+        else "RuntimeMapEntryConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime Map.Entry probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime Map.Entry probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime Map.Entry probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

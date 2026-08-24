@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-map-entry-2026-08-24.md`](runtime-reified-map-entry-2026-08-24.md)
+  records ABI/runtime surface 57's first multiple-owner-parameter family,
+  nested natural `Map.Entry<K,V>`, two independent `!n` fields, coherent BK-1
+  casts, ordinary C# implementation, and the atomic-switch boundary.
 - [`runtime-reified-mutable-list-2026-08-24.md`](runtime-reified-mutable-list-2026-08-24.md)
   records ABI/runtime surface 56's invariant natural `MutableList<T>`,
   position-independent relative inputs, mixed typed mutation grammar, true
