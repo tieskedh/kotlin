@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceDefaultPhysicalMethod
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceRelativeGenericInputBridge
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetDefaultParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
@@ -194,6 +195,8 @@ internal class DotNetIlEmitter(
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerFunctionInputEntryObjectParameters:
+            Map<IrSimpleFunction, Set<Int>> = emptyMap(),
     private val genericOwnerDirectForeignOverrideDispatches:
             Map<IrSimpleFunction, DotNetGenericOwnerDirectForeignOverrideDispatch> = emptyMap(),
     private val genericOwnerForeignOverrideProbeTargets:
@@ -695,6 +698,10 @@ internal class DotNetIlEmitter(
             genericOwnerReflectionCapabilityDeclarations = genericOwnerReflectionCapabilityDeclarations,
             externalGenericOwnerPhysicalSlots = boundExternalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries = externalGenericOwnerFunctionInputEntries,
+            genericOwnerNaturalFunctionInputDeclarations =
+                genericOwnerFunctionInputEntryObjectParameters.entries.flatMapTo(linkedSetOf()) { entry ->
+                    entry.value.map { index -> entry.key.parameters[index] }
+                },
             genericArgumentHasProperClrValueSubtype = genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
                 null
@@ -1146,6 +1153,16 @@ internal class DotNetIlEmitter(
                         null -> classInfo
                     }
                     val physicalMethodName = when {
+                        member.origin.isDotNetGenericInterfaceRelativeGenericInputBridge -> {
+                            val naturalNames = member.overriddenSymbols.map { overridden ->
+                                typeMapper.genericInterfaceTypedMethodName(overridden.owner)
+                            }.distinct()
+                            check(naturalNames.size == 1) {
+                                "Internal .NET backend error: relative generic input bridge " +
+                                        "'${member.name}' has different natural slot names: $naturalNames"
+                            }
+                            naturalNames.single()
+                        }
                         genericInterfaceInfo?.canonicalClassInfo?.typeParameterCount == 0 ->
                             member.dotNetGenericInterfaceCanonicalMethodName()
                         else -> member.dotNetAbiMethodNameOrNull(
@@ -2894,33 +2911,36 @@ internal class DotNetIlEmitter(
             emptyList()
         }
         val inheritedBridgeTypedInterfaceTypes = if (splitGenericInfo == null) {
-            irClass.declarations.filterIsInstance<IrSimpleFunction>().mapNotNull { member ->
+            irClass.declarations.filterIsInstance<IrSimpleFunction>().flatMap { member ->
                 val memberView = member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
-                    ?: return@mapNotNull null
-                val slot = member.overriddenSymbols.singleOrNull()?.owner ?: return@mapNotNull null
-                val interfaceClass = (slot.parent as? IrClass)
-                    ?.takeIf { candidate -> candidate.isInterface }
-                    ?: return@mapNotNull null
-                if (typeMapper.genericInterfaceInfoOrNull(interfaceClass) == null) return@mapNotNull null
-                val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                    interfaceClass.symbol,
-                    irClass.defaultType,
-                ) ?: dotNetUnsupported(
-                    "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
-                            "could not be substituted"
-                )
-                val substitutedInterfaceType = substitutor.substitute(interfaceClass.defaultType) as? IrSimpleType
-                    ?: dotNetUnsupported(
+                    ?: return@flatMap emptyList()
+                member.overriddenSymbols.mapNotNull { overridden ->
+                    val slot = overridden.owner
+                    val interfaceClass = (slot.parent as? IrClass)
+                        ?.takeIf { candidate -> candidate.isInterface }
+                        ?: return@mapNotNull null
+                    if (typeMapper.genericInterfaceInfoOrNull(interfaceClass) == null) return@mapNotNull null
+                    val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+                        interfaceClass.symbol,
+                        irClass.defaultType,
+                    ) ?: dotNetUnsupported(
                         "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
-                                "has a non-simple substituted type"
+                                "could not be substituted"
                     )
-                typeMapper.genericInterfaceCapabilityTypeOrNull(
-                    substitutedInterfaceType,
-                    memberView.physicalView,
-                ) ?: dotNetUnsupported(
-                    "its inherited typed interface capability '${substitutedInterfaceType.render()}' " +
-                            "could not be compiled"
-                )
+                    val substitutedInterfaceType =
+                        substitutor.substitute(interfaceClass.defaultType) as? IrSimpleType
+                            ?: dotNetUnsupported(
+                                "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
+                                        "has a non-simple substituted type"
+                            )
+                    typeMapper.genericInterfaceCapabilityTypeOrNull(
+                        substitutedInterfaceType,
+                        memberView.physicalView,
+                    ) ?: dotNetUnsupported(
+                        "its inherited typed interface capability '${substitutedInterfaceType.render()}' " +
+                                "could not be compiled"
+                    )
+                }
             }
         } else {
             emptyList()

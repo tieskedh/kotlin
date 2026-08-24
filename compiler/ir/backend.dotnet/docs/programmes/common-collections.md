@@ -539,6 +539,25 @@ lanes, four production-erased inverse lanes, and strict 191-suite/2,329-test
 target inventory are green. See the
 [`surface 57 archive`](../archive/runtime-reified-map-entry-2026-08-24.md).
 
+The next dependency recomputation selected and completed invariant
+`MutableMap.MutableEntry<K,V>` as surface 58. It is the smallest complete child
+of the now-natural Entry root and adds one typed `V -> V` mutation without
+selecting Map or MutableMap. Admission is structural: an equal-arity
+identity-substituted covariant producer-property parent, all child parameters
+invariant, and exactly one abstract direct input/output member whose argument
+and result are the same non-null owner parameter. The child inherits the
+parent's typed key/value getters and adds `!V SetValue(!V)`; only a projected
+operation may cross its semantic input/output slot. Runtime nests the natural
+child under the existing arity-zero MutableMap metadata container. No generic
+MutableMap owner is implied.
+The full Runtime regression closure also preserves natural closed and
+method-generic classifier inputs through paired object entries, coalesces
+relative-input MethodImpls, prevents semantic reachability from degrading
+producer-proven typed fields, and fixes value boxing plus the Runtime
+`containsAll` helper's physical stack contract. The strict 191-suite/2,333-test
+target inventory is green. See the
+[`surface 58 archive`](../archive/runtime-reified-mutable-map-entry-2026-08-24.md).
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
