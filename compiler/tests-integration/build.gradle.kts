@@ -140,6 +140,9 @@ projectTests {
             JdkMajorVersion.JDK_21_0,
         ),
         javaLauncher = JdkMajorVersion.JDK_1_8,
+        maxHeapSize = testMaxHeapSizeLarge,
+        // Keep the target-owned JDK 8 task on the same collector as the shared test task.
+        garbageCollector = GarbageCollector.Parallel,
         skipInLocalBuild = false,
     ) {
         configureIntegrationTestTask()
