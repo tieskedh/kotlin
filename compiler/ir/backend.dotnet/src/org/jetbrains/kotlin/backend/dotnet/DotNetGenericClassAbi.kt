@@ -174,6 +174,7 @@ enum class DotNetGenericOwnerSemanticHookReason {
     INHERITED_SEMANTIC_OVERRIDE,
     INTERNAL_SEMANTIC_REACHABILITY,
     OWNER_RELATIVE_METHOD_BOUND,
+    RELATIVE_GENERIC_INTERFACE_INPUT,
 }
 
 enum class DotNetGenericOwnerOverrideTargetKind {

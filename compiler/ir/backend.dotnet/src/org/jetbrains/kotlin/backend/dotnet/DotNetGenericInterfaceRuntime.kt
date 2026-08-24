@@ -822,7 +822,7 @@ internal object DotNetGenericInterfaceRuntime {
         $typeType 'openDefinition',
         object 'elements') cil managed
     {
-      .maxstack 8
+      .maxstack 9
       .locals init (
         [0] object 'iterator',
         [1] object[] 'predicateArguments'

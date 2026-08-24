@@ -1429,6 +1429,35 @@ variance, inputs, defaults, and inherited multiple-parameter families remain
 unselected. See
 [`../archive/runtime-reified-map-entry-2026-08-24.md`](../archive/runtime-reified-map-entry-2026-08-24.md).
 
+The post-surface-57 recomputation selected and completed
+`MutableMap.MutableEntry<K,V> : Map.Entry<K,V>` as surface 58 before Map. It is
+the smallest dependency-closed child and forces the first invariant
+multiple-owner-parameter mutation without introducing Map's much larger
+mixed-variance contract. The structural rule requires two or more invariant
+nullable-`Any`-bounded parameters, exactly one identity-substituted covariant
+producer-property parent of equal arity, and exactly one abstract direct
+input/output member whose non-null argument and result are the same owner
+parameter. Reordering, fixed arguments, changed input/result parameters,
+additional parents or members, defaults, and properties reject the family.
+
+The natural child retains all owner parameters, inherits the parent's typed
+getters, and keeps its direct mutation as `!V SetValue(!V)`. Its semantic
+capability inherits the parent's capability and adds only the operation-local
+`object SetValue(object)` slot. The Runtime TypeDef remains nested under the
+accepted arity-zero MutableMap metadata container; this gate must not select a
+speculative `MutableMap<K,V>`. Kotlin implementations must keep independent
+typed key/value state, and ordinary non-partial C# must implement only natural
+Entry getters plus SetValue. Map, MutableMap, mixed variance, nullable
+input/output mutation, properties, defaults, and deeper multi-parameter
+inheritance remain separate gates.
+The complete checkpoint also closes the general paired-input and inherited
+relative-input regressions exposed by the full Runtime family: natural closed
+and method-generic entries remain typed, widened calls use the separate object
+entry, identical inherited MethodImpl slots coalesce, and late semantic
+reachability cannot erase producer-proven typed fields. The strict aggregate
+is 191 suites/2,333 tests, all green. See
+[`../archive/runtime-reified-mutable-map-entry-2026-08-24.md`](../archive/runtime-reified-mutable-map-entry-2026-08-24.md).
+
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
 reuses the parent's capability and member family; it does not acquire a second

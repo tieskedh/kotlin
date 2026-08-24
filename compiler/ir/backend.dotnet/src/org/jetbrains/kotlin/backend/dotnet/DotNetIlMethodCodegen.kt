@@ -111,13 +111,16 @@ internal class DotNetIlMethodCodegen(
         signature.parameterTypes,
         typeMapper,
         firstArgumentIndex = if (function is IrConstructor) 1 else 0,
-        erasedRuntimeParameters = if (
-            function is IrSimpleFunction &&
-            (function.isDotNetErasedCallableInvoke() || function.isDotNetErasedPropertyAccess())
-        ) {
-            function.parameters.drop(if (signature.hasThis) 1 else 0).mapTo(linkedSetOf()) { it.symbol }
-        } else {
-            emptySet()
+        erasedRuntimeParameters = buildSet {
+            if (function is IrSimpleFunction &&
+                (function.isDotNetErasedCallableInvoke() || function.isDotNetErasedPropertyAccess())
+            ) {
+                function.parameters.drop(if (signature.hasThis) 1 else 0)
+                    .mapTo(this) { it.symbol }
+            }
+            function.parameters
+                .filter(typeMapper::isGenericOwnerCapabilityDeclaration)
+                .mapTo(this) { it.symbol }
         },
     ).apply {
         if (function is IrConstructor) {
@@ -621,49 +624,53 @@ internal class DotNetIlMethodCodegen(
     private fun StringBuilder.appendGenericInterfaceTypedBridgeOverride() {
         val bridge = function as? IrSimpleFunction
             ?: error("Internal .NET backend error: a typed generic interface bridge is not a simple function")
-        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
-            ?: error("Internal .NET backend error: a typed generic interface bridge has no unique slot")
-        val interfaceClass = overridden.parent as? IrClass
-            ?: error("Internal .NET backend error: a typed generic interface slot has no interface owner")
-        val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
-            ?: dotNetUnsupported("generic interface typed capability is unavailable")
+        val overriddenFunctions = bridge.overriddenSymbols.map { overridden -> overridden.owner }
+        check(overriddenFunctions.isNotEmpty()) {
+            "Internal .NET backend error: a typed generic interface bridge has no slots"
+        }
         val memberView = bridge.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
             ?: error("Internal .NET backend error: typed generic interface bridge has no physical view")
-        val capabilityInfo = interfaceInfo.classInfo(memberView.physicalView)
-            ?: dotNetUnsupported("generic interface ${memberView.name.lowercase()} capability is unavailable")
         val bridgeClass = bridge.parent as? IrClass
             ?: error("Internal .NET backend error: a typed generic interface bridge has no class owner")
-        val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-            interfaceClass.symbol,
-            bridgeClass.defaultType,
-        ) ?: error(
-            "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
-                    "generic interface '${interfaceClass.name}'"
-        )
-        val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
-        val arguments = interfaceClass.typeParameters.map { parameter ->
-            val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
-            signatureMapper.toDotNetIlGenericArgumentType(argumentType)
-                ?: dotNetUnsupported(
-                    "typed generic interface argument '${argumentType.render()}' is unavailable"
-                )
-        }
-        val ownerToken = DotNetIlValueType.GenericInstance(capabilityInfo, arguments).nameInSignature
-        val overrideInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
-            overridden,
-            memberView,
-        ) ?: DotNetIlFunctionInfo(
-            capabilityInfo,
-            overridden.dotNetSignature(signatureMapper),
-        )
-        appendLine(
-            "    .override method " +
-                    overrideInfo.renderOverrideMethodReference(
-                        typeMapper.genericInterfaceTypedMethodName(overridden),
-                        ownerToken,
-                        bridge.typeParameters.size,
+        for (overridden in overriddenFunctions) {
+            val interfaceClass = overridden.parent as? IrClass
+                ?: error("Internal .NET backend error: a typed generic interface slot has no interface owner")
+            val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
+                ?: dotNetUnsupported("generic interface typed capability is unavailable")
+            val capabilityInfo = interfaceInfo.classInfo(memberView.physicalView)
+                ?: dotNetUnsupported("generic interface ${memberView.name.lowercase()} capability is unavailable")
+            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+                interfaceClass.symbol,
+                bridgeClass.defaultType,
+            ) ?: error(
+                "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
+                        "generic interface '${interfaceClass.name}'"
+            )
+            val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
+            val arguments = interfaceClass.typeParameters.map { parameter ->
+                val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
+                signatureMapper.toDotNetIlGenericArgumentType(argumentType)
+                    ?: dotNetUnsupported(
+                        "typed generic interface argument '${argumentType.render()}' is unavailable"
                     )
-        )
+            }
+            val ownerToken = DotNetIlValueType.GenericInstance(capabilityInfo, arguments).nameInSignature
+            val overrideInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
+                overridden,
+                memberView,
+            ) ?: DotNetIlFunctionInfo(
+                capabilityInfo,
+                overridden.dotNetSignature(signatureMapper),
+            )
+            appendLine(
+                "    .override method " +
+                        overrideInfo.renderOverrideMethodReference(
+                            typeMapper.genericInterfaceTypedMethodName(overridden),
+                            ownerToken,
+                            bridge.typeParameters.size,
+                        )
+            )
+        }
     }
 
     /** Binds one private generic-owner selector to its non-generic semantic interface slot. */
