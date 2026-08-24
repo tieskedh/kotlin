@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
@@ -2382,11 +2383,54 @@ internal class DotNetIlExpressionCodegen(
         // abstract member is inherited from several unrelated super-interfaces at once, any of
         // them is a correct operand: the implementing class's single member fills every
         // same-signature interface slot (probe-verified, ifaceprobe_s9).
-        val genericOwnerCallTarget = typeMapper.genericOwnerCapabilityCallTarget(call)
-        val callee = genericOwnerCallTarget
-            ?: call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
+        val sourceCallee = call.symbol.owner.let {
+            it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
+        }
+        val sourceOwner = sourceCallee.parent as? IrClass
+        val naturalRuntimeOwner = sourceOwner?.takeIf(typeMapper::isRuntimeReifiedGenericInterface)
+        val naturalReceiverType = naturalRuntimeOwner
+            ?.let { call.arguments.firstOrNull()?.let(::mappedNaturalType) }
+        val naturalRuntimeCall = naturalRuntimeOwner
+            ?.let { owner ->
+                val memberView = typeMapper.genericInterfaceMemberView(sourceCallee, owner)
+                typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(sourceCallee, memberView)
+            }
+            ?.takeIf { info ->
+                naturalReceiverType?.dotNetViewAsGenericOwner(info.owner) != null
+            }
+            ?.let { info ->
+                val relativeInputIndex =
+                    DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(sourceCallee)
+                if (relativeInputIndex == null) {
+                    info to null
+                } else {
+                    val physicalInputIndex = relativeInputIndex + 1
+                    val openInput = info.signature.parameterTypes.getOrNull(physicalInputIndex)
+                        as? DotNetIlValueType.GenericInstance ?: return@let null
+                    val argumentType = call.arguments.getOrNull(physicalInputIndex)
+                        ?.let(::mappedNaturalType) ?: return@let null
+                    val argumentView = argumentType.dotNetViewAsGenericOwner(openInput.classInfo)
+                        ?: return@let null
+                    val relativeArgument = argumentView.arguments.singleOrNull() ?: return@let null
+                    info to listOf(relativeArgument)
+                }
+            }
+        val naturalRuntimeInfo = naturalRuntimeCall?.first
+        val syntheticMethodInstantiation = naturalRuntimeCall?.second
+        // A concrete natural Runtime construction is stronger evidence than a conservative
+        // semantic route recorded before all body-producing lowerings completed. Bind that
+        // receiver directly to its typed MethodDef. Object/capability carriers cannot view
+        // themselves as the typed owner and therefore retain the semantic route below.
+        val genericOwnerCallTarget = if (naturalRuntimeInfo == null) {
+            typeMapper.genericOwnerCapabilityCallTarget(call)
+        } else {
+            null
+        }
+        val callee = genericOwnerCallTarget ?: sourceCallee
         val calleeName = callee.name.asString()
-        val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
+        val info = naturalRuntimeInfo
+            ?: availableFunctions[callee]
+            ?: typeMapper.referencedFunctionInfoOrNull(callee)
             ?: dotNetUnsupported(
                 "call to unsupported function '$calleeName' on " +
                         ((callee.parent as? IrClass)?.fqNameWhenAvailable?.asString() ?: callee.parent.render()) +
@@ -2401,7 +2445,9 @@ internal class DotNetIlExpressionCodegen(
         // generic→generic call sites; a member can combine it with an independently instantiated
         // generic owner, genmemberprobe_s1) — never erased: an unmappable type argument fails the
         // call site loudly.
-        val methodInstantiation = if (callee.typeParameters.isNotEmpty()) {
+        val methodInstantiation = if (syntheticMethodInstantiation != null) {
+            syntheticMethodInstantiation
+        } else if (callee.typeParameters.isNotEmpty()) {
             if (call.typeArguments.size != callee.typeParameters.size) {
                 dotNetUnsupported("call to '$calleeName' has an unsupported type-argument shape")
             }
@@ -2415,7 +2461,9 @@ internal class DotNetIlExpressionCodegen(
         val receiverType = if (info.isInstance) {
             val receiver = call.arguments.firstOrNull()
                 ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
-            if (genericOwnerCallTarget != null) {
+            if (naturalRuntimeInfo != null) {
+                naturalReceiverType
+            } else if (genericOwnerCallTarget != null) {
                 mappedNaturalType(receiver)
             } else {
                 val logicalReceiverType = typeMapper.toDotNetIlValueType(receiver.type)
@@ -3275,16 +3323,38 @@ internal class DotNetIlExpressionCodegen(
         expectedType: DotNetIlValueType?,
     ): Boolean {
         if (call.arguments.isEmpty()) return false
-        val source = call.symbol.owner.let {
+        val logicalCallMember = call.symbol.owner
+        val source = logicalCallMember.let {
             it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
         }
         val sourceOwner = source.parent as? IrClass ?: return false
         val receiver = call.arguments.first() ?: return false
         val regularArguments = call.arguments.drop(1).map { argument -> argument ?: return false }
-        val semanticSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call)
-            ?: genericOwnerCapabilitySlotOrNull(source)?.takeIf {
-                (source.parent as? IrClass)?.isInterface == true &&
-                        mappedNaturalType(receiver) == DotNetIlValueType.Object
+        val relativeGenericInputIndex =
+            DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(source)
+        val usesRuntimeTypeArgumentFalseBarrier =
+            DotNetRuntimeTypes.genericInterfaceUsesForeignTypeArgumentFalseBarrier(source)
+        val usesRuntimeCollectionContainsAllFallback =
+            DotNetRuntimeTypes.genericInterfaceUsesForeignCollectionContainsAllFallback(source)
+        val hasNaturalOnlyExactInput = typeMapper.genericInterfaceInfoOrNull(sourceOwner)
+            ?.exactClassInfo != null &&
+                typeMapper.genericInterfaceMemberView(source, sourceOwner) ==
+                DotNetGenericInterfaceMemberView.EXACT
+        val admitsNaturalOnlyForeignInput = relativeGenericInputIndex != null ||
+                usesRuntimeCollectionContainsAllFallback || usesRuntimeTypeArgumentFalseBarrier ||
+                hasNaturalOnlyExactInput
+        val plannedForeignSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call)
+        val plannedCapabilitySlot = typeMapper.genericOwnerCapabilityCallTarget(call)
+        val inferredCapabilitySlot = genericOwnerCapabilitySlotOrNull(logicalCallMember)
+            ?: genericOwnerCapabilitySlotOrNull(source)
+        val semanticSlot = plannedForeignSlot
+            ?: plannedCapabilitySlot?.takeIf {
+                sourceOwner.isInterface && mappedNaturalType(receiver) != DotNetIlValueType.Object
+            }
+            ?: inferredCapabilitySlot?.takeIf {
+                sourceOwner.isInterface &&
+                        (mappedNaturalType(receiver) == DotNetIlValueType.Object ||
+                                admitsNaturalOnlyForeignInput)
             }
             ?: return false
         val runtimeSemanticOwner = (semanticSlot.parent as? IrClass)?.takeIf { owner ->
@@ -3293,6 +3363,14 @@ internal class DotNetIlExpressionCodegen(
         val semanticInfo = availableFunctions[semanticSlot]
             ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
             ?: return false
+        val fixedBarrierPolicy = reifiedGenericInterfaceFixedBarrierPolicy(
+            source,
+            usesRuntimeTypeArgumentFalseBarrier,
+        ) ?: reifiedGenericInterfaceFixedBarrierPolicy(
+            semanticSlot,
+            usesRuntimeTypeArgumentFalseBarrier ||
+                    DotNetRuntimeTypes.genericInterfaceUsesForeignTypeArgumentFalseBarrier(semanticSlot),
+        )
         val naturalInfo = if (runtimeSemanticOwner != null) {
             val memberView = typeMapper.genericInterfaceMemberView(semanticSlot, runtimeSemanticOwner)
             typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(semanticSlot, memberView)
@@ -3320,12 +3398,17 @@ internal class DotNetIlExpressionCodegen(
             ?: interfaceInfo?.canonicalClassInfo
         val exactInputType = naturalInfo.signature.parameterTypes.getOrNull(1)
             as? DotNetIlValueType.GenericInstance
-        val usesRuntimeTypeArgumentFalseBarrier =
-            DotNetRuntimeTypes.genericInterfaceUsesForeignTypeArgumentFalseBarrier(source)
-        val usesRuntimeCollectionContainsAllFallback =
-            DotNetRuntimeTypes.genericInterfaceUsesForeignCollectionContainsAllFallback(source)
-        val relativeGenericInputIndex =
-            DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(source)
+        val exactInputSemanticCarrier = source.parameters
+            .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+            .singleOrNull()
+            ?.type
+            .let { it as? IrSimpleType }
+            ?.classifier
+            .let { it as? IrClassSymbol }
+            ?.owner
+            ?.let(typeMapper::genericInterfaceInfoOrNull)
+            ?.canonicalClassInfo
+            ?.let(DotNetIlValueType::UserClass)
         fun DotNetIlValueType.referencesNaturalOwnerParameter(): Boolean = when (this) {
             is DotNetIlValueType.TypeParameter -> !isMethodParameter &&
                     index in 0 until naturalOwnerParameterCount
@@ -3352,9 +3435,15 @@ internal class DotNetIlExpressionCodegen(
             semanticInfo.signature.parameterTypes[index + 1] == DotNetIlValueType.Object &&
                     naturalInfo.signature.parameterTypes[index + 1].isNaturalOwnerParameter()
         }.singleOrNull()
+        val invariantOwnerInputType = invariantInputIndex?.let { index ->
+            naturalInfo.signature.parameterTypes[index + 1]
+                as? DotNetIlValueType.TypeParameter
+        }
         val hasInvariantOwnerInput = invariantInputIndex != null &&
-                sourceOwner.typeParameters.singleOrNull()?.variance ==
-                    org.jetbrains.kotlin.types.Variance.INVARIANT &&
+                invariantOwnerInputType != null &&
+                sourceOwner.typeParameters.all { parameter ->
+                    parameter.variance == org.jetbrains.kotlin.types.Variance.INVARIANT
+                } &&
                 hasOnlyDeclarationIndependentOtherInputs(invariantInputIndex)
         val isProducer = hasDeclarationIndependentInputs && naturalResultType != null &&
                 semanticResultType != null &&
@@ -3370,10 +3459,10 @@ internal class DotNetIlExpressionCodegen(
         val isInvariantInputValue = hasInvariantOwnerInput &&
                 naturalResultType != null && semanticResultType != null &&
                 (
-                    semanticResultType == DotNetIlValueType.Object &&
-                            naturalResultType.isNaturalOwnerParameter() ||
-                            semanticResultType == naturalResultType &&
-                            !naturalResultType.referencesNaturalOwnerParameter()
+                    (semanticResultType == DotNetIlValueType.Object &&
+                            naturalResultType == invariantOwnerInputType) ||
+                            (semanticResultType == naturalResultType &&
+                            !naturalResultType.referencesNaturalOwnerParameter())
                 )
         val isExactInputBoolean = regularArguments.size == 1 &&
                 interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
@@ -3381,37 +3470,67 @@ internal class DotNetIlExpressionCodegen(
                 (exactInputType?.classInfo?.ilTypeRef == naturalInterfaceOwner.ilTypeRef ||
                         usesRuntimeCollectionContainsAllFallback) &&
                 exactInputType?.arguments?.singleOrNull()?.isNaturalOwnerParameter() == true &&
-                semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
+                (semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object ||
+                        usesRuntimeCollectionContainsAllFallback &&
+                        semanticInfo.signature.parameterTypes[1] == exactInputSemanticCarrier) &&
                 semanticInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 naturalInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean)
+        var hasDirectRelativeGenericInput = false
+        var relativeGenericInputSemanticCarrier: DotNetIlValueType? = null
         val relativeGenericInputType = relativeGenericInputIndex?.let { index ->
             val naturalParameter = naturalInfo.signature.parameterTypes.getOrNull(index + 1)
                 as? DotNetIlValueType.GenericInstance
                 ?: return false
+            val sourceParameter = source.parameters
+                .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                .getOrNull(index)
+            val sourceParameterOwner = (sourceParameter?.type as? IrSimpleType)
+                ?.classifier
+                .let { it as? IrClassSymbol }
+                ?.owner
+                ?: return false
+            relativeGenericInputSemanticCarrier = typeMapper.genericInterfaceInfoOrNull(sourceParameterOwner)
+                ?.canonicalClassInfo
+                ?.let(DotNetIlValueType::UserClass)
+                ?: return false
             val argument = regularArguments.getOrNull(index) ?: return false
-            mappedNaturalType(argument)
+            val physicalArgument = mappedNaturalType(argument)
                 ?.dotNetViewAsGenericOwner(naturalParameter.classInfo)
                 ?.arguments
                 ?.singleOrNull()
-                ?: return false
+            if (physicalArgument != null) {
+                hasDirectRelativeGenericInput =
+                    mappedNaturalType(receiver)?.dotNetViewAsGenericOwner(naturalInfo.owner) != null
+                physicalArgument
+            } else {
+                typeMapper.genericInterfaceCapabilityTypeOrNull(
+                    argument.type,
+                    DotNetGenericInterfaceView.DECLARED,
+                )
+                    ?.takeIf { construction ->
+                        construction.classInfo.ilTypeRef == naturalParameter.classInfo.ilTypeRef
+                    }
+                    ?.arguments
+                    ?.singleOrNull()
+                    ?: return false
+            }
         }
+        if (hasDirectRelativeGenericInput) return false
         val isRelativeGenericInputBoolean = relativeGenericInputType != null &&
                 sourceOwner.typeParameters.singleOrNull()?.variance ==
                     org.jetbrains.kotlin.types.Variance.INVARIANT &&
-                semanticInfo.signature.parameterTypes[
-                    checkNotNull(relativeGenericInputIndex) + 1
-                ] == DotNetIlValueType.Object &&
+                semanticInfo.signature.parameterTypes[checkNotNull(relativeGenericInputIndex) + 1]
+                    .let { semanticParameter ->
+                        semanticParameter == DotNetIlValueType.Object ||
+                                semanticParameter == relativeGenericInputSemanticCarrier
+                    } &&
                 hasOnlyDeclarationIndependentOtherInputs(relativeGenericInputIndex) &&
                 semanticInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 naturalInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean)
-        val fixedBarrierPolicy = reifiedGenericInterfaceFixedBarrierPolicy(
-            source,
-            usesRuntimeTypeArgumentFalseBarrier,
-        )
         val fixedBarrierResultType = fixedBarrierPolicy?.resultTypeOrNull()
         val isFixedBarrier = regularArguments.size == 1 &&
                 interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
@@ -3424,7 +3543,7 @@ internal class DotNetIlExpressionCodegen(
                                 naturalResultType?.isDotNetReferenceShaped() == true) ||
                         semanticInfo.signature.returnType ==
                             DotNetIlReturnType.Value(fixedBarrierResultType) &&
-                        naturalInfo.signature.returnType ==
+                                naturalInfo.signature.returnType ==
                             DotNetIlReturnType.Value(fixedBarrierResultType))
         if (!isProducer && !isDeclarationIndependentUnit && !isInvariantInputUnit &&
             !isInvariantInputValue &&
@@ -3469,7 +3588,15 @@ internal class DotNetIlExpressionCodegen(
             "<reifiedGenericInterfaceForeignReceiver>",
         )
         val regularArgumentSlots = regularArguments.mapIndexed { index, argument ->
-            val parameterType = semanticInfo.signature.parameterTypes[index + 1]
+            val crossesGuardedSemanticInput =
+                (isRelativeGenericInputBoolean && index == relativeGenericInputIndex) ||
+                        (usesRuntimeCollectionContainsAllFallback && index == 0 &&
+                        semanticInfo.signature.parameterTypes[index + 1] != DotNetIlValueType.Object)
+            val parameterType = if (crossesGuardedSemanticInput) {
+                DotNetIlValueType.Object
+            } else {
+                semanticInfo.signature.parameterTypes[index + 1]
+            }
             emitExpression(argument, parameterType)
             spillToSyntheticLocal(
                 parameterType,
@@ -3497,9 +3624,38 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(storeLocalInstruction(capabilitySlot.index), pops = 1)
         methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
         methodContext.emitBranch("brfalse", foreignLabel, pops = 1)
+        regularArgumentSlots.indices.forEach { index ->
+            val crossesGuardedSemanticInput =
+                (isRelativeGenericInputBoolean && index == relativeGenericInputIndex) ||
+                        (usesRuntimeCollectionContainsAllFallback && index == 0)
+            if (!crossesGuardedSemanticInput) return@forEach
+            val semanticParameterType = semanticInfo.signature.parameterTypes[index + 1]
+            if (semanticParameterType != DotNetIlValueType.Object) {
+                methodContext.emit(loadLocalInstruction(regularArgumentSlots[index].index), pushes = 1)
+                methodContext.emit(
+                    "isinst ${semanticParameterType.nameInSignature}",
+                    pops = 1,
+                    pushes = 1,
+                )
+                methodContext.emitBranch("brfalse", foreignLabel, pops = 1)
+            }
+        }
         methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
-        regularArgumentSlots.forEach { slot ->
+        regularArgumentSlots.forEachIndexed { index, slot ->
             methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+            val crossesGuardedSemanticInput =
+                (isRelativeGenericInputBoolean && index == relativeGenericInputIndex) ||
+                        (usesRuntimeCollectionContainsAllFallback && index == 0)
+            if (crossesGuardedSemanticInput) {
+                val semanticParameterType = semanticInfo.signature.parameterTypes[index + 1]
+                if (semanticParameterType != DotNetIlValueType.Object) {
+                    methodContext.emit(
+                        "castclass ${semanticParameterType.nameInSignature}",
+                        pops = 1,
+                        pushes = 1,
+                    )
+                }
+            }
         }
         methodContext.emit(
             semanticInfo.renderCallInstruction(
@@ -3547,6 +3703,19 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.emit("dup", pops = 1, pushes = 2)
                 methodContext.emit("ldc.i4.$index", pushes = 1)
                 methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+                val objectCoercion = dotNetWideningCoercionOrNull(
+                    slot.type,
+                    DotNetIlValueType.Object,
+                    coreLibraryReference,
+                )
+                if (objectCoercion != null) {
+                    emitWideningCoercion(objectCoercion)
+                } else {
+                    check(slot.type.isDotNetReferenceShaped()) {
+                        "Runtime generic-interface dispatch cannot place " +
+                                "${slot.type.nameInSignature} in an object argument vector"
+                    }
+                }
                 methodContext.emit("stelem.ref", pops = 3)
             }
         }
@@ -3875,6 +4044,17 @@ internal class DotNetIlExpressionCodegen(
                         (usesRuntimeCollectionContainsAllFallback &&
                                 runtimeCollectionParameterOwner != null) ||
                         usesRelativeGenericInput)
+        val canEnterCanonicalRelativeInput = if (usesRelativeGenericInput) {
+            val inputIndex = checkNotNull(
+                DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(callee)
+            )
+            val argumentType = call.arguments.getOrNull(inputIndex + 1)
+                ?.let(::mappedNaturalType)
+            val canonicalParameterType = canonical.parameterTypes.getOrNull(inputIndex + 1)
+            argumentType?.isDotNetAssignableTo(checkNotNull(canonicalParameterType)) == true
+        } else {
+            true
+        }
         val capabilityParameterTypes = capabilitySignature.parameterTypes.map { parameterType ->
             parameterType.substituteDotNetTypeParameters(
                 capabilityReceiverType.arguments,
@@ -3958,31 +4138,33 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitGoto(joinLabel)
 
         methodContext.emitLabel(fallbackLabel)
-        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
-        methodContext.emit("isinst ${canonicalReceiverType.nameInSignature}", pops = 1, pushes = 1)
-        methodContext.emit(storeLocalInstruction(canonicalSlot.index), pops = 1)
-        methodContext.emit(loadLocalInstruction(canonicalSlot.index), pushes = 1)
         val missingCanonicalLabel = methodContext.nextLabel("genericInterfaceMissingCanonical")
-        methodContext.emitBranch("brfalse", missingCanonicalLabel, pops = 1)
-        methodContext.emit(loadLocalInstruction(canonicalSlot.index), pushes = 1)
-        emitArguments(
-            call.arguments.drop(1),
-            canonical.parameterTypes.drop(1),
-            "canonical generic-interface call to '${callee.name.asString()}'",
-        )
-        methodContext.emit(
-            canonical.info.renderCallInstruction(
-                canonical.info.physicalMethodName ?: callee.dotNetIlMethodName(),
-                virtual = true,
-                ownerToken = canonical.ownerToken,
-                methodInstantiation = canonical.methodInstantiation,
-            ),
-            pops = canonical.info.signature.parameterTypes.size,
-            pushes = if (canonical.returnType is DotNetIlReturnType.Value) 1 else 0,
-        )
-        canonicalResultCoercion?.let(::emitWideningCoercion)
-        resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
-        methodContext.emitGoto(joinLabel)
+        if (canEnterCanonicalRelativeInput) {
+            methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+            methodContext.emit("isinst ${canonicalReceiverType.nameInSignature}", pops = 1, pushes = 1)
+            methodContext.emit(storeLocalInstruction(canonicalSlot.index), pops = 1)
+            methodContext.emit(loadLocalInstruction(canonicalSlot.index), pushes = 1)
+            methodContext.emitBranch("brfalse", missingCanonicalLabel, pops = 1)
+            methodContext.emit(loadLocalInstruction(canonicalSlot.index), pushes = 1)
+            emitArguments(
+                call.arguments.drop(1),
+                canonical.parameterTypes.drop(1),
+                "canonical generic-interface call to '${callee.name.asString()}'",
+            )
+            methodContext.emit(
+                canonical.info.renderCallInstruction(
+                    canonical.info.physicalMethodName ?: callee.dotNetIlMethodName(),
+                    virtual = true,
+                    ownerToken = canonical.ownerToken,
+                    methodInstantiation = canonical.methodInstantiation,
+                ),
+                pops = canonical.info.signature.parameterTypes.size,
+                pushes = if (canonical.returnType is DotNetIlReturnType.Value) 1 else 0,
+            )
+            canonicalResultCoercion?.let(::emitWideningCoercion)
+            resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+            methodContext.emitGoto(joinLabel)
+        }
 
         methodContext.emitLabel(missingCanonicalLabel)
         if (hasRuntimeForeignInputFallback) {
@@ -4006,7 +4188,7 @@ internal class DotNetIlExpressionCodegen(
                 emitExpression(argument, DotNetIlValueType.Object)
                 methodContext.emit("stelem.ref", pops = 3)
             }
-            if (!usesRuntimeCollectionContainsAllFallback) {
+            if (!usesRuntimeCollectionContainsAllFallback && !usesRelativeGenericInput) {
                 emitReifiedGenericInterfaceFixedBarrier(checkNotNull(fixedBarrierPolicy))
             }
             methodContext.emit(

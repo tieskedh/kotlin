@@ -525,6 +525,47 @@ verification, and work state.
   Production remains erased outside the bounded rehearsal. See
   [`docs/archive/runtime-reified-map-entry-2026-08-24.md`](docs/archive/runtime-reified-map-entry-2026-08-24.md).
 
+  ABI/runtime surface 58 now adds the first invariant multiple-owner-parameter
+  child. A public owner with two or more invariant nullable-`Any`-bounded
+  parameters may extend exactly one admitted covariant producer-property root
+  of equal arity through identity substitution and declare exactly one
+  abstract non-null direct input/output member. The natural child inherits the
+  root's `!n` getters and retains its own mutation as `!n -> !n`; only a star
+  or projected operation crosses the owned `object -> object` semantic slot.
+  Reordered/fixed/nullable arguments, additional parents or members,
+  properties, defaults, and deeper lineage remain rejected.
+
+  Runtime instantiates the rule as invariant natural
+  `MutableMap.MutableEntry<K,V> : Map.Entry<K,V>` under the existing arity-zero
+  MutableMap metadata container. It does not select `MutableMap<K,V>`.
+  Compiler-emitted implementations retain independent `!0` key and `!1` value
+  fields. An ordinary sealed non-partial C# class implements only the natural
+  inherited getters and typed `SetValue(V): V`, without a compiler interface,
+  generator, partial class, wrapper, or adapter.
+
+  The complete Runtime selection exposed and closed general dual-entry
+  regressions which the isolated child did not exercise. Honest closed and
+  method-generic classifier inputs retain their natural public MethodDef while
+  a paired compiler entry owns widened object input. Producer data carries
+  that split across assemblies. Identical inherited relative-input MethodImpls
+  coalesce, concrete natural Runtime calls outrank conservative semantic
+  routes, and late semantic reachability no longer degrades
+  `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN` fields. Foreign argument vectors box
+  value carriers before `stelem.ref`; canonical Collection input is entered
+  only after a runtime guard; and the existing `containsAll` helper now records
+  its actual nine-slot maximum stack.
+
+  Four focused rehearsal lanes and four production-erased inverse lanes are
+  green across PSI, LightTree, Framework 4.8, and .NET 10. The complete
+  ten-family Runtime selection is green under both modes. The dependency-wide
+  strict aggregate was rebuilt from all transitive producers and exits zero.
+  Direct XML audit covers 191 freshly written suites/2,333 tests with zero
+  failures, errors, or skips: 187 FIR suites/2,199 tests, two integration
+  suites/127 tests, the one-test backend resolver suite, and the six-test
+  `dotnet.ir` root. Production remains atomically erased outside rehearsal.
+  See
+  [`docs/archive/runtime-reified-mutable-map-entry-2026-08-24.md`](docs/archive/runtime-reified-mutable-map-entry-2026-08-24.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -4943,8 +4984,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    first parentless multiple-parameter producer-property vector and
    instantiates it as nested natural `Map.Entry<K,V>` with independent
    `!0`/`!1` fields, natural-only ordinary C# authoring, and coherent BK-1
-   checks across both arguments. Recompute the next complete Common dependency
-   family from this head. Do not add Map, Sequence, or another
+   checks across both arguments. Surface 58 adds the dependency-minimal
+   invariant `MutableMap.MutableEntry<K,V>` child with typed input/output
+   mutation and closes the general paired classifier-input and inherited
+   relative-input Runtime regressions without selecting MutableMap. Recompute
+   the next complete Common dependency family from this head. Do not add Map,
+   Sequence, or another
    declaration-specific representation exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse

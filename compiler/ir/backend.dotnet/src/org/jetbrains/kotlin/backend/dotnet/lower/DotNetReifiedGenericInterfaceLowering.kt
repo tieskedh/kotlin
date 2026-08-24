@@ -96,6 +96,7 @@ import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.getInlineClassBackingField
+import org.jetbrains.kotlin.ir.util.IrTypeParameterRemapper
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
@@ -195,6 +196,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val directProducerParameter = parameters.singleOrNull { parameter ->
                     member.isDirectProducerMember(parameter)
                 }
+                val directInputOutputParameter = parameters.singleOrNull { parameter ->
+                    member.isDirectInputOutputMember(parameter)
+                }
                 val role = when {
                     property?.getter === member && directProducerParameter != null ->
                         DotNetPublishedGenericInterfaceMemberRole.PROPERTY_GETTER
@@ -215,6 +219,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
                     singleParameter != null && member.isDirectConsumerMember(singleParameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.CONSUMER
+                    directInputOutputParameter != null ->
+                        DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT
                     member.isOwnerIndependentPrimitivePropertyGetter() ->
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_PROPERTY_GETTER
                     member.isOwnerIndependentPrimitiveQuery() ->
@@ -243,10 +249,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
         visiting: Set<IrClass> = emptySet(),
     ): DotNetPublishedGenericInterfaceFamilyContract? {
         if (owner in visiting || !owner.hasLogicalReifiedInterfaceOwnerShape()) return null
-        if (owner.typeParameters.size > 1 &&
-            owner.directCovariantParameterPropertyVectorOrNull() == null
-        ) {
-            return null
+        if (owner.typeParameters.size > 1) {
+            val hasSupportedShape = if (owner.dotNetDirectInterfaceTypes().isEmpty()) {
+                owner.directCovariantParameterPropertyVectorOrNull() != null
+            } else {
+                owner.directInvariantParameterInputOutputChildShapeOrNull() != null
+            }
+            if (!hasSupportedShape) return null
         }
         val contract = rawPublishedFamilyOrNull(owner) ?: return null
         if (contract.genericArity != owner.typeParameters.size) return null
@@ -946,6 +955,22 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 // later value-routing pass would collapse a proven typed C# method back to object.
                 return true
             }
+            if (this is IrValueParameter) {
+                val inputEntry = context.genericOwnerFunctionInputEntries[function]
+                val parameterIndex = function.parameters.indexOf(this)
+                if (parameterIndex >= 0 &&
+                    (parameterIndex in
+                            context.genericOwnerFunctionInputEntryObjectParameters[function].orEmpty() ||
+                            inputEntry?.parameters?.getOrNull(parameterIndex)?.let { parameter ->
+                                parameter in context.genericOwnerForeignDispatchDeclarations
+                            } == true)
+                ) {
+                    // The source MethodDef remains the natural C<!!T> entry. Its separately
+                    // published input entry owns the object-domain parameter used by a widened
+                    // Kotlin call, so this later routing scan must not erase both entries.
+                    return true
+                }
+            }
             return false
         }
 
@@ -1013,19 +1038,44 @@ internal class DotNetReifiedGenericInterfaceLowering(
             else -> null
         }
 
-        fun IrType.isNaturalClassifierInput(): Boolean {
+        fun IrType.isNaturalClassifierInput(function: IrSimpleFunction): Boolean {
             val owner = reifiedCovariantInterfaceOwnerOrNull() ?: return false
             val arguments = (this as? IrSimpleType)?.arguments ?: return false
-            return arguments.size == owner.typeParameters.size &&
-                    arguments.all { argument ->
-                        (argument as? IrTypeProjection)?.variance == Variance.INVARIANT
-                    } &&
-                    potentialSemanticInterfaceOwnerOrNull() == null
+            if (arguments.size != owner.typeParameters.size ||
+                arguments.any { argument ->
+                    (argument as? IrTypeProjection)?.variance != Variance.INVARIANT
+                }
+            ) {
+                return false
+            }
+            if (potentialSemanticInterfaceOwnerOrNull() == null) return true
+            // `fun <T> f(value: I<T>)` has an honest natural CLR signature I<!!T>, even
+            // though a Kotlin caller may instantiate T broadly and pass a value-type-widened
+            // semantic view. Preserve that source entry and put only the latter calls through
+            // the paired object-input entry. A type parameter owned by a surrounding class does
+            // not provide the same method-local construction and remains outside this cell.
+            if (arguments.all { argument ->
+                val projection = argument as IrTypeProjection
+                ((projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)
+                    ?.owner?.parent === function
+            }) {
+                return true
+            }
+            // A closed value construction such as Collection<Int> is likewise an honest
+            // natural CLR parameter. Kotlin-only widened/unchecked carriers use the paired
+            // object entry; ordinary C# and exact Kotlin callers retain Collection<int>.
+            // Keep the universal `Any?` view semantic because C# callers intentionally use it
+            // as the one entry which can accept both reference and value constructions.
+            return arguments.all { argument ->
+                val projection = argument as IrTypeProjection
+                (projection.type as? IrSimpleType)?.classifier !is IrTypeParameterSymbol &&
+                        !projection.type.isNullableAny()
+            }
         }
 
         fun IrSimpleFunction.classifierInputParameterIndicesOrEmpty(): List<Int> {
             if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.FINAL || body == null ||
-                isFakeOverride || isSuspend || typeParameters.isNotEmpty() ||
+                isFakeOverride || isSuspend ||
                 correspondingPropertySymbol != null || returnType.reifiedCovariantInterfaceOwnerOrNull() != null ||
                 parameters.any { parameter ->
                     parameter.kind != IrParameterKind.DispatchReceiver &&
@@ -1039,7 +1089,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
             if (owner != null && (owner.isInterface || owner.typeParameters.isNotEmpty())) return emptyList()
             return parameters.mapIndexedNotNull { index, parameter ->
                 index.takeIf {
-                    parameter.kind == IrParameterKind.Regular && parameter.type.isNaturalClassifierInput()
+                    parameter.kind == IrParameterKind.Regular &&
+                            parameter.type.isNaturalClassifierInput(this)
                 }
             }.takeIf { indices -> indices.size == 1 }.orEmpty()
         }
@@ -1065,11 +1116,22 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     returnType = source.returnType
                 }.apply inputEntry@{
                     parent = source.parent
+                    val copiedTypeParameters = copyTypeParametersFrom(source)
+                    val typeParameterMapping = source.typeParameters.zip(copiedTypeParameters).toMap()
+                    val typeRemapper = IrTypeParameterRemapper(typeParameterMapping)
+                    returnType = typeRemapper.remapType(source.returnType)
                     source.parameters.forEach { parameter ->
-                        parameters += parameter.copyTo(this@inputEntry, defaultValue = null)
+                        parameters += parameter.copyTo(
+                            this@inputEntry,
+                            defaultValue = null,
+                            remapTypeMap = typeParameterMapping,
+                        )
                     }
                     val parameterMapping = source.parameters.zip(parameters).toMap()
-                    body = source.body!!.deepCopyWithSymbols(this@inputEntry).transform(
+                    body = source.body!!.deepCopyWithSymbols(
+                        initialParent = this@inputEntry,
+                        createTypeRemapper = { IrTypeParameterRemapper(typeParameterMapping) },
+                    ).transform(
                         object : VariableRemapper(parameterMapping) {
                             override fun visitReturn(expression: IrReturn): IrExpression = super.visitReturn(
                                 if (expression.returnTargetSymbol == source.symbol) {
@@ -1099,8 +1161,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     val parameter = inputEntry.parameters[index]
                     context.genericOwnerCapabilityDeclarations += parameter
                     context.genericOwnerForeignDispatchDeclarations += parameter
+                    // Keep the logical source occurrence as semantic/foreign routing evidence.
+                    // The producer-recorded paired-entry map, not deletion from these analysis
+                    // sets, protects the public source MethodDef's natural CLR signature.
+                    context.genericOwnerCapabilityDeclarations += source.parameters[index]
+                    context.genericOwnerForeignDispatchDeclarations += source.parameters[index]
                 }
                 context.genericOwnerFunctionInputEntries[source] = inputEntry
+                context.genericOwnerFunctionInputEntryObjectParameters[source] =
+                    objectParameterIndices.toSet()
             }
         }
 
@@ -1233,6 +1302,17 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val source = expression.symbol.owner.let { candidate ->
                     candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
                 }
+                specialBridgeMethods.findSpecialWithOverride(source, includeSelf = true)
+                    ?.second
+                    ?.toDotNetWrongShapePolicy()
+                    ?.let { policy ->
+                        val existing = context.genericOwnerWrongShapePolicies[source]
+                        check(existing == null || existing == policy) {
+                            "Internal .NET backend error: '${source.name}' acquired conflicting " +
+                                    "wrong-shape policies"
+                        }
+                        context.genericOwnerWrongShapePolicies[source] = policy
+                    }
                 if (source.origin == DOTNET_GENERIC_OWNER_SEMANTIC_HOOK) {
                     // This is already a planner-selected physical call from the typed wrapper or
                     // capability dispatcher to its semantic body. A nested reified-interface
@@ -1282,7 +1362,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             externalDeclarations,
                             source,
                         )
-                    }
+                }
                 val receiver = expression.dispatchReceiver
                 val usesSemanticCarrier = when (receiver) {
                     null -> false
@@ -1560,6 +1640,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
     }
 
     private fun IrClass.reifiedInterfaceChildShapeOrNull(): ReifiedInterfaceChildShape? {
+        if (typeParameters.size > 1) {
+            return directInvariantParameterInputOutputChildShapeOrNull()
+        }
         if (!hasFirstReifiedInterfaceOwnerShape()) return null
         val parameter = typeParameters.single()
         val members = when (parameter.variance) {
@@ -1749,6 +1832,53 @@ internal class DotNetReifiedGenericInterfaceLowering(
             members.size == getters.size && members.toSet() == getters.toSet() &&
                     producedParameters.toSet().size == parameters.size
         }
+    }
+
+    /**
+     * Admits one invariant multi-parameter child over an identity-substituted covariant
+     * producer-property root. Exactly one child member consumes and returns the same direct owner
+     * parameter. The other parameters remain physically meaningful through the parent rather
+     * than being erased merely because the child does not redeclare their producer slots.
+     */
+    private fun IrClass.directInvariantParameterInputOutputChildShapeOrNull():
+            ReifiedInterfaceChildShape? {
+        if (!hasLogicalReifiedInterfaceOwnerShape() || typeParameters.size <= 1 ||
+            typeParameters.any { parameter -> parameter.variance != Variance.INVARIANT }
+        ) {
+            return null
+        }
+        val hasSupportedPhysicalPlacement = parent is IrFile ||
+                DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(this)
+        if (!hasSupportedPhysicalPlacement || declaredInterfaceProperties().isNotEmpty()) return null
+        val member = declaredInterfaceMembers().singleOrNull() ?: return null
+        if (typeParameters.singleOrNull { parameter ->
+                member.isDirectInputOutputMember(parameter)
+            } == null
+        ) {
+            return null
+        }
+        val parentType = dotNetDirectInterfaceTypes().singleOrNull() ?: return null
+        val parent = (parentType.classifier as? IrClassSymbol)?.owner ?: return null
+        if (!parent.hasLogicalReifiedInterfaceOwnerShape() ||
+            parent.typeParameters.size != typeParameters.size ||
+            parent.typeParameters.any { parameter -> parameter.variance != Variance.OUT_VARIANCE } ||
+            parent.dotNetDirectInterfaceTypes().isNotEmpty() ||
+            parent.directCovariantParameterPropertyVectorOrNull() == null ||
+            parentType.arguments.size != typeParameters.size
+        ) {
+            return null
+        }
+        parentType.arguments.forEachIndexed { index, argument ->
+            val projection = argument as? IrTypeProjection ?: return null
+            val argumentParameter =
+                (projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+            if (projection.variance != Variance.INVARIANT ||
+                argumentParameter?.owner !== typeParameters[index]
+            ) {
+                return null
+            }
+        }
+        return ReifiedInterfaceChildShape(listOf(parent), listOf(member))
     }
 
     private fun IrClass.directCovariantPropertyMembersOrNull(
@@ -1969,6 +2099,24 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (inputType.isMarkedNullable()) return false
         val inputParameter = inputType.classifier as? IrTypeParameterSymbol
         return inputParameter?.owner === parameter
+    }
+
+    private fun IrSimpleFunction.isDirectInputOutputMember(parameter: IrTypeParameter): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
+            body != null || this in context.interfaceDefaultImplementations ||
+            correspondingPropertySymbol != null || isSuspend || typeParameters.isNotEmpty() ||
+            parameters.size != 2
+        ) {
+            return false
+        }
+        val regular = parameters.singleOrNull { it.kind == IrParameterKind.Regular } ?: return false
+        if (regular.defaultValue != null) return false
+        val inputType = regular.type as? IrSimpleType ?: return false
+        val resultType = returnType as? IrSimpleType ?: return false
+        if (inputType.isMarkedNullable() || resultType.isMarkedNullable()) return false
+        val inputParameter = inputType.classifier as? IrTypeParameterSymbol
+        val resultParameter = resultType.classifier as? IrTypeParameterSymbol
+        return inputParameter?.owner === parameter && resultParameter?.owner === parameter
     }
 
     private fun IrSimpleFunction.isBroadFixedBarrierInputMember(
@@ -2285,10 +2433,11 @@ private fun materializeExternalGenericOwnerFunctionInputEntry(
         entry.value == binding
     }?.let { entry -> return entry.key }
     val physicalEntry = binding.entry
-    require(source.typeParameters.isEmpty() &&
-            physicalEntry.objectParameterIndices.all(source.parameters.indices::contains)) {
+    require(physicalEntry.objectParameterIndices.all(source.parameters.indices::contains)) {
         "External generic-owner function '${source.name}' has an invalid classifier-input entry"
     }
+    context.genericOwnerFunctionInputEntryObjectParameters[source] =
+        physicalEntry.objectParameterIndices
     return context.irFactory.buildFun {
         startOffset = source.startOffset
         endOffset = source.endOffset
@@ -2299,13 +2448,23 @@ private fun materializeExternalGenericOwnerFunctionInputEntry(
         returnType = source.returnType
     }.apply inputEntry@{
         parent = source.parent
+        val copiedTypeParameters = copyTypeParametersFrom(source)
+        val typeParameterMapping = source.typeParameters.zip(copiedTypeParameters).toMap()
+        val typeRemapper = IrTypeParameterRemapper(typeParameterMapping)
+        returnType = typeRemapper.remapType(source.returnType)
         source.parameters.forEach { parameter ->
-            parameters += parameter.copyTo(this@inputEntry, defaultValue = null)
+            parameters += parameter.copyTo(
+                this@inputEntry,
+                defaultValue = null,
+                remapTypeMap = typeParameterMapping,
+            )
         }
         physicalEntry.objectParameterIndices.forEach { index ->
             val parameter = parameters[index]
             context.genericOwnerCapabilityDeclarations += parameter
             context.genericOwnerForeignDispatchDeclarations += parameter
+            context.genericOwnerCapabilityDeclarations += source.parameters[index]
+            context.genericOwnerForeignDispatchDeclarations += source.parameters[index]
         }
         context.externalGenericOwnerFunctionInputEntries[this] = binding
     }

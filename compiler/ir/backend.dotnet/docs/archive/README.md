@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-mutable-map-entry-2026-08-24.md`](runtime-reified-mutable-map-entry-2026-08-24.md)
+  records ABI/runtime surface 58's invariant multiple-parameter child,
+  natural `MutableMap.MutableEntry<K,V>`, typed input/output mutation and
+  state, ordinary C# authoring, and the general dual-entry Runtime closure.
 - [`runtime-reified-map-entry-2026-08-24.md`](runtime-reified-map-entry-2026-08-24.md)
   records ABI/runtime surface 57's first multiple-owner-parameter family,
   nested natural `Map.Entry<K,V>`, two independent `!n` fields, coherent BK-1

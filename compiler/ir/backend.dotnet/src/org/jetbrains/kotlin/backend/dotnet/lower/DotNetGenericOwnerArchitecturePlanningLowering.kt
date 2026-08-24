@@ -705,7 +705,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     val state = stateEntry.value
                     state.copy(
                         requirement = if (state.field in fields &&
-                            state.requirement != DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE
+                            state.requirement !=
+                                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                            state.requirement !=
+                                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
                         ) {
                             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
                         } else {
@@ -1601,6 +1604,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             } else {
                 DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
             }
+            val hasRelativeGenericInterfaceInput = member.allOverridden().any { overridden ->
+                DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(overridden) != null
+            }
             val semanticHookReasons = buildSet {
                 if (memberPolicies.getValue(member) == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY) {
                     add(DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY)
@@ -1639,6 +1645,14 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     // Keep the exact `<B : !A>` entry for C# and route the semantic slot through
                     // a separately erased `<B : object>` body.
                     add(DotNetGenericOwnerSemanticHookReason.OWNER_RELATIVE_METHOD_BOUND)
+                }
+                if (hasRelativeGenericInterfaceInput) {
+                    // The natural CLR slot represents `Nested<T>` as `<U : T>(Nested<U>)`, but a
+                    // legal Kotlin widening such as `Collection<Int> -> Collection<Any?>` may
+                    // still reach an invariant `C<Any?>` implementation. Keep that one body on
+                    // the semantic carrier and let the typed bridge add only the CLR method
+                    // parameter. Exact natural inputs continue to use the direct bridge.
+                    add(DotNetGenericOwnerSemanticHookReason.RELATIVE_GENERIC_INTERFACE_INPUT)
                 }
             }
             val roles = buildSet {
@@ -1949,10 +1963,46 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
         } while (changed)
 
+        // A semantic obligation inherited after the per-owner pass must carry through the same
+        // private helper graph as an obligation known during that pass. Otherwise moving only
+        // the overriding body to object-domain parameters makes its first private `Nested<T>`
+        // helper call reconstruct `Nested<!T>` and reject a legal widened carrier. These helpers
+        // are not new public capability entries; they receive only a private semantic body.
+        plans.entries.toList().forEach planLoop@{ planEntry ->
+            val owner = planEntry.key
+            val plan = plans.getValue(owner)
+            val semanticSources = plan.memberFamilies.filterValues { family ->
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles
+            }.keys
+            val semanticPrivateHelpers = semanticSources
+                .flatMapTo(linkedSetOf()) { source ->
+                    plan.memberAccesses.getValue(source).transitiveCalls
+                }
+                .filterIsInstance<IrSimpleFunction>()
+                .filterTo(linkedSetOf()) { helper ->
+                    helper.parent === owner && DescriptorVisibilities.isPrivate(helper.visibility)
+                }
+            if (semanticPrivateHelpers.isEmpty()) return@planLoop
+            val families = plan.memberFamilies.toMutableMap()
+            semanticPrivateHelpers.forEach helperLoop@{ helper ->
+                val family = families[helper] ?: return@helperLoop
+                families[helper] = family.copy(
+                    roles = family.roles + DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                    semanticHookReasons = family.semanticHookReasons +
+                            DotNetGenericOwnerSemanticHookReason.INTERNAL_SEMANTIC_REACHABILITY,
+                )
+            }
+            if (families != plan.memberFamilies) {
+                plans[owner] = plan.copy(memberFamilies = families)
+            }
+        }
+
         // An override can inherit a semantic hook only after all owners have been planned. Fold
-        // that late obligation back into state selection before any physical rehearsal occurs:
-        // a field reachable from the inherited broad body cannot retain `!T` storage merely
-        // because the local source signature itself looked invariant during the first pass.
+        // that late obligation back into state selection before any physical rehearsal occurs.
+        // Producer-proven typed state is the deliberate exception: inheriting a carrier boundary
+        // does not add a new logical write, so the hook narrows its object input to the already
+        // selected physical !T at the store. Every field whose producer graph was not proven
+        // still moves to semantic object state.
         plans.entries.toList().forEach { planEntry ->
             val owner = planEntry.key
             val plan = plans.getValue(owner)
@@ -1974,7 +2024,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 val semanticWriters = state.directWriters.filterTo(linkedSetOf(), semanticProducerFunctions::contains)
                 state.copy(
                     requirement = if (state.field in semanticWriteFields &&
-                        state.requirement != DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE
+                        state.requirement !=
+                            DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                        state.requirement !=
+                            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
                     ) {
                         DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
                     } else {
@@ -2834,6 +2887,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                                 origin
                             }
                         }
+                    } else if (target is IrSimpleFunction &&
+                        expression.type.hasRelevantGenericOwnerInAncestry() &&
+                        externalDeclarations.hasNaturalGenericOwnerFunctionReturn(target)
+                    ) {
+                        // In the versioned producer ABI, an explicit carrier record replaces the
+                        // natural result. A published function with no such replacement is exact
+                        // evidence, so a consumer must not degrade its constructed C<T> result to
+                        // the class capability merely because the producer body is unavailable.
+                        setOf(exact(expression.type))
                     } else if (expression.type.hasRelevantGenericOwnerInAncestry()) {
                         unresolved()
                     } else {
