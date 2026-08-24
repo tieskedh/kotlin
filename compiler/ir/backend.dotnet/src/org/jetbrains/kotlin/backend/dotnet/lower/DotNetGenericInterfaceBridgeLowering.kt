@@ -1226,11 +1226,12 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     }
 
     /**
-     * Materializes the CLR-only `<U : T>(Collection<U>)` slot used by an invariant natural
-     * interface for a nested covariant Kotlin input. The logical Kotlin member deliberately has
-     * no method parameter. Its producer-proven semantic hook owns the one body which can accept
-     * a value-type widening such as `Collection<Int> -> Collection<Any?>`; the physical bridge
-     * retains the original collection object and adds only the CLR method-parameter shape.
+     * Materializes the CLR-only `<U : T>(..., Collection<U>, ...)` slot used by an invariant
+     * natural interface for one nested covariant Kotlin input. The logical Kotlin member
+     * deliberately has no method type parameter. Its producer-proven semantic hook owns the one
+     * body which can accept a value-type widening such as
+     * `Collection<Int> -> Collection<Any?>`; the physical bridge retains the original collection
+     * object and every independent argument and adds only the CLR method-parameter shape.
      */
     private fun createRelativeGenericInputTypedBridge(
         plan: BridgePlan,
@@ -1252,11 +1253,6 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             ?: dotNetUnsupported(
                 "relative collection input '${plan.slot.name}' has no selected parameter"
             )
-        if (slotParameters.size != 1) {
-            dotNetUnsupported(
-                "relative collection input '${plan.slot.name}' requires one regular parameter"
-            )
-        }
         val semanticTarget = context.genericOwnerSemanticHooks[plan.target]
             ?: dotNetUnsupported(
                 "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
@@ -1265,12 +1261,28 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         val semanticParameters = semanticTarget.parameters.filter { parameter ->
             parameter.kind == IrParameterKind.Regular
         }
-        val semanticParameter = semanticParameters.singleOrNull()
+        if (semanticParameters.size != slotParameters.size) {
+            dotNetUnsupported(
+                "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
+                        "changed its semantic parameter count"
+            )
+        }
+        val semanticParameter = semanticParameters.getOrNull(inputIndex)
             ?.takeIf { parameter -> parameter.type.isNullableAny() }
             ?: dotNetUnsupported(
                 "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
-                        "does not have one object-domain semantic parameter"
+                        "does not have an object-domain semantic input at the selected position"
             )
+        slotParameters.forEachIndexed { index, parameter ->
+            if (index != inputIndex &&
+                semanticParameters[index].type != plan.typedSubstitutor.substitute(parameter.type)
+            ) {
+                dotNetUnsupported(
+                    "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
+                            "has an independently unrepresentable parameter"
+                )
+            }
+        }
         val viewName = memberView.name.lowercase().replaceFirstChar(Char::uppercaseChar)
         return plan.implementingClass.addFunction {
             startOffset = plan.target.startOffset
@@ -1300,17 +1312,26 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 ),
                 allowEmptySubstitution = false,
             )
-            addValueParameter(
-                sourceParameter.name.asString(),
-                relativeSubstitutor.substitute(sourceParameter.type),
-            )
+            slotParameters.forEachIndexed { index, parameter ->
+                addValueParameter(
+                    parameter.name.asString(),
+                    if (index == inputIndex) {
+                        relativeSubstitutor.substitute(sourceParameter.type)
+                    } else {
+                        plan.typedSubstitutor.substitute(parameter.type)
+                    },
+                )
+            }
             body = context.createIrBuilder(symbol).irBlockBody {
                 val call = irCall(semanticTarget.symbol, semanticTarget.returnType).apply {
                     arguments[0] = irGet(this@bridge.parameters[0])
-                    arguments[1] = irImplicitCast(
-                        irGet(this@bridge.parameters[1]),
-                        semanticParameter.type,
-                    )
+                    this@bridge.parameters.drop(1).forEachIndexed { index, parameter ->
+                        arguments[index + 1] = if (index == inputIndex) {
+                            irImplicitCast(irGet(parameter), semanticParameter.type)
+                        } else {
+                            irGet(parameter)
+                        }
+                    }
                 }
                 +irReturn(
                     if (call.type == this@bridge.returnType) call

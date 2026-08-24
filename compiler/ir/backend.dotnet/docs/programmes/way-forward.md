@@ -1381,12 +1381,29 @@ inputs remain on the earlier exact/semantic or bounded foreign path; the
 invariant child does not retroactively make CLR covariance accept inputs. See
 [`../archive/runtime-reified-mutable-set-2026-08-23.md`](../archive/runtime-reified-mutable-set-2026-08-23.md).
 
+ABI/runtime surface 56 selects invariant natural `MutableList<T>` after the
+post-surface-55 dependency recomputation. Its List, MutableCollection,
+MutableListIterator, and recursive MutableList result dependencies are now
+closed. Direct positional mutation and results remain typed. Indexed and
+non-indexed bulk inputs reuse one structural relative-generic rule which finds
+the unique nested `Collection<T>` input instead of assuming parameter zero.
+
+The bounded natural-only foreign grammar now permits that one owner-dependent
+input beside declaration-independent parameters and a Unit,
+declaration-independent value, or same-`T` result. This covers the positional
+`add`/`set` family without a
+MutableList switch; name plus complete arity distinguishes its overloads.
+Inherited covariant List candidate inputs retain their existing exact/semantic
+path and are not copied onto the invariant child. The provisional ABI/Runtime
+epoch advances to 56 to reject the missed surface-54/55 skew. See
+[`../archive/runtime-reified-mutable-list-2026-08-24.md`](../archive/runtime-reified-mutable-list-2026-08-24.md).
+
 Next recompute the smallest complete Common dependency family after surface
-55. Keep `MutableList`, Map, defaults, broader overload families, and multiple
-owner parameters on their current mappings unless that dependency proof
-selects one atomically. The natural CLR route and typed state remain the
-default; a semantic capability is an evidence-backed escape hatch, not the
-first implementation choice.
+56. Keep Map, defaults, multiple owner parameters, and any still broader
+overload family on their current mappings unless that dependency proof selects
+one atomically. The natural CLR route and typed state remain the default; a
+semantic capability is an evidence-backed escape hatch, not the first
+implementation choice.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
