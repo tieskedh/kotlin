@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-private-semantic-result-routing-2026-08-24.md`](generic-owner-private-semantic-result-routing-2026-08-24.md)
+  records the direct private semantic-hook route for exact same-owner reads,
+  its Iterator-shaped ablation proof, unchanged production inverse, and the
+  next local-versus-external function-carrier boundary.
 - [`runtime-reified-map-2026-08-24.md`](runtime-reified-map-2026-08-24.md)
   records ABI/runtime surface 59's mixed-variance natural `Map<K,out V>`,
   exact value-input sibling, honest open-nullable lookup carrier, typed fields
