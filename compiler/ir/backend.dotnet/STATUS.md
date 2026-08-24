@@ -644,6 +644,33 @@ verification, and work state.
   Sequence, or stdlib exception. See
   [`docs/archive/generic-owner-private-semantic-result-routing-2026-08-24.md`](docs/archive/generic-owner-private-semantic-result-routing-2026-08-24.md).
 
+  The local-versus-external generic-owner function-fact boundary is now closed
+  as a separate feature. `DotNetExternalDeclarations` no longer attempts to
+  derive producer ABI keys for functions in a local `IrFile`, including
+  generated/default accessors after their type graph has been rewritten. One
+  centralized guard covers member families, result carriers, the natural-
+  result fact, typed physical entries, and input entries. It catches no mangler
+  exception and grants no local override external authority; callers which need
+  that authority must resolve the external overridden declaration.
+
+  A backend resolver test uses a deliberately out-of-scope type parameter to
+  prove all public generic-owner function-fact queries return absent before the
+  mangler can fail. Four focused rehearsal lanes and four production-erased
+  inverse lanes remain green across PSI, LightTree, Framework 4.8, and .NET 10.
+  The final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,342 tests with no failures, errors, or skips: 187 FIR suites/2,207 tests,
+  two integration suites/127 tests, and the expanded two-test backend resolver
+  suite are fresh; the unchanged six-test `dotnet.ir` root is up-to-date.
+
+  The actual source-built Stdlib rehearsal passes both former carrier crashes
+  and reaches the emitter census. Its first repeated next blocker is a
+  synthesized local semantic interface with a producer-recorded external
+  super-interface (`SuspendFunction1` in the observed corpus), while current
+  emission supports only module-local super-interfaces. Resolve that structural
+  boundary next without a SuspendFunction, lambda, package, or stdlib
+  exception. See
+  [`docs/archive/generic-owner-external-function-authority-2026-08-24.md`](docs/archive/generic-owner-external-function-authority-2026-08-24.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
