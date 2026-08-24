@@ -1499,13 +1499,22 @@ planner when that direct binding is removed and executes on both profiles when
 it is present.
 
 The full source product consequently passes all ten former missing private
-routes and now reaches final value routing. Its next failure is an attempted
-external-function-carrier lookup which asks the Kotlin mangler for a local or
-generated Comparator-bearing function after its IR type graph has been
-rewritten. Close the authority boundary between local materialized declarations
-and producer-recorded external function carriers without a Comparator or
-stdlib exception; then rerun the product and recompute the next complete
-declaration family.
+routes. The next final-routing failure is closed at the resolver authority
+boundary: producer-recorded generic-owner member families, result carriers, and
+input entries are queried only for metadata-deserialized external declarations.
+A local or generated function remains under the current compilation's plan and
+is rejected before public ABI key computation, even when lowering has made its
+type graph unsuitable for the Kotlin mangler. A focused hostile unit proof
+covers the complete function-fact query surface without a Comparator, accessor,
+or stdlib exception.
+
+The source product now reaches CIL materialization. Its first repeated blocker
+is a synthesized local semantic interface whose direct super-interface is a
+producer-recorded external interface (`SuspendFunction1` in the observed
+corpus), while emission currently accepts only module-local super-interfaces.
+Establish the general local-capability/external-superinterface rule next without
+a SuspendFunction, lambda, package, or stdlib exception; then rerun the product
+and recompute the next complete declaration family.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

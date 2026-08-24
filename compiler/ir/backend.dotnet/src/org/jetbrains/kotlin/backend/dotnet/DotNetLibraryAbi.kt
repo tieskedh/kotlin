@@ -2228,6 +2228,15 @@ internal class DotNetExternalDeclarations(
     private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
     private val logicalKeys = DotNetLibraryAbiKeyCache()
 
+    private fun externalGenericOwnerFunctionKeyOrNull(function: IrSimpleFunction): String? {
+        // This resolver owns producer-recorded facts only. Declarations in a local IrFile are
+        // classified by the current compilation's plan; later lowerings may also have made their
+        // signatures intentionally unsuitable for public ABI mangling. A local override which
+        // needs producer authority must resolve and query the external overridden declaration.
+        if (function.fileOrNull != null) return null
+        return logicalKeys.keyOrNull(function, "F")
+    }
+
     /**
      * Whether [irClass] has a producer-recorded physical CLR class in a bound library.
      *
@@ -2361,7 +2370,7 @@ internal class DotNetExternalDeclarations(
     }
 
     fun genericOwnerMemberFamilyOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerMemberFamily? {
-        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
         return genericOwnerMemberFamiliesByLogicalKey[logicalKey]
     }
 
@@ -2370,7 +2379,7 @@ internal class DotNetExternalDeclarations(
         function: IrSimpleFunction,
         familyBinding: DotNetBoundGenericOwnerMemberFamily,
     ): DotNetBoundGenericOwnerPhysicalSlot? {
-        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
         require(bound.library === familyBinding.library && declaration.isInstance) {
@@ -2391,13 +2400,13 @@ internal class DotNetExternalDeclarations(
     }
 
     fun genericOwnerFunctionCarrierOrNull(function: IrSimpleFunction): DotNetBoundGenericOwnerFunctionCarrier? {
-        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
         return genericOwnerFunctionCarriersByLogicalKey[logicalKey]
     }
 
     /** The producer published this function and did not replace its natural result carrier. */
     fun hasNaturalGenericOwnerFunctionReturn(function: IrSimpleFunction): Boolean {
-        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return false
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return false
         if (declarations[logicalKey]?.declaration !is DotNetPhysicalDeclaration.Function) return false
         return genericOwnerFunctionCarriersByLogicalKey[logicalKey]
             ?.carrier
@@ -2407,7 +2416,7 @@ internal class DotNetExternalDeclarations(
     fun genericOwnerFunctionInputEntryOrNull(
         function: IrSimpleFunction,
     ): DotNetBoundGenericOwnerFunctionInputEntry? {
-        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
         return genericOwnerFunctionInputEntriesByLogicalKey[logicalKey]
     }
 

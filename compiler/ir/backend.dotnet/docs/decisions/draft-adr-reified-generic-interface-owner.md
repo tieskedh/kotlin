@@ -572,6 +572,16 @@ natural typed wrapper. Public and protected members continue to require their
 planned capability dispatcher; absence of that dispatcher remains a hard
 failure rather than permission to call a protected hook directly.
 
+Producer-recorded generic-owner function facts—member families, result carriers,
+and input entries—are consumer authority only for metadata-deserialized external
+declarations. The external resolver must not derive an ABI key for a declaration
+which belongs to a local `IrFile`, including a generated or default accessor
+after lowering. Such declarations remain under the current compilation's
+representation plan, whose rewritten type graph need not be a valid producer
+signature. If a local override needs producer authority, the compiler must
+resolve and query its external overridden source; it must not mangle the local
+post-lowering declaration or recover by swallowing a mangler failure.
+
 The first broad-input family is now materialized from its atomic producer
 record. ABI/runtime surface 45 adds `BROAD_FIXED_BARRIER_INPUT` and
 `BROAD_NESTED_SEMANTIC_INPUT` member roles plus the invariant exact TypeDef's
