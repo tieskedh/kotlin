@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-external-function-authority-2026-08-24.md`](generic-owner-external-function-authority-2026-08-24.md)
+  records the fail-closed boundary between local representation planning and
+  producer-recorded external generic-owner function facts, its hostile mangler
+  regression, and the next external-superinterface materialization boundary.
 - [`generic-owner-private-semantic-result-routing-2026-08-24.md`](generic-owner-private-semantic-result-routing-2026-08-24.md)
   records the direct private semantic-hook route for exact same-owner reads,
   its Iterator-shaped ablation proof, unchanged production inverse, and the
