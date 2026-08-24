@@ -1846,6 +1846,19 @@ internal class DotNetIlExpressionCodegen(
         typeOperand: IrType,
         mappedType: DotNetIlValueType,
     ): DotNetIlValueType.GenericInstance? {
+        val simpleType = typeOperand as? IrSimpleType
+        if (simpleType != null && simpleType.arguments.any { argument ->
+                val projection = argument as? IrTypeProjection
+                projection == null || projection.variance !=
+                    org.jetbrains.kotlin.types.Variance.INVARIANT
+            }
+        ) {
+            // A star or use-site projection asks only for the Kotlin classifier. The ambient
+            // signature mapper may represent that semantic carrier as I<object, ...>, but that
+            // physical placeholder is not a requested CLR construction and must not turn an
+            // implicit star-view cast into a reparameterisation check.
+            return null
+        }
         val declared = typeMapper.genericInterfaceCapabilityTypeOrNull(
             typeOperand,
             DotNetGenericInterfaceView.DECLARED,
@@ -3396,6 +3409,9 @@ internal class DotNetIlExpressionCodegen(
         val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(sourceOwner)
         val naturalInterfaceOwner = interfaceInfo?.declaredClassInfo
             ?: interfaceInfo?.canonicalClassInfo
+        val isNaturalOrExactInterfaceMember =
+            naturalInfo.owner.ilTypeRef == naturalInterfaceOwner?.ilTypeRef ||
+                    naturalInfo.owner.ilTypeRef == interfaceInfo?.exactClassInfo?.ilTypeRef
         val exactInputType = naturalInfo.signature.parameterTypes.getOrNull(1)
             as? DotNetIlValueType.GenericInstance
         val exactInputSemanticCarrier = source.parameters
@@ -3532,10 +3548,18 @@ internal class DotNetIlExpressionCodegen(
                 naturalInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean)
         val fixedBarrierResultType = fixedBarrierPolicy?.resultTypeOrNull()
+        val fixedBarrierOwnerTypeArgumentIndex =
+            (naturalInfo.signature.parameterTypes.getOrNull(1)
+                    as? DotNetIlValueType.TypeParameter)
+                ?.takeIf { parameter ->
+                    !parameter.isMethodParameter &&
+                            parameter.index in 0 until naturalOwnerParameterCount
+                }
+                ?.index
         val isFixedBarrier = regularArguments.size == 1 &&
-                interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
                 naturalInterfaceOwner != null &&
-                naturalInfo.signature.parameterTypes[1].isNaturalOwnerParameter() &&
+                isNaturalOrExactInterfaceMember &&
+                fixedBarrierOwnerTypeArgumentIndex != null &&
                 semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
                 fixedBarrierPolicy != null && fixedBarrierResultType != null &&
                 (fixedBarrierPolicy.fallback == DotNetCSharpWrongShapeFallback.NULL &&
@@ -3580,6 +3604,7 @@ internal class DotNetIlExpressionCodegen(
             exactInputType?.classInfo?.assemblyName?.let(typeMapper::recordAssemblyReference)
         }
         emitReifiedGenericInterfaceForeignReceiver(
+            call,
             receiver,
             foreignSelectionOwner,
         )
@@ -3720,6 +3745,10 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         if (isFixedBarrier) {
+            methodContext.emit(
+                "ldc.i4.${checkNotNull(fixedBarrierOwnerTypeArgumentIndex)}",
+                pushes = 1,
+            )
             emitReifiedGenericInterfaceFixedBarrier(checkNotNull(fixedBarrierPolicy))
         }
         methodContext.emit(
@@ -3744,9 +3773,11 @@ internal class DotNetIlExpressionCodegen(
                     coreLibraryReference
                 )
             },
-            pops = if (usesRuntimeCollectionContainsAllFallback ||
-                isRelativeGenericInputBoolean || isFixedBarrier
-            ) 5 else 4,
+            pops = when {
+                isFixedBarrier -> 6
+                usesRuntimeCollectionContainsAllFallback || isRelativeGenericInputBoolean -> 5
+                else -> 4
+            },
             pushes = 1,
         )
         if (resultSlot != null) {
@@ -3891,15 +3922,22 @@ internal class DotNetIlExpressionCodegen(
      * route is admitted only after the reified-interface lowering has proved that semantic
      * dispatch may need an ordinary foreign I<T> implementation. Re-emitting FIR's logical
      * `Any? -> I<*>` IMPLICIT_CAST here would reconstruct the hidden capability and reject that
-     * implementation before the capability-or-natural dispatcher can inspect it.
+     * implementation before the capability-or-natural dispatcher can inspect it. FIR also uses
+     * a declaration-range CAST to remove a star/projection from the dispatch receiver (for
+     * example, `Map<*, *>.get`); its non-overlapping range distinguishes it from an explicit
+     * source `as` receiver inside the call, whose construction check remains observable.
      */
     private fun emitReifiedGenericInterfaceForeignReceiver(
+        call: IrCall,
         receiver: IrExpression,
         naturalOwner: DotNetIlClassInfo,
     ) {
         val classifierSmartCastArgument = (receiver as? IrTypeOperatorCall)
             ?.takeIf { expression ->
-                expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+                (expression.operator == IrTypeOperator.IMPLICIT_CAST ||
+                        expression.operator == IrTypeOperator.CAST &&
+                        expression.startOffset >= 0 && call.startOffset >= 0 &&
+                        expression.endOffset <= call.startOffset) &&
                         typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(
                             expression.typeOperand,
                         )?.ilTypeRef == naturalOwner.ilTypeRef
@@ -4029,6 +4067,14 @@ internal class DotNetIlExpressionCodegen(
             memberView,
         ) ?: return false
         val capabilitySignature = capabilityInfo.signature
+        val runtimeForeignFixedBarrierOwnerTypeArgumentIndex =
+            (capabilitySignature.parameterTypes.getOrNull(1)
+                    as? DotNetIlValueType.TypeParameter)
+                ?.takeIf { parameter ->
+                    !parameter.isMethodParameter &&
+                            parameter.index in interfaceClass.typeParameters.indices
+                }
+                ?.index
         val usesRelativeGenericInput =
             DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(callee) != null
         val capabilityMethodInstantiation = if (usesRelativeGenericInput) {
@@ -4040,7 +4086,8 @@ internal class DotNetIlExpressionCodegen(
             .let { it as? DotNetIlValueType.GenericInstance }
             ?.classInfo
         val hasRuntimeForeignInputFallback = runtimeForeignNaturalOwner != null &&
-                (fixedBarrierPolicy != null ||
+                ((fixedBarrierPolicy != null &&
+                        runtimeForeignFixedBarrierOwnerTypeArgumentIndex != null) ||
                         (usesRuntimeCollectionContainsAllFallback &&
                                 runtimeCollectionParameterOwner != null) ||
                         usesRelativeGenericInput)
@@ -4189,6 +4236,10 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.emit("stelem.ref", pops = 3)
             }
             if (!usesRuntimeCollectionContainsAllFallback && !usesRelativeGenericInput) {
+                methodContext.emit(
+                    "ldc.i4.${checkNotNull(runtimeForeignFixedBarrierOwnerTypeArgumentIndex)}",
+                    pushes = 1,
+                )
                 emitReifiedGenericInterfaceFixedBarrier(checkNotNull(fixedBarrierPolicy))
             }
             methodContext.emit(
@@ -4205,7 +4256,9 @@ internal class DotNetIlExpressionCodegen(
                             coreLibraryReference
                         )
                 },
-                pops = 5,
+                pops = if (usesRuntimeCollectionContainsAllFallback ||
+                    usesRelativeGenericInput
+                ) 5 else 6,
                 pushes = 1,
             )
             val foreignResultType = expectedType ?: error(

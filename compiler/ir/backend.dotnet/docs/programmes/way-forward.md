@@ -1458,6 +1458,36 @@ reachability cannot erase producer-proven typed fields. The strict aggregate
 is 191 suites/2,333 tests, all green. See
 [`../archive/runtime-reified-mutable-map-entry-2026-08-24.md`](../archive/runtime-reified-mutable-map-entry-2026-08-24.md).
 
+The post-surface-58 recomputation selected and completed `Map<K,out V>` as
+surface 59. It is the next dependency-closed Runtime family now that Set,
+Collection, and Map.Entry have natural generic identities. The structural
+grammar admits exactly one invariant and one covariant parameter, no parents,
+two invariant-parameter barriers (Boolean membership and nullable covariant
+lookup), one covariant-parameter Boolean barrier, one owner-independent
+primitive property, one primitive query, and three read-only constructed
+results covering K, V, and their ordered pair. Those result classifiers must
+already be published covariant natural families. This is not a Map-name rule.
+
+The natural `Map<K,out V>` owns typed key input plus natural Set/Collection/
+Entry results. Its invariant exact sibling owns `ContainsValue(!V)`, which CLR
+variance forbids on the natural interface. `Get(!K): object` is an intentionally
+honest member-local carrier for Kotlin `V?`: unconstrained CLR V cannot use one
+signature for nullable references and `Nullable<V>`. Kotlin implementations
+still retain independent `!0`/`!1` state; neither Map nor nested generic state
+is globally erased. Stars, projections, value-type widening, and ordinary
+natural-only C# fallback select semantic dispatch only for the unnameable
+operation and preserve one object identity.
+
+The gate proves all eight members, typed fields and result constructions,
+exact/widened/star calls, wrong-shaped Common policies, coherent BK-1 checks
+over both arguments (including an explicit cast used as a lookup receiver),
+separately compiled Kotlin products, and ordinary sealed non-partial C# on
+Framework 4.8 and .NET 10 under both FIR parsers. The complete eleven-family
+rehearsal and production-erased inverse selections are green. The strict
+target aggregate covers 191 suites/2,337 tests with zero failures, errors, or
+skips. It deliberately does not select `MutableMap<K,V>`. See
+[`../archive/runtime-reified-map-2026-08-24.md`](../archive/runtime-reified-map-2026-08-24.md).
+
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
 reuses the parent's capability and member family; it does not acquire a second

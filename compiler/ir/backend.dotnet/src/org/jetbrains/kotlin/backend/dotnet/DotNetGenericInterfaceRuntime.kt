@@ -26,6 +26,7 @@ internal object DotNetGenericInterfaceRuntime {
     .field assembly initonly string 'methodName'
     .field assembly initonly int32 'argumentCount'
     .field assembly initonly int32 'unaryResolutionKind'
+    .field assembly initonly int32 'ownerTypeArgumentIndex'
     .field assembly initonly $typeType 'unaryParameterOpenDefinition'
     .field assembly initonly $methodType 'method'
     .field assembly initonly $entryType 'next'
@@ -35,6 +36,7 @@ internal object DotNetGenericInterfaceRuntime {
         string 'methodName',
         int32 'argumentCount',
         int32 'unaryResolutionKind',
+        int32 'ownerTypeArgumentIndex',
         $typeType 'unaryParameterOpenDefinition',
         $methodType 'method',
         $entryType 'next') cil managed
@@ -54,6 +56,9 @@ internal object DotNetGenericInterfaceRuntime {
       ldarg.0
       ldarg.s 'unaryResolutionKind'
       stfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryResolutionKind'
+      ldarg.0
+      ldarg.s 'ownerTypeArgumentIndex'
+      stfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'ownerTypeArgumentIndex'
       ldarg.0
       ldarg.s 'unaryParameterOpenDefinition'
       stfld $typeType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryParameterOpenDefinition'
@@ -417,10 +422,11 @@ internal object DotNetGenericInterfaceRuntime {
         string 'methodName',
         object[] 'arguments',
         int32 'unaryResolutionKind',
+        int32 'ownerTypeArgumentIndex',
         $typeType 'unaryParameterOpenDefinition',
         object 'wrongShapeFallback') cil managed
     {
-      .maxstack 8
+      .maxstack 9
       .locals init (
         [0] $typeType[] 'interfaces',
         [1] int32 'index',
@@ -487,6 +493,10 @@ internal object DotNetGenericInterfaceRuntime {
         ldloc.s 9
         ldfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryResolutionKind'
         ldarg.s 'unaryResolutionKind'
+        bne.un.s GIF_CacheContinue
+        ldloc.s 9
+        ldfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'ownerTypeArgumentIndex'
+        ldarg.s 'ownerTypeArgumentIndex'
         bne.un.s GIF_CacheContinue
         ldloc.s 9
         ldfld $typeType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryParameterOpenDefinition'
@@ -682,7 +692,7 @@ internal object DotNetGenericInterfaceRuntime {
         beq.s GIF_ConstructedInterfaceParameter
         ldloc.2
         callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
-        ldc.i4.0
+        ldarg.s 'ownerTypeArgumentIndex'
         ldelem.ref
         br.s GIF_ConcreteParameterReady
     GIF_ConcreteInterfaceParameter:
@@ -711,12 +721,13 @@ internal object DotNetGenericInterfaceRuntime {
         ldarg.2
         ldloc.s 12
         ldarg.s 'unaryResolutionKind'
+        ldarg.s 'ownerTypeArgumentIndex'
         ldarg.s 'unaryParameterOpenDefinition'
         ldloc.s 4
         ldloc.s 8
         ldfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
         newobj instance void $entryType::.ctor(
-            $typeType, string, int32, int32, $typeType, $methodType, $entryType)
+            $typeType, string, int32, int32, int32, $typeType, $methodType, $entryType)
         stfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
         leave.s GIF_MethodReady
       }
@@ -822,7 +833,7 @@ internal object DotNetGenericInterfaceRuntime {
         $typeType 'openDefinition',
         object 'elements') cil managed
     {
-      .maxstack 9
+      .maxstack 10
       .locals init (
         [0] object 'iterator',
         [1] object[] 'predicateArguments'
@@ -834,10 +845,11 @@ internal object DotNetGenericInterfaceRuntime {
       ldstr "GetIterator"
       ldnull
       ldc.i4.0
+      ldc.i4.0
       ldnull
       ldnull
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
-          object, $typeType, string, object[], int32, $typeType, object)
+          object, $typeType, string, object[], int32, int32, $typeType, object)
       stloc.0
     GIF_ContainsAllNext:
       ldloc.0
@@ -847,12 +859,13 @@ internal object DotNetGenericInterfaceRuntime {
       ldstr "HasNext"
       ldnull
       ldc.i4.0
+      ldc.i4.0
       ldnull
       ldnull
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
-          object, $typeType, string, object[], int32, $typeType, object)
+          object, $typeType, string, object[], int32, int32, $typeType, object)
       unbox.any ${coreLibraryReference}System.Boolean
-      brfalse.s GIF_ContainsAllTrue
+      brfalse GIF_ContainsAllTrue
       ldc.i4.1
       newarr ${coreLibraryReference}System.Object
       stloc.1
@@ -865,23 +878,25 @@ internal object DotNetGenericInterfaceRuntime {
       ldstr "Next"
       ldnull
       ldc.i4.0
+      ldc.i4.0
       ldnull
       ldnull
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
-          object, $typeType, string, object[], int32, $typeType, object)
+          object, $typeType, string, object[], int32, int32, $typeType, object)
       stelem.ref
       ldarg.0
       ldarg.1
       ldstr "Contains"
       ldloc.1
       ldc.i4.2
+      ldc.i4.0
       ldnull
       ldc.i4.0
       box ${coreLibraryReference}System.Boolean
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
-          object, $typeType, string, object[], int32, $typeType, object)
+          object, $typeType, string, object[], int32, int32, $typeType, object)
       unbox.any ${coreLibraryReference}System.Boolean
-      brtrue.s GIF_ContainsAllNext
+      brtrue GIF_ContainsAllNext
       ldc.i4.0
       box ${coreLibraryReference}System.Boolean
       ret
@@ -897,11 +912,12 @@ internal object DotNetGenericInterfaceRuntime {
         string 'methodName',
         object[] 'arguments') cil managed
     {
-      .maxstack 7
+      .maxstack 8
       ldarg.0
       ldarg.1
       ldarg.2
       ldarg.3
+      ldc.i4.0
       ldc.i4.0
       ldnull
       ldnull
@@ -910,6 +926,7 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
+          int32,
           int32,
           $typeType,
           object)
@@ -922,12 +939,13 @@ internal object DotNetGenericInterfaceRuntime {
         string 'methodName',
         object[] 'arguments') cil managed
     {
-      .maxstack 7
+      .maxstack 8
       ldarg.0
       ldarg.1
       ldarg.2
       ldarg.3
       ldc.i4.1
+      ldc.i4.0
       ldnull
       ldnull
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
@@ -935,6 +953,7 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
+          int32,
           int32,
           $typeType,
           object)
@@ -946,14 +965,16 @@ internal object DotNetGenericInterfaceRuntime {
         $typeType 'openDefinition',
         string 'methodName',
         object[] 'arguments',
+        int32 'ownerTypeArgumentIndex',
         object 'wrongShapeFallback') cil managed
     {
-      .maxstack 7
+      .maxstack 8
       ldarg.0
       ldarg.1
       ldarg.2
       ldarg.3
       ldc.i4.2
+      ldarg.s 'ownerTypeArgumentIndex'
       ldnull
       ldarg.s 'wrongShapeFallback'
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
@@ -961,6 +982,7 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
+          int32,
           int32,
           $typeType,
           object)
@@ -974,12 +996,13 @@ internal object DotNetGenericInterfaceRuntime {
         string 'methodName',
         object[] 'arguments') cil managed
     {
-      .maxstack 7
+      .maxstack 8
       ldarg.0
       ldarg.1
       ldarg.3
       ldarg.s 'arguments'
       ldc.i4.3
+      ldc.i4.0
       ldarg.2
       ldnull
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
@@ -987,6 +1010,7 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
+          int32,
           int32,
           $typeType,
           object)
@@ -1000,12 +1024,13 @@ internal object DotNetGenericInterfaceRuntime {
         string 'methodName',
         object[] 'arguments') cil managed
     {
-      .maxstack 7
+      .maxstack 8
       ldarg.0
       ldarg.1
       ldarg.3
       ldarg.s 'arguments'
       ldc.i4.4
+      ldc.i4.0
       ldarg.2
       ldnull
       call object Kotlin.Runtime.Internal.GenericInterfaceDispatch::'InvokeUniqueMemberCore'(
@@ -1013,6 +1038,7 @@ internal object DotNetGenericInterfaceRuntime {
           $typeType,
           string,
           object[],
+          int32,
           int32,
           $typeType,
           object)
@@ -1064,7 +1090,7 @@ internal object DotNetGenericInterfaceRuntime {
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueTypeArgumentUnaryMemberWithBarrier".toIlIdentifier()}(" +
-                "object, class ${coreLibraryReference}System.Type, string, object[], object)"
+                "object, class ${coreLibraryReference}System.Type, string, object[], int32, object)"
 
     fun invokeUniqueCollectionContainsAllCallInstruction(coreLibraryReference: String): String =
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
