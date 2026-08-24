@@ -1814,6 +1814,71 @@ $fixedFunctionTypesIl
             }
           }
 
+          // MutableList is invariant, so its positional inputs and results stay on one natural
+          // construction. Both bulk overloads use the same relative U : T input; the indexed
+          // form proves that the nested collection need not occupy physical parameter zero.
+          .class interface public abstract auto ansi 'MutableList`1'<T>
+                 implements class 'Kotlin.Collections.List`1'<!T>,
+                            class 'Kotlin.Collections.MutableCollection`1'<!T>
+          {
+            .method public hidebysig newslot abstract virtual instance bool Add(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Remove(!T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll<(!T) U>(
+                int32 index,
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RetainAll<(!T) U>(
+                class 'Kotlin.Collections.Collection`1'<!!0> elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T Set(int32 index, !T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Add(int32 index, !T element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !T RemoveAt(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.MutableListIterator`1'<!T> GetListIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.MutableListIterator`1'<!T> GetListIterator(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class 'Kotlin.Collections.MutableList`1'<!T> SubList(int32 fromIndex, int32 toIndex) cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi Set
                  implements Kotlin.Collections.Collection
           {

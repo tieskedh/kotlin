@@ -372,6 +372,21 @@ explicit BCL adapters are a separate interop programme. Common I/O owns EOF
 and rendering semantics; `.NET` supplies only narrow actuals and the
 `Console.ReadLine` host operation.
 
+In the test-only reified Runtime collection rehearsal, natural invariant
+owners and `!T` state are the default. A nested covariant input over the one
+owner parameter uses one CLR-only `<U : T>` method parameter. Derive its
+position as the unique matching Common IR input; declaration-independent
+parameters may surround it, and a missing or ambiguous match fails closed.
+Likewise, a natural-only foreign member may contain exactly one direct
+owner-dependent input beside independently representable parameters and may
+return Unit, a declaration-independent value, or that same owner parameter.
+Select overloads by name plus complete argument count and generic arity. Do
+not add a MutableList/stdlib switch, erase the owner or its field, copy a covariant
+parent's candidate slots onto an invariant child, or let an operation-local
+semantic view contaminate otherwise typed state. The published provisional
+ABI and Runtime surface epoch must advance with every new Runtime TypeDef;
+never accept a KLIB which names a newer family against an older Runtime.
+
 `Sequence<out T>` follows the same Kotlin-owned rule: one non-generic erased
 CLR interface owns the iterator capability, while Common source owns lazy
 objects and algorithms. Do not map it to `IEnumerable<T>`, LINQ, or a CLR

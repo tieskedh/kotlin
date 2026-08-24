@@ -3220,9 +3220,10 @@ internal class DotNetIlExpressionCodegen(
      * implementation of the natural `I<T>`. The runtime selects exactly one constructed natural
      * interface or rejects an ambiguous multi-construction object. The admitted foreign shapes
      * are deliberately bounded to a value-result or Unit member with declaration-independent
-     * inputs, a declaration-invariant one-object-input Unit member, the exact sibling's
-     * one-natural-input Boolean member, or an upstream-authorized one-T-input fixed barrier;
-     * same-arity overload ambiguity and broader signatures remain outside this path.
+     * inputs, one declaration-invariant owner-dependent input among independent inputs, the exact
+     * sibling's one-natural-input Boolean member, one relative nested input, or an
+     * upstream-authorized one-T-input fixed barrier. Name plus complete arity keeps the admitted
+     * overloads unambiguous; broader signatures remain outside this path.
      */
     private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
         call: IrCall,
@@ -3286,12 +3287,26 @@ internal class DotNetIlExpressionCodegen(
             is DotNetIlValueType.NullableValue -> elementType.referencesNaturalOwnerParameter()
             else -> false
         }
-        val hasDeclarationIndependentInputs = regularArguments.indices.all { index ->
+        fun hasDeclarationIndependentInput(index: Int): Boolean {
             val semanticParameter = semanticInfo.signature.parameterTypes[index + 1]
             val naturalParameter = naturalInfo.signature.parameterTypes[index + 1]
-            semanticParameter == naturalParameter &&
+            return semanticParameter == naturalParameter &&
                     !naturalParameter.referencesNaturalOwnerParameter()
         }
+        fun hasOnlyDeclarationIndependentOtherInputs(selectedIndex: Int): Boolean =
+            regularArguments.indices.all { index ->
+                index == selectedIndex || hasDeclarationIndependentInput(index)
+            }
+        val hasDeclarationIndependentInputs =
+            regularArguments.indices.all(::hasDeclarationIndependentInput)
+        val invariantInputIndex = regularArguments.indices.filter { index ->
+            semanticInfo.signature.parameterTypes[index + 1] == DotNetIlValueType.Object &&
+                    naturalInfo.signature.parameterTypes[index + 1].isNaturalOwnerParameter()
+        }.singleOrNull()
+        val hasInvariantOwnerInput = invariantInputIndex != null &&
+                sourceOwner.typeParameters.singleOrNull()?.variance ==
+                    org.jetbrains.kotlin.types.Variance.INVARIANT &&
+                hasOnlyDeclarationIndependentOtherInputs(invariantInputIndex)
         val isProducer = hasDeclarationIndependentInputs && naturalResultType != null &&
                 semanticResultType != null &&
                 (semanticResultType == DotNetIlValueType.Object ||
@@ -3300,13 +3315,17 @@ internal class DotNetIlExpressionCodegen(
         val isDeclarationIndependentUnit = hasDeclarationIndependentInputs &&
                 semanticInfo.signature.returnType == DotNetIlReturnType.Void &&
                 naturalInfo.signature.returnType == DotNetIlReturnType.Void
-        val isConsumer = regularArguments.size == 1 &&
-                sourceOwner.typeParameters.singleOrNull()?.variance ==
-                    org.jetbrains.kotlin.types.Variance.INVARIANT &&
-                semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
+        val isInvariantInputUnit = hasInvariantOwnerInput &&
                 semanticInfo.signature.returnType == DotNetIlReturnType.Void &&
-                naturalInfo.signature.parameterTypes[1].isNaturalOwnerParameter() &&
                 naturalInfo.signature.returnType == DotNetIlReturnType.Void
+        val isInvariantInputValue = hasInvariantOwnerInput &&
+                naturalResultType != null && semanticResultType != null &&
+                (
+                    semanticResultType == DotNetIlValueType.Object &&
+                            naturalResultType.isNaturalOwnerParameter() ||
+                            semanticResultType == naturalResultType &&
+                            !naturalResultType.referencesNaturalOwnerParameter()
+                )
         val isExactInputBoolean = regularArguments.size == 1 &&
                 interfaceInfo?.exactClassInfo?.ilTypeRef == naturalInfo.owner.ilTypeRef &&
                 naturalInterfaceOwner != null &&
@@ -3330,10 +3349,12 @@ internal class DotNetIlExpressionCodegen(
                 ?: return false
         }
         val isRelativeGenericInputBoolean = relativeGenericInputType != null &&
-                regularArguments.size == 1 &&
                 sourceOwner.typeParameters.singleOrNull()?.variance ==
                     org.jetbrains.kotlin.types.Variance.INVARIANT &&
-                semanticInfo.signature.parameterTypes[1] == DotNetIlValueType.Object &&
+                semanticInfo.signature.parameterTypes[
+                    checkNotNull(relativeGenericInputIndex) + 1
+                ] == DotNetIlValueType.Object &&
+                hasOnlyDeclarationIndependentOtherInputs(relativeGenericInputIndex) &&
                 semanticInfo.signature.returnType ==
                     DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 naturalInfo.signature.returnType ==
@@ -3356,13 +3377,14 @@ internal class DotNetIlExpressionCodegen(
                             DotNetIlReturnType.Value(fixedBarrierResultType) &&
                         naturalInfo.signature.returnType ==
                             DotNetIlReturnType.Value(fixedBarrierResultType))
-        if (!isProducer && !isDeclarationIndependentUnit && !isConsumer &&
+        if (!isProducer && !isDeclarationIndependentUnit && !isInvariantInputUnit &&
+            !isInvariantInputValue &&
             !isExactInputBoolean && !isRelativeGenericInputBoolean && !isFixedBarrier
         ) {
             return false
         }
         val hasValueResult = isProducer || isExactInputBoolean ||
-                isRelativeGenericInputBoolean || isFixedBarrier
+                isInvariantInputValue || isRelativeGenericInputBoolean || isFixedBarrier
         val resultNarrowing = if (hasValueResult) {
             val resultType = expectedType ?: return false
             when (resultType) {
