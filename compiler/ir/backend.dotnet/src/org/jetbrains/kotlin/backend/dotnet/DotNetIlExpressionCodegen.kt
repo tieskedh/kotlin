@@ -1350,16 +1350,16 @@ internal class DotNetIlExpressionCodegen(
                     DotNetIlValueType.Object,
                     "<genericInterfaceCastReceiver>",
                 )
+                val requestedConstruction =
+                    reifiedGenericInterfaceRequestedConstructionOrNull(
+                        expression.typeOperand,
+                        castType,
+                    )
                 fun emitMatch() {
-                    val requestedConstruction = castType as? DotNetIlValueType.GenericInstance
                     if (requestedConstruction != null) {
-                        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
-                        emitSystemTypeOrNull(requestedConstruction.nameInSignature)
-                        methodContext.emit(
-                            DotNetGenericInterfaceRuntime
-                                .isCompatibleGenericOwnerInstanceCallInstruction(coreLibraryReference),
-                            pops = 2,
-                            pushes = 1,
+                        emitReifiedGenericInterfaceConstructionMatch(
+                            receiverSlot.index,
+                            requestedConstruction,
                         )
                     } else {
                         emitReifiedGenericInterfaceClassifierMatch(
@@ -1594,6 +1594,10 @@ internal class DotNetIlExpressionCodegen(
                     expression,
                     capabilityType,
                     naturalClassifier,
+                    reifiedGenericInterfaceRequestedConstructionOrNull(
+                        expression.typeOperand,
+                        castType,
+                    ),
                 )
                 return
             }
@@ -1831,10 +1835,44 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitLabel(joinLabel)
     }
 
+    /**
+     * Recovers the requested natural CLR construction independently of the current method's
+     * physical signature view. A semantic method maps its logical `I<A>` operand to `object`, but
+     * that carrier decision must not erase the warning-bearing runtime check for `as I<B>`.
+     * Stars and projections intentionally return null and therefore retain classifier-only RTTI.
+     */
+    private fun reifiedGenericInterfaceRequestedConstructionOrNull(
+        typeOperand: IrType,
+        mappedType: DotNetIlValueType,
+    ): DotNetIlValueType.GenericInstance? {
+        val declared = typeMapper.genericInterfaceCapabilityTypeOrNull(
+            typeOperand,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        return declared ?: mappedType as? DotNetIlValueType.GenericInstance
+    }
+
+    /** Emits the shared Kotlin-aware construction predicate for casts and runtime type tests. */
+    private fun emitReifiedGenericInterfaceConstructionMatch(
+        receiverLocalIndex: Int,
+        requestedConstruction: DotNetIlValueType.GenericInstance,
+    ) {
+        requestedConstruction.classInfo.assemblyName?.let(typeMapper::recordAssemblyReference)
+        methodContext.emit(loadLocalInstruction(receiverLocalIndex), pushes = 1)
+        emitSystemTypeOrNull(requestedConstruction.nameInSignature)
+        methodContext.emit(
+            DotNetGenericInterfaceRuntime
+                .isCompatibleGenericOwnerInstanceCallInstruction(coreLibraryReference),
+            pops = 2,
+            pushes = 1,
+        )
+    }
+
     private fun emitReifiedGenericInterfaceRuntimeTypeTest(
         expression: IrTypeOperatorCall,
         capabilityType: DotNetIlValueType.UserClass,
         naturalClassifier: DotNetIlClassInfo,
+        requestedConstruction: DotNetIlValueType.GenericInstance?,
     ) {
         emitExpression(expression.argument, DotNetIlValueType.Object)
         if (methodContext.isTerminated) return
@@ -1854,11 +1892,18 @@ internal class DotNetIlExpressionCodegen(
         } else {
             null
         }
-        emitReifiedGenericInterfaceClassifierMatch(
-            receiverSlot.index,
-            capabilityType,
-            naturalClassifier,
-        )
+        if (requestedConstruction != null) {
+            emitReifiedGenericInterfaceConstructionMatch(
+                receiverSlot.index,
+                requestedConstruction,
+            )
+        } else {
+            emitReifiedGenericInterfaceClassifierMatch(
+                receiverSlot.index,
+                capabilityType,
+                naturalClassifier,
+            )
+        }
         resultJoin?.let(methodContext::emitLabel)
         if (expression.operator == IrTypeOperator.NOT_INSTANCEOF) {
             methodContext.emit("ldc.i4.0", pushes = 1)
@@ -3254,15 +3299,18 @@ internal class DotNetIlExpressionCodegen(
         } else {
             availableFunctions[source] ?: typeMapper.referencedFunctionInfoOrNull(source)
         } ?: return false
+        val naturalOwnerParameterCount = sourceOwner.typeParameters.size
         if (semanticInfo.owner.typeParameterCount != 0 ||
-            naturalInfo.owner.typeParameterCount != 1 ||
+            naturalOwnerParameterCount == 0 ||
+            naturalInfo.owner.typeParameterCount != naturalOwnerParameterCount ||
             semanticInfo.signature.parameterTypes.size != call.arguments.size ||
             naturalInfo.signature.parameterTypes.size != call.arguments.size
         ) {
             return false
         }
         fun DotNetIlValueType.isNaturalOwnerParameter(): Boolean =
-            this is DotNetIlValueType.TypeParameter && index == 0 && !isMethodParameter
+            this is DotNetIlValueType.TypeParameter && !isMethodParameter &&
+                    index in 0 until naturalOwnerParameterCount
         val naturalResultType =
             (naturalInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
         val semanticResultType =
@@ -3279,7 +3327,8 @@ internal class DotNetIlExpressionCodegen(
         val relativeGenericInputIndex =
             DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(source)
         fun DotNetIlValueType.referencesNaturalOwnerParameter(): Boolean = when (this) {
-            is DotNetIlValueType.TypeParameter -> index == 0 && !isMethodParameter
+            is DotNetIlValueType.TypeParameter -> !isMethodParameter &&
+                    index in 0 until naturalOwnerParameterCount
             is DotNetIlValueType.GenericInstance -> arguments.any {
                 it.referencesNaturalOwnerParameter()
             }

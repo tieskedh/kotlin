@@ -25,10 +25,12 @@ uses the runtime generic construction to check Kotlin subtyping. A star target
 such as `Producer<*>` is not in this entry. Neither are ordinary assignments,
 implicit conversions, declaration-site variance, or use-site projections.
 
-The current bounded implementation covers the admitted one-parameter
-covariant producer interface and recursively nested instances of that family.
-Unsupported owner/argument shapes remain outside the reified-owner proof; this
-entry does not authorize guessing their subtyping.
+The current bounded implementation covers admitted covariant producer owners,
+including recursively nested one-parameter instances and the parentless
+multiple-parameter producer-property vector. Every argument is checked with
+the declaration's recorded variance. Unsupported owner/argument shapes remain
+outside the reified-owner proof; this entry does not authorize guessing their
+subtyping.
 
 ### Observable rule
 

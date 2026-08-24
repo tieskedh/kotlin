@@ -119,6 +119,7 @@ internal object DotNetRuntimeTypes {
         hasRehearsalExactView: Boolean = false,
         usesDeclaredViewByDefaultInRehearsal: Boolean = false,
         declaredVariance: Variance = Variance.OUT_VARIANCE,
+        declaredVariances: List<Variance> = listOf(declaredVariance),
     ): DotNetGenericInterfaceInfo =
         DotNetGenericInterfaceInfo(
             canonicalClassInfo = DotNetIlClassInfo(
@@ -127,8 +128,8 @@ internal object DotNetRuntimeTypes {
             ),
             declaredClassInfo = if (hasRehearsalDeclaredView) {
                 DotNetIlClassInfo(
-                    ilClassName = "$canonicalName`1",
-                    typeParameterVariances = listOf(declaredVariance),
+                    ilClassName = "$canonicalName`${declaredVariances.size}",
+                    typeParameterVariances = declaredVariances,
                     assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
                 )
             } else {
@@ -136,8 +137,11 @@ internal object DotNetRuntimeTypes {
             },
             exactClassInfo = if (hasRehearsalExactView) {
                 DotNetIlClassInfo(
-                    ilClassName = dotNetExactGenericInterfaceName(canonicalName, 1),
-                    typeParameterVariances = listOf(Variance.INVARIANT),
+                    ilClassName = dotNetExactGenericInterfaceName(
+                        canonicalName,
+                        declaredVariances.size,
+                    ),
+                    typeParameterVariances = List(declaredVariances.size) { Variance.INVARIANT },
                     assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
                 )
             } else {
@@ -276,6 +280,16 @@ internal object DotNetRuntimeTypes {
             ilClassName = "Entry",
             enclosingClass = mapBase,
         ),
+        declaredClassInfo = DotNetIlClassInfo(
+            ilClassName = "Entry`2",
+            enclosingClass = mapBase,
+            typeParameterVariances = listOf(
+                Variance.OUT_VARIANCE,
+                Variance.OUT_VARIANCE,
+            ),
+        ),
+        isDeclaredViewStableInTypedSignatures = true,
+        usesDeclaredViewByDefaultInRehearsal = true,
     )
     private val mapEntryBase = mapEntryGenericInterfaceInfo.canonicalClassInfo
     val mapEntryType = DotNetIlValueType.UserClass(mapEntryBase)
@@ -297,10 +311,18 @@ internal object DotNetRuntimeTypes {
     private fun openRuntimeInterfaceType(
         info: DotNetGenericInterfaceInfo,
         view: DotNetGenericInterfaceView,
-    ): DotNetIlValueType.GenericInstance = DotNetIlValueType.GenericInstance(
-        checkNotNull(info.classInfo(view)),
-        listOf(DotNetIlValueType.TypeParameter(index = 0, isMethodParameter = false)),
-    )
+    ): DotNetIlValueType.GenericInstance {
+        val classInfo = checkNotNull(info.classInfo(view))
+        check(classInfo.typeParameterCount > 0) {
+            "Open Runtime generic-interface view must declare at least one parameter"
+        }
+        return DotNetIlValueType.GenericInstance(
+            classInfo,
+            List(classInfo.typeParameterCount) { index ->
+                DotNetIlValueType.TypeParameter(index = index, isMethodParameter = false)
+            },
+        )
+    }
 
     init {
         listIteratorBase.interfaces = listOf(iteratorType)
@@ -406,6 +428,7 @@ internal object DotNetRuntimeTypes {
     private data class RuntimeGenericInterfaceDescriptor(
         val info: DotNetGenericInterfaceInfo,
         val methods: Map<String, RuntimeGenericInterfaceMethodNames>,
+        val logicalArity: Int = 1,
     )
 
     private val iteratorMethods = mapOf(
@@ -566,10 +589,12 @@ internal object DotNetRuntimeTypes {
     private val mapEntryMethods = mapOf(
         "get_key" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Key",
+            typed = "get_Key",
             property = "Key",
         ),
         "get_value" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Value",
+            typed = "get_Value",
             property = "Value",
         ),
     )
@@ -633,18 +658,22 @@ internal object DotNetRuntimeTypes {
         "kotlin.collections.Map" to RuntimeGenericInterfaceDescriptor(
             info = mapGenericInterfaceInfo,
             methods = mapMethods,
+            logicalArity = 2,
         ),
         "kotlin.collections.Map.Entry" to RuntimeGenericInterfaceDescriptor(
             info = mapEntryGenericInterfaceInfo,
             methods = mapEntryMethods,
+            logicalArity = 2,
         ),
         "kotlin.collections.MutableMap" to RuntimeGenericInterfaceDescriptor(
             info = mutableMapGenericInterfaceInfo,
             methods = mutableMapMethods,
+            logicalArity = 2,
         ),
         "kotlin.collections.MutableMap.MutableEntry" to RuntimeGenericInterfaceDescriptor(
             info = mutableMapEntryGenericInterfaceInfo,
             methods = mutableMapEntryMethods,
+            logicalArity = 2,
         ),
     )
 
@@ -1160,7 +1189,7 @@ internal object DotNetRuntimeTypes {
             ?.let(genericInterfaceDescriptorsByFqName::get)
             ?: return null
         return descriptor.takeIf {
-            irClass.typeParameters.size == 1 ||
+            irClass.typeParameters.size == descriptor.logicalArity ||
                     irClass.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB
         }
     }

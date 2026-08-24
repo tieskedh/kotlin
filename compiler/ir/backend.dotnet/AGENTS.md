@@ -44,8 +44,11 @@ Kotlin-aware generic-argument subtyping predicate. Thus a covariant
 `Producer<Int> -> Producer<Any>` cast succeeds and retains the same object even
 when CLR value-type variance cannot name that view, while the unrelated
 `Producer<Int> -> Producer<String>` cast throws or returns null respectively.
-Ordinary variance, projections, stars, override families, broad candidate
-inputs, identity, and dispatch remain exact Kotlin contracts. See
+When a runtime type test can legally carry the same concrete construction it
+uses that predicate too; Kotlin's ordinary `is Producer<*>` remains the
+classifier-only star operation. Ordinary variance, projections, stars,
+override families, broad candidate inputs, identity, and dispatch remain exact
+Kotlin contracts. See
 [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md)
 and
 [`docs/decisions/breaking-kotlin-changes.md`](docs/decisions/breaking-kotlin-changes.md).
@@ -1331,6 +1334,18 @@ See the
   exact abstract natural property pairs. Never infer that fallback from member
   count alone, and never admit a mixed, incomplete, defaulted, inherited,
   nullable, or covariant multi-property family through this proof.
+  A covariant rehearsal root with two or more nullable-`Any`-bounded owner
+  parameters may use the producer-property-vector rule only when it is public,
+  parentless, and contains exactly one abstract read-only direct non-null
+  getter result for every parameter. The getter-to-parameter relation must be
+  bijective; any method, setter, default, input, repeated or unused parameter,
+  or inherited member rejects the complete family. Preserve every declared
+  CLR variance and natural `!n` getter, and widen only the corresponding
+  semantic operation to `object`. Runtime nesting is explicit mapping data;
+  never select or synthesize an enclosing generic owner merely to place a
+  selected nested leaf. BK-1 `as` and `as?` checks must derive the requested
+  natural construction independently from the result carrier and use one
+  recursive compatibility predicate across every owner argument.
   A covariant reified child may add one abstract read-only `val T` property to
   exact identity-substituted reified parents. The child natural TypeDef owns
   only that Property row and its typed getter; the parent Property remains in

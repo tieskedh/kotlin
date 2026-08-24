@@ -1589,7 +1589,17 @@ internal class DotNetIlMethodCodegen(
                 }
             }
             else -> {
-                val valueType = typeMapper.toDotNetIlValueType(expression.type)
+                val valueType = if (expression is IrTypeOperatorCall) {
+                    // A generic-owner cast deliberately retains the original object when its
+                    // logical construction is only a Kotlin semantic view. Recomputing the
+                    // discard type from expression.type would demand I<X> after codegen has
+                    // already selected that identity-preserving object carrier. Type operators
+                    // are also where array/value-class provenance can differ from the logical
+                    // result, so consume the expression's proven physical type uniformly.
+                    expressionCodegen.mappedNaturalType(expression)
+                } else {
+                    typeMapper.toDotNetIlValueType(expression.type)
+                }
                     ?: dotNetUnsupported("cannot discard value of unsupported type ${expression.javaClass.simpleName}")
                 expressionCodegen.emitExpression(expression, valueType)
                 if (methodContext.isTerminated) return

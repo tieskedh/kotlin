@@ -1405,6 +1405,30 @@ one atomically. The natural CLR route and typed state remain the default; a
 semantic capability is an evidence-backed escape hatch, not the first
 implementation choice.
 
+That recomputation selects `Map.Entry<out K, out V>` as ABI/runtime surface 57,
+not Map itself. Entry has no parent dependency and its two read-only properties
+form the smallest complete multiple-owner-parameter family. Admission is a
+general bijective producer-property-vector rule: two or more covariant
+nullable-`Any`-bounded parameters, exactly one abstract direct getter per
+parameter, and no other member. The natural CLR interface keeps both `!0` and
+`!1`; the semantic sibling widens only an operation whose Kotlin view has no
+honest CLR construction.
+
+The Runtime natural Entry TypeDef remains nested under the accepted arity-zero
+Map metadata container. It is not placed under a not-yet-selected `Map<K,V>`:
+entries are independent values, and using the erased container prevents this
+leaf prerequisite from silently making a partial Map ABI decision. This
+physical placement is Runtime mapping data, while the compiler admission and
+member treatment remain declaration-name independent. The completed gate
+proves two typed implementation fields, reference covariance, value-type
+widening, stars/open arguments, separate Kotlin products, ordinary non-partial
+C# implementation, one object identity, and exact arity-two reflection on both
+Framework 4.8 and .NET 10. It also closes coherent warning-bearing `as`/`as?`
+construction checks for this multi-parameter owner. MutableEntry, Map, mixed
+variance, inputs, defaults, and inherited multiple-parameter families remain
+unselected. See
+[`../archive/runtime-reified-map-entry-2026-08-24.md`](../archive/runtime-reified-map-entry-2026-08-24.md).
+
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
 reuses the parent's capability and member family; it does not acquire a second

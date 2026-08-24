@@ -744,6 +744,34 @@ broader properties/defaults, extra producer members, and mixed/multiple type
 parameters remain separate gates. See
 [`../archive/runtime-reified-mutable-list-2026-08-24.md`](../archive/runtime-reified-mutable-list-2026-08-24.md).
 
+ABI/runtime surface 57 selects the first multiple-owner-parameter root as one
+structural family. A public parentless interface with two or more covariant,
+nullable-`Any`-bounded owner parameters may expose exactly one abstract
+read-only property for each parameter. Every getter must return one direct,
+non-null owner parameter, and the getter-to-parameter relation must be a
+bijection. No method, setter, default, repeated parameter, unused parameter,
+changed argument, or inherited member is admitted by this rule. The natural
+CLR owner retains every declared variance and getter result as its matching
+`!n`; the single non-generic semantic sibling widens only those direct results
+to `object`.
+
+`Map.Entry<out K, out V>` is the first Runtime instantiation. Its accepted
+arity-zero nested `Map.Entry` remains the declaration-semantic identity. The
+additive natural `Map.Entry<K, V>` is a distinct nested arity-two TypeDef under
+the same accepted arity-zero `Map` metadata container. It is deliberately not
+nested under a speculative natural `Map<K, V>`: an entry value has no physical
+dependency on one enclosing map construction, and selecting it must not
+partially select the still-erased Map family. Ordinary non-partial C# may
+implement only the natural nested interface and its two properties. Kotlin
+implementations retain two independent typed fields, while a star, projection,
+open argument, or value-type widening crosses the semantic sibling only at the
+getter operation. This closes multiple covariant owner parameters and their
+Runtime nesting; it does not admit mixed variance, inputs, mutable entries, or
+Map itself. Warning-bearing parameterized `as` and `as?` derive the requested
+natural construction independently from that semantic carrier and use the
+same recursive compatibility predicate for all owner arguments. See
+[`../archive/runtime-reified-map-entry-2026-08-24.md`](../archive/runtime-reified-map-entry-2026-08-24.md).
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
@@ -755,7 +783,7 @@ must cover:
    overloads, changed arguments, multiple parents, and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
    method root, exact mutable-property root, exact one-level property child,
-   and exact property-root consumer child, mixed or multiple type parameters,
+   and exact property-root consumer child, mixed multiple-parameter families,
    and broader input-bearing child/interface compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
@@ -764,8 +792,9 @@ must cover:
    bounded warning-bearing covariant producer proof, mixed-control-flow cast
    returns, classifier-derived fields, and broader input parameters crossing
    separately compiled exact-looking boundaries;
-5. Kotlin/C# properties beyond the exact mutable invariant cell and the broad-
-   family owner-independent read-only primitive getter, broader
+5. Kotlin/C# properties beyond the exact mutable invariant cell, the broad-
+   family owner-independent read-only primitive getter, and the covariant
+   multiple-parameter producer-property vector, broader
    default families (including multiple members, properties, generic methods,
    diamonds, and reabstraction), hostile inheritance beyond the proven
    external default -> generic Kotlin override -> ordinary C# subclass chain,
