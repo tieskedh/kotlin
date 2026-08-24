@@ -794,6 +794,33 @@ The exact implementation checkpoint and the dual-entry/relative-input
 regressions it closed are recorded in
 [`../archive/runtime-reified-mutable-map-entry-2026-08-24.md`](../archive/runtime-reified-mutable-map-entry-2026-08-24.md).
 
+ABI/runtime surface 59 selects the first parentless mixed-variance,
+multiple-parameter lookup family. It has exactly one invariant and one
+covariant parameter, no parents, two invariant-parameter barriers (one Boolean
+and one nullable covariant result), one covariant-parameter Boolean barrier,
+one owner-independent primitive property, one primitive query, and three
+read-only constructed-interface properties whose recursively collected owner
+parameter vectors are invariant, covariant, and their ordered pair. Every
+constructed result owner must already publish a fully covariant natural family.
+The rule is derived from variance, member types, properties, and published
+dependencies; names and packages are not inputs.
+
+`Map<K,out V>` is the Runtime instantiation. Its natural interface owns
+`ContainsKey(!K)` and typed Set/Collection/Entry results. Its invariant exact
+sibling owns `ContainsValue(!V)`. The natural `Get(!K)` returns object because
+Kotlin `V?` has no single honest unconstrained CLR representation across
+reference and value V substitutions. This is a local call carrier, not an
+erased-owner decision: Kotlin implementation key/value fields remain `!0` and
+`!1`. Semantic dispatch is selected only for the concrete operation whose
+Kotlin view CLR cannot name, and all views retain one object identity.
+
+Ordinary non-partial C# implements only the natural Map and supplies the
+accepted public value-candidate convention; it need not name compiler ABI.
+Warning-bearing BK-1 `as`/`as?` checks apply the same recursive compatibility
+predicate to K and V, preserving legal V covariance. `MutableMap<K,V>` is not
+selected. See
+[`../archive/runtime-reified-map-2026-08-24.md`](../archive/runtime-reified-map-2026-08-24.md).
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
@@ -805,8 +832,9 @@ must cover:
    overloads, changed arguments, multiple parents, and deeper inheritance;
 2. invariant member families beyond the admitted one-producer/one-consumer
    method root, exact mutable-property root, exact one-level property child,
-   and exact property-root consumer child, mixed multiple-parameter families,
-   and broader input-bearing child/interface compositions;
+    and exact property-root consumer child, mixed multiple-parameter families
+    beyond the admitted parentless lookup family, and broader input-bearing
+    child/interface compositions;
 3. nullable-value, open-nullable, bounded, and value-class substitutions beyond
    the proven reference and `Int` input routes;
 4. broad and `@UnsafeVariance` inputs beyond the upstream-defined fixed
