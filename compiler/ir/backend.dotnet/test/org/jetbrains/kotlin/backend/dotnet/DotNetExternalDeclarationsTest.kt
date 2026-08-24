@@ -5,10 +5,26 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.builtins.DefaultBuiltIns
+import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
+import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
+import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.declarations.impl.IrFileImpl
+import org.jetbrains.kotlin.ir.declarations.impl.IrModuleFragmentImpl
+import org.jetbrains.kotlin.ir.symbols.impl.IrFileSymbolImpl
+import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
+import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.ir.util.NaiveSourceBasedFileEntryImpl
+import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.types.Variance
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
@@ -83,5 +99,47 @@ class DotNetExternalDeclarationsTest {
         )
         assertSame(exactOwner, resolver.exactGenericInterfaceOwnerInfoOrNull(logicalOwnerKey))
         assertNull(resolver.exactGenericInterfaceOwnerInfoOrNull("C:sample/Producer"))
+    }
+
+    @Test
+    fun doesNotMangleLocalGenericOwnerFunctionFacts() {
+        val moduleDescriptor = ModuleDescriptorImpl(
+            Name.special("<testModule>"),
+            LockBasedStorageManager("DotNetExternalDeclarationsTest"),
+            DefaultBuiltIns.Instance,
+        )
+        val module = IrModuleFragmentImpl(moduleDescriptor)
+        val file = IrFileImpl(
+            NaiveSourceBasedFileEntryImpl("local.kt"),
+            IrFileSymbolImpl(),
+            FqName("sample"),
+            module,
+        ).also { module.files += it }
+        val unrelatedOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("UnrelatedOwner")
+        }.apply { parent = file }
+        val unrelatedTypeParameter = unrelatedOwner.addTypeParameter {
+            name = Name.identifier("T")
+        }
+        val localFunction = IrFactoryImpl.buildFun {
+            name = Name.identifier("localFunction")
+            returnType = IrSimpleTypeImpl(
+                unrelatedTypeParameter.symbol,
+                SimpleTypeNullability.NOT_SPECIFIED,
+                emptyList(),
+                emptyList(),
+            )
+        }.apply { parent = file }
+        file.declarations += unrelatedOwner
+        file.declarations += localFunction
+
+        val resolver = DotNetExternalDeclarations(emptyList())
+
+        // The deliberately out-of-scope type parameter makes public ABI mangling fail. Local
+        // declarations must be rejected by this external resolver before it attempts that work.
+        assertNull(resolver.genericOwnerMemberFamilyOrNull(localFunction))
+        assertNull(resolver.genericOwnerFunctionCarrierOrNull(localFunction))
+        assertFalse(resolver.hasNaturalGenericOwnerFunctionReturn(localFunction))
+        assertNull(resolver.genericOwnerFunctionInputEntryOrNull(localFunction))
     }
 }
