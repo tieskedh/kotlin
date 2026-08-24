@@ -2038,6 +2038,29 @@ $fixedFunctionTypesIl
               }
             }
 
+            // Additive natural CLR view for the first multiple-owner-parameter Runtime family.
+            // The erased nested Entry above remains Kotlin's declaration-semantic capability.
+            .class nested public interface abstract auto ansi 'Entry`2'<+ K, + V>
+            {
+              .method public hidebysig specialname newslot abstract virtual instance !K get_Key() cil managed
+              {
+              }
+
+              .method public hidebysig specialname newslot abstract virtual instance !V get_Value() cil managed
+              {
+              }
+
+              .property instance !K Key()
+              {
+                .get instance !K Kotlin.Collections.Map/'Entry`2'::get_Key()
+              }
+
+              .property instance !V Value()
+              {
+                .get instance !V Kotlin.Collections.Map/'Entry`2'::get_Value()
+              }
+            }
+
             .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
             {
             }

@@ -501,6 +501,30 @@ verification, and work state.
   static foreign protocol, tooling, and rollback remain separate gates. See
   [`docs/archive/runtime-reified-mutable-list-2026-08-24.md`](docs/archive/runtime-reified-mutable-list-2026-08-24.md).
 
+  ABI/runtime surface 57 now adds the first multiple-owner-parameter family.
+  A public parentless covariant owner with two or more nullable-`Any`-bounded
+  parameters is admitted only when exactly one abstract read-only direct
+  property produces each parameter and that relation is bijective. Runtime
+  instantiates the rule as nested natural `Map.Entry<K,V>` under the accepted
+  arity-zero Map metadata container; it does not select or synthesize Map`2.
+
+  Kotlin implementations keep independent `!0` and `!1` fields. Exact and CLR-
+  covariant calls use the natural interface; only unnameable star, projection,
+  open, or value-type-widened getter operations use the semantic sibling. An
+  ordinary non-partial C# class implements only the two natural properties.
+  Warning-bearing parameterized `as` and `as?` now derive the requested
+  construction independently from the broad result carrier and apply the same
+  recursive Kotlin-aware predicate to every owner argument. Legal covariance
+  preserves identity; incompatible arguments fail at the cast boundary.
+
+  The four rehearsal and four production-erased inverse lanes pass through PSI
+  and LightTree on Framework 4.8 and .NET 10. The strict aggregate audit covers
+  191 suites/2,329 tests with no failures, errors, or skips. A diagnostic global
+  rehearsal still fails across unselected interface families and production
+  goldens; it is not a gate and confirms that the final switch remains atomic.
+  Production remains erased outside the bounded rehearsal. See
+  [`docs/archive/runtime-reified-map-entry-2026-08-24.md`](docs/archive/runtime-reified-map-entry-2026-08-24.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3181,9 +3205,9 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The rebased Runtime reified MutableList surface-56 candidate and all three
-post-rebase shared-contract adaptations passed every constituent of the strict
-target gate. The normal aggregate command remains:
+The Runtime reified Map.Entry surface-57 candidate and all three post-rebase
+shared-contract adaptations passed every constituent of the strict target
+gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -3191,14 +3215,19 @@ target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-24. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the surface-56 candidate. Direct audit of the result roots covers the
-complete target inventory of 191 suites and 2,325 tests:
+for the surface-57 candidate. Direct audit of the result roots covers the
+complete target inventory of 191 suites and 2,329 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,191 FIR, IL-text, and box tests
+- 2,195 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 1 backend resolver test
 - zero failures, errors, or skips
+
+The 187 FIR suites/2,195 tests and two integration suites/127 tests were
+freshly written by the final aggregate. The resolver suite was written by the
+earlier same-feature aggregate attempt; the unchanged green six-test
+`dotnet.ir` model root remained up-to-date.
 
 The earlier profile-specialized generic-array-fill aggregate and explicit
 model constituent exited successfully. That historical head additionally
@@ -4910,9 +4939,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    dependency-closed invariant natural MutableList family. Its structural
    relative-input rule finds the nested covariant input at either overload
    position; its mixed-input rule retains typed indexed mutation and same-T
-   results, and its implementation keeps one `!T` field. Recompute the next
-   complete Common dependency family from this head. Do not add Map, Sequence,
-   or another
+   results, and its implementation keeps one `!T` field. Surface 57 adds the
+   first parentless multiple-parameter producer-property vector and
+   instantiates it as nested natural `Map.Entry<K,V>` with independent
+   `!0`/`!1` fields, natural-only ordinary C# authoring, and coherent BK-1
+   checks across both arguments. Recompute the next complete Common dependency
+   family from this head. Do not add Map, Sequence, or another
    declaration-specific representation exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse

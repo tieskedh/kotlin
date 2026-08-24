@@ -518,6 +518,27 @@ epoch advances to 56 so none of the three new mutable collection TypeDefs can
 be paired with a surface-53 Runtime. See the
 [`surface 56 archive`](../archive/runtime-reified-mutable-list-2026-08-24.md).
 
+The post-surface-56 dependency recomputation selects `Map.Entry<out K, out V>`
+as surface 57 before Map. It is parentless and therefore forms the smallest
+complete remaining Runtime prerequisite, while also forcing the compiler's
+first real multiple-owner-parameter proof. The admitted declaration shape is
+not Map-specific: two or more covariant nullable-`Any`-bounded parameters,
+exactly one abstract read-only direct producer property per parameter, a
+bijective getter/parameter mapping, and no other member.
+
+Runtime keeps the accepted nested arity-zero Entry as the Kotlin semantic
+identity and adds a natural nested arity-two Entry under the existing
+arity-zero Map metadata container. This does not select a natural Map owner.
+Kotlin implementations must retain independent `!0` and `!1` fields; ordinary
+non-partial C# implements only the natural two-property interface. Stars, open
+arguments, projections, and value-type widening may select the semantic
+operation without erasing exact Entry constructions, either field, or the
+later Map family. MutableEntry and Map remain dependency-blocked until their
+own complete structural families are selected. The four focused rehearsal
+lanes, four production-erased inverse lanes, and strict 191-suite/2,329-test
+target inventory are green. See the
+[`surface 57 archive`](../archive/runtime-reified-map-entry-2026-08-24.md).
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
