@@ -562,6 +562,16 @@ surface 44 publishes the structural `CONSTRUCTED_INTERFACE_PRODUCER` role.
 See
 [`../archive/reified-generic-interface-constructed-result-family-2026-08-22.md`](../archive/reified-generic-interface-constructed-result-family-2026-08-22.md).
 
+That result route does not imply that every semantic member needs an interface
+slot. A private member is not callable through an external Kotlin view and
+therefore deliberately owns no capability dispatcher. When an exact same-owner
+call needs the raw semantic result of such a member, representation planning
+binds that call directly to the member's private semantic hook. It must not
+widen the member, manufacture a capability slot, or fall back through its
+natural typed wrapper. Public and protected members continue to require their
+planned capability dispatcher; absence of that dispatcher remains a hard
+failure rather than permission to call a protected hook directly.
+
 The first broad-input family is now materialized from its atomic producer
 record. ABI/runtime surface 45 adds `BROAD_FIXED_BARRIER_INPUT` and
 `BROAD_NESTED_SEMANTIC_INPUT` member roles plus the invariant exact TypeDef's

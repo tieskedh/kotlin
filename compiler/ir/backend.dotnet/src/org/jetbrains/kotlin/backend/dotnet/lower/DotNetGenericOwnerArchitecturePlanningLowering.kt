@@ -1047,6 +1047,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             })
         }
 
+        fun privateSemanticHook(source: IrSimpleFunction): IrSimpleFunction? =
+            semanticHooksBySource[source]?.takeIf {
+                DescriptorVisibilities.isPrivate(source.visibility)
+            }
+
         callRoutes.forEach { route ->
             if (route.routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY &&
                 route.routeRequirement !=
@@ -1059,17 +1064,21 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
             val defaultDispatcher = context.genericOwnerArchitecturePlans[route.calleeOwner]
                 ?.memberFamilies?.get(source)?.maskedDefaultDispatcher
-            val slot = if (route.call.symbol.owner === defaultDispatcher) {
+            val target = if (route.call.symbol.owner === defaultDispatcher) {
                 defaultSlotsBySource[route.callee] ?: defaultSlotsBySource[source]
             } else {
                 // A class redeclaration can own the physical capability family even when
                 // resolveFakeOverride() points at its logical interface/base root. Prefer that
                 // exact owner member; only inherit the root slot when no redeclared family was
-                // materialized locally.
+                // materialized locally. A private semantic family deliberately has no interface
+                // slot: an exact same-owner semantic-result route calls its private hook directly
+                // instead of widening visibility or passing through the typed wrapper. Do not
+                // extend this fallback to non-private hooks; their missing slot is an ABI error.
                 slotsBySource[route.callee] ?: slotsBySource[source]
+                    ?: privateSemanticHook(route.callee) ?: privateSemanticHook(source)
             }
-            slot?.let {
-                context.genericOwnerCapabilityCallTargets[route.call] = slot
+            target?.let {
+                context.genericOwnerCapabilityCallTargets[route.call] = target
             }
         }
 

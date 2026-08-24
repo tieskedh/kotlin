@@ -619,6 +619,31 @@ verification, and work state.
   outside rehearsal. See
   [`docs/archive/runtime-reified-map-2026-08-24.md`](docs/archive/runtime-reified-map-2026-08-24.md).
 
+  The first post-surface-59 source-built Stdlib prerequisite is now closed.
+  Ten exact-construction calls had correctly selected a semantic-result route
+  for private `Iterator<T>`, `List<T>`, and `Map.Entry<K,V>` result members but
+  then required a capability slot which private members deliberately do not
+  own. The materializer now binds only such private routes directly to the
+  already planned private semantic hook. Public and protected families still
+  require their capability dispatcher and fail closed when it is absent; no
+  member visibility, interface graph, state carrier, or production ABI changes.
+
+  A minimal inherited contravariant-scope/Iterator regression proves the rule
+  independently. Removing the binding reproduces exactly one missing private
+  getter route; restoring it executes four rehearsal and four production-
+  erased inverse lanes across PSI, LightTree, Framework 4.8, and .NET 10. The
+  final full aggregate exits zero. Direct XML audit covers 191 suites/2,341
+  tests with zero failures, errors, or skips: 187 FIR suites/2,207 tests, two
+  integration suites/127 tests, and the one-test backend resolver are fresh;
+  the unchanged six-test `dotnet.ir` root remains up-to-date. The
+  actual source-built Stdlib product now passes all ten former missing routes
+  and reaches the next independent final-routing failure: external function-
+  carrier lookup attempts to mangle a local or generated Comparator-bearing
+  declaration whose rewritten type parameter has no public-signature container.
+  Resolve that local/external ABI-authority boundary next without a Comparator,
+  Sequence, or stdlib exception. See
+  [`docs/archive/generic-owner-private-semantic-result-routing-2026-08-24.md`](docs/archive/generic-owner-private-semantic-result-routing-2026-08-24.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
