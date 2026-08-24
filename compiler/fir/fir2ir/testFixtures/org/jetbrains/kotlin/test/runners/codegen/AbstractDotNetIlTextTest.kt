@@ -576,6 +576,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-map-entry"
             ),
         )
+        validateGenericOwnerRuntimeMapCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-map"
+            ),
+        )
         validateGenericOwnerRuntimeMutableMapEntryCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -4232,6 +4242,8 @@ private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MAP_ENTRY_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MAP_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MAP_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MUTABLE_MAP_ENTRY_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_MAP_ENTRY_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
@@ -12751,10 +12763,9 @@ private fun validateGenericOwnerRuntimeMapEntryCSharp(
                             "incomplete producer-property vector was reified");
                     AssertRuntimeSurface();
                     if (entryOwner.DeclaringType != typeof(Kotlin.Collections.Map) ||
-                        typeof(Kotlin.Collections.Map).IsGenericType ||
-                        entryOwner.Assembly.GetType("Kotlin.Collections.Map`2") != null)
+                        typeof(Kotlin.Collections.Map).IsGenericType)
                         throw new InvalidOperationException(
-                            "Entry selected a speculative natural Map owner");
+                            "Entry lost its arity-zero logical container");
 
                     PairSource<string, string> referencePair =
                         new NaturalPair<string, string>("first", "second");
@@ -12844,6 +12855,308 @@ private fun validateGenericOwnerRuntimeMapEntryCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime Map.Entry probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the complete mixed-variance Runtime Map family, including its honest open-nullable
+ * lookup carrier and an ordinary natural-only C# implementation.
+ */
+private fun validateGenericOwnerRuntimeMapCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MAP_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime Map C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime Map C# probe lacks its separately compiled Kotlin libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime Map C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMapConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.runtime.map;
+
+            public sealed class NaturalMap : Kotlin.Collections.Map<string, int>
+            {
+                private readonly string key;
+                private readonly int value;
+
+                public NaturalMap(
+                    string key,
+                    int value,
+                    Kotlin.Collections.Set<string> keys,
+                    Kotlin.Collections.Collection<int> values,
+                    Kotlin.Collections.Set<Kotlin.Collections.Map.Entry<string, int>> entries)
+                {
+                    this.key = key;
+                    this.value = value;
+                    Keys = keys;
+                    Values = values;
+                    Entries = entries;
+                }
+
+                public int Size => 1;
+                public bool IsEmpty() => false;
+                public bool ContainsKey(string candidate) => candidate == key;
+                public bool ContainsValue(int candidate) => candidate == value;
+                public object Get(string candidate) => ContainsKey(candidate) ? (object)value : null;
+                public Kotlin.Collections.Set<string> Keys { get; }
+                public Kotlin.Collections.Collection<int> Values { get; }
+                public Kotlin.Collections.Set<Kotlin.Collections.Map.Entry<string, int>> Entries { get; }
+            }
+
+            public static class Program
+            {
+                private static void AssertRuntimeSurface()
+                {
+                    var found = false;
+                    foreach (AssemblyMetadataAttribute metadata in
+                        typeof(Kotlin.Collections.Map<,>).Assembly.GetCustomAttributes(
+                            typeof(AssemblyMetadataAttribute),
+                            false))
+                    {
+                        if (metadata.Key != "Kotlin.RuntimeSurfaceLevel") continue;
+                        int level;
+                        if (!int.TryParse(metadata.Value, out level) || level < 59)
+                            throw new InvalidOperationException(
+                                "Map<K,V> published with stale Runtime surface " +
+                                metadata.Value);
+                        found = true;
+                    }
+                    if (!found)
+                        throw new InvalidOperationException("Runtime surface metadata is absent");
+                }
+
+                private static void AssertNaturalShape()
+                {
+                    var owner = typeof(Kotlin.Collections.Map<,>);
+                    var parameters = owner.GetGenericArguments();
+                    if (parameters.Length != 2 ||
+                        (parameters[0].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.None ||
+                        (parameters[1].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.Covariant)
+                        throw new InvalidOperationException("Map<K,out V> variance is incorrect");
+
+                    var containsKey = owner.GetMethod("ContainsKey");
+                    var get = owner.GetMethod("Get");
+                    if (containsKey == null ||
+                        containsKey.GetParameters()[0].ParameterType != parameters[0] ||
+                        get == null || get.GetParameters()[0].ParameterType != parameters[0] ||
+                        get.ReturnType != typeof(object) ||
+                        owner.GetMethod("ContainsValue") != null)
+                        throw new InvalidOperationException(
+                            "Map<K,out V> did not retain its honest typed/object member split");
+
+                    var exact = typeof(Kotlin.Collections.Map__KotlinExact<,>);
+                    var exactParameters = exact.GetGenericArguments();
+                    var containsValue = exact.GetMethod("ContainsValue");
+                    if (containsValue == null ||
+                        containsValue.GetParameters()[0].ParameterType != exactParameters[1])
+                        throw new InvalidOperationException(
+                            "Map exact view lost the covariant-value input");
+
+                    var keys = owner.GetProperty("Keys");
+                    var values = owner.GetProperty("Values");
+                    var entries = owner.GetProperty("Entries");
+                    if (keys == null || values == null || entries == null ||
+                        keys.PropertyType.GetGenericTypeDefinition() !=
+                            typeof(Kotlin.Collections.Set<>) ||
+                        values.PropertyType.GetGenericTypeDefinition() !=
+                            typeof(Kotlin.Collections.Collection<>) ||
+                        entries.PropertyType.GetGenericTypeDefinition() !=
+                            typeof(Kotlin.Collections.Set<>))
+                        throw new InvalidOperationException("Map views are not natural CLR generics");
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract == typeof(Kotlin.Collections.Map) ||
+                            contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0)
+                            throw new InvalidOperationException(
+                                "ordinary C# Map acquired compiler ABI: " + contract);
+                    }
+                }
+
+                private static void AssertMappedMethod(Type implementation, Type contract, string name)
+                {
+                    var mapping = implementation.GetInterfaceMap(contract);
+                    for (var index = 0; index < mapping.InterfaceMethods.Length; index++)
+                    {
+                        if (mapping.InterfaceMethods[index].Name == name &&
+                            mapping.TargetMethods[index].ReturnType ==
+                                mapping.InterfaceMethods[index].ReturnType)
+                            return;
+                    }
+                    throw new InvalidOperationException(contract + "." + name + " is unmapped");
+                }
+
+                private static void AssertTypedFields()
+                {
+                    var owner = typeof(RuntimeMapValue<,>);
+                    var names = new[] { "keyState", "valueState" };
+                    for (var index = 0; index < names.Length; index++)
+                    {
+                        var field = owner.GetField(
+                            names[index],
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (field == null || !field.FieldType.IsGenericParameter ||
+                            field.FieldType.GenericParameterPosition != index)
+                            throw new InvalidOperationException(
+                                owner + "." + names[index] + " did not retain !" + index);
+                    }
+                }
+
+                public static int Main()
+                {
+                    AssertRuntimeSurface();
+                    AssertNaturalShape();
+                    AssertTypedFields();
+                    if (typeof(Kotlin.Collections.Map<,>).Assembly.GetType(
+                            "Kotlin.Collections.MutableMap`2") != null)
+                        throw new InvalidOperationException(
+                            "Map selected a speculative MutableMap<K,V> owner");
+
+                    var implementation = typeof(RuntimeMapValue<string, int>);
+                    AssertMappedMethod(
+                        implementation,
+                        typeof(Kotlin.Collections.Map<string, int>),
+                        "ContainsKey");
+                    AssertMappedMethod(
+                        implementation,
+                        typeof(Kotlin.Collections.Map<string, int>),
+                        "Get");
+                    AssertMappedMethod(
+                        implementation,
+                        typeof(Kotlin.Collections.Map__KotlinExact<string, int>),
+                        "ContainsValue");
+
+                    var seed = (Kotlin.Collections.Map<string, int>)
+                        mapImplementationKt.stringIntMap("seed", 1);
+                    if (mapApiKt.safeStringValueMap(seed) != null ||
+                        mapApiKt.safeAnyKeyMap(seed) != null ||
+                        !mapApiKt.hardStringValueMapFails(seed) ||
+                        !mapApiKt.hardStringValueMapReceiverFails(seed) ||
+                        !mapApiKt.hardAnyKeyMapFails(seed))
+                        throw new InvalidOperationException(
+                            "Kotlin-owned Map classifier/cast policy diverged");
+                    var map = new NaturalMap(
+                        "foreign",
+                        79,
+                        seed.Keys,
+                        seed.Values,
+                        seed.Entries);
+                    AssertNaturalOnly(map);
+
+                    if (map.Size != 1 || map.IsEmpty() ||
+                        !map.ContainsKey("foreign") || map.ContainsKey("missing") ||
+                        !map.ContainsValue(79) || map.ContainsValue(80) ||
+                        (int)map.Get("foreign") != 79 || map.Get("missing") != null)
+                        throw new InvalidOperationException("direct natural Map dispatch failed");
+                    if (mapApiKt.mapSize(map) != 1 || mapApiKt.mapIsEmpty(map) ||
+                        !mapApiKt.mapContainsKey(map, "foreign") ||
+                        mapApiKt.mapContainsKey(map, "missing") ||
+                        !mapApiKt.mapContainsValue(map, 79) ||
+                        mapApiKt.mapContainsValue(map, 80) ||
+                        (int)mapApiKt.mapGet(map, "foreign") != 79 ||
+                        mapApiKt.mapGet(map, "missing") != null)
+                        throw new InvalidOperationException("Kotlin exact Map dispatch failed");
+                    if ((int)mapApiKt.widenedMapGet(map, "foreign") != 79 ||
+                        mapApiKt.widenedMapGet(map, "missing") != null ||
+                        !mapApiKt.starMapContainsKey(map, "foreign") ||
+                        mapApiKt.starMapContainsKey(map, 79) ||
+                        !mapApiKt.starMapContainsValue(map, 79) ||
+                        mapApiKt.starMapContainsValue(map, "wrong") ||
+                        (int)mapApiKt.starMapGet(map, "foreign") != 79 ||
+                        mapApiKt.starMapGet(map, 79) != null)
+                        throw new InvalidOperationException("Kotlin broad Map dispatch failed");
+                    if (!object.ReferenceEquals(mapApiKt.mapKeys(map), map.Keys) ||
+                        !object.ReferenceEquals(mapApiKt.mapValues(map), map.Values) ||
+                        !object.ReferenceEquals(mapApiKt.mapEntries(map), map.Entries) ||
+                        !mapApiKt.sameMap(map, map))
+                        throw new InvalidOperationException("Map view/receiver identity changed");
+                    if (!mapApiKt.isMap(map) ||
+                        mapApiKt.safeStringValueMap(map) != null ||
+                        mapApiKt.safeAnyKeyMap(map) != null ||
+                        !mapApiKt.hardStringValueMapFails(map) ||
+                        !mapApiKt.hardStringValueMapReceiverFails(map) ||
+                        !mapApiKt.hardAnyKeyMapFails(map))
+                        throw new InvalidOperationException("Map classifier/cast policy diverged");
+
+                    Kotlin.Collections.Map<string, string> referenceMap = null;
+                    Kotlin.Collections.Map<string, object> widenedReferenceMap = referenceMap;
+                    if (widenedReferenceMap != null)
+                        throw new InvalidOperationException("reference covariance control failed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMapConsumer.exe"
+        else "RuntimeMapConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime Map probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime Map probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime Map probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

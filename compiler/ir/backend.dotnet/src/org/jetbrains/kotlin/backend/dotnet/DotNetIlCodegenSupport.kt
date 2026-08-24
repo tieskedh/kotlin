@@ -1337,6 +1337,15 @@ internal class DotNetIlTypeMapper private constructor(
         val simpleType = type as? IrSimpleType ?: return mapped
         val owner = (simpleType.classifier as? IrClassSymbol)?.owner ?: return mapped
         genericOwnerCapabilityInfoOrNull(owner) ?: return mapped
+        if (genericInterfaceMapping == DotNetGenericInterfaceMapping.DECLARED_SIGNATURE &&
+            genericInterfaceInfoOrNull(owner)?.isDeclaredViewStableInTypedSignatures == true
+        ) {
+            // A Runtime-owned family opts into natural nested MethodDef signatures only after
+            // every Kotlin implementation receives that declared interface bundle. Preserve the
+            // proven construction in that one signature mapper; arbitrary generic arguments and
+            // storage still take the instability analysis below.
+            return mapped
+        }
         if (mapped !is DotNetIlValueType.GenericInstance) {
             // A projection, star, or open argument already selected the non-generic semantic
             // capability as a value carrier. That capability is not a universal nested carrier:

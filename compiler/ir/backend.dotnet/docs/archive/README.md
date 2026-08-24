@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`runtime-reified-map-2026-08-24.md`](runtime-reified-map-2026-08-24.md)
+  records ABI/runtime surface 59's mixed-variance natural `Map<K,out V>`,
+  exact value-input sibling, honest open-nullable lookup carrier, typed fields
+  and constructed views, ordinary C# authoring, and coherent BK-1 boundary.
 - [`runtime-reified-mutable-map-entry-2026-08-24.md`](runtime-reified-mutable-map-entry-2026-08-24.md)
   records ABI/runtime surface 58's invariant multiple-parameter child,
   natural `MutableMap.MutableEntry<K,V>`, typed input/output mutation and
