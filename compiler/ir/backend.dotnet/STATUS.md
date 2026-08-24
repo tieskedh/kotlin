@@ -671,6 +671,35 @@ verification, and work state.
   exception. See
   [`docs/archive/generic-owner-external-function-authority-2026-08-24.md`](docs/archive/generic-owner-external-function-authority-2026-08-24.md).
 
+  The following synthesized-capability super-interface blocker is closed too,
+  after correcting the initial external-interface diagnosis. Logical
+  `SuspendFunctionN` has no producer-recorded TypeDef: the established type
+  mapper represents it with continuation-shaped Runtime `FunctionN+1`. Class
+  validation and final rendering already honored that mapping, but interface
+  validation duplicated the admissibility rule and omitted suspend callables.
+  Both shape validators now share one Runtime-interface carrier predicate. The
+  class path consequently loses its redundant fixed-callable clauses without
+  changing their existing mappings.
+
+  `suspendFunInterfaces.kt` now includes a generic explicit
+  `SuspendIdentity<T> : suspend (T) -> T`. Its rehearsal-generated semantic
+  capability reproduces the former module-local-superinterface rejection when
+  the predicate is absent and executes through the existing continuation
+  carrier when it is present. Four rehearsal and four production-erased inverse
+  lanes are green across PSI, LightTree, Framework 4.8, and .NET 10. The final
+  full aggregate exits zero. Direct XML audit covers 191 suites and 2,342 tests
+  with no failures, errors, or skips: 187 FIR suites/2,207 tests, two integration
+  suites/127 tests, and the two-test backend resolver suite are fresh; the
+  unchanged six-test `dotnet.ir` root is up-to-date.
+
+  The source-built Stdlib rehearsal loses all former synthesized
+  SuspendFunction capability errors and exposes the next repeated group:
+  missing covariant-return MethodImpls after generic-owner physical rewriting
+  for unrelated collection, callable, and iterator-result overrides. Resolve
+  that post-representation bridge generally, without collection, callable,
+  lambda, or member-name exceptions. See
+  [`docs/archive/generic-owner-logical-suspend-superinterface-2026-08-24.md`](docs/archive/generic-owner-logical-suspend-superinterface-2026-08-24.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

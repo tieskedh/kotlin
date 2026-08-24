@@ -1508,13 +1508,23 @@ type graph unsuitable for the Kotlin mangler. A focused hostile unit proof
 covers the complete function-fact query surface without a Comparator, accessor,
 or stdlib exception.
 
-The source product now reaches CIL materialization. Its first repeated blocker
-is a synthesized local semantic interface whose direct super-interface is a
-producer-recorded external interface (`SuspendFunction1` in the observed
-corpus), while emission currently accepts only module-local super-interfaces.
-Establish the general local-capability/external-superinterface rule next without
-a SuspendFunction, lambda, package, or stdlib exception; then rerun the product
-and recompute the next complete declaration family.
+The source product now reaches CIL materialization. Its first repeated
+super-interface blocker is closed by correcting an initial misclassification:
+`SuspendFunctionN` is a logical builtin mapped to the continuation-shaped
+Runtime `FunctionN+1`, not a producer-recorded external TypeDef. Class and
+interface validation now use one Runtime-interface carrier predicate, removing
+the duplicated callable checks which let the two validators diverge. An
+explicit generic suspend-callable class proves its synthesized semantic
+capability and continuation-shaped execution without a source-name or stdlib
+exception.
+
+The next repeated product blocker is missing covariant-return MethodImpl
+materialization after generic-owner physical rewriting. Independent collection,
+callable, and iterator-producing lambda overrides all retain a narrower typed
+result than their inherited object slot. Recompute that bridge after the
+relevant representation lowering without collection, callable, lambda, or
+member-name exceptions; then rerun the product and recompute the next complete
+declaration family.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

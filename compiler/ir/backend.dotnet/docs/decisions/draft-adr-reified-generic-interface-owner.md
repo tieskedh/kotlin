@@ -413,6 +413,15 @@ identity. A constructed imported CLR generic contributes neither, because
 capability. Local materialization and separate consumers therefore agree
 without reconstructing physical inheritance from consumer KLIB.
 
+A synthesized local capability remains an ordinary CLR interface for shape
+validation, but its logical Kotlin supertype may already have a target-owned
+runtime carrier. Interface and class validation must use one runtime-interface
+mapping predicate for that case. In particular, `SuspendFunctionN` is a
+logical builtin whose established physical edge is the continuation-shaped
+`FunctionN+1`; it is neither a missing module interface nor a producer-recorded
+external TypeDef. Validation must admit that logical edge and leave the shared
+type mapper to select its existing Runtime carrier.
+
 This early declaration fact is deliberately distinct from final call/value
 routing. It is sufficient for ordinary `Iterator` calls which
 `ForLoopsLowering` creates after generic-owner materialization, including a

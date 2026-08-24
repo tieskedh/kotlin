@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-logical-suspend-superinterface-2026-08-24.md`](generic-owner-logical-suspend-superinterface-2026-08-24.md)
+  records the shared Runtime-interface carrier predicate, generic suspend-
+  callable capability proof, removed validator duplication, and the next
+  post-representation covariant-return bridge boundary.
 - [`generic-owner-external-function-authority-2026-08-24.md`](generic-owner-external-function-authority-2026-08-24.md)
   records the fail-closed boundary between local representation planning and
   producer-recorded external generic-owner function facts, its hostile mangler
