@@ -556,6 +556,16 @@ private class BackendCliDotNetFacade(
                 "generic-owner-runtime-mutable-set"
             ),
         )
+        validateGenericOwnerRuntimeMutableListCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-runtime-mutable-list"
+            ),
+        )
         physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
@@ -4198,6 +4208,8 @@ private const val GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_COLLECTION_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_SET_CSHARP_PROBE"
+private const val GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER_NAME =
     "kotlinDotNetRecordGenericOwnerCallRouteForArchitectureTest"
 private const val GENERIC_OWNER_CALL_ROUTE_TRACE_FLUSHER_NAME =
@@ -12082,6 +12094,469 @@ private fun validateGenericOwnerRuntimeMutableSetCSharp(
         )
         DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable Runtime mutable set probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves the invariant Runtime MutableList family across positional mutation, both relative
+ * bulk positions, its natural parent diamond, and ordinary non-partial C# authoring.
+ */
+private fun validateGenericOwnerRuntimeMutableListCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_RUNTIME_MUTABLE_LIST_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The Runtime mutable list C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The Runtime mutable list C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The Runtime mutable list C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("RuntimeMutableListConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Reflection;
+            using generic.owner.runtime.mutable.list;
+
+            public sealed class NaturalMutableList<T> : Kotlin.Collections.MutableList<T>
+            {
+                private readonly List<T> values = new List<T>();
+
+                public NaturalMutableList(T value) { values.Add(value); }
+                public object LastBulk { get; private set; }
+                public int LastBulkIndex { get; private set; } = -1;
+                public T Current => values.Count == 0 ? default(T) : values[0];
+                public int Size => values.Count;
+                public bool IsEmpty() => values.Count == 0;
+                public T Get(int index) => values[index];
+                public bool Contains(T value) => values.Contains(value);
+                public int IndexOf(T value) => values.IndexOf(value);
+                public int LastIndexOf(T value) => values.LastIndexOf(value);
+
+                public bool ContainsAll(Kotlin.Collections.Collection<T> elements)
+                {
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext())
+                    {
+                        if (!Contains(iterator.Next())) return false;
+                    }
+                    return true;
+                }
+
+                private sealed class Cursor : Kotlin.Collections.MutableListIterator<T>
+                {
+                    private readonly NaturalMutableList<T> owner;
+                    private int index;
+                    private int lastIndex = -1;
+
+                    public Cursor(NaturalMutableList<T> owner, int index)
+                    {
+                        this.owner = owner;
+                        this.index = index;
+                    }
+
+                    public bool HasNext() => index < owner.values.Count;
+                    public T Next()
+                    {
+                        if (!HasNext()) throw new InvalidOperationException("iterator consumed");
+                        lastIndex = index;
+                        return owner.values[index++];
+                    }
+                    public bool HasPrevious() => index > 0;
+                    public T Previous()
+                    {
+                        if (!HasPrevious()) throw new InvalidOperationException("iterator at start");
+                        lastIndex = --index;
+                        return owner.values[index];
+                    }
+                    public int NextIndex() => index;
+                    public int PreviousIndex() => index - 1;
+                    public void Remove()
+                    {
+                        if (lastIndex < 0) throw new InvalidOperationException("no current element");
+                        owner.values.RemoveAt(lastIndex);
+                        if (lastIndex < index) index--;
+                        lastIndex = -1;
+                    }
+                    public void Set(T element)
+                    {
+                        if (lastIndex < 0) throw new InvalidOperationException("no current element");
+                        owner.values[lastIndex] = element;
+                    }
+                    public void Add(T element)
+                    {
+                        owner.values.Insert(index++, element);
+                        lastIndex = -1;
+                    }
+                }
+
+                public Kotlin.Collections.MutableIterator<T> GetIterator() =>
+                    new Cursor(this, 0);
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Iterable<T>.GetIterator() => GetIterator();
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.Collection<T>.GetIterator() => GetIterator();
+                Kotlin.Collections.Iterator<T>
+                    Kotlin.Collections.List<T>.GetIterator() => GetIterator();
+
+                public Kotlin.Collections.MutableListIterator<T> GetListIterator() =>
+                    new Cursor(this, 0);
+                public Kotlin.Collections.MutableListIterator<T> GetListIterator(int index) =>
+                    new Cursor(this, index);
+                Kotlin.Collections.ListIterator<T>
+                    Kotlin.Collections.List<T>.GetListIterator() => GetListIterator();
+                Kotlin.Collections.ListIterator<T>
+                    Kotlin.Collections.List<T>.GetListIterator(int index) =>
+                        GetListIterator(index);
+
+                public Kotlin.Collections.MutableList<T> SubList(int fromIndex, int toIndex)
+                {
+                    if (fromIndex != 0 || toIndex != values.Count)
+                        throw new InvalidOperationException("probe supports only its full live view");
+                    return this;
+                }
+                Kotlin.Collections.List<T> Kotlin.Collections.List<T>.SubList(
+                    int fromIndex,
+                    int toIndex) => SubList(fromIndex, toIndex);
+
+                public bool Add(T value)
+                {
+                    values.Add(value);
+                    return true;
+                }
+                public void Add(int index, T value) => values.Insert(index, value);
+                public bool Remove(T value) => values.Remove(value);
+                public T RemoveAt(int index)
+                {
+                    var previous = values[index];
+                    values.RemoveAt(index);
+                    return previous;
+                }
+                public T Set(int index, T value)
+                {
+                    var previous = values[index];
+                    values[index] = value;
+                    return previous;
+                }
+                public bool AddAll<U>(Kotlin.Collections.Collection<U> elements) where U : T =>
+                    AddAll(values.Count, elements);
+                public bool AddAll<U>(
+                    int index,
+                    Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    LastBulkIndex = index;
+                    var iterator = elements.GetIterator();
+                    var added = 0;
+                    while (iterator.HasNext()) values.Insert(index + added++, iterator.Next());
+                    return added != 0;
+                }
+                public bool RemoveAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var iterator = elements.GetIterator();
+                    var changed = false;
+                    while (iterator.HasNext()) changed = values.Remove(iterator.Next()) || changed;
+                    return changed;
+                }
+                public bool RetainAll<U>(Kotlin.Collections.Collection<U> elements) where U : T
+                {
+                    LastBulk = elements;
+                    var retained = new List<T>();
+                    var iterator = elements.GetIterator();
+                    while (iterator.HasNext()) retained.Add(iterator.Next());
+                    return values.RemoveAll(value => !retained.Contains(value)) != 0;
+                }
+                public void Clear() => values.Clear();
+            }
+
+            public static class Program
+            {
+                private static bool HasOpenInterface(Type owner, Type expected)
+                {
+                    return Array.Exists(owner.GetInterfaces(), contract =>
+                        contract.IsGenericType && contract.GetGenericTypeDefinition() == expected);
+                }
+
+                private static void AssertRelativeBulkMethod(
+                    Type owner,
+                    string name,
+                    int parameterCount,
+                    int relativeIndex)
+                {
+                    MethodInfo selected = null;
+                    foreach (var candidate in owner.GetMethods())
+                    {
+                        if (candidate.DeclaringType != owner || candidate.Name != name ||
+                            candidate.GetParameters().Length != parameterCount) continue;
+                        if (selected != null)
+                            throw new InvalidOperationException(name + " overload ambiguous");
+                        selected = candidate;
+                    }
+                    if (selected == null || !selected.IsGenericMethodDefinition)
+                        throw new InvalidOperationException(name + " is not method-generic");
+                    var parameter = selected.GetGenericArguments()[0];
+                    var constraints = parameter.GetGenericParameterConstraints();
+                    if (constraints.Length != 1 || constraints[0] != owner.GetGenericArguments()[0])
+                        throw new InvalidOperationException(name + " lost U : T");
+                    var input = selected.GetParameters()[relativeIndex].ParameterType;
+                    if (!input.IsGenericType ||
+                        input.GetGenericTypeDefinition() != typeof(Kotlin.Collections.Collection<>) ||
+                        input.GetGenericArguments()[0] != parameter)
+                        throw new InvalidOperationException(name + " lost Collection<U>");
+                }
+
+                private static void AssertKotlinRelativeBulkImplementation(
+                    string name,
+                    int parameterCount)
+                {
+                    var owner = typeof(RuntimeMutableListValue<>);
+                    var ownerParameter = owner.GetGenericArguments()[0];
+                    foreach (var method in owner.GetMethods(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                    {
+                        if (method.Name != name || !method.IsGenericMethodDefinition ||
+                            method.GetParameters().Length != parameterCount) continue;
+                        var parameter = method.GetGenericArguments()[0];
+                        var constraints = parameter.GetGenericParameterConstraints();
+                        if (constraints.Length == 1 && constraints[0] == ownerParameter) return;
+                    }
+                    throw new InvalidOperationException(
+                        name + "/" + parameterCount + " Kotlin implementation lost U : T");
+                }
+
+                private static MethodInfo AssertInterfaceMap(
+                    Type implementation,
+                    Type contract,
+                    string name,
+                    int parameterCount)
+                {
+                    var mapping = implementation.GetInterfaceMap(contract);
+                    MethodInfo selected = null;
+                    for (var index = 0; index < mapping.InterfaceMethods.Length; index++)
+                    {
+                        var method = mapping.InterfaceMethods[index];
+                        if (method.DeclaringType != contract || method.Name != name ||
+                            method.GetParameters().Length != parameterCount) continue;
+                        if (selected != null)
+                            throw new InvalidOperationException(
+                                contract + "." + name + "/" + parameterCount + " ambiguous");
+                        selected = mapping.TargetMethods[index];
+                    }
+                    if (selected == null)
+                        throw new InvalidOperationException(
+                            contract + "." + name + "/" + parameterCount + " is unmapped");
+                    return selected;
+                }
+
+                private static void AssertNaturalOnly(object value)
+                {
+                    foreach (var contract in value.GetType().GetInterfaces())
+                    {
+                        if (contract.Name.IndexOf("KotlinSemantic", StringComparison.Ordinal) >= 0 ||
+                            contract.Name.IndexOf("__KotlinExact", StringComparison.Ordinal) >= 0 ||
+                            contract == typeof(Kotlin.Collections.MutableList) ||
+                            contract == typeof(Kotlin.Collections.List) ||
+                            contract == typeof(Kotlin.Collections.MutableCollection) ||
+                            contract == typeof(Kotlin.Collections.Collection) ||
+                            contract == typeof(Kotlin.Collections.MutableIterable) ||
+                            contract == typeof(Kotlin.Collections.Iterable))
+                            throw new InvalidOperationException(
+                                "ordinary C# authoring acquired a compiler ABI dependency: " +
+                                contract);
+                    }
+                }
+
+                private static void AssertRuntimeSurface()
+                {
+                    var found = false;
+                    foreach (AssemblyMetadataAttribute metadata in
+                        typeof(Kotlin.Collections.MutableList<>).Assembly.GetCustomAttributes(
+                            typeof(AssemblyMetadataAttribute),
+                            false))
+                    {
+                        if (metadata.Key != "Kotlin.RuntimeSurfaceLevel") continue;
+                        int level;
+                        if (!int.TryParse(metadata.Value, out level) || level < 56)
+                            throw new InvalidOperationException(
+                                "MutableList<T> published with stale Runtime surface " +
+                                metadata.Value);
+                        found = true;
+                    }
+                    if (!found)
+                        throw new InvalidOperationException("Runtime surface metadata is absent");
+                }
+
+                public static int Main()
+                {
+                    var owner = typeof(Kotlin.Collections.MutableList<>);
+                    var variance = owner.GetGenericArguments()[0].GenericParameterAttributes &
+                        GenericParameterAttributes.VarianceMask;
+                    if (variance != GenericParameterAttributes.None)
+                        throw new InvalidOperationException("MutableList<T> is not invariant");
+                    if (!HasOpenInterface(owner, typeof(Kotlin.Collections.List<>)) ||
+                        !HasOpenInterface(owner, typeof(Kotlin.Collections.MutableCollection<>)))
+                        throw new InvalidOperationException("MutableList<T> lost its natural parents");
+                    AssertRuntimeSurface();
+                    AssertRelativeBulkMethod(owner, "AddAll", 1, 0);
+                    AssertRelativeBulkMethod(owner, "AddAll", 2, 1);
+                    AssertRelativeBulkMethod(owner, "RemoveAll", 1, 0);
+                    AssertRelativeBulkMethod(owner, "RetainAll", 1, 0);
+                    AssertKotlinRelativeBulkImplementation("AddAll", 1);
+                    AssertKotlinRelativeBulkImplementation("AddAll", 2);
+                    AssertKotlinRelativeBulkImplementation("RemoveAll", 1);
+                    AssertKotlinRelativeBulkImplementation("RetainAll", 1);
+
+                    var kotlinOwner = typeof(RuntimeMutableListValue<object>);
+                    AssertInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableList<object>),
+                        "AddAll",
+                        1);
+                    AssertInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableList<object>),
+                        "AddAll",
+                        2);
+                    AssertInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableCollection<object>),
+                        "AddAll",
+                        1);
+                    AssertInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableList<object>),
+                        "Set",
+                        2);
+                    AssertInterfaceMap(
+                        kotlinOwner,
+                        typeof(Kotlin.Collections.MutableList<object>),
+                        "Add",
+                        2);
+
+                    var list = new NaturalMutableList<object>("initial");
+                    AssertNaturalOnly(list);
+                    var csharpListBulkTarget = AssertInterfaceMap(
+                        list.GetType(),
+                        typeof(Kotlin.Collections.MutableList<object>),
+                        "AddAll",
+                        1);
+                    var csharpCollectionBulkTarget = AssertInterfaceMap(
+                        list.GetType(),
+                        typeof(Kotlin.Collections.MutableCollection<object>),
+                        "AddAll",
+                        1);
+                    if (csharpListBulkTarget != csharpCollectionBulkTarget)
+                        throw new InvalidOperationException(
+                            "C# emitted duplicate bulk implementations for the diamond");
+                    mutableListApiKt.starListClear(list);
+                    if (!mutableListApiKt.projectedListAdd<int>(list, 70) ||
+                        (int)list.Current != 70)
+                        throw new InvalidOperationException("foreign projected add failed");
+                    mutableListApiKt.starListClear(list);
+                    var values = mutableListImplementationKt.intCollection(71);
+                    if (!mutableListApiKt.widenedListValueAddAll(list, values) ||
+                        !object.ReferenceEquals(list.LastBulk, values) ||
+                        list.LastBulkIndex != 0 || (int)list.Current != 71)
+                        throw new InvalidOperationException("foreign value addAll failed");
+
+                    mutableListApiKt.starListClear(list);
+                    var indexed = mutableListImplementationKt.intCollection(72);
+                    if (!mutableListApiKt.widenedListValueAddAllAt(list, 0, indexed) ||
+                        !object.ReferenceEquals(list.LastBulk, indexed) ||
+                        list.LastBulkIndex != 0 || (int)list.Current != 72)
+                        throw new InvalidOperationException("foreign indexed addAll failed");
+                    if ((int)mutableListApiKt.projectedListSet<int>(list, 0, 73) != 72 ||
+                        (int)list.Current != 73)
+                        throw new InvalidOperationException(
+                            "foreign projected set input/result failed");
+                    if ((int)mutableListApiKt.widenedListRemoveAt(list, 0) != 73 ||
+                        !list.IsEmpty())
+                        throw new InvalidOperationException("foreign removeAt failed");
+                    mutableListApiKt.projectedListAddAt<int>(list, 0, 74);
+                    if ((int)list.Current != 74)
+                        throw new InvalidOperationException(
+                            "foreign projected indexed add failed");
+                    if ((int)mutableListApiKt.firstMutableListElement(list) != 74 ||
+                        (int)mutableListApiKt.firstMutableListElementFrom(list, 0) != 74)
+                        throw new InvalidOperationException("foreign mutable iterators failed");
+                    if (!object.ReferenceEquals(mutableListApiKt.fullMutableSubList(list), list))
+                        throw new InvalidOperationException("foreign live subList lost identity");
+                    if (!mutableListApiKt.widenedReadOnlyListContains(list, 74) ||
+                        mutableListApiKt.widenedReadOnlyListContains(list, "wrong") ||
+                        mutableListApiKt.widenedReadOnlyListIndexOf(list, "wrong") != -1)
+                        throw new InvalidOperationException("foreign read-only barriers failed");
+                    if (!mutableListApiKt.sameMutableList(list, list))
+                        throw new InvalidOperationException("foreign identity failed");
+
+                    var field = typeof(RuntimeMutableListValue<>).GetField(
+                        "value",
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (field == null || !field.FieldType.IsGenericParameter)
+                        throw new InvalidOperationException("Kotlin list field did not retain !T");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RuntimeMutableListConsumer.exe"
+        else "RuntimeMutableListConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the Runtime mutable list probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the Runtime mutable list probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable Runtime mutable list probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { dependency ->

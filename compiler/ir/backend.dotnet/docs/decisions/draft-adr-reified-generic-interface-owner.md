@@ -720,8 +720,29 @@ the already admitted candidate-input route because that parent still cannot
 honestly place `T` in its natural CLR input surface. See
 [`../archive/runtime-reified-mutable-set-2026-08-23.md`](../archive/runtime-reified-mutable-set-2026-08-23.md).
 
-`MutableList`, Map, broader properties/defaults/overload families, extra
-producer members, and mixed/multiple type parameters remain separate gates.
+ABI/runtime surface 56 adds natural invariant `MutableList<T>` over the
+existing natural `List<T>` and `MutableCollection<T>` graph. Its direct
+positional inputs and results remain `T`; its narrowed iterator and recursive
+sublist results remain the natural `MutableListIterator<T>` and
+`MutableList<T>` constructions. The child owns only its Common-redeclared
+slots and does not copy candidate-input members from the covariant List parent.
+
+Both bulk overloads use the same physical `<U : T>(Collection<U>)` rule. The
+relative input is selected as the unique nested covariant construction over
+the owner parameter, so an independent prefix such as the insertion index does
+not create a declaration-specific overload exception. The bounded foreign
+dispatcher likewise admits one owner-dependent input among independently
+representable parameters and may return Unit, a declaration-independent value,
+or the same owner parameter. Name plus complete argument count keeps the two `Add`
+and two `AddAll` forms unambiguous. Kotlin/KLIB members remain non-generic and
+one object retains one state.
+
+The cut advances the provisional Runtime/manifest epoch atomically. A library
+which can name the MutableCollection, MutableSet, or MutableList natural
+families must not be accepted with a Runtime predating those TypeDefs. Map,
+broader properties/defaults, extra producer members, and mixed/multiple type
+parameters remain separate gates. See
+[`../archive/runtime-reified-mutable-list-2026-08-24.md`](../archive/runtime-reified-mutable-list-2026-08-24.md).
 
 ## Remaining gates
 

@@ -468,6 +468,39 @@ verification, and work state.
   MutableSet representation. See
   [`docs/archive/runtime-reified-mutable-set-2026-08-23.md`](docs/archive/runtime-reified-mutable-set-2026-08-23.md).
 
+  ABI/runtime surface 56 now adds invariant natural `MutableList<T>` over the
+  existing natural List and MutableCollection parents. Direct element inputs
+  and results remain `T`; mutable iterators and recursive sublists retain their
+  natural generic constructions. The child owns only its Common-redeclared
+  slots and does not copy the covariant List parent's exact/candidate members.
+
+  Relative nested inputs are no longer recorded by a fixed position. The
+  compiler derives the unique `Collection<T>`-shaped covariant input from
+  Common IR, so both `addAll(elements)` and `addAll(index,elements)` become
+  `<U : T>` CLR methods without a MutableList branch. The bounded foreign
+  grammar now also admits one direct owner-dependent input among independent
+  parameters with a Unit, declaration-independent value, or same-`T` result.
+  Ordinary non-partial C# therefore implements typed `Add`, indexed `Add`, and `Set`
+  methods; projected Kotlin calls reach those methods without requiring a
+  compiler interface, generator, wrapper, or adapter.
+
+  The hostile implementation keeps one real `!T` field. Kotlin and separately
+  compiled C# execution cover exact/projected mutation, both bulk positions,
+  the MutableCollection diamond, `Set` input/result composition, removal,
+  mutable iterators, live sublist identity, and inherited List barriers under
+  PSI and LightTree on Framework 4.8 and .NET 10. The provisional ABI/Runtime
+  epoch also advances from 53 to 56, closing the missed surface-54/55 version-
+  skew hole; installed-platform tests reject stale Runtime metadata and the C#
+  probe reads level 56 from the actual assembly.
+
+  The four focused lanes pass after a forced rebuild. The strict aggregate
+  audit covers 190 freshly written suites/2,319 tests; the unchanged six-test
+  model root brings the target total to 191 suites/2,325 tests, with no
+  failures, errors, or skips. Production remains atomically erased outside the
+  rehearsal. Map, multiple owner parameters, defaults, trimming, NativeAOT,
+  static foreign protocol, tooling, and rollback remain separate gates. See
+  [`docs/archive/runtime-reified-mutable-list-2026-08-24.md`](docs/archive/runtime-reified-mutable-list-2026-08-24.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3148,9 +3181,9 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The rebased Runtime reified MutableSet head and all three post-rebase shared-
-contract adaptations passed every constituent of the strict target gate. The
-normal aggregate command remains:
+The rebased Runtime reified MutableList surface-56 candidate and all three
+post-rebase shared-contract adaptations passed every constituent of the strict
+target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -3158,11 +3191,11 @@ normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-24. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the adapted surface-55 head. Direct audit of the result roots covers the
-complete target inventory of 191 suites and 2,321 tests:
+for the surface-56 candidate. Direct audit of the result roots covers the
+complete target inventory of 191 suites and 2,325 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,187 FIR, IL-text, and box tests
+- 2,191 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 1 backend resolver test
 - zero failures, errors, or skips
@@ -4873,9 +4906,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    value-type relative widening, and typed Kotlin state without global owner
    erasure. Surface 55 composes invariant natural MutableSet over the existing
    Set/MutableCollection diamond, including both MethodImpl paths and one
-   ordinary C# implementation for both bulk contracts. Recompute the next
-   complete Common dependency family from this head. Do not add MutableList,
-   Map, Sequence, or another
+   ordinary C# implementation for both bulk contracts. Surface 56 adds the
+   dependency-closed invariant natural MutableList family. Its structural
+   relative-input rule finds the nested covariant input at either overload
+   position; its mixed-input rule retains typed indexed mutation and same-T
+   results, and its implementation keeps one `!T` field. Recompute the next
+   complete Common dependency family from this head. Do not add Map, Sequence,
+   or another
    declaration-specific representation exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse

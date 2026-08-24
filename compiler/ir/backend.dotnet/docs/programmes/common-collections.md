@@ -499,6 +499,25 @@ the separate covariant-parent gate rather than forcing the invariant child or
 its state into the object domain. See the
 [`surface 55 archive`](../archive/runtime-reified-mutable-set-2026-08-23.md).
 
+Surface 56 selects the dependency-closed invariant natural `MutableList<T>`
+family over the existing List and MutableCollection parents. Direct positional
+mutation remains typed, mutable iterators and sublists retain their natural
+constructed results, and Kotlin implementations keep one `!T` state graph.
+The indexed and non-indexed bulk overloads both use `<U : T>`: the compiler
+selects the unique `Collection<T>`-shaped owner-relative parameter rather than
+assuming it occupies position zero.
+
+The same structural rule extends the bounded natural-only foreign path. One
+owner-dependent input may be surrounded by declaration-independent parameters
+and may return Unit, a declaration-independent value, or `T`; overload
+selection remains name plus complete arity. This admits `add(index, value)` and
+`set(index, value)` without a MutableList branch. Inherited covariant List
+candidate inputs keep their existing exact/semantic protocol and do not erase
+the invariant child or duplicate parent slots. The provisional ABI/Runtime
+epoch advances to 56 so none of the three new mutable collection TypeDefs can
+be paired with a surface-53 Runtime. See the
+[`surface 56 archive`](../archive/runtime-reified-mutable-list-2026-08-24.md).
+
 ### Completed Kotlin-owned Grouping foundation
 
 The completed Grouping tranche publishes the authoritative Common
