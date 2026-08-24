@@ -18,6 +18,12 @@ private fun <T> runSuspend(block: suspend () -> T): T {
     return result!!.getOrThrow()
 }
 
+private class SuspendIdentity<T> : suspend (T) -> T {
+    override suspend fun invoke(value: T): T = value
+}
+
+private fun <T> suspendIdentity(): suspend (T) -> T = SuspendIdentity()
+
 fun box(): String {
     val transform = SuspendTransform { it + 1 }
     if (runSuspend { transform.transform(41) } != 42) return "fail 1: suspend forwarding"
@@ -27,6 +33,9 @@ fun box(): String {
     val second = SuspendTransform(function)
     if (first === second || first != second) return "fail 2: suspend wrapper equality"
     if (runSuspend { first.transform(40) } != 42) return "fail 3: stored suspend function"
+
+    val identity = suspendIdentity<String>()
+    if (runSuspend { identity("OK") } != "OK") return "fail 4: generic suspend callable"
 
     return "OK"
 }

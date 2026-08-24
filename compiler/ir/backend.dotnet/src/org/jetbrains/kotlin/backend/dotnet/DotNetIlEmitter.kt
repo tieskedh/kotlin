@@ -2233,20 +2233,11 @@ internal class DotNetIlEmitter(
             // like an evicted base class.
             for (superInterface in superClasses.filter { it.isInterface }) {
                 if (superInterface !in moduleInterfaces &&
-                    !DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(superInterface) &&
+                    !superInterface.hasDotNetRuntimeInterfaceCarrier() &&
                     !superInterface.isDotNetCharSequenceClass() &&
-                    DotNetRuntimeTypes.classInfoFor(superInterface) == null &&
                     !externalDeclarations.hasClass(superInterface) &&
                     DotNetStdlibLibrary.publicImplementationClassInfoOrNull(superInterface) == null &&
-                    importedClrDeclarations.classInfoOrNull(superInterface) == null &&
-                    !superInterface.defaultType.isSuspendFunction() &&
-                    !superInterface.defaultType.isKSuspendFunction() &&
-                    superInterface.dotNetFixedFunctionArityOrNull() == null &&
-                    superInterface.dotNetFixedKFunctionArityOrNull() == null &&
-                    superInterface.dotNetFixedKPropertyArityOrNull() == null &&
-                    superInterface.dotNetFixedKMutablePropertyArityOrNull() == null &&
-                    superInterface.dotNetExactFunctionArity == null &&
-                    superInterface.dotNetTypedArgumentsFunctionArity == null
+                    importedClrDeclarations.classInfoOrNull(superInterface) == null
                 ) {
                     dotNetUnsupported(
                         "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +
@@ -2424,7 +2415,7 @@ internal class DotNetIlEmitter(
             if (
                 !superInterface.isInterface ||
                 superInterface !in moduleInterfaces &&
-                !DotNetRuntimeTypes.hasBuiltInInterfaceMapping(superInterface) &&
+                !superInterface.hasDotNetRuntimeInterfaceCarrier() &&
                 !superInterface.isDotNetCharSequenceClass() &&
                 !externalDeclarations.hasClass(superInterface)
             ) {
@@ -2478,6 +2469,12 @@ internal class DotNetIlEmitter(
             }
         }
     }
+
+    /** One authority for logical interfaces whose physical TypeDef is supplied by Runtime. */
+    private fun IrClass.hasDotNetRuntimeInterfaceCarrier(): Boolean =
+        DotNetRuntimeTypes.hasBuiltInInterfaceMapping(this) ||
+                defaultType.isSuspendFunction() ||
+                defaultType.isKSuspendFunction()
 
     /**
      * One interface member (a function or a property accessor) of the interface shape gate; see
