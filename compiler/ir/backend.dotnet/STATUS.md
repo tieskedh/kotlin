@@ -8,7 +8,19 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: exact reviewed upstream commit
-  `f444263529ee3aaa7b657364979a5669030fbfa4`.
+  `f9a1706ce08c497554ee47fde7c9e7e89508152c`.
+- Follow-up integration checkpoint: the five upstream commits after
+  `f444263529ee3aaa7b657364979a5669030fbfa4` were audited by patch, shared
+  path, and target-owned reverse dependency, then integrated by rebase on
+  2026-08-24. All 610 target commits remain present: range-diff classifies
+  608 patches as identical and exactly two as context-adjusted, with no patch
+  added or removed. The target-owned JDK 8 `dn` task now follows upstream's
+  larger-heap and Parallel-GC test policy. The post-rebase target gate covers
+  191 freshly written suites/2,333 tests with zero failures, errors, or skips,
+  and the public aggregate task exits zero. The exact range, virtual merge,
+  preservation accounting, adaptation, rollback ref, and verification are
+  recorded in
+  [`docs/archive/upstream-sync-2026-08-24-followup.md`](docs/archive/upstream-sync-2026-08-24-followup.md).
 - Last integration checkpoint: the complete 461-commit upstream range after
   `d78e4a4c1465c00475b8019654b5905124dc30a6` was audited by subject, paths,
   shared contract, and target-owned reverse dependencies, then integrated by

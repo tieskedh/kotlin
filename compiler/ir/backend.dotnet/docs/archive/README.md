@@ -441,6 +441,9 @@ Archived snapshots:
   records the exact Common builder/window closure, its bounded local-array and
   runtime-fill dependencies, two strict-gate regressions found and repaired,
   and the final 2,216-test Framework/CoreCLR proof.
+- [`upstream-sync-2026-08-24-followup.md`](upstream-sync-2026-08-24-followup.md)
+  records the five-commit follow-up rebase, complete 610-patch preservation
+  audit, target-owned JDK 8 test-policy adaptation, and post-rebase gates.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots
