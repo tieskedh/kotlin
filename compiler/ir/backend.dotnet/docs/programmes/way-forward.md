@@ -1556,12 +1556,35 @@ producers, and does not narrow source or mutable locals. A hostile proof keeps
 an inlined generic-owner self-view typed while a mutable source
 `Producer<Any?>` still alternates value and reference implementations on the
 same semantic carrier. The source-built Stdlib loses
-`AbstractMutableList.indexOf` and now reaches the independent semantic-body
-self conversion in `AbstractMutableList.removeAll`. Resolve that boundary next
-without an AbstractMutableList, MutableList, collection, stdlib, or member-name
-exception; a semantic body must not fabricate `MutableList<object>` from an
-exact open `this`, but an ordinary source-level widened mutable view must
-remain semantic.
+`AbstractMutableList.indexOf` and at that checkpoint reached the independent
+semantic-body self conversion in `AbstractMutableList.removeAll`. That boundary
+still had to be resolved without an AbstractMutableList, MutableList,
+collection, stdlib, or member-name exception: a semantic body must not
+fabricate `MutableList<object>` from an exact open `this`, but an ordinary
+source-level widened mutable view must remain semantic.
+
+That semantic-body boundary is now closed structurally. A generic
+extension helper may preserve an owner-dependent method argument derived from
+the exact current hook receiver only when every other occurrence is output-
+only, including the callback shape `(T) -> Boolean`. A helper which accepts a
+`T`, invariant `C<T>`, or any other input occurrence remains in the semantic
+domain. Compiler-generated callable implementation classes also avoid an
+otherwise unused second generic-owner capability: their source-visible Kotlin
+identity is `FunctionN`, and route analysis must prove a direct semantic class
+call before adding a class capability. This lets a callback keep its one
+construction-relative exact interface and semantic captured state without
+imposing both `ExactFunctionN<T, R>` and `ExactFunctionN<object, R>` on one
+TypeDef.
+
+The source-built Stdlib consequently loses both
+`AbstractMutableList.removeAll` and `retainAll`. Its first remaining owner
+failure is `AbstractMutableMap.remove`, where a semantic
+`MutableMap.MutableEntry<object, object>` value must supply the logical
+`Map.Entry` key property without assuming the unrelated canonical non-generic
+entry construction. Classify that property-view conversion next without a
+Map, MutableEntry, property-name, package, or stdlib exception. Do not
+reinterpret this as permission to make every semantic interface value a
+natural generic construction.
 
 The first general split-result experiment is now implemented for a
 producer-recorded direct `T?` interface result: the natural MethodDef returns

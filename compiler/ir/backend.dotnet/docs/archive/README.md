@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-semantic-body-exact-helper-2026-08-25.md`](generic-owner-semantic-body-exact-helper-2026-08-25.md)
+  records the output-only exact self-helper rule, semantic captured callback
+  state, removal of an unneeded generated-callable class capability, complete
+  profile/frontend proof, and the next semantic Map.Entry property blocker.
 - [`generic-owner-inline-widened-temporary-carrier-2026-08-25.md`](generic-owner-inline-widened-temporary-carrier-2026-08-25.md)
   records exact natural carrier preservation through compiler-owned immutable
   inline aliases, the source/mutable semantic-view exclusion, the complete
