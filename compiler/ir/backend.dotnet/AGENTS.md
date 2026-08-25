@@ -702,8 +702,20 @@ See the
   `IrClass.declarations`, and every planned class must still enter the erased
   owner set. The ordinary backend pipeline may return immutable prototype
   snapshots for tests, but must not serialize them into DLL/KLIB artifacts or
-  make them a compiler-option-selected ABI. Absence of a directly observed
-  semantic field write is not proof of typed storage. The architecture planner
+  make them a compiler-option-selected ABI. Physical ancestry is
+  likewise producer authority: record one complete BaseType/InterfaceImpl set
+  per physical TypeDef, distinguish an unavailable set from a recorded empty
+  set, and close constructed views only through those records. A logical IR or
+  KLIB supertype, generated CLR name, current substitution, or capability
+  identity alone must never manufacture an edge. Edge parameters are scoped to
+  their source TypeDef; duplicate, self, cyclic, category-invalid, or missing
+  class-base rows fail closed. Positive views found before an unavailable
+  downstream set remain usable only with an explicitly incomplete closure. A
+  reified-family parent list that omits canonical-only interfaces is not a
+  complete edge set. Core `System.Object` has one canonical object-leaf carrier
+  and must not also circulate as a constructed TypeDef carrier.
+  Absence of a directly observed semantic field write is not proof of typed
+  storage. The architecture planner
   must build one module-wide producer graph over functions, constructors,
   delegating/function calls, field initializers, and anonymous initializers,
   then project every direct field of the generic owner from it. Only fields
