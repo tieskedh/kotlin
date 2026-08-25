@@ -1098,72 +1098,12 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val objectParameterIndices = source.classifierInputParameterIndicesOrEmpty()
                 if (objectParameterIndices.isEmpty()) continue
                 val logicalKey = context.preLoweringDeclarationKeys[source] ?: continue
-                val physicalName = "${source.dotNetIlMethodName()}__KotlinClassifierInput__" +
-                        DotNetLibraryAbiCodec.logicalIdentityDigest(logicalKey)
-                val inputEntry = context.irFactory.buildFun {
-                    startOffset = source.startOffset
-                    endOffset = source.endOffset
-                    origin = DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY
-                    name = Name.identifier(physicalName)
-                    visibility = DescriptorVisibilities.PUBLIC
-                    modality = Modality.FINAL
-                    returnType = source.returnType
-                }.apply inputEntry@{
-                    parent = source.parent
-                    val copiedTypeParameters = copyTypeParametersFrom(source)
-                    val typeParameterMapping = source.typeParameters.zip(copiedTypeParameters).toMap()
-                    val typeRemapper = IrTypeParameterRemapper(typeParameterMapping)
-                    returnType = typeRemapper.remapType(source.returnType)
-                    source.parameters.forEach { parameter ->
-                        parameters += parameter.copyTo(
-                            this@inputEntry,
-                            defaultValue = null,
-                            remapTypeMap = typeParameterMapping,
-                        )
-                    }
-                    val parameterMapping = source.parameters.zip(parameters).toMap()
-                    body = source.body!!.deepCopyWithSymbols(
-                        initialParent = this@inputEntry,
-                        createTypeRemapper = { IrTypeParameterRemapper(typeParameterMapping) },
-                    ).transform(
-                        object : VariableRemapper(parameterMapping) {
-                            override fun visitReturn(expression: IrReturn): IrExpression = super.visitReturn(
-                                if (expression.returnTargetSymbol == source.symbol) {
-                                    IrReturnImpl(
-                                        expression.startOffset,
-                                        expression.endOffset,
-                                        expression.type,
-                                        this@inputEntry.symbol,
-                                        expression.value,
-                                    )
-                                } else {
-                                    expression
-                                }
-                            )
-                        },
-                        null,
-                    )
-                }
-                when (val owner = source.parent) {
-                    is IrClass -> owner.declarations += inputEntry
-                    is IrFile -> owner.declarations += inputEntry
-                    else -> error(
-                        "Internal .NET backend error: classifier-input function '${source.name}' has no physical owner"
-                    )
-                }
-                objectParameterIndices.forEach { index ->
-                    val parameter = inputEntry.parameters[index]
-                    context.genericOwnerCapabilityDeclarations += parameter
-                    context.genericOwnerForeignDispatchDeclarations += parameter
-                    // Keep the logical source occurrence as semantic/foreign routing evidence.
-                    // The producer-recorded paired-entry map, not deletion from these analysis
-                    // sets, protects the public source MethodDef's natural CLR signature.
-                    context.genericOwnerCapabilityDeclarations += source.parameters[index]
-                    context.genericOwnerForeignDispatchDeclarations += source.parameters[index]
-                }
-                context.genericOwnerFunctionInputEntries[source] = inputEntry
-                context.genericOwnerFunctionInputEntryObjectParameters[source] =
-                    objectParameterIndices.toSet()
+                materializeLocalGenericOwnerFunctionInputEntry(
+                    context,
+                    source,
+                    objectParameterIndices.toSet(),
+                    logicalKey,
+                )
             }
         }
 
@@ -2556,6 +2496,99 @@ private fun IrType.semanticInterfaceSlotType(
     val classifier = (this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
     val parameter = classifier?.owner
     return if (parameter != null && parameter in ownerParameters) objectType else this
+}
+
+/**
+ * Creates the compiler-owned object-input twin of one natural final callable.
+ *
+ * The source MethodDef and its body remain the normal Kotlin/C# path. The twin owns a compiler
+ * IR copy whose selected parameters are mapped to object by the physical type mapper; semantic
+ * routing marks both copies explicitly so later body-producing lowerings cannot accidentally
+ * reconstruct the natural generic construction at the broad boundary.
+ */
+internal fun materializeLocalGenericOwnerFunctionInputEntry(
+    context: DotNetBackendContext,
+    source: IrSimpleFunction,
+    objectParameterIndices: Set<Int>,
+    logicalKey: String,
+): IrSimpleFunction {
+    context.genericOwnerFunctionInputEntries[source]?.let { existing ->
+        check(context.genericOwnerFunctionInputEntryObjectParameters[source] == objectParameterIndices) {
+            "Internal .NET backend error: '${source.name}' acquired conflicting object-input parameters"
+        }
+        return existing
+    }
+    require(source.body != null && objectParameterIndices.isNotEmpty() &&
+            objectParameterIndices.all(source.parameters.indices::contains)
+    ) {
+        "Internal .NET backend error: '${source.name}' has an invalid local object-input entry"
+    }
+    val physicalName = "${source.dotNetIlMethodName()}__KotlinClassifierInput__" +
+            DotNetLibraryAbiCodec.logicalIdentityDigest(logicalKey)
+    val inputEntry = context.irFactory.buildFun {
+        startOffset = source.startOffset
+        endOffset = source.endOffset
+        origin = DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY
+        name = Name.identifier(physicalName)
+        visibility = DescriptorVisibilities.PUBLIC
+        modality = Modality.FINAL
+        returnType = source.returnType
+    }.apply inputEntry@{
+        parent = source.parent
+        val copiedTypeParameters = copyTypeParametersFrom(source)
+        val typeParameterMapping = source.typeParameters.zip(copiedTypeParameters).toMap()
+        val typeRemapper = IrTypeParameterRemapper(typeParameterMapping)
+        returnType = typeRemapper.remapType(source.returnType)
+        source.parameters.forEach { parameter ->
+            parameters += parameter.copyTo(
+                this@inputEntry,
+                defaultValue = null,
+                remapTypeMap = typeParameterMapping,
+            )
+        }
+        val parameterMapping = source.parameters.zip(parameters).toMap()
+        body = source.body!!.deepCopyWithSymbols(
+            initialParent = this@inputEntry,
+            createTypeRemapper = { IrTypeParameterRemapper(typeParameterMapping) },
+        ).transform(
+            object : VariableRemapper(parameterMapping) {
+                override fun visitReturn(expression: IrReturn): IrExpression = super.visitReturn(
+                    if (expression.returnTargetSymbol == source.symbol) {
+                        IrReturnImpl(
+                            expression.startOffset,
+                            expression.endOffset,
+                            expression.type,
+                            this@inputEntry.symbol,
+                            expression.value,
+                        )
+                    } else {
+                        expression
+                    }
+                )
+            },
+            null,
+        )
+    }
+    when (val owner = source.parent) {
+        is IrClass -> owner.declarations += inputEntry
+        is IrFile -> owner.declarations += inputEntry
+        else -> error(
+            "Internal .NET backend error: classifier-input function '${source.name}' has no physical owner"
+        )
+    }
+    objectParameterIndices.forEach { index ->
+        val parameter = inputEntry.parameters[index]
+        context.genericOwnerCapabilityDeclarations += parameter
+        context.genericOwnerForeignDispatchDeclarations += parameter
+        // Keep the logical source occurrence as semantic/foreign routing evidence. The paired-
+        // entry map, not deletion from these analysis sets, protects the source MethodDef's
+        // natural CLR signature.
+        context.genericOwnerCapabilityDeclarations += source.parameters[index]
+        context.genericOwnerForeignDispatchDeclarations += source.parameters[index]
+    }
+    context.genericOwnerFunctionInputEntries[source] = inputEntry
+    context.genericOwnerFunctionInputEntryObjectParameters[source] = objectParameterIndices
+    return inputEntry
 }
 
 /** Reconstructs one producer-recorded object-input MethodDef without adding a logical callable. */

@@ -884,6 +884,18 @@ natural construction which references logical owner parameters absent from
 CLR metadata. See
 [`../archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md`](../archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md).
 
+A closed non-generic implementation does not acquire permission to narrow a
+declaration-semantic generic-interface input merely because its source member
+has one exact closed Kotlin signature. In the rehearsal epoch, a directly
+declared body on a physically final class may instead receive one paired
+compiler object-input entry when exactly one nested admitted-interface
+parameter differs, the result is unchanged, and no upstream fixed wrong-shape
+barrier owns the call. The canonical bridge targets that object entry; the
+natural source MethodDef/body remains the normal exact Kotlin and C# entry.
+The rule is structural and excludes open/inherited bodies, defaults, varargs,
+method generics, properties, multiple mismatches, and production emission. See
+[`../archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md`](../archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md).
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal

@@ -70,6 +70,7 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isNullableAny
@@ -404,6 +405,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     else -> emptyList()
                 },
             )
+            val closedSemanticInputEntry = prepareClosedNonGenericSemanticInputEntry(
+                plan,
+                isMappedKotlinGenericInterface,
+                isErasedKotlinCarrier,
+            )
             if (interfaceClass in context.reifiedGenericInterfaces ||
                 externalDeclarations.hasReifiedGenericInterface(interfaceClass)
             ) {
@@ -444,6 +450,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         }
                         val semanticTarget = genericOwnerSemanticTarget
                             ?: nonGenericImplementation?.semanticImplementation
+                            ?: closedSemanticInputEntry
                             ?: plan.target
                         val capabilityBridge = createForwardingBridge(
                             irClass = plan.implementingClass,
@@ -1141,6 +1148,117 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         return false
     }
 
+    /** The declaration-semantic type owned by the canonical interface MethodDef. */
+    private fun canonicalBridgeTypeTransform(
+        plan: BridgePlan,
+        isErasedKotlinCarrier: (IrClass) -> Boolean,
+    ): (IrType) -> IrType {
+        val substitution = plan.interfaceClass.typeParameters.associate { typeParameter ->
+            typeParameter.symbol to context.irBuiltIns.anyNType
+        }
+        val canonicalSubstitutor = IrTypeSubstitutor(substitution, allowEmptySubstitution = true)
+        val canonicalObjectParameterTypes =
+            DotNetRuntimeTypes.genericInterfaceCanonicalObjectParameterIndices(plan.slot)
+                .mapNotNull { index ->
+                    plan.slot.parameters
+                        .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                        .getOrNull(index)
+                        ?.type
+                }
+        return canonicalType@{ type ->
+            if (canonicalObjectParameterTypes.any { parameterType -> parameterType == type }) {
+                return@canonicalType context.irBuiltIns.anyNType
+            }
+            if (!type.referencesTypeParameterOf(plan.interfaceClass)) return@canonicalType type
+            val simpleType = type as? IrSimpleType
+                ?: return@canonicalType context.irBuiltIns.anyNType
+            val directParameter = simpleType.classifier as? IrTypeParameterSymbol
+            if (directParameter?.owner?.parent == plan.interfaceClass) {
+                return@canonicalType context.irBuiltIns.anyNType
+            }
+            val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
+            if (carrier?.let(isErasedKotlinCarrier) == true ||
+                carrier?.let(DotNetRuntimeTypes::usesDeclaredViewByDefaultInRehearsal) == true
+            ) {
+                // Both carriers have one declaration-semantic identity. Substitute the interface
+                // parameter while retaining the nested classifier; the mapper selects its
+                // canonical identity rather than fabricating one natural closed construction.
+                canonicalSubstitutor.substitute(type)
+            } else {
+                // A reified CLR carrier or array has no one honest canonical construction.
+                context.irBuiltIns.anyNType
+            }
+        }
+    }
+
+    /**
+     * Gives a closed non-generic implementation one object-input body only when its canonical
+     * interface slot is broader than its natural source member. A physically final class makes
+     * the copied body non-virtual and prevents a hidden compiler entry from splitting an override
+     * family. Fixed wrong-shape members keep their upstream constant barrier instead.
+     */
+    private fun prepareClosedNonGenericSemanticInputEntry(
+        plan: BridgePlan,
+        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
+        isErasedKotlinCarrier: (IrClass) -> Boolean,
+    ): IrSimpleFunction? {
+        if (!context.configuration.dotNetGenericOwnerRehearsal) return null
+        context.genericOwnerFunctionInputEntries[plan.target]?.let { return it }
+        val target = plan.target
+        val owner = target.parent as? IrClass ?: return null
+        if (owner !== plan.implementingClass || owner.isInterface || owner.typeParameters.isNotEmpty() ||
+            owner.modality != Modality.FINAL || target.body == null || target.isFakeOverride ||
+            target.isSuspend || target.correspondingPropertySymbol != null ||
+            target.typeParameters.isNotEmpty() || plan.slot.typeParameters.isNotEmpty()
+        ) {
+            return null
+        }
+        if (specialBridgeMethods.findSpecialWithOverride(target, includeSelf = true)
+                ?.second?.argumentsToCheck?.let { count -> count > 0 } == true
+        ) {
+            return null
+        }
+        val slotParameters = plan.slot.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        val targetParameters = target.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        val canonicalType = canonicalBridgeTypeTransform(plan, isErasedKotlinCarrier)
+        if (slotParameters.size != targetParameters.size || targetParameters.isEmpty() ||
+            targetParameters.any { parameter ->
+                parameter.defaultValue != null || parameter.varargElementType != null
+            } || canonicalType(plan.slot.returnType) != target.returnType
+        ) {
+            return null
+        }
+        fun IrType.containsMappedInterface(): Boolean {
+            val simpleType = this as? IrSimpleType ?: return false
+            val typeOwner = (simpleType.classifier as? IrClassSymbol)?.owner
+            return typeOwner?.let(isMappedKotlinGenericInterface) == true ||
+                    simpleType.arguments.any { argument ->
+                        (argument as? IrTypeProjection)?.type?.containsMappedInterface() == true
+                    }
+        }
+        val mismatches = slotParameters.zip(targetParameters).mapNotNull { pair ->
+            pair.second.takeIf { targetParameter ->
+                canonicalType(pair.first.type) !=
+                        targetParameter.type && targetParameter.type.containsMappedInterface()
+            }
+        }
+        val targetParameter = mismatches.singleOrNull() ?: return null
+        val parameterIndex = target.parameters.indexOf(targetParameter)
+        if (parameterIndex < 0) return null
+        val logicalKey = context.preLoweringDeclarationKeys[target]
+            ?: "${plan.interfaceIdentity}:${plan.slotIdentity}:closed-semantic-input"
+        return materializeLocalGenericOwnerFunctionInputEntry(
+            context,
+            target,
+            setOf(parameterIndex),
+            logicalKey,
+        )
+    }
+
     private fun createCanonicalBridge(
         plan: BridgePlan,
         isMappedKotlinGenericInterface: (IrClass) -> Boolean,
@@ -1151,46 +1269,10 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         // forwarding it back through the typed source entry would reintroduce an early
         // `Collection<object> -> Collection<!T>` cast for widened nested inputs. Exact/declared
         // bridges below continue to target the natural source member.
-        val canonicalTarget = context.genericOwnerSemanticHooks[plan.target] ?: plan.target
-        val canonicalSubstitution = plan.interfaceClass.typeParameters.associate { typeParameter ->
-            typeParameter.symbol to context.irBuiltIns.anyNType
-        }
-        val canonicalSubstitutor = IrTypeSubstitutor(canonicalSubstitution, allowEmptySubstitution = true)
-        val canonicalObjectParameterTypes =
-            DotNetRuntimeTypes.genericInterfaceCanonicalObjectParameterIndices(plan.slot)
-                .mapNotNull { index ->
-                    plan.slot.parameters
-                        .filter { parameter -> parameter.kind == IrParameterKind.Regular }
-                        .getOrNull(index)
-                        ?.type
-                }
-        fun canonicalType(type: IrType): IrType {
-            if (canonicalObjectParameterTypes.any { parameterType -> parameterType == type }) {
-                return context.irBuiltIns.anyNType
-            }
-            if (!type.referencesTypeParameterOf(plan.interfaceClass)) return type
-            val simpleType = type as? IrSimpleType
-                ?: return context.irBuiltIns.anyNType
-            val directParameter = simpleType.classifier as? IrTypeParameterSymbol
-            if (directParameter?.owner?.parent == plan.interfaceClass) return context.irBuiltIns.anyNType
-            val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
-            return if (
-                carrier?.let(isErasedKotlinCarrier) == true ||
-                carrier?.let(DotNetRuntimeTypes::usesDeclaredViewByDefaultInRehearsal) == true
-            ) {
-                // Both carriers have one erased physical identity. Substitute the interface
-                // parameter out of the synthetic bridge IR while preserving the nested carrier;
-                // the type mapper then selects the canonical interface or erased class owner.
-                // The selected Runtime dependency slice likewise has an explicit canonical
-                // identity next to its natural CLR construction, so it can retain the nested
-                // classifier instead of losing `Iterable.GetIterator(): Iterator` to object.
-                canonicalSubstitutor.substitute(type)
-            } else {
-                // A genuinely reified CLR carrier or array depending on an erased interface
-                // parameter has no single closed instantiation. Its canonical carrier is object.
-                context.irBuiltIns.anyNType
-            }
-        }
+        val canonicalTarget = context.genericOwnerSemanticHooks[plan.target]
+            ?: context.genericOwnerFunctionInputEntries[plan.target]
+            ?: plan.target
+        val canonicalType = canonicalBridgeTypeTransform(plan, isErasedKotlinCarrier)
 
         return createForwardingBridge(
             irClass = plan.implementingClass,
@@ -1199,7 +1281,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             origin = DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE,
             bridgeName = "<GenericInterfaceCanonicalBridge-${plan.interfaceIdentity}-" +
                     "${plan.slot.name.asString()}-${plan.slotIdentity}>",
-            bridgeTypeTransform = ::canonicalType,
+            bridgeTypeTransform = canonicalType,
             ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
             isErasedKotlinCarrier = isErasedKotlinCarrier,
             specialMethodInfo = specialBridgeMethods.findSpecialWithOverride(
@@ -1551,8 +1633,19 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     val ownerSubstituted = targetOwnerSubstitutor?.substitute(type) ?: type
                     return targetMethodSubstitutor.substitute(ownerSubstituted)
                 }
+                val backendContext = this@DotNetGenericInterfaceBridgeLowering.context
+                val objectInputParameterIndices = backendContext.genericOwnerFunctionInputEntries.entries
+                    .singleOrNull { entry -> entry.value === target }
+                    ?.let { entry ->
+                        backendContext.genericOwnerFunctionInputEntryObjectParameters[entry.key]
+                    }
+                    .orEmpty()
                 val targetParameterTypes = targetParameters.map { parameter ->
-                    targetType(parameter.type)
+                    if (target.parameters.indexOf(parameter) in objectInputParameterIndices) {
+                        backendContext.irBuiltIns.anyNType
+                    } else {
+                        targetType(parameter.type)
+                    }
                 }
                 val targetReturnType = targetType(target.returnType)
                 specialMethodInfo?.let { info ->
