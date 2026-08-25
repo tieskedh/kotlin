@@ -19,7 +19,7 @@ namespace Kotlin.DotNet.CSharpAuthoring.Manifest;
 
 internal static class ManifestReader
 {
-    internal const int CurrentSchemaVersion = 8;
+    internal const int CurrentSchemaVersion = 9;
     internal const string ManagedResourceName = "Kotlin.CSharpImplementationManifest";
 
     private const string LogicalIdentityScheme = "kotlin-public-id-signature-legacy-v1";

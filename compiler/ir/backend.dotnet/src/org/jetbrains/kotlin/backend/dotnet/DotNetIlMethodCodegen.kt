@@ -208,11 +208,17 @@ internal class DotNetIlMethodCodegen(
             // The printed parameter list never contains the implicit `this` of an instance
             // method: the dispatch-receiver pair of the zip is dropped (an IrConstructor's
             // parameter list carries no dispatch receiver to begin with).
-            val parameters = function.parameters.zip(signature.parameterTypes)
-                .drop(if (signature.hasThis) 1 else 0)
-                .joinToString(", ") { [parameter, type] ->
-                    "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
+            val parameters = buildList {
+                function.parameters.zip(signature.parameterTypes)
+                    .drop(if (signature.hasThis) 1 else 0)
+                    .mapTo(this) { [parameter, type] ->
+                        "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
+                    }
+                if (signature.hasSplitNullableResult) {
+                    val flagType = DotNetIlValueType.ByReference(DotNetIlValueType.Boolean)
+                    add("[out] ${flagType.nameInSignature} ${"<isNull>".toIlIdentifier()}")
                 }
+            }.joinToString(", ")
             if (function is IrConstructor) {
                 // `.ctor` is a bare keyword, not a quoted identifier; the spelling including the
                 // specialname/rtspecialname flags is ilasm-probe-verified. The visibility follows
@@ -1273,7 +1279,9 @@ internal class DotNetIlMethodCodegen(
      * singleton through the object-shaped ABI slot.
      */
     private fun emitReturnValue(expression: IrExpression, expectedType: DotNetIlValueType) {
-        if (
+        if (signature.hasSplitNullableResult) {
+            emitSplitNullableReturnValue(expression, expectedType)
+        } else if (
             function is IrSimpleFunction &&
             function.isDotNetErasedObjectResult() &&
             expectedType == DotNetIlValueType.Object &&
@@ -1284,6 +1292,107 @@ internal class DotNetIlMethodCodegen(
         } else {
             expressionCodegen.emitExpression(expression, expectedType)
         }
+    }
+
+    /**
+     * Emits the physical half of a logical open-nullable result. The payload remains typed while
+     * the final managed-pointer argument reports logical null. Concrete Nullable<T> producers use
+     * HasValue/GetValueOrDefault without boxing; an open !T needs one boxed null probe but the
+     * returned payload itself remains the original typed value.
+     */
+    private fun emitSplitNullableReturnValue(
+        expression: IrExpression,
+        payloadType: DotNetIlValueType,
+    ) {
+        val sourceType = typeMapper.toDotNetIlValueType(expression.type)
+            ?: dotNetUnsupported("split nullable result has unsupported source type ${expression.type.render()}")
+        when (sourceType) {
+            is DotNetIlValueType.NullableValue -> {
+                expressionCodegen.emitExpression(expression, sourceType)
+                val sourceSlot = expressionCodegen.spillToSyntheticLocal(sourceType, "<splitNullableSource>")
+                emitSplitNullFlagAddress()
+                methodContext.emit(loadLocalAddressInstruction(sourceSlot.index), pushes = 1)
+                methodContext.emit(sourceType.hasValueInstruction, pops = 1, pushes = 1)
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+                methodContext.emit("stind.i1", pops = 2)
+                when {
+                    sourceType == payloadType ->
+                        methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                    sourceType.elementType.isDotNetAssignableTo(payloadType) -> {
+                        methodContext.emit(loadLocalAddressInstruction(sourceSlot.index), pushes = 1)
+                        methodContext.emit(sourceType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                        emitSplitPayloadCoercion(sourceType.elementType, payloadType)
+                    }
+                    else -> dotNetUnsupported(
+                        "split nullable payload ${sourceType.elementType.nameInSignature} cannot be returned as " +
+                                payloadType.nameInSignature
+                    )
+                }
+            }
+            is DotNetIlValueType.TypeParameter -> {
+                expressionCodegen.emitExpression(expression, sourceType)
+                val sourceSlot = expressionCodegen.spillToSyntheticLocal(sourceType, "<splitNullableSource>")
+                emitSplitNullFlagAddress()
+                methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                methodContext.emit("box ${sourceType.nameInSignature}", pops = 1, pushes = 1)
+                methodContext.emit("ldnull", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+                methodContext.emit("stind.i1", pops = 2)
+                methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                emitSplitPayloadCoercion(sourceType, payloadType)
+            }
+            else -> if (sourceType.isDotNetReferenceShaped()) {
+                expressionCodegen.emitExpression(expression, sourceType)
+                val sourceSlot = expressionCodegen.spillToSyntheticLocal(sourceType, "<splitNullableSource>")
+                emitSplitNullFlagAddress()
+                methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                methodContext.emit("ldnull", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+                methodContext.emit("stind.i1", pops = 2)
+                if (sourceType.isDotNetAssignableTo(payloadType)) {
+                    methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                } else {
+                    val nonNullLabel = methodContext.nextLabel("splitNullableNonNull")
+                    val endLabel = methodContext.nextLabel("splitNullablePayload")
+                    methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                    methodContext.emitBranch("brtrue", nonNullLabel, pops = 1)
+                    expressionCodegen.emitDefaultValue(payloadType)
+                    methodContext.emitGoto(endLabel)
+                    methodContext.emitLabel(nonNullLabel)
+                    methodContext.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+                    val narrowing = payloadType.dotNetObjectNarrowingInstructionOrNull(
+                        expressionCodegen.coreLibraryReference
+                    ) ?: dotNetUnsupported(
+                        "split nullable object payload cannot be narrowed to ${payloadType.nameInSignature}"
+                    )
+                    methodContext.emit(narrowing, pops = 1, pushes = 1)
+                    methodContext.emitLabel(endLabel)
+                }
+            } else {
+                emitSplitNullFlagAddress()
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("stind.i1", pops = 2)
+                expressionCodegen.emitExpression(expression, sourceType)
+                emitSplitPayloadCoercion(sourceType, payloadType)
+            }
+        }
+    }
+
+    private fun emitSplitNullFlagAddress() {
+        check(signature.hasSplitNullableResult) {
+            "Internal .NET backend error: split-null flag requested for an ordinary signature"
+        }
+        methodContext.emit(loadArgumentInstruction(signature.parameterTypes.size), pushes = 1)
+    }
+
+    private fun emitSplitPayloadCoercion(from: DotNetIlValueType, to: DotNetIlValueType) {
+        if (from.isDotNetAssignableTo(to)) return
+        val coercion = dotNetWideningCoercionOrNull(from, to, expressionCodegen.coreLibraryReference)
+            ?: dotNetUnsupported(
+                "split nullable payload ${from.nameInSignature} cannot be converted to ${to.nameInSignature}"
+            )
+        expressionCodegen.emitWideningCoercion(coercion)
     }
 
     /**

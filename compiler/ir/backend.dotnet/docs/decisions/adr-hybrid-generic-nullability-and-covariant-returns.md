@@ -5,6 +5,8 @@
 - Amended: 2026-08-06 for relative method-type-parameter recovery, nullable
   relative-bound weakening, inherited class-slot closure, and
   declaration-erased carrier comparison
+- Amended: 2026-08-25 for producer-recorded split-nullable results on admitted
+  CLR-generic interfaces
 - Scope: Kotlin-owned declarations on `net48`, `netstandard2.0`, and `net10.0`
 
 This is a pre-ABI decision for the experimental Kotlin/.NET backend. No Kotlin/.NET binary has
@@ -30,8 +32,9 @@ the common solution because it is unavailable on `net48` and `netstandard2.0`.
 
 ### 1. Open `T?` uses a boxed-or-null object carrier
 
-Every occurrence whose outer type is a nullable type parameter is physically `System.Object` in
-the declaring ABI. This applies to parameters, results, locals, and fields.
+Except for the producer-recorded interface result convention in section 1a, every occurrence whose
+outer type is a nullable type parameter is physically `System.Object` in the declaring ABI. This
+applies to parameters, results, locals, and fields.
 
 - a value-type `T` is boxed when it enters the carrier;
 - a non-null `Nullable<V>` boxes as `V`, and an empty value boxes as `null`, following CLR nullable
@@ -65,6 +68,48 @@ is written `E`, so an unchecked read from its erased storage must preserve `null
 `E : Any` remains non-null and keeps the corresponding runtime null check. This is the CLR form of
 the same erased cast distinction made by JVM bytecode; it does not infer nullability from the
 stored object.
+
+### 1a. An admitted CLR-generic interface may split a direct `T?` result
+
+The generic-interface rehearsal may replace the natural slot of a producer-recorded direct
+nullable result:
+
+```kotlin
+interface Source<out T> {
+    fun read(missing: Boolean): T?
+}
+```
+
+with the physical CLR convention:
+
+```text
+T Source<T>.read(bool missing, [out] bool& isNull)
+```
+
+Kotlin IR, KLIB, override selection, and reflection continue to see `T?`. The hidden flag is a
+physical MethodDef/MemberRef parameter only. Its payload type is derived from the producer's owner
+parameter before applying the outer nullable marker; substituting `T = Int?` therefore produces a
+`Nullable<Int32>` payload rather than incorrectly collapsing it to `Int32`.
+
+An exact receiver construction calls this typed slot directly and reconstructs the logical
+nullable result from the returned payload and flag. A star, projection, value-type-widened view,
+or ordinary foreign implementation reached through an unnameable construction continues through
+the declaration-semantic object-result slot. The latter may invoke the same natural method and
+joins only at that operation boundary. It does not erase the owner, its fields, or unrelated
+members.
+
+The convention is selected only by a producer-published structural member role. A consumer must
+not infer it from a declaration name, current KLIB shape, or a locally chosen optimization. The
+published physical family, C# implementation manifest, Roslyn authoring tool, and separate
+consumer all carry or validate the final `[out] bool&` parameter. Ordinary C# implements the
+natural interface with an ordinary `out bool`; no generator, partial class, wrapper, or semantic
+interface is required. The optional partial-class authoring bridge may implement the compiler
+semantic view by calling that same typed method and interpreting the flag.
+
+This amendment does not change open-nullable fields, parameters, generic-class state, or nested
+carriers. It also does not encode Map missing-key semantics: a Map-shaped lookup with an
+owner-dependent key input and fixed barrier requires its own structural composition proof before
+it can use the convention.
 
 ### 2. Physical clashes are diagnosed after carrier mapping
 
@@ -167,7 +212,9 @@ modern metadata, but that cannot alter Kotlin dispatch or the portable ABI.
 
 ## Consequences
 
-- `Map<K, V>.get(): V?` and comparable APIs have one cross-module-safe CLR signature.
+- Unselected `Map<K, V>.get(): V?` and comparable APIs retain one cross-module-safe object-result
+  CLR signature; a separately admitted direct nullable interface producer may instead use the
+  producer-recorded split-result signature above.
 - Closed uses of an open `T?` may box even where a hand-written closed declaration would not.
 - Reflection over raw CLR metadata sees `object`; Kotlin reflection must reconstruct `T?` from
   Kotlin metadata.
@@ -189,4 +236,7 @@ Before this ABI is frozen, tests must cover:
 8. C# compilation/reflection showing the intended public surface and hidden bridges; and
 9. direct and transitive method-type-parameter bounds, exact `box C; unbox.any R` IL, same-object
    reference widening, legal value substitution, separate compilation, erased foreign-callback
-   fallback, and rejection of unrelated parameter conversions.
+   fallback, and rejection of unrelated parameter conversions; and
+10. split-nullable value, reference, and already-nullable payloads; exact and widened calls;
+    producer/consumer linkage; ordinary and generator-authored C# implementations; reflected
+    `[out] bool&`; and Framework 4.8 plus modern CLR execution.
