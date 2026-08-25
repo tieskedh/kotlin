@@ -63,6 +63,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSingleAbstractMethodLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSplitNullableResultLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetTypeOfLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
@@ -282,11 +283,18 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // capability is materialized only for physical slots which cannot name one honest I<X>.
     ::DotNetReifiedGenericInterfaceLowering,
     ::DotNetGenericInterfaceBridgeLowering,
+    // Select the producer-recorded open-nullable convention after generic-interface lowering has
+    // bound separate-consumer declarations, but before covariant bridge planning. The latter must
+    // compare split payload carriers, not the still-logical `T?` carriers.
+    ::DotNetSplitNullableResultLowering,
     // CLR method-slot identity includes the return type on every supported profile. Preserve
     // Kotlin covariant overrides with one exact virtual implementation plus private final
     // MethodImpl adapters for each wider ordinary class/interface slot. Erased generic-interface
     // slots and explicit mapped host capabilities remain owned by the preceding lowering.
     ::DotNetCovariantReturnBridgeLowering,
+    // Propagate the already selected convention to any lowering-generated natural MethodImpls.
+    // Kotlin IR/KLIB still retain the logical `T?` signature throughout both passes.
+    ::DotNetSplitNullableResultLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: the shared ForLoopsLowering is a body pass, so a `for` loop inside an `init {}`
     // block must already have been inlined into a constructor before the loop rewrite runs.

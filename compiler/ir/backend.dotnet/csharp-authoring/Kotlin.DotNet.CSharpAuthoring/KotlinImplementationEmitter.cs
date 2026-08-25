@@ -1085,8 +1085,9 @@ internal static class KotlinImplementationEmitter
         IMethodSymbol physicalMethod = resolved.Method;
         if (physicalMethod.ReturnsByRef ||
             physicalMethod.ReturnsByRefReadonly ||
-            physicalMethod.Parameters.Any(parameter =>
-                parameter.RefKind != RefKind.None))
+            (physicalMethod.Parameters.Any(parameter =>
+                 parameter.RefKind != RefKind.None) &&
+             !HasPhysicalSplitNullableResult(physicalMethod)))
         {
             diagnostics.Add(Diagnostic.Create(
                 Diagnostics.UnsupportedToolingShape,
@@ -1366,26 +1367,70 @@ internal static class KotlinImplementationEmitter
                 diagnostics,
                 out string wrongShapePrelude))
             return null;
+        bool hasSplitNullableResult =
+            HasSplitNullableAuthoringResult(
+                physicalMethod,
+                substitutedAuthoringMethod);
+        if (substitutedAuthoringMethod.Parameters.Length !=
+                physicalMethod.Parameters.Length +
+                    (hasSplitNullableResult ? 1 : 0))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.MalformedManifest,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                resolved.MemberAssembly.Identity.Name,
+                $"authoring and semantic parameter counts for '{resolved.Member.LogicalKey}' do not compose"));
+            return null;
+        }
         var arguments = new List<string>();
         for (int index = 0; index < physicalMethod.Parameters.Length; index++)
         {
+            IParameterSymbol physicalParameter = physicalMethod.Parameters[index];
+            IParameterSymbol authoringParameter =
+                substitutedAuthoringMethod.Parameters[index];
+            if (physicalParameter.RefKind != RefKind.None ||
+                authoringParameter.RefKind != RefKind.None)
+            {
+                if (physicalParameter.RefKind != authoringParameter.RefKind ||
+                    !SymbolEqualityComparer.Default.Equals(
+                        physicalParameter.Type,
+                        authoringParameter.Type))
+                {
+                    ReportUnsupportedConversion(
+                        authoringContract,
+                        physicalMethod,
+                        physicalParameter.Type,
+                        authoringParameter.Type,
+                        diagnostics);
+                    return null;
+                }
+                arguments.Add(
+                    physicalParameter.RefKind == RefKind.Out
+                        ? "out p" + index
+                        : physicalParameter.RefKind == RefKind.Ref
+                            ? "ref p" + index
+                            : "in p" + index);
+                continue;
+            }
             if (!TryConvertExpression(
                     authoringContract.Compilation,
-                    physicalMethod.Parameters[index].Type,
-                    substitutedAuthoringMethod.Parameters[index].Type,
+                    physicalParameter.Type,
+                    authoringParameter.Type,
                     "p" + index,
                     out string argument))
             {
                 ReportUnsupportedConversion(
                     authoringContract,
                     physicalMethod,
-                    physicalMethod.Parameters[index].Type,
-                    substitutedAuthoringMethod.Parameters[index].Type,
+                    physicalParameter.Type,
+                    authoringParameter.Type,
                     diagnostics);
                 return null;
             }
             arguments.Add(argument);
         }
+        if (hasSplitNullableResult)
+            arguments.Add("out __kotlinIsNull");
         string call = "this." + EscapeIdentifier(sourceMethod.Name);
         if (physicalMethod.Arity != 0)
         {
@@ -1395,6 +1440,29 @@ internal static class KotlinImplementationEmitter
                     EscapeIdentifier(parameter.Name))) + ">";
         }
         call += "(" + string.Join(", ", arguments) + ")";
+        if (hasSplitNullableResult)
+        {
+            if (!CanAcceptNull(physicalMethod.ReturnType) ||
+                !TryConvertExpression(
+                    authoringContract.Compilation,
+                    sourceMethod.ReturnType,
+                    physicalMethod.ReturnType,
+                    "__kotlinResult",
+                    out string splitResult))
+            {
+                ReportUnsupportedConversion(
+                    authoringContract,
+                    physicalMethod,
+                    sourceMethod.ReturnType,
+                    physicalMethod.ReturnType,
+                    diagnostics);
+                return null;
+            }
+            return "{ " + wrongShapePrelude +
+                "bool __kotlinIsNull; " + DisplayType(sourceMethod.ReturnType) +
+                " __kotlinResult = " + call +
+                "; return __kotlinIsNull ? null! : " + splitResult + "; }";
+        }
         return physicalMethod.ReturnsVoid
             ? "{ " + wrongShapePrelude + call + "; }"
             : TryConvertExpression(
@@ -1416,6 +1484,32 @@ internal static class KotlinImplementationEmitter
                 diagnostics);
             return null;
         }
+    }
+
+    private static bool HasSplitNullableAuthoringResult(
+        IMethodSymbol physicalMethod,
+        IMethodSymbol authoringMethod)
+    {
+        if (physicalMethod.ReturnsVoid || authoringMethod.ReturnsVoid ||
+            authoringMethod.Parameters.Length != physicalMethod.Parameters.Length + 1)
+            return false;
+        IParameterSymbol flag = authoringMethod.Parameters.Last();
+        return flag.RefKind == RefKind.Out &&
+            flag.Type.SpecialType == SpecialType.System_Boolean;
+    }
+
+    private static bool HasPhysicalSplitNullableResult(IMethodSymbol method)
+    {
+        if (method.ReturnsVoid || method.Parameters.IsEmpty)
+            return false;
+        for (int index = 0; index < method.Parameters.Length - 1; index++)
+        {
+            if (method.Parameters[index].RefKind != RefKind.None)
+                return false;
+        }
+        IParameterSymbol flag = method.Parameters.Last();
+        return flag.RefKind == RefKind.Out &&
+            flag.Type.SpecialType == SpecialType.System_Boolean;
     }
 
     private static bool TryWrongShapePrelude(
@@ -1860,15 +1954,26 @@ internal static class KotlinImplementationEmitter
             return false;
         for (int index = 0; index < method.Parameters.Length; index++)
         {
-            if (method.Parameters[index].RefKind != RefKind.None ||
+            IParameterSymbol parameter = method.Parameters[index];
+            string recordedParameterType = locator.ParameterTypes[index];
+            bool isByReference = recordedParameterType.EndsWith(
+                "&",
+                StringComparison.Ordinal);
+            if (isByReference)
+                recordedParameterType = recordedParameterType.Substring(
+                    0,
+                    recordedParameterType.Length - 1);
+            if ((isByReference
+                    ? parameter.RefKind != RefKind.Out
+                    : parameter.RefKind != RefKind.None) ||
                 !TryPhysicalSignatureType(
-                    method.Parameters[index].Type,
+                    parameter.Type,
                     method.ContainingAssembly,
                     returnsVoid: false,
                     out string parameterType) ||
                 !PhysicalSignatureEquals(
                     parameterType,
-                    locator.ParameterTypes[index],
+                    recordedParameterType,
                     method.ContainingAssembly.Identity.Name))
                 return false;
         }

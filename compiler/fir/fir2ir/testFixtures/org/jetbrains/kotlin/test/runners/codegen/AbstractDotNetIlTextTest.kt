@@ -492,6 +492,14 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-exact-interface-inputs"),
         )
+        validateGenericOwnerSplitNullableResultCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-split-nullable-result"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -4224,6 +4232,8 @@ private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE"
 private const val GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE"
+private const val GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE_MARKER =
@@ -4287,8 +4297,12 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
         "The reified generic-interface C# implementation manifest must remain publicly discoverable"
     }
     val manifest = DotNetCSharpImplementationManifestCodec.decodeManagedResource(resource.content)
-    val contract = manifest.interfaces.single { candidate ->
-        candidate.declaredOwnerPath?.lastOrNull() == expectedDeclaredOwner
+    val contract = checkNotNull(manifest.interfaces.singleOrNull { candidate ->
+        candidate.declaredOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                expectedDeclaredOwner
+    }) {
+        "The reified generic-interface manifest has no unique '$expectedDeclaredOwner': " +
+                manifest.interfaces.map { candidate -> candidate.declaredOwnerPath }
     }
     check(contract.sourceAuthoringSupported && contract.unsupportedReasons.isEmpty()) {
         "The admitted reified generic interface is not supported for C# source authoring"
@@ -10236,6 +10250,239 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
         dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
     }
     executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Proves that `T?` remains directly authorable as `T (..., out bool isNull)` in ordinary C#,
+ * while exact and widened Kotlin calls both preserve null on the same foreign object.
+ */
+private fun validateGenericOwnerSplitNullableResultCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The split-nullable C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) {
+        if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            validateReifiedGenericInterfaceCSharpManifest(
+                producer,
+                expectedDeclaredOwner = "NullableSource`1",
+                expectedMemberName = "read",
+                expectedSemanticReturnType = "object",
+                expectedSemanticParameterTypes = listOf("bool"),
+                expectedNaturalReturnType = "!0",
+                expectedNaturalParameterTypes = listOf("bool", "bool&"),
+            )
+        }
+        return
+    }
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The split-nullable C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The split-nullable C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("SplitNullableResultConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.split.nullable;
+
+            public sealed class NaturalIntSource : NullableSource<int>
+            {
+                public int read(bool missing, out bool isNull)
+                {
+                    isNull = missing;
+                    return missing ? default(int) : 73;
+                }
+            }
+
+            public sealed class NaturalStringSource : NullableSource<string>
+            {
+                public string read(bool missing, out bool isNull)
+                {
+                    isNull = missing;
+                    return missing ? null : "foreign";
+                }
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    var method = typeof(NullableSource<>).GetMethod("read");
+                    var parameters = method.GetParameters();
+                    if (!method.ReturnType.IsGenericParameter || parameters.Length != 2 ||
+                        parameters[0].ParameterType != typeof(bool) ||
+                        parameters[1].ParameterType != typeof(bool).MakeByRefType() ||
+                        !parameters[1].IsOut)
+                        throw new InvalidOperationException(
+                            "NullableSource<T>.read did not expose T + out bool");
+
+                    var ints = new NaturalIntSource();
+                    bool isNull;
+                    if (ints.read(false, out isNull) != 73 || isNull)
+                        throw new InvalidOperationException("direct C# value call failed");
+                    if (ints.read(true, out isNull) != 0 || !isNull)
+                        throw new InvalidOperationException("direct C# value null call failed");
+
+                    var reader = new NullableSourceReader();
+                    if (reader.readInt(ints, false) != 73 ||
+                        reader.readInt(ints, true).HasValue)
+                        throw new InvalidOperationException("typed Kotlin call to C# failed");
+                    var widenedInts = contractsKt.widenIntSource(ints);
+                    if (!object.Equals(reader.readWide(widenedInts, false), 73) ||
+                        reader.readWide(widenedInts, true) != null)
+                        throw new InvalidOperationException("widened Kotlin value call to C# failed");
+
+                    var strings = new NaturalStringSource();
+                    if (reader.readWide(strings, false) as string != "foreign" ||
+                        reader.readWide(strings, true) != null)
+                        throw new InvalidOperationException("widened Kotlin reference call to C# failed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "SplitNullableResultConsumer.exe"
+        else "SplitNullableResultConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the split-nullable probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the split-nullable probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable split-nullable probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+
+    val authoringSource = directory.resolve("SplitNullableResultAuthoringConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.split.nullable;
+
+            public sealed partial class GeneratedIntSource : NullableSource<int>
+            {
+                public int read(bool missing, out bool isNull)
+                {
+                    isNull = missing;
+                    return missing ? default(int) : 79;
+                }
+            }
+
+            public static class AuthoringProgram
+            {
+                public static int Main()
+                {
+                    var source = new GeneratedIntSource();
+                    var reader = new NullableSourceReader();
+                    if (reader.readInt(source, false) != 79 ||
+                        reader.readInt(source, true).HasValue)
+                        throw new InvalidOperationException(
+                            "generated typed split-nullable bridge failed");
+                    var widened = contractsKt.widenIntSource(source);
+                    if (!object.Equals(reader.readWide(widened, false), 79) ||
+                        reader.readWide(widened, true) != null)
+                        throw new InvalidOperationException(
+                            "generated semantic split-nullable bridge failed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val authoringConsumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "SplitNullableResultAuthoringConsumer.exe"
+        else "SplitNullableResultAuthoringConsumer.dll"
+    )
+    val generatedDirectory = directory.resolve("generated-${target.description}")
+    val authoringTooling = genericOwnerCSharpAuthoringTooling()
+    val authoringCompilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the split-nullable authoring probe"
+            },
+            authoringSource,
+            authoringConsumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+            analyzers = listOf(authoringTooling),
+            generatedFilesDirectory = generatedDirectory,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the split-nullable authoring probe"
+            },
+            authoringSource,
+            authoringConsumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+            analyzers = listOf(authoringTooling),
+            generatedFilesDirectory = generatedDirectory,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable split-nullable authoring probe")
+    }
+    check(authoringCompilation.exitCode == 0) { authoringCompilation.output }
+    val generated = generatedDirectory.walkTopDown()
+        .filter { file ->
+            file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+        }
+        .joinToString("\n", transform = File::readText)
+    check("partial class GeneratedIntSource" in generated &&
+            "out __kotlinIsNull" in generated &&
+            "__kotlinIsNull ? null" in generated) {
+        "The C# authoring tool did not preserve the split-nullable call convention:\n$generated"
+    }
+    executeSnapshotConsumer(target, authoringConsumer, directory)
 }
 
 /**
