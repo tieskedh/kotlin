@@ -1578,13 +1578,29 @@ TypeDef.
 
 The source-built Stdlib consequently loses both
 `AbstractMutableList.removeAll` and `retainAll`. Its first remaining owner
-failure is `AbstractMutableMap.remove`, where a semantic
-`MutableMap.MutableEntry<object, object>` value must supply the logical
-`Map.Entry` key property without assuming the unrelated canonical non-generic
-entry construction. Classify that property-view conversion next without a
-Map, MutableEntry, property-name, package, or stdlib exception. Do not
-reinterpret this as permission to make every semantic interface value a
-natural generic construction.
+failure was `AbstractMutableMap.remove`, where blanket semantic-body remapping
+degraded an independently exact iterator/entry result chain to
+`MutableMap.MutableEntry<object, object>`.
+
+That result-chain boundary is now closed structurally. A parameterless producer
+on the semantic hook's exact current receiver retains its natural CLR
+construction, and the proof propagates only through immutable locals with the
+same invariant type and further parameterless producer calls. Input-bearing
+calls, `super`, mutable/source-widened locals, and nested variant results which
+require a semantic route remain excluded. The broad key candidate therefore
+stays semantic while the iterator, entry, key, and value remain exact. The
+compiler Runtime graph also mirrors the already-emitted
+`MutableMap.MutableEntry<K,V> : Map.Entry<K,V>` declared edge, so the physical
+base view can be recovered without inventing a semantic conversion.
+
+The source-built Stdlib no longer reports `AbstractMutableMap.remove`. Its
+first remaining owner failure is `AbstractMutableMap.get_keys`, where the
+semantic getter constructs an anonymous view object whose constructor expects
+`AbstractMutableMap<object, object>` even though current `this` correctly
+remains `AbstractMutableMap<!K, !V>`. Classify that captured-self/anonymous-
+object construction next without an AbstractMutableMap, keys, anonymous-class,
+package, or stdlib exception. Do not weaken exact current-receiver authority or
+globally remap generated owner constructions merely to admit this one body.
 
 The first general split-result experiment is now implemented for a
 producer-recorded direct `T?` interface result: the natural MethodDef returns

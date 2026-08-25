@@ -403,6 +403,10 @@ internal object DotNetRuntimeTypes {
             mapGenericInterfaceInfo,
             DotNetGenericInterfaceView.DECLARED,
         )
+        val declaredMapEntry = openRuntimeInterfaceType(
+            mapEntryGenericInterfaceInfo,
+            DotNetGenericInterfaceView.DECLARED,
+        )
         mutableIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         listIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredIterator)
         mutableListIteratorGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(
@@ -438,6 +442,7 @@ internal object DotNetRuntimeTypes {
             declaredMutableCollection,
         )
         mapGenericInterfaceInfo.exactClassInfo!!.interfaces = listOf(declaredMap)
+        mutableMapEntryGenericInterfaceInfo.declaredClassInfo!!.interfaces = listOf(declaredMapEntry)
     }
 
     private data class RuntimeGenericInterfaceMethodNames(

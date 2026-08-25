@@ -871,6 +871,39 @@ verification, and work state.
   erased outside rehearsal. See
   [`docs/archive/generic-owner-semantic-body-exact-helper-2026-08-25.md`](docs/archive/generic-owner-semantic-body-exact-helper-2026-08-25.md).
 
+  The next semantic-body result-chain gate is now closed without a Map,
+  MutableMap, Entry, property-name, package, or stdlib rule. A parameterless
+  producer call on the semantic hook's exact current receiver retains its
+  natural CLR construction, and that evidence propagates only through
+  immutable same-invariant-type locals and further parameterless producers.
+  Calls with inputs, `super` calls, mutable/source-widened locals, and nested
+  variant results which require a semantic route remain excluded. The hook's
+  broad candidate therefore stays in the object domain while its iterator,
+  entry, key, and value chain remains on the actual `!K`/`!V` construction.
+
+  The compiler Runtime graph now also mirrors the already-emitted
+  `MutableMap.MutableEntry<K,V> : Map.Entry<K,V>` declared-generic edge. This
+  changes no TypeDef or public ABI; it lets code generation recover the
+  physical base view which Runtime already guarantees.
+
+  `genericOwnerSemanticBodyExactResultChain.kt` covers value and reference
+  entries, widened wrong and matching candidates, mutation, result values,
+  and identity. Four rehearsal and four production-erased inverse lanes pass
+  across PSI, LightTree, Framework 4.8, and .NET 10. The source-built Stdlib
+  rehearsal no longer reports `AbstractMutableMap.remove`; its first remaining
+  owner failure is the independent `AbstractMutableMap.get_keys` anonymous-
+  object construction, whose constructor still requests
+  `AbstractMutableMap<object, object>` from exact current
+  `AbstractMutableMap<!K, !V>`.
+
+  The final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,367 tests with no failures, errors, or skips: 187 freshly written FIR
+  suites/2,231 tests, two freshly written integration suites/127 tests, and
+  the freshly written three-test backend resolver suite; the unchanged six-
+  test `dotnet.ir` root remains up-to-date. Production remains atomically
+  erased outside rehearsal. See
+  [`docs/archive/generic-owner-semantic-body-exact-result-chain-2026-08-25.md`](docs/archive/generic-owner-semantic-body-exact-result-chain-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3551,29 +3584,28 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The Runtime reified Map.Entry surface-57 candidate and all three post-rebase
-shared-contract adaptations passed every constituent of the strict target
-gate. The normal aggregate command remains:
+The semantic-body exact result-chain checkpoint passed every constituent of
+the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed successfully on 2026-08-24. Backend, FIR2IR,
-stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were executed
-for the surface-57 candidate. Direct audit of the result roots covers the
-complete target inventory of 191 suites and 2,329 tests:
+The latest aggregate completed successfully on 2026-08-25. Backend, FIR2IR,
+stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
+executed for the semantic-body exact result-chain checkpoint. Direct audit of
+the result roots covers the complete target inventory of 191 suites and 2,367
+tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,195 FIR, IL-text, and box tests
+- 2,231 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
-- 1 backend resolver test
+- 3 backend resolver tests
 - zero failures, errors, or skips
 
-The 187 FIR suites/2,195 tests and two integration suites/127 tests were
-freshly written by the final aggregate. The resolver suite was written by the
-earlier same-feature aggregate attempt; the unchanged green six-test
-`dotnet.ir` model root remained up-to-date.
+The 187 FIR suites/2,231 tests, two integration suites/127 tests, and the
+three-test backend resolver suite were freshly written by the final aggregate.
+The unchanged green six-test `dotnet.ir` model root remained up-to-date.
 
 The earlier profile-specialized generic-array-fill aggregate and explicit
 model constituent exited successfully. That historical head additionally
