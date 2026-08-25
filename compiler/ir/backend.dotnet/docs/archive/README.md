@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-inline-widened-temporary-carrier-2026-08-25.md`](generic-owner-inline-widened-temporary-carrier-2026-08-25.md)
+  records exact natural carrier preservation through compiler-owned immutable
+  inline aliases, the source/mutable semantic-view exclusion, the complete
+  profile/frontend proof, and the next semantic-body self-conversion blocker.
 - [`reified-generic-interface-split-nullable-result-2026-08-25.md`](reified-generic-interface-split-nullable-result-2026-08-25.md)
   records ABI 59's typed-payload plus `[out] bool&` result convention,
   producer-derived already-nullable payloads, exact/semantic routing,

@@ -253,6 +253,18 @@ internal class DotNetIlExpressionCodegen(
         }
         if (expression is IrGetValue) {
             val slotType = methodContext.reference(expression.symbol).type
+            val variable = expression.symbol.owner as? IrVariable
+            val logicalGenericOwner = naturalConstructedGenericCarrierTypeOrNull(expression.type)
+            if (variable?.isDotNetImmutableCompilerCarrierAlias() == true &&
+                logicalGenericOwner != null && slotType != logicalGenericOwner &&
+                slotType != DotNetIlValueType.Object && slotType.isDotNetReferenceShaped() &&
+                !typeMapper.isGenericOwnerCapabilityViewOf(slotType, logicalGenericOwner)
+            ) {
+                // A following inliner alias must observe the exact carrier selected for the
+                // preceding alias. Reconstructing the logical C<object> here would lose that
+                // proof between two compiler-owned immutable temporaries.
+                return slotType
+            }
             val logicalType = typeMapper.toDotNetIlValueType(expression.type)
             if ((logicalType != null &&
                     typeMapper.isGenericOwnerNestedConstructionCarrierOf(slotType, logicalType)) ||
@@ -347,6 +359,55 @@ internal class DotNetIlExpressionCodegen(
         }
         val logicalType = typeMapper.toDotNetIlValueType(expression.type) ?: return null
         return naturalType.takeIf { typeMapper.isGenericOwnerCapabilityViewOf(it, logicalType) }
+    }
+
+    /**
+     * Retains the exact natural carrier behind one compiler-generated immutable generic-owner
+     * alias. Kotlin inference can instantiate a covariant inline receiver at `Any?` even when
+     * the supplied value is an exact `I<T>` or generic class construction. The logical widened
+     * view remains authoritative inside the inline body, but materializing `I<object>` would be
+     * false for value/open `T`; the temporary can instead keep the producer's already-proven CLR
+     * carrier. Semantic/object producers remain on their selected capability route.
+     */
+    fun exactGenericOwnerTemporaryCarrierTypeOrNull(
+        expression: IrExpression,
+        logicalType: IrType,
+    ): DotNetIlValueType? {
+        val mappedLogicalType = naturalConstructedGenericCarrierTypeOrNull(logicalType)
+            ?: return null
+        val producer = when (expression) {
+            is IrTypeOperatorCall -> if (
+                expression.operator == IrTypeOperator.IMPLICIT_CAST ||
+                expression.operator == IrTypeOperator.IMPLICIT_NOTNULL
+            ) {
+                expression.argument
+            } else {
+                expression
+            }
+            else -> expression
+        }
+        val mappedProducerType = naturalConstructedGenericCarrierTypeOrNull(producer.type)
+            ?: return null
+        val physicalType = mappedNaturalType(producer) ?: return null
+        if (physicalType == mappedLogicalType || physicalType == DotNetIlValueType.Object ||
+            !physicalType.isDotNetReferenceShaped() ||
+            physicalType.isDotNetAssignableTo(mappedLogicalType) ||
+            typeMapper.isGenericOwnerCapabilityViewOf(physicalType, mappedProducerType) ||
+            typeMapper.isGenericOwnerCapabilityViewOf(physicalType, mappedLogicalType)
+        ) {
+            return null
+        }
+        return physicalType
+    }
+
+    private fun naturalConstructedGenericCarrierTypeOrNull(
+        type: IrType,
+    ): DotNetIlValueType.GenericInstance? {
+        if (!typeMapper.isGenericOwnerRehearsalEnabled()) return null
+        val defaultType = typeMapper.toDotNetIlValueType(type)
+        val declaredType = declaredGenericSignatureTypeMapper.toDotNetIlValueType(type)
+        return defaultType as? DotNetIlValueType.GenericInstance
+            ?: declaredType as? DotNetIlValueType.GenericInstance
     }
 
     fun genericOwnerNestedConstructionCarrierTypeOrNull(
@@ -1641,6 +1702,15 @@ internal class DotNetIlExpressionCodegen(
             val targetsBigArityStub = expression.typeOperand.classOrNull?.owner
                 ?.isDotNetBigArityFunctionN == true
             when {
+                operandType == expectedType && castType != expectedType &&
+                        naturalConstructedGenericCarrierTypeOrNull(expression.typeOperand) != null &&
+                        naturalConstructedGenericCarrierTypeOrNull(expression.argument.type) != null -> {
+                    // An immutable compiler temporary selected the producer's exact natural
+                    // carrier for this logical widened inline view. IMPLICIT_CAST has no runtime
+                    // effect; retain that carrier instead of fabricating the sibling C<object>.
+                    emitExpression(expression.argument, operandType)
+                    return
+                }
                 operandType is DotNetIlValueType.GenericArray &&
                         castType is DotNetIlValueType.PrimitiveArray &&
                         operandType.elementType == castType.elementType -> {
