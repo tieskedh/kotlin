@@ -105,6 +105,7 @@ private object DotNetCustomAttributeEncoder {
         is DotNetIlValueType.MappedClass,
         is DotNetIlValueType.TypeParameter,
         is DotNetIlValueType.GenericInstance,
+        is DotNetIlValueType.ByReference,
             -> false
     }
 

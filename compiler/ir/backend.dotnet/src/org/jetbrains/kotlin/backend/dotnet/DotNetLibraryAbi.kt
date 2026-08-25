@@ -164,6 +164,8 @@ enum class DotNetPublishedGenericInterfaceFamilyKind {
 /** Logical role of one member declared directly by a published interface family. */
 enum class DotNetPublishedGenericInterfaceMemberRole {
     PRODUCER,
+    /** An open `T?` result whose natural CLR slot is physically `T + out bool isNull`. */
+    SPLIT_NULLABLE_PRODUCER,
     CONSTRUCTED_INTERFACE_PRODUCER,
     CONSUMER,
     INPUT_OUTPUT,
@@ -699,7 +701,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "58"
+    const val ABI_VERSION = "59"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"

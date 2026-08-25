@@ -125,6 +125,7 @@ private fun IrSimpleFunction.dotNetCanonicalBridgeSignature(
         parameterTypes = listOf(bridgeSignature.parameterTypes.first()) +
                 slotSignature.parameterTypes.drop(1),
         hasThis = true,
+        hasSplitNullableResult = slotSignature.hasSplitNullableResult,
     )
 }
 
@@ -211,6 +212,7 @@ internal class DotNetIlEmitter(
     private val genericOwnerCapabilityBearingDeclarations: Set<IrDeclaration> = emptySet(),
     private val genericOwnerForeignDispatchDeclarations: Set<IrDeclaration> = emptySet(),
     private val genericOwnerReflectionCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
+    private val splitNullableResultPayloadTypes: Map<IrSimpleFunction, IrType> = emptyMap(),
 ) {
     private val covariantReturnImplementations: Set<IrSimpleFunction> =
         covariantReturnBridges.asSequence()
@@ -702,6 +704,7 @@ internal class DotNetIlEmitter(
                 genericOwnerFunctionInputEntryObjectParameters.entries.flatMapTo(linkedSetOf()) { entry ->
                     entry.value.map { index -> entry.key.parameters[index] }
                 },
+            splitNullableResultPayloadTypes = splitNullableResultPayloadTypes,
             genericArgumentHasProperClrValueSubtype = genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
                 null
@@ -3579,7 +3582,7 @@ internal class DotNetIlEmitter(
             is DotNetIlValueType.NullableValue, DotNetIlValueType.Object,
             is DotNetIlValueType.GenericInstance, is DotNetIlValueType.TypeParameter,
             is DotNetIlValueType.PrimitiveArray, is DotNetIlValueType.GenericArray,
-            is DotNetIlValueType.ErasedGenericArray,
+            is DotNetIlValueType.ErasedGenericArray, is DotNetIlValueType.ByReference,
                 -> unsupportedValue()
         }
     }
@@ -4232,6 +4235,9 @@ internal class DotNetIlEmitter(
             }
             is DotNetIlValueType.TypeParameter -> dotNetUnsupported(
                 "open generic default placeholders are outside the non-generic CLR export boundary"
+            )
+            is DotNetIlValueType.ByReference -> dotNetUnsupported(
+                "managed-pointer default placeholders are not CLR values"
             )
             DotNetIlValueType.String,
             DotNetIlValueType.Object,

@@ -4,6 +4,8 @@
 - Scope: C# source implementations of non-generic Kotlin-owned interfaces on
   `net48`, `netstandard2.0`, and `net10.0`; historical evidence for the removed
   implicit generic authoring prototype
+- Amended: 2026-08-25 for schema-9 split-nullable MethodDef locators in the
+  production-inert CLR-generic interface rehearsal
 
 The generic canonical/declared/exact design recorded below is no longer
 normative. [Erased generic-interface identity](generic-interface-erased-identity.md)
@@ -33,6 +35,14 @@ Property row. The analyzer/generator ignores that type only after the manifest
 slots prove one of these exact shapes. If any implemented rehearsal contract
 has declaration-site variance or a broader member surface, the bounded partial-
 generation rules below still apply.
+
+The rehearsal also permits one producer-recorded direct `T?` result. Its
+natural CLR slot returns `T` and has one final `[out] bool&` null flag. An
+ordinary non-partial C# type may implement that natural method directly. If a
+partial type uses the optional generator, the generated semantic adapter calls
+the same typed method and interprets the flag; it does not create a second
+body or state. This remains rehearsal-only and does not broaden production
+generic authoring.
 
 ## Context
 
@@ -89,7 +99,14 @@ external assembly qualifiers remain identity-significant. The one exception is t
 core-facade set (`mscorlib`, `netstandard`, `System.Runtime`, and `System.Private.CoreLib`) for
 `System.*` types, which Roslyn may unify through type forwarding across profiles.
 
-Schema 7 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
+Schema 9 permits a trailing `&` only as a physical locator fact. The first
+producer of that fact is the rehearsal's split-nullable result, whose final
+`bool&` must resolve to Roslyn `RefKind.Out`; a by-value Boolean, `ref bool`, or
+different element type does not match. The locator still does not define a
+second logical parameter: generated source obtains direction and type from the
+resolved CLR MethodDef. Other by-reference authoring shapes remain unsupported.
+
+Schema 7 introduced `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
 and member records use the same public `IdSignature` rendered by
 `PublicIdSignatureComputer(DotNetIrMangler)` for the DLL's physical index. A manifest must not
 introduce a runtime-, Roslyn-, or tooling-owned declaration identity. The `X:` key of a derived
@@ -595,5 +612,8 @@ covering:
 - public, nested, and friend-accessible internal contracts;
 - separate assemblies and multi-targeted portable/modern assets;
 - nullability, value types, boxing, and reference identity;
+- producer-recorded split-nullable results through ordinary and generated C#,
+  including exact `[out] bool&` reflection and rejection of other by-reference
+  shapes;
 - malformed, oversized, duplicate, unknown-version, and tampered manifests; and
 - compatibility across at least two compiler generations once an ABI freeze is proposed.
