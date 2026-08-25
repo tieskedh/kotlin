@@ -1527,13 +1527,12 @@ independent ablation proofs and retain the production-erased inverse. Retained
 foreign CLR MethodDefs remain a stronger authority than nullable/flexible
 Kotlin import views and are substituted through their real construction.
 
-The next source-product blocker is an erased physical class emitting a reified
-generic-interface edge whose arguments still reference the logical owner's
-`!n` parameters. Such a class has no CLR GenericParams and therefore cannot
-name those arguments. Select the interface-edge carrier from the recorded
-physical owner representation, fail closed when no honest edge exists, and do
-not add a HashMap, MutableSet, collection, stdlib, or declaration-name
-exception. Rerun the source product after that complete structural correction.
+The erased physical-owner edge is closed at same-module bootstrap
+reconstruction: arity-zero owners retain closed edges but never link logical
+owner `!n` parameters absent from metadata. The source product now reaches its
+normal unsupported-shape census. Classify next the first repeated semantic-to-
+natural typed-interface conversion family without a Throwable, collection,
+stdlib, or declaration-name exception.
 
 Before ABI freeze, revisit the single-slot `object` carrier for open-nullable
 method results with one general split-result experiment: typed payload plus an
