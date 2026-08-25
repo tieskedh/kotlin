@@ -1530,9 +1530,22 @@ Kotlin import views and are substituted through their real construction.
 The erased physical-owner edge is closed at same-module bootstrap
 reconstruction: arity-zero owners retain closed edges but never link logical
 owner `!n` parameters absent from metadata. The source product now reaches its
-normal unsupported-shape census. Classify next the first repeated semantic-to-
-natural typed-interface conversion family without a Throwable, collection,
-stdlib, or declaration-name exception.
+normal unsupported-shape census.
+
+Its first semantic-to-natural conversion family is now closed structurally. A
+direct body on a physically final non-generic class may receive one paired
+object-input compiler entry when exactly one nested admitted-interface
+parameter is broader on the canonical slot and no fixed wrong-shape policy owns
+that input. Natural Kotlin/C# calls retain the original MethodDef and body; the
+canonical bridge calls the copied object-input body without first narrowing to
+one closed CLR construction. A custom separate-compilation owner proves exact
+and widened calls plus identity on both runtimes, and the production-erased
+inverse remains unchanged. The full target aggregate covers 191 suites/2,351
+tests with zero failures, errors, or skips. The source product loses the former
+`SuppressedExceptionList` family and now reaches the independent open generic-
+owner self-view conversion in `AbstractMutableList.indexOf`. Resolve that
+downstream typed-route degradation next without an AbstractMutableList, List,
+stdlib, or member-name exception.
 
 Before ABI freeze, revisit the single-slot `object` carrier for open-nullable
 method results with one general split-result experiment: typed payload plus an
