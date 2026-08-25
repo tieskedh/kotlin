@@ -1611,9 +1611,11 @@ root failure is static-initialization binding for a generated generic subclass:
 the subclass's synthetic `<StaticInitialization>` calls `<EnsureInitialized>`
 through a source-built generic base/companion holder that the backend does not
 yet bind. The later unsupported constructor in the parent semantic getter is a
-cascade from that class eviction. Close this next without an AbstractSet,
-AbstractMap, companion, collection, package, or stdlib exception, and without
-making arbitrary generated owners inherit unrelated static state.
+cascade from that class eviction. Do not close that census blocker yet. It is
+the stopping point for physical-carrier architecture consolidation. The next
+work is a behavior-neutral shadow implementation of staged declaration
+authority, symbolic value provenance, storage placement, and authoritative
+operation routing.
 
 The first general split-result experiment is now implemented for a
 producer-recorded direct `T?` interface result: the natural MethodDef returns
@@ -1637,6 +1639,42 @@ inputs. Extend the same convention to that composition only after its own
 general proof. Trimming and NativeAOT remain freeze gates, not premises for
 globally retaining the object-result representation. Fields and ordinary
 generic state remain a separate representation decision.
+
+The consolidation proceeds in bounded stages:
+
+1. expose the existing producer records, retained foreign metadata, physical
+   owner graph, member families, slot domains, MethodDefs, and result layouts
+   through one staged declaration-authority query; cross-check retained
+   foreign TypeDef arity/category against metadata and derive constrained
+   generic-parameter null encodings before those facts become authoritative;
+2. add a read-only carrier analysis after current body-producing lowerings,
+   with symbolic owner- and method-scoped parameters and no IR, ABI, routing,
+   or emitter change;
+3. distinguish every expression's produced carrier from the independently
+   selected carrier of a local or storage slot, and treat null as a carrierless
+   value whose guarantees concern only non-null paths;
+4. compare produced carriers, guaranteed physical views, selected lineage,
+   joins, and route prerequisites with every current planner/router/emitter
+   decision;
+5. record admitted symbolic physical supertype edges rather than recovering
+   InterfaceImpl truth from logical supertypes;
+6. move route selection behind one query which starts from the authoritative
+   callable family and treats exact provenance only as supporting evidence;
+7. replace blanket semantic-body remapping and the temporary alias, helper,
+   result-chain, and generated-capture recognizers one by one;
+8. normalize split-nullable as a result layout independent of parameter
+   domains and prove the composition on a custom two-parameter lookup family,
+   including nullable and value-class payload substitutions, before applying it
+   to Map; and
+9. resume the source-built Stdlib census only after the hostile shadow matrix
+   and exact production-erased inverse are green.
+
+This is not a generic state redesign. Field and public owner selection remain
+producer-wide, open-world decisions, and per-value facts are never serialized.
+The shadow work stops rather than broadens if it needs logical-supertype
+reconstruction, declaration names, IR-origin authority, emitter-side
+representation inference, or a general whole-compiler alias/effect framework
+merely to reproduce the current bounded cases.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

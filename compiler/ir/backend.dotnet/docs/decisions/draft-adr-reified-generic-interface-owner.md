@@ -896,7 +896,223 @@ The rule is structural and excludes open/inherited bodies, defaults, varargs,
 method generics, properties, multiple mismatches, and production emission. See
 [`../archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md`](../archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md).
 
+## Physical-value provenance consolidation
+
+The post-representation slot, closed semantic-input, split-nullable, inline
+temporary, receiver-helper, result-chain, and generated-capture checkpoints
+establish three related but distinct kinds of authority. They must not be
+collapsed into one exact/semantic/object ranking:
+
+1. Kotlin IR and KLIB remain the logical authority for types, variance,
+   nullability, overrides, projections, stars, and operation semantics.
+2. Producer-selected or retained CLR declarations are physical authority for
+   TypeDefs, MethodDefs, fields, InterfaceImpls, MethodImpls, and calling
+   conventions.
+3. Per-value provenance records which already-existing physical views remain
+   available after local flow and representation-preserving Kotlin view
+   changes. It does not select public declarations or state.
+
+Physical declaration authority advances monotonically through three explicit
+epochs. The early representation plan selects parametric owner/member/state
+relationships and bridge obligations. The bound-declaration index owns the
+materialized TypeDef, MethodDef, InterfaceImpl, and MethodImpl identities. The
+sealed emission-signature index binds every remaining representation variable,
+including value-class and hidden-result carriers, after the relevant physical
+lowerings. A later epoch may bind an earlier physical type expression; it may
+not reinterpret an already selected declaration family. Retained foreign CLR
+metadata is sealed authority from import. Contradictory producer and retained
+physical facts are a declaration conflict and fail closed.
+
+Physical declaration identity is separate from its epoch-specific description.
+Arity, class/interface/value-type category, and null encoding are admitted by
+one conflict-checked declaration index; they never participate in TypeDef or
+MethodDef identity inside value flow. Two descriptions of the same identity
+either agree or produce `Conflict`--they cannot become two apparently unrelated
+declarations. A later index is constructed only by monotone `advance` from the
+preceding epoch and retains every earlier fact. Starting an independent later
+snapshot is not an alternative to resolving an authority disagreement.
+
+Body-local carriers are symbolic until that final binding. A current-
+compilation TypeDef is identified by its IR declaration identity plus its
+selected canonical, natural, or exact physical view; it is not identified by a
+provisional emitted path. A producer TypeDef is identified by its complete
+library artifact identity and recorded path. A foreign CLR TypeDef or MethodDef
+is identified by its retained assembly metadata and metadata handle, never by
+re-resolving a name or enhanced Kotlin type. Emitter binding is a pure one-way
+query over the current live indexes:
+
+```text
+symbolic carrier + live emission indexes
+    -> bound physical type | unavailable | declaration conflict
+```
+
+An unavailable local declaration participates in normal emitter eviction. It
+does not authorize the binder to reinterpret the value as semantic or object,
+and a bound IL type is not cached across eviction/fixpoint rounds.
+
+Generic parameters in a symbolic carrier are scoped to their physical binder.
+`OwnerParameter(ownerA, 0)` and `OwnerParameter(ownerB, 0)` are distinct, as
+are method parameters from different MethodDefs. Only final signature binding
+may render them as `!0` or `!!0`, after checking the selected owner or method
+or applying an explicit recorded substitution. A bare context-relative `!0`
+must never circulate as a cross-body value fact.
+
+Per-value analysis uses a product rather than a scalar lattice. At minimum it
+distinguishes:
+
+- the carrier produced by the current definition or expression;
+- the carrier already selected for a destination local, parameter, field, or
+  result slot;
+- the real constructed CLR views guaranteed on every reaching non-null value;
+- optional selected-view lineage;
+- direct, null, bottom, and split-nullable value layouts; and
+- the physical evidence from which each guaranteed view was obtained.
+
+`ProducedCarrier` and `StorageCarrier` are deliberately different facts. A
+definition can produce `Producer<int>` while a destination selected by the
+join of several definitions stores `object`; reading that destination then
+produces its already selected `object` carrier. Conversely, local placement
+may select the one exact carrier of a closed immutable flow. Value analysis
+supplies constraints to placement but may not assume the placement result as
+its own input. Fields, public parameters, and MethodDef results are fixed by
+their producer-wide declaration plan rather than local flows.
+
+Placement in this analysis is identity-preserving only. Storing a reference
+carrier in `object` retains the same runtime object and its independently proven
+views. Boxing a scalar or value-type carrier, unboxing it, adapting a semantic
+capability, or materializing a nullable value is an explicit operation which
+produces a new fact; a permissive storage predicate must not smuggle those
+operations into provenance. Alternative reaching writes join their non-null
+guarantees, whereas a sequential overwrite kills the earlier contents. Reading
+a fixed constructed storage carrier independently guarantees that carrier's
+own physical view.
+
+Selected-view lineage is only a selector over already-proven views. It can
+remember that a value implementing both `Source<int>` and `Source<string>` was
+first selected as `Source<int>` before a logical star projection, but it may
+never prove that `Source<int>` exists. Every selected lineage entry must be a
+member of the value's guaranteed physical views. A join retains a lineage
+entry only when every incoming non-bottom path selects the same physical view;
+different or absent selections remove it even when the incoming values happen
+to share one concrete runtime class.
+
+Joins select a verifier-valid destination carrier independently from logical
+Kotlin type joining. Guaranteed view sets intersect after closing only over
+real producer-recorded or retained CLR edges. Two known incompatible
+constructions are ordinary precision loss, not a declaration conflict. They
+may join at a truthful common physical view, a capability guaranteed by every
+incoming object, or `object`; they never manufacture a construction such as
+`I<object>`. Unknown flow remains unknown. A successful checked barrier may
+add path-local view evidence, while a logical, unchecked, or implicit cast may
+only preserve evidence already held by its input.
+
+Evidence labels are diagnostic provenance, not an additional lattice
+dimension. Two facts guaranteeing the same view set and lineage compare equal
+even when one learned a view from a storage read and another from an
+identity-preserving transfer. This keeps evidence accumulation from perturbing
+fixpoint convergence or shadow-result equality.
+
+`null` is an explicit produced layout, not `object` with a special logical
+type. Guaranteed views quantify over reaching non-null values, so joining a
+known-null arm with an exact `Source<int>` arm preserves the latter view and
+changes only the null state. Placement may put that null directly in any
+already-selected compatible reference carrier; it must not claim that null was
+produced as `object` and thereby force an object join. A maybe-null unknown arm
+can still contain an unknown non-null value and therefore degrades exact
+provenance normally.
+
+The declaration index also selects a carrier's null encoding. A reference
+carrier accepts carrierless `ldnull`; an inline nullable value can represent
+logical null only after explicit materialization; a non-null scalar cannot
+represent it; and an unconstrained physical `!T` is substitution-dependent.
+The latter may carry an already typed maybe-null `!T` value and store it
+unchanged in the same `!T` slot, but it does not authorize injecting
+carrierless null before the construction is known. Joining carrierless null
+with split or inline value layouts therefore becomes unknown until an explicit
+layout conversion is chosen.
+
+Operation routing remains a separate decision. It starts from the logical
+member family, its selected physical slots, and its semantic policy, then asks
+whether receiver and argument facts satisfy an allowed route. Exact receiver
+provenance cannot override a broad-candidate barrier, semantic-result route,
+direct-super target, explicit MethodImpl, or retained foreign override slot.
+An object-carried value may recover one already-guaranteed exact view with the
+required CLR conversion, but an exact-looking logical type cannot create such
+evidence. The emitter consumes the resulting route and carrier decisions; it
+does not rediscover representation from member names, packages, IR origins, or
+logical supertype substitution.
+
+Semantic body variants receive explicit entry environments. The current exact
+receiver can remain on its selected owner construction while broad hook
+parameters start in their semantic/object carriers. Broadness follows real
+definitions and uses; it does not erase unrelated receiver-derived fields,
+producer results, helper arguments, or captures. Immutable aliases, calls,
+and generated captures follow the same transfer rules regardless of whether
+their IR declaration originated in source or a compiler lowering. Mutable
+values join every reaching definition.
+
+State selection is not delegated to per-value provenance. One owner field is
+chosen from every legal constructor, write, semantic entry, override, escape,
+memory-semantic obligation, and separate-compilation boundary. A convenient
+local `Box<Producer<int>>` allocation cannot specialize a logical mutable
+`Box<Producer<Any?>>` whose legal later writes may carry another construction.
+After the producer-wide field carrier is fixed, value provenance may route
+reads and writes around that one authoritative state. It may not introduce a
+wrapper, proxy, duplicate field, or shadow state.
+
+Guaranteed-view closure uses recorded physical supertype edges. A logical IR
+or KLIB supertype does not by itself prove that the corresponding InterfaceImpl
+survived physical admission. The representation plan records each admitted
+symbolic edge, and later epochs bind rather than reconstruct it. Until such an
+edge exists, a shadow analysis may retain an exact concrete carrier but must
+report an interface-call view as unknown.
+
+Open-nullable results compose through an independent physical result layout,
+not a mutually exclusive member role. A callable contract records its
+parameter domains, semantic input policies, virtual/MethodImpl identities,
+and one of:
+
+```text
+Direct(resultSlot)
+SplitNullable(payloadSlot, out bool& isNull)
+```
+
+The auxiliary flag is part of the MethodDef identity but not a Kotlin value
+parameter. Consequently a future structural lookup can combine an
+owner-dependent or broad-checked `!K` input with
+`SplitNullable(!V, out bool&)` without a Map, member-name, or combined-role
+exception. Split payload substitution follows the producer-recorded physical
+type expression and the actual constructed generic argument; it must not
+round-trip through a later logical `IrType` mapper. The method-result layout
+does not by itself authorize split fields or state.
+
+The first implementation of this consolidation is production-inert. It adds
+shared physical-value vocabulary and a final-epoch shadow analysis, compares
+that analysis with the existing bounded proofs, and changes neither emitted
+routes nor the erased production inverse. Existing shape restrictions remain
+until their individual hostile tests are explained by the shared model. If
+the model needs declaration names, packages, stdlib identities, IR-origin
+whitelists, logical-supertype reconstruction, serialized per-value facts, or a
+general target-owned optimizer to reproduce those proofs, the consolidation
+fails and the bounded implementation remains authoritative.
+
 ## Remaining gates
+
+Before another source-built Stdlib blocker is implemented, the rehearsal must
+consolidate the local carrier proofs behind the model above in shadow mode. It
+must query producer and retained-foreign authority through one staged
+interface; compute product value facts without declaration, package, stdlib,
+member-name, collection, or IR-origin exceptions; and explain the existing
+immutable-alias, exact-helper, result-chain, generated-capture, closed-
+semantic-input, MethodDef-authority, and split-nullable behavior without
+changing emitted products. The hostile matrix must include nullable joins,
+scoped owner and method parameters, mutable multi-construction joins, stars and
+projections, value-type variance, mixed captures, deeper inheritance, separate
+assemblies, and nullable/value-class substitutions.
+
+Existing bounded recognizers remain fail-closed until the shadow model explains
+both their positive behavior and their hostile negatives. They are removed one
+by one. Production remains erased and its inverse is exercised throughout.
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal
 must cover:

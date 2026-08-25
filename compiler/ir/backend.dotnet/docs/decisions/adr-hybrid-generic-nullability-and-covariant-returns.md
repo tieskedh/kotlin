@@ -6,7 +6,7 @@
   relative-bound weakening, inherited class-slot closure, and
   declaration-erased carrier comparison
 - Amended: 2026-08-25 for producer-recorded split-nullable results on admitted
-  CLR-generic interfaces
+  CLR-generic interfaces and their orthogonal composition with parameter domains
 - Scope: Kotlin-owned declarations on `net48`, `netstandard2.0`, and `net10.0`
 
 This is a pre-ABI decision for the experimental Kotlin/.NET backend. No Kotlin/.NET binary has
@@ -98,18 +98,25 @@ the declaration-semantic object-result slot. The latter may invoke the same natu
 joins only at that operation boundary. It does not erase the owner, its fields, or unrelated
 members.
 
-The convention is selected only by a producer-published structural member role. A consumer must
-not infer it from a declaration name, current KLIB shape, or a locally chosen optimization. The
-published physical family, C# implementation manifest, Roslyn authoring tool, and separate
+The convention is a producer-published physical result layout attached to an otherwise
+independently classified callable contract. During migration the rehearsal may encode that layout
+with the bounded `SPLIT_NULLABLE_PRODUCER` role, but that role is not a permanent combined member
+classification and must not grow variants for input-policy compositions. A consumer must not
+infer the layout from a declaration name, current KLIB shape, or a locally chosen optimization.
+The published physical family, C# implementation manifest, Roslyn authoring tool, and separate
 consumer all carry or validate the final `[out] bool&` parameter. Ordinary C# implements the
 natural interface with an ordinary `out bool`; no generator, partial class, wrapper, or semantic
 interface is required. The optional partial-class authoring bridge may implement the compiler
 semantic view by calling that same typed method and interpreting the flag.
 
 This amendment does not change open-nullable fields, parameters, generic-class state, or nested
-carriers. It also does not encode Map missing-key semantics: a Map-shaped lookup with an
-owner-dependent key input and fixed barrier requires its own structural composition proof before
-it can use the convention.
+carriers. It also does not encode Map missing-key semantics. A callable with an owner-dependent
+input or fixed barrier may use the convention only when the general callable contract
+independently proves its parameter domains and `SplitNullable` result layout. It must not
+introduce a Map-specific or combined input-plus-result member role. The payload is the
+producer-recorded physical expression scoped to its declaring TypeDef and is substituted through
+the actual physical construction; it is never round-tripped through a later logical `IrType`
+mapping.
 
 ### 2. Physical clashes are diagnosed after carrier mapping
 

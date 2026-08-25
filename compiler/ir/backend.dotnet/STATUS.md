@@ -935,6 +935,48 @@ verification, and work state.
   erased outside rehearsal. See
   [`docs/archive/generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md`](docs/archive/generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md).
 
+  Generic-owner carrier consolidation has now started before the next Stdlib
+  census blocker. The first production-inert foundation separates staged
+  declaration authority, symbolic per-value provenance, destination storage,
+  and operation routing instead of ranking typed/semantic/object in one
+  lattice. Physical identity is separate from arity/category description; one
+  conflict-checked index advances monotonically across authority epochs and
+  prevents later descriptions from fabricating a second TypeDef or MethodDef.
+  Local TypeDefs retain IR identity plus their selected physical view;
+  producer and foreign declarations retain recorded artifact/metadata
+  identity. Owner and method parameters are binder-scoped, so unrelated `!0`
+  or `!!0` positions cannot alias in analysis. Nested symbolic constructions
+  and their caller-owned lists are validated and snapshotted before entering
+  flow.
+
+  Guaranteed views require explicit physical evidence. Selected lineage may
+  choose only one of those views and disappears when different constructions
+  join. Produced and storage carriers remain independent, mutable writes join
+  alternative reaching constructions, sequential overwrites kill prior
+  contents, and a broad carrier cannot be narrowed by its destination.
+  Placement preserves identity and cannot silently box a scalar/value type.
+  Null is an explicit carrierless layout: a null arm does not erase views
+  guaranteed for all non-null values, and null can enter a compatible exact
+  reference slot without pretending to be `object`. Inline nullable values
+  require explicit materialization; substitution-dependent `!T` may carry an
+  already typed maybe-null value but cannot accept carrierless null.
+  Split-nullable remains an orthogonal method-result layout and cannot
+  silently become state.
+
+  Thirty-nine direct backend tests cover declaration conflicts/epochs, the
+  algebra, scoped parameters, hostile lineage/mutable joins, truthful shared
+  views, null encodings, storage, boxing rejection, and split-result
+  boundaries. The model
+  has no routing, lowering, ABI, or emitter consumer and changes no product.
+  The final full aggregate exits zero. Direct XML audit covers 191 freshly
+  written suites/2,404 tests—187 FIR suites/2,235 tests, two integration
+  suites/127 tests, and two backend unit suites/42 tests—plus the unchanged
+  six-test `dotnet.ir` root: 192 suites/2,410 tests total, with zero failures,
+  errors, or skips. The next bounded work is a read-only final-routing shadow
+  snapshot plus producer-recorded symbolic physical supertype edges; no
+  recognizer is removed yet. See
+  [`docs/archive/generic-owner-physical-value-provenance-foundation-2026-08-25.md`](docs/archive/generic-owner-physical-value-provenance-foundation-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5169,8 +5211,18 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the hardest-model-first generic-owner architecture spike while
-   keeping production emission erased. The erased hostile oracle, historical
+1. Consolidate physical declaration authority and per-value carrier provenance
+   before advancing the source-built Stdlib census, while keeping production
+   emission erased. The production-inert symbolic carrier algebra and its
+   hostile unit tests are complete. Next record admitted symbolic physical
+   supertype edges and add one read-only snapshot after the existing final-
+   routing fixpoint. It may compare with legacy decisions but must not enter
+   `stateSizes`, route maps, emitter inputs, or ABI serialization. No bounded
+   recognizer is removed until the same analysis also observes the relevant
+   pre-semantic-remap environment and explains its hostile negatives.
+
+   Continue the hardest-model-first generic-owner architecture spike within
+   that consolidation. The erased hostile oracle, historical
    failure audit, deterministic carrier/slot admission matrix, one-owner
    dispatch probe, direct C# surface, and atomic migration/rollback boundary
    are now recorded. The first fail-closed IR planner is also active in the
