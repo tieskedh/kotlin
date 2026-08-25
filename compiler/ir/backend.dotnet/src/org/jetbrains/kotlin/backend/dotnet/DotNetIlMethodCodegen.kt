@@ -719,6 +719,7 @@ internal class DotNetIlMethodCodegen(
         val bridgeOwner = bridge.parent as? IrClass
             ?: error("Internal .NET backend error: a covariant-return bridge has no class owner")
         val referencedInfo = availableFunctions[overridden]
+            ?: DotNetRuntimeTypes.exactCallableFunctionInfoOrNull(overridden, typeMapper)
             ?: typeMapper.referencedFunctionInfoOrNull(overridden)
             ?: dotNetUnsupported("covariant-return slot is unavailable")
         val ownerToken = if (referencedInfo.owner.typeParameterCount == 0) {

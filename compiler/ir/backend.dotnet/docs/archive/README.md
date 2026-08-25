@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-post-representation-covariant-slots-2026-08-25.md`](generic-owner-post-representation-covariant-slots-2026-08-25.md)
+  records physical-MethodDef authority for open-nullable class returns and
+  Runtime ExactFunction slots, the two independent ablation proofs, unchanged
+  production inverse, and the next illegal open interface edge on an erased
+  physical owner.
 - [`generic-owner-logical-suspend-superinterface-2026-08-24.md`](generic-owner-logical-suspend-superinterface-2026-08-24.md)
   records the shared Runtime-interface carrier predicate, generic suspend-
   callable capability proof, removed validator duplication, and the next
