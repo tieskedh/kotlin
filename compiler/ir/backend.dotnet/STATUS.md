@@ -977,6 +977,23 @@ verification, and work state.
   recognizer is removed yet. See
   [`docs/archive/generic-owner-physical-value-provenance-foundation-2026-08-25.md`](docs/archive/generic-owner-physical-value-provenance-foundation-2026-08-25.md).
 
+  Producer-recorded physical-supertype authority is now executable. Complete
+  per-TypeDef `BaseType`/`InterfaceImpl` sets distinguish unavailable from
+  recorded-empty topology, validate source-scoped substitutions and physical
+  categories, reject cycles while binding, and compute positive interface-view
+  closure without consulting logical IR/KLIB supertypes. Published generic-
+  interface family records bind only their proven natural/exact TypeDef
+  identities: their `directParents` omit canonical-only `InterfaceImpl` rows,
+  so ancestry correctly remains unavailable. Detached generic-class family
+  artifacts bind their exact owner/interface/capability/core edges from an
+  explicitly supplied producer artifact identity, with core `System.Object`
+  normalized to the canonical object carrier. Named value-type, retained-
+  foreign, and ordinary published Kotlin-class edges stay unavailable until
+  their physical authority is complete. The model remains
+  outside lowering, routing, emission, and ABI serialization. The next bounded
+  feature is the read-only final-routing shadow snapshot. See
+  [`docs/archive/generic-owner-physical-supertype-authority-2026-08-25.md`](docs/archive/generic-owner-physical-supertype-authority-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
