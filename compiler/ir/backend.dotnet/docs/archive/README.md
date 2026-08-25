@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-closed-semantic-input-bridge-2026-08-25.md`](generic-owner-closed-semantic-input-bridge-2026-08-25.md)
+  records the narrow paired object-input entry for a physically final closed
+  generic-interface implementation, its name-independent separate-compilation
+  proof, unchanged production inverse, and the next open-owner self-view
+  conversion blocker.
 - [`generic-owner-erased-bootstrap-interface-edge-2026-08-25.md`](generic-owner-erased-bootstrap-interface-edge-2026-08-25.md)
   records the physical-arity guard for same-module generic-class interface
   reconstruction, its name-independent unit proof, and the next source-product

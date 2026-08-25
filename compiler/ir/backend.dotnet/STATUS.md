@@ -739,6 +739,27 @@ verification, and work state.
   errors, or skips. See
   [`docs/archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md`](docs/archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md).
 
+  The first semantic-to-natural conversion family is now closed without a
+  List, Collection, Throwable, package, or member-name rule. A directly
+  declared body in a physically final non-generic class receives one paired
+  compiler object-input entry only when exactly one nested admitted-interface
+  parameter is broader on the canonical slot, the result is unchanged, and no
+  upstream fixed wrong-shape barrier applies. Exact Kotlin and C# calls retain
+  the original natural MethodDef/body; the canonical bridge calls the copied
+  object-input body without first narrowing its semantic argument. Open and
+  inherited families remain fail-closed.
+
+  A custom covariant separate-compilation proof covers exact and widened
+  dispatch, matching and mismatching nested inputs, and one receiver/argument
+  identity across PSI, LightTree, Framework 4.8, and .NET 10. Four rehearsal
+  and four production-erased inverse lanes are green. The source-built Stdlib
+  rehearsal loses `SuppressedExceptionList` and its dependent iterator from
+  the census; the first remaining blocker is the independent open generic-
+  owner self-view conversion in `AbstractMutableList.indexOf`. The final full
+  aggregate exits zero; direct XML audit covers 191 suites/2,351 tests with
+  zero failures, errors, or skips. See
+  [`docs/archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md`](docs/archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
