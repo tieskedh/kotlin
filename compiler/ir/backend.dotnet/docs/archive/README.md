@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md`](generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md)
+  records exact current-receiver capture by a reified non-ABI generic owner,
+  the public-owner/broad-cache boundary, complete profile and frontend proof,
+  and the next generated-owner static-initialization binding blocker.
 - [`generic-owner-semantic-body-exact-result-chain-2026-08-25.md`](generic-owner-semantic-body-exact-result-chain-2026-08-25.md)
   records exact parameterless result-chain preservation inside a semantic
   body, the truthful MutableEntry-to-Entry Runtime edge, complete profile and

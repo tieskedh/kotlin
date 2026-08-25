@@ -641,6 +641,57 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     else -> false
                 }
 
+                fun IrConstructorCall.isExactCurrentReceiverCapture(): Boolean {
+                    val constructor = symbol.owner
+                    val constructedClass = constructor.parent as? IrClass ?: return false
+                    val plan = context.genericOwnerArchitecturePlans[constructedClass]
+                        ?: return false
+                    if (plan.disposition !=
+                        DotNetGenericOwnerCandidateDisposition.RETAINED_NON_ABI_IMPLEMENTATION_OWNER ||
+                        !plan.isReifiedByGenericOwnerRehearsal
+                    ) {
+                        return false
+                    }
+                    val constructedType = type as? IrSimpleType ?: return false
+                    if (constructedType.classifier != constructedClass.symbol ||
+                        constructedType.arguments.size != constructedClass.typeParameters.size ||
+                        constructedType.arguments.isEmpty()
+                    ) {
+                        return false
+                    }
+                    val substitutions = constructedClass.typeParameters.zip(constructedType.arguments)
+                        .mapNotNull { pair ->
+                            val projection = pair.second as? IrTypeProjection
+                                ?: return@mapNotNull null
+                            if (projection.variance != Variance.INVARIANT ||
+                                !projection.type.referencesGenericOwnerParameter(owner)
+                            ) {
+                                return@mapNotNull null
+                            }
+                            pair.first.symbol to projection.type
+                        }
+                    if (substitutions.size != constructedClass.typeParameters.size) return false
+                    val substitutor = IrTypeSubstitutor(
+                        substitutions.toMap(),
+                        allowEmptySubstitution = true,
+                    )
+                    var hasExactCapture = false
+                    return constructor.parameters.all { parameter ->
+                        if (!parameter.type.referencesTypeParameterOf(constructedClass)) {
+                            return@all true
+                        }
+                        val argument = arguments.getOrNull(parameter.indexInParameters)
+                            ?: return@all false
+                        if (!argument.isCurrentHookReceiver() ||
+                            !substitutor.substitute(parameter.type).sameInvariantTypeAs(argument.type)
+                        ) {
+                            return@all false
+                        }
+                        hasExactCapture = true
+                        true
+                    } && hasExactCapture
+                }
+
                 val exactNoInputProducerValues =
                     Collections.newSetFromMap(IdentityHashMap<IrVariable, Boolean>())
                 fun IrExpression.isExactNoInputProducerValue(): Boolean = when (this) {
@@ -778,16 +829,20 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                                             container.symbol.owner in exactNoInputProducerValues) ||
                                     (container is IrCall &&
                                             container.isExactNoInputProducerValue()) ||
+                                    (container is IrConstructorCall &&
+                                            container.isExactCurrentReceiverCapture()) ||
                                     (container is IrTypeOperatorCall &&
                                             container.isExactNoInputProducerValue())) &&
                             type?.referencesGenericOwnerParameter(owner) == true
                         ) {
                             // A no-input producer reached exclusively through this exact C<!T>
                             // returns the CLR construction promised by that typed slot. Preserve
-                            // it through immutable same-type locals and later no-input producers;
-                            // only the semantic hook's broad input crosses into object-domain
-                            // storage. Mutable or widened locals and input-bearing calls remain
-                            // deliberately outside this proof.
+                            // it through immutable same-type locals and later no-input producers.
+                            // A non-ABI generated construction whose every generic input is that
+                            // exact receiver likewise keeps the construction needed by its outer
+                            // capture. Only the semantic hook's broad input crosses into object-
+                            // domain storage. Mutable or widened locals and input-bearing calls
+                            // remain deliberately outside this proof.
                             return type
                         }
                         if (container is IrCall &&
