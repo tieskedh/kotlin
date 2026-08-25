@@ -831,6 +831,46 @@ verification, and work state.
   erased outside rehearsal. See
   [`docs/archive/generic-owner-inline-widened-temporary-carrier-2026-08-25.md`](docs/archive/generic-owner-inline-widened-temporary-carrier-2026-08-25.md).
 
+  The following semantic-body self-helper gate is now closed by two structural
+  composition rules. A generic extension call whose receiver is the semantic
+  hook's exact current `C<T>` may retain an owner-dependent method argument
+  only when every non-receiver occurrence supplies `T` as output, such as
+  `(T) -> Boolean`. A direct or nested input occurrence remains semantic, so a
+  broad candidate cannot be narrowed through the exact receiver. This keeps
+  the Common `MutableList<T>.removeAll(predicate)` helper on the actual
+  `MutableList<!T>` construction rather than fabricating
+  `MutableList<object>`.
+
+  A generated callable implementation class now receives its own private
+  generic-owner capability only when route analysis proves a semantic call to
+  that class. Its Kotlin callable identity remains the ordinary erased
+  `FunctionN` plus the established exact `ExactFunctionN` optimization.
+  Inventing an otherwise unused class capability would project the latter to
+  `ExactFunctionN<object, R>` and impose two incompatible `InvokeExact` slots
+  on one TypeDef. Captured broad collection state remains the already-planned
+  semantic object field; ordinary erased `FunctionN` invocation and the one
+  construction-relative exact callable interface remain unchanged. No wrapper,
+  copied body, shadow state, or source-name-based exception is added.
+
+  `genericOwnerSemanticBodyExactReceiverHelper.kt` exercises value and
+  reference `MutableList<T>` implementations, the exact generic helper and
+  its captured predicate, plus a widened direct candidate which must remain
+  semantic. Four rehearsal and four production-erased inverse lanes pass
+  across PSI, LightTree, Framework 4.8, and .NET 10. The source-built Stdlib
+  rehearsal no longer reports `AbstractMutableList.removeAll` or `retainAll`;
+  its first remaining owner failure is the independent
+  `AbstractMutableMap.remove` property read from a semantic
+  `MutableMap.MutableEntry<object, object>` through the logical `Map.Entry`
+  view.
+
+  The final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,363 tests with no failures, errors, or skips: 187 freshly written FIR
+  suites/2,227 tests, two freshly written integration suites/127 tests, and
+  the freshly written three-test backend resolver suite; the unchanged six-
+  test `dotnet.ir` root remains up-to-date. Production remains atomically
+  erased outside rehearsal. See
+  [`docs/archive/generic-owner-semantic-body-exact-helper-2026-08-25.md`](docs/archive/generic-owner-semantic-body-exact-helper-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

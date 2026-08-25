@@ -287,12 +287,18 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
             .map(DotNetGenericOwnerCallRoutePlan::calleeOwner)
             .toSet()
+        // A generated callable's Kotlin classifier is FunctionN, not its private implementation
+        // class. Giving that generic class a second semantic capability also projects its exact
+        // FunctionN<T, R> supertype to FunctionN<object, R>, creating two incompatible
+        // InvokeExact obligations on one TypeDef. Materialize such a class capability only when
+        // an analyzed call actually addresses the private class itself; its ordinary erased and
+        // exact FunctionN interfaces continue to carry every callable invocation.
         val capabilityPlans = admittedPlans.filter { plan ->
             plan.disposition != DotNetGenericOwnerCandidateDisposition.RETAINED_NON_ABI_IMPLEMENTATION_OWNER ||
                     plan.owner in privateCapabilityOwners ||
-                    plan.memberFamilies.values.any { family ->
+                    (!plan.owner.isDotNetCallableObject && plan.memberFamilies.values.any { family ->
                         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in family.roles
-                    }
+                    })
         }
         callRoutes.filter { route ->
             route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
@@ -602,6 +608,60 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     else -> false
                 }
 
+                fun IrType.typeParameterPolarities(
+                    parameter: IrTypeParameter,
+                    polarity: TypePolarity,
+                ): Set<TypePolarity> {
+                    val simple = this as? IrSimpleType ?: return emptySet()
+                    if (simple.classifier == parameter.symbol) return setOf(polarity)
+                    val classifier = (simple.classifier as? IrClassSymbol)?.owner ?: return emptySet()
+                    return simple.arguments.withIndex().flatMapTo(linkedSetOf()) { indexedArgument ->
+                        val projection = indexedArgument.value as? IrTypeProjection
+                            ?: return@flatMapTo emptySet()
+                        val declarationVariance = classifier.typeParameters
+                            .getOrNull(indexedArgument.index)
+                            ?.variance
+                            ?: Variance.INVARIANT
+                        val effectiveVariance = if (projection.variance == Variance.INVARIANT) {
+                            declarationVariance
+                        } else {
+                            projection.variance
+                        }
+                        projection.type.typeParameterPolarities(
+                            parameter,
+                            polarity.through(effectiveVariance),
+                        )
+                    }
+                }
+
+                fun IrCall.isExactReceiverAnchoredOutputHelper(): Boolean {
+                    val callee = symbol.owner
+                    val extensionReceiverIndex = callee.parameters.indexOfFirst { parameter ->
+                        parameter.kind == IrParameterKind.ExtensionReceiver
+                    }
+                    if (extensionReceiverIndex < 0 ||
+                        !arguments[extensionReceiverIndex].isCurrentHookReceiver()
+                    ) return false
+                    val extensionReceiverType = callee.parameters[extensionReceiverIndex].type
+                    val anchoredParameters = callee.typeParameters.filterIndexed { index, parameter ->
+                        typeArguments[index]?.referencesGenericOwnerParameter(owner) == true &&
+                                extensionReceiverType.typeParameterPolarities(
+                                    parameter,
+                                    TypePolarity.OUT,
+                                ).isNotEmpty()
+                    }
+                    if (anchoredParameters.isEmpty()) return false
+                    return anchoredParameters.all { parameter ->
+                        callee.parameters.withIndex().all { indexedParameter ->
+                            if (indexedParameter.index == extensionReceiverIndex) return@all true
+                            indexedParameter.value.type.typeParameterPolarities(
+                                parameter,
+                                TypePolarity.IN,
+                            ).all { occurrence -> occurrence == TypePolarity.OUT }
+                        }
+                    }
+                }
+
                 // The moved semantic body is declaration-erased, not merely its public
                 // signature. Remap every owner-dependent occurrence: generated equals bodies,
                 // private `value as T` helpers, nested C<T> applications and generic intrinsic
@@ -621,6 +681,19 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             // value occurrences cross into the semantic domain. Routing `this`
                             // through its own property capability would recurse back into this
                             // hook.
+                            return type
+                        }
+                        if (container is IrCall &&
+                            container.isExactReceiverAnchoredOutputHelper() &&
+                            type?.referencesGenericOwnerParameter(owner) == true
+                        ) {
+                            // A generic extension helper can derive T from this exact C<!T> and
+                            // expose it only as output to a callback. That is still an exact
+                            // operation on the current construction: erasing the call's method
+                            // argument to object would instead demand an unrelated invariant
+                            // interface such as MutableList<object>. A helper which accepts T
+                            // in any input position is deliberately excluded because a broad
+                            // hook candidate must never be narrowed through the exact receiver.
                             return type
                         }
                         if (container is IrGetField) {
