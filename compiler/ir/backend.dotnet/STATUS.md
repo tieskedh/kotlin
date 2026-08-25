@@ -904,6 +904,37 @@ verification, and work state.
   erased outside rehearsal. See
   [`docs/archive/generic-owner-semantic-body-exact-result-chain-2026-08-25.md`](docs/archive/generic-owner-semantic-body-exact-result-chain-2026-08-25.md).
 
+  The exact current-receiver construction gate is now closed without an
+  AbstractMutableMap, keys, collection, property-name, package, or stdlib
+  rule. A semantic body may retain a generated generic construction only when
+  its class is a reified non-ABI implementation owner, every construction
+  argument invariantly derives from the current owner, and every constructor
+  input involving that generated owner's parameters receives the hook's exact
+  current `this` with an exactly matching substituted type. Public/external,
+  erased, singleton, projected, mixed-input, and ordinary ABI owners remain
+  excluded. Constructor visibility is not used: an anonymous class nested in
+  a public owner may have a non-private constructor while still publishing no
+  nameable ABI.
+
+  `genericOwnerSemanticBodyExactCurrentReceiverCapture.kt` uses a public
+  two-parameter owner, a Runtime `Iterator<K>` cache, value and reference
+  substitutions, widened owner views, cache identity, and a truly broad
+  replacement. Four rehearsal and four production-erased inverse lanes pass
+  across PSI, LightTree, Framework 4.8, and .NET 10. The source-built Stdlib
+  census no longer reports the `AbstractMutableMap<object, object>` anonymous-
+  constructor mismatch. Its next independent root failure is a generated
+  generic subclass's synthetic static initializer failing to bind
+  `<EnsureInitialized>` through its source-built generic base; later
+  unsupported-constructor diagnostics are only cascading class eviction.
+
+  The final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,371 tests with no failures, errors, or skips: 187 freshly written FIR
+  suites/2,235 tests, two freshly written integration suites/127 tests, and
+  the freshly written three-test backend resolver suite; the unchanged six-
+  test `dotnet.ir` root remains up-to-date. Production remains atomically
+  erased outside rehearsal. See
+  [`docs/archive/generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md`](docs/archive/generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3584,7 +3615,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The semantic-body exact result-chain checkpoint passed every constituent of
+The semantic-body exact current-receiver capture checkpoint passed every constituent of
 the strict target gate. The normal aggregate command remains:
 
 ```text
@@ -3593,17 +3624,17 @@ the strict target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-25. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
-executed for the semantic-body exact result-chain checkpoint. Direct audit of
-the result roots covers the complete target inventory of 191 suites and 2,367
+executed for the exact current-receiver capture checkpoint. Direct audit of
+the result roots covers the complete target inventory of 191 suites and 2,371
 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 2,231 FIR, IL-text, and box tests
+- 2,235 FIR, IL-text, and box tests
 - 127 generated CLI and library-integration tests
 - 3 backend resolver tests
 - zero failures, errors, or skips
 
-The 187 FIR suites/2,231 tests, two integration suites/127 tests, and the
+The 187 FIR suites/2,235 tests, two integration suites/127 tests, and the
 three-test backend resolver suite were freshly written by the final aggregate.
 The unchanged green six-test `dotnet.ir` model root remained up-to-date.
 
