@@ -700,6 +700,35 @@ verification, and work state.
   lambda, or member-name exceptions. See
   [`docs/archive/generic-owner-logical-suspend-superinterface-2026-08-24.md`](docs/archive/generic-owner-logical-suspend-superinterface-2026-08-24.md).
 
+  The post-representation covariant-return group is now closed generally. An
+  inherited physical MethodDef remains authoritative when a later class
+  substitution would narrow an open nullable owner parameter from its emitted
+  `object` carrier. A retained foreign CLR MethodDef is explicitly excluded:
+  its reified constructed signature remains physical authority despite a
+  nullable/flexible Kotlin import view. Synthetic ExactFunction declarations
+  also participate as real Runtime generic slots; only their MethodImpl
+  declaration receives the canonical closed capability construction, leaving
+  ordinary function calls and the production-erased epoch unchanged. The
+  original typed member remains the sole body and natural entry; each required
+  adapter is private and final.
+
+  `covariantReturnPhysicalSlots.kt` proves both independent shapes with a
+  generic iterator-producing lambda and an open-nullable base/closed leaf.
+  Removing either rule reproduces its own exact missing-MethodImpl diagnostic.
+  Four rehearsal and four production-erased inverse lanes are green across
+  PSI, LightTree, Framework 4.8, and .NET 10. The existing foreign
+  `OpenNullableEcho<String>` implementation test also remains green on both
+  profiles and rejects any accidental `object Echo(object)` MethodImpl. The
+  final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,346 tests with no failures, errors, or skips: 187 FIR suites/2,211 tests,
+  two integration suites/127 tests, and the two-test backend resolver suite
+  are fresh; the unchanged six-test `dotnet.ir` root remains up-to-date. The
+  source-built Stdlib rehearsal passes the former collection, callable, and
+  iterator-result mismatch group and reaches the next independent physical-
+  owner failure: an erased class emits a reified interface edge containing
+  open owner `!n` arguments it does not physically declare. See
+  [`docs/archive/generic-owner-post-representation-covariant-slots-2026-08-25.md`](docs/archive/generic-owner-post-representation-covariant-slots-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5124,9 +5153,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    relative-input Runtime regressions without selecting MutableMap. Surface 59
    adds the complete parentless mixed-variance Map lookup family, keeps typed
    K/V state and constructed views, and isolates only the covariant-value input
-   and open-nullable lookup carriers. Recompute the next complete Common
-   dependency family from this head. Do not add MutableMap, Sequence, or another
-   declaration-specific representation exception;
+   and open-nullable lookup carriers. Post-representation return closure now
+   preserves the emitted base slot and real Runtime ExactFunction construction.
+   Resolve next the illegal open reified-interface edge emitted by an erased
+   physical owner which has no CLR GenericParams. Do not add a HashMap,
+   MutableSet, collection, stdlib, or another declaration-specific
+   representation exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse
    rollback for the next go/no-go decision.

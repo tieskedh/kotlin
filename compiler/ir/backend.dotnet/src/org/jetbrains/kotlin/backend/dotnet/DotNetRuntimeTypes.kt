@@ -1125,6 +1125,21 @@ internal object DotNetRuntimeTypes {
         )
     }
 
+    /** Physical Runtime slot used only when emitting an ExactFunctionN MethodImpl declaration. */
+    fun exactCallableFunctionInfoOrNull(
+        function: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo? {
+        val interfaceClass = function.parent as? IrClass ?: return null
+        val arity = interfaceClass.dotNetExactFunctionArity ?: return null
+        if (function.name.asString() != "InvokeExact") return null
+        return DotNetIlFunctionInfo(
+            exactFunctionClasses[arity],
+            function.dotNetSignature(typeMapper.declaredGenericInterfaceSignatureView()),
+            function.name.asString(),
+        )
+    }
+
     /**
      * The source/KLIB Enum declaration remains logical authority, while Runtime owns its one
      * physical erased class. Keep every ordinary member bound to that Runtime owner; otherwise
