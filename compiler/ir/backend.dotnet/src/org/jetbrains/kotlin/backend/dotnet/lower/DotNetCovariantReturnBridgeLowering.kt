@@ -138,9 +138,14 @@ internal class DotNetCovariantReturnBridgeLowering(
             .forEach { adapter ->
                 adapter.overriddenSymbols = adapter.overriddenSymbols.filter { overridden ->
                     val slot = overridden.owner
-                    adapter.returnType.hasSameClrCarrierAs(
+                    adapter.typeIn(
+                        adapter.physicalReturnType(adapter.returnType),
+                        owner,
+                        adapter.typeParameters,
+                        keepOwnerTypeParameters = false,
+                    ).hasSameClrCarrierAs(
                         slot.typeIn(
-                            slot.returnType,
+                            slot.physicalReturnType(slot.returnType),
                             owner,
                             adapter.typeParameters,
                             keepOwnerTypeParameters = false,
@@ -276,10 +281,10 @@ internal class DotNetCovariantReturnBridgeLowering(
                     (slotOwner.isErasedKotlinGenericOwner() ||
                             externalDeclarations.hasGenericClass(slotOwner))
         val targetReturnType = target.typeIn(
-            target.returnType,
-            owner,
-            target.typeParameters,
-            keepOwnerTypeParameters = false,
+                target.physicalReturnType(target.returnType),
+                owner,
+                target.typeParameters,
+                keepOwnerTypeParameters = false,
         )
         val exactCallableSlot = slotOwner.dotNetExactFunctionArity != null
         fun exactCallableCarrier(type: IrType): IrType =
@@ -288,17 +293,20 @@ internal class DotNetCovariantReturnBridgeLowering(
             exactCallableCarrier(targetReturnType)
         } else {
             slot.typeIn(
-                slot.returnType,
-                owner,
-                target.typeParameters,
-                keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
+                    slot.physicalReturnType(slot.returnType),
+                    owner,
+                    target.typeParameters,
+                    keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
             )
         }
         val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val needsInheritedFinalInterfaceForwarder =
             slotOwner.isInterface && target.parent != owner && !target.isDotNetVirtual()
-        val hasDifferentParameterCarrier = slotParameters.size != targetParameters.size ||
+        val hasDifferentParameterCarrier =
+                (slot in context.splitNullableResultPayloadTypes) !=
+                        (target in context.splitNullableResultPayloadTypes) ||
+                slotParameters.size != targetParameters.size ||
                 slotParameters.zip(targetParameters).any { pair ->
                     val slotParameter = pair.first
                     val targetParameter = pair.second
@@ -342,6 +350,10 @@ internal class DotNetCovariantReturnBridgeLowering(
         )
     }
 
+    /** Physical split-nullable members compare their producer-derived payload, not logical `T?`. */
+    private fun IrSimpleFunction.physicalReturnType(type: IrType): IrType =
+        context.splitNullableResultPayloadTypes[this] ?: type
+
     private fun IrSimpleFunction.typeIn(
         type: IrType,
         owner: IrClass,
@@ -352,7 +364,8 @@ internal class DotNetCovariantReturnBridgeLowering(
         val ownerSubstituted = if (
             declarationOwner != owner &&
             !keepOwnerTypeParameters &&
-            !keepsOpenNullableDeclarationCarrier(type)
+            (!keepsOpenNullableDeclarationCarrier(type) ||
+                    this in context.splitNullableResultPayloadTypes)
         ) {
             type.substituteClassOwnerParameters(declarationOwner, owner)
         } else type

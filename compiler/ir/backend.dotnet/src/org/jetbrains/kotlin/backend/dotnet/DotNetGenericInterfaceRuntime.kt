@@ -443,7 +443,10 @@ internal object DotNetGenericInterfaceRuntime {
         [12] int32 'argumentCount',
         [13] $methodType[] 'candidateMethods',
         [14] int32 'methodIndex',
-        [15] $methodType 'methodCandidate'
+        [15] $methodType 'methodCandidate',
+        [16] class ${coreLibraryReference}System.Reflection.ParameterInfo[] 'methodParameters',
+        [17] object[] 'invocationArguments',
+        [18] bool 'splitNullableResult'
       )
       ldarg.0
       brtrue.s GIF_InstanceReady
@@ -475,34 +478,34 @@ internal object DotNetGenericInterfaceRuntime {
         stloc.s 9
       GIF_CacheNext:
         ldloc.s 9
-        brfalse.s GIF_CacheMiss
+        brfalse GIF_CacheMiss
         ldloc.s 9
         ldfld $typeType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'openDefinition'
         ldarg.1
         call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
-        brfalse.s GIF_CacheContinue
+        brfalse GIF_CacheContinue
         ldloc.s 9
         ldfld string Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'methodName'
         ldarg.2
         call bool ${coreLibraryReference}System.String::op_Equality(string, string)
-        brfalse.s GIF_CacheContinue
+        brfalse GIF_CacheContinue
         ldloc.s 9
         ldfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'argumentCount'
         ldloc.s 12
-        bne.un.s GIF_CacheContinue
+        bne.un GIF_CacheContinue
         ldloc.s 9
         ldfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryResolutionKind'
         ldarg.s 'unaryResolutionKind'
-        bne.un.s GIF_CacheContinue
+        bne.un GIF_CacheContinue
         ldloc.s 9
         ldfld int32 Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'ownerTypeArgumentIndex'
         ldarg.s 'ownerTypeArgumentIndex'
-        bne.un.s GIF_CacheContinue
+        bne.un GIF_CacheContinue
         ldloc.s 9
         ldfld $typeType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'unaryParameterOpenDefinition'
         ldarg.s 'unaryParameterOpenDefinition'
         call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
-        brfalse.s GIF_CacheContinue
+        brfalse GIF_CacheContinue
         ldloc.s 9
         ldfld $methodType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'method'
         stloc.s 4
@@ -511,7 +514,7 @@ internal object DotNetGenericInterfaceRuntime {
         ldloc.s 9
         ldfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchEntry::'next'
         stloc.s 9
-        br.s GIF_CacheNext
+        br GIF_CacheNext
 
       GIF_CacheMiss:
         ldloc.s 8
@@ -526,7 +529,7 @@ internal object DotNetGenericInterfaceRuntime {
         ldloc.0
         ldlen
         conv.i4
-        bge.s GIF_SearchComplete
+        bge GIF_SearchComplete
         ldloc.0
         ldloc.1
         ldelem.ref
@@ -559,7 +562,7 @@ internal object DotNetGenericInterfaceRuntime {
         br.s GIF_Next
     GIF_SearchComplete:
         ldloc.2
-        brtrue.s GIF_ConstructionReady
+        brtrue GIF_ConstructionReady
         ldstr "The value does not implement the required CLR generic interface"
         newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor(string)
         throw
@@ -590,15 +593,47 @@ internal object DotNetGenericInterfaceRuntime {
       callvirt instance string ${coreLibraryReference}System.Reflection.MemberInfo::get_Name()
       ldarg.2
       call bool ${coreLibraryReference}System.String::op_Equality(string, string)
-      brfalse.s GIF_MethodSearchContinue
+      brfalse GIF_MethodSearchContinue
       ldloc.s 15
       callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
+      stloc.s 16
+      ldloc.s 16
       ldlen
       conv.i4
       ldloc.s 12
-      bne.un.s GIF_MethodSearchContinue
+      beq GIF_MethodSearchArityReady
+      ldloc.s 16
+      ldlen
+      conv.i4
+      ldloc.s 12
+      ldc.i4.1
+      add
+      bne.un GIF_MethodSearchContinue
+      ldloc.s 16
+      ldloc.s 12
+      ldelem.ref
+      callvirt instance bool ${coreLibraryReference}System.Reflection.ParameterInfo::get_IsOut()
+      brfalse GIF_MethodSearchContinue
+      ldloc.s 16
+      ldloc.s 12
+      ldelem.ref
+      callvirt instance $typeType ${coreLibraryReference}System.Reflection.ParameterInfo::get_ParameterType()
+      dup
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsByRef()
+      brfalse GIF_MethodSearchDiscardParameterType
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetElementType()
+      ldtoken ${coreLibraryReference}System.Boolean
+      call $typeType ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse GIF_MethodSearchContinue
+      br GIF_MethodSearchArityReady
+    GIF_MethodSearchDiscardParameterType:
+      pop
+      br GIF_MethodSearchContinue
+    GIF_MethodSearchArityReady:
       ldloc.s 4
-      brfalse.s GIF_MethodSearchSelect
+      brfalse GIF_MethodSearchSelect
       ldstr "The selected CLR generic implementation has multiple required overloads with the same arity"
       newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
       throw
@@ -610,7 +645,7 @@ internal object DotNetGenericInterfaceRuntime {
       ldc.i4.1
       add
       stloc.s 14
-      br.s GIF_MethodSearchNext
+      br GIF_MethodSearchNext
     GIF_ResolveRelativeGenericMethod:
       ldloc.2
       callvirt instance $methodType[] ${coreLibraryReference}System.Type::GetMethods()
@@ -665,7 +700,7 @@ internal object DotNetGenericInterfaceRuntime {
       br.s GIF_RelativeMethodSearchNext
     GIF_RelativeMethodSearchComplete:
       ldloc.s 4
-      brfalse.s GIF_MethodResolved
+      brfalse GIF_MethodResolved
       ldloc.s 4
       ldc.i4.1
       newarr ${coreLibraryReference}System.Type
@@ -686,7 +721,7 @@ internal object DotNetGenericInterfaceRuntime {
         ldc.i4.0
         ldarg.s 'unaryResolutionKind'
         ldc.i4.1
-        beq.s GIF_ConcreteInterfaceParameter
+        beq GIF_ConcreteInterfaceParameter
         ldarg.s 'unaryResolutionKind'
         ldc.i4.3
         beq.s GIF_ConstructedInterfaceParameter
@@ -694,10 +729,10 @@ internal object DotNetGenericInterfaceRuntime {
         callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
         ldarg.s 'ownerTypeArgumentIndex'
         ldelem.ref
-        br.s GIF_ConcreteParameterReady
+        br GIF_ConcreteParameterReady
     GIF_ConcreteInterfaceParameter:
         ldloc.2
-        br.s GIF_ConcreteParameterReady
+        br GIF_ConcreteParameterReady
     GIF_ConstructedInterfaceParameter:
         ldarg.s 'unaryParameterOpenDefinition'
         ldloc.2
@@ -711,7 +746,7 @@ internal object DotNetGenericInterfaceRuntime {
         stloc.s 4
     GIF_MethodResolved:
         ldloc.s 4
-        brtrue.s GIF_CacheStore
+        brtrue GIF_CacheStore
         ldstr "The selected CLR generic implementation has no unique required method"
         newobj instance void ${coreLibraryReference}System.MissingMethodException::.ctor(string)
         throw
@@ -729,7 +764,7 @@ internal object DotNetGenericInterfaceRuntime {
         newobj instance void $entryType::.ctor(
             $typeType, string, int32, int32, int32, $typeType, $methodType, $entryType)
         stfld $entryType Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'head'
-        leave.s GIF_MethodReady
+        leave GIF_MethodReady
       }
       finally
       {
@@ -739,12 +774,19 @@ internal object DotNetGenericInterfaceRuntime {
       }
 
     GIF_MethodReady:
+      ldloc.s 4
+      callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
+      ldlen
+      conv.i4
+      ldloc.s 12
+      cgt
+      stloc.s 18
       ldarg.s 'unaryResolutionKind'
       ldc.i4.2
-      beq.s GIF_CheckFixedBarrier
+      beq GIF_CheckFixedBarrier
       ldarg.s 'unaryResolutionKind'
       ldc.i4.3
-      bne.un.s GIF_Invoke
+      bne.un GIF_Invoke
       ldloc.s 4
       callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
       ldc.i4.0
@@ -754,7 +796,7 @@ internal object DotNetGenericInterfaceRuntime {
       ldc.i4.0
       ldelem.ref
       callvirt instance bool ${coreLibraryReference}System.Type::IsInstanceOfType(object)
-      brtrue.s GIF_Invoke
+      brtrue GIF_Invoke
       ldarg.0
       ldarg.1
       ldarg.3
@@ -778,29 +820,52 @@ internal object DotNetGenericInterfaceRuntime {
       brtrue.s GIF_TestFixedBarrierValue
       ldloc.s 10
       callvirt instance bool ${coreLibraryReference}System.Type::get_IsValueType()
-      brfalse.s GIF_Invoke
+      brfalse GIF_Invoke
       ldloc.s 10
       call $typeType ${coreLibraryReference}System.Nullable::GetUnderlyingType($typeType)
-      brtrue.s GIF_Invoke
-      br.s GIF_FixedBarrierFallback
+      brtrue GIF_Invoke
+      br GIF_FixedBarrierFallback
     GIF_TestFixedBarrierValue:
       ldloc.s 10
       ldloc.s 11
       callvirt instance bool ${coreLibraryReference}System.Type::IsInstanceOfType(object)
-      brtrue.s GIF_Invoke
+      brtrue GIF_Invoke
     GIF_FixedBarrierFallback:
       ldarg.s 'wrongShapeFallback'
       ret
     GIF_Invoke:
       nop
+      ldarg.3
+      stloc.s 17
+      ldloc.s 18
+      brfalse GIF_InvokeArgumentsReady
+      ldloc.s 12
+      ldc.i4.1
+      add
+      newarr ${coreLibraryReference}System.Object
+      stloc.s 17
+      ldloc.s 12
+      brfalse GIF_InvokeArgumentsReady
+      ldarg.3
+      ldc.i4.0
+      ldloc.s 17
+      ldc.i4.0
+      ldloc.s 12
+      call void ${coreLibraryReference}System.Array::Copy(
+          class ${coreLibraryReference}System.Array,
+          int32,
+          class ${coreLibraryReference}System.Array,
+          int32,
+          int32)
+    GIF_InvokeArgumentsReady:
       .try
       {
         ldloc.s 4
         ldarg.0
-        ldarg.3
+        ldloc.s 17
         callvirt instance object ${coreLibraryReference}System.Reflection.MethodBase::Invoke(object, object[])
         stloc.s 6
-        leave.s GIF_Return
+        leave GIF_Return
       }
       catch ${coreLibraryReference}System.Reflection.TargetInvocationException
       {
@@ -816,9 +881,19 @@ internal object DotNetGenericInterfaceRuntime {
         callvirt instance void ${coreLibraryReference}System.Runtime.ExceptionServices.ExceptionDispatchInfo::Throw()
         ldnull
         stloc.s 6
-        leave.s GIF_Return
+        leave GIF_Return
       }
     GIF_Return:
+      ldloc.s 18
+      brfalse GIF_ReturnResult
+      ldloc.s 17
+      ldloc.s 12
+      ldelem.ref
+      unbox.any ${coreLibraryReference}System.Boolean
+      brfalse GIF_ReturnResult
+      ldnull
+      ret
+    GIF_ReturnResult:
       ldloc.s 6
       ret
     }

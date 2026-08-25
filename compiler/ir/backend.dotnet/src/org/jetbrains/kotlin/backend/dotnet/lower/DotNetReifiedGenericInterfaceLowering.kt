@@ -45,6 +45,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetNumberType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -212,6 +213,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             singleParameter != null &&
                             member.isDirectMethodGenericProducerMember(singleParameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+                    singleParameter != null && member.isDirectNullableProducerMember(singleParameter) ->
+                        DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
                     member.isConstructedInterfaceProducerMember(owner) ->
                         DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
                     fixedBarrierParameter != null ->
@@ -1719,6 +1722,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return when (parameter.variance) {
             Variance.OUT_VARIANCE -> members.singleOrNull()?.let { member ->
                 member.isDirectProducerMember(parameter) ||
+                        member.isDirectNullableProducerMember(parameter) ||
                         member.isDirectConstructedInterfaceProducerMember(parameter) ||
                         member.isDirectMethodGenericProducerMember(parameter)
             } == true ||
@@ -2055,6 +2059,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (resultType.isMarkedNullable()) return false
         val resultParameter = resultType.classifier as? IrTypeParameterSymbol
         return resultParameter?.owner === parameter
+    }
+
+    /**
+     * The first open-nullable result family. Regular inputs may be declaration-independent, but
+     * no owner parameter may occur in them: broad inputs remain a separate semantic concern.
+     */
+    private fun IrSimpleFunction.isDirectNullableProducerMember(parameter: IrTypeParameter): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
+            body != null || this in context.interfaceDefaultImplementations ||
+            correspondingPropertySymbol != null || isSuspend || typeParameters.isNotEmpty() ||
+            parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
+            parameters.drop(1).any { input ->
+                input.kind != IrParameterKind.Regular || input.defaultValue != null ||
+                        input.type.referencesTypeParameterOf(parameter.parent as IrClass)
+            }
+        ) {
+            return false
+        }
+        return returnType.isDirectNullableProducerOf(parameter)
     }
 
     /**

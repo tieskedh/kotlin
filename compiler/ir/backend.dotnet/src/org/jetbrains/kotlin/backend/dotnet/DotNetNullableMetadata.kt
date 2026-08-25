@@ -111,6 +111,7 @@ internal object DotNetNullableMetadata {
             if (type.isMarkedNullable()) DotNetNullableReferenceFlag.NULLABLE
             else DotNetNullableReferenceFlag.NON_NULL
         )
+        is DotNetIlValueType.ByReference -> flags(type, physicalType.elementType)
     }
 
     /**

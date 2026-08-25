@@ -250,6 +250,7 @@ object DotNetBackend {
                     genericOwnerForeignDispatchDeclarations = context.genericOwnerForeignDispatchDeclarations,
                     genericOwnerReflectionCapabilityDeclarations =
                         context.genericOwnerReflectionCapabilityDeclarations,
+                    splitNullableResultPayloadTypes = context.splitNullableResultPayloadTypes,
                 ).emit(irModuleFragment) ?: return result(ilTarget)
             } else {
                 null
@@ -392,6 +393,7 @@ object DotNetBackend {
                 genericOwnerForeignDispatchDeclarations = context.genericOwnerForeignDispatchDeclarations,
                 genericOwnerReflectionCapabilityDeclarations =
                     context.genericOwnerReflectionCapabilityDeclarations,
+                splitNullableResultPayloadTypes = context.splitNullableResultPayloadTypes,
             )
             val emission = emitter.emit(irModuleFragment)
             if (emission == null) {

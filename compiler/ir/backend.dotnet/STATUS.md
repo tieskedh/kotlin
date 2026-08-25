@@ -760,6 +760,44 @@ verification, and work state.
   zero failures, errors, or skips. See
   [`docs/archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md`](docs/archive/generic-owner-closed-semantic-input-bridge-2026-08-25.md).
 
+  The first producer-recorded split-nullable result convention is now closed
+  without an interface, member, package, Runtime, Stdlib, or Map-name rule. A
+  public abstract direct `T?` result on an admitted covariant interface keeps
+  its logical Kotlin IR/KLIB signature but emits the natural CLR MethodDef as
+  typed `T (..., [out] bool& isNull)`. Exact constructed calls use that natural
+  slot and reconstruct the nullable result at the call site; stars,
+  projections, open/value-type-widened views, and natural-only foreign objects
+  retain the operation-local semantic object route. No owner, field, nested
+  state, or other member is erased.
+
+  ABI 59 publishes `SPLIT_NULLABLE_PRODUCER`. The payload is derived from the
+  producer owner parameter before applying the outer nullable marker, so
+  `T = Int?` remains a `Nullable<Int32>` payload instead of collapsing to
+  `Int32`. Separate consumers follow the recorded member family, and
+  covariant-return planning treats the presence of the flag as part of the
+  physical calling convention. Runtime natural-only fallback accepts an
+  extra parameter only after reflection proves a final `[out] bool&` and joins
+  to null only from the returned flag.
+
+  Ordinary sealed non-partial C# implements only the natural typed method.
+  C# implementation-manifest schema 9 records `bool&`, and Roslyn matches it
+  only to `RefKind.Out` Boolean. The optional partial-class generator forwards
+  that same natural method and interprets the flag only in its compiler-owned
+  semantic bridge; arbitrary by-reference shapes remain unsupported. Kotlin
+  `Int`, `String`, and already-nullable `Int?` producers, exact/widened calls,
+  reflected metadata, ordinary C#, and generated C# execute through PSI and
+  LightTree on Framework 4.8 and .NET 10.
+
+  The final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,355 tests with no failures, errors, or skips: 187 FIR suites/2,219 tests,
+  two integration suites/127 tests, and the three-test backend resolver suite
+  are fresh; the unchanged six-test `dotnet.ir` root remains up-to-date.
+  Production remains atomically erased outside rehearsal. `Map.get` is not
+  migrated by this checkpoint because it additionally composes an owner-
+  dependent key input and fixed barrier; that requires its own structural
+  proof. See
+  [`docs/archive/reified-generic-interface-split-nullable-result-2026-08-25.md`](docs/archive/reified-generic-interface-split-nullable-result-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

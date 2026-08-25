@@ -262,6 +262,15 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
         override fun hashCode(): Int = nameInSignature.hashCode()
         override fun toString(): kotlin.String = "GenericInstance($nameInSignature)"
     }
+
+    /**
+     * A managed pointer used in a CLR parameter signature (`T&`). It is not a Kotlin value
+     * carrier and must never be selected by ordinary type mapping: only an explicitly chosen
+     * physical calling convention may introduce it. Keeping the element structural lets open
+     * `!n`/`!!n` references substitute exactly like every other signature type.
+     */
+    data class ByReference(val elementType: DotNetIlValueType) :
+        DotNetIlValueType("${elementType.nameInSignature}&")
 }
 
 /**
@@ -298,6 +307,8 @@ internal fun DotNetIlValueType.substituteDotNetTypeParameters(
         DotNetIlValueType.PrimitiveArray(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
     is DotNetIlValueType.GenericArray ->
         DotNetIlValueType.GenericArray(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
+    is DotNetIlValueType.ByReference ->
+        DotNetIlValueType.ByReference(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
     else -> this
 }
 
@@ -420,9 +431,24 @@ internal data class DotNetIlMethodSignature(
     val returnType: DotNetIlReturnType,
     val parameterTypes: List<DotNetIlValueType>,
     val hasThis: Boolean = false,
+    /** Physical-only final `out bool` carrying whether the logical Kotlin result was null. */
+    val hasSplitNullableResult: Boolean = false,
 ) {
+    val physicalParameterTypes: List<DotNetIlValueType>
+        get() = buildList {
+            addAll(parameterTypes)
+            if (hasSplitNullableResult) {
+                add(DotNetIlValueType.ByReference(DotNetIlValueType.Boolean))
+            }
+        }
+
     fun renderParameterTypes(): String =
-        parameterTypes.drop(if (hasThis) 1 else 0).joinToString(", ") { it.nameInSignature }
+        physicalParameterTypes
+            .drop(if (hasThis) 1 else 0)
+            .joinToString(", ", transform = DotNetIlValueType::nameInSignature)
+
+    val physicalParameterCount: Int
+        get() = physicalParameterTypes.size
 }
 
 /**

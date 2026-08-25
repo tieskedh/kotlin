@@ -124,7 +124,7 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(instruction, pops, pushes)
     }
 
-    private fun emitWideningCoercion(coercion: DotNetIlWideningCoercion) {
+    fun emitWideningCoercion(coercion: DotNetIlWideningCoercion) {
         coercion.instructions.forEach { instruction ->
             methodContext.emit(instruction, pops = 1, pushes = 1)
         }
@@ -315,7 +315,16 @@ internal class DotNetIlExpressionCodegen(
                 !expression.symbol.owner.isErasedGenericInterfaceMember() &&
                 !expression.symbol.owner.isErasedGenericClassMember()
             ) {
-                val returnType = resolveCall(expression).returnType
+                val resolved = resolveCall(expression)
+                if (resolved.info.signature.hasSplitNullableResult) {
+                    // The physical call pushes only its producer-selected payload, but ordinary
+                    // expression emission immediately combines it with the out flag and exposes
+                    // the logical Kotlin nullable carrier. Report that reconstructed carrier to
+                    // enclosing casts; otherwise `Int? -> Any?` would box the payload `0` on the
+                    // null arm instead of boxing an empty Nullable<Int> to CLR null.
+                    return typeMapper.toDotNetIlValueType(expression.type)
+                }
+                val returnType = resolved.returnType
                 if (returnType is DotNetIlReturnType.Value) return returnType.type
             }
         }
@@ -411,7 +420,7 @@ internal class DotNetIlExpressionCodegen(
 
     fun emitExpression(expression: IrExpression?, expectedType: DotNetIlValueType) {
         if (expression.isNullDefaultArgumentPlaceholder()) {
-            emitDefaultArgumentPlaceholder(expectedType)
+            emitDefaultValue(expectedType)
             return
         }
         if (
@@ -1035,7 +1044,7 @@ internal class DotNetIlExpressionCodegen(
      * this value before source code can observe it, so emit the parameter's physical default:
      * null for references, zero for known primitives, and `initobj` for open or nullable values.
      */
-    private fun emitDefaultArgumentPlaceholder(type: DotNetIlValueType) {
+    fun emitDefaultValue(type: DotNetIlValueType) {
         when (type) {
             DotNetIlValueType.Boolean,
             DotNetIlValueType.Int8,
@@ -1053,6 +1062,8 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.emit("initobj ${type.nameInSignature}", pops = 1)
                 methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
             }
+            is DotNetIlValueType.ByReference ->
+                dotNetUnsupported("a managed pointer has no ordinary default value")
             DotNetIlValueType.String,
             DotNetIlValueType.Object,
             is DotNetIlValueType.UserClass,
@@ -1966,6 +1977,7 @@ internal class DotNetIlExpressionCodegen(
                 )
                 is DotNetIlValueType.MappedClass,
                 is DotNetIlValueType.NullableValue,
+                is DotNetIlValueType.ByReference,
                     -> dotNetUnsupported(
                         "runtime type test against ${runtimeTestType.nameInSignature} has no selected " +
                                 "exact carrier or classifier"
@@ -2211,6 +2223,8 @@ internal class DotNetIlExpressionCodegen(
                         emitNullStringAsStringLiteral()
                     }
                 }
+                is DotNetIlValueType.ByReference ->
+                    dotNetUnsupported("managed-pointer string conversion is not supported")
             }
         }
     }
@@ -2325,8 +2339,15 @@ internal class DotNetIlExpressionCodegen(
      * nonvirtual DIM call. Seeing an interface super qualifier here without the compiler-owned
      * exact-call origin therefore means lowering failed and is rejected below.
      */
-    fun emitCall(call: IrCall): DotNetIlReturnType {
+    fun emitCall(call: IrCall): DotNetIlReturnType = emitPhysicalCall(call).returnType
+
+    private fun emitPhysicalCall(call: IrCall): EmittedCall {
         val resolved = resolveCall(call)
+        val splitNullFlagSlot = if (resolved.info.signature.hasSplitNullableResult) {
+            methodContext.declareSyntheticLocal(DotNetIlValueType.Boolean, "<splitNullableIsNull>")
+        } else {
+            null
+        }
         val constrainedReceiverType = resolved.receiverType as? DotNetIlValueType.TypeParameter
         if (constrainedReceiverType != null) {
             val expectedReceiverType = resolved.parameterTypes.firstOrNull()
@@ -2347,6 +2368,9 @@ internal class DotNetIlExpressionCodegen(
         } else {
             emitArguments(call.arguments, resolved.parameterTypes, "'${resolved.calleeName}'")
         }
+        splitNullFlagSlot?.let { slot ->
+            methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+        }
         if (constrainedReceiverType != null && resolved.virtual) {
             // `constrained.` is a prefix and must be immediately adjacent to its `callvirt`.
             methodContext.emit("constrained. ${constrainedReceiverType.nameInSignature}")
@@ -2358,11 +2382,16 @@ internal class DotNetIlExpressionCodegen(
                 ownerToken = resolved.ownerToken,
                 methodInstantiation = resolved.methodInstantiation,
             ),
-            pops = resolved.info.signature.parameterTypes.size,
+            pops = resolved.info.signature.physicalParameterCount,
             pushes = if (resolved.info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
-        return resolved.returnType
+        return EmittedCall(resolved.returnType, splitNullFlagSlot)
     }
+
+    private data class EmittedCall(
+        val returnType: DotNetIlReturnType,
+        val splitNullFlagSlot: DotNetIlSlot.Local?,
+    )
 
     /** Uses an optional typed capability in statement position, then discards any produced value. */
     fun tryEmitCapabilityCallForDiscard(call: IrCall): Boolean {
@@ -2430,11 +2459,14 @@ internal class DotNetIlExpressionCodegen(
             }
         val naturalRuntimeInfo = naturalRuntimeCall?.first
         val syntheticMethodInstantiation = naturalRuntimeCall?.second
+        val splitNaturalCall = splitNullableNaturalCallOrNull(call, sourceCallee)
+        val splitNaturalInfo = splitNaturalCall?.first
+        val splitNaturalReceiverType = splitNaturalCall?.second
         // A concrete natural Runtime construction is stronger evidence than a conservative
         // semantic route recorded before all body-producing lowerings completed. Bind that
         // receiver directly to its typed MethodDef. Object/capability carriers cannot view
         // themselves as the typed owner and therefore retain the semantic route below.
-        val genericOwnerCallTarget = if (naturalRuntimeInfo == null) {
+        val genericOwnerCallTarget = if (naturalRuntimeInfo == null && splitNaturalInfo == null) {
             typeMapper.genericOwnerCapabilityCallTarget(call)
         } else {
             null
@@ -2442,6 +2474,7 @@ internal class DotNetIlExpressionCodegen(
         val callee = genericOwnerCallTarget ?: sourceCallee
         val calleeName = callee.name.asString()
         val info = naturalRuntimeInfo
+            ?: splitNaturalInfo
             ?: availableFunctions[callee]
             ?: typeMapper.referencedFunctionInfoOrNull(callee)
             ?: dotNetUnsupported(
@@ -2476,6 +2509,8 @@ internal class DotNetIlExpressionCodegen(
                 ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
             if (naturalRuntimeInfo != null) {
                 naturalReceiverType
+            } else if (splitNaturalInfo != null) {
+                splitNaturalReceiverType
             } else if (genericOwnerCallTarget != null) {
                 mappedNaturalType(receiver)
             } else {
@@ -3131,7 +3166,17 @@ internal class DotNetIlExpressionCodegen(
         if (emitReifiedGenericInterfaceObjectCarrierCapabilityCallOrNull(call, expectedType)) return
         if (emitGenericInterfaceCapabilityCallOrNull(call, expectedType)) return
         if (emitCallableCapabilityCallOrNull(call, expectedType)) return
-        val returnType = emitCall(call)
+        val emittedCall = emitPhysicalCall(call)
+        if (emittedCall.splitNullFlagSlot != null) {
+            emitSplitNullableLogicalResult(
+                emittedCall.returnType,
+                emittedCall.splitNullFlagSlot,
+                expectedType,
+                call.symbol.owner.name.asString(),
+            )
+            return
+        }
+        val returnType = emittedCall.returnType
         val producedType = (returnType as? DotNetIlReturnType.Value)?.type
         if (
             producedType != null &&
@@ -3179,6 +3224,55 @@ internal class DotNetIlExpressionCodegen(
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
+    }
+
+    /** Reconstructs the logical Kotlin nullable carrier after a typed-payload CLR call. */
+    private fun emitSplitNullableLogicalResult(
+        returnType: DotNetIlReturnType,
+        nullFlagSlot: DotNetIlSlot.Local,
+        expectedType: DotNetIlValueType,
+        calleeName: String,
+    ) {
+        val payloadType = (returnType as? DotNetIlReturnType.Value)?.type
+            ?: dotNetUnsupported("split nullable call to '$calleeName' has no typed payload")
+        val payloadSlot = spillToSyntheticLocal(payloadType, "<splitNullablePayload>")
+        val nonNullLabel = methodContext.nextLabel("splitNullableNonNull")
+        val endLabel = methodContext.nextLabel("splitNullableResult")
+        methodContext.emit(loadLocalInstruction(nullFlagSlot.index), pushes = 1)
+        methodContext.emitBranch("brfalse", nonNullLabel, pops = 1)
+        emitDefaultValue(expectedType)
+        methodContext.emitGoto(endLabel)
+        methodContext.emitLabel(nonNullLabel)
+        methodContext.emit(loadLocalInstruction(payloadSlot.index), pushes = 1)
+        when {
+            payloadType.isDotNetAssignableTo(expectedType) -> Unit
+            expectedType is DotNetIlValueType.NullableValue &&
+                    payloadType.isDotNetAssignableTo(expectedType.elementType) ->
+                methodContext.emit(expectedType.ctorInstruction, pops = 1, pushes = 1)
+            else -> {
+                val widening = dotNetWideningCoercionOrNull(
+                    payloadType,
+                    expectedType,
+                    coreLibraryReference,
+                )
+                if (widening != null) {
+                    emitWideningCoercion(widening)
+                } else if (payloadType == DotNetIlValueType.Object) {
+                    val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                        ?: dotNetUnsupported(
+                            "split nullable call to '$calleeName' cannot narrow object to " +
+                                    expectedType.nameInSignature
+                        )
+                    methodContext.emit(narrowing, pops = 1, pushes = 1)
+                } else {
+                    dotNetUnsupported(
+                        "split nullable call to '$calleeName' produces ${payloadType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+            }
+        }
+        methodContext.emitLabel(endLabel)
     }
 
     /**
@@ -3358,6 +3452,12 @@ internal class DotNetIlExpressionCodegen(
                 hasNaturalOnlyExactInput
         val plannedForeignSlot = typeMapper.genericOwnerForeignDispatchCallTarget(call)
         val plannedCapabilitySlot = typeMapper.genericOwnerCapabilityCallTarget(call)
+        if (splitNullableNaturalCallOrNull(call, source) != null) {
+            // A receiver which already names the exact natural I<X> construction can invoke the
+            // producer's split slot directly. Kotlin semantic/capability dispatch remains only
+            // for object-carried or otherwise non-nameable views.
+            return false
+        }
         val inferredCapabilitySlot = genericOwnerCapabilitySlotOrNull(logicalCallMember)
             ?: genericOwnerCapabilitySlotOrNull(source)
         val semanticSlot = plannedForeignSlot
@@ -3805,6 +3905,20 @@ internal class DotNetIlExpressionCodegen(
                 genericOwnerCapabilitySlots[overridden]
                     ?: typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(overridden)
             }
+
+    private fun splitNullableNaturalCallOrNull(
+        call: IrCall,
+        source: IrSimpleFunction,
+    ): Pair<DotNetIlFunctionInfo, DotNetIlValueType>? {
+        val info = availableFunctions[source]
+            ?: typeMapper.referencedFunctionInfoOrNull(source)
+            ?: return null
+        if (!info.signature.hasSplitNullableResult || !info.isInstance) return null
+        val receiver = call.arguments.firstOrNull() ?: return null
+        val receiverType = mappedNaturalType(receiver) ?: return null
+        if (receiverType.dotNetViewAsGenericOwner(info.owner) == null) return null
+        return info to receiverType
+    }
 
     private fun genericOwnerObjectCarrierCallReturnTypeOrNull(
         call: IrCall,
@@ -4657,6 +4771,8 @@ internal class DotNetIlExpressionCodegen(
             // and every value constant maps to its concrete type first); defensive.
             is DotNetIlValueType.TypeParameter ->
                 dotNetUnsupported("constant in a type-parameter-typed position is not supported")
+            is DotNetIlValueType.ByReference ->
+                dotNetUnsupported("constant in a managed-pointer-typed position is not supported")
         }
     }
 

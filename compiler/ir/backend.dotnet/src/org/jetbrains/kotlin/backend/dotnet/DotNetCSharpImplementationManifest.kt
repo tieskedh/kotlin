@@ -159,7 +159,7 @@ data class DotNetCSharpMethodLocator(
 
 /** Deterministic versioned records and their self-contained managed-resource carrier. */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 8
+    const val CURRENT_SCHEMA_VERSION = 9
     const val MANAGED_RESOURCE_NAME = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
@@ -965,7 +965,7 @@ internal fun collectDotNetCSharpImplementationManifest(
         propertyName = propertyName,
         genericArity = function.typeParameters.size,
         returnType = info.signature.returnType.nameInSignature,
-        parameterTypes = info.signature.parameterTypes
+        parameterTypes = info.signature.physicalParameterTypes
             .drop(if (info.signature.hasThis) 1 else 0)
             .map { type -> type.nameInSignature },
     )
@@ -1251,7 +1251,7 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
             propertyName = physicalPropertyName,
             genericArity = source.typeParameters.size,
             returnType = signature.returnType.nameInSignature,
-            parameterTypes = signature.parameterTypes
+            parameterTypes = signature.physicalParameterTypes
                 .drop(if (signature.hasThis) 1 else 0)
                 .map { type -> type.nameInSignature },
         )

@@ -286,7 +286,14 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     val boxesTypedGenericInterfaceReturn = typedGenericInterfaceOwner != null &&
             typedGenericInterfaceSlot.returnType.referencesTypeParameterOf(typedGenericInterfaceOwner) &&
             returnType.dotNetValueClassOrNull() != null
-    val ilReturnType = if (origin == DOTNET_VALUE_CLASS_BOX_HELPER || boxesTypedGenericInterfaceReturn) {
+    val splitNullableResultPayloadType = typeMapper.splitNullableResultPayloadType(this)
+    val hasSplitNullableResult = splitNullableResultPayloadType != null
+    val ilReturnType = if (splitNullableResultPayloadType != null) {
+        typeMapper.toDotNetIlReturnType(splitNullableResultPayloadType)
+            ?: dotNetUnsupported(
+                "split nullable return payload ${splitNullableResultPayloadType.render()} is not supported"
+            )
+    } else if (origin == DOTNET_VALUE_CLASS_BOX_HELPER || boxesTypedGenericInterfaceReturn) {
         DotNetIlReturnType.Value(
             typeMapper.toDotNetIlBoxedValueClassType(returnType)
                 ?: dotNetUnsupported("value-class generic boundary has no nominal owner")
@@ -360,7 +367,12 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     } else {
         parameters.dotNetParameterTypes(typeMapper)
     }
-    return DotNetIlMethodSignature(ilReturnType, parameterTypes, hasThis)
+    return DotNetIlMethodSignature(
+        ilReturnType,
+        parameterTypes,
+        hasThis,
+        hasSplitNullableResult = hasSplitNullableResult,
+    )
 }
 
 /**
@@ -750,6 +762,7 @@ internal class DotNetIlTypeMapper private constructor(
     private val externalGenericOwnerFunctionInputEntries:
             Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry>,
     private val genericOwnerNaturalFunctionInputDeclarations: Set<IrDeclaration>,
+    private val splitNullableResultPayloadTypes: Map<IrSimpleFunction, IrType>,
     private val erasedValueClassMethodParameters: Set<IrTypeParameter>,
     private val genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean,
     val stdlibAssemblyName: String?,
@@ -784,6 +797,7 @@ internal class DotNetIlTypeMapper private constructor(
         externalGenericOwnerFunctionInputEntries:
                 Map<IrSimpleFunction, DotNetBoundGenericOwnerFunctionInputEntry> = emptyMap(),
         genericOwnerNaturalFunctionInputDeclarations: Set<IrDeclaration> = emptySet(),
+        splitNullableResultPayloadTypes: Map<IrSimpleFunction, IrType> = emptyMap(),
         erasedValueClassMethodParameters: Set<IrTypeParameter> = emptySet(),
         genericArgumentHasProperClrValueSubtype: (IrType) -> Boolean = { false },
         stdlibAssemblyName: String? = DotNetStdlibLibrary.ASSEMBLY_NAME,
@@ -820,6 +834,7 @@ internal class DotNetIlTypeMapper private constructor(
         externalGenericOwnerPhysicalSlots,
         externalGenericOwnerFunctionInputEntries,
         genericOwnerNaturalFunctionInputDeclarations,
+        splitNullableResultPayloadTypes,
         erasedValueClassMethodParameters,
         genericArgumentHasProperClrValueSubtype,
         stdlibAssemblyName,
@@ -855,6 +870,7 @@ internal class DotNetIlTypeMapper private constructor(
             externalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries,
             genericOwnerNaturalFunctionInputDeclarations,
+            splitNullableResultPayloadTypes,
             erasedValueClassMethodParameters,
             genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName,
@@ -913,6 +929,7 @@ internal class DotNetIlTypeMapper private constructor(
             externalGenericOwnerPhysicalSlots,
             externalGenericOwnerFunctionInputEntries,
             genericOwnerNaturalFunctionInputDeclarations,
+            splitNullableResultPayloadTypes,
             erasedValueClassMethodParameters + copiedParameters,
             genericArgumentHasProperClrValueSubtype,
             stdlibAssemblyName,
@@ -1514,6 +1531,9 @@ internal class DotNetIlTypeMapper private constructor(
         declaration in genericOwnerCapabilityDeclarations
 
     fun isGenericOwnerRehearsalEnabled(): Boolean = genericOwnerRehearsal
+
+    fun splitNullableResultPayloadType(function: IrSimpleFunction): IrType? =
+        splitNullableResultPayloadTypes[function]
 
     fun isGenericOwnerCapabilityBearingDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerCapabilityBearingDeclarations
@@ -2243,6 +2263,7 @@ internal class DotNetIlTypeMapper private constructor(
             is DotNetIlValueType.ErasedGenericArray -> Unit
             is DotNetIlValueType.PrimitiveArray -> recordAssemblyReferences(type.elementType)
             is DotNetIlValueType.NullableValue -> recordAssemblyReferences(type.elementType)
+            is DotNetIlValueType.ByReference -> recordAssemblyReferences(type.elementType)
             is DotNetIlValueType.TypeParameter -> type.upperBounds.forEach(::recordAssemblyReferences)
             DotNetIlValueType.Boolean,
             DotNetIlValueType.Char,

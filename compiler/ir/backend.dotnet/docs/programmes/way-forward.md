@@ -1547,13 +1547,28 @@ owner self-view conversion in `AbstractMutableList.indexOf`. Resolve that
 downstream typed-route degradation next without an AbstractMutableList, List,
 stdlib, or member-name exception.
 
-Before ABI freeze, revisit the single-slot `object` carrier for open-nullable
-method results with one general split-result experiment: typed payload plus an
-outer-presence flag. It is admissible only if exact value-type calls avoid
-boxing while overrides, callable adaptation, reflection, separate compilation,
-ordinary C# implementation, Framework 4.8, trimming, and NativeAOT remain
-coherent. Do not encode Map lookup or missing-key semantics in that convention;
-fields and ordinary generic state remain a separate representation decision.
+The first general split-result experiment is now implemented for a
+producer-recorded direct `T?` interface result: the natural MethodDef returns
+the typed `T` payload and appends `[out] bool& isNull`, while Kotlin IR/KLIB and
+the declaration-semantic sibling retain `T?` and `object` respectively. Exact
+constructed calls use the natural slot and reconstruct the nullable value at
+the call site. Payload selection occurs before applying the outer nullable
+marker, so `T = Int?` remains `Nullable<Int32>` and is not collapsed to
+`Int32`. Ordinary C# implements the natural method directly; the optional
+partial-class generator consumes manifest schema 9, calls the same typed
+method, and joins to null only in its semantic bridge. The rule is structural,
+producer-published, and independent of interface, member, package, Map, or
+stdlib names.
+
+This closes Framework 4.8 and .NET 10 execution, both FIR parsers, separate
+Kotlin products, reflected `[out] bool&`, ordinary non-partial C#, and the
+Roslyn generator path. It does not yet select Map lookup: that member combines
+an owner-dependent key input, a fixed Kotlin barrier, and the nullable result,
+whereas the admitted first family permits only declaration-independent regular
+inputs. Extend the same convention to that composition only after its own
+general proof. Trimming and NativeAOT remain freeze gates, not premises for
+globally retaining the object-result representation. Fields and ordinary
+generic state remain a separate representation decision.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and

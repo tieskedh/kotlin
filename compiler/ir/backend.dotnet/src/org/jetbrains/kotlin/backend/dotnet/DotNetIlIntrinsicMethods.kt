@@ -3281,6 +3281,8 @@ private class DotNetIlEqualityIntrinsic(
                 error("Internal .NET backend error: nullable-primitive equality operands handled above")
             is DotNetIlValueType.TypeParameter ->
                 error("Internal .NET backend error: type-parameter equality operands rejected above")
+            is DotNetIlValueType.ByReference ->
+                error("Internal .NET backend error: managed pointers are not equality operands")
         }
         return true
     }

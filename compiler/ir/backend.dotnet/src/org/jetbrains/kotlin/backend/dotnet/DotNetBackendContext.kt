@@ -197,6 +197,9 @@ internal class DotNetBackendContext(
     val erasedGenericClasses: MutableSet<IrClass> = hashSetOf()
     /** Rehearsal-only generic interfaces whose natural CLR owner is the truthful `I<T>` TypeDef. */
     val reifiedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
+    /** Natural CLR members and their producer-derived payload for `T + out bool isNull`. */
+    val splitNullableResultPayloadTypes: MutableMap<IrSimpleFunction, IrType> =
+        java.util.IdentityHashMap()
     /** Immutable physical-family contracts published identically to local and external consumers. */
     val publishedGenericInterfaceFamilies:
         MutableMap<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = linkedMapOf()

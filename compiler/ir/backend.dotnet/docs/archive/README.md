@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`reified-generic-interface-split-nullable-result-2026-08-25.md`](reified-generic-interface-split-nullable-result-2026-08-25.md)
+  records ABI 59's typed-payload plus `[out] bool&` result convention,
+  producer-derived already-nullable payloads, exact/semantic routing,
+  ordinary and generated C# authoring, and the deliberately separate Map
+  lookup composition gate.
 - [`generic-owner-closed-semantic-input-bridge-2026-08-25.md`](generic-owner-closed-semantic-input-bridge-2026-08-25.md)
   records the narrow paired object-input entry for a physically final closed
   generic-interface implementation, its name-independent separate-compilation
