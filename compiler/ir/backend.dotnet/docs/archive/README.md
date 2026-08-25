@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-semantic-body-exact-result-chain-2026-08-25.md`](generic-owner-semantic-body-exact-result-chain-2026-08-25.md)
+  records exact parameterless result-chain preservation inside a semantic
+  body, the truthful MutableEntry-to-Entry Runtime edge, complete profile and
+  frontend proof, and the next anonymous-object self-construction blocker.
 - [`generic-owner-semantic-body-exact-helper-2026-08-25.md`](generic-owner-semantic-body-exact-helper-2026-08-25.md)
   records the output-only exact self-helper rule, semantic captured callback
   state, removal of an unneeded generated-callable class capability, complete
