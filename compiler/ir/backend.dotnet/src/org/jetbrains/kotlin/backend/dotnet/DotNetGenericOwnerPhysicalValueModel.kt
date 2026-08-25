@@ -175,6 +175,38 @@ internal sealed interface DotNetGenericOwnerPhysicalGenericBinderReference {
     ) : DotNetGenericOwnerPhysicalGenericBinderReference
 }
 
+/** One producer-recorded BaseType or InterfaceImpl target; it contains no logical-type evidence. */
+internal data class DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+    val kind: DotNetGenericOwnerDirectSupertypeKind,
+    val target: DotNetGenericOwnerSymbolicCarrierReference,
+)
+
+/**
+ * Complete recorded direct-supertype rows for one physical TypeDef. Absence of this set remains
+ * distinct from a recorded empty set, so an unavailable graph can never prove negative facts.
+ */
+internal class DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
+    val source: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    edges: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference>,
+) {
+    private val edgeList = edges.toList()
+    val edges: Set<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference> = edgeList.toSet()
+
+    init {
+        require(edgeList.size == this.edges.size) {
+            "a complete physical direct-supertype set cannot contain duplicate metadata rows"
+        }
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet &&
+                source == other.source && edges == other.edges
+
+    override fun hashCode(): Int = 31 * source.hashCode() + edges.hashCode()
+
+    override fun toString(): String = "DirectSupertypes(source=$source, edges=$edges)"
+}
+
 /**
  * One conflict-checked declaration-authority snapshot. Value provenance consumes only identities;
  * all arity/category descriptions are validated here before a symbolic carrier can be created.
@@ -185,11 +217,14 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalTypeDefReference>,
     private val methodDefinitions:
             Map<DotNetGenericOwnerPhysicalMethodDefIdentity, DotNetGenericOwnerPhysicalMethodDefReference>,
+    private val directSupertypeEdgeSets:
+            Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
 ) {
     fun advance(
         nextEpoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
         typeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
         methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
+        directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet> = emptyList(),
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
         if (nextEpoch.ordinal <= epoch.ordinal) {
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -200,6 +235,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             nextEpoch,
             this.typeDefinitions.values + typeDefinitions,
             this.methodDefinitions.values + methodDefinitions,
+            this.directSupertypeEdgeSets.values + directSupertypeEdgeSets,
         )
     }
 
@@ -255,6 +291,100 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         definition: DotNetGenericOwnerPhysicalMethodDefIdentity,
     ): DotNetGenericOwnerPhysicalMethodDefReference? = methodDefinitions[definition]
 
+    fun directSupertypeEdgesOrUnavailable(
+        definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    ): DotNetGenericOwnerPhysicalBindingResult<Set<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference>> =
+        directSupertypeEdgeSets[definition]?.let { edgeSet ->
+            DotNetGenericOwnerPhysicalBindingResult.Bound(edgeSet.edges)
+        } ?: DotNetGenericOwnerPhysicalBindingResult.Unavailable
+
+    /**
+     * Computes only interface views proven by recorded physical edges. A missing complete edge set
+     * stops that branch and marks the positive result incomplete. It never consults Kotlin IR or
+     * synthesizes an additional view from CLR/Kotlin variance.
+     */
+    fun physicalInterfaceViewClosureOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalInterfaceViewClosure> {
+        when (val validation = validateConstructionOrError(construction.definition, construction.arguments)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+
+        val interfaceViews = linkedSetOf<DotNetGenericOwnerPhysicalView>()
+        var isComplete = true
+        val visitedConstructions = mutableSetOf<DotNetGenericOwnerSymbolicCarrierReference.Constructed>()
+
+        fun visit(
+            current: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+            activeDefinitions: Set<DotNetGenericOwnerPhysicalTypeDefIdentity>,
+        ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+            if (current.definition in activeDefinitions) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "cyclic recorded physical direct-supertype graph at ${current.definition}",
+                )
+            }
+            if (!visitedConstructions.add(current)) {
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+            }
+
+            val currentDescription = typeDefinitions[current.definition]
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            if (currentDescription.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE) {
+                interfaceViews += DotNetGenericOwnerPhysicalView(current)
+            }
+
+            val edgeSet = directSupertypeEdgeSets[current.definition]
+            if (edgeSet == null) {
+                isComplete = false
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+            }
+
+            val nextActiveDefinitions = activeDefinitions + current.definition
+            for (edge in edgeSet.edges) {
+                val target = when (val substitution = substituteDirectSupertypeTargetOrError(
+                    edge.target,
+                    current,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> substitution.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return substitution
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                when (target) {
+                    is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> when (
+                        val targetResult = visit(target, nextActiveDefinitions)
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return targetResult
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return targetResult
+                    }
+                    is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> check(
+                        edge.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS &&
+                                target == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                    ) { "validated direct-supertype leaf stopped being System.Object" }
+                    is DotNetGenericOwnerSymbolicCarrierReference.Parameter,
+                    is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
+                    -> error("validated physical direct-supertype root stopped being named")
+                }
+            }
+            return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        }
+
+        return when (val traversal = visit(construction, emptySet())) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetGenericOwnerPhysicalInterfaceViewClosure(interfaceViews, isComplete),
+                )
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict(traversal.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    }
+
     fun carrierOrError(
         type: DotNetGenericOwnerSymbolicCarrierReference,
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> =
@@ -292,17 +422,170 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             validateCarrierOrError(carrier.element)
     }
 
+    private fun validateDirectSupertypeEdgeSetOrError(
+        edgeSet: DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        val sourceDescription = typeDefinitions[edgeSet.source]
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val baseEdgeCount = edgeSet.edges.count { edge ->
+            edge.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+        }
+        if (baseEdgeCount > 1) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "a physical TypeDef cannot record more than one direct base class",
+            )
+        }
+        if (sourceDescription.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            baseEdgeCount != 0
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "a physical interface TypeDef cannot record a base-class row",
+            )
+        }
+        if (sourceDescription.category != DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            baseEdgeCount != 1
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "a complete physical class or value-type edge set requires one direct base class",
+            )
+        }
+
+        for (edge in edgeSet.edges) {
+            when (val carrierValidation = validateCarrierOrError(edge.target)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return carrierValidation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return carrierValidation
+            }
+            when (val scopeValidation = validateDirectSupertypeParameterScopesOrError(
+                edge.target,
+                edgeSet.source,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return scopeValidation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return scopeValidation
+            }
+
+            val targetDescription = (edge.target as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.let { target ->
+                typeDefinitions[target.definition]
+            }
+            val targetIsValid = when (edge.kind) {
+                DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS ->
+                    edge.target == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() ||
+                            targetDescription?.category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                DotNetGenericOwnerDirectSupertypeKind.INTERFACE ->
+                    targetDescription?.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+            }
+            if (!targetIsValid) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a physical ${edge.kind.name.lowercase()} edge has an incompatible target carrier",
+                )
+            }
+            if ((edge.target as? DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+                    ?.definition == edgeSet.source
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a physical TypeDef cannot directly inherit from itself",
+                )
+            }
+        }
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+    }
+
+    private fun validateDirectSupertypeParameterScopesOrError(
+        target: DotNetGenericOwnerSymbolicCarrierReference,
+        source: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        return when (target) {
+            is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+            is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+                if (target.binder == DotNetGenericOwnerPhysicalGenericBinderReference.Type(source)) {
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+                } else {
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a physical direct-supertype target may reference only its source TypeDef parameters",
+                    )
+                }
+            is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                for (argument in target.arguments) {
+                    when (val validation = validateDirectSupertypeParameterScopesOrError(argument, source)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+                    }
+                }
+                DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+                validateDirectSupertypeParameterScopesOrError(target.element, source)
+        }
+    }
+
+    private fun substituteDirectSupertypeTargetOrError(
+        target: DotNetGenericOwnerSymbolicCarrierReference,
+        source: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
+        return when (target) {
+            is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(target)
+            is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+                if (target.binder != DotNetGenericOwnerPhysicalGenericBinderReference.Type(source.definition)) {
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a recorded direct-supertype edge escaped its source TypeDef binder",
+                    )
+                } else {
+                    source.arguments.getOrNull(target.index)?.let {
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
+                    } ?: DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a recorded direct-supertype parameter is outside its constructed source arity",
+                    )
+                }
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                val substitutedArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+                for (argument in target.arguments) {
+                    when (val substitution = substituteDirectSupertypeTargetOrError(argument, source)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                            substitutedArguments += substitution.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return substitution
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return substitution
+                    }
+                }
+                constructTypeOrError(target.definition, substitutedArguments)
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> when (
+                val element = substituteDirectSupertypeTargetOrError(target.element, source)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetGenericOwnerSymbolicCarrierReference.SzArray(element.value),
+                    )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> element
+            }
+        }
+    }
+
     companion object {
         fun bind(
             epoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
             typeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
             methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
+            directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet> = emptyList(),
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val typesByIdentity = linkedMapOf<
                     DotNetGenericOwnerPhysicalTypeDefIdentity,
                     DotNetGenericOwnerPhysicalTypeDefReference,
                     >()
             for (candidate in typeDefinitions) {
+                if ((candidate.identity as? DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary)
+                        ?.ownerPath == listOf("System", "Object")
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "core System.Object must use the canonical object leaf carrier",
+                    )
+                }
                 val existing = typesByIdentity[candidate.identity]
                 if (existing != null && existing.conflictsWith(candidate)) {
                     return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -333,8 +616,78 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 methodsByIdentity.putIfAbsent(candidate.identity, candidate)
             }
 
+            val declarationsWithoutEdges = DotNetGenericOwnerPhysicalDeclarationIndex(
+                epoch,
+                typesByIdentity,
+                methodsByIdentity,
+                emptyMap(),
+            )
+            val edgesBySource = linkedMapOf<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity,
+                    DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet,
+                    >()
+            for (candidate in directSupertypeEdgeSets) {
+                when (val validation = declarationsWithoutEdges.validateDirectSupertypeEdgeSetOrError(candidate)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                val existing = edgesBySource[candidate.source]
+                if (existing != null && existing != candidate) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "conflicting complete physical direct-supertype sets for ${candidate.source}",
+                    )
+                }
+                edgesBySource.putIfAbsent(candidate.source, candidate)
+            }
+
+            val activeDefinitions = mutableSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity>()
+            val completedDefinitions = mutableSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity>()
+            fun validateAcyclicOrError(
+                source: DotNetGenericOwnerPhysicalTypeDefIdentity,
+            ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+                if (source in completedDefinitions) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+                }
+                if (!activeDefinitions.add(source)) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "cyclic recorded physical direct-supertype graph at $source",
+                    )
+                }
+                for (edge in edgesBySource.getValue(source).edges) {
+                    val target = (edge.target as?
+                            DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.definition
+                        ?: continue
+                    if (target !in edgesBySource) continue
+                    when (val validation = validateAcyclicOrError(target)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+                    }
+                }
+                check(activeDefinitions.remove(source)) {
+                    "physical direct-supertype validation lost its active source"
+                }
+                completedDefinitions += source
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+            }
+            for (source in edgesBySource.keys) {
+                when (val validation = validateAcyclicOrError(source)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            }
+
             return DotNetGenericOwnerPhysicalBindingResult.Bound(
-                DotNetGenericOwnerPhysicalDeclarationIndex(epoch, typesByIdentity, methodsByIdentity),
+                DotNetGenericOwnerPhysicalDeclarationIndex(
+                    epoch,
+                    typesByIdentity,
+                    methodsByIdentity,
+                    edgesBySource,
+                ),
             )
         }
     }
@@ -566,6 +919,23 @@ internal data class DotNetGenericOwnerPhysicalView(
 ) {
     val family: DotNetGenericOwnerPhysicalTypeDefIdentity
         get() = construction.definition
+}
+
+/** Positive interface views found through recorded CLR edges and whether every branch was recorded. */
+internal class DotNetGenericOwnerPhysicalInterfaceViewClosure(
+    interfaceViews: Iterable<DotNetGenericOwnerPhysicalView>,
+    val isComplete: Boolean,
+) {
+    val interfaceViews: Set<DotNetGenericOwnerPhysicalView> = interfaceViews.toSet()
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetGenericOwnerPhysicalInterfaceViewClosure &&
+                interfaceViews == other.interfaceViews && isComplete == other.isComplete
+
+    override fun hashCode(): Int = 31 * interfaceViews.hashCode() + isComplete.hashCode()
+
+    override fun toString(): String =
+        "PhysicalInterfaceViewClosure(views=$interfaceViews, complete=$isComplete)"
 }
 
 /** Auditable source of one guaranteed view; none of these is inferred from a logical type alone. */
