@@ -96,6 +96,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDispatc
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeScope
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowEvidence
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowGuaranteeState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowNullState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
@@ -446,6 +453,11 @@ private class BackendCliDotNetFacade(
                 .orEmpty()
             "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
         }
+        validateGenericOwnerPhysicalValueShadow(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            snapshots = completedOutput.genericOwnerPhysicalValueShadows,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         System.getProperty(GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY)?.let { exportPath ->
             check(genericOwnerRehearsal) {
                 "A generic-owner rehearsal product can only be exported from the rehearsal epoch"
@@ -642,6 +654,100 @@ private class BackendCliDotNetFacade(
             }
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+/**
+ * Proves that the read-only physical-value shadow retains an exact receiver-derived view through
+ * object storage without using that result to narrow an independently broad semantic input.
+ */
+private fun validateGenericOwnerPhysicalValueShadow(
+    genericOwnerRehearsal: Boolean,
+    snapshots: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        check(snapshots.isEmpty()) {
+            "The production erased epoch must not publish generic-owner physical-value shadows: $snapshots"
+        }
+        return
+    }
+
+    val observed = snapshots.filter { snapshot ->
+        snapshot.ownerName.endsWith("ShadowOwner") &&
+                snapshot.sourceFunctionName == "observe" &&
+                snapshot.functionRole == DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK
+    }
+    val exact = observed.single { snapshot -> snapshot.variableName == "exactReceiverAsObject" }
+    val exactAlias = observed.single { snapshot -> snapshot.variableName == "exactAliasReadAgain" }
+    val broad = observed.single { snapshot -> snapshot.variableName == "genuinelyBroadAsObject" }
+    check(exact.ownerName == broad.ownerName &&
+            exact.physicalFunctionName == broad.physicalFunctionName) {
+        "The exact receiver alias and broad candidate must belong to one semantic-hook body: $observed"
+    }
+
+    check(exact.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+            exact.unsupportedReason == null &&
+            exact.initializerProducedCarrier.kind ==
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+            exact.initializerProducedCarrier.localOwnerName?.endsWith("ShadowOwner") == true &&
+            exact.initializerProducedCarrier.ownerParameterIndices == listOf(0) &&
+            exact.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+            exact.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+            exact.guaranteedViews.singleOrNull()?.let { view ->
+                view.carrier == exact.initializerProducedCarrier &&
+                        DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
+                        view.evidence
+            } == true &&
+            exact.selectedViewLineage.isEmpty() &&
+            exact.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+            exact.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
+        "The widened receiver alias must retain only its proven exact physical owner view: $exact"
+    }
+
+    check(exactAlias.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+            exactAlias.unsupportedReason == null &&
+            exactAlias.initializerProducedCarrier.kind ==
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+            exactAlias.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+            exactAlias.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+            exactAlias.guaranteedViews.singleOrNull()?.let { view ->
+                view.carrier == exact.initializerProducedCarrier &&
+                        DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
+                        view.evidence
+            } == true &&
+            exactAlias.selectedViewLineage.isEmpty() &&
+            exactAlias.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+            exactAlias.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
+        "Reading object storage must change the produced carrier without losing exact provenance: $exactAlias"
+    }
+
+    check(broad.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+            broad.unsupportedReason == null &&
+            broad.initializerProducedCarrier.kind ==
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+            broad.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+            broad.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+            broad.guaranteedViews.isEmpty() &&
+            broad.selectedViewLineage.isEmpty() &&
+            broad.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+            broad.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL) {
+        "A genuinely broad semantic input must not inherit exact receiver provenance: $broad"
+    }
+
+    listOf("mutableMixedAsObject", "uncheckedCastAsObject").forEach { variableName ->
+        val unsupported = observed.single { snapshot -> snapshot.variableName == variableName }
+        check(unsupported.status == DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
+                !unsupported.unsupportedReason.isNullOrEmpty() &&
+                unsupported.initializerProducedCarrier.kind ==
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
+                unsupported.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
+                unsupported.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+                unsupported.guaranteedViews.isEmpty() &&
+                unsupported.selectedViewLineage.isEmpty()) {
+            "A mutable or unchecked-cast local must fail closed in the first shadow slice: $unsupported"
+        }
     }
 }
 
@@ -4226,6 +4332,8 @@ private const val GENERIC_OWNER_REHEARSAL_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsal"
 private const val GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsalDir"
+private const val GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
