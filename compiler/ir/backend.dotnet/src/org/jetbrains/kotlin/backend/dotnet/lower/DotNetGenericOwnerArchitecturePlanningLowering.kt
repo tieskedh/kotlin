@@ -596,6 +596,39 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     ?: externalProbeBySemanticPrototype[overridden.owner]?.symbol
             }.distinct()
         }
+        val exactNoInputProducerCalls = Collections.newSetFromMap(IdentityHashMap<IrCall, Boolean>())
+        callRoutes.forEach { route ->
+            if (route.receiverProvenance !=
+                DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION ||
+                route.call.superQualifierSymbol != null ||
+                route.callee.parameters.any { parameter ->
+                    parameter.kind != IrParameterKind.DispatchReceiver
+                }
+            ) {
+                return@forEach
+            }
+            val usesExactNaturalEntry = when (route.routeRequirement) {
+                DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY -> true
+                DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED -> {
+                    if (route.call.symbol.owner in context.externalDefaultArgumentDispatchers) {
+                        return@forEach
+                    }
+                    val source = route.callee.let { candidate ->
+                        candidate.resolveFakeOverride()
+                            ?: candidate.resolveFakeOverrideMaybeAbstract()
+                            ?: candidate
+                    }
+                    val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
+                        ?: return@forEach
+                    val exactResultNeedsSemanticRoute =
+                        source.returnType.containsReifiedVariantOwnerApplicationOf(route.calleeOwner) &&
+                                binding.family.semanticHookMethodName != null
+                    !exactResultNeedsSemanticRoute
+                }
+                else -> false
+            }
+            if (usesExactNaturalEntry) exactNoInputProducerCalls += route.call
+        }
         semanticHooksBySource.entries.forEach { entry ->
             val source = entry.key
             val hook = entry.value
@@ -607,6 +640,62 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         operator == IrTypeOperator.IMPLICIT_CAST && argument.isCurrentHookReceiver()
                     else -> false
                 }
+
+                val exactNoInputProducerValues =
+                    Collections.newSetFromMap(IdentityHashMap<IrVariable, Boolean>())
+                fun IrExpression.isExactNoInputProducerValue(): Boolean = when (this) {
+                    is IrCall -> {
+                        if (this in exactNoInputProducerCalls) {
+                            true
+                        } else {
+                            val callee = symbol.owner.let { candidate ->
+                                candidate.resolveFakeOverride()
+                                    ?: candidate.resolveFakeOverrideMaybeAbstract()
+                                    ?: candidate
+                            }
+                            val calleeOwner = callee.parent as? IrClass
+                            superQualifierSymbol == null &&
+                                    callee.parameters.none { parameter ->
+                                        parameter.kind != IrParameterKind.DispatchReceiver
+                                    } &&
+                                    calleeOwner != null &&
+                                    DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(calleeOwner) &&
+                                    !callee.returnType.containsReifiedVariantOwnerApplicationOf(calleeOwner) &&
+                                    dispatchReceiver?.isExactNoInputProducerValue() == true
+                        }
+                    }
+                    is IrGetValue -> symbol.owner === hook.parameters[0] ||
+                            symbol.owner in exactNoInputProducerValues
+                    is IrTypeOperatorCall ->
+                        (operator == IrTypeOperator.IMPLICIT_CAST ||
+                                operator == IrTypeOperator.IMPLICIT_NOTNULL) &&
+                                type.sameInvariantTypeAs(argument.type) &&
+                                argument.isExactNoInputProducerValue()
+                    else -> false
+                }
+                var addedExactProducerValue: Boolean
+                do {
+                    addedExactProducerValue = false
+                    body.acceptVoid(object : IrVisitorVoid() {
+                        override fun visitElement(element: IrElement) {
+                            element.acceptChildrenVoid(this)
+                        }
+
+                        override fun visitVariable(declaration: IrVariable) {
+                            val initializer = declaration.initializer
+                            if (!declaration.isVar &&
+                                declaration.type.referencesGenericOwnerParameter(owner) &&
+                                initializer != null &&
+                                initializer.type.sameInvariantTypeAs(declaration.type) &&
+                                initializer.isExactNoInputProducerValue()
+                            ) {
+                                addedExactProducerValue =
+                                    exactNoInputProducerValues.add(declaration) || addedExactProducerValue
+                            }
+                            declaration.acceptChildrenVoid(this)
+                        }
+                    })
+                } while (addedExactProducerValue)
 
                 fun IrType.typeParameterPolarities(
                     parameter: IrTypeParameter,
@@ -681,6 +770,24 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             // value occurrences cross into the semantic domain. Routing `this`
                             // through its own property capability would recurse back into this
                             // hook.
+                            return type
+                        }
+                        if (((container is IrVariable &&
+                                    container in exactNoInputProducerValues) ||
+                                    (container is IrGetValue &&
+                                            container.symbol.owner in exactNoInputProducerValues) ||
+                                    (container is IrCall &&
+                                            container.isExactNoInputProducerValue()) ||
+                                    (container is IrTypeOperatorCall &&
+                                            container.isExactNoInputProducerValue())) &&
+                            type?.referencesGenericOwnerParameter(owner) == true
+                        ) {
+                            // A no-input producer reached exclusively through this exact C<!T>
+                            // returns the CLR construction promised by that typed slot. Preserve
+                            // it through immutable same-type locals and later no-input producers;
+                            // only the semantic hook's broad input crosses into object-domain
+                            // storage. Mutable or widened locals and input-bearing calls remain
+                            // deliberately outside this proof.
                             return type
                         }
                         if (container is IrCall &&
@@ -3073,23 +3180,6 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             return false
         }
 
-        private fun IrType.sameInvariantTypeAs(other: IrType): Boolean {
-            val left = this as? IrSimpleType ?: return false
-            val right = other as? IrSimpleType ?: return false
-            if (left.classifier != right.classifier || left.nullability != right.nullability ||
-                left.arguments.size != right.arguments.size
-            ) {
-                return false
-            }
-            return left.arguments.indices.all { index ->
-                val leftProjection = left.arguments[index] as? IrTypeProjection ?: return@all false
-                val rightProjection = right.arguments[index] as? IrTypeProjection ?: return@all false
-                leftProjection.variance == Variance.INVARIANT &&
-                        rightProjection.variance == Variance.INVARIANT &&
-                        leftProjection.type.sameInvariantTypeAs(rightProjection.type)
-            }
-        }
-
         private fun exact(type: IrType): ReceiverOrigin = ReceiverOrigin(ReceiverOriginKind.EXACT, type)
 
         private fun unresolved(): Set<ReceiverOrigin> = setOf(ReceiverOrigin(ReceiverOriginKind.UNRESOLVED))
@@ -3627,6 +3717,23 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
         return simpleType.arguments.any { argument ->
             (argument as? IrTypeProjection)?.type?.hasExplicitNullableParameterOf(owner) == true
+        }
+    }
+
+    private fun IrType.sameInvariantTypeAs(other: IrType): Boolean {
+        val left = this as? IrSimpleType ?: return false
+        val right = other as? IrSimpleType ?: return false
+        if (left.classifier != right.classifier || left.nullability != right.nullability ||
+            left.arguments.size != right.arguments.size
+        ) {
+            return false
+        }
+        return left.arguments.indices.all { index ->
+            val leftProjection = left.arguments[index] as? IrTypeProjection ?: return@all false
+            val rightProjection = right.arguments[index] as? IrTypeProjection ?: return@all false
+            leftProjection.variance == Variance.INVARIANT &&
+                    rightProjection.variance == Variance.INVARIANT &&
+                    leftProjection.type.sameInvariantTypeAs(rightProjection.type)
         }
     }
 
