@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.util.isAnnotationClass
@@ -81,6 +82,21 @@ internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqNa
 /** Whether this is Kotlin's invariant generic array classifier (`Array<E>`). */
 internal fun IrType.isDotNetGenericArray(): Boolean =
     classFqName?.asString() == "kotlin.Array"
+
+/**
+ * An immutable alias introduced wholly by Common IR lowering. Such a slot may retain a more
+ * precise physical carrier than its inferred logical view; a source local may not silently do so.
+ */
+internal fun IrVariable.isDotNetImmutableCompilerCarrierAlias(): Boolean {
+    if (isVar) return false
+    return when (origin) {
+        IrDeclarationOrigin.IR_TEMPORARY_VARIABLE,
+        IrDeclarationOrigin.IR_TEMPORARY_VARIABLE_FOR_INLINED_PARAMETER,
+        IrDeclarationOrigin.IR_TEMPORARY_VARIABLE_FOR_INLINED_EXTENSION_RECEIVER,
+        IrDeclarationOrigin.FOR_LOOP_ITERATOR -> true
+        else -> false
+    }
+}
 
 /** Whether this is the logical Common `CharSequence` classifier (nullable or non-null). */
 internal fun IrType.isDotNetCharSequenceType(): Boolean =

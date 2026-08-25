@@ -1087,8 +1087,16 @@ internal class DotNetIlMethodCodegen(
     private fun emitVariable(variable: IrVariable) {
         val initializer = variable.initializer
         val exactArrayStorage = if (initializer == null) null else variable.exactCompilerTemporaryArrayStorageOrNull()
+        val exactGenericOwnerStorage = if (
+            exactArrayStorage == null && initializer != null
+        ) {
+            variable.exactCompilerTemporaryGenericOwnerStorageOrNull()
+        } else {
+            null
+        }
         val localOpenNullableArrayStorage = if (
-            exactArrayStorage == null && initializer != null && !variable.isVar &&
+            exactArrayStorage == null && exactGenericOwnerStorage == null &&
+            initializer != null && !variable.isVar &&
             initializer is IrWhen && variable.type.isDotNetInvariantOpenNullableGenericArray()
         ) {
             // Common RingBuffer conditionally selects either a resized copy or the supplied
@@ -1099,7 +1107,8 @@ internal class DotNetIlMethodCodegen(
             null
         }
         val nestedConstructionStorage = if (
-            exactArrayStorage == null && localOpenNullableArrayStorage == null &&
+            exactArrayStorage == null && exactGenericOwnerStorage == null &&
+            localOpenNullableArrayStorage == null &&
             initializer != null && !variable.isVar
         ) {
             expressionCodegen.genericOwnerNestedConstructionCarrierTypeOrNull(
@@ -1111,7 +1120,8 @@ internal class DotNetIlMethodCodegen(
         }
         val slot = methodContext.declareLocal(
             variable,
-            exactArrayStorage ?: localOpenNullableArrayStorage ?: nestedConstructionStorage,
+            exactArrayStorage ?: exactGenericOwnerStorage ?:
+                localOpenNullableArrayStorage ?: nestedConstructionStorage,
         )
         if (initializer == null) return
         // Shared lowerings may place statement-bearing expressions in compiler-temporary
@@ -1121,6 +1131,17 @@ internal class DotNetIlMethodCodegen(
         emitValueExpression(initializer, slot.type)
         if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+    }
+
+    /**
+     * Preserves an exact natural generic-owner construction through immutable scaffolding made
+     * by the shared inliner/for-loop lowering. Source and mutable locals keep their declared
+     * carrier; only compiler-owned aliases may retain the more precise value they were given.
+     */
+    private fun IrVariable.exactCompilerTemporaryGenericOwnerStorageOrNull(): DotNetIlValueType? {
+        if (!isDotNetImmutableCompilerCarrierAlias()) return null
+        val initializer = initializer ?: return null
+        return expressionCodegen.exactGenericOwnerTemporaryCarrierTypeOrNull(initializer, type)
     }
 
     /**

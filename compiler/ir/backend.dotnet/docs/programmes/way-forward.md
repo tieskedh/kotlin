@@ -1542,10 +1542,26 @@ one closed CLR construction. A custom separate-compilation owner proves exact
 and widened calls plus identity on both runtimes, and the production-erased
 inverse remains unchanged. The full target aggregate covers 191 suites/2,351
 tests with zero failures, errors, or skips. The source product loses the former
-`SuppressedExceptionList` family and now reaches the independent open generic-
-owner self-view conversion in `AbstractMutableList.indexOf`. Resolve that
-downstream typed-route degradation next without an AbstractMutableList, List,
-stdlib, or member-name exception.
+`SuppressedExceptionList` family and at that checkpoint reached the independent
+open generic-owner self-view conversion in `AbstractMutableList.indexOf`.
+
+That downstream typed-route degradation is now closed structurally. When
+Common inference widens a covariant inline receiver and the inliner introduces
+immutable aliases, those compiler-owned slots may retain the exact natural CLR
+generic construction already supplied by the producer. Alias reads propagate
+that physical fact through the compiler-generated chain instead of
+materializing a false `I<object>` sibling. The rule applies only to compiler
+temporaries and for-loop iterators, rejects object or semantic-capability
+producers, and does not narrow source or mutable locals. A hostile proof keeps
+an inlined generic-owner self-view typed while a mutable source
+`Producer<Any?>` still alternates value and reference implementations on the
+same semantic carrier. The source-built Stdlib loses
+`AbstractMutableList.indexOf` and now reaches the independent semantic-body
+self conversion in `AbstractMutableList.removeAll`. Resolve that boundary next
+without an AbstractMutableList, MutableList, collection, stdlib, or member-name
+exception; a semantic body must not fabricate `MutableList<object>` from an
+exact open `this`, but an ordinary source-level widened mutable view must
+remain semantic.
 
 The first general split-result experiment is now implemented for a
 producer-recorded direct `T?` interface result: the natural MethodDef returns

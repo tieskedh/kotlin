@@ -798,6 +798,39 @@ verification, and work state.
   proof. See
   [`docs/archive/reified-generic-interface-split-nullable-result-2026-08-25.md`](docs/archive/reified-generic-interface-split-nullable-result-2026-08-25.md).
 
+  The downstream open-owner self-view gate is now closed without an
+  `AbstractMutableList`, List, collection, member-name, or stdlib rule. Common
+  inference may instantiate a covariant inline receiver at `Any?` and the
+  inliner then creates immutable `List<Any?>` aliases around an exact
+  `AbstractMutableList<E>` receiver. On the CLR, materializing the apparent
+  `List<object>` construction is false when `E` is open or value-shaped. The
+  emitter now retains the producer's exact natural generic construction only
+  through compiler-owned immutable temporary and for-loop aliases. A
+  following alias observes that recorded slot carrier instead of
+  reconstructing its wider logical construction. Object and semantic-
+  capability producers remain excluded, and source or mutable locals retain
+  their declared Kotlin view.
+
+  `genericOwnerInlineWidenedTemporary.kt` proves both sides of the boundary: a
+  generic owner's inlined self-view executes for value and reference
+  instantiations, while a source-declared mutable `Producer<Any?>` view can
+  still hold first the value producer and then the reference producer with
+  unchanged object identity. Four rehearsal and four production-erased
+  inverse lanes pass across PSI, LightTree, Framework 4.8, and .NET 10. The
+  actual source-built Stdlib rehearsal no longer reports
+  `AbstractMutableList.indexOf`; its first remaining owner failure is the
+  independent semantic-body self conversion in
+  `AbstractMutableList.removeAll`, where exact `this` is requested as
+  `MutableList<object>`.
+
+  The final full aggregate exits zero. Direct XML audit covers 191 suites and
+  2,359 tests with no failures, errors, or skips: 187 freshly written FIR
+  suites/2,223 tests, two freshly written integration suites/127 tests, and
+  the freshly written three-test backend resolver suite; the unchanged six-
+  test `dotnet.ir` root remains up-to-date. Production remains atomically
+  erased outside rehearsal. See
+  [`docs/archive/generic-owner-inline-widened-temporary-carrier-2026-08-25.md`](docs/archive/generic-owner-inline-widened-temporary-carrier-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
