@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCovariantReturnBridge
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetExactFunctionArity
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
@@ -244,6 +245,10 @@ internal class DotNetCovariantReturnBridgeLowering(
         ) {
             return true
         }
+        // ExactFunctionN is an IR-only view of a real Runtime generic interface. Its closed
+        // generic arguments select the physical slots; no erased Kotlin interface lowering owns
+        // a second adapter for it.
+        if (slotOwner.dotNetExactFunctionArity != null) return true
         // Resolution-only built-ins such as KProperty0 are logically generic, but their complete
         // physical owner is one dedicated non-generic Kotlin.Runtime interface rather than the
         // split generic-interface ABI. Its covariant accessor slots therefore belong to this
@@ -270,18 +275,25 @@ internal class DotNetCovariantReturnBridgeLowering(
             !slotOwner.isInterface &&
                     (slotOwner.isErasedKotlinGenericOwner() ||
                             externalDeclarations.hasGenericClass(slotOwner))
-        val slotReturnType = slot.typeIn(
-            slot.returnType,
-            owner,
-            target.typeParameters,
-            keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
-        )
         val targetReturnType = target.typeIn(
             target.returnType,
             owner,
             target.typeParameters,
             keepOwnerTypeParameters = false,
         )
+        val exactCallableSlot = slotOwner.dotNetExactFunctionArity != null
+        fun exactCallableCarrier(type: IrType): IrType =
+            if (type.usesExactCallableObjectCarrier()) context.irBuiltIns.anyNType else type
+        val slotReturnType = if (exactCallableSlot) {
+            exactCallableCarrier(targetReturnType)
+        } else {
+            slot.typeIn(
+                slot.returnType,
+                owner,
+                target.typeParameters,
+                keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
+            )
+        }
         val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val needsInheritedFinalInterfaceForwarder =
@@ -290,18 +302,22 @@ internal class DotNetCovariantReturnBridgeLowering(
                 slotParameters.zip(targetParameters).any { pair ->
                     val slotParameter = pair.first
                     val targetParameter = pair.second
-                    val slotType = slot.typeIn(
-                        slotParameter.type,
-                        owner,
-                        target.typeParameters,
-                        keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
-                    )
                     val targetType = target.typeIn(
                         targetParameter.type,
                         owner,
                         target.typeParameters,
                         keepOwnerTypeParameters = false,
                     )
+                    val slotType = if (exactCallableSlot) {
+                        exactCallableCarrier(targetType)
+                    } else {
+                        slot.typeIn(
+                            slotParameter.type,
+                            owner,
+                            target.typeParameters,
+                            keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
+                        )
+                    }
                     !slotType.hasSameClrCarrierAs(targetType)
                 }
         if (!needsInheritedFinalInterfaceForwarder &&
@@ -333,7 +349,11 @@ internal class DotNetCovariantReturnBridgeLowering(
         keepOwnerTypeParameters: Boolean,
     ): IrType {
         val declarationOwner = parent as? IrClass ?: return type
-        val ownerSubstituted = if (declarationOwner != owner && !keepOwnerTypeParameters) {
+        val ownerSubstituted = if (
+            declarationOwner != owner &&
+            !keepOwnerTypeParameters &&
+            !keepsOpenNullableDeclarationCarrier(type)
+        ) {
             type.substituteClassOwnerParameters(declarationOwner, owner)
         } else type
         if (typeParameters.isEmpty()) return ownerSubstituted
@@ -582,8 +602,13 @@ internal class DotNetCovariantReturnBridgeLowering(
                 // The physical slot of a Kotlin-owned generic base was emitted in the base's
                 // erased declaration context. Keep those owner parameters here so the shared
                 // type mapper reproduces the exact object/upper-bound/erased-array carrier;
-                // only method parameters are rebound to this synthetic method.
-                val ownerSubstituted = if (keepsErasedClassOwnerParameters) {
+                // only method parameters are rebound to this synthetic method. An open nullable
+                // parameter is likewise frozen to object by the CLR signature mapper even on a
+                // reified owner; substituting its concrete derived argument must not reconstruct
+                // a narrower carrier which the inherited MethodDef never declared.
+                val ownerSubstituted = if (
+                    keepsErasedClassOwnerParameters || slot.keepsOpenNullableDeclarationCarrier(type)
+                ) {
                     type
                 } else {
                     type.substituteClassOwnerParameters(slotOwner, owner)
@@ -597,7 +622,15 @@ internal class DotNetCovariantReturnBridgeLowering(
                         targetParameters[index].varargElementType != null &&
                         targetParameters[index].type.isSupportedDotNetPrimitiveArray()
             }
-            returnType = if (
+            returnType = if (slotOwner.dotNetExactFunctionArity != null) {
+                val targetType = target.typeIn(
+                    target.returnType,
+                    owner,
+                    bridgeTypeParameters,
+                    keepOwnerTypeParameters = false,
+                )
+                if (targetType.usesExactCallableObjectCarrier()) context.irBuiltIns.anyNType else targetType
+            } else if (
                 adaptsPrimitiveVararg &&
                 slot.hasSameImportedClrReturnCarrierAs(target, owner)
             ) {
@@ -615,7 +648,15 @@ internal class DotNetCovariantReturnBridgeLowering(
                 val slotParameter = indexedParameter.value
                 val targetParameter = targetParameters[index]
                 val retainedParameterType = retainedParameterTypes?.getOrNull(index)
-                val bridgeParameterType = if (
+                val bridgeParameterType = if (slotOwner.dotNetExactFunctionArity != null) {
+                    val targetType = target.typeIn(
+                        targetParameter.type,
+                        owner,
+                        bridgeTypeParameters,
+                        keepOwnerTypeParameters = false,
+                    )
+                    if (targetType.usesExactCallableObjectCarrier()) context.irBuiltIns.anyNType else targetType
+                } else if (
                     retainedParameterType is DotNetClrTypeSignature.SzArray &&
                     targetParameter.varargElementType != null &&
                     targetParameter.type.isSupportedDotNetPrimitiveArray()
@@ -719,6 +760,16 @@ internal class DotNetCovariantReturnBridgeLowering(
         }
     }
 
+    /** Whether ExactFunctionN's canonical nested argument must use its universal object carrier. */
+    private fun IrType.usesExactCallableObjectCarrier(): Boolean {
+        if (!context.configuration.dotNetGenericOwnerRehearsal) return false
+        val resultOwner = ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return false
+        if (!resultOwner.isDotNetGenericInterfaceDeclaration) return false
+        return resultOwner in context.genericOwnerCapabilityInterfaces ||
+                externalDeclarations.genericOwnerCapabilityInfoOrNull(resultOwner) != null ||
+                DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(resultOwner)
+    }
+
     /** The declaration-context carrier used by an owner-erased generic class parameter. */
     private fun IrType.erasedClassParameterCarrierOrNull(): IrType? {
         val simpleType = this as? IrSimpleType ?: return null
@@ -743,6 +794,14 @@ internal class DotNetCovariantReturnBridgeLowering(
         val simpleType = this as? IrSimpleType ?: return false
         return simpleType.isMarkedNullable() && simpleType.classifier is IrTypeParameterSymbol
     }
+
+    /**
+     * Kotlin-owned open `T?` slots are emitted as object and remain stable in their declaration
+     * context. A retained foreign CLR MethodDef is different physical evidence: its reified `!T`
+     * slot must be substituted through the implemented construction (for example `T = string`).
+     */
+    private fun IrSimpleFunction.keepsOpenNullableDeclarationCarrier(type: IrType): Boolean =
+        type.isOpenNullableTypeParameter() && importedClrPhysicalMethodOrNull() == null
 
     private fun IrClass.baseClassAlreadyImplements(interfaceClass: IrClass): Boolean {
         val baseClass = dotNetBaseClassOrNull() ?: return false
