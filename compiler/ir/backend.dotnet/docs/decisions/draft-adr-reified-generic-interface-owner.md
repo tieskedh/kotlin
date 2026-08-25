@@ -843,12 +843,40 @@ erased-owner decision: Kotlin implementation key/value fields remain `!0` and
 `!1`. Semantic dispatch is selected only for the concrete operation whose
 Kotlin view CLR cannot name, and all views retain one object identity.
 
+This selects the honest single-slot carrier, not the final performance optimum.
+A general pre-ABI proof may represent an open-nullable method result as a typed
+payload plus an outer-presence flag, for example `V` plus `bool`, so an exact
+value-type construction need not box. Such a convention must be declaration-
+independent and close overrides, function references, reflection, separate
+compilation, C# implementation, Framework 4.8, and modern AOT lanes before it
+can replace the one-slot rule. The flag denotes absence of the outer payload;
+it is not a Map-specific missing-key protocol. No such multi-slot ABI is
+selected by surface 59.
+
 Ordinary non-partial C# implements only the natural Map and supplies the
 accepted public value-candidate convention; it need not name compiler ABI.
 Warning-bearing BK-1 `as`/`as?` checks apply the same recursive compatibility
 predicate to K and V, preserving legal V covariance. `MutableMap<K,V>` is not
 selected. See
 [`../archive/runtime-reified-map-2026-08-24.md`](../archive/runtime-reified-map-2026-08-24.md).
+
+Post-representation override closure uses the inherited physical MethodDef as
+authority rather than reconstructing it from a later logical substitution. An
+open nullable owner parameter therefore retains the declaration's `object`
+slot even when a leaf fixes the parameter to a reference type; the leaf keeps
+its natural typed method and receives one private final forwarding MethodImpl.
+This declaration-carrier rule does not override retained foreign CLR metadata:
+an imported reified `!T` MethodDef is substituted through its actual
+construction, regardless of nullable/flexible Kotlin import types.
+The same rule admits the synthetic `ExactFunctionN.InvokeExact` declarations
+as real Runtime generic slots. Their closed MethodImpl owner is derived from
+the typed callable target and the canonical capability carrier, while ordinary
+call references remain unchanged. Rehearsal-only carrier selection is epoch
+guarded, so production-erased emission cannot acquire a mismatched Runtime
+construction. This closes a physical correctness boundary; selectively
+naturalizing stable closed nested callable results remains a separate pre-ABI
+optimization proof. See
+[`../archive/generic-owner-post-representation-covariant-slots-2026-08-25.md`](../archive/generic-owner-post-representation-covariant-slots-2026-08-25.md).
 
 ## Remaining gates
 

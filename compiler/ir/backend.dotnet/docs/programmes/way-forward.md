@@ -1518,13 +1518,30 @@ explicit generic suspend-callable class proves its synthesized semantic
 capability and continuation-shaped execution without a source-name or stdlib
 exception.
 
-The next repeated product blocker is missing covariant-return MethodImpl
-materialization after generic-owner physical rewriting. Independent collection,
-callable, and iterator-producing lambda overrides all retain a narrower typed
-result than their inherited object slot. Recompute that bridge after the
-relevant representation lowering without collection, callable, lambda, or
-member-name exceptions; then rerun the product and recompute the next complete
-declaration family.
+The post-representation covariant-return blocker is closed. The inherited
+physical MethodDef remains authoritative for an open nullable class result,
+and the IR-only ExactFunction declarations bind to their real Runtime generic
+slots. Typed source methods remain the natural entries and private final
+MethodImpl adapters bridge only the physical mismatch. The two rules have
+independent ablation proofs and retain the production-erased inverse. Retained
+foreign CLR MethodDefs remain a stronger authority than nullable/flexible
+Kotlin import views and are substituted through their real construction.
+
+The next source-product blocker is an erased physical class emitting a reified
+generic-interface edge whose arguments still reference the logical owner's
+`!n` parameters. Such a class has no CLR GenericParams and therefore cannot
+name those arguments. Select the interface-edge carrier from the recorded
+physical owner representation, fail closed when no honest edge exists, and do
+not add a HashMap, MutableSet, collection, stdlib, or declaration-name
+exception. Rerun the source product after that complete structural correction.
+
+Before ABI freeze, revisit the single-slot `object` carrier for open-nullable
+method results with one general split-result experiment: typed payload plus an
+outer-presence flag. It is admissible only if exact value-type calls avoid
+boxing while overrides, callable adaptation, reflection, separate compilation,
+ordinary C# implementation, Framework 4.8, trimming, and NativeAOT remain
+coherent. Do not encode Map lookup or missing-key semantics in that convention;
+fields and ordinary generic state remain a separate representation decision.
 
 The physical choice is also closed over a transparent same-product covariant
 subinterface fixpoint. `Child<out T> : Parent<T>` remains a real `Child<T>` and
