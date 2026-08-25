@@ -1089,6 +1089,7 @@ internal class DotNetIlTypeMapper private constructor(
                 val baseType = irClass.dotNetBaseSuperTypeOrNull()
                 info.classInfo.baseType = baseType?.let(::toDotNetIlBaseClassType)
                 info.classInfo.interfaces = irClass.dotNetDirectInterfaceTypes()
+                    .filter { interfaceType -> info.classInfo.canNameDirectInterfaceType(irClass, interfaceType) }
                     .mapNotNull(::toDotNetIlImplementedInterfaceType)
                     .distinct()
             } finally {
@@ -2258,6 +2259,12 @@ internal class DotNetIlTypeMapper private constructor(
         }
     }
 }
+
+/** A physical TypeDef may reference only class GenericParams which it actually declares. */
+internal fun DotNetIlClassInfo.canNameDirectInterfaceType(
+    logicalOwner: IrClass,
+    interfaceType: IrType,
+): Boolean = typeParameterCount > 0 || !interfaceType.referencesTypeParameterOf(logicalOwner)
 
 /**
  * Maps the supported constraints of this parameter to their physical CLR types.
