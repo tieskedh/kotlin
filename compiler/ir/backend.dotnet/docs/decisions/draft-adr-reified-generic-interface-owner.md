@@ -1082,6 +1082,28 @@ walks logical supertypes or adds an unrecorded capability edge.
 See
 [`../archive/generic-owner-physical-supertype-authority-2026-08-25.md`](../archive/generic-owner-physical-supertype-authority-2026-08-25.md).
 
+The first integrated value-flow slice runs exactly once after final routing has
+reached its fixpoint and only in the generic-owner rehearsal. An admitted local
+generic-class plan supplies the early physical self construction
+`C<OwnerParameter(...)>`; a regular `Any`/`Any?` hook parameter starts in the
+object carrier with unknown views. Sequential immutable object locals may read
+those fixed parameter/local slots and cross implicit representation-preserving
+wrappers. Thus `val x: Any? = this` records a constructed produced carrier, an
+object storage carrier, and the independently guaranteed self view, while
+`val y: Any? = broadCandidate` remains object plus unknown. Reading `x` again
+produces object because that is its storage carrier but retains the guaranteed
+self view. No view is selected merely because it is guaranteed.
+
+This slice deliberately rejects mutable locals, explicit casts, unsupported
+initializers, and every carrier or view which its diagnostic schema cannot
+render. Snapshot projection is complete or `UNSUPPORTED`; it never silently
+drops a foreign/interface view while claiming a known result. The early local
+self adapter may not be generalized into ancestry, MethodDef, retained-foreign,
+or later-epoch authority. Snapshots are IR-free in-memory evidence and cannot
+enter the routing fixpoint, architecture plan, emitter, library ABI, or state
+selection. Existing recognizers remain authoritative. See
+[`../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md).
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,
