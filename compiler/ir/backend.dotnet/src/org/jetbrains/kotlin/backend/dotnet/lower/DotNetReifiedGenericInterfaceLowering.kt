@@ -2296,6 +2296,10 @@ internal class DotNetGenericOwnerFinalRoutingLowering(
             previousState = stateSizes()
             DotNetReifiedGenericInterfaceLowering(context, finalRoutingOnly = true).lower(irModule)
         } while (stateSizes() != previousState)
+
+        if (context.configuration.dotNetGenericOwnerRehearsal) {
+            DotNetGenericOwnerPhysicalValueShadowAnalysis(context).analyze(irModule)
+        }
     }
 }
 

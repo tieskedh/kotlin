@@ -1640,6 +1640,22 @@ general proof. Trimming and NativeAOT remain freeze gates, not premises for
 globally retaining the object-result representation. Fields and ordinary
 generic state remain a separate representation decision.
 
+The first integrated shadow slice now executes after the final-routing
+fixpoint. It seeds only the admitted early-plan construction of a local generic
+class's current receiver and unknown object-domain regular parameters, then
+tracks sequential immutable `Any`/`Any?` locals through fixed storage. This
+already proves the important asymmetry: an exact receiver can be produced as
+`C<!T>`, stored as `object`, read back as `object`, and retain its independently
+guaranteed physical view, while a broad hook input does not acquire that view.
+Mutable multi-definition flow and warning-bearing casts are present as
+fail-closed negative controls rather than being inferred as exact. Both FIR
+parsers and both CLR profiles exercise this against the rehearsal and the
+production-erased inverse. Snapshot conversion is complete-or-unsupported and
+no result is consumed by routing, emission, state, or ABI serialization. This
+closes the first vertical slice of stages 2 and 3, not their general call,
+field, constructor, join, or separate-compilation grammar. See
+[`../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical

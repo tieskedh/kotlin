@@ -994,6 +994,28 @@ verification, and work state.
   feature is the read-only final-routing shadow snapshot. See
   [`docs/archive/generic-owner-physical-supertype-authority-2026-08-25.md`](docs/archive/generic-owner-physical-supertype-authority-2026-08-25.md).
 
+  The first physical-value shadow is now integrated after the final-routing
+  fixpoint and remains rehearsal-only and production-inert. For an admitted
+  local generic class, its early representation plan seeds the exact current
+  receiver as `C<!T>` with `CURRENT_PHYSICAL_RECEIVER` evidence; regular
+  object-domain hook inputs start with unknown views. Immutable `Any?` storage
+  keeps produced and storage carriers distinct: `this` is produced as `C<!T>`
+  and placed in `object`, while a later read is produced as `object` but retains
+  the independently guaranteed self view. Selected lineage stays empty. A
+  genuinely broad candidate remains object plus unknown, and mutable or
+  warning-bearing cast locals fail closed instead of laundering exactness.
+  Snapshot conversion rejects rather than truncates any unsupported carrier,
+  view, or lineage. The snapshot is copied only into the in-memory backend/CLI
+  result; it is absent from route maps, `stateSizes`, planning, emission, and
+  library serialization. The focused rehearsal and exact-off matrix passes all
+  eight PSI/LightTree, Framework 4.8, and .NET 10 cases. The final normal
+  aggregate exits zero; direct XML audit covers 194 suites and 2,431 tests with
+  zero failures, errors, or skips. The changed FIR root freshly rewrites 187
+  suites/2,239 tests; the up-to-date `dotnet.ir`, integration, and backend-unit
+  roots retain six, 127, and 59 green tests. Existing recognizers remain
+  unchanged pending wider transfer and hostile coverage. See
+  [`docs/archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](docs/archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5230,13 +5252,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 1. Consolidate physical declaration authority and per-value carrier provenance
    before advancing the source-built Stdlib census, while keeping production
-   emission erased. The production-inert symbolic carrier algebra and its
-   hostile unit tests are complete. Next record admitted symbolic physical
-   supertype edges and add one read-only snapshot after the existing final-
-   routing fixpoint. It may compare with legacy decisions but must not enter
+   emission erased. The production-inert symbolic carrier algebra, complete-set
+   physical ancestry, and first post-final-routing value shadow are complete.
+   Next compare the shared facts with the immutable-alias recognizer by adding
+   exact local placement plus the relevant pre-semantic-remap observation.
+   Mutable multi-construction flow, source-declared widening, and cast
+   laundering must remain hostile controls. The comparison must not enter
    `stateSizes`, route maps, emitter inputs, or ABI serialization. No bounded
-   recognizer is removed until the same analysis also observes the relevant
-   pre-semantic-remap environment and explains its hostile negatives.
+   recognizer is removed until the same analysis explains both its positive
+   behavior and hostile negatives.
 
    Continue the hardest-model-first generic-owner architecture spike within
    that consolidation. The erased hostile oracle, historical

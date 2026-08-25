@@ -71,12 +71,14 @@ object DotNetBackend {
         val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
+        var genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot> = emptyList()
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
             DotNetBackendOutput(
                 file,
                 declarations,
                 genericOwnerPrototypes,
                 genericOwnerCallRoutes,
+                genericOwnerPhysicalValueShadows,
                 configuration.dotNetGenericOwnerRehearsal,
             )
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
@@ -191,6 +193,21 @@ object DotNetBackend {
         genericOwnerCallRoutes = context.genericOwnerCallRoutes
             .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)
             .sortedBy(DotNetGenericOwnerCallRouteSnapshot::callSiteIndex)
+        genericOwnerPhysicalValueShadows = if (configuration.dotNetGenericOwnerRehearsal) {
+            context.genericOwnerPhysicalValueShadows
+                .toList()
+                .sortedWith(
+                    compareBy<DotNetGenericOwnerPhysicalValueShadowSnapshot>(
+                        DotNetGenericOwnerPhysicalValueShadowSnapshot::ownerName,
+                        DotNetGenericOwnerPhysicalValueShadowSnapshot::sourceFunctionName,
+                        DotNetGenericOwnerPhysicalValueShadowSnapshot::physicalFunctionName,
+                        { snapshot -> snapshot.functionRole.ordinal },
+                        DotNetGenericOwnerPhysicalValueShadowSnapshot::variableName,
+                    ),
+                )
+        } else {
+            emptyList()
+        }
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -598,5 +615,6 @@ data class DotNetBackendOutput(
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+    val genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
     val genericOwnerRehearsal: Boolean,
 )
