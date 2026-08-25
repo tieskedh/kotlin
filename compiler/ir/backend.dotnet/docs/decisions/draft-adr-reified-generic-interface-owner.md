@@ -1067,6 +1067,21 @@ symbolic edge, and later epochs bind rather than reconstruct it. Until such an
 edge exists, a shadow analysis may retain an exact concrete carrier but must
 report an interface-call view as unknown.
 
+The first executable edge authority records one complete direct set per
+physical TypeDef. Missing and recorded-empty sets are distinct; positive views
+survive an incomplete downstream closure but the result remains explicitly
+incomplete. Targets use source-TypeDef-scoped parameters, reject duplicate,
+self, cyclic, category-invalid, or incomplete class-base rows, and substitute
+only through recorded physical constructions. Detached generic-class family
+artifacts provide their exact `directSupertypes`. Existing published generic-
+interface contracts provide natural/exact TypeDef identities but deliberately
+omit canonical-only parents, so their ancestry remains unavailable until it is
+joined with complete producer or retained `InterfaceImpl` authority. Core
+`System.Object` is normalized to its one canonical leaf carrier. No adapter
+walks logical supertypes or adds an unrecorded capability edge.
+See
+[`../archive/generic-owner-physical-supertype-authority-2026-08-25.md`](../archive/generic-owner-physical-supertype-authority-2026-08-25.md).
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,

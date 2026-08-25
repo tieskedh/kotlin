@@ -1657,7 +1657,11 @@ The consolidation proceeds in bounded stages:
    joins, and route prerequisites with every current planner/router/emitter
    decision;
 5. record admitted symbolic physical supertype edges rather than recovering
-   InterfaceImpl truth from logical supertypes;
+   InterfaceImpl truth from logical supertypes. The complete-set algebra and
+   detached generic-class artifact adapter are now implemented. Published
+   generic-interface records bind TypeDef identities only because their family
+   relation is not a complete InterfaceImpl set; complete published Kotlin and
+   retained-foreign edge authority remain later adapters;
 6. move route selection behind one query which starts from the authoritative
    callable family and treats exact provenance only as supporting evidence;
 7. replace blanket semantic-body remapping and the temporary alias, helper,

@@ -9,10 +9,12 @@ import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DotNetGenericOwnerPhysicalValueModelTest {
     @Test
@@ -324,6 +326,398 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         assertEquals(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable,
             index.methodParameterOrError(method, 0),
+        )
+    }
+
+    @Test
+    fun `an unavailable edge set differs from a recorded empty edge set`() {
+        val root = localOwnerIdentity(IrClassSymbolImpl())
+        val early = boundDeclarationIndex(
+            listOf(typeDescription(root, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE)),
+            emptyList(),
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            early.directSupertypeEdgesOrUnavailable(root),
+        )
+
+        val sealed = boundEdgeIndex(early, listOf(edgeSet(root)))
+        val recorded = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        Set<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference>,
+                        >,
+                >(sealed.directSupertypeEdgesOrUnavailable(root))
+        val closure = boundInterfaceClosure(sealed, boundConstruction(sealed, root, emptyList()))
+
+        assertEquals(emptySet(), recorded.value)
+        assertEquals(setOf(view(boundConstruction(sealed, root, emptyList()))), closure.interfaceViews)
+        assertTrue(closure.isComplete)
+    }
+
+    @Test
+    fun `direct-supertype authority validates base and interface target categories`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val base = localOwnerIdentity(IrClassSymbolImpl())
+        val firstBase = localOwnerIdentity(IrClassSymbolImpl())
+        val contract = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(base, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(firstBase, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(contract, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val baseType = boundConstruction(index, base, emptyList())
+        val firstBaseType = boundConstruction(index, firstBase, emptyList())
+        val contractType = boundConstruction(index, contract, emptyList())
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(source)),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(source, interfaceEdge(baseType))),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(source, baseEdge(contractType))),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(source, baseEdge(baseType), baseEdge(firstBaseType))),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(contract, baseEdge(baseType))),
+            ),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(source, baseEdge(baseType), interfaceEdge(contractType))),
+            ),
+        )
+    }
+
+    @Test
+    fun `interface closure follows recorded base-class edges`() {
+        val derived = localOwnerIdentity(IrClassSymbolImpl())
+        val base = localOwnerIdentity(IrClassSymbolImpl())
+        val contract = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(derived, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(base, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(contract, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val baseType = boundConstruction(index, base, emptyList())
+        val contractType = boundConstruction(index, contract, emptyList())
+        val sealed = boundEdgeIndex(
+            index,
+            listOf(
+                edgeSet(derived, baseEdge(baseType)),
+                edgeSet(
+                    base,
+                    baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                    interfaceEdge(contractType),
+                ),
+                edgeSet(contract),
+            ),
+        )
+
+        val closure = boundInterfaceClosure(sealed, boundConstruction(sealed, derived, emptyList()))
+
+        assertEquals(setOf(view(contractType)), closure.interfaceViews)
+        assertTrue(closure.isComplete)
+    }
+
+    @Test
+    fun `direct-supertype targets may reference only their source TypeDef parameters`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val other = localOwnerIdentity(IrClassSymbolImpl())
+        val contract = localOwnerIdentity(IrClassSymbolImpl())
+        val method = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(other, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(contract, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            listOf(methodDescription(method, 1)),
+        )
+
+        fun contractOf(argument: DotNetGenericOwnerSymbolicCarrierReference) =
+            boundConstruction(index, contract, listOf(argument))
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(
+                    source,
+                    baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                    interfaceEdge(contractOf(boundTypeParameter(index, source, 0))),
+                )),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(
+                    source,
+                    baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                    interfaceEdge(contractOf(boundTypeParameter(index, other, 0))),
+                )),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(edgeSet(
+                    source,
+                    baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                    interfaceEdge(contractOf(boundMethodParameter(index, method, 0))),
+                )),
+            ),
+        )
+    }
+
+    @Test
+    fun `interface closure recursively substitutes nested source parameters`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val middle = localOwnerIdentity(IrClassSymbolImpl())
+        val root = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(middle, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+                typeDescription(root, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val sourceParameter = boundTypeParameter(index, source, 0)
+        val middleParameter = boundTypeParameter(index, middle, 0)
+        val middleOfSource = boundConstruction(index, middle, listOf(sourceParameter))
+        val rootOfMiddleArray = boundConstruction(
+            index,
+            root,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.SzArray(middleParameter)),
+        )
+        val sealed = boundEdgeIndex(
+            index,
+            listOf(
+                edgeSet(
+                    source,
+                    baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                    interfaceEdge(middleOfSource),
+                ),
+                edgeSet(middle, interfaceEdge(rootOfMiddleArray)),
+                edgeSet(root),
+            ),
+        )
+        val sourceString = boundConstruction(sealed, source, listOf(stringType()))
+        val middleString = boundConstruction(sealed, middle, listOf(stringType()))
+        val rootStringArray = boundConstruction(
+            sealed,
+            root,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.SzArray(stringType())),
+        )
+
+        val closure = boundInterfaceClosure(sealed, sourceString)
+
+        assertEquals(setOf(view(middleString), view(rootStringArray)), closure.interfaceViews)
+        assertTrue(closure.isComplete)
+    }
+
+    @Test
+    fun `positive interface views survive an incomplete recorded edge closure`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val contract = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(contract, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val contractType = boundConstruction(index, contract, emptyList())
+        val sealed = boundEdgeIndex(
+            index,
+            listOf(edgeSet(
+                source,
+                baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                interfaceEdge(contractType),
+            )),
+        )
+
+        val closure = boundInterfaceClosure(sealed, boundConstruction(sealed, source, emptyList()))
+
+        assertEquals(setOf(view(contractType)), closure.interfaceViews)
+        assertFalse(closure.isComplete)
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            sealed.directSupertypeEdgesOrUnavailable(contract),
+        )
+    }
+
+    @Test
+    fun `different constructions of one interface are ordinary positive views not conflicts`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val contract = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(contract, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val contractInt = boundConstruction(index, contract, listOf(int32Type()))
+        val contractString = boundConstruction(index, contract, listOf(stringType()))
+        val sealed = boundEdgeIndex(
+            index,
+            listOf(
+                edgeSet(
+                    source,
+                    baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                    interfaceEdge(contractInt),
+                    interfaceEdge(contractString),
+                ),
+                edgeSet(contract),
+            ),
+        )
+
+        val closure = boundInterfaceClosure(sealed, boundConstruction(sealed, source, emptyList()))
+
+        assertEquals(setOf(view(contractInt), view(contractString)), closure.interfaceViews)
+        assertTrue(closure.isComplete)
+    }
+
+    @Test
+    fun `different complete edge sets for one source are declaration conflicts`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val first = localOwnerIdentity(IrClassSymbolImpl())
+        val second = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(first, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+                typeDescription(second, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(
+                    edgeSet(
+                        source,
+                        baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                        interfaceEdge(boundConstruction(index, first, emptyList())),
+                    ),
+                    edgeSet(
+                        source,
+                        baseEdge(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                        interfaceEdge(boundConstruction(index, second, emptyList())),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `a complete edge set rejects duplicate metadata rows`() {
+        val source = localOwnerIdentity(IrClassSymbolImpl())
+        val contract = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(source, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(contract, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val edge = interfaceEdge(boundConstruction(index, contract, emptyList()))
+
+        assertFailsWith<IllegalArgumentException> {
+            DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(source, listOf(edge, edge))
+        }
+    }
+
+    @Test
+    fun `declaration binding rejects an indirect physical inheritance cycle`() {
+        val first = localOwnerIdentity(IrClassSymbolImpl())
+        val second = localOwnerIdentity(IrClassSymbolImpl())
+        val index = boundDeclarationIndex(
+            listOf(
+                typeDescription(first, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+                typeDescription(second, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            index.advance(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                emptyList(),
+                emptyList(),
+                listOf(
+                    edgeSet(first, interfaceEdge(boundConstruction(index, second, emptyList()))),
+                    edgeSet(second, interfaceEdge(boundConstruction(index, first, emptyList()))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `core System Object cannot acquire a second constructed carrier identity`() {
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.EARLY_REPRESENTATION_PLAN,
+                listOf(
+                    typeDescription(
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary(
+                            listOf("System", "Object"),
+                        ),
+                        0,
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    ),
+                ),
+                emptyList(),
+            ),
         )
     }
 
@@ -810,6 +1204,25 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         arity: Int,
     ) = DotNetGenericOwnerPhysicalMethodDefReference(identity, arity)
 
+    private fun interfaceEdge(
+        target: DotNetGenericOwnerSymbolicCarrierReference,
+    ) = DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+        DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+        target,
+    )
+
+    private fun baseEdge(
+        target: DotNetGenericOwnerSymbolicCarrierReference,
+    ) = DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+        DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
+        target,
+    )
+
+    private fun edgeSet(
+        source: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        vararg edges: DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference,
+    ) = DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(source, edges.asIterable())
+
     private fun boundDeclarationIndex(
         types: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
         methods: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
@@ -824,6 +1237,27 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             methods,
         ),
     ).value
+
+    private fun boundEdgeIndex(
+        index: DotNetGenericOwnerPhysicalDeclarationIndex,
+        edgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+    ): DotNetGenericOwnerPhysicalDeclarationIndex = assertIs<
+            DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalDeclarationIndex>,
+            >(
+        index.advance(
+            DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+            emptyList(),
+            emptyList(),
+            edgeSets,
+        ),
+    ).value
+
+    private fun boundInterfaceClosure(
+        index: DotNetGenericOwnerPhysicalDeclarationIndex,
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalInterfaceViewClosure = assertIs<
+            DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalInterfaceViewClosure>,
+            >(index.physicalInterfaceViewClosureOrError(construction)).value
 
     private fun boundConstruction(
         index: DotNetGenericOwnerPhysicalDeclarationIndex,
