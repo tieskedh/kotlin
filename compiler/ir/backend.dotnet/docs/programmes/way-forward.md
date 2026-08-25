@@ -1593,14 +1593,27 @@ compiler Runtime graph also mirrors the already-emitted
 `MutableMap.MutableEntry<K,V> : Map.Entry<K,V>` declared edge, so the physical
 base view can be recovered without inventing a semantic conversion.
 
-The source-built Stdlib no longer reports `AbstractMutableMap.remove`. Its
-first remaining owner failure is `AbstractMutableMap.get_keys`, where the
-semantic getter constructs an anonymous view object whose constructor expects
-`AbstractMutableMap<object, object>` even though current `this` correctly
-remains `AbstractMutableMap<!K, !V>`. Classify that captured-self/anonymous-
-object construction next without an AbstractMutableMap, keys, anonymous-class,
-package, or stdlib exception. Do not weaken exact current-receiver authority or
-globally remap generated owner constructions merely to admit this one body.
+The captured-self construction boundary is now closed structurally. A moved
+semantic body preserves a generated generic construction only when the class
+is already a reified non-ABI implementation owner, all construction arguments
+invariantly derive from the current owner, and every constructor input using
+the generated owner's parameters receives exact current `this` with an
+identical substituted type. This keeps an anonymous `C<K,V>` relative to its
+actual outer `Owner<!K,!V>` without narrowing any broad cache input. Public or
+external ABI owners, erased and singleton carriers, projections, partial
+substitutions, and mixed inputs remain fail-closed. Class-level non-ABI status,
+not constructor visibility, is authoritative for anonymous classes nested in
+public owners.
+
+The source-built Stdlib no longer reports the
+`AbstractMutableMap<object, object>` constructor mismatch. Its next independent
+root failure is static-initialization binding for a generated generic subclass:
+the subclass's synthetic `<StaticInitialization>` calls `<EnsureInitialized>`
+through a source-built generic base/companion holder that the backend does not
+yet bind. The later unsupported constructor in the parent semantic getter is a
+cascade from that class eviction. Close this next without an AbstractSet,
+AbstractMap, companion, collection, package, or stdlib exception, and without
+making arbitrary generated owners inherit unrelated static state.
 
 The first general split-result experiment is now implemented for a
 producer-recorded direct `T?` interface result: the natural MethodDef returns
