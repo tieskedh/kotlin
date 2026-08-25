@@ -729,6 +729,16 @@ verification, and work state.
   open owner `!n` arguments it does not physically declare. See
   [`docs/archive/generic-owner-post-representation-covariant-slots-2026-08-25.md`](docs/archive/generic-owner-post-representation-covariant-slots-2026-08-25.md).
 
+  Same-module Stdlib generic-class reconstruction now obeys recorded physical
+  arity. An arity-zero TypeDef no longer links an owner-dependent natural
+  interface construction, while closed edges remain legal. A name-independent
+  backend unit proof covers arity-zero rejection, arity-one admission, and a
+  closed arity-zero edge. The source product passes the former
+  `HashMapEntrySetBase` substitution crash and reaches its normal conversion
+  census. The full aggregate covers 191 suites/2,347 tests with zero failures,
+  errors, or skips. See
+  [`docs/archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md`](docs/archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5155,10 +5165,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    K/V state and constructed views, and isolates only the covariant-value input
    and open-nullable lookup carriers. Post-representation return closure now
    preserves the emitted base slot and real Runtime ExactFunction construction.
-   Resolve next the illegal open reified-interface edge emitted by an erased
-   physical owner which has no CLR GenericParams. Do not add a HashMap,
-   MutableSet, collection, stdlib, or another declaration-specific
-   representation exception;
+   Same-module bootstrap reconstruction now removes that illegal open edge
+   according to physical owner arity. Classify next the first repeated
+   semantic-to-natural typed-interface conversion family. Do not add a
+   Throwable, collection, stdlib, or another declaration-specific exception;
    extend the same structural rules only when the selected family
    is complete. Then execute representative products and exact inverse
    rollback for the next go/no-go decision.

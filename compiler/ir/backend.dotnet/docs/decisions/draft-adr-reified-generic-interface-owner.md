@@ -878,6 +878,12 @@ naturalizing stable closed nested callable results remains a separate pre-ABI
 optimization proof. See
 [`../archive/generic-owner-post-representation-covariant-slots-2026-08-25.md`](../archive/generic-owner-post-representation-covariant-slots-2026-08-25.md).
 
+Same-module bootstrap reconstruction is bound by physical owner arity. An
+arity-zero TypeDef may retain a closed interface edge, but it may not link a
+natural construction which references logical owner parameters absent from
+CLR metadata. See
+[`../archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md`](../archive/generic-owner-erased-bootstrap-interface-edge-2026-08-25.md).
+
 ## Remaining gates
 
 Before this draft may replace the erased-interface ADR, one atomic rehearsal

@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-erased-bootstrap-interface-edge-2026-08-25.md`](generic-owner-erased-bootstrap-interface-edge-2026-08-25.md)
+  records the physical-arity guard for same-module generic-class interface
+  reconstruction, its name-independent unit proof, and the next source-product
+  semantic-to-natural conversion census.
 - [`generic-owner-post-representation-covariant-slots-2026-08-25.md`](generic-owner-post-representation-covariant-slots-2026-08-25.md)
   records physical-MethodDef authority for open-nullable class returns and
   Runtime ExactFunction slots, the two independent ablation proofs, unchanged

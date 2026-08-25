@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.ir.declarations.impl.IrFileImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrModuleFragmentImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrFileSymbolImpl
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
 import org.jetbrains.kotlin.ir.util.NaiveSourceBasedFileEntryImpl
 import org.jetbrains.kotlin.name.FqName
@@ -29,6 +30,35 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class DotNetExternalDeclarationsTest {
+    @Test
+    fun physicalOwnerArityControlsOwnerDependentInterfaceEdges() {
+        val logicalOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("LogicalOwner")
+        }
+        val parameter = logicalOwner.addTypeParameter {
+            name = Name.identifier("T")
+        }
+        val closedClass = IrFactoryImpl.buildClass {
+            name = Name.identifier("Closed")
+        }
+        val closedType = IrSimpleTypeImpl(
+            closedClass.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            emptyList(),
+            emptyList(),
+        )
+
+        val erasedOwner = DotNetIlClassInfo("sample.ErasedOwner")
+        val reifiedOwner = DotNetIlClassInfo(
+            "sample.ReifiedOwner`1",
+            typeParameterVariances = listOf(Variance.INVARIANT),
+        )
+
+        assertFalse(erasedOwner.canNameDirectInterfaceType(logicalOwner, parameter.typeParameterDefaultType))
+        assertEquals(true, reifiedOwner.canNameDirectInterfaceType(logicalOwner, parameter.typeParameterDefaultType))
+        assertEquals(true, erasedOwner.canNameDirectInterfaceType(logicalOwner, closedType))
+    }
+
     @Test
     fun resolvesProducerRecordedExactGenericInterfaceOwner() {
         val logicalOwnerKey = "C:sample/GenericOwner"
