@@ -1322,8 +1322,12 @@ See the
   conflict; only one complete match publishes exact paths, names, supported
   CLI flag vectors, signatures, and MethodImpls. The certificate is
   rehearsal/diagnostic-only, production/off publishes none, and it authorizes
-  no route, recognizer, state, KLIB, or erased-production-ABI change. MethodDef
-  GenericParam rows, producer-recorded and retained-foreign evidence,
+  no route, recognizer, state, KLIB, or erased-production-ABI change. Each
+  sealed MethodDef owns its complete ordered GenericParam rows. A call carries
+  a separate MethodSpec vector whose arity must equal that selected MethodDef;
+  it substitutes only parameters owned by that MethodDef, never establishes
+  the declaration's arity, and remains independent from TypeDef `!n`
+  substitution. Producer-recorded and retained-foreign sealed evidence,
   overlapping/global family ownership, and wider callable grammars remain
   separate gates. A sealed CLR MethodDef coordinate consists of owner, exact
   name, `hasThis`, generic arity, and printed explicit parameter carriers

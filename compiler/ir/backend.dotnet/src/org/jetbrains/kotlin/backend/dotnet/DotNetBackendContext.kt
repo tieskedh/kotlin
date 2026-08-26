@@ -66,6 +66,23 @@ internal data class DotNetLoweredInterfaceDefaultImplementation(
     val bodyPlacement: DotNetInterfaceDefaultBodyPlacement,
 )
 
+/** Pre-lowering authority for one source function which may acquire an object-input twin. */
+internal enum class DotNetGenericOwnerFunctionInputEntryAuthorityKind {
+    /** Public MethodDef recorded as Q against an existing Kotlin F declaration. */
+    KOTLIN_PHYSICAL_INDEX,
+
+    /** Public DIM helper referenced by portable Kotlin ABI and the C# authoring manifest, not Q. */
+    PORTABLE_INTERFACE_DEFAULT_HELPER,
+
+    /** Assembly-private implementation detail with no external record. */
+    ASSEMBLY_LOCAL,
+}
+
+internal data class DotNetGenericOwnerFunctionInputEntryAuthority(
+    val logicalKey: String,
+    val kind: DotNetGenericOwnerFunctionInputEntryAuthorityKind,
+)
+
 /**
  * Rehearsal-only dispatcher split for a concrete semantic output family. The typed and semantic
  * virtual slots normally move together for Kotlin subclasses. When only the typed slot changed,
@@ -128,6 +145,9 @@ internal class DotNetBackendContext(
     irModuleFragment: IrModuleFragment,
     /** KLIB-authoritative public identities captured before mutable backend lowerings. */
     val preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
+    /** Source-function identities captured before any lowering can synthesize a lookalike helper. */
+    val preLoweringGenericOwnerFunctionInputAuthorities:
+            Map<IrSimpleFunction, DotNetGenericOwnerFunctionInputEntryAuthority> = emptyMap(),
 ) : CommonBackendContext {
     override val irFactory: IrFactory = symbolTable.irFactory
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)
@@ -258,6 +278,9 @@ internal class DotNetBackendContext(
     val genericOwnerCapabilityDispatchers: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Natural function to its compiler-owned classifier-derived object-input entry. */
     val genericOwnerFunctionInputEntries: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Exact external-record authority selected when each local input entry was materialized. */
+    val genericOwnerFunctionInputEntryAuthorities:
+        MutableMap<IrSimpleFunction, DotNetGenericOwnerFunctionInputEntryAuthority> = linkedMapOf()
     /** Source parameter indices whose object carrier is owned exclusively by the paired entry. */
     val genericOwnerFunctionInputEntryObjectParameters: MutableMap<IrSimpleFunction, Set<Int>> =
         linkedMapOf()

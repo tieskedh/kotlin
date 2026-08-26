@@ -208,6 +208,15 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             source.symbol,
             selection.selectedEntry,
         ) ?: return diagnostic.unavailable()
+        val selectedDescription = declarations.methodDescriptionOrNull(selectedMethod)
+            ?: return diagnostic.unavailable()
+        if (selectedDescription.signature.genericArity != 0) {
+            // This bounded IR shadow does not yet own value facts for method type arguments or
+            // ordinary call arguments. Omit such a call rather than presenting an absent vector
+            // as a contradictory MethodSpec; the pure route model and emitter binder test that
+            // physical contract independently.
+            return null
+        }
         val prediction = selectDotNetGenericOwnerPhysicalOperationRoute(
             declarations = declarations,
             selectedMethod = selectedMethod,
