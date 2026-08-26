@@ -43,6 +43,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             output.genericOwnerPrototypes,
             output.genericOwnerCallRoutes,
             output.genericOwnerPhysicalValueShadows,
+            output.genericOwnerPhysicalValuePlacementComparisons,
             output.genericOwnerRehearsal,
         )
     }

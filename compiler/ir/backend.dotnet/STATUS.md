@@ -1038,6 +1038,32 @@ verification, and work state.
   the existing IR-origin recognizer are unchanged. See
   [`docs/archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](docs/archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md).
 
+  The shadow is now compared read-only with final verifier-visible ordinary
+  `IrVariable` slots from the emitter's variable-local path. Catch parameters
+  and separately declared IL locals remain outside this slice. Failed renders
+  and superseded fixpoint rounds publish nothing; completed stdlib/user emitter
+  scopes retain only their final products. Correlation uses physical
+  function/local IR-symbol identity, and
+  structural normalization retains the physical MethodDef owner, local
+  TypeDef view, and scoped generic-parameter binder. Evidence labels do not
+  create false pre/final divergence. The existing source hostile probe records
+  one stable exact prediction against the unchanged semantic-capability local.
+  A separate public-producer inline probe exposes repeated compiler aliases
+  inside a sequential expression container; the origin-independent shadow
+  predicts `InlineSelfView<!T>` and all match the existing exact generic-owner
+  override. Current-module implicit reference wrappers preserve only an already
+  produced carrier and add no interface-view proof; foreign/external targets
+  remain fail-closed. Sixteen focused rehearsal/on and erased/off lanes pass
+  through PSI/LightTree on Framework 4.8 and .NET 10. The final normal
+  aggregate exits zero; direct XML audit covers 194 suites and 2,431 tests
+  with zero failures, errors, or skips. The FIR, integration, and backend-unit
+  roots freshly write 187 suites/2,239 tests, two suites/127 tests, and four
+  suites/59 tests respectively; the unchanged `dotnet.ir` root retains six
+  green tests. No local selection, conversion, route, state, or old origin
+  recognizer changed;
+  for a fixed IR input, neither did the emitted IL or ABI. See
+  [`docs/archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](docs/archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3718,28 +3744,26 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The semantic-body exact current-receiver capture checkpoint passed every constituent of
-the strict target gate. The normal aggregate command remains:
+The physical-value local-placement comparison checkpoint passed every
+constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed successfully on 2026-08-25. Backend, FIR2IR,
+The latest aggregate completed successfully on 2026-08-26. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
-executed for the exact current-receiver capture checkpoint. Direct audit of
-the result roots covers the complete target inventory of 191 suites and 2,371
-tests:
-
-- 6 policy-free physical CLI model/serializer tests
-- 2,235 FIR, IL-text, and box tests
-- 127 generated CLI and library-integration tests
-- 3 backend resolver tests
-- zero failures, errors, or skips
-
-The 187 FIR suites/2,235 tests, two integration suites/127 tests, and the
-three-test backend resolver suite were freshly written by the final aggregate.
-The unchanged green six-test `dotnet.ir` model root remained up-to-date.
+executed for the physical-value local-placement comparison checkpoint. Direct
+audit of the result roots covers the complete target inventory of 194 suites
+and 2,431 tests, with zero failures, errors, or skips. The FIR, integration,
+and backend-unit roots freshly wrote 187 suites/2,239 tests, two suites/127
+tests, and four suites/59 tests respectively; the unchanged `dotnet.ir` root
+retained six green tests. The focused rehearsal-on/off matrix independently
+covers both probes through PSI and LightTree on Framework 4.8 and .NET 10. It proves
+that repeated compiler aliases agree with the origin-independent exact-local
+prediction, that an independent source-alias probe retains its deliberately
+neutral exact-versus-semantic contrast, and that production-off publishes no
+placement observations or comparisons.
 
 The earlier profile-specialized generic-array-fill aggregate and explicit
 model constituent exited successfully. That historical head additionally
@@ -5275,14 +5299,17 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 1. Consolidate physical declaration authority and per-value carrier provenance
    before advancing the source-built Stdlib census, while keeping production
    emission erased. The production-inert symbolic carrier algebra, complete-set
-   physical ancestry, post-final-routing value shadow, and origin-independent
-   pre-remap exact-local prediction are complete. Next bind those facts to the
-   actual compiler-owned inline alias and compare predicted storage with the
-   emitter's existing selected local carrier, including the source-alias
-   contrast. The comparison remains read-only and must not enter `stateSizes`,
-   route maps, emitter inputs, or ABI serialization. No bounded recognizer is
-   removed until the same analysis explains both its positive behavior and
-   hostile negatives.
+   physical ancestry, two-epoch value shadow, and transactional comparison
+   with final emitted locals are complete. Next bind the exact receiver's
+   already-selected physical interface edge into declaration authority and
+   add an immutable source alias to the public `InlineProducer` probe and prove
+   a call through that natural interface view. The logical destination and
+   selected lineage may choose only among independently guaranteed views;
+   neither may prove that a view exists. Only after calls and conversions
+   through that alias remain correct may the shared placement query replace
+   the origin recognizer and become authoritative for both source and compiler
+   immutable aliases. No bounded recognizer is removed until the same analysis
+   explains both its positive behavior and hostile negatives.
 
    Continue the hardest-model-first generic-owner architecture spike within
    that consolidation. The erased hostile oracle, historical

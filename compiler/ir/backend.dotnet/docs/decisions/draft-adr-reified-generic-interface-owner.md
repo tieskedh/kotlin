@@ -1122,6 +1122,38 @@ inline early return. These are shadow storage predictions only: the old emitter
 recognizer remains unchanged and no snapshot controls a local slot. See
 [`../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md).
 
+Actual local placement is observed through a one-way post-emission diagnostic
+boundary. Each successful emitter scope publishes only ordinary `IrVariable`
+slots emitted through the variable-local path in its final surviving render
+products, plus their existing selection reasons; catch parameters and other
+separately declared IL locals remain outside this slice. Failed renders and
+superseded fixpoint rounds publish nothing.
+Function/local IR-symbol identity correlates the two sides. Raw emitter
+identities are normalized structurally, including the physical TypeDef view,
+the scoped type-parameter binder, and the physical MethodDef owner. Missing,
+ambiguous, unsupported, and unbindable correlations stay explicit.
+
+Comparison uses the final-routing storage prediction. The pre-remap fact
+establishes continuity only, and diagnostic evidence labels are not part of
+value equality. A matching local proves only the selected `StorageCarrier`.
+It does not prove the initializer's produced carrier, a conversion, guaranteed
+interface ancestry, a selected logical view, an operation route, state, or
+MethodImpl. `DIFFERENT` is likewise neutral and cannot by itself authorize
+either carrier. Neither the prediction nor the comparison is an input to the
+other side.
+
+The shadow may enter a sequential block/composite expression container to
+observe nested aliases without making the surrounding call/branch tree
+transparent. An implicit wrapper may preserve an already direct reference
+carrier when the logical target's reference shape is independently known from
+a non-value class/interface declaration in the current IR module. It adds no
+target construction to guaranteed views. External and foreign targets remain
+unavailable until retained physical category authority exists. Thus the
+current exact compiler-alias override can match an origin-independent
+prediction while an independent source-alias probe remains a recorded
+semantic-policy contrast. The old recognizer remains authoritative. See
+[`../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md).
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,

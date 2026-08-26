@@ -1,9 +1,11 @@
+// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE
+
 // Kotlin inference may choose Any? for the covariant receiver of an inline helper even when the
 // call originates on an exact generic owner. The inliner's immutable argument temporaries must
 // retain that owner's natural CLR construction instead of fabricating Producer<object> or
 // degrading the whole typed member body to the semantic carrier.
 
-private interface InlineProducer<out T> {
+interface InlineProducer<out T> {
     fun produce(): T
 }
 
