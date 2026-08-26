@@ -599,6 +599,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 }
             }
         }
+        recordLocalGenericOwnerPhysicalClassEdgesAtBridgeSelection(context, irClass)
     }
 
     /**

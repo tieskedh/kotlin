@@ -1682,6 +1682,43 @@ emission. It proves neither a natural interface view nor permission to remove
 the old recognizer. See
 [`../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md).
 
+The first natural interface-view proof now closes the next boundary without
+making a destination type authoritative. Architecture planning records local
+generic-class TypeDefs in the early epoch. Generic-interface bridge selection
+may then publish the complete bounded selection-site class edge plan for this
+grammar, and a later pass binds that exact record into the same declaration-
+authority lineage. The admitted slice is deliberately only an unconstrained
+class with Object base and exactly one ROOT/OWNED/no-exact natural `I<T>`.
+Its three direct rows must be the natural construction, the class-owner
+capability, and the interface-family capability. The natural arguments must be
+invariant, non-null, exact owner parameters. Any non-Object base, another
+direct family, inherited/extra physical bridge family, exact sibling, bound
+remap, or external capability makes the edge authority unavailable. The bound
+pass does not recover a missing row from logical supertypes.
+
+For `val x: I<T> = this`, the logical destination constructs only a desired
+view selector. Closure over the recorded `C<!T> : I<!T>` edge must already
+contain that view before lineage may select it and storage may become `I<!T>`.
+The same closure records both semantic capabilities as distinct physical
+families even where a diagnostic projection shares a logical owner. `I<Any?>`
+and `I<T?>` source aliases cannot select or fabricate a sibling construction;
+the former is not an owner-parameter selector and the latter is explicitly
+rejected as open nullable. The positive local matches the unchanged emitter,
+and the isolated `sourceAliasMatches` MethodDef contains one actual emitted
+`I<!0>::produce` call operand. Each CLR profile executes its corresponding
+emitted product. The broad controls retain `object` locals in the unchanged
+emitter.
+
+This is still shadow evidence. The emitter selects the product independently;
+the new bound index is neither sealed-emission authority nor a codegen input.
+The legacy class-owner route analyzer does not classify direct natural-
+interface calls. The next consolidation slice should therefore bind the same
+authority lineage to callable/MethodDef families and compare one general read-
+only operation-routing query with existing natural and semantic products. It
+must retain the same edge ablation and broad/open-nullable controls before any
+old local or body recognizer is removed. See
+[`../archive/generic-owner-local-physical-interface-view-2026-08-26.md`](../archive/generic-owner-local-physical-interface-view-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical

@@ -17,15 +17,42 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
     override fun produce(): T = value
 
     fun indexOf(element: T): Int = indexOfFirst { it == element }
+
+    fun sourceAliasMatches(element: T): Boolean {
+        val sourceNaturalAlias: InlineProducer<T> = this
+        return sourceNaturalAlias.produce() == element
+    }
+
+    fun wideAliasMatches(element: T): Boolean {
+        val sourceWideAlias: InlineProducer<Any?> = this
+        return sourceWideAlias.produce() == element
+    }
+
+    fun nullableAliasMatches(element: T): Boolean {
+        val sourceNullableAlias: InlineProducer<T?> = this
+        return sourceNullableAlias.produce() == element
+    }
 }
 
 fun box(): String {
     val ints = InlineSelfView(42)
     if (ints.indexOf(42) != 0 || ints.indexOf(43) != -1) return "value self-view"
+    if (!ints.sourceAliasMatches(42) || ints.sourceAliasMatches(43)) return "value source alias"
+    if (!ints.wideAliasMatches(42) || ints.wideAliasMatches(43)) return "value wide alias"
+    if (!ints.nullableAliasMatches(42) || ints.nullableAliasMatches(43)) return "value nullable alias"
 
     val strings = InlineSelfView("inline")
     if (strings.indexOf("inline") != 0 || strings.indexOf("other") != -1) {
         return "reference self-view"
+    }
+    if (!strings.sourceAliasMatches("inline") || strings.sourceAliasMatches("other")) {
+        return "reference source alias"
+    }
+    if (!strings.wideAliasMatches("inline") || strings.wideAliasMatches("other")) {
+        return "reference wide alias"
+    }
+    if (!strings.nullableAliasMatches("inline") || strings.nullableAliasMatches("other")) {
+        return "reference nullable alias"
     }
 
     // A source-declared wide variable remains a semantic Kotlin view. In particular, its

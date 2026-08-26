@@ -101,6 +101,24 @@ data class DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
     }
 }
 
+/** Physical TypeDef identity of a selected family, without treating its construction as proof. */
+data class DotNetGenericOwnerPhysicalValueShadowFamilySnapshot(
+    val kind: DotNetGenericOwnerPhysicalValueShadowCarrierKind,
+    val localOwnerName: String,
+    val localTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView? = null,
+) {
+    init {
+        require(localOwnerName.isNotEmpty() && when (kind) {
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION -> true
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY ->
+                localTypeDefView == null
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN,
+            -> false
+        }) { "selected physical-value lineage requires one constructed physical family" }
+    }
+}
+
 /** Existing reason why the emitter selected one verifier-visible local carrier. */
 enum class DotNetGenericOwnerPhysicalValueLocalSelectionKind {
     DECLARED_TYPE,
@@ -169,7 +187,10 @@ data class DotNetGenericOwnerPhysicalValueShadowViewSnapshot(
     val evidence: Set<DotNetGenericOwnerPhysicalValueShadowEvidence>,
 ) {
     init {
-        require(carrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+        require(carrier.kind in setOf(
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION,
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY,
+        ) &&
                 evidence.isNotEmpty()) {
             "a guaranteed physical-value shadow view requires a constructed carrier and evidence"
         }
@@ -178,12 +199,14 @@ data class DotNetGenericOwnerPhysicalValueShadowViewSnapshot(
 
 /** A selector over an independently guaranteed family view; never a proof source. */
 data class DotNetGenericOwnerPhysicalValueShadowSelectedViewSnapshot(
-    val familyOwnerName: String,
+    val family: DotNetGenericOwnerPhysicalValueShadowFamilySnapshot,
     val view: DotNetGenericOwnerPhysicalValueShadowViewSnapshot,
 ) {
     init {
-        require(familyOwnerName.isNotEmpty() && familyOwnerName == view.carrier.localOwnerName) {
-            "selected physical-value shadow lineage must name the selected view family"
+        require(family.kind == view.carrier.kind &&
+                family.localOwnerName == view.carrier.localOwnerName &&
+                family.localTypeDefView == view.carrier.localTypeDefView) {
+            "selected physical-value shadow lineage must identify the selected physical TypeDef"
         }
     }
 }
@@ -218,7 +241,7 @@ data class DotNetGenericOwnerPhysicalValueShadowSnapshot(
         }
         require(guaranteedViews.map { view -> view.carrier }.distinct().size == guaranteedViews.size &&
                 selectedViewLineage.distinct().size == selectedViewLineage.size &&
-                selectedViewLineage.map { selection -> selection.familyOwnerName }.distinct().size ==
+                selectedViewLineage.map { selection -> selection.family }.distinct().size ==
                 selectedViewLineage.size) {
             "a physical-value shadow snapshot cannot contain duplicate views or lineage entries"
         }

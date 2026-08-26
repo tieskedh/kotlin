@@ -29,6 +29,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberPolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideBindingPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
@@ -39,6 +41,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantic
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerMemberFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
@@ -48,6 +53,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalForeignOverrideProbeName
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
+import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
@@ -249,6 +255,27 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         ).analyze()
         context.genericOwnerCallRoutes += callRoutes
         if (context.configuration.dotNetGenericOwnerRehearsal) {
+            context.localGenericOwnerPhysicalAuthority =
+                DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(
+                    context.genericOwnerArchitecturePlans.values
+                        .filter(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
+                        .filter { plan -> plan.owner.kind == ClassKind.CLASS }
+                        .map { plan ->
+                            DotNetLocalGenericOwnerPhysicalTypeInput(
+                                identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                                    plan.owner.symbol,
+                                    view = null,
+                                ),
+                                logicalOwnerName = plan.owner.dotNetPhysicalValueStableName(),
+                                genericArity = plan.owner.typeParameters.size,
+                                role = DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+                            )
+                        },
+                ).also { binding ->
+                    if (binding is DotNetGenericOwnerPhysicalBindingResult.Conflict) {
+                        error("Internal .NET backend error: ${binding.reason}")
+                    }
+                }
             materializeCapabilityFamilies(irModule, callRoutes)
         } else context.configuration.dotNetGenericOwnerCallRouteTraceHooks?.let { hooks ->
             instrumentCallRoutes(irModule, callRoutes, hooks.recorder)

@@ -73,6 +73,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassAutoboxingLower
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassImplementationSignatureLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalGenericOwnerPhysicalAuthorityLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerArchitecturePlanningLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerFinalRoutingLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
@@ -283,6 +284,9 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // capability is materialized only for physical slots which cannot name one honest I<X>.
     ::DotNetReifiedGenericInterfaceLowering,
     ::DotNetGenericInterfaceBridgeLowering,
+    // Freeze one rehearsal-only symbolic copy of the selected local TypeDef/InterfaceImpl graph.
+    // It is read only by the provenance shadow and cannot change routing or emitted metadata.
+    ::DotNetLocalGenericOwnerPhysicalAuthorityLowering,
     // Select the producer-recorded open-nullable convention after generic-interface lowering has
     // bound separate-consumer declarations, but before covariant bridge planning. The latter must
     // compare split payload carriers, not the still-logical `T?` carriers.
