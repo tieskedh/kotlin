@@ -748,7 +748,7 @@ internal fun buildDotNetGenericOwnerActualMethodDefEmissionHeaderEvidence(
                 physicalMethodIdentity.role,
             ),
             owner = ownerSnapshot,
-            physicalMethodNameForDiagnostics = observation.physicalMethodNameForDiagnostics,
+            physicalMethodNameForDiagnostics = observation.physicalMethodName,
             visibility = visibility,
             dispatch = DotNetGenericOwnerPhysicalMethodDefEmissionDispatchSnapshot(
                 category = dispatchCategory,

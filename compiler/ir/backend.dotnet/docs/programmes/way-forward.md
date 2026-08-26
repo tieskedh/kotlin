@@ -1820,6 +1820,27 @@ foreign adapters. No route recognizer or stdlib family advances on the
 strength of this local certificate alone. See
 [`../archive/generic-owner-complete-emission-family-2026-08-26.md`](../archive/generic-owner-complete-emission-family-2026-08-26.md).
 
+The first non-additive seal now closes that bounded local scope. A fresh,
+family-scoped index is constructed only from one successful final TypeDef,
+MethodDef, and MethodImpl emission transaction and is validated against the
+BOUND structural manifest; no BOUND row is copied or advanced, so omitted
+final evidence cannot survive. It retains exact TypeDef paths and supported
+flags, exact MethodDef names, supported flags and signatures, and actual
+MethodImpl rows. CLR method coordinates exclude the result and implicit
+receiver but include every printed explicit parameter, including the
+split-nullable `bool&`. The family adapter separately proves the exact-name
+equality needed for ordinary implicit natural-interface mapping.
+
+Only the complete direct-producer implementation family is certified. Missing
+evidence is unavailable; duplicate, extra, cross-scope, structurally
+contradictory, flag-contradictory, or coordinate-conflicting evidence rejects
+the transaction and publishes no rows. This is read-only rehearsal output:
+it authorizes no route or recognizer change, and production/off remains empty
+and erased. MethodDef GenericParam rows, producer-recorded and retained-foreign
+adapters, overlapping/compiler-wide family ownership, and wider grammars
+remain open. See
+[`../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md`](../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
@@ -1845,9 +1866,10 @@ The consolidation proceeds in bounded stages:
 6. move route selection behind one query which starts from the authoritative
    callable family and treats exact provenance only as supporting evidence.
    The first local direct-producer BOUND shadow, exact emitted role/alias
-   identity, and bounded complete TypeDef/edge/MethodDef/MethodImpl comparison
-   are implemented. A non-additive sealed signature/name/flag scope and later
-   producer/foreign adapters remain open;
+   identity, bounded complete TypeDef/edge/MethodDef/MethodImpl comparison, and
+   the first fresh actual-only family-scoped signature/name/flag seal are
+   implemented. Producer-recorded and retained-foreign adapters, MethodDef
+   GenericParam rows, and overlapping/global-family closure remain open;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

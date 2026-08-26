@@ -1313,6 +1313,22 @@ See the
   types. Keep this reopening production-inert until its complete atomic gate
   replaces the accepted erased ABI. See
   [the reopening draft](docs/decisions/draft-adr-reified-generic-interface-owner.md).
+  Within the rehearsal, `SEALED_EMISSION_SIGNATURE_INDEX` is not an additive
+  declaration-index advance. A local seal is a fresh, family-scoped
+  certificate built only from rows retained by one successful final-emission
+  transaction. BOUND supplies expected keys and structural contracts for
+  correlation and validation, but contributes no sealed row. Missing final
+  evidence is unavailable; duplicate, extra, or contradictory physical claims
+  conflict; only one complete match publishes exact paths, names, supported
+  CLI flag vectors, signatures, and MethodImpls. The certificate is
+  rehearsal/diagnostic-only, production/off publishes none, and it authorizes
+  no route, recognizer, state, KLIB, or erased-production-ABI change. MethodDef
+  GenericParam rows, producer-recorded and retained-foreign evidence,
+  overlapping/global family ownership, and wider callable grammars remain
+  separate gates. A sealed CLR MethodDef coordinate consists of owner, exact
+  name, `hasThis`, generic arity, and printed explicit parameter carriers
+  (including a split-nullable `bool&`); it excludes the result and implicit
+  receiver.
   A rehearsal-admitted method parameter may carry direct public non-generic
   nominal interface bounds and at most one non-final class bound, optionally
   together with one admitted constructed self-bound, only when every natural,

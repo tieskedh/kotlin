@@ -912,25 +912,32 @@ collapsed into one exact/semantic/object ranking:
    available after local flow and representation-preserving Kotlin view
    changes. It does not select public declarations or state.
 
-Physical declaration authority advances monotonically through three explicit
+Physical declaration authority is staged through three explicit evidence
 epochs. The early representation plan selects parametric owner/member/state
 relationships and bridge obligations. The bound-declaration index owns the
-materialized TypeDef, MethodDef, InterfaceImpl, and MethodImpl identities. The
-sealed emission-signature index binds every remaining representation variable,
-including value-class and hidden-result carriers, after the relevant physical
-lowerings. A later epoch may bind an earlier physical type expression; it may
-not reinterpret an already selected declaration family. Retained foreign CLR
-metadata is sealed authority from import. Contradictory producer and retained
-physical facts are a declaration conflict and fail closed.
+materialized TypeDef, MethodDef, InterfaceImpl, and MethodImpl identities and
+the structural contracts expected for them. The sealed emission-signature
+index is a fresh certificate over final-live physical rows after the relevant
+lowerings; it is not an additive copy or overlay of BOUND. Identity lineage and
+opaque keys may persist between epochs for correlation, but a BOUND row can
+never supply a sealed path, name, CLI flag, signature, hidden carrier, or
+MethodImpl. Missing actual evidence is unavailable and disagreement is a
+conflict. Retained foreign CLR metadata may become sealed authority only
+through its own retained-actual-evidence adapter, never through a BOUND
+overlay. A later epoch may bind an earlier physical type expression; it may
+not reinterpret an already selected declaration family.
 
 Physical declaration identity is separate from its epoch-specific description.
 Arity, class/interface/value-type category, and null encoding are admitted by
 one conflict-checked declaration index; they never participate in TypeDef or
 MethodDef identity inside value flow. Two descriptions of the same identity
 either agree or produce `Conflict`--they cannot become two apparently unrelated
-declarations. A later index is constructed only by monotone `advance` from the
-preceding epoch and retains every earlier fact. Starting an independent later
-snapshot is not an alternative to resolving an authority disagreement.
+declarations. A later evidence epoch may reuse an already selected identity,
+but it must construct its own description from that epoch's authoritative
+source. An independent final-emission certificate is therefore required to
+prevent an omitted or evicted BOUND declaration from surviving as falsely
+sealed; it is not an alternative identity and cannot conceal an authority
+disagreement.
 
 Body-local carriers are symbolic until that final binding. A current-
 compilation TypeDef is identified by its IR declaration identity plus its
@@ -1249,17 +1256,45 @@ the actual owner independently proves the same logical declaration, matching
 physical arity, and interface category. That exception cannot apply to the
 semantic endpoint or manufacture an exact view.
 
-This overlay is not `SEALED_EMISSION_SIGNATURE_INDEX`. The declaration index
-advances additively, so a partial set must never be used to enter that epoch:
-an absent final declaration would otherwise survive from BOUND. The current
-comparison covers owner, arity/category, visibility, dispatch category,
-instance/receiver shape, method arity, parameters, and result layout. Exact
-CLI flags and physical names remain diagnostic until declaration authority
-records their complete contract. A full seal additionally requires explicit
-emitted MethodDef roles, physical TypeDef alias relations, complete
-BaseType/InterfaceImpl sets, exact-sibling entries, MethodImpl rows, and every
-retained foreign/core construction in its scope. See
+At that checkpoint this overlay was not
+`SEALED_EMISSION_SIGNATURE_INDEX`. A partial set could not enter the sealed
+epoch because an absent final declaration would otherwise survive from BOUND.
+The comparison covered owner, arity/category, visibility, dispatch category,
+instance/receiver shape, method arity, parameters, and result layout, while
+exact CLI flags and physical names remained diagnostic. See
 [`../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md).
+
+### First family-scoped sealed certificate
+
+The first local seal now covers one already complete direct-producer
+implementation family. Its actual evidence is constructed afresh from one
+successful final-emission transaction: four TypeDefs with exact physical paths
+and complete supported flag decisions, six MethodDefs with exact names,
+supported flag decisions and signatures, and two explicit MethodImpl rows.
+BOUND supplies the opaque keys and complete expected structural manifest used
+to select, correlate, and validate those rows; none of its rows are copied into
+the sealed index. The index is immutable and queryable only by those keys.
+
+Binding is one transaction with `Known`, `Unavailable`, and `Conflict`
+outcomes. Missing final rows remain unavailable. Duplicate or extra rows,
+cross-scope evidence, path/nesting or category/flag disagreement, structural
+drift, duplicate CLR coordinates, invalid special-name masks, and wrong
+MethodImpl endpoints conflict and publish no authoritative rows. A CLR
+MethodDef coordinate contains the final owner, exact name, instance convention,
+generic arity, and printed explicit parameter carriers. It excludes the result
+and implicit receiver; a split-nullable result contributes its hidden
+`bool&` output parameter. The direct natural interface slot and typed
+implementation entry must have equal final names for ordinary implicit CLR
+mapping, but that is a rule of this family adapter rather than of the generic
+sealed index.
+
+This certificate is deliberately family-scoped and rehearsal-only. It changes
+no route, recognizer, field/state decision, KLIB record, or production ABI;
+production/off publishes no sealed families and remains erased. MethodDef
+GenericParam rows, producer-recorded and retained-foreign adapters,
+overlapping/compiler-wide family ownership, arbitrary members outside the
+selected family, and broader callable grammars remain open. See
+[`../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md`](../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md).
 
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
@@ -1292,13 +1327,19 @@ fails and the bounded implementation remains authoritative.
 
 ## Remaining gates
 
+The local actual-only final-emission certificate is complete for its bounded
+direct-producer family. Before that authority can be shared across families or
+replace a recognizer, independently sourced producer-recorded and
+retained-foreign adapters, MethodDef GenericParam rows, and overlapping/global
+ownership must join the same fail-closed model. BOUND cannot fill any missing
+final fact in those adapters.
+
 Before another source-built Stdlib blocker is implemented, the rehearsal must
-consolidate the local carrier proofs behind the model above in shadow mode. It
-must query producer and retained-foreign authority through one staged
-interface; compute product value facts without declaration, package, stdlib,
-member-name, collection, or IR-origin exceptions; and explain the existing
-immutable-alias, exact-helper, result-chain, generated-capture, closed-
-semantic-input, MethodDef-authority, and split-nullable behavior without
+continue consolidating the local carrier proofs behind the model above in
+shadow mode. It must compute product value facts without declaration, package,
+stdlib, member-name, collection, or IR-origin exceptions; and explain the
+existing immutable-alias, exact-helper, result-chain, generated-capture,
+closed-semantic-input, MethodDef-authority, and split-nullable behavior without
 changing emitted products. The hostile matrix must include nullable joins,
 scoped owner and method parameters, mutable multi-construction joins, stars and
 projections, value-type variance, mixed captures, deeper inheritance, separate
