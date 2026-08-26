@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-local-physical-interface-view-2026-08-26.md`](generic-owner-local-physical-interface-view-2026-08-26.md)
+  records the selection-site local class InterfaceImpl authority, monotone
+  early/bound lineage, natural-interface alias selection, hostile broad and
+  open-nullable controls, actual local and emitted-call-operand cross-check,
+  and production-inert boundary.
 - [`generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](generic-owner-physical-value-local-placement-comparison-2026-08-26.md)
   records the transactional comparison between the two-epoch carrier shadow
   and final ordinary variable-local slots, independent source/compiler probes,

@@ -460,6 +460,93 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `recorded interface selection disappears when only the physical edge changes`() {
+        val owner = localOwnerIdentity(IrClassSymbolImpl())
+        val natural = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            IrClassSymbolImpl(),
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val declarations = boundDeclarationIndex(
+            listOf(
+                typeDescription(owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(natural, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        )
+        val ownerParameter = boundTypeParameter(declarations, owner, 0)
+        val ownerConstruction = boundConstruction(declarations, owner, listOf(ownerParameter))
+        val desiredConstruction = boundConstruction(declarations, natural, listOf(ownerParameter))
+        val desiredView = view(desiredConstruction)
+
+        fun produced(index: DotNetGenericOwnerPhysicalDeclarationIndex): DotNetGenericOwnerProducedValueFact {
+            val reboundOwner = boundConstruction(index, owner, listOf(boundTypeParameter(index, owner, 0)))
+            val carrier = assertIs<
+                    DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalCarrier>,
+                    >(index.carrierOrError(reboundOwner)).value
+            return directValue(carrier)
+        }
+
+        val withExactEdge = boundEdgeIndex(
+            declarations,
+            listOf(
+                edgeSet(
+                    owner,
+                    baseEdge(objectType()),
+                    interfaceEdge(desiredConstruction),
+                ),
+                edgeSet(natural),
+            ),
+        )
+        val selected = assertIs<DotNetGenericOwnerProducedValueFact>(
+            produced(withExactEdge).selectRecordedPhysicalInterfaceViewOrNull(
+                withExactEdge,
+                desiredView,
+            ),
+        )
+        assertEquals(desiredView, selected.provenance.selectedViewLineage[natural])
+        assertTrue(desiredView in knownViewsOf(selected.provenance))
+        assertTrue(
+            DotNetGenericOwnerPhysicalViewEvidence.RECORDED_INTERFACE_EDGE in
+                    assertIs<DotNetGenericOwnerGuaranteedViews.Known>(
+                        selected.provenance.guaranteedViews,
+                    ).evidenceByView.getValue(desiredView),
+        )
+
+        val withoutInterfaceEdge = boundEdgeIndex(
+            declarations,
+            listOf(edgeSet(owner, baseEdge(objectType())), edgeSet(natural)),
+        )
+        assertNull(
+            produced(withoutInterfaceEdge).selectRecordedPhysicalInterfaceViewOrNull(
+                withoutInterfaceEdge,
+                desiredView,
+            ),
+        )
+        assertNull(
+            produced(declarations).selectRecordedPhysicalInterfaceViewOrNull(
+                declarations,
+                desiredView,
+            ),
+        )
+
+        val wrongConstruction = boundConstruction(declarations, natural, listOf(objectType()))
+        val withOnlyWrongEdge = boundEdgeIndex(
+            declarations,
+            listOf(
+                edgeSet(owner, baseEdge(objectType()), interfaceEdge(wrongConstruction)),
+                edgeSet(natural),
+            ),
+        )
+        assertNull(
+            produced(withOnlyWrongEdge).selectRecordedPhysicalInterfaceViewOrNull(
+                withOnlyWrongEdge,
+                desiredView,
+            ),
+        )
+        assertNotEquals(ownerConstruction, desiredConstruction)
+    }
+
+    @Test
     fun `direct-supertype targets may reference only their source TypeDef parameters`() {
         val source = localOwnerIdentity(IrClassSymbolImpl())
         val other = localOwnerIdentity(IrClassSymbolImpl())

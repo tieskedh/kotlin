@@ -1154,6 +1154,47 @@ prediction while an independent source-alias probe remains a recorded
 semantic-policy contrast. The old recognizer remains authoritative. See
 [`../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md).
 
+The first local natural-interface selection uses one context-owned authority
+lineage. `EARLY_REPRESENTATION_PLAN` contains only admitted local generic-class
+TypeDefs. Once generic-interface bridge selection has chosen a complete
+bounded family, `BOUND_DECLARATION_INDEX` adds the selected natural, class-
+owner capability, and interface-family capability TypeDefs plus the recorded
+class edge template. It does not re-read logical supertypes. The initial
+executable adapter is intentionally restricted to an unconstrained class with
+Object base and exactly one ROOT/OWNED/no-exact natural family. Its three
+direct rows must be exactly natural `I<T>`, the class-owner capability, and the
+interface-family capability. Every natural argument must be the invariant,
+non-null default type of one source owner parameter. Any other physical row or
+mapping makes the adapter unavailable.
+
+A logical destination `I<T>` may construct a desired selector, but the
+selector contributes no authority. The produced `C<!T>` fact must first obtain
+`I<!T>` from closure over the recorded InterfaceImpl edge. Only then may
+selected lineage choose that view and storage placement use its carrier.
+Internal lineage is keyed by physical TypeDef identity; the diagnostic
+projection records family kind and TypeDef view, so two physical interfaces
+normalized to one Kotlin owner cannot collide. Removing the edge while leaving
+the logical destination unchanged makes selection fail. `I<Any?>`, `I<T?>`,
+stars, projections, and bound-remapped parameters cannot select a natural
+construction.
+
+The integration proof compares the selected storage with the unchanged
+emitter's declared local and inspects the isolated emitted
+`sourceAliasMatches` MethodDef body for exactly one natural
+`I<!0>::produce` call. Each CLR profile then assembles and executes its own
+corresponding emitted IL. Both the class-owner and interface-family semantic
+capabilities are present as separately recorded views. Broad and open-nullable
+controls retain empty lineage while their unchanged emitter locals remain
+`object`.
+
+This authority is `BOUND`, not sealed emission truth. It cannot control
+emitter liveness, interface rows, calls, MethodDefs, MethodImpls, fields, state,
+or serialized ABI. The emitter remains authoritative until a later callable-
+family query and sealed-emission cross-check replace it. The legacy class-owner
+route analyzer does not classify direct natural-interface calls, so this slice
+makes no static-route claim. Production remains atomically erased. See
+[`../archive/generic-owner-local-physical-interface-view-2026-08-26.md`](../archive/generic-owner-local-physical-interface-view-2026-08-26.md).
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,
