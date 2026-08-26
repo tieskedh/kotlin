@@ -104,6 +104,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowStatus
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowTypeDefView
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueLocalSelectionKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementContinuity
@@ -466,6 +467,7 @@ private class BackendCliDotNetFacade(
         validateGenericOwnerPhysicalValuePlacementComparison(
             genericOwnerRehearsal = genericOwnerRehearsal,
             comparisons = completedOutput.genericOwnerPhysicalValuePlacementComparisons,
+            emittedArtifact = completedOutput.output,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
         System.getProperty(GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY)?.let { exportPath ->
@@ -674,6 +676,7 @@ private class BackendCliDotNetFacade(
 private fun validateGenericOwnerPhysicalValuePlacementComparison(
     genericOwnerRehearsal: Boolean,
     comparisons: List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
+    emittedArtifact: File,
     testDataFile: File,
 ) {
     val testData = testDataFile.readText()
@@ -683,6 +686,13 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
     if (!genericOwnerRehearsal) {
         check(comparisons.isEmpty()) {
             "The production erased epoch must not publish local-placement comparisons: $comparisons"
+        }
+        if (probesCompilerAlias) {
+            val emittedIl = emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
+            check(emittedIl.isFile && "'InlineProducer`1'" !in emittedIl.readText()) {
+                "The production-erased inverse emitted a natural InlineProducer TypeDef or use: " +
+                        emittedIl.path
+            }
         }
         return
     }
@@ -734,6 +744,153 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
     }
 
     if (probesCompilerAlias) {
+        val sourceAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSelfView") &&
+                    comparison.prediction.sourceFunctionName == "sourceAliasMatches" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "sourceNaturalAlias"
+        }
+        check(sourceAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val selfView = prediction.guaranteedViews.singleOrNull { view ->
+                view.carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        view.carrier.localOwnerName?.endsWith("InlineSelfView") == true &&
+                        view.carrier.localTypeDefView == null &&
+                        view.carrier.ownerParameterIndices == listOf(0) &&
+                        view.carrier.parameterBinderOwnerName?.endsWith("InlineSelfView") == true &&
+                        DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in view.evidence
+            }
+            val naturalView = prediction.guaranteedViews.singleOrNull { view ->
+                view.carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        view.carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                        view.carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        view.carrier.ownerParameterIndices == listOf(0) &&
+                        view.carrier.parameterBinderOwnerName?.endsWith("InlineSelfView") == true &&
+                        view.carrier.parameterBinderTypeDefView == null &&
+                        DotNetGenericOwnerPhysicalValueShadowEvidence.RECORDED_INTERFACE_EDGE in view.evidence
+            }
+            val semanticView = prediction.guaranteedViews.singleOrNull { view ->
+                view.carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+                        view.carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                        DotNetGenericOwnerPhysicalValueShadowEvidence.RECORDED_INTERFACE_EDGE in view.evidence
+            }
+            val classSemanticView = prediction.guaranteedViews.singleOrNull { view ->
+                view.carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+                        view.carrier.localOwnerName?.endsWith("InlineSelfView") == true &&
+                        DotNetGenericOwnerPhysicalValueShadowEvidence.RECORDED_INTERFACE_EDGE in view.evidence
+            }
+            val selected = prediction.selectedViewLineage.singleOrNull()
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedCarrier == selfView?.carrier &&
+                    prediction.storageCarrier == naturalView?.carrier &&
+                    semanticView != null && classSemanticView != null &&
+                    prediction.guaranteedViews.toSet() ==
+                    setOf(selfView, naturalView, semanticView, classSemanticView) &&
+                    selected?.family?.let { family ->
+                        family.kind ==
+                                DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                                family.localOwnerName.endsWith("InlineProducer") &&
+                                family.localTypeDefView ==
+                                DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED
+                    } == true && selected.view == naturalView &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                    comparison.continuity != DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE &&
+                    comparison.actualStorageCarrier == prediction.storageCarrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "The source natural alias must select only its recorded InlineProducer<!T> view: " +
+                    "source=$sourceAlias, all=$comparisons"
+        }
+
+        listOf(
+            "wideAliasMatches" to "sourceWideAlias",
+            "nullableAliasMatches" to "sourceNullableAlias",
+        ).forEach { probe ->
+            val hostileAlias = comparisons.singleOrNull { comparison ->
+                comparison.prediction.ownerName.endsWith("InlineSelfView") &&
+                        comparison.prediction.sourceFunctionName == probe.first &&
+                        comparison.prediction.functionRole ==
+                        DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                        comparison.prediction.variableName == probe.second
+            }
+            check(hostileAlias?.let { comparison ->
+                val prediction = comparison.prediction
+                val producedSelf = prediction.initializerProducedCarrier
+                prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                        prediction.unsupportedReason == null &&
+                        producedSelf.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        producedSelf.localOwnerName?.endsWith("InlineSelfView") == true &&
+                        producedSelf.localTypeDefView == null &&
+                        producedSelf.ownerParameterIndices == listOf(0) &&
+                        prediction.storageCarrier == producedSelf &&
+                        prediction.guaranteedViews.singleOrNull()?.let { view ->
+                            view.carrier == producedSelf &&
+                                    DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
+                                    view.evidence
+                        } == true &&
+                        prediction.selectedViewLineage.isEmpty() &&
+                        prediction.guaranteedViews.none { view ->
+                            view.carrier.kind ==
+                                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                                    view.carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                                    view.carrier.ownerParameterIndices != listOf(0)
+                        } &&
+                        comparison.continuity !=
+                        DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                        comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
+                        comparison.actualSelectionKind ==
+                        DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE &&
+                        comparison.actualStorageCarrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                        comparison.relation ==
+                        DotNetGenericOwnerPhysicalValuePlacementRelation.DIFFERENT
+            } == true) {
+                "A logically broad alias selected or fabricated a natural CLR construction: " +
+                        "probe=$probe, alias=$hostileAlias, all=$comparisons"
+            }
+        }
+        val emittedIl = emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
+        check(emittedIl.isFile) {
+            "The natural-alias probe has no emitted IL sibling: ${emittedIl.path}"
+        }
+        val ilText = emittedIl.readText().removePrefix("\uFEFF")
+        val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText).map { match -> match.range.first }.toList()
+        val methodWindows = methodStarts.mapIndexed { index, start ->
+            ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+        }
+        val emittedMethod = methodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'sourceAliasMatches'(")
+        }
+        check(emittedMethod != null) {
+            "Cannot isolate the emitted sourceAliasMatches MethodDef: ${emittedIl.path}"
+        }
+        val emittedProduceCalls = emittedMethod.lineSequence().map(String::trim).filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'produce'(" in line
+        }.toList()
+        check(emittedProduceCalls.singleOrNull()?.let { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!0\\s+class\\s+'InlineProducer`1'<!0>::'produce'\\(\\)$",
+            ).matches(call)
+        } == true) {
+            "The emitted natural alias must call the exact InlineProducer<!T> MethodDef: " +
+                    "calls=$emittedProduceCalls, method=$emittedMethod"
+        }
+
         val observed = comparisons.filter { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSelfView") &&
                     comparison.prediction.sourceFunctionName == "indexOf" &&

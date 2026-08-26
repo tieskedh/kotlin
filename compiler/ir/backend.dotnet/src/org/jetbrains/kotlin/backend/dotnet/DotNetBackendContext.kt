@@ -215,6 +215,13 @@ internal class DotNetBackendContext(
         MutableList<DotNetGenericOwnerPhysicalValueShadowRecord> = mutableListOf()
     /** Distinguishes a successfully completed final shadow from pre-remap capture or no run. */
     var genericOwnerPhysicalValueShadowFinalAnalysisCompleted: Boolean = false
+    /** One rehearsal-only, monotone local TypeDef/InterfaceImpl authority lineage. */
+    var localGenericOwnerPhysicalAuthority:
+            DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalAuthority> =
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    /** Complete class-edge plans recorded only by the rehearsal bridge selection itself. */
+    var localGenericOwnerPhysicalClassEdgePlans:
+            MutableMap<IrClass, DotNetLocalGenericOwnerPhysicalClassEdgePlan>? = null
     /** Rehearsal-only logical owner to its materialized non-generic semantic capability interface. */
     val genericOwnerCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Local reified subinterface to the external logical ancestor whose capability it inherits. */

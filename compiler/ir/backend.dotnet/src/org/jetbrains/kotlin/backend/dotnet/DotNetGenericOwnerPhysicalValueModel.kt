@@ -1133,6 +1133,41 @@ internal data class DotNetGenericOwnerProducedValueFact(
     }
 }
 
+/**
+ * Selects one interface construction only when recorded physical ancestry already guarantees it.
+ *
+ * [desiredView] is a selector, never an authority source: removing the corresponding CLR edge
+ * must make this query fail even when a logical destination still names that construction. A
+ * positive direct view remains usable when ancestry below that interface is unavailable; the
+ * closure's completeness bit is evidence about negative queries, not a veto on an observed row.
+ */
+internal fun DotNetGenericOwnerProducedValueFact.selectRecordedPhysicalInterfaceViewOrNull(
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    desiredView: DotNetGenericOwnerPhysicalView,
+): DotNetGenericOwnerProducedValueFact? {
+    if (!nullState.canBeNonNull) return null
+    val producedConstruction = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)
+        ?.carrier?.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        ?: return null
+    val closure = when (val result = declarations.physicalInterfaceViewClosureOrError(producedConstruction)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+        -> return null
+    }
+    if (desiredView !in closure.interfaceViews) return null
+
+    var selectedProvenance = provenance
+    closure.interfaceViews.forEach { view ->
+        selectedProvenance = selectedProvenance.guarantee(
+            view,
+            DotNetGenericOwnerPhysicalViewEvidence.RECORDED_INTERFACE_EDGE,
+        )
+    }
+    selectedProvenance = selectedProvenance.selectViewOrNull(desiredView) ?: return null
+    return copy(provenance = selectedProvenance)
+}
+
 /** Unreachable is flow bottom and contributes neither a carrier nor provenance. */
 internal sealed interface DotNetGenericOwnerPhysicalFlowFact {
     data object Unreachable : DotNetGenericOwnerPhysicalFlowFact
