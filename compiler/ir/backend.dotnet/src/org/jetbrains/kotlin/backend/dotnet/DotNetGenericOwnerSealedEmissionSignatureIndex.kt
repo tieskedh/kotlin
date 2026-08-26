@@ -22,6 +22,7 @@ internal data class DotNetGenericOwnerSealedEmissionTypeDefRow(
 internal data class DotNetGenericOwnerSealedEmissionMethodDefRow(
     val structural: DotNetGenericOwnerCompleteEmissionMethodDefRow,
     val physicalName: String,
+    val physicalGenericParameterNames: List<String>,
     val visibility: DotNetIlRawMethodDefVisibility,
     val dispatch: DotNetIlRawMethodDefDispatch,
     val isHideBySig: Boolean,
@@ -31,6 +32,10 @@ internal data class DotNetGenericOwnerSealedEmissionMethodDefRow(
     init {
         require(physicalName.isNotEmpty()) {
             "a final-emission MethodDef requires a non-empty physical name"
+        }
+        require(physicalGenericParameterNames.size == structural.header.genericArity &&
+                physicalGenericParameterNames.all(String::isNotEmpty)) {
+            "a final-emission MethodDef requires every exact GenericParam name"
         }
     }
 }
@@ -362,8 +367,18 @@ private fun validateActualSealedEmissionRows(
         if (row.isRuntimeSpecialName && !row.isSpecialName) {
             conflicts += "a final MethodDef cannot carry rtspecialname without specialname"
         }
-        if (header.genericArity != 0) {
-            unavailable += "the bounded sealed family does not capture MethodDef GenericParam rows"
+        structural.genericParameters.forEach { parameter ->
+            parameter.constraints.forEach { constraint ->
+                validateSealedCarrier(
+                    constraint,
+                    uniqueTypes,
+                    uniqueMethods,
+                    allowedTypeParameterBinder = header.owner,
+                    allowedMethodParameterBinder = structural.identityKey,
+                    unavailable,
+                    conflicts,
+                )
+            }
         }
         listOfNotNull(header.receiverCarrier).plus(header.ordinaryParameterCarriers).forEach { carrier ->
             validateSealedCarrier(
@@ -583,6 +598,7 @@ private fun DotNetGenericOwnerSealedEmissionTypeDefRow.frozen() = copy(
 
 private fun DotNetGenericOwnerSealedEmissionMethodDefRow.frozen() = copy(
     structural = structural.frozen(),
+    physicalGenericParameterNames = physicalGenericParameterNames.toList(),
 )
 
 private fun DotNetGenericOwnerCompleteEmissionTypeDefRow.frozen() = copy(
@@ -599,6 +615,9 @@ private fun DotNetGenericOwnerCompleteEmissionMethodDefRow.frozen() = copy(
         ordinaryParameterCarriers = header.ordinaryParameterCarriers.map { carrier -> carrier.frozen() },
         result = header.result.frozen(),
     ),
+    genericParameters = genericParameters.map { parameter ->
+        parameter.copy(constraints = parameter.constraints.map { carrier -> carrier.frozen() })
+    },
 )
 
 private fun DotNetGenericOwnerCompleteEmissionMethodImplRow.frozen() = copy(

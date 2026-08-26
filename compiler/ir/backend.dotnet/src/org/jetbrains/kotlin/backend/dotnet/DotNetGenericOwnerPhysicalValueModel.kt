@@ -280,16 +280,93 @@ internal class DotNetGenericOwnerPhysicalMethodSignatureReference(
                 "parameters=$parameterSlots, result=$resultLayout)"
 }
 
+/** Verifier-visible declaration-site variance on one CLR GenericParam row. */
+internal enum class DotNetGenericOwnerPhysicalTypeParameterVariance {
+    INVARIANT,
+    COVARIANT,
+    CONTRAVARIANT,
+}
+
+/**
+ * One ordered, binder-relative CLR GenericParam row.
+ *
+ * The owning TypeDef or MethodDef supplies the parameter number through this row's position. The
+ * constraints remain symbolic until the complete declaration index can validate both their
+ * referenced declarations and their exact `!n`/`!!n` binder ownership.
+ */
+internal class DotNetGenericOwnerPhysicalGenericParameterReference(
+    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    constraints: List<DotNetGenericOwnerSymbolicCarrierReference>,
+) {
+    val constraints: List<DotNetGenericOwnerSymbolicCarrierReference> = constraints.toList()
+
+    init {
+        require(this.constraints.size == this.constraints.toSet().size) {
+            "a physical GenericParam cannot repeat a constraint row"
+        }
+        require(DotNetGenericOwnerSymbolicCarrierReference.voidCarrier() !in this.constraints) {
+            "a physical GenericParam cannot have a void constraint"
+        }
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetGenericOwnerPhysicalGenericParameterReference &&
+                variance == other.variance && constraints.toSet() == other.constraints.toSet()
+
+    override fun hashCode(): Int = 31 * variance.hashCode() + constraints.toSet().hashCode()
+
+    override fun toString(): String =
+        "GenericParameter(variance=$variance, constraints=$constraints)"
+}
+
 /** Epoch-specific description candidate for one MethodDef identity. It never enters value flow. */
-internal data class DotNetGenericOwnerPhysicalMethodDefReference(
+internal class DotNetGenericOwnerPhysicalMethodDefReference(
     val identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
     val declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
     val visibility: DotNetGenericOwnerPhysicalMemberVisibility,
     val dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
     val signature: DotNetGenericOwnerPhysicalMethodSignatureReference,
+    genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference>,
 ) {
+    val genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference> =
+        genericParameters.toList()
+
+    init {
+        require(genericParameters.size == signature.genericArity) {
+            "a physical MethodDef requires one complete GenericParam row per generic parameter"
+        }
+        require(genericParameters.all { parameter ->
+            parameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+        }) {
+            "a physical MethodDef GenericParam must be invariant"
+        }
+    }
+
     fun conflictsWith(other: DotNetGenericOwnerPhysicalMethodDefReference): Boolean =
         identity == other.identity && this != other
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetGenericOwnerPhysicalMethodDefReference &&
+                identity == other.identity &&
+                declaringType == other.declaringType &&
+                visibility == other.visibility &&
+                dispatch == other.dispatch &&
+                signature == other.signature &&
+                genericParameters == other.genericParameters
+
+    override fun hashCode(): Int {
+        var result = identity.hashCode()
+        result = 31 * result + declaringType.hashCode()
+        result = 31 * result + visibility.hashCode()
+        result = 31 * result + dispatch.hashCode()
+        result = 31 * result + signature.hashCode()
+        result = 31 * result + genericParameters.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "MethodDef(identity=$identity, declaringType=$declaringType, visibility=$visibility, " +
+                "dispatch=$dispatch, signature=$signature, genericParameters=$genericParameters)"
 }
 
 /** Scope of a physical generic parameter; `!0` from different scopes is never the same fact. */
@@ -777,6 +854,9 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                         is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
                             add(result.payloadSlot.carrier)
                         DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> Unit
+                    }
+                    candidate.genericParameters.forEach { parameter ->
+                        addAll(parameter.constraints)
                     }
                 }
                 for (carrier in slotCarriers) {
