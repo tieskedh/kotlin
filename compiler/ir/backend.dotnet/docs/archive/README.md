@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-sealed-emission-signature-family-2026-08-26.md`](generic-owner-sealed-emission-signature-family-2026-08-26.md)
+  records the fresh actual-only, non-additive seal for the bounded
+  4-TypeDef/6-MethodDef/2-MethodImpl direct-producer family, exact final
+  paths/names/CLI flags and coordinates, transactional hostile evidence,
+  two-implementation isolation, the production-empty inverse, and the
+  remaining producer/foreign/global authority gates.
 - [`generic-owner-complete-emission-family-2026-08-26.md`](generic-owner-complete-emission-family-2026-08-26.md)
   records a bounded per-implementation 4-TypeDef/6-MethodDef/2-MethodImpl
   final-emission manifest, two shared-interface implementation families,

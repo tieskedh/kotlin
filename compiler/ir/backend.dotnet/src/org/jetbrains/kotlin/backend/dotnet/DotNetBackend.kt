@@ -230,8 +230,7 @@ object DotNetBackend {
                     DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::logicalMemberName,
                 ))
         }
-        fun physicalCompleteEmissionComparisons():
-                List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot> {
+        fun physicalCompleteEmissionProducts(): List<DotNetGenericOwnerCompleteEmissionFamilyProducts> {
             if (!configuration.dotNetGenericOwnerRehearsal) return emptyList()
             val authority = when (val binding = localPhysicalAuthorityForEmissionComparison) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
@@ -239,12 +238,14 @@ object DotNetBackend {
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable,
                 -> return emptyList()
             }
-            return authority.compareFinalCompleteEmissionFamilies(
+            return authority.inspectFinalCompleteEmissionFamilies(
                 successfulCompleteEmissionObservations.toList(),
             )
         }
-        fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
-            DotNetBackendOutput(
+        fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()):
+                DotNetBackendOutput {
+            val completeEmissionProducts = physicalCompleteEmissionProducts()
+            return DotNetBackendOutput(
                 file,
                 declarations,
                 genericOwnerPrototypes,
@@ -253,9 +254,11 @@ object DotNetBackend {
                 genericOwnerPhysicalOperationRouteShadows,
                 physicalValuePlacementComparisons(),
                 physicalMethodDefEmissionComparisons(),
-                physicalCompleteEmissionComparisons(),
+                completeEmissionProducts.map { product -> product.comparison },
+                completeEmissionProducts.map { product -> product.sealed },
                 configuration.dotNetGenericOwnerRehearsal,
             )
+        }
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
             val missing = expectedMetadataLinkageKeys - declarations.keys
             if (missing.isEmpty()) return true
@@ -837,5 +840,13 @@ data class DotNetBackendOutput(
         List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot>,
     val genericOwnerCompleteEmissionComparisons:
         List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot>,
+    val genericOwnerSealedEmissionFamilies:
+        List<DotNetGenericOwnerSealedEmissionFamilySnapshot>,
     val genericOwnerRehearsal: Boolean,
-)
+) {
+    init {
+        require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
+            "the production erased epoch cannot publish sealed generic-owner families"
+        }
+    }
+}
