@@ -1397,6 +1397,7 @@ internal class DotNetIlEmitter(
                             else -> null
                         },
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                        capturePhysicalLocalPlacements = genericOwnerRehearsal,
                     ).render()
                 } catch (e: DotNetIlUnsupportedException) {
                     availableFunctions.remove(function)
@@ -1448,6 +1449,7 @@ internal class DotNetIlEmitter(
                             typeMapper = typeMapper,
                             facadeClassInfoByFile = facadeClassInfoByFile,
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                            capturePhysicalLocalPlacements = genericOwnerRehearsal,
                         ).render()
                     }
                     staticFieldLines[file] = fieldLines
@@ -1939,12 +1941,131 @@ internal class DotNetIlEmitter(
             appendLine()
             append(moduleBody)
         }
+        if (!genericOwnerRehearsal) {
+            check(renderedClasses.values.all { rendered -> rendered.localPlacementObservations.isEmpty() } &&
+                    renderedMethods.values.all { rendered -> rendered.localPlacementObservations.isEmpty() } &&
+                    renderedStaticInitializers.values.all { rendered ->
+                        rendered.localPlacementObservations.isEmpty()
+                    }
+            ) {
+                "production IL emission must not retain raw generic-owner local-placement observations"
+            }
+        }
+        val rawLocalPlacementObservations = if (genericOwnerRehearsal) {
+            buildList {
+                renderedClasses.values.forEach { rendered ->
+                    addAll(rendered.localPlacementObservations)
+                }
+                renderedMethods.values.forEach { rendered ->
+                    addAll(rendered.localPlacementObservations)
+                }
+                renderedStaticInitializers.values.forEach { rendered ->
+                    addAll(rendered.localPlacementObservations)
+                }
+            }
+        } else {
+            emptyList()
+        }
+        val localTypeDefByClassInfo =
+            java.util.IdentityHashMap<DotNetIlClassInfo, DotNetGenericOwnerPhysicalTypeDefIdentity.Local>()
+        if (genericOwnerRehearsal) {
+            availableClasses.forEach { entry ->
+                val owner = entry.key
+                val classInfo = entry.value
+                val interfaceInfo = genericInterfaces[owner]
+                val view = when {
+                    interfaceInfo?.declaredClassInfo === classInfo -> DotNetGenericInterfaceView.DECLARED
+                    interfaceInfo?.canonicalClassInfo === classInfo -> DotNetGenericInterfaceView.CANONICAL
+                    else -> null
+                }
+                localTypeDefByClassInfo[classInfo] =
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view)
+                interfaceInfo?.exactClassInfo?.let { exactClassInfo ->
+                    localTypeDefByClassInfo[exactClassInfo] =
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                            owner.symbol,
+                            DotNetGenericInterfaceView.EXACT,
+                        )
+                }
+            }
+        }
+        val capabilityOwnersByClassInfo =
+            java.util.IdentityHashMap<DotNetIlClassInfo, MutableSet<org.jetbrains.kotlin.ir.symbols.IrClassSymbol>>()
+        if (genericOwnerRehearsal) {
+            genericOwnerCapabilities.forEach { entry ->
+                val owner = entry.key
+                val classInfo = entry.value
+                capabilityOwnersByClassInfo.getOrPut(classInfo) { linkedSetOf() } += owner.symbol
+            }
+        }
+        fun normalizeObservedCarrier(
+            raw: DotNetIlRawLocalPlacementObservation,
+            physicalOwner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local?,
+        ): DotNetGenericOwnerObservedLocalCarrier = when (val carrier = raw.carrier) {
+            DotNetIlValueType.Object -> DotNetGenericOwnerObservedLocalCarrier.Object
+            is DotNetIlValueType.UserClass -> {
+                val capabilityOwners = capabilityOwnersByClassInfo[carrier.classInfo].orEmpty()
+                when {
+                    capabilityOwners.size == 1 ->
+                        DotNetGenericOwnerObservedLocalCarrier.SemanticCapability(
+                            capabilityOwners.single(),
+                        )
+                    else -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        if (capabilityOwners.isEmpty()) {
+                            "the emitted UserClass local is not a recorded generic-owner capability"
+                        } else {
+                            "the emitted UserClass local denotes more than one logical capability owner"
+                        },
+                    )
+                }
+            }
+            is DotNetIlValueType.GenericInstance -> {
+                val definition = localTypeDefByClassInfo[carrier.classInfo]
+                val argumentIndices = carrier.arguments.map { argument ->
+                    (argument as? DotNetIlValueType.TypeParameter)
+                        ?.takeIf { parameter -> !parameter.isMethodParameter }
+                        ?.index
+                }
+                when {
+                    definition == null -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted generic local does not belong to a local physical TypeDef",
+                    )
+                    physicalOwner == null -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted generic local has no local physical type-parameter binder",
+                    )
+                    argumentIndices.any { index -> index == null } ->
+                        DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                            "the emitted generic local is not constructed solely from owner parameters",
+                        )
+                    else -> DotNetGenericOwnerObservedLocalCarrier.LocalConstruction(
+                        definition,
+                        physicalOwner,
+                        argumentIndices.map { index -> checkNotNull(index) },
+                    )
+                }
+            }
+            else -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                "the emitted local carrier is outside the bounded physical-value vocabulary",
+            )
+        }
+        val localPlacementObservations = rawLocalPlacementObservations.map { raw ->
+            val physicalOwner = localTypeDefByClassInfo[raw.physicalOwner]
+            DotNetGenericOwnerPhysicalValueLocalPlacementObservation(
+                physicalFunction = raw.function,
+                physicalMethodOwner = physicalOwner,
+                variable = raw.variable,
+                slotIndex = raw.slotIndex,
+                carrier = normalizeObservedCarrier(raw, physicalOwner),
+                selectionKind = raw.selectionKind,
+            )
+        }
         return DotNetIlEmissionResult(
             ilText,
             declarations,
             referencedAssemblies.toSet(),
             referencedForeignAssemblies.toList(),
             managedResources,
+            localPlacementObservations,
         )
     }
 
@@ -2974,6 +3095,11 @@ internal class DotNetIlEmitter(
         val renderedFields = mutableListOf<String>()
         val renderedMethods = mutableListOf<String>()
         val renderedProperties = mutableListOf<String>()
+        val localPlacementObservations = if (genericOwnerRehearsal) {
+            mutableListOf<DotNetIlRawLocalPlacementObservation>()
+        } else {
+            null
+        }
         var hasClassInitializer = false
         val declaredSignatureTypeMapper = declaredGenericTypeMapper.declaredGenericInterfaceSignatureView()
         val exactSignatureTypeMapper = exactGenericTypeMapper.declaredGenericInterfaceSignatureView()
@@ -3034,11 +3160,13 @@ internal class DotNetIlEmitter(
                     genericOwnerDirectForeignOverrideDispatch =
                         genericOwnerDirectForeignOverrideDispatches[member],
                     genericOwnerForeignOverrideProbeTarget = genericOwnerForeignOverrideProbeTargets[member],
+                    capturePhysicalLocalPlacements = genericOwnerRehearsal,
                 ).render()
             } catch (failure: DotNetIlUnsupportedException) {
                 dotNetUnsupported("member '${member.name.asString()}' is not supported: ${failure.reason}")
             }
             renderedMethods += rendered.ilText
+            localPlacementObservations?.addAll(rendered.localPlacementObservations)
         }
 
         for (declaration in irClass.declarations) {
@@ -3053,8 +3181,10 @@ internal class DotNetIlEmitter(
                         typeMapper = physicalTypeMapper,
                         facadeClassInfoByFile = facadeClassInfoByFile,
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                        capturePhysicalLocalPlacements = genericOwnerRehearsal,
                     ).render()
                     renderedMethods += rendered.ilText
+                    localPlacementObservations?.addAll(rendered.localPlacementObservations)
                 }
                 is IrAnonymousInitializer ->
                     dotNetUnsupported("internal: init block of class '$name' survived InitializersLowering")
@@ -3090,6 +3220,7 @@ internal class DotNetIlEmitter(
                         throw DotNetIlUnsupportedClassException(declaration, e.reason)
                     }
                     renderedNestedClasses += rendered.ilText.trimEnd('\n').prependIndent("  ") + "\n"
+                    localPlacementObservations?.addAll(rendered.localPlacementObservations)
                 }
                 is IrField -> {
                     // JVM precedent: FIR's interface-delegation field is an ordinary private
@@ -3148,8 +3279,10 @@ internal class DotNetIlEmitter(
                             typeMapper = physicalTypeMapper,
                             facadeClassInfoByFile = facadeClassInfoByFile,
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                            capturePhysicalLocalPlacements = genericOwnerRehearsal,
                         ).render()
                         renderedMethods.add(0, rendered.ilText)
+                        localPlacementObservations?.addAll(rendered.localPlacementObservations)
                         hasClassInitializer = true
                     }
                     !declaration.isFakeOverride ->
@@ -3189,6 +3322,7 @@ internal class DotNetIlEmitter(
                 else -> dotNetUnsupported("unsupported member of class '$name': ${declaration.javaClass.simpleName}")
             }
         }
+        var renderedExactView: RenderedClass? = null
         val physicalIlText = buildString {
             DotNetIlClassCodegen(
                 classInfo.ilClassName,
@@ -3244,19 +3378,24 @@ internal class DotNetIlEmitter(
                 coreLibraryReference = coreLibrary.reference,
             ).generate(this)
             splitGenericInfo?.exactClassInfo?.let { exactClassInfo ->
+                val rendered = renderExactGenericInterfaceView(
+                    irClass = irClass,
+                    classInfo = exactClassInfo,
+                    availableFunctions = availableFunctions,
+                    intrinsicMethods = intrinsicMethods,
+                    exactTypeMapper = exactGenericTypeMapper,
+                    facadeClassInfoByFile = facadeClassInfoByFile,
+                )
+                renderedExactView = rendered
                 append(
-                    renderExactGenericInterfaceView(
-                        irClass = irClass,
-                        classInfo = exactClassInfo,
-                        availableFunctions = availableFunctions,
-                        intrinsicMethods = intrinsicMethods,
-                        exactTypeMapper = exactGenericTypeMapper,
-                        facadeClassInfoByFile = facadeClassInfoByFile,
-                    )
+                    rendered.ilText
                 )
             }
         }
-        return RenderedClass(physicalIlText)
+        renderedExactView?.let { rendered ->
+            localPlacementObservations?.addAll(rendered.localPlacementObservations)
+        }
+        return RenderedClass(physicalIlText, localPlacementObservations.orEmpty())
     }
 
     /** Emits the invariant typed-input sibling of one natural reified CLR interface. */
@@ -3267,11 +3406,16 @@ internal class DotNetIlEmitter(
         intrinsicMethods: DotNetIlIntrinsicMethods,
         exactTypeMapper: DotNetIlTypeMapper,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
-    ): String {
+    ): RenderedClass {
         val signatureTypeMapper = exactTypeMapper.declaredGenericInterfaceSignatureView()
         val viewFunctions = availableFunctions.toMutableMap()
         val renderedMethods = mutableListOf<String>()
         val renderedProperties = mutableListOf<String>()
+        val localPlacementObservations = if (genericOwnerRehearsal) {
+            mutableListOf<DotNetIlRawLocalPlacementObservation>()
+        } else {
+            null
+        }
 
         fun renderMember(member: IrSimpleFunction): IrSimpleFunction? {
             if (intrinsicMethods.getIntrinsic(member.symbol)?.excludesDeclarationFromCodegen == true ||
@@ -3287,7 +3431,7 @@ internal class DotNetIlEmitter(
                 recordedInfo?.physicalMethodName,
             )
             viewFunctions[member] = memberInfo
-            renderedMethods += DotNetIlMethodCodegen(
+            val rendered = DotNetIlMethodCodegen(
                 function = member,
                 functionInfo = memberInfo,
                 isEntryPoint = false,
@@ -3295,7 +3439,10 @@ internal class DotNetIlEmitter(
                 intrinsicMethods = intrinsicMethods,
                 typeMapper = signatureTypeMapper,
                 facadeClassInfoByFile = facadeClassInfoByFile,
-            ).render().ilText
+                capturePhysicalLocalPlacements = genericOwnerRehearsal,
+            ).render()
+            renderedMethods += rendered.ilText
+            localPlacementObservations?.addAll(rendered.localPlacementObservations)
             return member
         }
 
@@ -3321,7 +3468,7 @@ internal class DotNetIlEmitter(
             }
         }
 
-        return buildString {
+        val ilText = buildString {
             DotNetIlClassCodegen(
                 classInfo.ilClassName,
                 renderedMethods,
@@ -3349,6 +3496,7 @@ internal class DotNetIlEmitter(
                 coreLibraryReference = coreLibrary.reference,
             ).generate(this)
         }
+        return RenderedClass(ilText, localPlacementObservations.orEmpty())
     }
 
     /**
@@ -3700,8 +3848,14 @@ internal class DotNetIlEmitter(
         else -> "field '${name.asString()}'"
     }
 
-    /** A successfully rendered user class and its complete IL text. */
-    private class RenderedClass(val ilText: String)
+    /** A successfully rendered user class, its IL, and every surviving recursive local observation. */
+    private class RenderedClass(
+        val ilText: String,
+        localPlacementObservations: List<DotNetIlRawLocalPlacementObservation>,
+    ) {
+        val localPlacementObservations: List<DotNetIlRawLocalPlacementObservation> =
+            localPlacementObservations.toList()
+    }
 
     /**
      * A [DotNetIlUnsupportedException] tagged with the nested class whose recursive render
@@ -3980,7 +4134,7 @@ internal class DotNetIlEmitter(
                 }
                 appendLine("    ret")
                 appendLine("  }")
-            }),
+            }, emptyList()),
             methodName = clrMethodName,
             returnType = exportedReturnType,
             parameterTypes = exportedParameterTypes,
@@ -4102,7 +4256,7 @@ internal class DotNetIlEmitter(
                     }
                     appendLine("    ret")
                     appendLine("  }")
-                }),
+                }, emptyList()),
                 methodName = clrMethodName,
                 returnType = exportedReturnType,
                 parameterTypes = retainedParameterTypes,
@@ -4423,4 +4577,5 @@ internal data class DotNetIlEmissionResult(
     val referencedAssemblies: Set<String>,
     val referencedForeignAssemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
     val managedResources: Map<String, ByteArray>,
+    val localPlacementObservations: List<DotNetGenericOwnerPhysicalValueLocalPlacementObservation>,
 )

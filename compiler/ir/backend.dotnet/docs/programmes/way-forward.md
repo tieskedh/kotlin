@@ -1667,6 +1667,21 @@ same hostile matrix. This is still a read-only prediction, not actual local-
 slot selection; the existing emitter recognizer remains unchanged. See
 [`../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md).
 
+The first final-emitter comparison is now complete. Successful final render
+products expose ordinary `IrVariable` slots from the variable-local path
+transactionally, and a post-emission query correlates them with the shadow by
+physical function/local symbol identity. Catch parameters and other separately
+declared IL locals remain outside this slice. Scoped generic-parameter binders
+and physical MethodDef owners remain visible in the IR-free result. The source
+hostile probe retains one stable exact prediction while the unchanged emitter
+selects its semantic capability. In a separate inline probe, repeated compiler
+aliases reached through a sequential expression container match the existing
+exact generic-owner override without the shadow consulting their names or
+origins. The comparison records this evidence but feeds nothing back into
+emission. It proves neither a natural interface view nor permission to remove
+the old recognizer. See
+[`../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](../archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
