@@ -52,6 +52,10 @@ data class DotNetGenericOwnerCompleteEmissionMethodDefSnapshot(
     val kind: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
     val role: DotNetGenericOwnerMemberFamilyRole?,
     val ownerKind: DotNetGenericOwnerCompleteEmissionTypeKindSnapshot,
+    val genericArity: Int,
+    val genericParameterVariances:
+        List<DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot>,
+    val genericParameterConstraintCounts: List<Int>,
 )
 
 data class DotNetGenericOwnerCompleteEmissionMethodImplSnapshot(
@@ -132,6 +136,7 @@ data class DotNetGenericOwnerSealedEmissionTypeDefSnapshot(
 data class DotNetGenericOwnerSealedEmissionMethodDefSnapshot(
     val kind: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
     val physicalName: String,
+    val physicalGenericParameterNames: List<String>,
     val flags: DotNetGenericOwnerSealedEmissionMethodDefFlagsSnapshot,
     val structural: DotNetGenericOwnerCompleteEmissionMethodDefSnapshot,
     val header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
@@ -344,7 +349,7 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
         val identity = entry.value
         val description = typeDescriptions.getValue(kind)
         val parameters = family.typeParameters.getValue(kind).map { parameter ->
-            DotNetGenericOwnerCompleteEmissionTypeParameterRow(
+            DotNetGenericOwnerCompleteEmissionGenericParameterRow(
                 parameter.variance,
                 parameter.constraints.map { constraint ->
                     checkNotNull(buildDotNetGenericOwnerExpectedEmissionCarrierShape(
@@ -384,6 +389,20 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
         )
     }
     val expectedMethodRows = expectedMethods.map { method ->
+        val genericParameters = method.reference.genericParameters.map { parameter ->
+            DotNetGenericOwnerCompleteEmissionGenericParameterRow(
+                parameter.variance,
+                parameter.constraints.map { constraint ->
+                    checkNotNull(buildDotNetGenericOwnerExpectedEmissionCarrierShape(
+                        authority,
+                        declarations,
+                        allocator,
+                        method.identity,
+                        constraint,
+                    )) { "a BOUND complete family has an unbindable MethodDef GenericParam constraint" }
+                },
+            )
+        }
         DotNetGenericOwnerCompleteEmissionMethodDefRow(
             method.key,
             checkNotNull(buildDotNetGenericOwnerExpectedMethodDefEmissionHeaderShape(
@@ -393,6 +412,7 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
                 method.identity,
                 method.reference,
             )) { "a BOUND complete family has an unbindable MethodDef header" },
+            genericParameters,
         )
     }
     val methodsByIdentity = expectedMethods.associateBy { method -> method.identity }
@@ -518,6 +538,9 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
             method.kind.toSnapshot(),
             method.identity.role,
             ownerKind.toSnapshot(),
+            method.reference.signature.genericArity,
+            method.reference.genericParameters.map { parameter -> parameter.variance.toSnapshot() },
+            method.reference.genericParameters.map { parameter -> parameter.constraints.size },
         )
     }
     val expectedMethodImplSnapshots = family.methodImpls.map { entry ->
@@ -634,11 +657,19 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
                 DotNetGenericOwnerSealedEmissionMethodDefSnapshot(
                     kind = kind,
                     physicalName = row.physicalName,
+                    physicalGenericParameterNames = row.physicalGenericParameterNames,
                     flags = row.toFlagsSnapshot(),
                     structural = DotNetGenericOwnerCompleteEmissionMethodDefSnapshot(
                         kind = kind,
                         role = method.identity.role,
                         ownerKind = typeKindsByKey.getValue(row.structural.header.owner).toSnapshot(),
+                        genericArity = row.structural.header.genericArity,
+                        genericParameterVariances = row.structural.genericParameters.map { parameter ->
+                            parameter.variance.toSnapshot()
+                        },
+                        genericParameterConstraintCounts = row.structural.genericParameters.map { parameter ->
+                            parameter.constraints.size
+                        },
                     ),
                     header = actualMethodsByKey.getValue(key).snapshot,
                 )
@@ -737,7 +768,7 @@ private fun actualCompleteTypeDefs(
                 return@forEach
             }
         }
-        val genericParameters = mutableListOf<DotNetGenericOwnerCompleteEmissionTypeParameterRow>()
+        val genericParameters = mutableListOf<DotNetGenericOwnerCompleteEmissionGenericParameterRow>()
         for (parameter in observation.genericParameters) {
             val constraints = mutableListOf<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape>()
             for (constraint in parameter.constraints) {
@@ -759,7 +790,7 @@ private fun actualCompleteTypeDefs(
                 ))
                 return@forEach
             }
-            genericParameters += DotNetGenericOwnerCompleteEmissionTypeParameterRow(
+            genericParameters += DotNetGenericOwnerCompleteEmissionGenericParameterRow(
                 parameter.variance,
                 constraints,
             )
@@ -843,6 +874,21 @@ private fun actualCompleteMethodDefs(
                 return@forEach
             }
         }
+        val genericParameters = when (val conversion = observation.toCompleteMethodGenericParameters(
+            authority,
+            allocator,
+            method.identity,
+        )) {
+            is CompleteConversion.Known -> conversion.value
+            is CompleteConversion.Unavailable -> {
+                accumulator.add(conversion)
+                return@forEach
+            }
+            is CompleteConversion.Conflict -> {
+                accumulator.add(conversion)
+                return@forEach
+            }
+        }
         when (val actual = buildDotNetGenericOwnerActualMethodDefEmissionHeaderEvidence(
             authority,
             allocator,
@@ -857,8 +903,10 @@ private fun actualCompleteMethodDefs(
                             structural = DotNetGenericOwnerCompleteEmissionMethodDefRow(
                                 method.key,
                                 actual.shape,
+                                genericParameters.rows,
                             ),
                             physicalName = observation.physicalMethodName,
+                            physicalGenericParameterNames = genericParameters.physicalNames,
                             visibility = observation.visibility,
                             dispatch = observation.dispatch,
                             isHideBySig = observation.isHideBySig,
@@ -875,6 +923,53 @@ private fun actualCompleteMethodDefs(
         }
     }
     return accumulator.evidence()
+}
+
+private data class CompleteActualMethodGenericParameters(
+    val rows: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow>,
+    val physicalNames: List<String>,
+)
+
+private fun DotNetGenericOwnerPhysicalMethodDefHeaderObservation.toCompleteMethodGenericParameters(
+    authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    allocator: EmissionIdentityAllocator,
+    currentMethod: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+): CompleteConversion<CompleteActualMethodGenericParameters> {
+    if (genericParameters.size != genericArity) {
+        return CompleteConversion.Conflict(
+            "an emitted MethodDef has an incoherent GenericParam row count",
+        )
+    }
+    val rows = mutableListOf<DotNetGenericOwnerCompleteEmissionGenericParameterRow>()
+    for (parameter in genericParameters) {
+        if (parameter.variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT) {
+            return CompleteConversion.Conflict(
+                "an emitted MethodDef GenericParam has illegal declaration-site variance",
+            )
+        }
+        val constraints = mutableListOf<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape>()
+        for (constraint in parameter.constraints) {
+            val conversion = constraint.toActualCarrier(authority, allocator, currentMethod)
+            conversion.conflictReason?.let { reason -> return CompleteConversion.Conflict(reason) }
+            conversion.unavailableReason?.let { reason -> return CompleteConversion.Unavailable(reason) }
+            constraints += checkNotNull(conversion.known).shape
+        }
+        if (constraints.size != constraints.toSet().size) {
+            return CompleteConversion.Conflict(
+                "an emitted MethodDef GenericParam contains duplicate normalized constraints",
+            )
+        }
+        rows += DotNetGenericOwnerCompleteEmissionGenericParameterRow(
+            parameter.variance,
+            constraints,
+        )
+    }
+    return CompleteConversion.Known(
+        CompleteActualMethodGenericParameters(
+            rows = rows,
+            physicalNames = genericParameters.map { parameter -> parameter.physicalName },
+        ),
+    )
 }
 
 private fun actualCompleteMethodImpls(

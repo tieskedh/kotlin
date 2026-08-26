@@ -1836,10 +1836,20 @@ evidence is unavailable; duplicate, extra, cross-scope, structurally
 contradictory, flag-contradictory, or coordinate-conflicting evidence rejects
 the transaction and publishes no rows. This is read-only rehearsal output:
 it authorizes no route or recognizer change, and production/off remains empty
-and erased. MethodDef GenericParam rows, producer-recorded and retained-foreign
-adapters, overlapping/compiler-wide family ownership, and wider grammars
-remain open. See
+and erased. See
 [`../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md`](../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md).
+
+The same family-scoped seal now includes complete MethodDef GenericParam rows.
+The bounded extension admits one coherent `<R>(R): T` family: all six
+MethodDefs independently own one invariant, unconstrained `R`, and their sole
+declaration-independent input is that exact MethodDef's `!!0`. Expected rows
+come from BOUND, while exact names and normalized actual rows come only from
+the successful final-emission transaction. Row position is significant;
+constraint ordering is not. Cross-method and out-of-range binders conflict.
+The declaration proof intentionally stops before MethodSpec/call routing.
+Producer-recorded and retained-foreign adapters, overlapping/compiler-wide
+family ownership, and wider grammars remain open. See
+[`../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md).
 
 The consolidation proceeds in bounded stages:
 
@@ -1865,11 +1875,11 @@ The consolidation proceeds in bounded stages:
    retained-foreign edge authority remain later adapters;
 6. move route selection behind one query which starts from the authoritative
    callable family and treats exact provenance only as supporting evidence.
-   The first local direct-producer BOUND shadow, exact emitted role/alias
-   identity, bounded complete TypeDef/edge/MethodDef/MethodImpl comparison, and
-   the first fresh actual-only family-scoped signature/name/flag seal are
-   implemented. Producer-recorded and retained-foreign adapters, MethodDef
-   GenericParam rows, and overlapping/global-family closure remain open;
+   The local direct-producer BOUND shadow, emitted role/alias identity,
+   complete 4/6/2 comparison, fresh actual-only seal, and bounded MethodDef
+   GenericParam rows are implemented. Method-generic MethodSpec/call routing
+   is the next executable boundary; producer-recorded and retained-foreign
+   adapters and overlapping/global-family closure follow it;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

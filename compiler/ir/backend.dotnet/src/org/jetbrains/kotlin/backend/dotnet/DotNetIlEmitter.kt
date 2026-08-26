@@ -2344,6 +2344,15 @@ internal class DotNetIlEmitter(
                 .map { carrier ->
                     normalizeObservedMethodCarrier(carrier, raw, physicalOwner)
                 }
+            val genericParameters = raw.genericParameters.map { parameter ->
+                DotNetGenericOwnerPhysicalMethodDefGenericParameterObservation(
+                    physicalName = parameter.physicalName,
+                    variance = parameter.variance,
+                    constraints = parameter.constraints.map { constraint ->
+                        normalizeObservedMethodCarrier(constraint, raw, physicalOwner)
+                    },
+                )
+            }
             DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
                 physicalFunction = raw.function,
                 physicalMethodIdentity = raw.genericOwnerPhysicalMethodIdentity,
@@ -2355,6 +2364,7 @@ internal class DotNetIlEmitter(
                 isSpecialName = raw.isSpecialName,
                 isRuntimeSpecialName = raw.isRuntimeSpecialName,
                 genericArity = raw.genericArity,
+                genericParameters = genericParameters,
                 signature = DotNetGenericOwnerObservedMethodSignature(
                     receiverCarrier = receiverCarrier,
                     returnCarrier = returnCarrier,
@@ -5223,10 +5233,3 @@ internal data class DotNetIlEmissionResult(
     val typeDefEmissionObservations: List<DotNetGenericOwnerPhysicalTypeDefEmissionObservation>,
     val methodImplObservations: List<DotNetGenericOwnerPhysicalMethodImplObservation>,
 )
-
-private fun Variance.toDotNetGenericOwnerPhysicalTypeParameterVariance():
-        DotNetGenericOwnerPhysicalTypeParameterVariance = when (this) {
-    Variance.INVARIANT -> DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
-    Variance.OUT_VARIANCE -> DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT
-    Variance.IN_VARIANCE -> DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
-}
