@@ -1016,6 +1016,28 @@ verification, and work state.
   unchanged pending wider transfer and hostile coverage. See
   [`docs/archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](docs/archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md).
 
+  The shadow now observes the same semantic-hook body both immediately after
+  its authoritative move and before semantic remapping, and after final
+  routing. One origin-independent engine predicts exact private storage for an
+  immutable generic source alias only from its initializer's already direct
+  null-reference carrier plus an independently guaranteed matching
+  construction; the logical destination contributes only Deferred storage.
+  Object storage remains fixed. Actual sets, direct/nested stars, non-invariant
+  projections, explicit casts, distinct-construction mutable/control flow, and
+  an inline early return all fail closed in both epochs. Implicit wrappers are
+  accepted only for proven reference-identity flow, and an opaque container
+  prefix cannot make its lexical last expression authoritative. Final analysis
+  completion is required before a successful rehearsal output publishes
+  snapshots. The final focused rehearsal/on and production/off matrix passes
+  all eight PSI/LightTree, Framework 4.8, and .NET 10 lanes. The final normal
+  aggregate exits zero; direct XML audit covers 194 suites and 2,431 tests with
+  zero failures, errors, or skips. The FIR, integration, and backend-unit roots
+  freshly write 187 suites/2,239 tests, two suites/127 tests, and four suites/
+  59 tests respectively; the unchanged `dotnet.ir` root retains six green
+  tests. This remains a shadow prediction: actual emitter local selection and
+  the existing IR-origin recognizer are unchanged. See
+  [`docs/archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](docs/archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5253,14 +5275,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 1. Consolidate physical declaration authority and per-value carrier provenance
    before advancing the source-built Stdlib census, while keeping production
    emission erased. The production-inert symbolic carrier algebra, complete-set
-   physical ancestry, and first post-final-routing value shadow are complete.
-   Next compare the shared facts with the immutable-alias recognizer by adding
-   exact local placement plus the relevant pre-semantic-remap observation.
-   Mutable multi-construction flow, source-declared widening, and cast
-   laundering must remain hostile controls. The comparison must not enter
-   `stateSizes`, route maps, emitter inputs, or ABI serialization. No bounded
-   recognizer is removed until the same analysis explains both its positive
-   behavior and hostile negatives.
+   physical ancestry, post-final-routing value shadow, and origin-independent
+   pre-remap exact-local prediction are complete. Next bind those facts to the
+   actual compiler-owned inline alias and compare predicted storage with the
+   emitter's existing selected local carrier, including the source-alias
+   contrast. The comparison remains read-only and must not enter `stateSizes`,
+   route maps, emitter inputs, or ABI serialization. No bounded recognizer is
+   removed until the same analysis explains both its positive behavior and
+   hostile negatives.
 
    Continue the hardest-model-first generic-owner architecture spike within
    that consolidation. The erased hostile oracle, historical

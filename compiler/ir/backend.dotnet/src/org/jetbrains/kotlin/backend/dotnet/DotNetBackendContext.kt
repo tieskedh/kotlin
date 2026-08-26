@@ -210,8 +210,8 @@ internal class DotNetBackendContext(
     /** Read-only physical-value shadow evidence; no lowering or emitter may consume it. */
     val genericOwnerPhysicalValueShadows: MutableList<DotNetGenericOwnerPhysicalValueShadowSnapshot> =
         mutableListOf()
-    /** Distinguishes a completed empty shadow from a shadow which has not run. */
-    var genericOwnerPhysicalValueShadowAnalysisCompleted: Boolean = false
+    /** Distinguishes a successfully completed final shadow from pre-remap capture or no run. */
+    var genericOwnerPhysicalValueShadowFinalAnalysisCompleted: Boolean = false
     /** Rehearsal-only logical owner to its materialized non-generic semantic capability interface. */
     val genericOwnerCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Local reified subinterface to the external logical ancestor whose capability it inherits. */

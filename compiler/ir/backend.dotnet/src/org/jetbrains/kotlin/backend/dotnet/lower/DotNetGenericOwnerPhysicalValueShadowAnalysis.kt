@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalAuthorityEp
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullState
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
@@ -30,10 +31,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowGuaranteeState
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowNullState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSelectedViewSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowViewSnapshot
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -48,30 +51,66 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrBody
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
+import org.jetbrains.kotlin.ir.expressions.IrBlock
+import org.jetbrains.kotlin.ir.expressions.IrComposite
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
+import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.ir.visitors.acceptVoid
+import org.jetbrains.kotlin.types.Variance
 
 /**
  * First production-inert consumer of the generic-owner physical-value model.
  *
- * The shadow deliberately recognizes only immutable object-carrier aliases of a current physical
- * receiver or an already-object parameter. It records diagnostics after final routing has reached
- * its fixpoint, but it neither mutates IR nor publishes a fact to any routing/emission structure.
+ * The shadow recognizes only exact current-receiver flow, broad object parameters, and immutable
+ * single-definition object/generic aliases. It observes both the moved pre-remap body and the final
+ * routing fixpoint, but it neither mutates IR nor publishes a fact to any routing/emission structure.
  */
 internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
     private val context: DotNetBackendContext,
 ) {
+    /** Captures the moved authoritative body before any owner-dependent semantic type remap. */
+    fun captureBeforeSemanticRemap(
+        owner: IrClass,
+        source: IrSimpleFunction,
+        physical: IrSimpleFunction,
+        body: IrBody,
+    ) {
+        check(context.configuration.dotNetGenericOwnerRehearsal) {
+            "the pre-remap physical-value shadow is rehearsal-only"
+        }
+        val plan = context.genericOwnerArchitecturePlans[owner]
+            ?.takeIf(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
+            ?.takeIf { candidate -> candidate.owner.kind == ClassKind.CLASS }
+            ?: return
+        context.genericOwnerPhysicalValueShadows += analyzeFunction(
+            owner = owner,
+            function = physical,
+            semanticSource = source,
+            authority = bindOwnerAuthorityOrNull(plan),
+            phase = DotNetGenericOwnerPhysicalValueShadowPhase.PRE_SEMANTIC_REMAP,
+            body = body,
+        )
+    }
+
     fun analyze(module: IrModuleFragment) {
-        check(!context.genericOwnerPhysicalValueShadowAnalysisCompleted) {
+        check(!context.genericOwnerPhysicalValueShadowFinalAnalysisCompleted) {
             "generic-owner physical-value shadow analysis must run exactly once"
         }
-        context.genericOwnerPhysicalValueShadowAnalysisCompleted = true
 
         val sourceBySemanticHook = context.genericOwnerSemanticHooks.entries.associate { entry ->
             entry.value to entry.key
@@ -92,11 +131,14 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                             function,
                             sourceBySemanticHook[function],
                             authority,
+                            DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING,
+                            function.body,
                         )
                     }
             }
 
         context.genericOwnerPhysicalValueShadows += snapshots
+        context.genericOwnerPhysicalValueShadowFinalAnalysisCompleted = true
     }
 
     private fun analyzeFunction(
@@ -104,30 +146,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         function: IrSimpleFunction,
         semanticSource: IrSimpleFunction?,
         authority: OwnerAuthority?,
+        phase: DotNetGenericOwnerPhysicalValueShadowPhase,
+        body: IrBody?,
     ): List<DotNetGenericOwnerPhysicalValueShadowSnapshot> {
-        val body = function.body as? IrBlockBody ?: return emptyList()
-        val storageByValue = linkedMapOf<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>()
-        if (authority != null) {
-            function.parameters.forEach { parameter ->
-                when {
-                    parameter === function.dispatchReceiverParameter ->
-                        storageByValue[parameter.symbol] = authority.receiverStorage
-                    parameter.kind == IrParameterKind.Regular && parameter.type.isObjectShadowType() -> {
-                        val nullState = if (parameter.type.isNullableAny()) {
-                            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
-                        } else {
-                            DotNetGenericOwnerPhysicalNullState.NON_NULL
-                        }
-                        storageByValue[parameter.symbol] = DotNetGenericOwnerPhysicalStorageFact(
-                            DotNetGenericOwnerStorageCarrier.Fixed(authority.objectCarrier),
-                            DotNetGenericOwnerPhysicalValueProvenance(DotNetGenericOwnerGuaranteedViews.Unknown),
-                            nullState,
-                        )
-                    }
-                }
-            }
-        }
-
+        val blockBody = body as? IrBlockBody ?: return emptyList()
         val source = semanticSource ?: function
         val role = when {
             semanticSource != null -> DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK
@@ -135,50 +157,256 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY
             else -> DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER
         }
-        return body.statements.mapNotNull { statement ->
-            val variable = statement as? IrVariable ?: return@mapNotNull null
-            if (!variable.type.isObjectShadowType()) return@mapNotNull null
-            val diagnostic = ShadowDiagnosticIdentity(owner, source, function, role, variable)
-            if (authority == null) {
-                return@mapNotNull diagnostic.unsupported("physical declaration authority unavailable")
-            }
-            if (variable.isVar) {
-                return@mapNotNull diagnostic.unsupported("mutable local is outside the first shadow slice")
-            }
-            val initializer = variable.initializer
-                ?: return@mapNotNull diagnostic.unsupported("immutable local has no initializer")
-            val produced = evaluateInitializerOrNull(initializer, storageByValue)
-                ?: return@mapNotNull diagnostic.unsupported("initializer is outside the first shadow grammar")
-            val objectStorage = DotNetGenericOwnerStorageCarrier.Fixed(authority.objectCarrier)
-            val placed = produced.placeInStorageOrNull(objectStorage, ::canStoreIdentityPreserving)
-                ?: return@mapNotNull diagnostic.unsupported("initializer requires a non-identity storage conversion")
-            storageByValue[variable.symbol] = placed
-            diagnostic.analyzed(produced, placed, owner, authority.identity)
-        }
+        return FunctionShadowEngine(
+            owner,
+            source,
+            function,
+            role,
+            phase,
+            authority,
+            blockBody,
+        ).analyze()
     }
 
-    private fun evaluateInitializerOrNull(
-        expression: IrExpression,
-        storageByValue: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
-    ): DotNetGenericOwnerProducedValueFact? = when (expression) {
-        is IrGetValue -> storageByValue[expression.symbol]?.read()?.value
-        is IrTypeOperatorCall -> when (expression.operator) {
-            IrTypeOperator.IMPLICIT_CAST -> {
-                if (!expression.type.isObjectShadowType()) null
-                else evaluateInitializerOrNull(expression.argument, storageByValue)
-            }
-            IrTypeOperator.IMPLICIT_NOTNULL -> {
-                val value = evaluateInitializerOrNull(expression.argument, storageByValue)
-                    ?: return null
-                if (!value.nullState.canBeNonNull || value.layout == DotNetGenericOwnerProducedValueLayout.Null) {
-                    null
-                } else {
-                    value.copy(nullState = DotNetGenericOwnerPhysicalNullState.NON_NULL)
+    /**
+     * One phase-independent transfer engine. Its only physical seeds are declaration authority;
+     * neither a source type nor a destination type can manufacture an exact construction.
+     */
+    private inner class FunctionShadowEngine(
+        private val owner: IrClass,
+        private val source: IrSimpleFunction,
+        private val physical: IrSimpleFunction,
+        private val role: DotNetGenericOwnerPhysicalValueShadowFunctionRole,
+        private val phase: DotNetGenericOwnerPhysicalValueShadowPhase,
+        private val authority: OwnerAuthority?,
+        private val body: IrBlockBody,
+    ) {
+        private val storageByValue = linkedMapOf<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>()
+        private val setValueCountBySymbol = java.util.IdentityHashMap<IrValueSymbol, Int>()
+        private val snapshots = mutableListOf<DotNetGenericOwnerPhysicalValueShadowSnapshot>()
+
+        fun analyze(): List<DotNetGenericOwnerPhysicalValueShadowSnapshot> {
+            body.acceptVoid(object : IrVisitorVoid() {
+                override fun visitElement(element: IrElement) {
+                    element.acceptChildrenVoid(this)
+                }
+
+                override fun visitSetValue(expression: IrSetValue) {
+                    setValueCountBySymbol[expression.symbol] =
+                        (setValueCountBySymbol[expression.symbol] ?: 0) + 1
+                    expression.acceptChildrenVoid(this)
+                }
+            })
+
+            authority?.let { ownerAuthority ->
+                physical.parameters.forEach { parameter ->
+                    when {
+                        parameter === physical.dispatchReceiverParameter ->
+                            storageByValue[parameter.symbol] = ownerAuthority.receiverStorage
+                        parameter.kind == IrParameterKind.Regular && parameter.type.isObjectShadowType() -> {
+                            val nullState = if (parameter.type.isNullableAny()) {
+                                DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+                            } else {
+                                DotNetGenericOwnerPhysicalNullState.NON_NULL
+                            }
+                            storageByValue[parameter.symbol] = DotNetGenericOwnerPhysicalStorageFact(
+                                DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier),
+                                DotNetGenericOwnerPhysicalValueProvenance(
+                                    DotNetGenericOwnerGuaranteedViews.Unknown,
+                                ),
+                                nullState,
+                            )
+                        }
+                    }
                 }
             }
+
+            processStatements(body.statements, storageByValue)
+            return snapshots
+        }
+
+        private fun processStatements(
+            statements: List<IrStatement>,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ) {
+            statements.forEach { statement ->
+                when (statement) {
+                    is IrVariable -> processVariable(statement, storage)
+                    is IrBlock -> processNestedContainer(statement.statements, storage)
+                    is IrComposite -> processNestedContainer(statement.statements, storage)
+                }
+            }
+        }
+
+        private fun processNestedContainer(
+            statements: List<IrStatement>,
+            outerStorage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ) {
+            processStatements(statements, LinkedHashMap(outerStorage))
+        }
+
+        private fun processVariable(
+            variable: IrVariable,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): Boolean {
+            if (!variable.type.isPhysicalValueShadowCandidateType()) return false
+            val diagnostic = ShadowDiagnosticIdentity(owner, source, physical, role, phase, variable)
+            val ownerAuthority = authority
+            if (ownerAuthority == null) {
+                snapshots += diagnostic.unsupported("physical declaration authority unavailable")
+                return false
+            }
+            if (setValueCountBySymbol[variable.symbol].orZero() != 0) {
+                snapshots += diagnostic.unsupported(
+                    "multiply-defined local is outside the shadow transfer grammar",
+                )
+                return false
+            }
+            if (variable.isVar) {
+                snapshots += diagnostic.unsupported("mutable local is outside the shadow transfer grammar")
+                return false
+            }
+            if (variable.type.hasUnsupportedProjection()) {
+                snapshots += diagnostic.unsupported(
+                    "star or non-invariant projected local storage is outside the shadow transfer grammar",
+                )
+                return false
+            }
+            val initializer = variable.initializer
+            if (initializer == null) {
+                snapshots += diagnostic.unsupported("immutable local has no initializer")
+                return false
+            }
+            val produced = evaluateInitializerOrNull(initializer, storage)
+            if (produced == null) {
+                snapshots += diagnostic.unsupported("initializer is outside the shadow transfer grammar")
+                return false
+            }
+            val selectedStorage = selectStorageCarrierOrNull(variable, produced, ownerAuthority)
+            if (selectedStorage == null) {
+                snapshots += diagnostic.unsupported(
+                    "deferred storage has no independently proven direct reference carrier",
+                )
+                return false
+            }
+            val placed = produced.placeInStorageOrNull(selectedStorage, ::canStoreIdentityPreserving)
+            if (placed == null) {
+                snapshots += diagnostic.unsupported("initializer requires a non-identity storage conversion")
+                return false
+            }
+            storage[variable.symbol] = placed
+            snapshots += diagnostic.analyzed(produced, placed, owner, ownerAuthority.identity)
+            return true
+        }
+
+        private fun selectStorageCarrierOrNull(
+            variable: IrVariable,
+            produced: DotNetGenericOwnerProducedValueFact,
+            ownerAuthority: OwnerAuthority,
+        ): DotNetGenericOwnerStorageCarrier.Fixed? {
+            val requestedCarrier: DotNetGenericOwnerStorageCarrier = when {
+                variable.type.isObjectShadowType() ->
+                    DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier)
+                variable.type.isDeferredGenericShadowType() -> DotNetGenericOwnerStorageCarrier.Deferred
+                else -> DotNetGenericOwnerStorageCarrier.Unknown
+            }
+            if (requestedCarrier is DotNetGenericOwnerStorageCarrier.Fixed) return requestedCarrier
+            if (requestedCarrier != DotNetGenericOwnerStorageCarrier.Deferred) return null
+
+            // The logical generic destination contributes only Deferred storage. Selection comes
+            // from the already-produced verifier carrier and its independent physical guarantee.
+            val carrier = (produced.layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier
+                ?: return null
+            if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return null
+            val construction = carrier.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                ?: return null
+            val guaranteed = (produced.provenance.guaranteedViews as?
+                    DotNetGenericOwnerGuaranteedViews.Known)?.views.orEmpty()
+            if (DotNetGenericOwnerPhysicalView(construction) !in guaranteed) return null
+            return DotNetGenericOwnerStorageCarrier.Fixed(carrier)
+        }
+
+        private fun evaluateInitializerOrNull(
+            expression: IrExpression,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? = when (expression) {
+            is IrGetValue -> storage[expression.symbol]?.read()?.value
+            is IrTypeOperatorCall -> when (expression.operator) {
+                IrTypeOperator.IMPLICIT_CAST ->
+                    transferIdentityPreservingReferenceOperatorOrNull(expression, storage, forceNonNull = false)
+                IrTypeOperator.IMPLICIT_NOTNULL ->
+                    transferIdentityPreservingReferenceOperatorOrNull(expression, storage, forceNonNull = true)
+                else -> null
+            }
+            is IrBlock -> evaluateContainerOrNull(expression.statements, storage)
+            is IrComposite -> evaluateContainerOrNull(expression.statements, storage)
             else -> null
         }
-        else -> null
+
+        private fun transferIdentityPreservingReferenceOperatorOrNull(
+            expression: IrTypeOperatorCall,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+            forceNonNull: Boolean,
+        ): DotNetGenericOwnerProducedValueFact? {
+            if (expression.type.hasUnsupportedProjection() ||
+                !expression.type.isKnownNonValueReferenceTarget()
+            ) return null
+            val value = evaluateInitializerOrNull(expression.argument, storage) ?: return null
+            val carrier = (value.layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier
+                ?: return null
+            if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return null
+            if (forceNonNull) {
+                if (!value.nullState.canBeNonNull) return null
+                return value.copy(nullState = DotNetGenericOwnerPhysicalNullState.NON_NULL)
+            }
+            if (!expression.type.isMarkedNullable() &&
+                value.nullState != DotNetGenericOwnerPhysicalNullState.NON_NULL
+            ) return null
+            return value
+        }
+
+        /** Only targets proven by this slice's object or current-owner declaration authority. */
+        private fun IrType.isKnownNonValueReferenceTarget(): Boolean {
+            if (isObjectShadowType()) return true
+            val simple = this as? IrSimpleType ?: return false
+            return simple.classifier == owner.symbol && !owner.isValue
+        }
+
+        private fun evaluateContainerOrNull(
+            statements: List<IrStatement>,
+            outerStorage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val nestedStorage = LinkedHashMap(outerStorage)
+            val last = statements.lastOrNull() ?: return null
+            if (!processTransparentStatements(statements.dropLast(1), nestedStorage)) return null
+            return when (last) {
+                is IrExpression -> evaluateInitializerOrNull(last, nestedStorage)
+                is IrVariable -> {
+                    processVariable(last, nestedStorage)
+                    null
+                }
+                else -> null
+            }
+        }
+
+        private fun processTransparentStatements(
+            statements: List<IrStatement>,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): Boolean = statements.all { statement ->
+            when (statement) {
+                is IrVariable -> processVariable(statement, storage)
+                is IrBlock -> processTransparentNestedContainer(statement.statements, storage)
+                is IrComposite -> processTransparentNestedContainer(statement.statements, storage)
+                else -> false
+            }
+        }
+
+        private fun processTransparentNestedContainer(
+            statements: List<IrStatement>,
+            outerStorage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): Boolean = processTransparentStatements(statements, LinkedHashMap(outerStorage))
+
+        private fun Int?.orZero(): Int = this ?: 0
     }
 
     /**
@@ -270,6 +498,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         val source: IrSimpleFunction,
         val physical: IrSimpleFunction,
         val role: DotNetGenericOwnerPhysicalValueShadowFunctionRole,
+        val phase: DotNetGenericOwnerPhysicalValueShadowPhase,
         val variable: IrVariable,
     ) {
         fun unsupported(reason: String) = DotNetGenericOwnerPhysicalValueShadowSnapshot(
@@ -277,6 +506,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             sourceFunctionName = source.name.asString(),
             physicalFunctionName = physical.name.asString(),
             functionRole = role,
+            phase = phase,
             variableName = variable.name.asString(),
             status = DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED,
             initializerProducedCarrier = unknownCarrierSnapshot,
@@ -344,6 +574,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 sourceFunctionName = source.name.asString(),
                 physicalFunctionName = physical.name.asString(),
                 functionRole = role,
+                phase = phase,
                 variableName = variable.name.asString(),
                 status = DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED,
                 initializerProducedCarrier = initializerCarrier,
@@ -398,6 +629,20 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         }
 
         fun org.jetbrains.kotlin.ir.types.IrType.isObjectShadowType(): Boolean = isAny() || isNullableAny()
+
+        fun org.jetbrains.kotlin.ir.types.IrType.isDeferredGenericShadowType(): Boolean =
+            (this as? IrSimpleType)?.arguments?.isNotEmpty() == true
+
+        fun org.jetbrains.kotlin.ir.types.IrType.isPhysicalValueShadowCandidateType(): Boolean =
+            isObjectShadowType() || isDeferredGenericShadowType()
+
+        fun org.jetbrains.kotlin.ir.types.IrType.hasUnsupportedProjection(): Boolean {
+            val simple = this as? IrSimpleType ?: return false
+            return simple.arguments.any { argument ->
+                val projection = argument as? IrTypeProjection ?: return@any true
+                projection.variance != Variance.INVARIANT || projection.type.hasUnsupportedProjection()
+            }
+        }
 
         fun DotNetGenericOwnerProducedValueLayout.toCarrierSnapshot(
             currentOwner: IrClass,

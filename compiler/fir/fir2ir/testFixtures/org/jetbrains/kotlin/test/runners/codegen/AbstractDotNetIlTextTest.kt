@@ -101,6 +101,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowGuaranteeState
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowNullState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
@@ -679,74 +680,133 @@ private fun validateGenericOwnerPhysicalValueShadow(
                 snapshot.sourceFunctionName == "observe" &&
                 snapshot.functionRole == DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK
     }
-    val exact = observed.single { snapshot -> snapshot.variableName == "exactReceiverAsObject" }
-    val exactAlias = observed.single { snapshot -> snapshot.variableName == "exactAliasReadAgain" }
-    val broad = observed.single { snapshot -> snapshot.variableName == "genuinelyBroadAsObject" }
-    check(exact.ownerName == broad.ownerName &&
-            exact.physicalFunctionName == broad.physicalFunctionName) {
-        "The exact receiver alias and broad candidate must belong to one semantic-hook body: $observed"
+    val byPhase = DotNetGenericOwnerPhysicalValueShadowPhase.entries.associateWith { phase ->
+        observed.filter { snapshot -> snapshot.phase == phase }
+    }
+    check(byPhase.values.all { phaseSnapshots -> phaseSnapshots.isNotEmpty() }) {
+        "The hostile physical-value probe must observe every immutable IR epoch: $observed"
     }
 
-    check(exact.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
-            exact.unsupportedReason == null &&
-            exact.initializerProducedCarrier.kind ==
-            DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
-            exact.initializerProducedCarrier.localOwnerName?.endsWith("ShadowOwner") == true &&
-            exact.initializerProducedCarrier.ownerParameterIndices == listOf(0) &&
-            exact.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
-            exact.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
-            exact.guaranteedViews.singleOrNull()?.let { view ->
-                view.carrier == exact.initializerProducedCarrier &&
-                        DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
-                        view.evidence
-            } == true &&
-            exact.selectedViewLineage.isEmpty() &&
-            exact.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
-            exact.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
-        "The widened receiver alias must retain only its proven exact physical owner view: $exact"
+    fun snapshot(
+        phase: DotNetGenericOwnerPhysicalValueShadowPhase,
+        variableName: String,
+    ): DotNetGenericOwnerPhysicalValueShadowSnapshot =
+        checkNotNull(byPhase.getValue(phase).singleOrNull { candidate ->
+            candidate.variableName == variableName
+        }) {
+            "The hostile physical-value probe must publish exactly one $variableName at $phase: $observed"
+        }
+
+    fun hasExactSelfView(value: DotNetGenericOwnerPhysicalValueShadowSnapshot): Boolean =
+        value.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                value.guaranteedViews.singleOrNull()?.let { view ->
+                    view.carrier.kind ==
+                            DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                            view.carrier.localOwnerName?.endsWith("ShadowOwner") == true &&
+                            view.carrier.ownerParameterIndices == listOf(0) &&
+                            DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
+                            view.evidence
+                } == true &&
+                value.selectedViewLineage.isEmpty()
+
+    fun requireExactStorage(value: DotNetGenericOwnerPhysicalValueShadowSnapshot) {
+        check(value.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                value.unsupportedReason == null &&
+                value.initializerProducedCarrier.kind ==
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                value.storageCarrier == value.initializerProducedCarrier &&
+                hasExactSelfView(value) &&
+                value.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                value.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
+            "The shadow must predict exact storage only from an immutable exact producer: $value"
+        }
     }
 
-    check(exactAlias.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
-            exactAlias.unsupportedReason == null &&
-            exactAlias.initializerProducedCarrier.kind ==
-            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
-            exactAlias.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
-            exactAlias.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
-            exactAlias.guaranteedViews.singleOrNull()?.let { view ->
-                view.carrier == exact.initializerProducedCarrier &&
-                        DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
-                        view.evidence
-            } == true &&
-            exactAlias.selectedViewLineage.isEmpty() &&
-            exactAlias.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
-            exactAlias.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
-        "Reading object storage must change the produced carrier without losing exact provenance: $exactAlias"
+    fun requireExactToObject(value: DotNetGenericOwnerPhysicalValueShadowSnapshot) {
+        check(value.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                value.unsupportedReason == null &&
+                value.initializerProducedCarrier.kind ==
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                value.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                hasExactSelfView(value) &&
+                value.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                value.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
+            "The shadow must keep exact production separate from object placement: $value"
+        }
     }
 
-    check(broad.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
-            broad.unsupportedReason == null &&
-            broad.initializerProducedCarrier.kind ==
-            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
-            broad.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
-            broad.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
-            broad.guaranteedViews.isEmpty() &&
-            broad.selectedViewLineage.isEmpty() &&
-            broad.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
-            broad.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL) {
-        "A genuinely broad semantic input must not inherit exact receiver provenance: $broad"
+    fun requireExactObjectRead(value: DotNetGenericOwnerPhysicalValueShadowSnapshot) {
+        check(value.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                value.unsupportedReason == null &&
+                value.initializerProducedCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                value.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                hasExactSelfView(value) &&
+                value.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                value.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL) {
+            "The shadow must read object storage as object while retaining independent guarantees: $value"
+        }
     }
 
-    listOf("mutableMixedAsObject", "uncheckedCastAsObject").forEach { variableName ->
-        val unsupported = observed.single { snapshot -> snapshot.variableName == variableName }
-        check(unsupported.status == DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
-                !unsupported.unsupportedReason.isNullOrEmpty() &&
-                unsupported.initializerProducedCarrier.kind ==
-                DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
-                unsupported.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
-                unsupported.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
-                unsupported.guaranteedViews.isEmpty() &&
-                unsupported.selectedViewLineage.isEmpty()) {
-            "A mutable or unchecked-cast local must fail closed in the first shadow slice: $unsupported"
+    fun requireBroadObject(value: DotNetGenericOwnerPhysicalValueShadowSnapshot) {
+        val retainedNullState = value.initializerNullState
+        check(value.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                value.unsupportedReason == null &&
+                value.initializerProducedCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                value.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                value.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+                value.guaranteedViews.isEmpty() &&
+                value.selectedViewLineage.isEmpty() &&
+                retainedNullState in setOf(
+                    DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL,
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL,
+                ) && value.contentsNullState == retainedNullState) {
+            "A genuinely broad input must remain object/unknown: $value"
+        }
+    }
+
+    fun requireFailClosed(value: DotNetGenericOwnerPhysicalValueShadowSnapshot) {
+        val unsupported = value.status == DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
+                !value.unsupportedReason.isNullOrEmpty() &&
+                value.initializerProducedCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
+                value.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
+                value.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+                value.guaranteedViews.isEmpty() &&
+                value.selectedViewLineage.isEmpty() &&
+                value.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.UNKNOWN &&
+                value.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.UNKNOWN
+        val analyzedObjectUnknown =
+            value.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    value.unsupportedReason == null &&
+                    value.initializerProducedCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                    value.storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                    value.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+                    value.guaranteedViews.isEmpty() &&
+                    value.selectedViewLineage.isEmpty()
+        check(unsupported || analyzedObjectUnknown) {
+            "A hostile broad, mutable, projected, cast, or joined value must fail closed: $value"
+        }
+    }
+
+    DotNetGenericOwnerPhysicalValueShadowPhase.entries.forEach { phase ->
+        requireExactStorage(snapshot(phase, "sourceDeclaredExactWidening"))
+        requireExactStorage(snapshot(phase, "exactWideningAlias"))
+        requireExactToObject(snapshot(phase, "exactWideningAsObject"))
+        requireExactObjectRead(snapshot(phase, "exactObjectAliasRead"))
+        requireExactToObject(snapshot(phase, "exactReceiverAsObject"))
+        requireExactObjectRead(snapshot(phase, "exactAliasReadAgain"))
+        requireBroadObject(snapshot(phase, "genuinelyBroadAsObject"))
+
+        listOf(
+            "broadSameLogicalGeneric",
+            "directStarProjection",
+            "nestedStarProjection",
+            "nonInvariantProjection",
+            "mutableMixedAsObject",
+            "explicitlyCastWidening",
+            "unsupportedControlFlowJoin",
+            "unsupportedLexicalLastJoin",
+        ).forEach { variableName ->
+            requireFailClosed(snapshot(phase, variableName))
         }
     }
 }

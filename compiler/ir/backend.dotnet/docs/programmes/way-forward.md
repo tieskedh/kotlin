@@ -1656,6 +1656,17 @@ closes the first vertical slice of stages 2 and 3, not their general call,
 field, constructor, join, or separate-compilation grammar. See
 [`../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md).
 
+The same engine now also observes the authoritative moved body before semantic
+remapping and predicts private generic-local storage without consulting an IR
+origin. The destination contributes only Deferred storage; a direct reference
+carrier plus an independent matching guarantee selects exact storage. Source
+and compiler aliases therefore obey one transfer rule, while broad generic
+flow, mutable definitions, nested projections, casts, and opaque control flow
+cannot manufacture exactness. Both pre-remap and post-routing epochs pass the
+same hostile matrix. This is still a read-only prediction, not actual local-
+slot selection; the existing emitter recognizer remains unchanged. See
+[`../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical

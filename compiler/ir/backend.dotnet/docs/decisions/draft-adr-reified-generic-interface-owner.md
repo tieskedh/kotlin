@@ -1104,6 +1104,24 @@ enter the routing fixpoint, architecture plan, emitter, library ABI, or state
 selection. Existing recognizers remain authoritative. See
 [`../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](../archive/generic-owner-physical-value-shadow-first-slice-2026-08-26.md).
 
+The next slice observes the same engine immediately after `moveBodyTo`, before
+semantic remapping, as well as after final routing. A generic local contributes
+only Deferred storage; it receives the initializer's exact carrier only when
+that value is already a direct null-reference carrier with an independently
+guaranteed matching construction. Source and compiler-owned immutable aliases
+therefore follow one origin-independent rule. Object storage remains fixed and
+cannot be narrowed by a retained guarantee.
+
+Actual definitions, not `isVar` alone, guard mutable flow. Stars and non-
+invariant projections are rejected recursively. Implicit wrappers preserve
+identity only for proven reference carriers and known object/current-owner
+reference targets. Container evaluation rejects opaque/control-flow prefixes
+instead of trusting a lexical last expression. Both epochs exercise broad
+Deferred flow, different constructions, projections, cast laundering, and an
+inline early return. These are shadow storage predictions only: the old emitter
+recognizer remains unchanged and no snapshot controls a local slot. See
+[`../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](../archive/generic-owner-physical-value-pre-remap-alias-2026-08-26.md).
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,
