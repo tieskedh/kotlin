@@ -60,9 +60,15 @@ internal fun compareDotNetGenericOwnerPhysicalMethodDefEmissionFamily(
     }.toSet()
     val scopeConflict = physicalScopes != setOf(scope)
 
-    val endpoints = endpointInputs.map { input ->
-        val expected = buildExpectedHeader(authority, declarations, allocator, input)
-            ?: error("BOUND local callable authority lost one of its own MethodDef descriptions")
+    // Register every expected identity before any actual alias is bound. Final-emission evidence
+    // may match an existing BOUND identity, but it must never create or merge that authority.
+    val expectedEndpoints = endpointInputs.map { input ->
+        input to (buildExpectedHeader(authority, declarations, allocator, input)
+            ?: error("BOUND local callable authority lost one of its own MethodDef descriptions"))
+    }
+    val endpoints = expectedEndpoints.map { expectedEndpoint ->
+        val input = expectedEndpoint.first
+        val expected = expectedEndpoint.second
         val candidates = if (scopeConflict) {
             listOf(DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Conflict(
                 "the logical family and its physical MethodDef owners belong to different emission scopes",
@@ -72,6 +78,7 @@ internal fun compareDotNetGenericOwnerPhysicalMethodDefEmissionFamily(
                 authority,
                 allocator,
                 input,
+                endpointInputs.map(EndpointInput::identity),
                 observations,
                 otherScopeObservations,
             )
@@ -134,15 +141,66 @@ private class LocalMethodIdentityKey(
 }
 
 /** Invocation-local keys strip IR from the pure comparator without turning names into identity. */
-private class EmissionIdentityAllocator {
-    private val types = linkedMapOf<LocalTypeIdentityKey, DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey>()
-    private val methods = linkedMapOf<LocalMethodIdentityKey, DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey>()
+internal class EmissionIdentityAllocator {
+    private data class ExpectedType(
+        val key: DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey,
+        val genericArity: Int,
+        val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+    )
 
-    fun type(identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local):
-            DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey =
-        types.getOrPut(LocalTypeIdentityKey(identity)) {
-            DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(types.size)
+    sealed interface ActualType {
+        data class Bound(val key: DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey) : ActualType
+        data class Conflict(val reason: String) : ActualType
+    }
+
+    private val expectedTypes = linkedMapOf<LocalTypeIdentityKey, ExpectedType>()
+    private val actualOnlyTypes = linkedMapOf<
+            DotNetGenericOwnerObservedPhysicalTypeDefKey,
+            DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey,
+            >()
+    private val methods = linkedMapOf<LocalMethodIdentityKey, DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey>()
+    private var nextTypeKey = 0
+
+    fun expectedType(
+        identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        description: DotNetGenericOwnerPhysicalTypeDefReference,
+    ): DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey {
+        val identityKey = LocalTypeIdentityKey(identity)
+        val existing = expectedTypes[identityKey]
+        if (existing != null) {
+            check(existing.genericArity == description.genericArity &&
+                    existing.category == description.category) {
+                "BOUND authority assigned contradictory facts to one expected TypeDef identity"
+            }
+            return existing.key
         }
+        val key = DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(nextTypeKey++)
+        expectedTypes[identityKey] = ExpectedType(key, description.genericArity, description.category)
+        return key
+    }
+
+    fun actualType(typeDef: DotNetGenericOwnerObservedLocalTypeDef): ActualType {
+        val matches = typeDef.aliases.mapNotNull { alias ->
+            expectedTypes[LocalTypeIdentityKey(alias)]
+        }.distinctBy(ExpectedType::key)
+        if (matches.size > 1) {
+            return ActualType.Conflict(
+                "one emitted physical TypeDef aliases multiple distinct BOUND TypeDef identities",
+            )
+        }
+        val expected = matches.singleOrNull()
+        if (expected != null) {
+            if (expected.genericArity != typeDef.genericArity || expected.category != typeDef.category) {
+                return ActualType.Conflict(
+                    "an emitted TypeDef alias contradicts the BOUND arity or category",
+                )
+            }
+            return ActualType.Bound(expected.key)
+        }
+        return ActualType.Bound(actualOnlyTypes.getOrPut(typeDef.physicalKey) {
+            DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(nextTypeKey++)
+        })
+    }
 
     fun method(identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local):
             DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey =
@@ -160,7 +218,7 @@ private fun buildExpectedHeader(
     val owner = input.reference.declaringType as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
         ?: return null
     val ownerDescription = declarations.typeDescriptionOrNull(owner) ?: return null
-    val ownerKey = allocator.type(owner)
+    val ownerKey = allocator.expectedType(owner, ownerDescription)
     val ownerSnapshot = owner.toSnapshot(authority, ownerDescription)
     val receiverShape = if (input.reference.signature.isInstance) {
         DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction(
@@ -213,6 +271,9 @@ private fun buildExpectedHeader(
             result = result.first,
         ),
         DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot(
+            methodIdentity = DotNetGenericOwnerPhysicalMethodDefEmissionIdentitySnapshot(
+                input.identity.role,
+            ),
             owner = ownerSnapshot,
             physicalMethodNameForDiagnostics = null,
             visibility = visibility,
@@ -290,7 +351,7 @@ private fun expectedCarrier(
             val identity = binder.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
                 ?: return null
             val description = declarations.typeDescriptionOrNull(identity) ?: return null
-            val key = allocator.type(identity)
+            val key = allocator.expectedType(identity, description)
             DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter(key, carrier.index) to
                     DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
                         DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OWNER_PARAMETER,
@@ -325,7 +386,7 @@ private fun expectedCarrier(
                 ?: return null
         }
         DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction(
-            allocator.type(identity),
+            allocator.expectedType(identity, description),
             arguments.map { pair -> pair.first },
         ) to DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
             DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.LOCAL_CONSTRUCTION,
@@ -348,16 +409,37 @@ private fun correlateActualHeaders(
     authority: DotNetLocalGenericOwnerPhysicalAuthority,
     allocator: EmissionIdentityAllocator,
     input: EndpointInput,
+    familyIdentities: List<DotNetGenericOwnerPhysicalMethodDefIdentity.Local>,
     observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
     otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
 ): List<DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence> {
     val expectedOwner = input.reference.declaringType as DotNetGenericOwnerPhysicalTypeDefIdentity.Local
     val expectedOwnerArity = authority.inputOrNull(expectedOwner)?.genericArity
-    val sameFunction = observations.filter { observation ->
-        observation.physicalFunction === input.identity.function
-    }
     val candidates = mutableListOf<DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence>()
-    sameFunction.forEach { observation ->
+    observations.forEach { observation ->
+        when (classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+            input.identity,
+            familyIdentities,
+            observation.physicalFunction,
+            observation.physicalMethodIdentity,
+        )) {
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.IRRELEVANT,
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.OTHER_FAMILY_ENDPOINT,
+            -> return@forEach
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNAVAILABLE -> {
+                candidates += DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Unavailable(
+                    "the selected emitted MethodDef has no bound generic-owner physical identity",
+                )
+                return@forEach
+            }
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNEXPECTED -> {
+                candidates += DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Conflict(
+                    "the selected logical MethodDef function was emitted with an unexpected physical role",
+                )
+                return@forEach
+            }
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.MATCHING_ENDPOINT -> Unit
+        }
         when (val owner = observation.physicalMethodOwner) {
             is DotNetGenericOwnerObservedMethodDefOwner.Local -> {
                 when (classifyDotNetGenericOwnerPhysicalMethodDefEmissionOwner(
@@ -390,22 +472,12 @@ private fun correlateActualHeaders(
         }
     }
     if (otherScopeObservations.any { observation ->
-            observation.physicalFunction === input.identity.function &&
-                    when (val owner = observation.physicalMethodOwner) {
-                        is DotNetGenericOwnerObservedMethodDefOwner.Local -> when (
-                            classifyDotNetGenericOwnerPhysicalMethodDefEmissionOwner(
-                                input.entryKind,
-                                expectedOwner,
-                                expectedOwnerArity,
-                                owner.typeDef,
-                            )
-                        ) {
-                            DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation
-                                .LEGITIMATE_EXACT_SIBLING -> false
-                            else -> true
-                        }
-                        is DotNetGenericOwnerObservedMethodDefOwner.Unbindable -> true
-                    }
+            isDotNetGenericOwnerPhysicalMethodDefEmissionIdentityEvidenceForEndpoint(
+                input.identity,
+                familyIdentities,
+                observation.physicalFunction,
+                observation.physicalMethodIdentity,
+            )
         }
     ) {
         candidates += DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Conflict(
@@ -414,6 +486,52 @@ private fun correlateActualHeaders(
     }
     return candidates
 }
+
+internal enum class DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation {
+    MATCHING_ENDPOINT,
+    OTHER_FAMILY_ENDPOINT,
+    UNAVAILABLE,
+    UNEXPECTED,
+    IRRELEVANT,
+}
+
+/** Role-aware identity correlation; diagnostic names and IR origins never participate. */
+internal fun classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+    expected: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    familyIdentities: List<DotNetGenericOwnerPhysicalMethodDefIdentity.Local>,
+    physicalFunction: IrSimpleFunctionSymbol,
+    actual: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+): DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation = when {
+    actual == null && physicalFunction === expected.function ->
+        DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNAVAILABLE
+    actual == null -> DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.IRRELEVANT
+    actual.sameLocalMethodIdentityAs(expected) ->
+        DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.MATCHING_ENDPOINT
+    // The per-emission identity is authoritative. A future lowering may deliberately emit two
+    // selected family endpoints from the same IR function; the raw function symbol cannot turn
+    // that other physical endpoint into a conflict.
+    familyIdentities.any(actual::sameLocalMethodIdentityAs) ->
+        DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.OTHER_FAMILY_ENDPOINT
+    physicalFunction === expected.function ->
+        DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNEXPECTED
+    else -> DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.IRRELEVANT
+}
+
+/** Any selected identity evidence in another emitter transaction is scope contamination. */
+internal fun isDotNetGenericOwnerPhysicalMethodDefEmissionIdentityEvidenceForEndpoint(
+    expected: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    familyIdentities: List<DotNetGenericOwnerPhysicalMethodDefIdentity.Local>,
+    physicalFunction: IrSimpleFunctionSymbol,
+    actual: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+): Boolean = classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+    expected,
+    familyIdentities,
+    physicalFunction,
+    actual,
+) !in setOf(
+    DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.IRRELEVANT,
+    DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.OTHER_FAMILY_ENDPOINT,
+)
 
 internal enum class DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation {
     MATCHING_ENDPOINT,
@@ -432,9 +550,10 @@ internal fun classifyDotNetGenericOwnerPhysicalMethodDefEmissionOwner(
     expectedOwnerArity: Int?,
     actualOwner: DotNetGenericOwnerObservedLocalTypeDef,
 ): DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation = when {
-    actualOwner.identity.sameIdentityAs(expectedOwner) ->
+    actualOwner.aliases.any(expectedOwner::sameLocalTypeIdentityAs) ->
         DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation.MATCHING_ENDPOINT
     entryKind == DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.NATURAL_INTERFACE &&
+            actualOwner.aliases.size == 1 &&
             actualOwner.identity.owner === expectedOwner.owner &&
             actualOwner.identity.view == DotNetGenericInterfaceView.EXACT &&
             actualOwner.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
@@ -450,6 +569,15 @@ private fun actualHeaderEvidence(
     observation: DotNetGenericOwnerPhysicalMethodDefHeaderObservation,
     owner: DotNetGenericOwnerObservedLocalTypeDef,
 ): DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence {
+    val physicalMethodIdentity = observation.physicalMethodIdentity
+        ?: return DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Unavailable(
+            "the emitted MethodDef has no bound generic-owner physical identity",
+        )
+    if (!physicalMethodIdentity.sameLocalMethodIdentityAs(input.identity)) {
+        return DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Conflict(
+            "the emitted MethodDef role does not match the selected BOUND identity",
+        )
+    }
     val receiver = observation.signature.receiverCarrier?.toActualCarrier(
         authority,
         allocator,
@@ -538,11 +666,16 @@ private fun actualHeaderEvidence(
         }
     }
     val ownerSnapshot = owner.toSnapshot(authority)
+    val ownerKey = when (val binding = allocator.actualType(owner)) {
+        is EmissionIdentityAllocator.ActualType.Bound -> binding.key
+        is EmissionIdentityAllocator.ActualType.Conflict ->
+            return DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Conflict(binding.reason)
+    }
     val visibility = observation.visibility.toEmissionVisibility()
     val dispatchCategory = observation.dispatch.toPhysicalDispatch()
     return DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Known(
         DotNetGenericOwnerPhysicalMethodDefEmissionHeaderShape(
-            owner = allocator.type(owner.identity),
+            owner = ownerKey,
             ownerGenericArity = owner.genericArity,
             ownerCategory = owner.category,
             visibility = visibility,
@@ -554,6 +687,9 @@ private fun actualHeaderEvidence(
             result = actualResult.first,
         ),
         DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot(
+            methodIdentity = DotNetGenericOwnerPhysicalMethodDefEmissionIdentitySnapshot(
+                physicalMethodIdentity.role,
+            ),
             owner = ownerSnapshot,
             physicalMethodNameForDiagnostics = observation.physicalMethodNameForDiagnostics,
             visibility = visibility,
@@ -601,23 +737,31 @@ private fun DotNetGenericOwnerObservedMethodCarrier.toActualCarrier(
             kind.toEmissionCarrierSnapshot(),
         ),
     )
-    is DotNetGenericOwnerObservedMethodCarrier.OwnerParameter -> ActualCarrierConversion(
-        known = ActualCarrier(
-            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter(
-                allocator.type(binder.identity),
-                index,
-            ),
-            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
-                DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OWNER_PARAMETER,
-                typeDef = binder.toSnapshot(authority),
-                parameterIndex = index,
-            ),
-        ),
-    )
+    is DotNetGenericOwnerObservedMethodCarrier.OwnerParameter ->
+        when (val binding = allocator.actualType(binder)) {
+            is EmissionIdentityAllocator.ActualType.Conflict ->
+                ActualCarrierConversion(conflictReason = binding.reason)
+            is EmissionIdentityAllocator.ActualType.Bound -> ActualCarrierConversion(
+                known = ActualCarrier(
+                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter(
+                        binding.key,
+                        index,
+                    ),
+                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
+                        DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OWNER_PARAMETER,
+                        typeDef = binder.toSnapshot(authority),
+                        parameterIndex = index,
+                    ),
+                ),
+            )
+        }
     is DotNetGenericOwnerObservedMethodCarrier.MethodParameter -> {
         val currentOwner = (currentMethod.function.owner.parent as? IrClass)?.symbol
-        if (function !== currentMethod.function || currentOwner == null ||
-            physicalOwner.identity.owner !== currentOwner
+        if (physicalMethodIdentity == null) {
+            ActualCarrierConversion(unavailableReason =
+                "an emitted method parameter has no bound physical MethodDef identity")
+        } else if (!physicalMethodIdentity.sameLocalMethodIdentityAs(currentMethod) ||
+            currentOwner == null || physicalOwner.aliases.none { alias -> alias.owner === currentOwner }
         ) {
             ActualCarrierConversion(conflictReason =
                 "an emitted method parameter is bound to a different physical MethodDef")
@@ -632,7 +776,7 @@ private fun DotNetGenericOwnerObservedMethodCarrier.toActualCarrier(
                         DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.METHOD_PARAMETER,
                         typeDef = physicalOwner.toSnapshot(authority),
                         parameterIndex = index,
-                        methodNameForDiagnostics = function.owner.name.asString(),
+                        methodNameForDiagnostics = physicalFunction.owner.name.asString(),
                     ),
                 ),
             )
@@ -647,19 +791,23 @@ private fun DotNetGenericOwnerObservedMethodCarrier.toActualCarrier(
         } ?: arguments.firstNotNullOfOrNull { conversion -> conversion.unavailableReason }?.let { reason ->
             ActualCarrierConversion(unavailableReason = reason)
         } ?: arguments.map { conversion -> checkNotNull(conversion.known) }.let { knownArguments ->
-            ActualCarrierConversion(
-                known = ActualCarrier(
-                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction(
-                        allocator.type(definition.identity),
-                        knownArguments.map { argument -> argument.shape },
+            when (val binding = allocator.actualType(definition)) {
+                is EmissionIdentityAllocator.ActualType.Conflict ->
+                    ActualCarrierConversion(conflictReason = binding.reason)
+                is EmissionIdentityAllocator.ActualType.Bound -> ActualCarrierConversion(
+                    known = ActualCarrier(
+                        DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction(
+                            binding.key,
+                            knownArguments.map { argument -> argument.shape },
+                        ),
+                        DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
+                            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.LOCAL_CONSTRUCTION,
+                            typeDef = definition.toSnapshot(authority),
+                            arguments = knownArguments.map { argument -> argument.snapshot },
+                        ),
                     ),
-                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
-                        DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.LOCAL_CONSTRUCTION,
-                        typeDef = definition.toSnapshot(authority),
-                        arguments = knownArguments.map { argument -> argument.snapshot },
-                    ),
-                ),
-            )
+                )
+            }
         }
     }
     is DotNetGenericOwnerObservedMethodCarrier.SzArray ->
@@ -716,6 +864,7 @@ private fun DotNetGenericOwnerObservedLocalTypeDef.toSnapshot(
         ownerName = authority.inputOrNull(identity)?.logicalOwnerName
             ?: identity.owner.owner.dotNetPhysicalValueStableName(),
         typeDefView = identity.view?.toEmissionView(),
+        physicalAliasViews = aliases.map { alias -> alias.view?.toEmissionView() },
         genericArity = genericArity,
         category = category,
     )
@@ -749,10 +898,6 @@ private fun DotNetGenericOwnerPhysicalTypeKind.toEmissionCarrierSnapshot():
     }
     return DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(snapshotKind)
 }
-
-private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.sameIdentityAs(
-    other: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
-): Boolean = owner === other.owner && view == other.view
 
 private fun DotNetGenericInterfaceView.toEmissionView():
         DotNetGenericOwnerPhysicalValueShadowTypeDefView =

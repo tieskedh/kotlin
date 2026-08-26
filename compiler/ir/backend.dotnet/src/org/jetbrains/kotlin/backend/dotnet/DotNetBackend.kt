@@ -20,6 +20,64 @@ import org.jetbrains.kotlin.load.dotnet.DotNetExactContractProjection
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.tryMeasurePhaseTime
 import java.io.File
+import java.util.IdentityHashMap
+
+/**
+ * Captures the lowering-selected logical MethodDef identity for each emitted IR function.
+ *
+ * This is deliberately independent from BOUND declaration authority and from names/origins.
+ * The returned map is only a default for concrete [DotNetIlFunctionInfo] emission instances;
+ * those instances remain capable of carrying different roles for the same IR function later.
+ */
+private fun buildGenericOwnerPhysicalMethodDefEmissionBindings(
+    capabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
+    defaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
+    semanticHooks: Map<IrSimpleFunction, IrSimpleFunction>,
+    capabilityDispatchers: Map<IrSimpleFunction, IrSimpleFunction>,
+): Map<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> {
+    val bindings = IdentityHashMap<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local>()
+
+    fun bind(
+        emittedFunction: IrSimpleFunction,
+        logicalFunction: IrSimpleFunction,
+        role: DotNetGenericOwnerMemberFamilyRole?,
+    ) {
+        val identity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(logicalFunction.symbol, role)
+        val previous = bindings.put(emittedFunction, identity)
+        check(previous == null || previous.sameLocalMethodIdentityAs(identity)) {
+            "one emitted generic-owner MethodDef function received contradictory physical identities"
+        }
+    }
+
+    fun bindTypedSource(source: IrSimpleFunction) =
+        bind(source, source, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+
+    capabilitySlots.forEach { entry ->
+        val source = entry.key
+        val slot = entry.value
+        bindTypedSource(source)
+        bind(slot, slot, role = null)
+    }
+    defaultCapabilitySlots.forEach { entry ->
+        val source = entry.key
+        val slot = entry.value
+        bindTypedSource(source)
+        bind(slot, slot, role = null)
+    }
+    semanticHooks.forEach { entry ->
+        val source = entry.key
+        val hook = entry.value
+        bindTypedSource(source)
+        bind(hook, source, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+    }
+    capabilityDispatchers.forEach { entry ->
+        val source = entry.key
+        val dispatcher = entry.value
+        bindTypedSource(source)
+        bind(dispatcher, source, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+    }
+    return bindings
+}
 
 object DotNetBackend {
     fun compile(
@@ -305,6 +363,17 @@ object DotNetBackend {
         } else {
             emptyList()
         }
+        val genericOwnerPhysicalMethodDefEmissionBindings =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                buildGenericOwnerPhysicalMethodDefEmissionBindings(
+                    context.genericOwnerCapabilitySlots,
+                    context.genericOwnerDefaultCapabilitySlots,
+                    context.genericOwnerSemanticHooks,
+                    context.genericOwnerCapabilityDispatchers,
+                )
+            } else {
+                emptyMap()
+            }
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -347,6 +416,8 @@ object DotNetBackend {
                         context.genericOwnerWrongShapePolicies,
                     genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                     genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
+                    genericOwnerPhysicalMethodDefEmissionBindings =
+                        genericOwnerPhysicalMethodDefEmissionBindings,
                     genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
                     genericOwnerFunctionInputEntryObjectParameters =
                         context.genericOwnerFunctionInputEntryObjectParameters,
@@ -493,6 +564,8 @@ object DotNetBackend {
                     context.genericOwnerWrongShapePolicies,
                 genericOwnerDefaultCapabilitySlots = context.genericOwnerDefaultCapabilitySlots,
                 genericOwnerSemanticHooks = context.genericOwnerSemanticHooks,
+                genericOwnerPhysicalMethodDefEmissionBindings =
+                    genericOwnerPhysicalMethodDefEmissionBindings,
                 genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
                 genericOwnerFunctionInputEntryObjectParameters =
                     context.genericOwnerFunctionInputEntryObjectParameters,

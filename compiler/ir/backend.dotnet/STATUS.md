@@ -1180,6 +1180,41 @@ verification, and work state.
   sealed epoch or recognizer removal. See
   [`docs/archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](docs/archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md).
 
+  Final-emission identity now distinguishes the physical MethodDef role of
+  each concrete emission instance. Outer null remains genuinely unbound;
+  explicit role-null denotes the semantic capability-interface slot; typed
+  entries, semantic hooks, and class dispatchers retain separate identities
+  even when they originate from one logical Kotlin member. The identity is
+  selected by lowering, carried through the exact header decision which emits
+  IL, and never reconstructed from names or IR origins. Another explicitly
+  selected family role remains its own endpoint even if a future lowering
+  reuses one IR function; a non-family identity on the expected raw function
+  conflicts. Legitimate generated sibling roles cannot satisfy another
+  endpoint. Production receives no bindings.
+
+  Final emitter `ClassInfo` identity independently records physical TypeDef
+  aliases. Canonical and declared natural views may share one physical
+  TypeDef; exact and semantic views may not. Different owners, contradictory
+  arity/category facts, illegal alias combinations, and one logical alias on
+  two physical definitions conflict. All expected BOUND identities are
+  registered before actual evidence: actual aliases may confirm exactly one
+  existing identity but cannot create or merge authority; unmatched actual
+  definitions receive opaque keys and therefore cannot false-match.
+
+  The four-lane product requires expected `[DECLARED]` versus actual
+  `[CANONICAL, DECLARED]` natural aliases with `TYPED_ENTRY`, and singleton
+  semantic/null aliases with an explicit role-null slot. Focused hostile tests
+  cover role separation, missing versus role-null identity, illegal alias
+  sets, expected/actual one-way binding, and duplicate physical claims. This
+  remains a partial final-emission overlay, not a sealed epoch. The final
+  aggregate exits zero; direct XML audit covers 195 suites/2,453 tests with no
+  failures, errors, or skips: five backend suites/81 tests, 187 FIR suites/
+  2,239 tests, and two integration suites/127 tests are current; the unchanged
+  `dotnet.ir` suite retains six green tests. Complete-set TypeDef/edge/
+  MethodDef/MethodImpl liveness and global cross-family claims are next; no
+  recognizer or production ABI changes here. See
+  [`docs/archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md`](docs/archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

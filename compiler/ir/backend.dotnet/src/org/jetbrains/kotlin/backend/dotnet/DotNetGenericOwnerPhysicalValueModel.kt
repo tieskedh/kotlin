@@ -84,6 +84,10 @@ internal sealed interface DotNetGenericOwnerPhysicalTypeDefIdentity {
     }
 }
 
+internal fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.sameLocalTypeIdentityAs(
+    other: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+): Boolean = owner === other.owner && view == other.view
+
 /** Epoch-specific description candidate for one TypeDef identity. It never enters value flow. */
 internal data class DotNetGenericOwnerPhysicalTypeDefReference(
     val identity: DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -144,6 +148,10 @@ internal sealed interface DotNetGenericOwnerPhysicalMethodDefIdentity {
         }
     }
 }
+
+internal fun DotNetGenericOwnerPhysicalMethodDefIdentity.Local.sameLocalMethodIdentityAs(
+    other: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+): Boolean = function === other.function && role == other.role
 
 private fun DotNetGenericOwnerPhysicalMethodDefIdentity.retainedGenericArityOrNull(): Int? = when (this) {
     is DotNetGenericOwnerPhysicalMethodDefIdentity.Local -> null

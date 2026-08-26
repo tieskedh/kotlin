@@ -144,6 +144,7 @@ internal data class DotNetIlRawMethodDefDispatch(
  */
 internal data class DotNetIlRawMethodDefHeaderObservation(
     val function: IrSimpleFunctionSymbol,
+    val genericOwnerPhysicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
     val physicalOwner: DotNetIlClassInfo,
     val physicalMethodNameForDiagnostics: String,
     val visibility: DotNetIlRawMethodDefVisibility,
@@ -164,7 +165,9 @@ internal data class DotNetIlRawMethodDefHeaderObservation(
 
 /** One independently observed local TypeDef after the final emitter owner map has been applied. */
 internal data class DotNetGenericOwnerObservedLocalTypeDef(
+    val physicalKey: DotNetGenericOwnerObservedPhysicalTypeDefKey,
     val identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    val aliases: List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local> = listOf(identity),
     val genericArity: Int,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
 ) {
@@ -172,6 +175,131 @@ internal data class DotNetGenericOwnerObservedLocalTypeDef(
         require(genericArity >= 0) {
             "an observed local TypeDef requires a non-negative physical arity"
         }
+        require(aliases.isNotEmpty() && aliases.any(identity::sameLocalTypeIdentityAs) &&
+                aliases.distinctBy { alias -> alias.view }.size == aliases.size &&
+                aliases.all { alias -> alias.owner === identity.owner }) {
+            "an observed local TypeDef requires unique same-owner aliases containing its primary identity"
+        }
+        val aliasViews = aliases.mapTo(linkedSetOf()) { alias -> alias.view }
+        require(aliasViews.size == 1 || aliasViews == setOf(
+            DotNetGenericInterfaceView.CANONICAL,
+            DotNetGenericInterfaceView.DECLARED,
+        )) {
+            "only canonical/declared logical views may alias one observed physical TypeDef"
+        }
+    }
+}
+
+internal data class DotNetGenericOwnerObservedLocalTypeDefCandidate(
+    val identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    val genericArity: Int,
+    val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+)
+
+internal sealed interface DotNetGenericOwnerObservedLocalTypeDefResolution {
+    data class Known(val typeDef: DotNetGenericOwnerObservedLocalTypeDef) :
+        DotNetGenericOwnerObservedLocalTypeDefResolution
+
+    data class Conflict(val reason: String) : DotNetGenericOwnerObservedLocalTypeDefResolution {
+        init {
+            require(reason.isNotEmpty()) { "an observed TypeDef conflict requires a reason" }
+        }
+    }
+}
+
+/**
+ * Resolves every logical emitter view attached to one actual [DotNetIlClassInfo]. Only the
+ * canonical/declared pair may denote the same physical TypeDef; exact and semantic identities
+ * remain independently observable.
+ */
+internal fun resolveDotNetGenericOwnerObservedLocalTypeDef(
+    physicalKey: DotNetGenericOwnerObservedPhysicalTypeDefKey,
+    candidates: List<DotNetGenericOwnerObservedLocalTypeDefCandidate>,
+): DotNetGenericOwnerObservedLocalTypeDefResolution {
+    if (candidates.isEmpty()) {
+        return DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict(
+            "an observed physical TypeDef has no logical emitter identity",
+        )
+    }
+    val arities = candidates.mapTo(linkedSetOf()) { candidate -> candidate.genericArity }
+    val categories = candidates.mapTo(linkedSetOf()) { candidate -> candidate.category }
+    val owners = mutableListOf<org.jetbrains.kotlin.ir.symbols.IrClassSymbol>()
+    candidates.forEach { candidate ->
+        if (owners.none { owner -> owner === candidate.identity.owner }) {
+            owners += candidate.identity.owner
+        }
+    }
+    if (arities.size != 1 || categories.size != 1 || owners.size != 1) {
+        return DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict(
+            "one emitted physical TypeDef received contradictory owner, arity, or category facts",
+        )
+    }
+    val aliases = candidates
+        .map(DotNetGenericOwnerObservedLocalTypeDefCandidate::identity)
+        .distinctBy { identity -> identity.view }
+        .sortedBy { identity ->
+            when (identity.view) {
+                null -> 0
+                DotNetGenericInterfaceView.CANONICAL -> 1
+                DotNetGenericInterfaceView.DECLARED -> 2
+                DotNetGenericInterfaceView.EXACT -> 3
+            }
+        }
+    val aliasViews = aliases.mapTo(linkedSetOf()) { identity -> identity.view }
+    if (aliasViews.size != 1 && aliasViews != setOf(
+            DotNetGenericInterfaceView.CANONICAL,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+    ) {
+        return DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict(
+            "only canonical and declared logical views may share one emitted physical TypeDef",
+        )
+    }
+    val identity = aliases.singleOrNull { alias ->
+        alias.view == DotNetGenericInterfaceView.DECLARED
+    } ?: aliases.single()
+    return DotNetGenericOwnerObservedLocalTypeDefResolution.Known(
+        DotNetGenericOwnerObservedLocalTypeDef(
+            physicalKey = physicalKey,
+            identity = identity,
+            aliases = aliases,
+            genericArity = arities.single(),
+            category = categories.single(),
+        ),
+    )
+}
+
+/** Finds one logical alias claimed by more than one independently observed physical TypeDef. */
+internal fun conflictingDotNetGenericOwnerObservedPhysicalTypeDefKeys(
+    definitions: List<DotNetGenericOwnerObservedLocalTypeDef>,
+): Set<DotNetGenericOwnerObservedPhysicalTypeDefKey> {
+    val aliases = mutableListOf<Pair<
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            DotNetGenericOwnerObservedPhysicalTypeDefKey,
+            >>()
+    val conflicts = linkedSetOf<DotNetGenericOwnerObservedPhysicalTypeDefKey>()
+    definitions.forEach { definition ->
+        definition.aliases.forEach { alias ->
+            aliases.firstOrNull { previous ->
+                previous.first.sameLocalTypeIdentityAs(alias)
+            }?.let { previous ->
+                if (previous.second != definition.physicalKey) {
+                    conflicts += previous.second
+                    conflicts += definition.physicalKey
+                }
+            } ?: run {
+                aliases += alias to definition.physicalKey
+            }
+        }
+    }
+    return conflicts
+}
+
+/** Final-emitter identity of one independently observed physical TypeDef. */
+@JvmInline
+internal value class DotNetGenericOwnerObservedPhysicalTypeDefKey(val value: Int) {
+    init {
+        require(value >= 0) { "an observed physical TypeDef key must be non-negative" }
     }
 }
 
@@ -224,7 +352,8 @@ internal sealed interface DotNetGenericOwnerObservedMethodCarrier {
 
     data class MethodParameter(
         val physicalOwner: DotNetGenericOwnerObservedLocalTypeDef,
-        val function: IrSimpleFunctionSymbol,
+        val physicalFunction: IrSimpleFunctionSymbol,
+        val physicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
         val index: Int,
     ) : DotNetGenericOwnerObservedMethodCarrier {
         init {
@@ -300,6 +429,7 @@ internal data class DotNetGenericOwnerObservedMethodSignature(
  */
 internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
     val physicalFunction: IrSimpleFunctionSymbol,
+    val physicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
     val physicalMethodOwner: DotNetGenericOwnerObservedMethodDefOwner,
     val physicalMethodNameForDiagnostics: String,
     val visibility: DotNetIlRawMethodDefVisibility,
@@ -314,6 +444,7 @@ internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
  */
 private data class DotNetIlSimpleMethodHeaderDecision(
     val function: IrSimpleFunction,
+    val genericOwnerPhysicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
     val physicalOwner: DotNetIlClassInfo,
     val physicalMethodName: String,
     val visibility: DotNetIlRawMethodDefVisibility,
@@ -324,6 +455,7 @@ private data class DotNetIlSimpleMethodHeaderDecision(
 ) {
     fun observation(): DotNetIlRawMethodDefHeaderObservation = DotNetIlRawMethodDefHeaderObservation(
         function = function.symbol,
+        genericOwnerPhysicalMethodIdentity = genericOwnerPhysicalMethodIdentity,
         physicalOwner = physicalOwner,
         physicalMethodNameForDiagnostics = physicalMethodName,
         visibility = visibility,
@@ -483,6 +615,7 @@ internal class DotNetIlMethodCodegen(
             if (simpleFunction.origin == DOTNET_STATIC_INITIALIZER) {
                 DotNetIlSimpleMethodHeaderDecision(
                     function = simpleFunction,
+                    genericOwnerPhysicalMethodIdentity = functionInfo.genericOwnerPhysicalMethodIdentity,
                     physicalOwner = functionInfo.owner,
                     physicalMethodName = ".cctor",
                     visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
@@ -503,6 +636,7 @@ internal class DotNetIlMethodCodegen(
                     .orEmpty()
                 DotNetIlSimpleMethodHeaderDecision(
                     function = simpleFunction,
+                    genericOwnerPhysicalMethodIdentity = functionInfo.genericOwnerPhysicalMethodIdentity,
                     physicalOwner = functionInfo.owner,
                     physicalMethodName = functionInfo.physicalMethodName
                         ?: simpleFunction.dotNetIlMethodName(),

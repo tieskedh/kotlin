@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-methoddef-role-alias-2026-08-26.md`](generic-owner-physical-methoddef-role-alias-2026-08-26.md)
+  records per-emission MethodDef roles, independently observed physical
+  TypeDef aliases, expected-first one-way identity binding, hostile role/alias
+  evidence, and the remaining complete-set sealed-emission boundary.
 - [`generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](generic-owner-physical-methoddef-emission-comparison-2026-08-26.md)
   records transactional final-fixpoint MethodDef-header capture, the atomic
   BOUND-to-emission comparison for both producer endpoints, hostile owner and

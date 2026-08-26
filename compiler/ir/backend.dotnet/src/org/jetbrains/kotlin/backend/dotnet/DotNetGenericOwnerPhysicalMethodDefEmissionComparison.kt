@@ -55,15 +55,29 @@ enum class DotNetGenericOwnerPhysicalMethodDefEmissionResultLayout {
 data class DotNetGenericOwnerPhysicalMethodDefEmissionTypeDefSnapshot(
     val ownerName: String,
     val typeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView?,
+    /** Every logical view independently observed on this one physical TypeDef. */
+    val physicalAliasViews: List<DotNetGenericOwnerPhysicalValueShadowTypeDefView?> = listOf(typeDefView),
     val genericArity: Int,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
 ) {
     init {
-        require(ownerName.isNotEmpty() && genericArity >= 0) {
+        require(ownerName.isNotEmpty() && genericArity >= 0 &&
+                physicalAliasViews.isNotEmpty() && typeDefView in physicalAliasViews &&
+                physicalAliasViews.distinct().size == physicalAliasViews.size &&
+                (physicalAliasViews.size == 1 || physicalAliasViews.toSet() == setOf(
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.CANONICAL,
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED,
+                ))) {
             "a MethodDef-emission TypeDef snapshot requires a name and non-negative arity"
         }
     }
 }
+
+/** Bound generic-owner identity of one expected or independently observed MethodDef. */
+data class DotNetGenericOwnerPhysicalMethodDefEmissionIdentitySnapshot(
+    /** Null is the explicit role-less capability slot, not missing identity. */
+    val role: DotNetGenericOwnerMemberFamilyRole?,
+)
 
 /** One physical signature carrier; names are diagnostics and never participate in comparison. */
 data class DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot(
@@ -162,6 +176,7 @@ data class DotNetGenericOwnerPhysicalMethodDefEmissionResultSnapshot(
 
 /** Covered MethodDef facts; the physical name and exact flag vector remain diagnostic only. */
 data class DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot(
+    val methodIdentity: DotNetGenericOwnerPhysicalMethodDefEmissionIdentitySnapshot,
     val owner: DotNetGenericOwnerPhysicalMethodDefEmissionTypeDefSnapshot,
     val physicalMethodNameForDiagnostics: String?,
     val visibility: DotNetGenericOwnerPhysicalMethodDefEmissionVisibility,
@@ -195,8 +210,12 @@ data class DotNetGenericOwnerPhysicalMethodDefEmissionEndpointComparisonSnapshot
         require(observationCount >= 0 && (diagnostic == null || diagnostic.isNotEmpty())) {
             "a MethodDef-emission endpoint comparison has invalid evidence"
         }
+        require(expected.methodIdentity.role == methodRole) {
+            "a MethodDef-emission endpoint must retain its selected BOUND role"
+        }
         require(status != DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH ||
-                observationCount == 1 && actual != null && diagnostic == null) {
+                observationCount == 1 && actual != null && diagnostic == null &&
+                actual.methodIdentity.role == methodRole) {
             "a matching MethodDef-emission endpoint requires one exact observation"
         }
         require(status != DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.UNAVAILABLE ||
@@ -361,6 +380,9 @@ internal fun compareDotNetGenericOwnerPhysicalMethodDefEmissionEndpoint(
     expectedSnapshot: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
     actualCandidates: List<DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence>,
 ): DotNetGenericOwnerPhysicalMethodDefEmissionEndpointComparisonSnapshot {
+    require(expectedSnapshot.methodIdentity.role == methodRole) {
+        "the expected MethodDef-emission snapshot must carry the selected BOUND role"
+    }
     if (actualCandidates.isEmpty()) {
         return DotNetGenericOwnerPhysicalMethodDefEmissionEndpointComparisonSnapshot(
             entryKind,
@@ -406,7 +428,8 @@ internal fun compareDotNetGenericOwnerPhysicalMethodDefEmissionEndpoint(
                 diagnostic = actual.reason,
             )
         is DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Known -> {
-            val matches = expectedShape == actual.shape
+            val matches = expectedShape == actual.shape &&
+                    expectedSnapshot.methodIdentity == actual.snapshot.methodIdentity
             DotNetGenericOwnerPhysicalMethodDefEmissionEndpointComparisonSnapshot(
                 entryKind,
                 methodRole,
