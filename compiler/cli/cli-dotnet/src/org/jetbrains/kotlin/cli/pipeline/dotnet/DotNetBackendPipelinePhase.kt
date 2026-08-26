@@ -46,6 +46,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             output.genericOwnerPhysicalOperationRouteShadows,
             output.genericOwnerPhysicalValuePlacementComparisons,
             output.genericOwnerPhysicalMethodDefEmissionComparisons,
+            output.genericOwnerCompleteEmissionComparisons,
             output.genericOwnerRehearsal,
         )
     }

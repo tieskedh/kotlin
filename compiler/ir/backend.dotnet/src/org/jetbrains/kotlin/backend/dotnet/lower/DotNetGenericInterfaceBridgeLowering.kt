@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectForeignOverrideDispatch
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceViewBridge
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassForwarder
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
@@ -466,6 +467,21 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                                 includeSelf = true,
                             )?.second,
                         )
+                        if (context.configuration.dotNetGenericOwnerRehearsal) {
+                            val selection =
+                                DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection(
+                                    logicalInterfaceMember = plan.slot.symbol,
+                                    implementationMember = plan.target.symbol,
+                                    interfaceCapabilityMember = capabilitySlot.symbol,
+                                    dispatcher = capabilityBridge.symbol,
+                                )
+                            check(context.localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections
+                                .none { existing -> existing.dispatcher === capabilityBridge.symbol }) {
+                                "Internal .NET backend error: one interface-capability dispatcher " +
+                                        "received multiple physical selections"
+                            }
+                            context.localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections += selection
+                        }
                         nonGenericImplementation?.foreignOverrideProbe?.let { probe ->
                             val directDispatch = DotNetGenericOwnerDirectForeignOverrideDispatch(
                                 typedEntry = nonGenericImplementation.typedImplementation,
