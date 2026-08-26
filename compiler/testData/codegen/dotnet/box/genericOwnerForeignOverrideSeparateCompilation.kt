@@ -263,6 +263,16 @@ public class RehearsalSeparateAbstractMethodGenericReader {
         value: Int,
     ): Any? = producer.produceAbstractGeneric(value)
 
+    public fun readString(
+        producer: RehearsalSeparateAbstractMethodGenericProducer<Any?>,
+        value: String,
+    ): Any? = producer.produceAbstractGeneric(value)
+
+    public fun <R> readOpen(
+        producer: RehearsalSeparateAbstractMethodGenericProducer<Any?>,
+        value: R,
+    ): Any? = producer.produceAbstractGeneric(value)
+
     public fun same(
         producer: RehearsalSeparateAbstractMethodGenericProducer<Any?>,
         expected: Any?,
@@ -515,6 +525,22 @@ public class RehearsalSeparateConsumerReader {
         consumer === expected
 }
 
+// Stable C# entry for a Kotlin-valid contravariant view which CLR value-type variance cannot
+// express at RehearsalSeparateConsumerReader.consume(Consumer<Int>, Int).  The ordinary reader
+// remains naturally typed; this broad natural entry lets Kotlin form the statically valid
+// Consumer<Any?> -> Consumer<Int> view without asking C# source to name compiler ABI.
+public fun rehearsalSeparateConsumeBroadConsumer(
+    consumer: RehearsalSeparateConsumer<Any?>,
+    value: Int,
+) {
+    RehearsalSeparateConsumerReader().consume(consumer, value)
+}
+
+public fun rehearsalSeparateBroadConsumerRetainsIdentity(
+    consumer: RehearsalSeparateConsumer<Any?>,
+    expected: Any?,
+): Boolean = RehearsalSeparateConsumerReader().same(consumer, expected)
+
 public class RehearsalSeparateDefaultConsumerReader {
     public fun consume(
         consumer: RehearsalSeparateDefaultConsumer<Int>,
@@ -528,6 +554,18 @@ public class RehearsalSeparateDefaultConsumerReader {
         expected: Any?,
     ): Boolean = consumer === expected
 }
+
+public fun rehearsalSeparateConsumeBroadDefaultConsumer(
+    consumer: RehearsalSeparateDefaultConsumer<Any?>,
+    value: Int,
+) {
+    RehearsalSeparateDefaultConsumerReader().consume(consumer, value)
+}
+
+public fun rehearsalSeparateBroadDefaultConsumerRetainsIdentity(
+    consumer: RehearsalSeparateDefaultConsumer<Any?>,
+    expected: Any?,
+): Boolean = RehearsalSeparateDefaultConsumerReader().same(consumer, expected)
 
 public interface RehearsalSeparateLocalIntersectionProducer<out T> :
     RehearsalSeparateProducer<T>,

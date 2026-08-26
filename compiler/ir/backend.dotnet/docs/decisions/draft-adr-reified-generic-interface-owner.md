@@ -266,20 +266,39 @@ same-object return, one actual foreign member invocation, and the later
 `String` result check on Framework 4.8 and .NET 10 with both FIR parsers.
 
 The paired input boundary keeps that ordinary exact API rather than changing
-its sole MethodDef to `object`. For each admitted public final function with
-one exact-looking classifier input, ABI 40 may publish one additional compiler
-MethodDef whose selected parameter is `object`. Calls use it only when producer
-provenance says that the argument came from the classifier path. Exact Kotlin
-and C# calls continue to use the natural MethodDef and direct source body. The
-alternate entry deep-copies the same compiler IR body, is named by the logical
-function digest, and is bound by an explicit producer record across separate
-compilation. `CHECK_NOT_NULL` is carrier-neutral, so it and an immutable local
-cannot turn the foreign object into a fabricated `Source<string>`.
+its sole MethodDef to `object`. ABI 40 introduced one additional compiler
+MethodDef whose selected parameter is `object`; physical-library ABI 60 also
+records the exact generic arity of both MethodDefs. Exact Kotlin and C# calls
+continue to use the natural MethodDef and direct source body. The alternate
+entry deep-copies the same compiler IR body, is named by the logical function
+digest, and is bound by explicit pre-lowering producer authority across
+separate compilation. `CHECK_NOT_NULL` is carrier-neutral, so it and an
+immutable local cannot turn the foreign object into a fabricated
+`Source<string>`.
+
+The bounded method-generic extension admits the direct form
+`fun <T> retain(value: Source<T>)`. Its source MethodDef keeps the truthful
+`Source<!!0>` parameter, while its paired MethodDef keeps the same generic
+arity and method-argument vector but carries that selected parameter as
+`object`. A call uses the natural entry only when positive physical evidence
+already proves the required construction: the corresponding parameter of the
+current source MethodDef, or the current bounded local non-generic direct
+flat-closed InterfaceImpl. Logical Kotlin ancestry, `Nothing` subtyping,
+reference or value-type variance, and a later exact-looking substitution never
+prove a CLR construction. Those paths, an open-nullable construction, and any
+foreign, transitive, generic-owner, or unknown carrier use the paired entry.
+An implicit representation-preserving cast may propagate existing evidence;
+it cannot manufacture it.
 
 This is a callable boundary, not permission to erase all parameters of that
-logical type. Open/overridable functions, multiple selected inputs, defaults,
-varargs, function generics, generic owners, custom property accessors, and
-unproven control flow remain outside the proof.
+logical type. The executable method-generic closure currently proves one
+non-reified unconstrained invariant method parameter. Open/overridable
+functions, multiple selected inputs, default parameters and their dispatchers,
+varargs, generic containing owners, custom property accessors, nullable or
+projected inputs, nested-open arguments, reified/intrinsic physical remainders,
+and unproven control flow remain outside the proof. A portable interface-
+default helper may receive its own recorded paired entry; that is distinct from
+a source function with default value parameters.
 
 The first open nested-construction proof adds a distinct rule for a generic
 callable whose type parameter occurs inside a variant interface and then an
@@ -1308,10 +1327,44 @@ integrated family currently admits only one unconstrained, non-reified
 parameter and no special GenericParam flags. See
 [`../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md).
 
-This remains declaration authority, not call-site authority. A closed call
-must still prove ordinary CLR MethodSpec construction and substitute its method
-arguments through the selected natural or semantic MethodDef before those
-routes can become executable evidence.
+### First executable MethodSpec binding
+
+Declaration authority and call-site authority remain separate. Physical-
+library ABI 60 records the exact MethodDef generic arity on every producer
+Function record, paired classifier-input entry, member capability/default/
+semantic-hook/probe locator, interface-default or default-argument helper, and
+value-class compiler helper. Portable physical-ABI comparison and external
+reconstruction require that recorded arity to agree with the selected emitted
+MethodDef. A missing, negative, stale, or disagreeing value fails closed.
+
+The call-site binder takes an already selected MethodDef plus independent
+TypeDef and MethodSpec argument vectors. It substitutes `!n` only from the
+constructed owner and `!!n` only from the exact MethodSpec vector. The vector's
+size must equal the selected MethodDef's recorded arity; it never establishes
+that arity, closes the declaration signature, or supplies a parameter for a
+sibling MethodDef. An open caller method parameter is a valid MethodSpec
+argument when its own binder remains in scope. An omitted, extra, out-of-range,
+or cross-binder substitution is unavailable or conflicting rather than an
+erased call. The executable family is still unconstrained: its sealed
+GenericParam rows remain declaration authority, and this checkpoint does not
+claim a general call-site constraint solver.
+
+For the bounded `<R>(R): T` producer family, exact calls therefore target the
+natural `I<!0>` slot and return its owner `!0`; widened calls target the non-generic
+semantic owner's `produce<R>(R): object` slot. Both endpoints receive the same
+logical `R` vector for value, reference, and open caller substitutions. A
+natural-only precompiled C# implementation continues to implement just that
+ordinary generic method; the existing unique-construction fallback invokes it
+with the same MethodSpec and object identity rather than requiring the compiler
+capability.
+
+The physical-operation query uses the same rule. It instantiates parameter and
+result carriers only after checking the selected MethodDef's arity and complete
+GenericParam rows. Method-parameter substitution composes structurally through
+arrays and both direct and split-nullable result layouts. This is not yet the
+custom two-parameter lookup or `Map.get` proof and does not authorize a
+Map-specific route. See
+[`../archive/generic-owner-methodspec-call-binding-2026-08-27.md`](../archive/generic-owner-methodspec-call-binding-2026-08-27.md).
 
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
@@ -1344,11 +1397,11 @@ fails and the bounded implementation remains authoritative.
 
 ## Remaining gates
 
-The local actual-only final-emission certificate, including its bounded
-MethodDef GenericParam rows, is complete. The next gate is executable
-MethodSpec/call-value routing for that same family. Only after it is green
-should independently sourced producer-recorded and retained-foreign adapters,
-then overlapping/global ownership, join the fail-closed model. BOUND cannot
+The local actual-only final-emission certificate, its bounded MethodDef
+GenericParam rows, and executable MethodSpec/call-value routing are complete
+for the selected family. The next gates are independently sourced producer-
+recorded and retained-foreign sealed adapters, including static/file-facade
+operation authority, followed by overlapping/global ownership. BOUND cannot
 fill a missing final fact in any adapter.
 
 Before another source-built Stdlib blocker is implemented, the rehearsal must

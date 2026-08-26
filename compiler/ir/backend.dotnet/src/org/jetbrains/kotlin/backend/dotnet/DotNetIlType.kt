@@ -433,7 +433,15 @@ internal data class DotNetIlMethodSignature(
     val hasThis: Boolean = false,
     /** Physical-only final `out bool` carrying whether the logical Kotlin result was null. */
     val hasSplitNullableResult: Boolean = false,
+    /** Exact GenericParam arity of the physical MethodDef which owns this signature. */
+    val methodGenericParameterCount: Int,
 ) {
+    init {
+        require(methodGenericParameterCount >= 0) {
+            "a physical CLR MethodDef cannot have negative generic arity"
+        }
+    }
+
     val physicalParameterTypes: List<DotNetIlValueType>
         get() = buildList {
             addAll(parameterTypes)
@@ -449,6 +457,51 @@ internal data class DotNetIlMethodSignature(
 
     val physicalParameterCount: Int
         get() = physicalParameterTypes.size
+}
+
+/**
+ * The verifier-visible value signature of one call to an already selected physical MethodDef.
+ *
+ * [methodSpecArguments] are rendered only as the MethodSpec `<...>` suffix. The MethodDef's
+ * declared signature remains open and authoritative in the member-reference operand; in
+ * particular, a declared `!!0` parameter stays `!!0` in text even though
+ * [verifierParameterTypes] contains the concrete call-site carrier.
+ */
+internal data class DotNetIlCallSiteSignatureBinding(
+    val methodSpecArguments: List<DotNetIlValueType>,
+    val verifierParameterTypes: List<DotNetIlValueType>,
+    val verifierReturnType: DotNetIlReturnType,
+)
+
+/**
+ * Binds the independent TypeDef (`!n`) and MethodDef (`!!n`) parameter vectors for one call.
+ * Exact arity checks keep a call from borrowing an identically numbered parameter from another
+ * physical binder. The returned carriers are for stack/local verification only; rendering keeps
+ * this declared signature unchanged.
+ */
+internal fun DotNetIlMethodSignature.bindCallSite(
+    declaredOwnerArity: Int,
+    ownerArguments: List<DotNetIlValueType>,
+    methodSpecArguments: List<DotNetIlValueType>,
+): DotNetIlCallSiteSignatureBinding {
+    check(declaredOwnerArity >= 0 && ownerArguments.size == declaredOwnerArity) {
+        "Internal .NET backend error: call-site owner arguments have arity " +
+                "${ownerArguments.size}, expected $declaredOwnerArity"
+    }
+    check(methodSpecArguments.size == methodGenericParameterCount) {
+        "Internal .NET backend error: call-site MethodSpec arguments have arity " +
+                "${methodSpecArguments.size}, expected $methodGenericParameterCount"
+    }
+    return DotNetIlCallSiteSignatureBinding(
+        methodSpecArguments = methodSpecArguments.toList(),
+        verifierParameterTypes = parameterTypes.map { parameterType ->
+            parameterType.substituteDotNetTypeParameters(ownerArguments, methodSpecArguments)
+        },
+        verifierReturnType = returnType.substituteDotNetTypeParameters(
+            ownerArguments,
+            methodSpecArguments,
+        ),
+    )
 }
 
 /**
@@ -497,6 +550,11 @@ internal class DotNetIlFunctionInfo(
         ownerToken: String = owner.ilTypeRef,
         methodInstantiation: List<DotNetIlValueType> = emptyList(),
     ): String {
+        check(methodInstantiation.size == signature.methodGenericParameterCount) {
+            "Internal .NET backend error: MethodSpec reference to '$methodName' on " +
+                    "$ownerToken has arity ${methodInstantiation.size}, expected " +
+                    signature.methodGenericParameterCount
+        }
         val instantiation =
             if (methodInstantiation.isEmpty()) ""
             else methodInstantiation.joinToString(", ", "<", ">") { it.nameInSignature }
@@ -511,9 +569,12 @@ internal class DotNetIlFunctionInfo(
     fun renderOverrideMethodReference(
         methodName: String,
         ownerToken: String = owner.ilTypeRef,
-        genericArity: Int = 0,
     ): String {
-        val arity = if (genericArity == 0) "" else "<[$genericArity]>"
+        val arity = if (signature.methodGenericParameterCount == 0) {
+            ""
+        } else {
+            "<[${signature.methodGenericParameterCount}]>"
+        }
         return renderMethodReferenceWithSuffix(methodName, ownerToken, arity)
     }
 
@@ -545,8 +606,10 @@ internal class DotNetIlFunctionInfo(
         virtual: Boolean = false,
         ownerToken: String = owner.ilTypeRef,
         methodInstantiation: List<DotNetIlValueType> = emptyList(),
-    ): String =
-        "${if (virtual) "callvirt" else "call"} ${renderMethodReference(methodName, ownerToken, methodInstantiation)}"
+    ): String {
+        return "${if (virtual) "callvirt" else "call"} " +
+                renderMethodReference(methodName, ownerToken, methodInstantiation)
+    }
 }
 
 /**

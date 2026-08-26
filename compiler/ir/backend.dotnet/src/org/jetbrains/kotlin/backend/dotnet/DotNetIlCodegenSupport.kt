@@ -98,6 +98,13 @@ internal fun IrVariable.isDotNetImmutableCompilerCarrierAlias(): Boolean {
     }
 }
 
+/** Mirrors JVM's InlineOnly test, including an accessor whose property owns the annotation. */
+internal fun IrFunction.isDotNetInlineOnly(): Boolean =
+    (isInline && hasAnnotation(StandardClassIds.Annotations.InlineOnly)) ||
+            (this is IrSimpleFunction &&
+                    correspondingPropertySymbol?.owner
+                        ?.hasAnnotation(StandardClassIds.Annotations.InlineOnly) == true)
+
 /** Whether this is the logical Common `CharSequence` classifier (nullable or non-null). */
 internal fun IrType.isDotNetCharSequenceType(): Boolean =
     classFqName == StandardNames.FqNames.charSequence.toSafe()
@@ -388,6 +395,7 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
         parameterTypes,
         hasThis,
         hasSplitNullableResult = hasSplitNullableResult,
+        methodGenericParameterCount = typeParameters.size,
     )
 }
 
@@ -701,7 +709,11 @@ internal fun IrSimpleFunction.isDotNetErasedObjectResult(): Boolean =
  * numbering, handled by [DotNetIlMethodContext]).
  */
 internal fun IrConstructor.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature =
-    DotNetIlMethodSignature(DotNetIlReturnType.Void, parameters.dotNetParameterTypes(typeMapper))
+    DotNetIlMethodSignature(
+        DotNetIlReturnType.Void,
+        parameters.dotNetParameterTypes(typeMapper),
+        methodGenericParameterCount = 0,
+    )
 
 private fun List<IrValueParameter>.dotNetParameterTypes(typeMapper: DotNetIlTypeMapper): List<DotNetIlValueType> =
     map { parameter ->
@@ -1270,6 +1282,7 @@ internal class DotNetIlTypeMapper private constructor(
                         type
                     }
                 },
+                methodGenericParameterCount = 1,
             )
         }
         return DotNetIlFunctionInfo(

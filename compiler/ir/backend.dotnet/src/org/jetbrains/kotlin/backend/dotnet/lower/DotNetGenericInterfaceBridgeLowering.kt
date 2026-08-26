@@ -1226,6 +1226,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         if (owner !== plan.implementingClass || owner.isInterface || owner.typeParameters.isNotEmpty() ||
             owner.modality != Modality.FINAL || target.body == null || target.isFakeOverride ||
             target.isSuspend || target.correspondingPropertySymbol != null ||
+            !target.dotNetDefaultParameterIndices.isNullOrEmpty() ||
             target.typeParameters.isNotEmpty() || plan.slot.typeParameters.isNotEmpty()
         ) {
             return null
@@ -1266,13 +1267,13 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         val targetParameter = mismatches.singleOrNull() ?: return null
         val parameterIndex = target.parameters.indexOf(targetParameter)
         if (parameterIndex < 0) return null
-        val logicalKey = context.preLoweringDeclarationKeys[target]
-            ?: "${plan.interfaceIdentity}:${plan.slotIdentity}:closed-semantic-input"
+        val authority =
+            context.preLoweringGenericOwnerFunctionInputAuthorities[target] ?: return null
         return materializeLocalGenericOwnerFunctionInputEntry(
             context,
             target,
             setOf(parameterIndex),
-            logicalKey,
+            authority,
         )
     }
 
