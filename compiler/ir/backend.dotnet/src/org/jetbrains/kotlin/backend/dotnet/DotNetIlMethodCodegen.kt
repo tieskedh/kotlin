@@ -138,27 +138,33 @@ internal data class DotNetIlRawMethodDefDispatch(
 /**
  * Raw rehearsal evidence for the exact physical header emitted for one IR MethodDef.
  *
- * [physicalMethodNameForDiagnostics] is intentionally diagnostic text only. The exact IR symbol,
- * emitter-owned [physicalOwner], and structured [signature]/flag facts are the non-textual
- * identity available to the later normalization boundary.
+ * [physicalMethodName] is the exact emitted metadata name. It is a physical fact rather than an
+ * identity: the exact IR symbol and emitter-owned [physicalOwner] remain the keys used by the
+ * later normalization boundary.
  */
 internal data class DotNetIlRawMethodDefHeaderObservation(
     val function: IrSimpleFunctionSymbol,
     val genericOwnerPhysicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
     val physicalOwner: DotNetIlClassInfo,
-    val physicalMethodNameForDiagnostics: String,
+    val physicalMethodName: String,
     val visibility: DotNetIlRawMethodDefVisibility,
     val dispatch: DotNetIlRawMethodDefDispatch,
+    val isHideBySig: Boolean,
+    val isSpecialName: Boolean,
+    val isRuntimeSpecialName: Boolean,
     val genericArity: Int,
     val signature: DotNetIlMethodSignature,
 ) {
     init {
-        require(physicalMethodNameForDiagnostics.isNotEmpty()) {
-            "an observed MethodDef requires a physical diagnostic name"
+        require(physicalMethodName.isNotEmpty()) {
+            "an observed MethodDef requires its exact physical name"
         }
         require(genericArity >= 0) { "an observed MethodDef requires a non-negative generic arity" }
         require(dispatch.isInstance == signature.hasThis) {
             "an observed MethodDef dispatch convention must agree with its physical signature"
+        }
+        require(!isRuntimeSpecialName || isSpecialName) {
+            "an observed runtime-special MethodDef must also carry specialname"
         }
     }
 }
@@ -193,10 +199,30 @@ internal data class DotNetIlRawTypeDefGenericParameterObservation(
 /** Exact structured TypeDef rows consumed by the final successful class render. */
 internal data class DotNetIlRawTypeDefEmissionObservation(
     val physicalType: DotNetIlClassInfo,
+    val physicalTypePath: List<String>,
+    val flags: DotNetIlRawTypeDefFlags,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
     val genericParameters: List<DotNetIlRawTypeDefGenericParameterObservation>,
     val directSupertypes: List<DotNetIlRawTypeDefEdgeObservation>,
-)
+) {
+    init {
+        require(physicalTypePath == physicalType.physicalPathComponents() &&
+                flags.visibility.isNested == (physicalTypePath.size > 1)) {
+            "an observed TypeDef path and nesting flags must match its emitted physical owner"
+        }
+        require(flags.isInterface ==
+                (category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE)) {
+            "an observed TypeDef category must match its exact emitted flags"
+        }
+        require(if (flags.isInterface) {
+            directSupertypes.none { edge -> edge.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS }
+        } else {
+            directSupertypes.count { edge -> edge.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS } == 1
+        }) {
+            "an observed TypeDef base edge must match its exact interface flag"
+        }
+    }
+}
 
 /** One explicit MethodImpl row at the exact append site which emitted its `.override`. */
 internal data class DotNetIlRawMethodImplObservation(
@@ -474,9 +500,26 @@ internal data class DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
     val physicalKey: DotNetGenericOwnerObservedPhysicalTypeDefKey?,
     /** All local aliases claimed before conflict resolution; used only to scope fail-closed evidence. */
     val claimedAliases: List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
+    val physicalTypePath: List<String>,
+    val flags: DotNetIlRawTypeDefFlags,
     val genericParameters: List<DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation>,
     val directSupertypes: List<DotNetGenericOwnerPhysicalTypeDefEdgeObservation>,
-)
+) {
+    init {
+        require(physicalTypePath.isNotEmpty() && physicalTypePath.all(String::isNotEmpty)) {
+            "a normalized TypeDef observation requires a non-empty physical metadata path"
+        }
+        require(flags.visibility.isNested == (physicalTypePath.size > 1)) {
+            "a normalized TypeDef path and exact nesting flags must agree"
+        }
+        (physicalType as? DotNetGenericOwnerObservedMethodDefOwner.Local)?.let { local ->
+            require(flags.isInterface ==
+                    (local.typeDef.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE)) {
+                "a normalized TypeDef category must match its exact emitted flags"
+            }
+        }
+    }
+}
 
 /** Final-fixpoint MethodImpl evidence with both MethodDefs and the constructed declaration owner. */
 internal data class DotNetGenericOwnerPhysicalMethodImplObservation(
@@ -500,18 +543,30 @@ internal data class DotNetGenericOwnerObservedMethodSignature(
 
 /**
  * Final-fixpoint rehearsal evidence published by the emitter after all owner/carrier normalization.
- * The diagnostic name is never used as physical identity.
+ * The exact name remains a physical fact and is never used as physical identity.
  */
 internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
     val physicalFunction: IrSimpleFunctionSymbol,
     val physicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
     val physicalMethodOwner: DotNetGenericOwnerObservedMethodDefOwner,
-    val physicalMethodNameForDiagnostics: String,
+    val physicalMethodName: String,
     val visibility: DotNetIlRawMethodDefVisibility,
     val dispatch: DotNetIlRawMethodDefDispatch,
+    val isHideBySig: Boolean,
+    val isSpecialName: Boolean,
+    val isRuntimeSpecialName: Boolean,
     val genericArity: Int,
     val signature: DotNetGenericOwnerObservedMethodSignature,
-)
+) {
+    init {
+        require(physicalMethodName.isNotEmpty()) {
+            "an observed MethodDef requires its exact physical name"
+        }
+        require(!isRuntimeSpecialName || isSpecialName) {
+            "an observed runtime-special MethodDef must also carry specialname"
+        }
+    }
+}
 
 /**
  * One already-computed simple-function header decision. Rendering and observation both consume
@@ -524,6 +579,9 @@ private data class DotNetIlSimpleMethodHeaderDecision(
     val physicalMethodName: String,
     val visibility: DotNetIlRawMethodDefVisibility,
     val dispatch: DotNetIlRawMethodDefDispatch,
+    val isHideBySig: Boolean,
+    val isSpecialName: Boolean,
+    val isRuntimeSpecialName: Boolean,
     val genericArity: Int,
     val renderedGenericParameters: String,
     val signature: DotNetIlMethodSignature,
@@ -532,12 +590,22 @@ private data class DotNetIlSimpleMethodHeaderDecision(
         function = function.symbol,
         genericOwnerPhysicalMethodIdentity = genericOwnerPhysicalMethodIdentity,
         physicalOwner = physicalOwner,
-        physicalMethodNameForDiagnostics = physicalMethodName,
+        physicalMethodName = physicalMethodName,
         visibility = visibility,
         dispatch = dispatch,
+        isHideBySig = isHideBySig,
+        isSpecialName = isSpecialName,
+        isRuntimeSpecialName = isRuntimeSpecialName,
         genericArity = genericArity,
         signature = signature,
     )
+
+    val renderedMetadataFlags: String
+        get() = buildString {
+            if (isHideBySig) append("hidebysig ")
+            if (isSpecialName) append("specialname ")
+            if (isRuntimeSpecialName) append("rtspecialname ")
+        }
 }
 
 /** A successfully rendered method, its complete IL text, and its read-only observations. */
@@ -709,6 +777,9 @@ internal class DotNetIlMethodCodegen(
                         isAbstract = false,
                         isFinal = false,
                     ),
+                    isHideBySig = true,
+                    isSpecialName = true,
+                    isRuntimeSpecialName = true,
                     genericArity = 0,
                     renderedGenericParameters = "",
                     signature = signature,
@@ -725,6 +796,9 @@ internal class DotNetIlMethodCodegen(
                         ?: simpleFunction.dotNetIlMethodName(),
                     visibility = simpleFunction.dotNetRawMethodDefVisibility(),
                     dispatch = simpleFunction.dotNetRawMethodDefDispatch(),
+                    isHideBySig = true,
+                    isSpecialName = simpleFunction.isPropertyAccessor,
+                    isRuntimeSpecialName = false,
                     genericArity = simpleFunction.typeParameters.size,
                     renderedGenericParameters = genericParameters,
                     signature = signature,
@@ -765,7 +839,7 @@ internal class DotNetIlMethodCodegen(
                 // it before the first active use of the non-beforefieldinit class.
                 val header = checkNotNull(simpleMethodHeader)
                 appendLine(
-                    "  .method ${header.visibility.ilKeyword} hidebysig specialname rtspecialname " +
+                    "  .method ${header.visibility.ilKeyword} ${header.renderedMetadataFlags}" +
                             "${header.dispatch.instanceKeyword} void .cctor() cil managed"
                 )
             } else {
@@ -777,9 +851,8 @@ internal class DotNetIlMethodCodegen(
                 // Members of the inheritance model additionally carry virtual flags — see
                 // [dotNetRawMethodDefDispatch].
                 val header = checkNotNull(simpleMethodHeader)
-                val specialname = if (function.isPropertyAccessor) "specialname " else ""
                 appendLine(
-                    "  .method ${header.visibility.ilKeyword} hidebysig $specialname" +
+                    "  .method ${header.visibility.ilKeyword} ${header.renderedMetadataFlags}" +
                             "${header.dispatch.virtualFlags}${header.dispatch.instanceKeyword} " +
                             "${signature.returnType.nameInSignature} " +
                             "${header.physicalMethodName.toIlIdentifier()}" +

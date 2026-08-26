@@ -808,15 +808,20 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     internal fun compareFinalCompleteEmissionFamilies(
         successfulEmissions: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
     ): List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot> =
+        inspectFinalCompleteEmissionFamilies(successfulEmissions).map { product -> product.comparison }
+
+    internal fun inspectFinalCompleteEmissionFamilies(
+        successfulEmissions: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
+    ): List<DotNetGenericOwnerCompleteEmissionFamilyProducts> =
         completeEmissionFamilies.map { family ->
-            compareDotNetGenericOwnerCompleteEmissionFamily(this, family, successfulEmissions)
+            inspectDotNetGenericOwnerCompleteEmissionFamily(this, family, successfulEmissions)
         }.sortedWith(compareBy(
-            { comparison: DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot ->
-                comparison.scope.ordinal
+            { product: DotNetGenericOwnerCompleteEmissionFamilyProducts ->
+                product.comparison.scope.ordinal
             },
-            DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot::ownerName,
-            DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot::logicalMemberName,
-            DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot::implementationOwnerName,
+            { product -> product.comparison.ownerName },
+            { product -> product.comparison.logicalMemberName },
+            { product -> product.comparison.implementationOwnerName },
         ))
 
     fun advanceBound(

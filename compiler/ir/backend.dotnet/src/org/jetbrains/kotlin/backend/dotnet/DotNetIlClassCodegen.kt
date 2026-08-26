@@ -1,5 +1,115 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+/** Exact CLI accessibility selected for one emitted TypeDef. */
+internal enum class DotNetIlRawTypeDefVisibility(
+    val ilKeyword: String,
+    val isNested: Boolean,
+) {
+    PUBLIC("public", false),
+    NOT_PUBLIC("private", false),
+    NESTED_PUBLIC("public", true),
+    NESTED_PRIVATE("private", true),
+    NESTED_ASSEMBLY("assembly", true),
+    NESTED_FAMILY("family", true),
+}
+
+/** Exact CLI layout mask selected by the current TypeDef emitter. */
+internal enum class DotNetIlRawTypeDefLayout(val ilKeyword: String) {
+    AUTO("auto"),
+}
+
+/** Exact CLI string-format mask selected by the current TypeDef emitter. */
+internal enum class DotNetIlRawTypeDefStringFormat(val ilKeyword: String) {
+    ANSI("ansi"),
+}
+
+/**
+ * Structured TypeDef flags consumed directly by IL rendering.
+ *
+ * Keeping this as the render input makes a later final-emission observation evidence from the
+ * same decision, rather than a reconstruction from the emitted text. The current backend admits
+ * only auto-layout ANSI classes/interfaces, but those masks remain explicit physical facts.
+ */
+internal data class DotNetIlRawTypeDefFlags(
+    val visibility: DotNetIlRawTypeDefVisibility,
+    val layout: DotNetIlRawTypeDefLayout,
+    val stringFormat: DotNetIlRawTypeDefStringFormat,
+    val isInterface: Boolean,
+    val isAbstract: Boolean,
+    val isSealed: Boolean,
+    val isBeforeFieldInit: Boolean,
+) {
+    init {
+        require(!isInterface || isAbstract && !isSealed && !isBeforeFieldInit) {
+            "an interface TypeDef must be abstract, unsealed, and omit beforefieldinit"
+        }
+    }
+
+    val ilKeywords: String
+        get() = buildString {
+            if (visibility.isNested) {
+                append("nested ")
+                append(visibility.ilKeyword)
+                append(' ')
+            }
+            if (isInterface) {
+                append("interface ")
+                if (!visibility.isNested) {
+                    append(visibility.ilKeyword)
+                    append(' ')
+                }
+            } else if (!visibility.isNested) {
+                append(visibility.ilKeyword)
+                append(' ')
+            }
+            if (isAbstract) append("abstract ")
+            // Preserve the probe-verified legacy spelling: static holders are
+            // `abstract sealed auto ansi`, while ordinary final classes are
+            // `auto ansi sealed`. The flags are a set in CLI metadata, but the
+            // textual emitter and its goldens deliberately keep one stable order.
+            if (isAbstract && isSealed) append("sealed ")
+            append(layout.ilKeyword)
+            append(' ')
+            append(stringFormat.ilKeyword)
+            if (!isAbstract && isSealed) append(" sealed")
+            if (isBeforeFieldInit) append(" beforefieldinit")
+        }
+}
+
+private fun legacyDotNetIlRawTypeDefFlags(
+    isStaticHolder: Boolean,
+    exported: Boolean,
+    hasClassInitializer: Boolean,
+    isNested: Boolean,
+    nestedVisibility: String,
+    isOpen: Boolean,
+    isAbstract: Boolean,
+    isInterface: Boolean,
+): DotNetIlRawTypeDefFlags {
+    val visibility = if (isNested) {
+        when (nestedVisibility) {
+            "public" -> DotNetIlRawTypeDefVisibility.NESTED_PUBLIC
+            "private" -> DotNetIlRawTypeDefVisibility.NESTED_PRIVATE
+            "assembly" -> DotNetIlRawTypeDefVisibility.NESTED_ASSEMBLY
+            "family" -> DotNetIlRawTypeDefVisibility.NESTED_FAMILY
+            else -> error("Internal .NET backend error: unsupported nested TypeDef visibility '$nestedVisibility'")
+        }
+    } else if (exported) {
+        DotNetIlRawTypeDefVisibility.PUBLIC
+    } else {
+        DotNetIlRawTypeDefVisibility.NOT_PUBLIC
+    }
+    return DotNetIlRawTypeDefFlags(
+        visibility = visibility,
+        layout = DotNetIlRawTypeDefLayout.AUTO,
+        stringFormat = DotNetIlRawTypeDefStringFormat.ANSI,
+        isInterface = isInterface,
+        isAbstract = isInterface || isStaticHolder || isAbstract,
+        isSealed = !isInterface && (isStaticHolder || !isAbstract && !isOpen),
+        isBeforeFieldInit = !isInterface && !hasClassInitializer,
+    )
+}
+
 /**
  * Assembles the class wrapper around already rendered members: the file class of one Kotlin file
  * (public and static — `abstract sealed` — like the JVM's file facades), a top-level user class
@@ -56,40 +166,43 @@ internal class DotNetIlClassCodegen(
     private val interfaceRefs: List<String> = emptyList(),
     private val genericParameters: String? = null,
     private val coreLibraryReference: String = DEFAULT_EXECUTABLE_CORE_LIBRARY.reference,
+    /** Assembly-independent exact metadata path; the final component is the declared name. */
+    val physicalTypePath: List<String> = listOf(className),
+    /** Exact TypeDef flag decision shared by rendering and final-emission observation. */
+    val flags: DotNetIlRawTypeDefFlags = legacyDotNetIlRawTypeDefFlags(
+        isStaticHolder = isStaticHolder,
+        exported = exported,
+        hasClassInitializer = hasClassInitializer,
+        isNested = isNested,
+        nestedVisibility = nestedVisibility,
+        isOpen = isOpen,
+        isAbstract = isAbstract,
+        isInterface = isInterface,
+    ),
 ) {
+    init {
+        require(physicalTypePath.isNotEmpty() && physicalTypePath.all(String::isNotEmpty) &&
+                physicalTypePath.last() == className) {
+            "a TypeDef header requires an exact physical path ending in its declared name"
+        }
+        require(flags.visibility.isNested == (physicalTypePath.size > 1 || isNested)) {
+            "a TypeDef visibility and physical nesting path must agree"
+        }
+    }
+
     fun generate(builder: StringBuilder) {
-        val visibility = if (exported) "public" else "private"
         // All flag spellings (including their order, with and without beforefieldinit) are
         // ilasm-probe-verified (the nested one by objprobe_s6, the non-sealed open-class one by
         // inheritprobe_s1, the abstract-class one by abstractprobe_s1, the interface one by
         // ifaceprobe_s1); the static-holder one is additionally frozen by the goldens.
-        val beforeFieldInit = if (hasClassInitializer) "" else " beforefieldinit"
-        val sealed = if (isOpen) "" else " sealed"
-        val flags = when {
-            // An interface carries neither `sealed` nor `beforefieldinit` (including one that
-            // owns a companion `.cctor`) and, per ECMA-335, no `extends` line at all.
-            isInterface && isNested -> "nested $nestedVisibility interface abstract auto ansi"
-            isInterface -> "interface $visibility abstract auto ansi"
-            // A compiler-owned holder nested in a generic class or interface is a genuine CLR
-            // static class: named nested TypeDefs do not capture enclosing generic parameters.
-            isNested && isStaticHolder ->
-                "nested $nestedVisibility abstract sealed auto ansi$beforeFieldInit"
-            // Ordinary nested-class modality uses the same flags as a top-level class after the
-            // nested accessibility prefix: abstract/sealed Kotlin classes are CLR `abstract`,
-            // open classes omit `sealed`, and final named classes plus companion objects carry
-            // CLR `sealed` (`nestedprobe_s3`).
-            isNested && isAbstract -> "nested $nestedVisibility abstract auto ansi$beforeFieldInit"
-            isNested -> "nested $nestedVisibility auto ansi$sealed$beforeFieldInit"
-            isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"
-            isAbstract -> "$visibility abstract auto ansi$beforeFieldInit"
-            else -> "$visibility auto ansi$sealed$beforeFieldInit"
-        }
         // A reified CLR TypeDef (for example an explicitly mapped host capability) appends its formal
         // type-parameter list right after the arity-suffixed name. Kotlin-owned ordinary generic
         // classes pass no list here: their one physical owner is declaration-erased. A genuinely
         // generic CLR base reference still carries its complete instantiation token.
-        builder.appendLine(".class $flags ${className.toIlIdentifier()}${genericParameters.orEmpty()}")
-        if (!isInterface) {
+        builder.appendLine(
+            ".class ${flags.ilKeywords} ${physicalTypePath.last().toIlIdentifier()}${genericParameters.orEmpty()}"
+        )
+        if (!flags.isInterface) {
             builder.appendLine("       extends ${baseClassRef ?: "${coreLibraryReference}System.Object"}")
         }
         if (interfaceRefs.isNotEmpty()) {

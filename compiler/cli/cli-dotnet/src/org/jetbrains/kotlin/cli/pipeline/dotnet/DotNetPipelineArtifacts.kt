@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacem
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSealedEmissionFamilySnapshot
 import org.jetbrains.kotlin.cli.pipeline.Fir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.FrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
@@ -66,8 +67,16 @@ data class DotNetBackendPipelineArtifact(
         List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot>,
     val genericOwnerCompleteEmissionComparisons:
         List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot>,
+    val genericOwnerSealedEmissionFamilies:
+        List<DotNetGenericOwnerSealedEmissionFamilySnapshot>,
     val genericOwnerRehearsal: Boolean,
 ) : PipelineArtifact() {
+    init {
+        require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
+            "the production erased epoch cannot publish sealed generic-owner families"
+        }
+    }
+
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetBackendPipelineArtifact =
         copy(configuration = newConfiguration)
