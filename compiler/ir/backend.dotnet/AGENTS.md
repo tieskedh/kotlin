@@ -1582,17 +1582,22 @@ answer has been incorporated into the owning ADR and implementation plan.
 Also:
 
 - preserve unrelated worktree changes and do not modify another branch;
-- keep `dotnet` as the authoritative feature worktree. A secondary worktree is
-  permitted only after the current coherent feature has passed its focused
-  proofs and review and the authoritative worktree is frozen for a long full
-  gate. Base it on an immutable local checkpoint of that exact tested tree;
-  use it only for reversible follow-on work, and do not commit, merge, or push
-  that follow-on until the predecessor gate is green and its feature commit is
-  pushed. Never run overlapping gates which can reach Framework CLR, ILAsm, or
-  another shared external toolchain, and do not use a worktree when overlapping
-  files or semantics would make the evidence or eventual integration
-  ambiguous. A failed predecessor invalidates the checkpoint and requires the
-  follow-on to be rebased or discarded explicitly;
+- keep `dotnet` as the authoritative integration branch, but not necessarily as
+  the only active worktree. Once a coherent feature has passed its focused
+  proofs and local review, an immutable local checkpoint may be created before
+  its long full gate. Run that gate against the exact checkpoint in one
+  worktree while another performs read-only investigation or reversible
+  follow-on edits and local commits. A worktree is not unsafe merely because
+  nearby files are involved; use it when the checkpoint, branch purpose, and
+  eventual rebase remain unambiguous. Do not merge or push the follow-on onto
+  `dotnet` until the predecessor gate is green and the predecessor feature is
+  pushed. Never run overlapping Gradle or external-tool lanes that can share
+  build outputs, Framework CLR, ILAsm, or another mutable toolchain resource.
+  If the predecessor needs a semantic fix, its checkpoint evidence is invalid
+  and dependent follow-on work must be rebased or discarded explicitly. If the
+  final predecessor commit differs from the tested checkpoint only by recording
+  gate evidence or other Markdown-only maintenance, rebase the follow-on onto
+  that final commit and retain the checkpoint's semantic evidence;
 - never edit `*Generated.java`, generated configuration keys, or API baselines
   by hand—run the owning scoped generator and critically review its output;
 - the Kotlin 2.5 bootstrap uses name-based destructuring `[a, b]` for
