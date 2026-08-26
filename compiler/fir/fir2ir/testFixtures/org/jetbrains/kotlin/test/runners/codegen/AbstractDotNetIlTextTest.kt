@@ -109,6 +109,14 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueLocalS
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementContinuity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementRelation
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteKindSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowRelation
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
@@ -464,6 +472,11 @@ private class BackendCliDotNetFacade(
             snapshots = completedOutput.genericOwnerPhysicalValueShadows,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
+        validateGenericOwnerPhysicalOperationRouteShadow(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            snapshots = completedOutput.genericOwnerPhysicalOperationRouteShadows,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         validateGenericOwnerPhysicalValuePlacementComparison(
             genericOwnerRehearsal = genericOwnerRehearsal,
             comparisons = completedOutput.genericOwnerPhysicalValuePlacementComparisons,
@@ -666,6 +679,134 @@ private class BackendCliDotNetFacade(
             }
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+/** Proves that logical call policy wins before exact receiver provenance is consulted. */
+private fun validateGenericOwnerPhysicalOperationRouteShadow(
+    genericOwnerRehearsal: Boolean,
+    snapshots: List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        check(snapshots.isEmpty()) {
+            "The production erased epoch must not publish physical-operation shadows: $snapshots"
+        }
+        return
+    }
+
+    fun snapshot(
+        functionName: String,
+        variableName: String,
+    ): DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot =
+        checkNotNull(snapshots.singleOrNull { candidate ->
+            candidate.ownerName.endsWith("InlineSelfView") &&
+                    candidate.physicalFunctionName == functionName &&
+                    candidate.receiverVariableName == variableName &&
+                    candidate.logicalMemberName == "produce"
+        }) {
+            "The operation probe must publish one $functionName/$variableName route: $snapshots"
+        }
+
+    val natural = snapshot("sourceAliasMatches", "sourceNaturalAlias")
+    check(natural.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            natural.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            natural.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            natural.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0) &&
+                        carrier.parameterBinderOwnerName?.endsWith("InlineSelfView") == true
+            } && natural.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.DIRECT &&
+            natural.resultSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            natural.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            natural.resultCarrierParameterBinderOwnerName?.endsWith("InlineSelfView") == true &&
+            natural.resultCarrierParameterIndex == 0 &&
+            natural.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            natural.relation == DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            natural.diagnostic == null) {
+        "The exact source alias must retain the natural MethodDef and !T result: $natural"
+    }
+
+    fun checkSemantic(
+        semantic: DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot,
+        expectedSelector: DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot,
+        description: String,
+    ) {
+        check(semantic.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+                semantic.logicalSelector == expectedSelector &&
+                semantic.predictedRouteKind ==
+                DotNetGenericOwnerPhysicalOperationRouteKindSnapshot
+                    .SEMANTIC_CAPABILITY_INTERFACE_SLOT &&
+                semantic.requiredReceiverCarrier.let { carrier ->
+                    carrier.kind ==
+                            DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+                            carrier.localOwnerName?.endsWith("InlineProducer") == true
+                } && semantic.resultLayout ==
+                DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.DIRECT &&
+                semantic.resultSlotDomain ==
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                semantic.resultCarrierKind ==
+                DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OBJECT &&
+                semantic.resultCarrierParameterBinderOwnerName == null &&
+                semantic.resultCarrierParameterIndex == null &&
+                semantic.actualRoute ==
+                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
+                    .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
+                semantic.relation ==
+                DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+                semantic.diagnostic == null) {
+            "$description must select the exact capability slot without fabricating a " +
+                    "natural construction: $semantic"
+        }
+    }
+
+    listOf(
+        Triple(
+            "wideAliasMatches",
+            "sourceWideAlias",
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
+        ),
+        Triple(
+            "nullableAliasMatches",
+            "sourceNullableAlias",
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.OPEN_NULLABLE,
+        ),
+    ).forEach { probe ->
+        val semantic = snapshot(probe.first, probe.second)
+        checkSemantic(semantic, probe.third, "The ${probe.first} source alias")
+    }
+
+
+    val inlineWidened = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineSelfView") &&
+                candidate.physicalFunctionName == "indexOf" &&
+                candidate.logicalMemberName == "produce" &&
+                candidate.logicalSelector ==
+                DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL
+    }) {
+        "The inlined broad receiver must remain visible outside its exact local provenance: $snapshots"
+    }
+    checkSemantic(
+        inlineWidened,
+        DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
+        "The implicitly widened inline receiver",
+    )
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineSelfView") &&
+                candidate.physicalFunctionName == "nestedAliasMatches" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "A nested callable must not be attributed to its enclosing physical function: $snapshots"
     }
 }
 
@@ -4657,6 +4798,8 @@ private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE"
 private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE"
+private const val GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =

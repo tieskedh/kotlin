@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
 import org.jetbrains.kotlin.cli.pipeline.Fir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.FrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
@@ -55,6 +56,8 @@ data class DotNetBackendPipelineArtifact(
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
     val genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
+    val genericOwnerPhysicalOperationRouteShadows:
+        List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
     val genericOwnerPhysicalValuePlacementComparisons:
         List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
     val genericOwnerRehearsal: Boolean,
