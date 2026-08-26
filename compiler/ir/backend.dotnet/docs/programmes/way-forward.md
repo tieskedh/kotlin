@@ -1788,6 +1788,38 @@ set TypeDef/edge/MethodDef/MethodImpl liveness for one bounded family, not a
 new stdlib shape or recognizer removal. See
 [`../archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md`](../archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md).
 
+The next liveness checkpoint now compares each complete bounded implementation
+family as a single final-emission manifest. It contains the complete direct
+edge and TypeDef GenericParam sets for the selected natural interface, its
+interface capability, the generic implementation class, and its class
+capability; all six selected MethodDef headers and roles; and exactly the two
+explicit semantic MethodImpl rows. The natural `I<!T>` implementation is
+ordinary implicit CLR mapping and is therefore not invented as a MethodImpl.
+Raw TypeDef and MethodImpl evidence is retained only by successful final
+fixpoint products. Missing rows stay unavailable; duplicate, extra,
+cross-scope, role, endpoint, alias, constraint, or structural contradictions
+conflict.
+
+The bounded product also contains two implementations of the same logical
+producer. A generated interface-capability dispatcher is identified by its
+own physical IR declaration rather than by the shared logical member. A
+shared declaration endpoint alone cannot pull one implementation's MethodImpl
+into the other implementation family; ownership requires the selected body,
+or the selected implementing TypeDef together with that declaration. This is
+the first hostile cross-implementation isolation proof, not general global
+family sealing.
+
+This is complete only for that structural projection. It remains over
+`BOUND_DECLARATION_INDEX` and does not seal physical names, the complete CLI
+flag vector, MethodDef GenericParam constraints, retained foreign/producer
+metadata, arbitrary overlapping/global families, or broader callable
+grammars. The next
+step is a non-additive final signature/name/flag scope built solely from one
+successful emission transaction, followed by producer-recorded and retained-
+foreign adapters. No route recognizer or stdlib family advances on the
+strength of this local certificate alone. See
+[`../archive/generic-owner-complete-emission-family-2026-08-26.md`](../archive/generic-owner-complete-emission-family-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
@@ -1812,10 +1844,10 @@ The consolidation proceeds in bounded stages:
    retained-foreign edge authority remain later adapters;
 6. move route selection behind one query which starts from the authoritative
    callable family and treats exact provenance only as supporting evidence.
-   The first local direct-producer BOUND shadow and partial final-fixpoint
-   MethodDef comparison are complete. Exact emitted role/alias identity is
-   also complete for that bounded family; a complete sealed signature set and
-   later producer/foreign adapters remain open;
+   The first local direct-producer BOUND shadow, exact emitted role/alias
+   identity, and bounded complete TypeDef/edge/MethodDef/MethodImpl comparison
+   are implemented. A non-additive sealed signature/name/flag scope and later
+   producer/foreign adapters remain open;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

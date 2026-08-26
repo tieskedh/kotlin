@@ -163,6 +163,51 @@ internal data class DotNetIlRawMethodDefHeaderObservation(
     }
 }
 
+/** One structured target in a final TypeDef's BaseType/InterfaceImpl table. */
+internal sealed interface DotNetIlRawTypeDefEdgeTarget {
+    /** The emitter's implicit default base for an ordinary CLR class. */
+    data object CoreObject : DotNetIlRawTypeDefEdgeTarget
+
+    data class Type(val carrier: DotNetIlValueType) : DotNetIlRawTypeDefEdgeTarget
+
+    /** A fully emitted target outside the bounded local structural vocabulary. */
+    data class Other(val physicalDescription: String) : DotNetIlRawTypeDefEdgeTarget {
+        init {
+            require(physicalDescription.isNotEmpty()) {
+                "an observed TypeDef edge diagnostic cannot be empty"
+            }
+        }
+    }
+}
+
+internal data class DotNetIlRawTypeDefEdgeObservation(
+    val kind: DotNetGenericOwnerDirectSupertypeKind,
+    val target: DotNetIlRawTypeDefEdgeTarget,
+)
+
+internal data class DotNetIlRawTypeDefGenericParameterObservation(
+    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    val constraints: List<DotNetIlValueType>,
+)
+
+/** Exact structured TypeDef rows consumed by the final successful class render. */
+internal data class DotNetIlRawTypeDefEmissionObservation(
+    val physicalType: DotNetIlClassInfo,
+    val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+    val genericParameters: List<DotNetIlRawTypeDefGenericParameterObservation>,
+    val directSupertypes: List<DotNetIlRawTypeDefEdgeObservation>,
+)
+
+/** One explicit MethodImpl row at the exact append site which emitted its `.override`. */
+internal data class DotNetIlRawMethodImplObservation(
+    val implementingType: DotNetIlClassInfo,
+    val bodyFunction: IrSimpleFunctionSymbol,
+    val bodyIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+    val declarationOwner: DotNetIlValueType,
+    val declarationFunction: IrSimpleFunctionSymbol,
+    val declarationIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+)
+
 /** One independently observed local TypeDef after the final emitter owner map has been applied. */
 internal data class DotNetGenericOwnerObservedLocalTypeDef(
     val physicalKey: DotNetGenericOwnerObservedPhysicalTypeDefKey,
@@ -413,6 +458,36 @@ internal sealed interface DotNetGenericOwnerObservedMethodCarrier {
     }
 }
 
+internal data class DotNetGenericOwnerPhysicalTypeDefEdgeObservation(
+    val kind: DotNetGenericOwnerDirectSupertypeKind,
+    val target: DotNetGenericOwnerObservedMethodCarrier,
+)
+
+internal data class DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation(
+    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    val constraints: List<DotNetGenericOwnerObservedMethodCarrier>,
+)
+
+/** Final-fixpoint TypeDef plus its complete emitted direct-edge set. */
+internal data class DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
+    val physicalType: DotNetGenericOwnerObservedMethodDefOwner,
+    val physicalKey: DotNetGenericOwnerObservedPhysicalTypeDefKey?,
+    /** All local aliases claimed before conflict resolution; used only to scope fail-closed evidence. */
+    val claimedAliases: List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
+    val genericParameters: List<DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation>,
+    val directSupertypes: List<DotNetGenericOwnerPhysicalTypeDefEdgeObservation>,
+)
+
+/** Final-fixpoint MethodImpl evidence with both MethodDefs and the constructed declaration owner. */
+internal data class DotNetGenericOwnerPhysicalMethodImplObservation(
+    val implementingType: DotNetGenericOwnerObservedMethodDefOwner,
+    val bodyFunction: IrSimpleFunctionSymbol,
+    val bodyIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+    val declarationOwner: DotNetGenericOwnerObservedMethodCarrier,
+    val declarationFunction: IrSimpleFunctionSymbol,
+    val declarationIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+)
+
 /** A normalized physical signature which contains no live [DotNetIlClassInfo] reference. */
 internal data class DotNetGenericOwnerObservedMethodSignature(
     /** The independently normalized implicit receiver, or null for a static MethodDef. */
@@ -470,11 +545,14 @@ internal class DotNetIlRenderedMethod(
     val ilText: String,
     localPlacementObservations: List<DotNetIlRawLocalPlacementObservation>,
     methodDefHeaderObservations: List<DotNetIlRawMethodDefHeaderObservation> = emptyList(),
+    methodImplObservations: List<DotNetIlRawMethodImplObservation> = emptyList(),
 ) {
     val localPlacementObservations: List<DotNetIlRawLocalPlacementObservation> =
         localPlacementObservations.toList()
     val methodDefHeaderObservations: List<DotNetIlRawMethodDefHeaderObservation> =
         methodDefHeaderObservations.toList()
+    val methodImplObservations: List<DotNetIlRawMethodImplObservation> =
+        methodImplObservations.toList()
 }
 
 /**
@@ -509,6 +587,11 @@ internal class DotNetIlMethodCodegen(
 ) {
     private val localPlacementObservations = if (capturePhysicalLocalPlacements) {
         mutableListOf<DotNetIlRawLocalPlacementObservation>()
+    } else {
+        null
+    }
+    private val methodImplObservations = if (capturePhysicalMethodDefHeaders) {
+        mutableListOf<DotNetIlRawMethodImplObservation>()
     } else {
         null
     }
@@ -775,6 +858,26 @@ internal class DotNetIlMethodCodegen(
             ilText,
             localPlacementObservations.orEmpty(),
             methodDefHeaderObservations,
+            methodImplObservations.orEmpty(),
+        )
+    }
+
+    /** Records the same structured body/declaration pair that the following `.override` prints. */
+    private fun recordMethodImpl(
+        declarationOwner: DotNetIlValueType,
+        declaration: IrSimpleFunction,
+        declarationInfo: DotNetIlFunctionInfo,
+    ) {
+        val body = function as? IrSimpleFunction ?: return
+        methodImplObservations?.add(
+            DotNetIlRawMethodImplObservation(
+                implementingType = functionInfo.owner,
+                bodyFunction = body.symbol,
+                bodyIdentity = functionInfo.genericOwnerPhysicalMethodIdentity,
+                declarationOwner = declarationOwner,
+                declarationFunction = declaration.symbol,
+                declarationIdentity = declarationInfo.genericOwnerPhysicalMethodIdentity,
+            ),
         )
     }
 
@@ -914,6 +1017,7 @@ internal class DotNetIlMethodCodegen(
                 "Internal .NET backend error: interface-default slot bridge changed method arity"
             }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+            recordMethodImpl(DotNetIlValueType.UserClass(overrideInfo.owner), overridden, overrideInfo)
             appendLine(
                 "    .override method " +
                         overrideInfo.renderOverrideMethodReference(
@@ -960,7 +1064,8 @@ internal class DotNetIlMethodCodegen(
                         "reified interface-default argument '${argumentType.render()}' is unavailable"
                     )
             }
-            val ownerToken = DotNetIlValueType.GenericInstance(interfaceInfo, arguments).nameInSignature
+            val declarationOwner = DotNetIlValueType.GenericInstance(interfaceInfo, arguments)
+            val ownerToken = declarationOwner.nameInSignature
             val overrideInfo = availableFunctions[overridden]
                 ?: typeMapper.referencedFunctionInfoOrNull(overridden)
                 ?: dotNetUnsupported("reified generic interface default slot is unavailable")
@@ -975,6 +1080,7 @@ internal class DotNetIlMethodCodegen(
                 "Internal .NET backend error: reified interface-default target changed method arity"
             }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+            recordMethodImpl(declarationOwner, overridden, overrideInfo)
             appendLine(
                 "    .override method " +
                         overrideInfo.renderOverrideMethodReference(
@@ -1025,6 +1131,7 @@ internal class DotNetIlMethodCodegen(
             ) {
                 continue
             }
+            recordMethodImpl(DotNetIlValueType.UserClass(overrideInfo.owner), overridden, overrideInfo)
             appendLine("    .override method ${overrideInfo.renderMethodReference(slotName)}")
         }
     }
@@ -1062,6 +1169,7 @@ internal class DotNetIlMethodCodegen(
                 overridden.dotNetSignature(canonicalTypeMapper),
                 physicalMethodName,
             )
+            recordMethodImpl(DotNetIlValueType.UserClass(interfaceInfo), overridden, overrideInfo)
             appendLine(
                 "    .override method " +
                         overrideInfo.renderOverrideMethodReference(
@@ -1107,7 +1215,8 @@ internal class DotNetIlMethodCodegen(
                         "typed generic interface argument '${argumentType.render()}' is unavailable"
                     )
             }
-            val ownerToken = DotNetIlValueType.GenericInstance(capabilityInfo, arguments).nameInSignature
+            val declarationOwner = DotNetIlValueType.GenericInstance(capabilityInfo, arguments)
+            val ownerToken = declarationOwner.nameInSignature
             val overrideInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
                 overridden,
                 memberView,
@@ -1115,6 +1224,7 @@ internal class DotNetIlMethodCodegen(
                 capabilityInfo,
                 overridden.dotNetSignature(signatureMapper),
             )
+            recordMethodImpl(declarationOwner, overridden, overrideInfo)
             appendLine(
                 "    .override method " +
                         overrideInfo.renderOverrideMethodReference(
@@ -1151,6 +1261,7 @@ internal class DotNetIlMethodCodegen(
             "Internal .NET backend error: a generic-owner capability dispatcher changed its slot signature"
         }
         val physicalMethodName = overrideInfo.physicalMethodName ?: slot.dotNetIlMethodName()
+        recordMethodImpl(DotNetIlValueType.UserClass(overrideInfo.owner), slot, overrideInfo)
         appendLine(
             "    .override method " +
                     overrideInfo.renderOverrideMethodReference(
@@ -1175,8 +1286,8 @@ internal class DotNetIlMethodCodegen(
             ?: DotNetRuntimeTypes.exactCallableFunctionInfoOrNull(overridden, typeMapper)
             ?: typeMapper.referencedFunctionInfoOrNull(overridden)
             ?: dotNetUnsupported("covariant-return slot is unavailable")
-        val ownerToken = if (referencedInfo.owner.typeParameterCount == 0) {
-            referencedInfo.owner.ilTypeRef
+        val declarationOwner = if (referencedInfo.owner.typeParameterCount == 0) {
+            DotNetIlValueType.UserClass(referencedInfo.owner)
         } else {
             val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
                 overriddenOwner.symbol,
@@ -1190,9 +1301,15 @@ internal class DotNetIlMethodCodegen(
                 typeMapper.toDotNetIlGenericArgumentType(argumentType)
                     ?: dotNetUnsupported("covariant-return owner argument '${argumentType.render()}' is unavailable")
             }
-            DotNetIlValueType.GenericInstance(referencedInfo.owner, arguments).nameInSignature
+            DotNetIlValueType.GenericInstance(referencedInfo.owner, arguments)
+        }
+        val ownerToken = if (referencedInfo.owner.typeParameterCount == 0) {
+            referencedInfo.owner.ilTypeRef
+        } else {
+            declarationOwner.nameInSignature
         }
         val physicalMethodName = referencedInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+        recordMethodImpl(declarationOwner, overridden, referencedInfo)
         appendLine(
             "    .override method " +
                     referencedInfo.renderOverrideMethodReference(
