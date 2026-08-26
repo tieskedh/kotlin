@@ -13,9 +13,12 @@ import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.SymbolTable
+import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.load.dotnet.DotNetExactContractProjection
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.tryMeasurePhaseTime
@@ -88,6 +91,55 @@ private fun buildGenericOwnerPhysicalMethodDefEmissionBindings(
     return bindings
 }
 
+/**
+ * Captures which callable declarations actually existed before target lowerings.
+ *
+ * A later generic-owner pass may need an object-input twin for an application-local callable,
+ * so the public KLIB linkage table alone is insufficient.  Conversely, recomputing an exported
+ * signature after lowering could bless a generated helper as if it were source ABI.  Keep one
+ * identity-keyed authority table for both cases and record separately whether the declaration is
+ * allowed to cross the assembly boundary.
+ */
+private fun collectGenericOwnerFunctionInputEntryAuthorities(
+    module: IrModuleFragment,
+    publishedKeys: Map<IrDeclaration, String>,
+    publishedStdlibKeys: Map<IrDeclaration, String>,
+    isExcludedFromCodegen: (IrSimpleFunction) -> Boolean,
+): Map<IrSimpleFunction, DotNetGenericOwnerFunctionInputEntryAuthority> {
+    val result = IdentityHashMap<IrSimpleFunction, DotNetGenericOwnerFunctionInputEntryAuthority>()
+
+    fun add(function: IrSimpleFunction) {
+        if (isExcludedFromCodegen(function) ||
+            function.parameters.any { parameter -> parameter.defaultValue != null }
+        ) {
+            return
+        }
+        val publishedKey = publishedKeys[function] ?: publishedStdlibKeys[function]
+        result[function] = DotNetGenericOwnerFunctionInputEntryAuthority(
+            logicalKey = publishedKey ?: function.dotNetGenericInterfaceCanonicalSlotId(),
+            kind = if (publishedKey != null) {
+                DotNetGenericOwnerFunctionInputEntryAuthorityKind.KOTLIN_PHYSICAL_INDEX
+            } else {
+                DotNetGenericOwnerFunctionInputEntryAuthorityKind.ASSEMBLY_LOCAL
+            },
+        )
+    }
+
+    fun visit(declaration: IrDeclaration) {
+        when (declaration) {
+            is IrSimpleFunction -> add(declaration)
+            is IrProperty -> {
+                declaration.getter?.let(::add)
+                declaration.setter?.let(::add)
+            }
+            is IrClass -> declaration.declarations.forEach(::visit)
+        }
+    }
+
+    module.files.forEach { file -> file.declarations.forEach(::visit) }
+    return result
+}
+
 object DotNetBackend {
     fun compile(
         irModuleFragment: IrModuleFragment,
@@ -136,6 +188,29 @@ object DotNetBackend {
             producesStdlib -> preLoweringDeclarationKeys
             else -> collectPreLoweringDeclarationKeys(DotNetIlEmissionScope.STDLIB)
         }
+        val preLoweringGenericOwnerFunctionInputAuthorities =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                val userIntrinsics = DotNetIlIntrinsicMethods(irBuiltIns, DotNetIlEmissionScope.USER)
+                val stdlibIntrinsics = DotNetIlIntrinsicMethods(irBuiltIns, DotNetIlEmissionScope.STDLIB)
+                collectGenericOwnerFunctionInputEntryAuthorities(
+                    irModuleFragment,
+                    preLoweringDeclarationKeys,
+                    preLoweringStdlibDeclarationKeys,
+                ) { function ->
+                    val intrinsicMethods = if (
+                        function.fileOrNull?.isDotNetStdlibImplementationSource == true
+                    ) {
+                        stdlibIntrinsics
+                    } else {
+                        userIntrinsics
+                    }
+                    intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true ||
+                            (function.isInline && function.typeParameters.any { parameter -> parameter.isReified }) ||
+                            function.isDotNetInlineOnly()
+                }
+            } else {
+                emptyMap()
+            }
         val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
@@ -346,6 +421,7 @@ object DotNetBackend {
             symbolTable,
             irModuleFragment,
             preLoweringDeclarationKeys,
+            preLoweringGenericOwnerFunctionInputAuthorities,
         )
         val runtimeCSharpImplementationManifest =
             collectDotNetRuntimeCSharpImplementationManifest(context, target)
@@ -461,6 +537,8 @@ object DotNetBackend {
                     genericOwnerPhysicalMethodDefEmissionBindings =
                         genericOwnerPhysicalMethodDefEmissionBindings,
                     genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
+                    genericOwnerFunctionInputEntryAuthorities =
+                        context.genericOwnerFunctionInputEntryAuthorities,
                     genericOwnerFunctionInputEntryObjectParameters =
                         context.genericOwnerFunctionInputEntryObjectParameters,
                     genericOwnerDirectForeignOverrideDispatches =
@@ -609,6 +687,8 @@ object DotNetBackend {
                 genericOwnerPhysicalMethodDefEmissionBindings =
                     genericOwnerPhysicalMethodDefEmissionBindings,
                 genericOwnerFunctionInputEntries = context.genericOwnerFunctionInputEntries,
+                genericOwnerFunctionInputEntryAuthorities =
+                    context.genericOwnerFunctionInputEntryAuthorities,
                 genericOwnerFunctionInputEntryObjectParameters =
                     context.genericOwnerFunctionInputEntryObjectParameters,
                 genericOwnerDirectForeignOverrideDispatches =

@@ -156,6 +156,7 @@ internal class DotNetClrImportedDeclarations(
                 returnType = returnType,
                 parameterTypes = parameterTypes,
                 hasThis = true,
+                methodGenericParameterCount = signature.genericParameterCount,
             ),
             physicalMethodName = method.name,
         )

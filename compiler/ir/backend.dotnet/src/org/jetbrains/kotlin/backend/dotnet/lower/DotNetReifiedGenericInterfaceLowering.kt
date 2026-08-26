@@ -17,9 +17,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionInputEntryAuthority
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionInputEntryAuthorityKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.isDotNetInlineOnly
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
@@ -100,6 +103,7 @@ import org.jetbrains.kotlin.ir.util.getInlineClassBackingField
 import org.jetbrains.kotlin.ir.util.IrTypeParameterRemapper
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
@@ -808,8 +812,17 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return returnsBackingClassifier && backingField in declarations
         }
 
+        fun IrValueParameter.isNaturalClassifierInputDeclaration(): Boolean {
+            val function = parent as? IrSimpleFunction ?: return false
+            val parameterIndex = function.parameters.indexOf(this)
+            return parameterIndex >= 0 && parameterIndex in
+                    context.genericOwnerFunctionInputEntryObjectParameters[function].orEmpty()
+        }
+
         fun IrExpression.readsSemanticInterfaceDeclaration(): Boolean = when (this) {
-            is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations
+            is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations &&
+                    (symbol.owner as? IrValueParameter)
+                        ?.isNaturalClassifierInputDeclaration() != true
             is IrGetField -> symbol.owner in context.genericOwnerCapabilityDeclarations
             is IrCall -> checkNotNullArgumentOrNull()?.readsSemanticInterfaceDeclaration()
                 ?: when {
@@ -836,7 +849,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
 
         fun IrExpression.readsForeignDispatchDeclaration(): Boolean = when (this) {
-            is IrGetValue -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
+            is IrGetValue -> symbol.owner in context.genericOwnerForeignDispatchDeclarations &&
+                    (symbol.owner as? IrValueParameter)
+                        ?.isNaturalClassifierInputDeclaration() != true
             is IrGetField -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
             is IrCall -> checkNotNullArgumentOrNull()?.readsForeignDispatchDeclaration()
                 ?: (symbol.owner in context.genericOwnerForeignDispatchDeclarations ||
@@ -866,8 +881,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
         fun IrExpression.provesExactPhysicalInterfaceView(expected: IrType): Boolean {
             if (readsSemanticInterfaceDeclaration()) return false
             when (this) {
-                is IrGetValue -> exactInterfaceDeclarationTypes[symbol.owner]?.let { exactType ->
-                    return exactType.hasExactPhysicalInterfaceView(expected)
+                is IrGetValue -> {
+                    val parameter = symbol.owner as? IrValueParameter
+                    if (parameter?.isNaturalClassifierInputDeclaration() == true &&
+                        parameter.type.hasExactPhysicalInterfaceView(expected)
+                    ) {
+                        return true
+                    }
+                    exactInterfaceDeclarationTypes[symbol.owner]?.let { exactType ->
+                        return exactType.hasExactPhysicalInterfaceView(expected)
+                    }
                 }
                 is IrGetField -> exactInterfaceDeclarationTypes[symbol.owner]?.let { exactType ->
                     return exactType.hasExactPhysicalInterfaceView(expected)
@@ -879,6 +902,59 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val producer = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                 ?: return false
             return !producer.isInterface && type.hasExactPhysicalInterfaceView(expected)
+        }
+
+        /**
+         * Positive admission for the natural side of a paired classifier-input MethodDef.
+         *
+         * The broader value-routing proof above still predates the bound physical edge index and
+         * walks logical IR ancestry. That is not strong enough here: an erased owner or a nested
+         * generic argument can map its open logical edge to a different CLR construction than a
+         * later closed MethodSpec expects. Until the physical-value model owns this query,
+         * admit only a parameter whose source MethodDef already names the exact construction or a
+         * local non-generic reference class with that exact direct closed InterfaceImpl. Everything
+         * else uses the paired object-input entry; no logical variance or subtype relation proves
+         * a CLR construction.
+         */
+        fun IrExpression.provesNaturalClassifierInputCarrier(expected: IrType): Boolean {
+            if (readsSemanticInterfaceDeclaration() || readsForeignDispatchDeclaration()) return false
+
+            fun IrType.hasFlatClosedInterfaceArguments(): Boolean {
+                val type = this as? IrSimpleType ?: return false
+                if (type.isMarkedNullable() || type.reifiedInterfaceOwnerOrNull() == null) return false
+                return type.arguments.all { argument ->
+                    val projection = argument as? IrTypeProjection ?: return@all false
+                    val leaf = projection.type as? IrSimpleType ?: return@all false
+                    projection.variance == Variance.INVARIANT && !leaf.isMarkedNullable() &&
+                            leaf.classifier !is IrTypeParameterSymbol && leaf.arguments.isEmpty()
+                }
+            }
+
+            fun IrType.isDirectLocalNonGenericInterfaceView(): Boolean {
+                val simple = this as? IrSimpleType ?: return false
+                val producer = (simple.classifier as? IrClassSymbol)?.owner ?: return false
+                if (producer.isInterface || producer.typeParameters.isNotEmpty() ||
+                    producer !in localClasses || producer.isOriginallyLocalDeclaration ||
+                    context.inlineClassesUtils.isClassInlineLike(producer)
+                ) {
+                    return false
+                }
+                if (!expected.hasFlatClosedInterfaceArguments()) return false
+                return producer.superTypes.any { superType -> superType.sameInvariantTypeAs(expected) }
+            }
+
+            return when (this) {
+                is IrGetValue -> {
+                    val parameter = symbol.owner as? IrValueParameter
+                    parameter?.isNaturalClassifierInputDeclaration() == true &&
+                            parameter.type.sameInvariantTypeAs(expected) ||
+                            symbol.owner.type.isDirectLocalNonGenericInterfaceView()
+                }
+                is IrGetField -> symbol.owner.type.isDirectLocalNonGenericInterfaceView()
+                is IrTypeOperatorCall -> operator == IrTypeOperator.IMPLICIT_CAST &&
+                        argument.provesNaturalClassifierInputCarrier(expected)
+                else -> type.isDirectLocalNonGenericInterfaceView()
+            }
         }
 
         fun IrExpression.provesCapabilityBearingImplementation(): Boolean {
@@ -903,6 +979,31 @@ internal class DotNetReifiedGenericInterfaceLowering(
             // lowering. An arbitrary imported CLR class may implement only the natural I<T>, so
             // its exact construction is deliberately not evidence for the sibling capability.
             return !producer.isInterface && producer in localClasses
+        }
+
+        /**
+         * Substitutes only the selected MethodSpec binder into a source parameter. Owner
+         * parameters remain open unless they are already copied onto the selected helper. An
+         * incomplete vector is unavailable evidence and therefore cannot authorize the natural
+         * input entry.
+         */
+        fun IrCall.substitutedClassifierInputTypeOrNull(
+            source: IrSimpleFunction,
+            parameterIndex: Int,
+        ): IrType? {
+            val parameter = source.parameters.getOrNull(parameterIndex) ?: return null
+            if (source.typeParameters.size != typeArguments.size) return null
+            if (source.typeParameters.isEmpty()) return parameter.type
+            val substitutions = source.typeParameters.indices.mapNotNull { index ->
+                typeArguments[index]?.let { argument ->
+                    source.typeParameters[index].symbol to argument
+                }
+            }
+            if (substitutions.size != source.typeParameters.size) return null
+            return IrTypeSubstitutor(
+                substitutions.toMap(),
+                allowEmptySubstitution = true,
+            ).substitute(parameter.type)
         }
 
         fun IrDeclaration.isNaturalReifiedInterfaceSignatureDeclaration(): Boolean {
@@ -1037,42 +1138,65 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
         fun IrType.isNaturalClassifierInput(function: IrSimpleFunction): Boolean {
             val owner = reifiedInterfaceOwnerOrNull() ?: return false
-            val arguments = (this as? IrSimpleType)?.arguments ?: return false
-            if (arguments.size != owner.typeParameters.size ||
+            val simpleType = this as? IrSimpleType ?: return false
+            val arguments = simpleType.arguments
+            if (simpleType.isMarkedNullable() || arguments.size != owner.typeParameters.size ||
                 arguments.any { argument ->
                     (argument as? IrTypeProjection)?.variance != Variance.INVARIANT
                 }
             ) {
                 return false
             }
-            if (potentialSemanticInterfaceOwnerOrNull() == null) return true
+            fun IrType.containsTypeParameter(): Boolean {
+                val type = this as? IrSimpleType ?: return true
+                if (type.classifier is IrTypeParameterSymbol) return true
+                return type.arguments.any { nested ->
+                    val projection = nested as? IrTypeProjection ?: return@any true
+                    projection.variance != Variance.INVARIANT ||
+                            projection.type.containsTypeParameter()
+                }
+            }
             // `fun <T> f(value: I<T>)` has an honest natural CLR signature I<!!T>, even
             // though a Kotlin caller may instantiate T broadly and pass a value-type-widened
             // semantic view. Preserve that source entry and put only the latter calls through
             // the paired object-input entry. A type parameter owned by a surrounding class does
             // not provide the same method-local construction and remains outside this cell.
-            if (arguments.all { argument ->
+            val isDirectMethodParameterConstruction = arguments.all { argument ->
                 val projection = argument as IrTypeProjection
-                ((projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)
-                    ?.owner?.parent === function
-            }) {
-                return true
+                val parameter = (
+                    (projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+                )?.owner
+                !projection.type.isMarkedNullable() && parameter?.parent === function
             }
+            if (arguments.any { argument ->
+                    (argument as IrTypeProjection).type.containsTypeParameter()
+                }) return isDirectMethodParameterConstruction
+            if (potentialSemanticInterfaceOwnerOrNull() == null) return true
             // A closed value construction such as Collection<Int> is likewise an honest
             // natural CLR parameter. Kotlin-only widened/unchecked carriers use the paired
             // object entry; ordinary C# and exact Kotlin callers retain Collection<int>.
             // Keep the universal `Any?` view semantic because C# callers intentionally use it
             // as the one entry which can accept both reference and value constructions.
+            fun IrType.isClosedInvariantArgument(): Boolean {
+                val type = this as? IrSimpleType ?: return false
+                if (type.classifier is IrTypeParameterSymbol) return false
+                return type.arguments.all { nested ->
+                    val projection = nested as? IrTypeProjection ?: return@all false
+                    projection.variance == Variance.INVARIANT &&
+                            projection.type.isClosedInvariantArgument()
+                }
+            }
             return arguments.all { argument ->
                 val projection = argument as IrTypeProjection
-                (projection.type as? IrSimpleType)?.classifier !is IrTypeParameterSymbol &&
-                        !projection.type.isNullableAny()
+                projection.type.isClosedInvariantArgument() && !projection.type.isNullableAny()
             }
         }
 
         fun IrSimpleFunction.classifierInputParameterIndicesOrEmpty(): List<Int> {
             if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.FINAL || body == null ||
                 isFakeOverride || isSuspend ||
+                isDotNetInlineOnly() ||
+                !dotNetDefaultParameterIndices.isNullOrEmpty() ||
                 correspondingPropertySymbol != null || returnType.reifiedInterfaceOwnerOrNull() != null ||
                 parameters.any { parameter ->
                     parameter.kind != IrParameterKind.DispatchReceiver &&
@@ -1097,15 +1221,38 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // avoids making ordinary Kotlin/C# calls pay an object-domain wrapper while retaining one
         // compiler-authored semantic definition for the same source body.
         if (!finalRoutingOnly) {
+            val defaultSourcesByHelper = context.interfaceDefaultImplementations.entries
+                .associate { entry -> entry.value.helper to entry.key }
+
+            fun inputEntryAuthority(source: IrSimpleFunction):
+                    DotNetGenericOwnerFunctionInputEntryAuthority? {
+                context.preLoweringGenericOwnerFunctionInputAuthorities[source]?.let { return it }
+                val defaultSource = defaultSourcesByHelper[source] ?: return null
+                val sourceAuthority =
+                    context.preLoweringGenericOwnerFunctionInputAuthorities[defaultSource]
+                        ?: return null
+                return DotNetGenericOwnerFunctionInputEntryAuthority(
+                    logicalKey = "${sourceAuthority.logicalKey}#interface-default-helper",
+                    kind = when (sourceAuthority.kind) {
+                        DotNetGenericOwnerFunctionInputEntryAuthorityKind.KOTLIN_PHYSICAL_INDEX ->
+                            DotNetGenericOwnerFunctionInputEntryAuthorityKind.PORTABLE_INTERFACE_DEFAULT_HELPER
+                        DotNetGenericOwnerFunctionInputEntryAuthorityKind.ASSEMBLY_LOCAL ->
+                            DotNetGenericOwnerFunctionInputEntryAuthorityKind.ASSEMBLY_LOCAL
+                        DotNetGenericOwnerFunctionInputEntryAuthorityKind.PORTABLE_INTERFACE_DEFAULT_HELPER ->
+                            error("an interface-default helper cannot derive from another manifest helper")
+                    },
+                )
+            }
+
             for (source in sourceFunctions) {
                 val objectParameterIndices = source.classifierInputParameterIndicesOrEmpty()
                 if (objectParameterIndices.isEmpty()) continue
-                val logicalKey = context.preLoweringDeclarationKeys[source] ?: continue
+                val authority = inputEntryAuthority(source) ?: continue
                 materializeLocalGenericOwnerFunctionInputEntry(
                     context,
                     source,
                     objectParameterIndices.toSet(),
-                    logicalKey,
+                    authority,
                 )
             }
         }
@@ -1283,8 +1430,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         classifierInputEntry.parameters[index] in
                                 context.genericOwnerForeignDispatchDeclarations &&
                                 expression.arguments.getOrNull(index)?.let { argument ->
-                                    argument.readsForeignDispatchDeclaration() ||
-                                            argument.classifierErasedInterfaceOwnerOrNull() != null
+                                    argument.readsSemanticInterfaceDeclaration() ||
+                                            argument.readsForeignDispatchDeclaration() ||
+                                            argument.classifierErasedInterfaceOwnerOrNull() != null ||
+                                            expression.substitutedClassifierInputTypeOrNull(
+                                                source,
+                                                index,
+                                            )?.let { expected ->
+                                                !argument.provesNaturalClassifierInputCarrier(expected)
+                                            } != false
                                 } == true
                     }
                 ) {
@@ -1303,8 +1457,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 val receiver = expression.dispatchReceiver
                 val usesSemanticCarrier = when (receiver) {
                     null -> false
-                    is IrGetValue -> receiver.symbol.owner in context.genericOwnerCapabilityDeclarations
-                    is IrGetField -> receiver.symbol.owner in context.genericOwnerCapabilityDeclarations
+                    is IrGetValue,
+                    is IrGetField,
+                        -> receiver.readsSemanticInterfaceDeclaration()
                     is IrCall,
                     is IrTypeOperatorCall,
                         -> receiver.readsSemanticInterfaceDeclaration() ||
@@ -2538,19 +2693,24 @@ internal fun materializeLocalGenericOwnerFunctionInputEntry(
     context: DotNetBackendContext,
     source: IrSimpleFunction,
     objectParameterIndices: Set<Int>,
-    logicalKey: String,
+    authority: DotNetGenericOwnerFunctionInputEntryAuthority,
 ): IrSimpleFunction {
     context.genericOwnerFunctionInputEntries[source]?.let { existing ->
         check(context.genericOwnerFunctionInputEntryObjectParameters[source] == objectParameterIndices) {
             "Internal .NET backend error: '${source.name}' acquired conflicting object-input parameters"
         }
+        check(context.genericOwnerFunctionInputEntryAuthorities[source] == authority) {
+            "Internal .NET backend error: '${source.name}' acquired conflicting input-entry authority"
+        }
         return existing
     }
     require(source.body != null && objectParameterIndices.isNotEmpty() &&
-            objectParameterIndices.all(source.parameters.indices::contains)
+            objectParameterIndices.all(source.parameters.indices::contains) &&
+            source.dotNetDefaultParameterIndices.isNullOrEmpty()
     ) {
         "Internal .NET backend error: '${source.name}' has an invalid local object-input entry"
     }
+    val logicalKey = authority.logicalKey
     val physicalName = "${source.dotNetIlMethodName()}__KotlinClassifierInput__" +
             DotNetLibraryAbiCodec.logicalIdentityDigest(logicalKey)
     val inputEntry = context.irFactory.buildFun {
@@ -2558,7 +2718,13 @@ internal fun materializeLocalGenericOwnerFunctionInputEntry(
         endOffset = source.endOffset
         origin = DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY
         name = Name.identifier(physicalName)
-        visibility = DescriptorVisibilities.PUBLIC
+        visibility = if (authority.kind !=
+            DotNetGenericOwnerFunctionInputEntryAuthorityKind.ASSEMBLY_LOCAL
+        ) {
+            DescriptorVisibilities.PUBLIC
+        } else {
+            DescriptorVisibilities.INTERNAL
+        }
         modality = Modality.FINAL
         returnType = source.returnType
     }.apply inputEntry@{
@@ -2615,6 +2781,7 @@ internal fun materializeLocalGenericOwnerFunctionInputEntry(
         context.genericOwnerForeignDispatchDeclarations += source.parameters[index]
     }
     context.genericOwnerFunctionInputEntries[source] = inputEntry
+    context.genericOwnerFunctionInputEntryAuthorities[source] = authority
     context.genericOwnerFunctionInputEntryObjectParameters[source] = objectParameterIndices
     return inputEntry
 }

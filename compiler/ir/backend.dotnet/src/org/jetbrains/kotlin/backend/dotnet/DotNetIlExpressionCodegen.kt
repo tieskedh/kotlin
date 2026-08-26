@@ -234,6 +234,18 @@ internal class DotNetIlExpressionCodegen(
         ) {
             val operandType = mappedNaturalType(expression.argument)
             val logicalResultType = typeMapper.toDotNetIlValueType(expression.typeOperand)
+            val semanticResultType =
+                typeMapper.genericOwnerSemanticCapabilityTypeOrNull(expression.typeOperand)
+            if (operandType != null && logicalResultType != null && semanticResultType != null &&
+                !operandType.isDotNetAssignableTo(logicalResultType) &&
+                operandType.isDotNetAssignableTo(semanticResultType)
+            ) {
+                // A compiler-proven logical upcast can cross from a generic class capability to
+                // a semantic interface in its producer-published physical ancestry. Report that
+                // actual verifier-visible target, not the unrelated natural I<object> suggested
+                // by the widened Kotlin type. No new construction or runtime object is created.
+                return semanticResultType
+            }
             if (operandType != null && logicalResultType != null &&
                 typeMapper.isGenericOwnerCapabilityViewOf(operandType, logicalResultType)
             ) {
@@ -1701,7 +1713,19 @@ internal class DotNetIlExpressionCodegen(
             val kFunctionArity = expression.argument.type.dotNetKFunctionExecutionArityOrNull()
             val targetsBigArityStub = expression.typeOperand.classOrNull?.owner
                 ?.isDotNetBigArityFunctionN == true
+            val semanticCastType =
+                typeMapper.genericOwnerSemanticCapabilityTypeOrNull(expression.typeOperand)
             when {
+                semanticCastType == expectedType &&
+                        operandType.isDotNetAssignableTo(semanticCastType) -> {
+                    // A logically widened generic-owner upcast can retain a semantic carrier
+                    // selected from the producer's physical ancestry. The destination already
+                    // names that verifier-visible capability, so materializing the unrelated
+                    // natural C<object> view would fabricate a construction the object need not
+                    // implement. This is an ordinary physical upcast and changes no identity.
+                    emitExpression(expression.argument, operandType)
+                    return
+                }
                 operandType == expectedType && castType != expectedType &&
                         naturalConstructedGenericCarrierTypeOrNull(expression.typeOperand) != null &&
                         naturalConstructedGenericCarrierTypeOrNull(expression.argument.type) != null -> {
@@ -2480,6 +2504,80 @@ internal class DotNetIlExpressionCodegen(
      * separate from instruction emission lets [mappedNaturalType] use exactly the same generic
      * owner/method substitution when an enclosing IR cast asks what a call really produces.
      */
+    private fun logicalCallTypeArgumentsOrNull(
+        call: IrCall,
+        mapper: DotNetIlTypeMapper,
+        logicalArity: Int,
+    ): List<DotNetIlValueType>? {
+        if (logicalArity < 0 || call.typeArguments.size != logicalArity) return null
+        return call.typeArguments.map { argument ->
+            argument?.let(mapper::toDotNetIlGenericArgumentType) ?: return null
+        }
+    }
+
+    private fun methodSpecArgumentsOrNull(
+        call: IrCall,
+        mapper: DotNetIlTypeMapper,
+        logicalCallee: IrSimpleFunction,
+        explicitMethodSpecArguments: List<DotNetIlValueType>? = null,
+    ): List<DotNetIlValueType>? {
+        if (explicitMethodSpecArguments != null) return explicitMethodSpecArguments
+        return logicalCallTypeArgumentsOrNull(call, mapper, logicalCallee.typeParameters.size)
+    }
+
+    private fun bindCallSiteOrNull(
+        call: IrCall,
+        info: DotNetIlFunctionInfo,
+        ownerArguments: List<DotNetIlValueType>,
+        logicalCallee: IrSimpleFunction,
+        mapper: DotNetIlTypeMapper = typeMapper,
+        explicitMethodSpecArguments: List<DotNetIlValueType>? = null,
+    ): DotNetIlCallSiteSignatureBinding? {
+        val methodSpecArguments = methodSpecArgumentsOrNull(
+            call,
+            mapper,
+            logicalCallee,
+            explicitMethodSpecArguments,
+        ) ?: return null
+        return info.signature.bindCallSite(
+            declaredOwnerArity = info.owner.typeParameterCount,
+            ownerArguments = ownerArguments,
+            methodSpecArguments = methodSpecArguments,
+        )
+    }
+
+    private fun bindCallSite(
+        call: IrCall,
+        calleeName: String,
+        info: DotNetIlFunctionInfo,
+        ownerArguments: List<DotNetIlValueType>,
+        logicalCallee: IrSimpleFunction,
+        mapper: DotNetIlTypeMapper = typeMapper,
+        explicitMethodSpecArguments: List<DotNetIlValueType>? = null,
+    ): DotNetIlCallSiteSignatureBinding {
+        val methodSpecArguments = methodSpecArgumentsOrNull(
+            call,
+            mapper,
+            logicalCallee,
+            explicitMethodSpecArguments,
+        ) ?: dotNetUnsupported("call to '$calleeName' has an unsupported type-argument shape")
+        return try {
+            info.signature.bindCallSite(
+                declaredOwnerArity = info.owner.typeParameterCount,
+                ownerArguments = ownerArguments,
+                methodSpecArguments = methodSpecArguments,
+            )
+        } catch (failure: IllegalStateException) {
+            throw IllegalStateException(
+                "Internal .NET backend error: cannot bind call to '$calleeName' on " +
+                        "${info.owner.ilTypeRef}; ownerArguments=" +
+                        "${ownerArguments.map { it.nameInSignature }}, methodArguments=" +
+                        methodSpecArguments.map { it.nameInSignature },
+                failure,
+            )
+        }
+    }
+
     private fun resolveCall(call: IrCall): ResolvedCall {
         call.superQualifierSymbol?.owner?.let { superQualifier ->
             if (superQualifier.isInterface && call.origin != DOTNET_INTERFACE_DEFAULT_EXACT_CALL) {
@@ -2555,25 +2653,6 @@ internal class DotNetIlExpressionCodegen(
                         "arguments=${call.arguments.size}; result=${call.type.render()})"
             )
         info.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
-        // A generic FUNCTION call, top-level or member, carries its instantiation on the method token —
-        // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration
-        // (probe-verified, genprobe_s1; `!!0` is itself a legal instantiation argument at
-        // generic→generic call sites; a member can combine it with an independently instantiated
-        // generic owner, genmemberprobe_s1) — never erased: an unmappable type argument fails the
-        // call site loudly.
-        val methodInstantiation = if (syntheticMethodInstantiation != null) {
-            syntheticMethodInstantiation
-        } else if (callee.typeParameters.isNotEmpty()) {
-            if (call.typeArguments.size != callee.typeParameters.size) {
-                dotNetUnsupported("call to '$calleeName' has an unsupported type-argument shape")
-            }
-            call.typeArguments.map { argumentType ->
-                argumentType?.let { typeMapper.toDotNetIlGenericArgumentType(it) }
-                    ?: dotNetUnsupported(
-                        "call to '$calleeName' instantiates a type parameter with an unsupported type argument"
-                    )
-            }
-        } else emptyList()
         val receiverType = if (info.isInstance) {
             val receiver = call.arguments.firstOrNull()
                 ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
@@ -2646,36 +2725,28 @@ internal class DotNetIlExpressionCodegen(
             ownerToken = ownerView.nameInSignature
             classInstantiation = ownerView.arguments
         }
-        // Argument VALUES flow at the substituted types (the CLR's reification: `Box<Int>`
-        // really takes an `int32`), while the member-ref operand keeps the open ones.
-        val parameterTypes = info.signature.parameterTypes
-            .mapIndexed { index, parameterType ->
-                try {
-                    parameterType.substituteDotNetTypeParameters(classInstantiation, methodInstantiation)
-                } catch (failure: IllegalStateException) {
-                    throw IllegalStateException(
-                        "Internal .NET backend error: cannot substitute parameter $index of '$calleeName' " +
-                                "on ${info.owner.ilTypeRef}; parameter=${parameterType.nameInSignature}, " +
-                                "ownerArguments=${classInstantiation.map { it.nameInSignature }}, " +
-                                "methodArguments=${methodInstantiation.map { it.nameInSignature }}",
-                        failure,
-                    )
-                }
-            }
+        // A generic FUNCTION call carries its instantiation on the MethodSpec token while the
+        // selected MethodDef/MemberRef signature stays open. Argument and result VALUES use the
+        // independently substituted TypeDef and MethodDef vectors.
+        val binding = bindCallSite(
+            call = call,
+            calleeName = calleeName,
+            info = info,
+            ownerArguments = classInstantiation,
+            logicalCallee = sourceCallee,
+            explicitMethodSpecArguments = syntheticMethodInstantiation,
+        )
         val virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual()
         return ResolvedCall(
             callee = callee,
             calleeName = calleeName,
             info = info,
-            methodInstantiation = methodInstantiation,
+            methodInstantiation = binding.methodSpecArguments,
             receiverType = receiverType,
             ownerToken = ownerToken,
-            parameterTypes = parameterTypes,
+            parameterTypes = binding.verifierParameterTypes,
             virtual = virtual,
-            returnType = info.signature.returnType.substituteDotNetTypeParameters(
-                classInstantiation,
-                methodInstantiation,
-            ),
+            returnType = binding.verifierReturnType,
         )
     }
 
@@ -3532,7 +3603,7 @@ internal class DotNetIlExpressionCodegen(
             ?: genericOwnerCapabilitySlotOrNull(source)
         val semanticSlot = plannedForeignSlot
             ?: plannedCapabilitySlot?.takeIf {
-                sourceOwner.isInterface && mappedNaturalType(receiver) != DotNetIlValueType.Object
+                sourceOwner.isInterface
             }
             ?: inferredCapabilitySlot?.takeIf {
                 sourceOwner.isInterface &&
@@ -3745,6 +3816,48 @@ internal class DotNetIlExpressionCodegen(
         ) {
             return false
         }
+        val logicalMethodSpecArguments = logicalCallTypeArgumentsOrNull(
+            call,
+            typeMapper,
+            source.typeParameters.size,
+        ) ?: return false
+        val naturalMethodSpecArguments = if (isRelativeGenericInputBoolean) {
+            if (logicalMethodSpecArguments.isNotEmpty()) return false
+            listOf(checkNotNull(relativeGenericInputType))
+        } else {
+            logicalMethodSpecArguments
+        }
+        if (logicalMethodSpecArguments.isNotEmpty() &&
+            (usesRuntimeCollectionContainsAllFallback || isExactInputBoolean ||
+                    isRelativeGenericInputBoolean || isFixedBarrier)
+        ) {
+            return false
+        }
+        // The current natural-only reflection ABI materializes exactly one MethodSpec argument.
+        // Broader generic methods remain outside this bounded route rather than being invoked as
+        // an accidentally open MethodDef.
+        if (naturalMethodSpecArguments.size > 1) return false
+        val naturalCallBinding = bindCallSiteOrNull(
+            call = call,
+            info = naturalInfo,
+            ownerArguments = List(naturalInfo.owner.typeParameterCount) { index ->
+                DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+            },
+            logicalCallee = source,
+            explicitMethodSpecArguments = naturalMethodSpecArguments,
+        ) ?: return false
+        val semanticMethodSpecArguments = if (isRelativeGenericInputBoolean) {
+            naturalCallBinding.methodSpecArguments
+        } else {
+            logicalMethodSpecArguments
+        }
+        val semanticCallBinding = bindCallSiteOrNull(
+            call = call,
+            info = semanticInfo,
+            ownerArguments = emptyList(),
+            logicalCallee = source,
+            explicitMethodSpecArguments = semanticMethodSpecArguments,
+        ) ?: return false
         val hasValueResult = isProducer || isExactInputBoolean ||
                 isInvariantInputValue || isRelativeGenericInputBoolean || isFixedBarrier
         val resultNarrowing = if (hasValueResult) {
@@ -3786,11 +3899,11 @@ internal class DotNetIlExpressionCodegen(
             val crossesGuardedSemanticInput =
                 (isRelativeGenericInputBoolean && index == relativeGenericInputIndex) ||
                         (usesRuntimeCollectionContainsAllFallback && index == 0 &&
-                        semanticInfo.signature.parameterTypes[index + 1] != DotNetIlValueType.Object)
+                        semanticCallBinding.verifierParameterTypes[index + 1] != DotNetIlValueType.Object)
             val parameterType = if (crossesGuardedSemanticInput) {
                 DotNetIlValueType.Object
             } else {
-                semanticInfo.signature.parameterTypes[index + 1]
+                semanticCallBinding.verifierParameterTypes[index + 1]
             }
             emitExpression(argument, parameterType)
             spillToSyntheticLocal(
@@ -3824,7 +3937,7 @@ internal class DotNetIlExpressionCodegen(
                 (isRelativeGenericInputBoolean && index == relativeGenericInputIndex) ||
                         (usesRuntimeCollectionContainsAllFallback && index == 0)
             if (!crossesGuardedSemanticInput) return@forEach
-            val semanticParameterType = semanticInfo.signature.parameterTypes[index + 1]
+            val semanticParameterType = semanticCallBinding.verifierParameterTypes[index + 1]
             if (semanticParameterType != DotNetIlValueType.Object) {
                 methodContext.emit(loadLocalInstruction(regularArgumentSlots[index].index), pushes = 1)
                 methodContext.emit(
@@ -3842,7 +3955,7 @@ internal class DotNetIlExpressionCodegen(
                 (isRelativeGenericInputBoolean && index == relativeGenericInputIndex) ||
                         (usesRuntimeCollectionContainsAllFallback && index == 0)
             if (crossesGuardedSemanticInput) {
-                val semanticParameterType = semanticInfo.signature.parameterTypes[index + 1]
+                val semanticParameterType = semanticCallBinding.verifierParameterTypes[index + 1]
                 if (semanticParameterType != DotNetIlValueType.Object) {
                     methodContext.emit(
                         "castclass ${semanticParameterType.nameInSignature}",
@@ -3857,17 +3970,20 @@ internal class DotNetIlExpressionCodegen(
                 semanticInfo.physicalMethodName ?: semanticSlot.dotNetIlMethodName(),
                 virtual = true,
                 ownerToken = semanticInfo.owner.ilTypeRef,
+                methodInstantiation = semanticCallBinding.methodSpecArguments,
             ),
             pops = semanticInfo.signature.parameterTypes.size,
             pushes = if (hasValueResult) 1 else 0,
         )
-        if (hasValueResult && semanticResultType != DotNetIlValueType.Object &&
-            !checkNotNull(semanticResultType).isDotNetAssignableTo(DotNetIlValueType.Object)
+        val semanticCallResultType =
+            (semanticCallBinding.verifierReturnType as? DotNetIlReturnType.Value)?.type
+        if (hasValueResult && semanticCallResultType != DotNetIlValueType.Object &&
+            !checkNotNull(semanticCallResultType).isDotNetAssignableTo(DotNetIlValueType.Object)
         ) {
             // Both branches join through the runtime helper's object result. Preserve that one
             // stack shape when a declaration-independent query returns an unboxed CLR value.
             methodContext.emit(
-                "box ${checkNotNull(semanticResultType).nameInSignature}",
+                "box ${checkNotNull(semanticCallResultType).nameInSignature}",
                 pops = 1,
                 pushes = 1,
             )
@@ -3882,8 +3998,8 @@ internal class DotNetIlExpressionCodegen(
         emitSystemTypeOrNull(foreignSelectionOwner.ilTypeRef)
         if (usesRuntimeCollectionContainsAllFallback) {
             emitSystemTypeOrNull(checkNotNull(exactInputType).classInfo.ilTypeRef)
-        } else if (isRelativeGenericInputBoolean) {
-            emitSystemTypeOrNull(checkNotNull(relativeGenericInputType).nameInSignature)
+        } else if (naturalCallBinding.methodSpecArguments.isNotEmpty()) {
+            emitSystemTypeOrNull(naturalCallBinding.methodSpecArguments.single().nameInSignature)
         }
         methodContext.emit(
             "ldstr ${(naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()).toIlStringLiteral()}",
@@ -3927,7 +4043,7 @@ internal class DotNetIlExpressionCodegen(
                     DotNetGenericInterfaceRuntime.invokeUniqueCollectionContainsAllCallInstruction(
                         coreLibraryReference
                     )
-                isRelativeGenericInputBoolean ->
+                naturalCallBinding.methodSpecArguments.isNotEmpty() ->
                     DotNetGenericInterfaceRuntime
                         .invokeUniqueRelativeGenericInputCallInstruction(coreLibraryReference)
                 isExactInputBoolean ->
@@ -3945,7 +4061,8 @@ internal class DotNetIlExpressionCodegen(
             },
             pops = when {
                 isFixedBarrier -> 6
-                usesRuntimeCollectionContainsAllFallback || isRelativeGenericInputBoolean -> 5
+                usesRuntimeCollectionContainsAllFallback ||
+                        naturalCallBinding.methodSpecArguments.isNotEmpty() -> 5
                 else -> 4
             },
             pushes = 1,
@@ -4002,7 +4119,15 @@ internal class DotNetIlExpressionCodegen(
         val semanticInfo = availableFunctions[semanticSlot]
             ?: typeMapper.referencedFunctionInfoOrNull(semanticSlot)
             ?: return null
-        val semanticReturnType = (semanticInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        if (semanticInfo.owner.typeParameterCount != 0) return null
+        val semanticCallBinding = bindCallSiteOrNull(
+            call = call,
+            info = semanticInfo,
+            ownerArguments = emptyList(),
+            logicalCallee = source,
+        ) ?: return null
+        val semanticReturnType =
+            (semanticCallBinding.verifierReturnType as? DotNetIlReturnType.Value)?.type
             ?: return null
         val runtimeSemanticOwner = (semanticSlot.parent as? IrClass)?.takeIf { owner ->
             typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(semanticSlot) != null &&
@@ -4010,10 +4135,21 @@ internal class DotNetIlExpressionCodegen(
         }
         if (runtimeSemanticOwner != null) {
             val memberView = typeMapper.genericInterfaceMemberView(semanticSlot, runtimeSemanticOwner)
-            val naturalReturnType = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
+            val naturalInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
                 semanticSlot,
                 memberView,
-            )?.signature?.returnType.let { it as? DotNetIlReturnType.Value }?.type
+            )
+            val naturalReturnType = naturalInfo?.let { info ->
+                bindCallSiteOrNull(
+                    call = call,
+                    info = info,
+                    ownerArguments = List(info.owner.typeParameterCount) { index ->
+                        DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                    },
+                    logicalCallee = source,
+                    explicitMethodSpecArguments = semanticCallBinding.methodSpecArguments,
+                )
+            }?.verifierReturnType.let { it as? DotNetIlReturnType.Value }?.type
             if (naturalReturnType != null && naturalReturnType != semanticReturnType &&
                 naturalReturnType.isDotNetReferenceShaped() && semanticReturnType.isDotNetReferenceShaped()
             ) {
@@ -4057,7 +4193,13 @@ internal class DotNetIlExpressionCodegen(
         ) {
             return false
         }
-        val semanticReturnType = semanticInfo.signature.returnType
+        val semanticCallBinding = bindCallSiteOrNull(
+            call = call,
+            info = semanticInfo,
+            ownerArguments = emptyList(),
+            logicalCallee = source,
+        ) ?: return false
+        val semanticReturnType = semanticCallBinding.verifierReturnType
         val resultCoercion = when (semanticReturnType) {
             DotNetIlReturnType.Void -> {
                 if (expectedType != null &&
@@ -4080,7 +4222,7 @@ internal class DotNetIlExpressionCodegen(
         semanticInfo.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         emitArguments(
             call.arguments,
-            semanticInfo.signature.parameterTypes,
+            semanticCallBinding.verifierParameterTypes,
             "nested object-carrier call to '${source.name.asString()}'",
         )
         methodContext.emit(
@@ -4088,6 +4230,7 @@ internal class DotNetIlExpressionCodegen(
                 semanticInfo.physicalMethodName ?: semanticSlot.dotNetIlMethodName(),
                 virtual = true,
                 ownerToken = semanticInfo.owner.ilTypeRef,
+                methodInstantiation = semanticCallBinding.methodSpecArguments,
             ),
             pops = semanticInfo.signature.parameterTypes.size,
             pushes = if (semanticReturnType is DotNetIlReturnType.Value) 1 else 0,
@@ -4167,14 +4310,6 @@ internal class DotNetIlExpressionCodegen(
         val receiverType = receiver.type as? IrSimpleType ?: return false
         if ((receiverType.classifier as? IrClassSymbol)?.owner != interfaceClass) return false
 
-        fun methodInstantiation(mapper: DotNetIlTypeMapper): List<DotNetIlValueType>? {
-            if (callee.typeParameters.isEmpty()) return emptyList()
-            if (call.typeArguments.size != callee.typeParameters.size) return null
-            return call.typeArguments.map { argument ->
-                argument?.let(mapper::toDotNetIlGenericArgumentType) ?: return null
-            }
-        }
-
         fun relativeGenericMethodInstantiation(
             info: DotNetIlFunctionInfo,
         ): List<DotNetIlValueType>? {
@@ -4195,33 +4330,36 @@ internal class DotNetIlExpressionCodegen(
             ?: return false
         val canonicalReceiverType = canonicalGenericSignatureTypeMapper.toDotNetIlValueType(receiver.type)
             ?: return false
-        val canonicalMethodInstantiation = methodInstantiation(canonicalGenericSignatureTypeMapper)
-            ?: return false
-        val canonicalSignature = callee.dotNetSignature(canonicalGenericSignatureTypeMapper)
-        val canonicalPhysicalMethodName =
-            canonicalGenericSignatureTypeMapper.referencedFunctionInfoOrNull(callee)?.physicalMethodName
-                ?: callee.dotNetGenericInterfaceCanonicalMethodName()
-        val canonicalInfo = DotNetIlFunctionInfo(
+        val referencedCanonicalInfo =
+            canonicalGenericSignatureTypeMapper.referencedFunctionInfoOrNull(callee)
+        val canonicalInfo = referencedCanonicalInfo?.also { recorded ->
+            check(recorded.owner.ilTypeRef == canonicalClassInfo.ilTypeRef) {
+                "Internal .NET backend error: canonical generic-interface MethodDef owner " +
+                        "${recorded.owner.ilTypeRef} disagrees with selected owner " +
+                        canonicalClassInfo.ilTypeRef
+            }
+        } ?: DotNetIlFunctionInfo(
             canonicalClassInfo,
-            canonicalSignature,
-            canonicalPhysicalMethodName,
+            callee.dotNetSignature(canonicalGenericSignatureTypeMapper),
+            callee.dotNetGenericInterfaceCanonicalMethodName(),
         )
-        val canonicalParameterTypes = canonicalSignature.parameterTypes.map { parameterType ->
-            parameterType.substituteDotNetTypeParameters(emptyList(), canonicalMethodInstantiation)
-        }
+        val canonicalCallBinding = bindCallSiteOrNull(
+            call = call,
+            info = canonicalInfo,
+            ownerArguments = emptyList(),
+            logicalCallee = callee,
+            mapper = canonicalGenericSignatureTypeMapper,
+        ) ?: return false
         val canonical = ResolvedCall(
             callee = callee,
             calleeName = callee.name.asString(),
             info = canonicalInfo,
-            methodInstantiation = canonicalMethodInstantiation,
+            methodInstantiation = canonicalCallBinding.methodSpecArguments,
             receiverType = canonicalReceiverType,
             ownerToken = canonicalClassInfo.ilTypeRef,
-            parameterTypes = canonicalParameterTypes,
+            parameterTypes = canonicalCallBinding.verifierParameterTypes,
             virtual = true,
-            returnType = canonicalSignature.returnType.substituteDotNetTypeParameters(
-                emptyList(),
-                canonicalMethodInstantiation,
-            ),
+            returnType = canonicalCallBinding.verifierReturnType,
         )
         val memberView = typeMapper.genericInterfaceMemberView(callee, interfaceClass)
         val usesRuntimeTypeArgumentFalseBarrier =
@@ -4261,11 +4399,21 @@ internal class DotNetIlExpressionCodegen(
                 ?.index
         val usesRelativeGenericInput =
             DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(callee) != null
-        val capabilityMethodInstantiation = if (usesRelativeGenericInput) {
+        val explicitCapabilityMethodInstantiation = if (usesRelativeGenericInput) {
             relativeGenericMethodInstantiation(capabilityInfo)
         } else {
-            methodInstantiation(capabilitySignatureMapper)
-        } ?: return false
+            null
+        }
+        if (usesRelativeGenericInput && explicitCapabilityMethodInstantiation == null) return false
+        val capabilityCallBinding = bindCallSiteOrNull(
+            call = call,
+            info = capabilityInfo,
+            ownerArguments = capabilityReceiverType.arguments,
+            logicalCallee = callee,
+            mapper = capabilitySignatureMapper,
+            explicitMethodSpecArguments = explicitCapabilityMethodInstantiation,
+        ) ?: return false
+        val capabilityMethodInstantiation = capabilityCallBinding.methodSpecArguments
         val runtimeCollectionParameterOwner = capabilitySignature.parameterTypes.getOrNull(1)
             .let { it as? DotNetIlValueType.GenericInstance }
             ?.classInfo
@@ -4286,19 +4434,11 @@ internal class DotNetIlExpressionCodegen(
         } else {
             true
         }
-        val capabilityParameterTypes = capabilitySignature.parameterTypes.map { parameterType ->
-            parameterType.substituteDotNetTypeParameters(
-                capabilityReceiverType.arguments,
-                capabilityMethodInstantiation,
-            )
-        }
+        val capabilityParameterTypes = capabilityCallBinding.verifierParameterTypes
         if (call.arguments.size != capabilityParameterTypes.size || call.arguments.size != canonical.parameterTypes.size) {
             return false
         }
-        val capabilityReturnType = capabilitySignature.returnType.substituteDotNetTypeParameters(
-            capabilityReceiverType.arguments,
-            capabilityMethodInstantiation,
-        )
+        val capabilityReturnType = capabilityCallBinding.verifierReturnType
         val capabilityResultCoercion: DotNetOptionalCoercion?
         val canonicalResultCoercion: DotNetIlWideningCoercion?
         if (expectedType == null) {

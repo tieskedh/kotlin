@@ -197,10 +197,14 @@ class DotNetProducerGenericInterfacePhysicalAuthorityTest {
                             ownerLogicalKey = logicalOwnerKey,
                             logicalMemberKey = memberKey,
                             capabilityMethodName = "broad__KotlinCapability__fixture",
+                            capabilityMethodGenericParameterCount = 0,
                             defaultCapabilityMethodName = null,
+                            defaultCapabilityMethodGenericParameterCount = null,
                             semanticHookOwnerPath = null,
                             semanticHookMethodName = null,
+                            semanticHookMethodGenericParameterCount = null,
                             foreignOverrideProbeMethodName = null,
+                            foreignOverrideProbeMethodGenericParameterCount = null,
                         ),
                     )
                 }

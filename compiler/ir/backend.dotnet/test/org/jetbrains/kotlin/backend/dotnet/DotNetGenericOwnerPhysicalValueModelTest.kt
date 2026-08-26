@@ -1156,6 +1156,216 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `selected MethodSpec arity is authoritative and substitutes only its own binder`() {
+        val schema = OperationFixtureSchema()
+        val callerMethod = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val constrainedMethod = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val splitArrayMethod = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val types = listOf(
+            typeDescription(schema.owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(schema.natural, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            typeDescription(schema.semantic, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val ownerParameter = boundTypeParameter(provisional, schema.owner, 0)
+        val ownerConstruction = boundConstruction(provisional, schema.owner, listOf(ownerParameter))
+        val naturalConstruction = boundConstruction(provisional, schema.natural, listOf(ownerParameter))
+        val semanticConstruction = boundConstruction(provisional, schema.semantic, emptyList())
+
+        fun genericMethod(
+            identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
+            owner: DotNetGenericOwnerPhysicalTypeDefIdentity,
+            arity: Int,
+            constraints: List<DotNetGenericOwnerSymbolicCarrierReference> = emptyList(),
+        ): DotNetGenericOwnerPhysicalMethodDefReference {
+            val parameters = List(arity) { index ->
+                DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                    identity,
+                    index,
+                )
+            }
+            return DotNetGenericOwnerPhysicalMethodDefReference(
+                identity = identity,
+                declaringType = owner,
+                visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+                dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+                signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                    isInstance = true,
+                    genericArity = arity,
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                        callableSlot(
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                            parameters.last(),
+                        ),
+                    ),
+                    parameterSlots = listOf(callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        parameters.first(),
+                    )),
+                ),
+                genericParameters = List(arity) {
+                    DotNetGenericOwnerPhysicalGenericParameterReference(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                        constraints = constraints,
+                    )
+                },
+            )
+        }
+
+        val splitArrayParameter =
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                splitArrayMethod,
+                0,
+            )
+        val splitArrayCarrier = DotNetGenericOwnerSymbolicCarrierReference.SzArray(
+            splitArrayParameter,
+        )
+        val splitArrayMethodReference = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = splitArrayMethod,
+            declaringType = schema.semantic,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        splitArrayCarrier,
+                    ),
+                ),
+                parameterSlots = listOf(callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    splitArrayCarrier,
+                )),
+            ),
+            genericParameters = listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                constraints = emptyList(),
+            )),
+        )
+
+        val declarations = boundDeclarationIndex(
+            types,
+            listOf(
+                genericMethod(schema.naturalMethod, schema.natural, arity = 2),
+                genericMethod(schema.semanticMethod, schema.semantic, arity = 1),
+                genericMethod(
+                    constrainedMethod,
+                    schema.semantic,
+                    arity = 1,
+                    constraints = listOf(objectType()),
+                ),
+                splitArrayMethodReference,
+                methodDescription(callerMethod, schema.owner, arity = 1),
+            ),
+            edgeSets = listOf(
+                edgeSet(
+                    schema.owner,
+                    baseEdge(objectType()),
+                    interfaceEdge(naturalConstruction),
+                    interfaceEdge(semanticConstruction),
+                ),
+                edgeSet(schema.natural),
+                edgeSet(schema.semantic),
+            ),
+        )
+        val receiver = directValue(boundCarrier(declarations, ownerConstruction))
+        val intArgument = directValue(boundCarrier(declarations, int32Type()))
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                schema.naturalMethod,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(
+                    view(naturalConstruction),
+                    methodArguments = listOf(int32Type()),
+                ),
+                receiver,
+                listOf(intArgument),
+            ),
+        )
+
+        fun semanticRoute(
+            methodArgument: DotNetGenericOwnerSymbolicCarrierReference,
+        ): DotNetGenericOwnerPhysicalOperationRoute {
+            val argument = directValue(boundCarrier(declarations, methodArgument))
+            return assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalOperationRoute,
+                    >>(
+                selectDotNetGenericOwnerPhysicalOperationRoute(
+                    declarations,
+                    schema.semanticMethod,
+                    DotNetGenericOwnerPhysicalOperationRouteRequest(
+                        view(semanticConstruction),
+                        methodArguments = listOf(methodArgument),
+                    ),
+                    receiver,
+                    listOf(argument),
+                ),
+            ).value
+        }
+
+        val closed = semanticRoute(int32Type())
+        assertEquals(listOf(int32Type()), closed.methodArguments)
+        assertEquals(
+            int32Type(),
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                closed.instantiatedSignature.resultLayout,
+            ).slot.carrier,
+        )
+        assertEquals(int32Type(), closed.instantiatedSignature.parameterSlots.single().carrier)
+
+        val openCallerParameter = boundMethodParameter(declarations, callerMethod, 0)
+        val open = semanticRoute(openCallerParameter)
+        assertEquals(listOf(openCallerParameter), open.methodArguments)
+        assertEquals(
+            openCallerParameter,
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                open.instantiatedSignature.resultLayout,
+            ).slot.carrier,
+        )
+        assertEquals(openCallerParameter, open.instantiatedSignature.parameterSlots.single().carrier)
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                constrainedMethod,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(
+                    view(semanticConstruction),
+                    methodArguments = listOf(int32Type()),
+                ),
+                receiver,
+                listOf(intArgument),
+            ),
+        )
+
+        val intArray = DotNetGenericOwnerSymbolicCarrierReference.SzArray(int32Type())
+        val splitArrayRoute = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                splitArrayMethod,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(
+                    view(semanticConstruction),
+                    methodArguments = listOf(int32Type()),
+                ),
+                receiver,
+                listOf(directValue(boundCarrier(declarations, intArray))),
+            ),
+        ).value
+        assertEquals(intArray, splitArrayRoute.instantiatedSignature.parameterSlots.single().carrier)
+        assertEquals(
+            intArray,
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable>(
+                splitArrayRoute.instantiatedSignature.resultLayout,
+            ).payloadSlot.carrier,
+        )
+    }
+
+    @Test
     fun `strict owner input composes with split nullable output using exact value carriers`() {
         val owner = localOwnerIdentity(IrClassSymbolImpl())
         val natural = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(

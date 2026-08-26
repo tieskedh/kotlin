@@ -1851,6 +1851,33 @@ Producer-recorded and retained-foreign adapters, overlapping/compiler-wide
 family ownership, and wider grammars remain open. See
 [`../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md).
 
+The corresponding executable boundary is now closed for that bounded grammar.
+One call-site binder retains the selected MethodDef as an open declaration,
+requires its independently recorded generic arity, and applies the call's exact
+MethodSpec vector only to that MethodDef's `!!n` parameters. TypeDef `!n`
+substitution remains independent. Natural and semantic generic-owner endpoints
+receive the same logical method arguments, including closed value/reference
+types and an open caller method parameter; arity and binder disagreement fail
+closed. The executable grammar remains unconstrained, so this checkpoint adds
+no general call-site constraint solver. Physical-library ABI 60 carries exact
+MethodDef arity through producer functions, compiler entries, member-family
+locators, defaults/dispatchers, and value-class helpers so a consumer never
+infers it from a call.
+
+The same checkpoint extends the paired classifier-input boundary to the
+bounded direct method-generic `I<!!0>` form. The natural source MethodDef
+remains the normal Kotlin/C# entry. Only positive physical carrier evidence may
+select it; value-type widening, `Nothing`, open-nullable, foreign, generic-
+owner, transitive, or otherwise unproven values use the paired object-input
+MethodDef without fabricating `I<object>`. Application entries remain assembly-
+local, while producer-recorded and portable helper entries are hidden compiler
+ABI. Default parameters, `@InlineOnly`, reified/intrinsic remainders,
+projections, nested-open arguments, generic containing owners, and multiple
+selected inputs remain outside the proof. The focused local and separate C#
+execution matrix, full aggregate, direct XML audit, and explicit-off plus
+property-absent production inverses are green. See
+[`../archive/generic-owner-methodspec-call-binding-2026-08-27.md`](../archive/generic-owner-methodspec-call-binding-2026-08-27.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
@@ -1877,9 +1904,10 @@ The consolidation proceeds in bounded stages:
    callable family and treats exact provenance only as supporting evidence.
    The local direct-producer BOUND shadow, emitted role/alias identity,
    complete 4/6/2 comparison, fresh actual-only seal, and bounded MethodDef
-   GenericParam rows are implemented. Method-generic MethodSpec/call routing
-   is the next executable boundary; producer-recorded and retained-foreign
-   adapters and overlapping/global-family closure follow it;
+   GenericParam rows are implemented. Bounded method-generic MethodSpec/call
+   routing is executable as well. Producer-recorded and retained-foreign
+   adapters, including static/file-facade operation authority, and then
+   overlapping/global-family closure follow it;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

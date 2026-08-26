@@ -920,6 +920,7 @@ internal fun collectDotNetCSharpImplementationManifest(
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
     interfaceDefaultImplementations:
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation>,
+    genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction>,
     reifiedGenericInterfaces: Set<IrClass>,
     genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
     genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
@@ -1105,14 +1106,21 @@ internal fun collectDotNetCSharpImplementationManifest(
                             ))
                         }
                         interfaceDefaultImplementations[source]?.let { lowered ->
-                            val helperInfo = checkNotNull(availableFunctions[lowered.helper]) {
+                            // A semantic method-generic slot may erase an owner-relative
+                            // constraint which its natural default helper still represents through
+                            // I<T>.  Publish the already-materialized object-input helper when one
+                            // exists; C# authoring can then instantiate the helper in the semantic
+                            // owner domain without fabricating I<object> on an I<int> receiver.
+                            val manifestHelper =
+                                genericOwnerFunctionInputEntries[lowered.helper] ?: lowered.helper
+                            val helperInfo = checkNotNull(availableFunctions[manifestHelper]) {
                                 "C# implementation manifest default helper did not survive physical emission"
                             }
                             val helperMethodName =
-                                helperInfo.physicalMethodName ?: lowered.helper.dotNetIlMethodName()
+                                helperInfo.physicalMethodName ?: manifestHelper.dotNetIlMethodName()
                             add(locator(
                                 DotNetCSharpSlotRole.HELPER,
-                                lowered.helper,
+                                manifestHelper,
                                 helperInfo,
                                 helperMethodName,
                                 propertyName = null,

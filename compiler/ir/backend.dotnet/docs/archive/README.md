@@ -14,6 +14,13 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-methodspec-call-binding-2026-08-27.md`](generic-owner-methodspec-call-binding-2026-08-27.md)
+  records physical-library ABI 60 MethodDef-arity authority, independent
+  TypeDef/MethodDef call-site substitution, executable natural and semantic
+  MethodSpecs, bounded positive-only classifier-input twins, hidden versus
+  assembly-local compiler ABI, natural-only C# dispatch, hostile arity/binder/
+  variance/open-shape evidence, the production-erased aggregate/inverse, and
+  the remaining producer/foreign/global authority gates.
 - [`generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md)
   records complete binder-owned MethodDef GenericParam rows in BOUND and final
   emission, exact raw metadata names, set-semantic constraints, the coherent

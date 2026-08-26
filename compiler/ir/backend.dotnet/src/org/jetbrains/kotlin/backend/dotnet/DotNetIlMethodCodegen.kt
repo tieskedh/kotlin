@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_REIFIED_GENERIC_INTERFAC
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ENUM_ENTRY_CONSTRUCTOR
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
@@ -75,7 +76,6 @@ import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
-import org.jetbrains.kotlin.name.StandardClassIds
 
 /** One final verifier-visible local selected while rendering one physical MethodDef. */
 internal data class DotNetIlRawLocalPlacementObservation(
@@ -630,6 +630,14 @@ private data class DotNetIlSimpleMethodHeaderDecision(
     val genericParameters: List<DotNetIlGenericParameterDecision>,
     val signature: DotNetIlMethodSignature,
 ) {
+    init {
+        check(genericArity == signature.methodGenericParameterCount) {
+            "Internal .NET backend error: MethodDef '${physicalMethodName}' header has generic " +
+                    "arity $genericArity, but its selected physical signature records " +
+                    signature.methodGenericParameterCount
+        }
+    }
+
     val genericArity: Int
         get() = genericParameters.size
 
@@ -996,6 +1004,13 @@ internal class DotNetIlMethodCodegen(
         declarationInfo: DotNetIlFunctionInfo,
     ) {
         val body = function as? IrSimpleFunction ?: return
+        check(signature.methodGenericParameterCount ==
+                declarationInfo.signature.methodGenericParameterCount) {
+            "Internal .NET backend error: MethodImpl body '${body.name.asString()}' has generic " +
+                    "arity ${signature.methodGenericParameterCount}, but declaration " +
+                    "'${declaration.name.asString()}' has arity " +
+                    declarationInfo.signature.methodGenericParameterCount
+        }
         methodImplObservations?.add(
             DotNetIlRawMethodImplObservation(
                 implementingType = functionInfo.owner,
@@ -1101,6 +1116,7 @@ internal class DotNetIlMethodCodegen(
                 (origin == IrDeclarationOrigin.SYNTHETIC_ACCESSOR ||
                         origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
                         origin == DOTNET_INTERFACE_DEFAULT_HELPER ||
+                        origin == DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY ||
                         origin == DOTNET_STATIC_INITIALIZATION_ENTRY ||
                         origin == DOTNET_VALUE_CLASS_BOX_HELPER ||
                         origin == DOTNET_VALUE_CLASS_UNBOX_HELPER ||
@@ -1115,12 +1131,6 @@ internal class DotNetIlMethodCodegen(
                         (this as? IrSimpleFunction)
                             ?.dotNetValueClassImplementationSourceOrNull()
                             ?.isPublishedApi() == true)
-
-    /** Mirrors JVM's package-private physical treatment through CLR assembly visibility. */
-    private fun IrFunction.isDotNetInlineOnly(): Boolean =
-        (isInline && hasAnnotation(StandardClassIds.Annotations.InlineOnly)) ||
-                (this is IrSimpleFunction &&
-                        correspondingPropertySymbol?.owner?.hasAnnotation(StandardClassIds.Annotations.InlineOnly) == true)
 
     /** Maps a hidden helper-backed class or DIM bridge to every physical Kotlin interface slot. */
     private fun StringBuilder.appendInterfaceDefaultSlotOverrides() {
@@ -1140,16 +1150,12 @@ internal class DotNetIlMethodCodegen(
                 // in addition to the correctly typed forwarding MethodImpl.
                 return@forEach
             }
-            check(overridden.typeParameters.size == bridge.typeParameters.size) {
-                "Internal .NET backend error: interface-default slot bridge changed method arity"
-            }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
             recordMethodImpl(DotNetIlValueType.UserClass(overrideInfo.owner), overridden, overrideInfo)
             appendLine(
                 "    .override method " +
                         overrideInfo.renderOverrideMethodReference(
                             physicalMethodName,
-                            genericArity = bridge.typeParameters.size,
                         )
             )
         }
@@ -1203,9 +1209,6 @@ internal class DotNetIlMethodCodegen(
                 substitutor.substitute(overridden.returnType),
             ) ?: dotNetUnsupported("reified generic interface default result is unavailable")
             if (closedReturnType != signature.returnType) continue
-            check(overridden.typeParameters.size == bridge.typeParameters.size) {
-                "Internal .NET backend error: reified interface-default target changed method arity"
-            }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
             recordMethodImpl(declarationOwner, overridden, overrideInfo)
             appendLine(
@@ -1213,7 +1216,6 @@ internal class DotNetIlMethodCodegen(
                         overrideInfo.renderOverrideMethodReference(
                             physicalMethodName,
                             ownerToken,
-                            bridge.typeParameters.size,
                         )
             )
         }
@@ -1259,7 +1261,7 @@ internal class DotNetIlMethodCodegen(
                 continue
             }
             recordMethodImpl(DotNetIlValueType.UserClass(overrideInfo.owner), overridden, overrideInfo)
-            appendLine("    .override method ${overrideInfo.renderMethodReference(slotName)}")
+            appendLine("    .override method ${overrideInfo.renderOverrideMethodReference(slotName)}")
         }
     }
 
@@ -1280,9 +1282,6 @@ internal class DotNetIlMethodCodegen(
             check(interfaceInfo.typeParameterCount == 0) {
                 "Internal .NET backend error: a canonical generic-interface identity must be non-generic"
             }
-            check(overridden.typeParameters.size == bridge.typeParameters.size) {
-                "Internal .NET backend error: canonical generic-interface override changed method arity"
-            }
             val referencedInfo = canonicalTypeMapper.referencedFunctionInfoOrNull(overridden)
             val physicalMethodName = referencedInfo?.physicalMethodName ?: if (
                 interfaceClass.isDotNetGenericInterfaceDeclaration
@@ -1302,7 +1301,6 @@ internal class DotNetIlMethodCodegen(
                         overrideInfo.renderOverrideMethodReference(
                             physicalMethodName,
                             interfaceInfo.ilTypeRef,
-                            bridge.typeParameters.size,
                         )
             )
         }
@@ -1357,7 +1355,6 @@ internal class DotNetIlMethodCodegen(
                         overrideInfo.renderOverrideMethodReference(
                             typeMapper.genericInterfaceTypedMethodName(overridden),
                             ownerToken,
-                            bridge.typeParameters.size,
                         )
             )
         }
@@ -1394,7 +1391,6 @@ internal class DotNetIlMethodCodegen(
                     overrideInfo.renderOverrideMethodReference(
                         physicalMethodName,
                         overrideInfo.owner.ilTypeRef,
-                        dispatcher.typeParameters.size,
                     )
         )
     }
@@ -1442,7 +1438,6 @@ internal class DotNetIlMethodCodegen(
                     referencedInfo.renderOverrideMethodReference(
                         physicalMethodName,
                         ownerToken,
-                        bridge.typeParameters.size,
                     )
         )
     }

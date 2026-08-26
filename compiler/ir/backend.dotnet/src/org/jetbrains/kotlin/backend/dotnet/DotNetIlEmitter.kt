@@ -116,6 +116,8 @@ private fun IrSimpleFunction.dotNetCanonicalBridgeSignature(
     }
     val slotSignature = slotSignatures.single()
     check(bridgeSignature.hasThis && slotSignature.hasThis &&
+            bridgeSignature.methodGenericParameterCount ==
+            slotSignature.methodGenericParameterCount &&
             bridgeSignature.parameterTypes.size == slotSignature.parameterTypes.size
     ) {
         "Internal .NET backend error: canonical generic-interface bridge changed its physical arity"
@@ -126,6 +128,7 @@ private fun IrSimpleFunction.dotNetCanonicalBridgeSignature(
                 slotSignature.parameterTypes.drop(1),
         hasThis = true,
         hasSplitNullableResult = slotSignature.hasSplitNullableResult,
+        methodGenericParameterCount = slotSignature.methodGenericParameterCount,
     )
 }
 
@@ -198,6 +201,8 @@ internal class DotNetIlEmitter(
     private val genericOwnerPhysicalMethodDefEmissionBindings:
             Map<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> = emptyMap(),
     private val genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerFunctionInputEntryAuthorities:
+            Map<IrSimpleFunction, DotNetGenericOwnerFunctionInputEntryAuthority> = emptyMap(),
     private val genericOwnerFunctionInputEntryObjectParameters:
             Map<IrSimpleFunction, Set<Int>> = emptyMap(),
     private val genericOwnerDirectForeignOverrideDispatches:
@@ -1869,6 +1874,8 @@ internal class DotNetIlEmitter(
             genericOwnerSemanticHooks = if (genericOwnerRehearsal) genericOwnerSemanticHooks else emptyMap(),
             genericOwnerFunctionInputEntries =
                 if (genericOwnerRehearsal) genericOwnerFunctionInputEntries else emptyMap(),
+            genericOwnerFunctionInputEntryAuthorities =
+                if (genericOwnerRehearsal) genericOwnerFunctionInputEntryAuthorities else emptyMap(),
             genericOwnerForeignOverrideProbeTargets =
                 if (genericOwnerRehearsal) genericOwnerForeignOverrideProbeTargets else emptyMap(),
             preLoweringDeclarationKeys = preLoweringDeclarationKeys,
@@ -1898,6 +1905,11 @@ internal class DotNetIlEmitter(
                                 typeMapper = typeMapper,
                                 preLoweringDeclarationKeys = preLoweringDeclarationKeys,
                                 interfaceDefaultImplementations = interfaceDefaultImplementations,
+                                genericOwnerFunctionInputEntries = if (genericOwnerRehearsal) {
+                                    genericOwnerFunctionInputEntries
+                                } else {
+                                    emptyMap()
+                                },
                                 reifiedGenericInterfaces = if (genericOwnerRehearsal) {
                                     reifiedGenericInterfaces
                                 } else {

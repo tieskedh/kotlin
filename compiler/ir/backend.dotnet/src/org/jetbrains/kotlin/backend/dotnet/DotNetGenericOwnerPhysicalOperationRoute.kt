@@ -8,20 +8,24 @@ package org.jetbrains.kotlin.backend.dotnet
 /** The required physical view is a proof goal and never a source of receiver evidence. */
 internal data class DotNetGenericOwnerPhysicalOperationRouteRequest(
     val requiredReceiverView: DotNetGenericOwnerPhysicalView,
+    /** The selected MethodDef's MethodSpec vector; it never defines that MethodDef's arity. */
+    val methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference> = emptyList(),
 )
 
 /** One read-only route decision; it neither rewrites the call nor enters emitter state. */
 internal data class DotNetGenericOwnerPhysicalOperationRoute(
     val method: DotNetGenericOwnerPhysicalMethodDefReference,
     val requiredReceiverView: DotNetGenericOwnerPhysicalView,
+    val methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
     val instantiatedSignature: DotNetGenericOwnerPhysicalMethodSignatureReference,
 )
 
 /**
  * Proves only the MethodDef already selected by authoritative logical-family policy.
  * A missing endpoint or receiver view never falls back to another MethodDef, and provenance can
- * support but never replace the requested view. Broad-candidate inputs remain unavailable in this
- * first slice.
+ * support but never replace the requested view. TypeDef and MethodDef binders are substituted
+ * independently from their authority-owned vectors. Broad-candidate inputs remain unavailable in
+ * this slice.
  */
 internal fun selectDotNetGenericOwnerPhysicalOperationRoute(
     declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
@@ -39,9 +43,26 @@ internal fun selectDotNetGenericOwnerPhysicalOperationRoute(
     ) {
         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     }
-    if (method.signature.genericArity != 0) {
-        // Method-argument provenance is deliberately outside this first owner-callable slice.
+    if (request.methodArguments.size != method.signature.genericArity) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "selected physical MethodDef has generic arity ${method.signature.genericArity}, " +
+                    "but its MethodSpec vector has arity ${request.methodArguments.size}",
+        )
+    }
+    if (method.genericParameters.any { parameter -> parameter.constraints.isNotEmpty() }) {
+        // Constraint satisfaction is a separate nominal type proof. Until that proof consumes
+        // the selected MethodDef's recorded rows, an unconstrained substitution must not silently
+        // authorize a constrained MethodSpec.
         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    for (argument in request.methodArguments) {
+        when (val validation = declarations.carrierOrError(argument)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(validation.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
     }
     when (val proof = receiver.proveRequiredPhysicalView(
         declarations,
@@ -53,10 +74,12 @@ internal fun selectDotNetGenericOwnerPhysicalOperationRoute(
         DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
             return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     }
-    val instantiatedSignature = when (val binding = method.signature.instantiateForReceiverOrError(
+    val instantiatedSignature = when (val binding = method.signature.instantiateForCallOrError(
         declarations,
         method.declaringType,
+        method.identity,
         request.requiredReceiverView.construction,
+        request.methodArguments,
     )) {
         is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
         is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
@@ -88,15 +111,18 @@ internal fun selectDotNetGenericOwnerPhysicalOperationRoute(
         DotNetGenericOwnerPhysicalOperationRoute(
             method,
             request.requiredReceiverView,
+            request.methodArguments.toList(),
             instantiatedSignature,
         ),
     )
 }
 
-private fun DotNetGenericOwnerPhysicalMethodSignatureReference.instantiateForReceiverOrError(
+private fun DotNetGenericOwnerPhysicalMethodSignatureReference.instantiateForCallOrError(
     declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
     declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    selectedMethod: DotNetGenericOwnerPhysicalMethodDefIdentity,
     receiver: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalMethodSignatureReference> {
     if (receiver.definition != declaringType) {
         return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -105,7 +131,12 @@ private fun DotNetGenericOwnerPhysicalMethodSignatureReference.instantiateForRec
     }
     val parameterSlots = mutableListOf<DotNetGenericOwnerPhysicalCallableValueSlotReference>()
     for (slot in this.parameterSlots) {
-        when (val binding = slot.instantiateForReceiverOrError(declarations, receiver)) {
+        when (val binding = slot.instantiateForCallOrError(
+            declarations,
+            selectedMethod,
+            receiver,
+            methodArguments,
+        )) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> parameterSlots += binding.value
             is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
@@ -117,11 +148,21 @@ private fun DotNetGenericOwnerPhysicalMethodSignatureReference.instantiateForRec
         DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void ->
             DotNetGenericOwnerPhysicalBindingResult.Bound(result)
         is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
-            result.slot.instantiateForReceiverOrError(declarations, receiver).map { slot ->
+            result.slot.instantiateForCallOrError(
+                declarations,
+                selectedMethod,
+                receiver,
+                methodArguments,
+            ).map { slot ->
                 DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(slot)
             }
         is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
-            result.payloadSlot.instantiateForReceiverOrError(declarations, receiver).map { slot ->
+            result.payloadSlot.instantiateForCallOrError(
+                declarations,
+                selectedMethod,
+                receiver,
+                methodArguments,
+            ).map { slot ->
                 DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
                     payloadSlot = slot,
                     nullFlag = result.nullFlag,
@@ -145,17 +186,26 @@ private fun DotNetGenericOwnerPhysicalMethodSignatureReference.instantiateForRec
     )
 }
 
-private fun DotNetGenericOwnerPhysicalCallableValueSlotReference.instantiateForReceiverOrError(
+private fun DotNetGenericOwnerPhysicalCallableValueSlotReference.instantiateForCallOrError(
     declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    selectedMethod: DotNetGenericOwnerPhysicalMethodDefIdentity,
     receiver: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCallableValueSlotReference> =
-    carrier.instantiateForReceiverOrError(declarations, receiver).map { instantiatedCarrier ->
+    carrier.instantiateForCallOrError(
+        declarations,
+        selectedMethod,
+        receiver,
+        methodArguments,
+    ).map { instantiatedCarrier ->
         copy(carrier = instantiatedCarrier)
     }
 
-private fun DotNetGenericOwnerSymbolicCarrierReference.instantiateForReceiverOrError(
+private fun DotNetGenericOwnerSymbolicCarrierReference.instantiateForCallOrError(
     declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    selectedMethod: DotNetGenericOwnerPhysicalMethodDefIdentity,
     receiver: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
     return when (this) {
         is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
@@ -174,13 +224,29 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.instantiateForReceiverOrE
                     )
                 }
             }
-            is DotNetGenericOwnerPhysicalGenericBinderReference.Method ->
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            is DotNetGenericOwnerPhysicalGenericBinderReference.Method -> {
+                if (binder.definition != selectedMethod) {
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "physical MethodDef signature uses a MethodDef binder outside its selected owner",
+                    )
+                } else {
+                    methodArguments.getOrNull(index)?.let {
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
+                    } ?: DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "physical MethodSpec omits required method parameter $index",
+                    )
+                }
+            }
         }
         is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
             val instantiatedArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
             for (argument in arguments) {
-                when (val binding = argument.instantiateForReceiverOrError(declarations, receiver)) {
+                when (val binding = argument.instantiateForCallOrError(
+                    declarations,
+                    selectedMethod,
+                    receiver,
+                    methodArguments,
+                )) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> instantiatedArguments += binding.value
                     is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return binding
@@ -191,7 +257,12 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.instantiateForReceiverOrE
             }
         }
         is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
-            element.instantiateForReceiverOrError(declarations, receiver).map { instantiatedElement ->
+            element.instantiateForCallOrError(
+                declarations,
+                selectedMethod,
+                receiver,
+                methodArguments,
+            ).map { instantiatedElement ->
                 DotNetGenericOwnerSymbolicCarrierReference.SzArray(instantiatedElement)
             }
     }

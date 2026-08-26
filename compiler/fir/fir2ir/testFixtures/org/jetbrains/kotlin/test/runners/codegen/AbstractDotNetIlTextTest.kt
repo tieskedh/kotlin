@@ -507,6 +507,12 @@ private class BackendCliDotNetFacade(
             families = completedOutput.genericOwnerSealedEmissionFamilies,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
+        validateGenericOwnerMethodGenericExecutableCalls(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            families = completedOutput.genericOwnerSealedEmissionFamilies,
+            emittedArtifact = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         validateGenericOwnerPhysicalValuePlacementComparison(
             genericOwnerRehearsal = genericOwnerRehearsal,
             comparisons = completedOutput.genericOwnerPhysicalValuePlacementComparisons,
@@ -1369,6 +1375,276 @@ private fun validateGenericOwnerSealedEmissionFamilies(
             sharedKinds.mapTo(linkedSetOf()) { kind -> pathsByKind[0].getValue(kind) }) {
         "The two family certificates must share only interface roots and isolate implementation-owned roots: " +
                 pathsByKind
+    }
+}
+
+/**
+ * Requires the bounded method-generic declaration certificate to survive real natural and
+ * semantic MethodSpec calls. Generic-class route snapshots deliberately are not an oracle here:
+ * this fixture owns an interface. The sealed family, emitted IL, and executed assembly are the
+ * independent physical evidence. This remains fixture-keyed and does not alter compiler policy.
+ */
+private fun validateGenericOwnerMethodGenericExecutableCalls(
+    genericOwnerRehearsal: Boolean,
+    families: List<DotNetGenericOwnerSealedEmissionFamilySnapshot>,
+    emittedArtifact: File,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) return
+
+    val methodGenericFamilies = families.filter { family ->
+        family.scope == DotNetIlEmissionScope.USER &&
+                family.ownerName.endsWith("MethodGenericProducer") &&
+                family.logicalMemberName == "produce" &&
+                family.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH
+    }
+    check(methodGenericFamilies.size == 2) {
+        "The executable MethodSpec probe requires both sealed implementation families: $families"
+    }
+    val sharedFamily = methodGenericFamilies.first()
+    val naturalOwner = sharedFamily.typeDefs.single { type ->
+        type.kind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.NATURAL_INTERFACE
+    }.physicalPath.last()
+    val semanticOwner = sharedFamily.typeDefs.single { type ->
+        type.kind ==
+                DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY
+    }.physicalPath.last()
+    val naturalMethod = sharedFamily.methodDefs.single { method ->
+        method.kind ==
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.NATURAL_INTERFACE_SLOT
+    }.physicalName
+    val semanticMethod = sharedFamily.methodDefs.single { method ->
+        method.kind ==
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_SLOT
+    }.physicalName
+    check(methodGenericFamilies.all { family ->
+            family.typeDefs.single { type ->
+                type.kind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.NATURAL_INTERFACE
+            }.physicalPath.last() == naturalOwner && family.typeDefs.single { type ->
+                type.kind ==
+                        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY
+            }.physicalPath.last() == semanticOwner && family.methodDefs.single { method ->
+                method.kind ==
+                        DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.NATURAL_INTERFACE_SLOT
+            }.physicalName == naturalMethod && family.methodDefs.single { method ->
+                method.kind ==
+                        DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_SLOT
+            }.physicalName == semanticMethod
+        }) {
+        "Both implementation certificates must select the same declaration-owned MethodDefs"
+    }
+
+    val emittedIl = emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
+    check(emittedIl.isFile) {
+        "The executable MethodSpec probe has no emitted IL sibling: ${emittedIl.path}"
+    }
+    val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+        .map { match -> match.range.first }
+        .toList()
+    val methodWindows = methodStarts.mapIndexed { index, start ->
+        ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+    }
+
+    val applicationInputEntries = methodWindows.filter { window ->
+        val header = window.substringBefore('{')
+        "__KotlinClassifierInput__" in header && listOf(
+            "methodGenericExactIntOwnerIntMarker",
+            "methodGenericExactIntOwnerStringMarker",
+            "methodGenericExactStringOwnerIntMarker",
+            "methodGenericExactStringOwnerStringMarker",
+            "methodGenericRetainProducer",
+            "methodGenericForwardExactProducer",
+            "methodGenericForwardClosedNestedProducer",
+        ).any { sourceName -> sourceName in header }
+    }
+    check(applicationInputEntries.size == 7 && applicationInputEntries.all { window ->
+            window.trimStart().startsWith(".method assembly ")
+        }) {
+        "Application classifier-input twins must remain assembly-local compiler ABI: " +
+                applicationInputEntries.map { window -> window.substringBefore('{').trim() }
+    }
+
+    val boxMethod = methodWindows.singleOrNull { window ->
+        "'box'(" in window.substringBefore('{')
+    }
+    check(boxMethod != null) { "Cannot isolate the MethodSpec route probe's box MethodDef" }
+    val retainCalls = boxMethod.lineSequence().map(String::trim).filter { line ->
+        (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                "::'methodGenericRetainProducer" in line
+    }.toList()
+    val naturalRetainCalls = retainCalls.filter { line ->
+        "__KotlinClassifierInput__" !in line
+    }
+    val semanticRetainCalls = retainCalls.filter { line ->
+        "__KotlinClassifierInput__" in line
+    }
+    check(naturalRetainCalls.size == 1 && "<int32>(" in naturalRetainCalls.single() &&
+            semanticRetainCalls.size == 3) {
+        "Producer classifier-input MethodSpecs must contain one proven natural call and three " +
+                "fail-closed object-input calls: $retainCalls"
+    }
+    val nestedForwarder = methodWindows.singleOrNull { window ->
+        "'methodGenericForwardClosedNestedProducer'(" in window.substringBefore('{')
+    }
+    val nestedForwarderTwin = methodWindows.singleOrNull { window ->
+        val header = window.substringBefore('{')
+        "methodGenericForwardClosedNestedProducer__KotlinClassifierInput__" in header
+    }
+    check(nestedForwarder != null && nestedForwarder.lineSequence().map(String::trim).any { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'methodGenericRetainProducer'<" in line &&
+                    "__KotlinClassifierInput__" !in line
+        } && nestedForwarderTwin != null &&
+            nestedForwarderTwin.lineSequence().map(String::trim).any { line ->
+                (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                        "::'methodGenericRetainProducer__KotlinClassifierInput__" in line
+            }) {
+        "An exact closed MethodDef parameter must stay natural only in the natural forwarding " +
+                "MethodDef: natural=$nestedForwarder, twin=$nestedForwarderTwin"
+    }
+    val exactForwarder = methodWindows.singleOrNull { window ->
+        "'methodGenericForwardExactProducer'<" in window.substringBefore('{')
+    }
+    val exactForwarderTwin = methodWindows.singleOrNull { window ->
+        val header = window.substringBefore('{')
+        "methodGenericForwardExactProducer__KotlinClassifierInput__" in header
+    }
+    check(exactForwarder != null && exactForwarder.lineSequence().map(String::trim).any { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'methodGenericRetainProducer'<!!0>" in line &&
+                    "__KotlinClassifierInput__" !in line
+        } && exactForwarderTwin != null &&
+            exactForwarderTwin.lineSequence().map(String::trim).any { line ->
+                (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                        "::'methodGenericRetainProducer__KotlinClassifierInput__" in line
+            }) {
+        "A direct method binder must stay natural only in the natural forwarding MethodDef: " +
+                "natural=$exactForwarder, twin=$exactForwarderTwin"
+    }
+
+    val defaultBearingMethods = methodWindows.filter { window ->
+        "'methodGenericDefaultedClassifierInput" in window.substringBefore('{')
+    }
+    check(defaultBearingMethods.any { window ->
+            "'methodGenericDefaultedClassifierInput'<" in window.substringBefore('{')
+        } && defaultBearingMethods.any { window ->
+            "methodGenericDefaultedClassifierInput\$default" in window.substringBefore('{')
+        } && defaultBearingMethods.none { window ->
+            "__KotlinClassifierInput__" in window.substringBefore('{')
+        }) {
+        "A default-bearing source or its default dispatcher acquired classifier-input ABI: " +
+                defaultBearingMethods.map { window -> window.substringBefore('{').trim() }
+    }
+
+    val inlineOnlyMethods = methodWindows.filter { window ->
+        "'methodGenericInlineOnlyClassifierInput'" in window.substringBefore('{')
+    }
+    check(inlineOnlyMethods.size == 1 &&
+            inlineOnlyMethods.single().trimStart().startsWith(".method assembly ") &&
+            "__KotlinClassifierInput__" !in inlineOnlyMethods.single().substringBefore('{')) {
+        "An InlineOnly source acquired public or paired classifier-input ABI: " +
+                inlineOnlyMethods.map { window -> window.substringBefore('{').trim() }
+    }
+
+    listOf(
+        "methodGenericOpenNullableClassifierInput",
+        "methodGenericNestedOpenClassifierInput",
+    ).forEach { sourceName ->
+        val sourceFamily = methodWindows.filter { window ->
+            sourceName in window.substringBefore('{')
+        }
+        check(sourceFamily.isNotEmpty() && sourceFamily.none { window ->
+                "__KotlinClassifierInput__" in window.substringBefore('{')
+            }) {
+            "An open-nullable or nested-open source acquired classifier-input ABI: " +
+                    sourceFamily.map { window -> window.substringBefore('{').trim() }
+        }
+    }
+
+    data class ExpectedMethodSpec(
+        val callerName: String,
+        val route: DotNetGenericOwnerCallRouteRequirement,
+        val ownerArgument: String?,
+        val methodArgument: String,
+    )
+
+    val expectedMethodSpecs = listOf(
+        ExpectedMethodSpec(
+            "methodGenericExactIntOwnerIntMarker",
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+            "int32",
+            "int32",
+        ),
+        ExpectedMethodSpec(
+            "methodGenericExactIntOwnerStringMarker",
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+            "int32",
+            "string",
+        ),
+        ExpectedMethodSpec(
+            "methodGenericExactStringOwnerIntMarker",
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+            "string",
+            "int32",
+        ),
+        ExpectedMethodSpec(
+            "methodGenericExactStringOwnerStringMarker",
+            DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
+            "string",
+            "string",
+        ),
+        ExpectedMethodSpec(
+            "methodGenericWidenedIntMarker",
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+            null,
+            "int32",
+        ),
+        ExpectedMethodSpec(
+            "methodGenericWidenedStringMarker",
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+            null,
+            "string",
+        ),
+        ExpectedMethodSpec(
+            "methodGenericWidenedForward",
+            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+            null,
+            "!!0",
+        ),
+    )
+    for (expected in expectedMethodSpecs) {
+        val method = methodWindows.singleOrNull { window ->
+            window.substringBefore('{').let { header ->
+                "'${expected.callerName}'(" in header || "'${expected.callerName}'<" in header
+            }
+        }
+        check(method != null) {
+            "Cannot isolate the emitted ${expected.callerName} MethodDef: ${emittedIl.path}"
+        }
+        val calls = method.lineSequence().map(String::trim).filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    ("::'$naturalMethod'<" in line || "::'$semanticMethod'<" in line)
+        }.toList()
+        check(calls.size == 1) {
+            "${expected.callerName} must emit one selected generic-owner call: $calls"
+        }
+        val call = calls.single()
+        val expectedMethodArgument = "<${expected.methodArgument}>(!!0)"
+        if (expected.route == DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY) {
+            check(call.startsWith("callvirt instance !0 ") &&
+                    "'$naturalOwner'<${expected.ownerArgument}>::'$naturalMethod'" in call &&
+                    expectedMethodArgument in call && "'$semanticOwner'::" !in call) {
+                "${expected.callerName} did not emit its exact natural MethodSpec: $call"
+            }
+        } else {
+            check(call.startsWith("callvirt instance object ") &&
+                    "'$semanticOwner'::'$semanticMethod'" in call &&
+                    expectedMethodArgument in call && "'$naturalOwner'<" !in call) {
+                "${expected.callerName} did not emit its semantic-capability MethodSpec: $call"
+            }
+        }
     }
 }
 
@@ -6889,6 +7165,30 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (classifier.safeRead(rawString) != "raw-string")
                         throw new InvalidOperationException(
                             "Kotlin safe cast did not dispatch the matching precompiled producer");
+                    RehearsalSeparateRawCSharpMethodGenericProducer rawMethodGeneric =
+                        new RehearsalSeparateRawCSharpMethodGenericProducer();
+                    RehearsalSeparateAbstractMethodGenericProducer<int> rawMethodGenericExact =
+                        rawMethodGeneric;
+                    RehearsalSeparateAbstractMethodGenericReader rawMethodGenericReader =
+                        new RehearsalSeparateAbstractMethodGenericReader();
+                    if (rawMethodGenericExact.produceAbstractGeneric<int>(3) != 3103 ||
+                        !object.Equals(rawMethodGenericReader.read(rawMethodGeneric, 4), 3104) ||
+                        !object.Equals(
+                            rawMethodGenericReader.readString(rawMethodGeneric, "abc"),
+                            3203) ||
+                        !object.Equals(
+                            rawMethodGenericReader.readOpen<int>(rawMethodGeneric, 5),
+                            3105) ||
+                        !object.Equals(
+                            rawMethodGenericReader.readOpen<string>(rawMethodGeneric, "open"),
+                            3204) ||
+                        !object.Equals(
+                            rawMethodGenericReader.readOpen<object>(rawMethodGeneric, "runtime-string"),
+                            3314) ||
+                        !rawMethodGenericReader.same(rawMethodGeneric, rawMethodGeneric) ||
+                        rawMethodGeneric.Calls != 6)
+                        throw new InvalidOperationException(
+                            "Kotlin widened MethodSpec routing rejected a natural-only C# implementation");
                     RehearsalSeparateProducer<RehearsalSeparateProducer<int>> rawNested =
                         new RehearsalSeparateProducerValue<RehearsalSeparateProducer<int>>(
                             rawProducer);
@@ -6984,18 +7284,30 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         .GetMethod("rehearsalSeparateOpenProducerBox");
                     Type separateOpenProducerParameter = separateOpenProducerBox
                         .GetParameters()[0].ParameterType;
-                    if (separateOpenProducerParameter != typeof(object) ||
+                    Type separateOpenProducerTypeParameter = separateOpenProducerBox
+                        .GetGenericArguments()[0];
+                    if (!separateOpenProducerParameter.IsGenericType ||
+                            separateOpenProducerParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateProducer<>) ||
+                            separateOpenProducerParameter.GetGenericArguments()[0] !=
+                                separateOpenProducerTypeParameter ||
                             separateOpenProducerBox.ReturnType != typeof(object))
                         throw new InvalidOperationException(
-                            "the separate open producer construction lacked an object boundary");
+                            "the separate open producer lost its natural input or object result boundary");
                     System.Reflection.MethodInfo separateOpenConsumerBox = typeof(libKt)
                         .GetMethod("rehearsalSeparateOpenConsumerBox");
                     Type separateOpenConsumerParameter = separateOpenConsumerBox
                         .GetParameters()[0].ParameterType;
-                    if (separateOpenConsumerParameter != typeof(object) ||
+                    Type separateOpenConsumerTypeParameter = separateOpenConsumerBox
+                        .GetGenericArguments()[0];
+                    if (!separateOpenConsumerParameter.IsGenericType ||
+                            separateOpenConsumerParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateConsumer<>) ||
+                            separateOpenConsumerParameter.GetGenericArguments()[0] !=
+                                separateOpenConsumerTypeParameter ||
                             separateOpenConsumerBox.ReturnType != typeof(object))
                         throw new InvalidOperationException(
-                            "the separate open consumer construction lacked an object boundary");
+                            "the separate open consumer lost its natural input or object result boundary");
                     System.Reflection.MethodInfo separateOpenProducerIdentity = typeof(libKt)
                         .GetMethod("rehearsalSeparateOpenProducerBoxIdentity");
                     if (separateOpenProducerIdentity.GetParameters()[0].ParameterType !=
@@ -7833,6 +8145,36 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!ambiguousRejected)
                         throw new InvalidOperationException(
                             "a foreign producer with two CLR constructions was not rejected");
+                    System.Reflection.MethodInfo publishedClassifierInputEntry = null;
+                    foreach (System.Reflection.MethodInfo candidate in typeof(libKt).GetMethods(
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.Static))
+                    {
+                        if (candidate.Name.StartsWith(
+                            "rehearsalSeparateIntConsumerBox__KotlinClassifierInput__",
+                            StringComparison.Ordinal))
+                        {
+                            if (publishedClassifierInputEntry != null)
+                                throw new InvalidOperationException(
+                                    "the published classifier-input entry was ambiguous");
+                            publishedClassifierInputEntry = candidate;
+                        }
+                    }
+                    System.ComponentModel.EditorBrowsableAttribute classifierInputBrowsable =
+                        publishedClassifierInputEntry == null ? null :
+                            (System.ComponentModel.EditorBrowsableAttribute)
+                                Attribute.GetCustomAttribute(
+                                    publishedClassifierInputEntry,
+                                    typeof(System.ComponentModel.EditorBrowsableAttribute));
+                    if (publishedClassifierInputEntry == null ||
+                        publishedClassifierInputEntry.GetCustomAttributes(
+                            typeof(Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute),
+                            false).Length != 1 ||
+                        classifierInputBrowsable == null ||
+                        classifierInputBrowsable.State !=
+                            System.ComponentModel.EditorBrowsableState.Never)
+                        throw new InvalidOperationException(
+                            "the published classifier-input entry was exposed as ordinary C# API");
                     RehearsalSeparateConsumerReader consumerReader =
                         new RehearsalSeparateConsumerReader();
                     RehearsalSeparateCSharpObjectConsumer objectConsumer =
@@ -7842,11 +8184,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (!object.Equals(objectConsumer.Value, "reference-csharp"))
                         throw new InvalidOperationException(
                             "natural CLR reference contravariance was not preserved");
-                    consumerReader.consume(objectConsumer, 71);
+                    libKt.rehearsalSeparateConsumeBroadConsumer(objectConsumer, 71);
                     if (!object.Equals(objectConsumer.Value, 71) ||
-                        !consumerReader.same(objectConsumer, objectConsumer) ||
-                        !object.ReferenceEquals(
-                            consumerReader.identity(objectConsumer), objectConsumer))
+                        !libKt.rehearsalSeparateBroadConsumerRetainsIdentity(
+                            objectConsumer,
+                            objectConsumer))
                         throw new InvalidOperationException(
                             "Kotlin contravariant dispatch bypassed the generated object consumer bridge");
                     RehearsalSeparateCSharpIntConsumer intConsumer =
@@ -7874,10 +8216,14 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "ordinary C# default dispatch did not execute Kotlin's one default body");
                     RehearsalSeparateDefaultConsumerReader defaultConsumerReader =
                         new RehearsalSeparateDefaultConsumerReader();
-                    defaultConsumerReader.consume(defaultConsumer, 74);
+                    libKt.rehearsalSeparateConsumeBroadDefaultConsumer(
+                        defaultConsumer,
+                        74);
                     if (!object.Equals(
                             libKt.rehearsalSeparateDefaultConsumerObserved(), 74) ||
-                        !defaultConsumerReader.same(defaultConsumer, defaultConsumer))
+                        !libKt.rehearsalSeparateBroadDefaultConsumerRetainsIdentity(
+                            defaultConsumer,
+                            defaultConsumer))
                         throw new InvalidOperationException(
                             "Kotlin narrowed dispatch bypassed the C# default implementation bridge");
                     RehearsalSeparateCSharpDefaultOverrideConsumer defaultOverrideConsumer =
@@ -7890,9 +8236,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
                             "csharp-default-override-reference"))
                         throw new InvalidOperationException(
                             "ordinary C# override did not replace Kotlin's default");
-                    defaultConsumerReader.consume(defaultOverrideConsumer, 75);
+                    libKt.rehearsalSeparateConsumeBroadDefaultConsumer(
+                        defaultOverrideConsumer,
+                        75);
                     if (!object.Equals(defaultOverrideConsumer.observed, 75) ||
-                        !defaultConsumerReader.same(
+                        !libKt.rehearsalSeparateBroadDefaultConsumerRetainsIdentity(
                             defaultOverrideConsumer,
                             defaultOverrideConsumer))
                         throw new InvalidOperationException(
@@ -8077,7 +8425,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         constrainedDefaultHelperValues.Length != 2 ||
                         constrainedDefaultHelper.ReturnType !=
                             constrainedDefaultHelperParameters[0] ||
-                        constrainedDefaultHelperValues[0].ParameterType != typeof(object) ||
+                        !constrainedDefaultHelperValues[0].ParameterType.IsGenericType ||
+                        constrainedDefaultHelperValues[0].ParameterType
+                            .GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateConstrainedDefaultMethodGenericProducer<>) ||
+                        constrainedDefaultHelperValues[0].ParameterType
+                            .GetGenericArguments()[0] != constrainedDefaultHelperParameters[0] ||
                         constrainedDefaultHelperValues[1].ParameterType !=
                             constrainedDefaultHelperParameters[1])
                         throw new InvalidOperationException(
@@ -8242,7 +8595,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         multiConstrainedHelperValues.Length != 2 ||
                         multiConstrainedDefaultHelper.ReturnType !=
                             multiConstrainedHelperParameters[0] ||
-                        multiConstrainedHelperValues[0].ParameterType != typeof(object) ||
+                        !multiConstrainedHelperValues[0].ParameterType.IsGenericType ||
+                        multiConstrainedHelperValues[0].ParameterType
+                            .GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateMultiConstrainedDefaultProducer<>) ||
+                        multiConstrainedHelperValues[0].ParameterType
+                            .GetGenericArguments()[0] != multiConstrainedHelperParameters[0] ||
                         multiConstrainedHelperValues[1].ParameterType !=
                             multiConstrainedHelperParameters[1])
                         throw new InvalidOperationException(
@@ -8415,7 +8773,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         nominalConstrainedHelperValues.Length != 2 ||
                         nominalConstrainedDefaultHelper.ReturnType !=
                             nominalConstrainedHelperParameters[0] ||
-                        nominalConstrainedHelperValues[0].ParameterType != typeof(object) ||
+                        !nominalConstrainedHelperValues[0].ParameterType.IsGenericType ||
+                        nominalConstrainedHelperValues[0].ParameterType
+                            .GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateNominalConstrainedDefaultProducer<>) ||
+                        nominalConstrainedHelperValues[0].ParameterType
+                            .GetGenericArguments()[0] != nominalConstrainedHelperParameters[0] ||
                         nominalConstrainedHelperValues[1].ParameterType !=
                             nominalConstrainedHelperParameters[1])
                         throw new InvalidOperationException(
@@ -8544,7 +8907,11 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     if (nonNullHelperParameters.Length != 2 ||
                         nonNullHelperValues.Length != 2 ||
                         nonNullDefaultHelper.ReturnType != nonNullHelperParameters[0] ||
-                        nonNullHelperValues[0].ParameterType != typeof(object) ||
+                        !nonNullHelperValues[0].ParameterType.IsGenericType ||
+                        nonNullHelperValues[0].ParameterType.GetGenericTypeDefinition() !=
+                            typeof(RehearsalSeparateNonNullDefaultProducer<>) ||
+                        nonNullHelperValues[0].ParameterType.GetGenericArguments()[0] !=
+                            nonNullHelperParameters[0] ||
                         nonNullHelperValues[1].ParameterType != nonNullHelperParameters[1] ||
                         nonNullHelperParameters[1].GenericParameterAttributes !=
                             System.Reflection.GenericParameterAttributes.None ||
@@ -9270,13 +9637,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         ownerRelativeDefaultHelperParameters[1]
                             .GetGenericParameterConstraints().Length != 0 ||
                         ownerRelativeDefaultHelperValues.Length != 2 ||
-                        ownerRelativeDefaultHelperValues[0].ParameterType != typeof(object) ||
+                        !ownerRelativeDefaultHelperValues[0].ParameterType.IsGenericType ||
+                        ownerRelativeDefaultHelperValues[0].ParameterType
+                            .GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateOwnerRelativeDefaultMethodGenericProducer<>) ||
+                        ownerRelativeDefaultHelperValues[0].ParameterType
+                            .GetGenericArguments()[0] != ownerRelativeDefaultHelperParameters[0] ||
                         ownerRelativeDefaultHelperValues[1].ParameterType !=
                             ownerRelativeDefaultHelperParameters[1] ||
                         ownerRelativeDefaultHelper.ReturnType !=
                             ownerRelativeDefaultHelperParameters[0])
                         throw new InvalidOperationException(
-                            "owner-relative default helper lost T/R order or physical erasure");
+                            "owner-relative default helper lost T/R order or natural receiver");
                     RehearsalSeparateNullableOwnerRelativeDefaultReader
                         nullableOwnerRelativeReader =
                             new RehearsalSeparateNullableOwnerRelativeDefaultReader();
@@ -9390,13 +9762,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         nullableOwnerRelativeHelperParameters[1]
                             .GetGenericParameterConstraints().Length != 0 ||
                         nullableOwnerRelativeHelperValues.Length != 2 ||
-                        nullableOwnerRelativeHelperValues[0].ParameterType != typeof(object) ||
+                        !nullableOwnerRelativeHelperValues[0].ParameterType.IsGenericType ||
+                        nullableOwnerRelativeHelperValues[0].ParameterType
+                            .GetGenericTypeDefinition() !=
+                                typeof(RehearsalSeparateNullableOwnerRelativeDefaultProducer<>) ||
+                        nullableOwnerRelativeHelperValues[0].ParameterType
+                            .GetGenericArguments()[0] != nullableOwnerRelativeHelperParameters[0] ||
                         nullableOwnerRelativeHelperValues[1].ParameterType !=
                             nullableOwnerRelativeHelperParameters[1] ||
                         nullableOwnerRelativeHelper.ReturnType !=
                             nullableOwnerRelativeHelperParameters[0])
                         throw new InvalidOperationException(
-                            "nullable owner-relative helper lost T/R order or erasure");
+                            "nullable owner-relative helper lost T/R order or natural receiver");
                     System.Reflection.MethodInfo kotlinNullableOwnerRelativeOverride =
                         typeof(RehearsalSeparateNullableOwnerRelativeDefaultOverrideProducerValue)
                             .GetMethod("produceNullableOwnerRelativeDefault");
@@ -9422,10 +9799,12 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         middleKt.rehearsalSeparateOpenDefaultConsumerObserved() != null)
                         throw new InvalidOperationException(
                             "C# subclass override did not replace the Kotlin natural default override");
-                    defaultConsumerReader.consume(derivedDefaultConsumer, 76);
+                    libKt.rehearsalSeparateConsumeBroadDefaultConsumer(
+                        derivedDefaultConsumer,
+                        76);
                     if (!object.Equals(derivedDefaultConsumer.observed, 76) ||
                         middleKt.rehearsalSeparateOpenDefaultConsumerObserved() != null ||
-                        !defaultConsumerReader.same(
+                        !libKt.rehearsalSeparateBroadDefaultConsumerRetainsIdentity(
                             derivedDefaultConsumer,
                             derivedDefaultConsumer))
                         throw new InvalidOperationException(
@@ -10142,18 +10521,28 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         typeof(genericOwnerRehearsalStateCarriersKt)
                             .GetMethod("rehearsalOpenProducerBox");
                     Type openProducerParameter = openProducerBox.GetParameters()[0].ParameterType;
-                    if (openProducerParameter != typeof(object) ||
+                    Type openProducerTypeParameter = openProducerBox.GetGenericArguments()[0];
+                    if (!openProducerParameter.IsGenericType ||
+                            openProducerParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalProducer<>) ||
+                            openProducerParameter.GetGenericArguments()[0] !=
+                                openProducerTypeParameter ||
                             openProducerBox.ReturnType != typeof(object))
                         throw new InvalidOperationException(
-                            "the open producer construction lacked an object boundary");
+                            "the open producer lost its natural input or object result boundary");
                     System.Reflection.MethodInfo openConsumerBox =
                         typeof(genericOwnerRehearsalStateCarriersKt)
                             .GetMethod("rehearsalOpenConsumerBox");
                     Type openConsumerParameter = openConsumerBox.GetParameters()[0].ParameterType;
-                    if (openConsumerParameter != typeof(object) ||
+                    Type openConsumerTypeParameter = openConsumerBox.GetGenericArguments()[0];
+                    if (!openConsumerParameter.IsGenericType ||
+                            openConsumerParameter.GetGenericTypeDefinition() !=
+                                typeof(RehearsalConsumer<>) ||
+                            openConsumerParameter.GetGenericArguments()[0] !=
+                                openConsumerTypeParameter ||
                             openConsumerBox.ReturnType != typeof(object))
                         throw new InvalidOperationException(
-                            "the open consumer construction lacked an object boundary");
+                            "the open consumer lost its natural input or object result boundary");
                     System.Reflection.MethodInfo openProducerIdentity =
                         typeof(genericOwnerRehearsalStateCarriersKt)
                             .GetMethod("rehearsalOpenProducerBoxIdentity");
@@ -10614,6 +11003,28 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     public string produce()
                     {
                         return "raw-string";
+                    }
+                }
+
+                // This assembly is compiled without the Kotlin authoring generator. The class
+                // therefore implements only the ordinary natural CLR-generic interface; Kotlin's
+                // widened route must discover and instantiate this same generic MethodDef.
+                public sealed class RehearsalSeparateRawCSharpMethodGenericProducer :
+                    RehearsalSeparateAbstractMethodGenericProducer<int>
+                {
+                    public int Calls { get; private set; }
+
+                    public int produceAbstractGeneric<R>(R value)
+                    {
+                        Calls++;
+                        if (typeof(R) == typeof(int))
+                            return 3100 + (int)(object)value;
+                        if (typeof(R) == typeof(string))
+                            return 3200 + ((string)(object)value).Length;
+                        if (typeof(R) == typeof(object))
+                            return 3300 + ((string)(object)value).Length;
+                        throw new System.InvalidOperationException(
+                            "unexpected natural-only method argument " + typeof(R).FullName);
                     }
                 }
 

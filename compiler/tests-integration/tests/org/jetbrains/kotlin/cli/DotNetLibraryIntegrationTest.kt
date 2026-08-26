@@ -10242,8 +10242,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ownerPath = listOf("sample.Box"),
                 valueClassAbi = DotNetValueClassAbi(
                     primaryConstructorMethodName = "constructor-impl",
+                    primaryConstructorMethodGenericParameterCount = 1,
                     boxMethodName = "box-impl",
+                    boxMethodGenericParameterCount = 2,
                     unboxMethodName = "unbox-impl",
+                    unboxMethodGenericParameterCount = 3,
                 ),
             ),
             "C:sample/Counter" to DotNetPhysicalDeclaration.Class(
@@ -10261,11 +10264,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ownerPath = listOf("sample.LibraryKt"),
                 methodName = "Increment",
                 isInstance = false,
+                methodGenericParameterCount = 1,
             ),
             "F:sample/consumeGenericOwner" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.LibraryKt"),
                 methodName = "consumeGenericOwner",
                 isInstance = false,
+                methodGenericParameterCount = 2,
             ),
             "G:F:sample/GenericOwner/member" to
                     DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
@@ -10273,11 +10278,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ownerLogicalKey = "C:sample/GenericOwner",
                         logicalMemberKey = "F:sample/GenericOwner/member",
                         capabilityMethodName = "member__KotlinCapability__1234",
+                        capabilityMethodGenericParameterCount = 1,
                         defaultCapabilityMethodName = "memberDefault__KotlinCapability__1234",
+                        defaultCapabilityMethodGenericParameterCount = 2,
                         semanticHookOwnerPath = listOf("sample.GenericOwner`2"),
                         semanticHookMethodName = "member__KotlinSemantic__1234",
+                        semanticHookMethodGenericParameterCount = 3,
                         foreignOverrideProbeMethodName =
                             "member__KotlinForeignOverrideProbe__1234",
+                        foreignOverrideProbeMethodGenericParameterCount = 4,
                     ),
             "H:C:sample/GenericOwner" to
                     DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
@@ -10305,29 +10314,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         logicalFunctionKey = "F:sample/consumeGenericOwner",
                         methodName = "consumeGenericOwner__KotlinClassifierInput__1234",
                         isInstance = false,
+                        methodGenericParameterCount = 5,
                         objectParameterIndices = setOf(0, 2),
                     ),
             "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
                 methodName = "abstractWithDefaults",
                 isInstance = true,
+                methodGenericParameterCount = 1,
                 defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
                     ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     methodName = "abstractWithDefaults\$default",
+                    methodGenericParameterCount = 2,
                 ),
             ),
             "F:sample/defaultWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
                 methodName = "defaultWithDefaults",
                 isInstance = true,
+                methodGenericParameterCount = 3,
                 interfaceDefaultImplementation = DotNetInterfaceDefaultImplementation(
                     bodyPlacement = DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY,
                     helperOwnerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     helperMethodName = "defaultWithDefaults",
+                    helperMethodGenericParameterCount = 4,
                 ),
                 defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
                     ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     methodName = "defaultWithDefaults\$default",
+                    methodGenericParameterCount = 5,
                 ),
             ),
             "B:C:sample/Contract:F:sample/defaultWithDefaults:CANONICAL" to
@@ -10364,6 +10379,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY),
         )
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
+        val encodedFunction = DotNetLibraryAbiCodec.encode(
+            mapOf("F:sample/increment" to declarations.getValue("F:sample/increment"))
+        ).entries.single()
+        val encodedFunctionFields = String(
+            Base64.getUrlDecoder().decode(encodedFunction.value),
+            Charsets.UTF_8,
+        ).split('\u0000')
+        fun malformedFunctionProperties(fields: List<String>): Properties = Properties().apply {
+            setProperty(
+                encodedFunction.key,
+                Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    fields.joinToString("\u0000").toByteArray(Charsets.UTF_8)
+                ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetLibraryAbiCodec.decode(
+                malformedFunctionProperties(encodedFunctionFields.toMutableList().apply { removeAt(3) })
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetLibraryAbiCodec.decode(
+                malformedFunctionProperties(encodedFunctionFields.toMutableList().apply { this[3] = "-1" })
+            )
+        }
         assertThrows(IllegalArgumentException::class.java) {
             DotNetGenericOwnerAbi(
                 capabilityAssemblyName = "invalid]assembly",
@@ -12669,14 +12709,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ownerPath = listOf("sample.LibraryKt"),
                 methodName = "read",
                 isInstance = false,
+                methodGenericParameterCount = 0,
             ),
             "F:sample/withDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
                 methodName = "withDefaults",
                 isInstance = true,
+                methodGenericParameterCount = 0,
                 defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
                     ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     methodName = "withDefaults\$default",
+                    methodGenericParameterCount = 0,
                 ),
             ),
             "W:C:sample/Box:F:sample/withDefaults:CANONICAL" to
@@ -12702,6 +12745,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ownerPath = listOf("sample.PlatformKt"),
                     methodName = "runtimeOnly",
                     isInstance = false,
+                    methodGenericParameterCount = 0,
                 )
                 )
         assertTrue(DotNetLibraryAbiCodec.portablePhysicalAbiDifferences(portable, compatiblePlatform).isEmpty())
@@ -12711,14 +12755,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ownerPath = listOf("sample.ChangedKt"),
             methodName = "read",
             isInstance = false,
+            methodGenericParameterCount = 0,
         )
         val changedDispatcher = DotNetPhysicalDeclaration.Function(
             ownerPath = listOf("sample.Contract"),
             methodName = "withDefaults",
             isInstance = true,
+            methodGenericParameterCount = 0,
             defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
-                ownerPath = listOf("sample.Contract", "<ChangedDefaultImpls>"),
+                ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                 methodName = "withDefaults\$default",
+                methodGenericParameterCount = 1,
             ),
         )
         val differences = DotNetLibraryAbiCodec.portablePhysicalAbiDifferences(
