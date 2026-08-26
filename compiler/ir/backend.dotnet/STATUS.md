@@ -1064,6 +1064,57 @@ verification, and work state.
   for a fixed IR input, neither did the emitted IL or ABI. See
   [`docs/archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](docs/archive/generic-owner-physical-value-local-placement-comparison-2026-08-26.md).
 
+  The first local physical-interface view is now authorized by one monotone
+  declaration-authority lineage rather than by the logical destination alone.
+  Architecture planning binds only admitted local generic-class TypeDefs in
+  the `EARLY_REPRESENTATION_PLAN` epoch. After generic-interface bridge
+  selection, a separate pass advances that same lineage to
+  `BOUND_DECLARATION_INDEX` with the selected natural TypeDef, the class-owner
+  and interface-family capability TypeDefs, and the complete bounded
+  `BaseType`/`InterfaceImpl` selection-site row set for this admitted grammar.
+  The recorder currently accepts only an unconstrained class with the
+  canonical Object base and exactly one ROOT/OWNED/no-exact `I<T>` family. Its
+  three direct rows must be exactly natural `I<T>`, the class-owner capability,
+  and the interface-family capability. It records exact invariant non-null
+  owner-parameter mappings at the bridge-selection boundary; the later binder
+  never walks logical IR/KLIB ancestry or invents `I<object>`.
+
+  An immutable `val sourceNaturalAlias: InlineProducer<T> = this` may select
+  `InlineProducer<!T>` only when closure over that recorded class edge already
+  guarantees the construction. Selected lineage is a selector over that
+  guarantee, not a proof source. Internal lineage is keyed by physical TypeDef
+  identity; diagnostic snapshots retain family kind and view, so the natural
+  and capability TypeDefs cannot collide merely because they share a logical
+  Kotlin owner. The predicted natural local matches the emitter's existing
+  declared local. The isolated emitted `sourceAliasMatches` MethodDef contains
+  exactly one `callvirt ... InlineProducer<!0>::produce`; each CLR profile's
+  corresponding assembly executes its own emitted IL for value and reference
+  substitutions. Immutable `InlineProducer<Any?>` and `InlineProducer<T?>`
+  controls retain only their concrete generic-class self fact with empty
+  selected lineage; their unchanged emitter locals remain `object`. Stars,
+  projections, non-universal bounds, extra interface families, inherited
+  physical rows, exact siblings, external capabilities, and every non-Object
+  base stay unavailable.
+
+  The model-level ablation keeps the logical desired view fixed while removing
+  or replacing only the physical edge; selection then disappears. The
+  authority and shadow remain rehearsal-only, in-memory, and production-
+  inert. They do not select a route, local, MethodDef, MethodImpl, field, state,
+  emitted interface row, or serialized ABI. The existing emitter remains
+  authoritative and is cross-checked only for the selected local and the one
+  emitted natural call operand. The legacy class-owner route analyzer does not
+  classify a direct natural-interface call; callable/MethodDef authority is the
+  next slice rather than a claim of this one. This is a `BOUND` checkpoint, not
+  sealed-emission authority; emitter liveness and retained-foreign/separate-
+  product rows remain later stages. Four PSI/LightTree and Framework 4.8/.NET
+  10 positive rehearsal lanes, four production-erased inverse lanes, and the
+  focused backend unit suite pass. The final normal aggregate exits zero.
+  Direct XML audit covers 194 suites and 2,432 tests with zero failures,
+  errors, or skips: backend, FIR, and integration freshly wrote four suites/60
+  tests, 187 suites/2,239 tests, and two suites/127 tests respectively; the
+  unchanged up-to-date `dotnet.ir` root retains one suite/six green tests. See
+  [`docs/archive/generic-owner-local-physical-interface-view-2026-08-26.md`](docs/archive/generic-owner-local-physical-interface-view-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5299,17 +5350,23 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 1. Consolidate physical declaration authority and per-value carrier provenance
    before advancing the source-built Stdlib census, while keeping production
    emission erased. The production-inert symbolic carrier algebra, complete-set
-   physical ancestry, two-epoch value shadow, and transactional comparison
-   with final emitted locals are complete. Next bind the exact receiver's
-   already-selected physical interface edge into declaration authority and
-   add an immutable source alias to the public `InlineProducer` probe and prove
-   a call through that natural interface view. The logical destination and
-   selected lineage may choose only among independently guaranteed views;
-   neither may prove that a view exists. Only after calls and conversions
-   through that alias remain correct may the shared placement query replace
-   the origin recognizer and become authoritative for both source and compiler
-   immutable aliases. No bounded recognizer is removed until the same analysis
-   explains both its positive behavior and hostile negatives.
+   physical ancestry, two-epoch value shadow, transactional comparison with
+   final emitted locals, and the first bounded selection-site InterfaceImpl
+   authority are complete. An immutable public `InlineProducer<T>` source alias
+   selects only the recorded natural edge; its local and emitted call operand
+   match the unchanged emitter, while broad/open-nullable controls cannot
+   fabricate a construction. The logical destination and selected lineage may
+   choose only among independently guaranteed views; neither may prove that a
+   view exists. Next extend this same authority lineage to the callable/
+   MethodDef layer and add a read-only operation query after interface routing.
+   The natural alias must select the natural MethodDef, broad controls must
+   select the semantic member, and edge ablation must make the route
+   unavailable. Advance to `SEALED_EMISSION_SIGNATURE_INDEX` only after the
+   second split-nullable/covariant-result selection has been bound and compared.
+   Only then may the shared placement query replace the origin recognizer and
+   become authoritative for both source and compiler immutable aliases. No
+   bounded recognizer is removed until the same analysis explains both its
+   positive behavior and hostile negatives.
 
    Continue the hardest-model-first generic-owner architecture spike within
    that consolidation. The erased hostile oracle, historical

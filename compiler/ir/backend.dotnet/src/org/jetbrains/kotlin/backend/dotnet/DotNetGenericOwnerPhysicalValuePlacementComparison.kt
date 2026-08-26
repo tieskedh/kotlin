@@ -209,9 +209,9 @@ private fun DotNetGenericOwnerPhysicalValueShadowRecord.sameValueFactAs(
                 left.guaranteedViews.map { view -> view.carrier }.toSet() ==
                 right.guaranteedViews.map { view -> view.carrier }.toSet() &&
                 left.selectedViewLineage.associate { selection ->
-                    selection.familyOwnerName to selection.view.carrier
+                    selection.family to selection.view.carrier
                 } == right.selectedViewLineage.associate { selection ->
-                    selection.familyOwnerName to selection.view.carrier
+                    selection.family to selection.view.carrier
                 } &&
                 left.initializerNullState == right.initializerNullState &&
                 left.contentsNullState == right.contentsNullState &&
