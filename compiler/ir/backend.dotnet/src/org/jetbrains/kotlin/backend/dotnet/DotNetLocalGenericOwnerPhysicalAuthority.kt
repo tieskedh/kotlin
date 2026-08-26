@@ -271,6 +271,31 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     ): DotNetGenericOwnerPhysicalMethodDefIdentity? =
         callableFamiliesByLogicalMember[logicalMember]?.selectedMethod(kind)
 
+    /**
+     * Compares only the opaque families already admitted by BOUND authority with one successful
+     * final emitter scope. This is diagnostic and deliberately does not advance or mutate the
+     * declaration index: absent emission evidence must remain absent rather than inheriting the
+     * corresponding BOUND MethodDef through the index's additive epoch transition.
+     */
+    fun compareFinalMethodDefHeaders(
+        scope: DotNetIlEmissionScope,
+        observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+        otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation> = emptyList(),
+    ): List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot> =
+        callableFamiliesByLogicalMember.entries.mapNotNull { entry ->
+            compareDotNetGenericOwnerPhysicalMethodDefEmissionFamily(
+                authority = this,
+                scope = scope,
+                logicalMember = entry.key,
+                family = entry.value,
+                observations = observations,
+                otherScopeObservations = otherScopeObservations,
+            )
+        }.sortedWith(compareBy(
+            DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::ownerName,
+            DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::logicalMemberName,
+        ))
+
     fun advanceBound(
         additionalInputs: Iterable<DotNetLocalGenericOwnerPhysicalTypeInput>,
         buildBoundInput: (

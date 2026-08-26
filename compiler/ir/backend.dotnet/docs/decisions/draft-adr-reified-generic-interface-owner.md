@@ -1230,6 +1230,37 @@ the existing isolated IL operand assertion remains independent evidence.
 Production still publishes no authority or operation snapshots. See
 [`../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md`](../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md).
 
+Final emitter evidence is a separate one-way authority input. A simple
+MethodDef's structured header decision is shared by IL rendering and
+rehearsal observation; it is not reconstructed from rendered text. Raw
+observations belong to successful render products and only the final surviving
+fixpoint maps may publish them. Normalization maps actual emitter-owned
+TypeDefs independently and retains their physical identity, arity/category,
+explicit receiver, scoped generic parameters, parameter carriers, and result
+layout. Diagnostic names never establish identity.
+
+The first comparison is intentionally an overlay on the existing BOUND
+direct-producer family. Both its natural and semantic interface MethodDefs
+must have unique final evidence and the family joins failure atomically.
+Missing evidence is unavailable; duplicate, wrong-owner, cross-scope, or
+structurally different evidence conflicts. A source symbol rendered on the
+natural and invariant-exact interface views may ignore the latter only when
+the actual owner independently proves the same logical declaration, matching
+physical arity, and interface category. That exception cannot apply to the
+semantic endpoint or manufacture an exact view.
+
+This overlay is not `SEALED_EMISSION_SIGNATURE_INDEX`. The declaration index
+advances additively, so a partial set must never be used to enter that epoch:
+an absent final declaration would otherwise survive from BOUND. The current
+comparison covers owner, arity/category, visibility, dispatch category,
+instance/receiver shape, method arity, parameters, and result layout. Exact
+CLI flags and physical names remain diagnostic until declaration authority
+records their complete contract. A full seal additionally requires explicit
+emitted MethodDef roles, physical TypeDef alias relations, complete
+BaseType/InterfaceImpl sets, exact-sibling entries, MethodImpl rows, and every
+retained foreign/core construction in its scope. See
+[`../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md).
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,
