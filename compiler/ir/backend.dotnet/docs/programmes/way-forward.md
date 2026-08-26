@@ -1762,6 +1762,32 @@ sealed epoch may be published until every fact in the selected scope is
 observed rather than inherited from BOUND. See
 [`../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md).
 
+The follow-on identity slice now gives every concrete final-emission
+MethodDef an explicit lowering-selected role. Missing identity, the role-less
+semantic capability slot, typed entry, semantic hook, and class dispatcher are
+distinct; reconstructing a recorded emission preserves outer null rather than
+reattaching a global default. Exact natural siblings retain the typed-entry
+identity, while a generated hook/dispatcher cannot satisfy that endpoint.
+Names and IR origins remain diagnostic only, and production receives no role
+bindings.
+
+Actual emitter `ClassInfo` identity also retains all independently observed
+logical TypeDef aliases. Only canonical and declared views of the same natural
+owner may share one physical TypeDef. Exact, semantic/null, cross-owner,
+arity/category, and duplicate-physical claims fail closed. Expected BOUND
+identities are allocated first; actual emission may bind to exactly one
+already-known alias or receive an opaque actual-only key, but it can never
+manufacture or merge declaration authority. The product matrix now proves
+expected `[DECLARED]` versus actual `[CANONICAL, DECLARED]` together with the
+typed and explicit role-null MethodDefs.
+
+This remains the same partial overlay. It does not seal a TypeDef or MethodDef
+set, account for every exact-sibling/MethodImpl row, or admit retained foreign
+metadata and multiple BOUND families. The next slice is therefore complete-
+set TypeDef/edge/MethodDef/MethodImpl liveness for one bounded family, not a
+new stdlib shape or recognizer removal. See
+[`../archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md`](../archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
@@ -1787,9 +1813,9 @@ The consolidation proceeds in bounded stages:
 6. move route selection behind one query which starts from the authoritative
    callable family and treats exact provenance only as supporting evidence.
    The first local direct-producer BOUND shadow and partial final-fixpoint
-   MethodDef comparison are complete. Exact emitted role/alias identity, a
-   complete sealed signature set, and later producer/foreign adapters remain
-   open;
+   MethodDef comparison are complete. Exact emitted role/alias identity is
+   also complete for that bounded family; a complete sealed signature set and
+   later producer/foreign adapters remain open;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

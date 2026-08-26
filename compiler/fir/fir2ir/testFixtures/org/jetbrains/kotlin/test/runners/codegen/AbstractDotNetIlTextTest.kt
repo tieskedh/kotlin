@@ -874,11 +874,15 @@ private fun validateGenericOwnerPhysicalMethodDefEmissionComparison(
 
     fun hasCommonProducerHeader(
         header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
+        methodRole: DotNetGenericOwnerMemberFamilyRole?,
         ownerArity: Int,
         ownerView: DotNetGenericOwnerPhysicalValueShadowTypeDefView?,
+        ownerAliasViews: List<DotNetGenericOwnerPhysicalValueShadowTypeDefView?>,
         expectsExactFlags: Boolean,
-    ): Boolean = header.owner.ownerName.endsWith("InlineProducer") &&
+    ): Boolean = header.methodIdentity.role == methodRole &&
+            header.owner.ownerName.endsWith("InlineProducer") &&
             header.owner.typeDefView == ownerView &&
+            header.owner.physicalAliasViews == ownerAliasViews &&
             header.owner.genericArity == ownerArity &&
             header.owner.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
             header.visibility == DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PUBLIC &&
@@ -901,11 +905,20 @@ private fun validateGenericOwnerPhysicalMethodDefEmissionComparison(
         expectsExactFlags: Boolean,
     ): Boolean {
         if (!hasCommonProducerHeader(
-                header,
-                ownerArity = 1,
-                ownerView = DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED,
-                expectsExactFlags = expectsExactFlags,
-            )) return false
+            header,
+            methodRole = DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            ownerArity = 1,
+            ownerView = DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED,
+            ownerAliasViews = if (expectsExactFlags) {
+                listOf(
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.CANONICAL,
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED,
+                )
+            } else {
+                listOf(DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED)
+            },
+            expectsExactFlags = expectsExactFlags,
+        )) return false
         val receiverParameter = header.receiverCarrier?.arguments?.singleOrNull()
         val resultCarrier = header.result.carrier
         return receiverParameter?.let { parameter ->
@@ -931,8 +944,10 @@ private fun validateGenericOwnerPhysicalMethodDefEmissionComparison(
         expectsExactFlags: Boolean,
     ): Boolean = hasCommonProducerHeader(
         header,
+        methodRole = null,
         ownerArity = 0,
         ownerView = null,
+        ownerAliasViews = listOf(null),
         expectsExactFlags = expectsExactFlags,
     ) && header.receiverCarrier?.arguments?.isEmpty() == true &&
             header.result.carrier?.kind ==

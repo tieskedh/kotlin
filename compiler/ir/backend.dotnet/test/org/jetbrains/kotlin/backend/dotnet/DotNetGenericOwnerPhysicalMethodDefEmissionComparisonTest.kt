@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
+import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -133,6 +134,25 @@ class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonTest {
     }
 
     @Test
+    fun rejectsAHeaderObservedUnderAnotherPhysicalMethodRole() {
+        val expected = directHeaderShape()
+        val comparison = compare(
+            expected,
+            headerSnapshot("expected"),
+            listOf(known(
+                expected,
+                headerSnapshot(
+                    "same-header-wrong-role",
+                    methodRole = DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                ),
+            )),
+        )
+
+        assertEquals(DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.CONFLICT, comparison.status)
+        assertNotNull(comparison.diagnostic)
+    }
+
+    @Test
     fun distinguishesDirectAndSplitNullableResultLayouts() {
         val direct = directHeaderShape()
         val split = direct.copy(result = splitNullable(valueShape))
@@ -205,6 +225,319 @@ class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonTest {
                         logicalOwner,
                         DotNetGenericInterfaceView.EXACT,
                     ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun distinguishesMissingExplicitNullAndNamedMethodDefRoles() {
+        val function = IrSimpleFunctionSymbolImpl()
+        val typed = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            function,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val semantic = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            function,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+        )
+        val roleless = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(function, role = null)
+        val family = listOf(typed, semantic)
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.MATCHING_ENDPOINT,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                typed,
+                family,
+                function,
+                typed,
+            ),
+        )
+        assertEquals(
+            true,
+            isDotNetGenericOwnerPhysicalMethodDefEmissionIdentityEvidenceForEndpoint(
+                typed,
+                family,
+                function,
+                typed,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.OTHER_FAMILY_ENDPOINT,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                typed,
+                family,
+                function,
+                semantic,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNEXPECTED,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                typed,
+                family,
+                function,
+                roleless,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.IRRELEVANT,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                typed,
+                family,
+                IrSimpleFunctionSymbolImpl(),
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                    function,
+                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                ),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNEXPECTED,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                typed,
+                family,
+                function,
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                    IrSimpleFunctionSymbolImpl(),
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                ),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNAVAILABLE,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                typed,
+                family,
+                function,
+                actual = null,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.MATCHING_ENDPOINT,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                roleless,
+                listOf(roleless),
+                function,
+                roleless,
+            ),
+        )
+        val capabilitySlot = IrSimpleFunctionSymbolImpl()
+        val rolelessCapability = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            capabilitySlot,
+            role = null,
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.IRRELEVANT,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                rolelessCapability,
+                listOf(typed, rolelessCapability),
+                IrSimpleFunctionSymbolImpl(),
+                semantic,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.UNEXPECTED,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionIdentity(
+                rolelessCapability,
+                listOf(typed, rolelessCapability),
+                capabilitySlot,
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                    capabilitySlot,
+                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                ),
+            ),
+        )
+        assertEquals(
+            false,
+            isDotNetGenericOwnerPhysicalMethodDefEmissionIdentityEvidenceForEndpoint(
+                typed,
+                family,
+                IrSimpleFunctionSymbolImpl(),
+                semantic,
+            ),
+        )
+        val allocator = EmissionIdentityAllocator()
+        assertEquals(false, allocator.method(typed) == allocator.method(semantic))
+        assertEquals(allocator.method(typed), allocator.method(typed))
+    }
+
+    @Test
+    fun retainsOnlyTheTruthfulCanonicalDeclaredTypeDefAliasPair() {
+        val owner = IrClassSymbolImpl()
+        fun candidate(view: DotNetGenericInterfaceView?) =
+            DotNetGenericOwnerObservedLocalTypeDefCandidate(
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner, view),
+                genericArity = 1,
+                category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            )
+
+        val resolved = resolveDotNetGenericOwnerObservedLocalTypeDef(
+            DotNetGenericOwnerObservedPhysicalTypeDefKey(7),
+            listOf(
+                candidate(DotNetGenericInterfaceView.CANONICAL),
+                candidate(DotNetGenericInterfaceView.DECLARED),
+            ),
+        ) as DotNetGenericOwnerObservedLocalTypeDefResolution.Known
+        assertEquals(DotNetGenericInterfaceView.DECLARED, resolved.typeDef.identity.view)
+        assertEquals(
+            listOf(DotNetGenericInterfaceView.CANONICAL, DotNetGenericInterfaceView.DECLARED),
+            resolved.typeDef.aliases.map { alias -> alias.view },
+        )
+        val reversed = resolveDotNetGenericOwnerObservedLocalTypeDef(
+            DotNetGenericOwnerObservedPhysicalTypeDefKey(10),
+            listOf(
+                candidate(DotNetGenericInterfaceView.DECLARED),
+                candidate(DotNetGenericInterfaceView.CANONICAL),
+            ),
+        ) as DotNetGenericOwnerObservedLocalTypeDefResolution.Known
+        assertEquals(
+            resolved.typeDef.aliases.map { alias -> alias.view },
+            reversed.typeDef.aliases.map { alias -> alias.view },
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation.MATCHING_ENDPOINT,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionOwner(
+                DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.NATURAL_INTERFACE,
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                    owner,
+                    DotNetGenericInterfaceView.DECLARED,
+                ),
+                expectedOwnerArity = 1,
+                resolved.typeDef,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation.UNEXPECTED,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionOwner(
+                DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.NATURAL_INTERFACE,
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                    owner,
+                    DotNetGenericInterfaceView.EXACT,
+                ),
+                expectedOwnerArity = 1,
+                resolved.typeDef,
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionOwnerRelation.UNEXPECTED,
+            classifyDotNetGenericOwnerPhysicalMethodDefEmissionOwner(
+                DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.SEMANTIC_CAPABILITY_INTERFACE_SLOT,
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner, view = null),
+                expectedOwnerArity = 0,
+                resolved.typeDef,
+            ),
+        )
+        assertEquals(
+            true,
+            resolveDotNetGenericOwnerObservedLocalTypeDef(
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(8),
+                listOf(
+                    candidate(DotNetGenericInterfaceView.CANONICAL),
+                    candidate(DotNetGenericInterfaceView.EXACT),
+                ),
+            ) is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict,
+        )
+        assertEquals(
+            true,
+            resolveDotNetGenericOwnerObservedLocalTypeDef(
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(11),
+                listOf(
+                    candidate(null),
+                    candidate(DotNetGenericInterfaceView.DECLARED),
+                ),
+            ) is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict,
+        )
+        assertEquals(
+            true,
+            resolveDotNetGenericOwnerObservedLocalTypeDef(
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(9),
+                listOf(
+                    candidate(DotNetGenericInterfaceView.CANONICAL),
+                    DotNetGenericOwnerObservedLocalTypeDefCandidate(
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                            IrClassSymbolImpl(),
+                            DotNetGenericInterfaceView.DECLARED,
+                        ),
+                        genericArity = 1,
+                        category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    ),
+                ),
+            ) is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict,
+        )
+    }
+
+    @Test
+    fun bindsActualAliasesOnlyToAlreadyRegisteredBoundTypeDefs() {
+        val owner = IrClassSymbolImpl()
+        val canonical = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            owner,
+            DotNetGenericInterfaceView.CANONICAL,
+        )
+        val declared = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            owner,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        fun description(identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local, arity: Int = 1) =
+            DotNetGenericOwnerPhysicalTypeDefReference(
+                identity,
+                genericArity = arity,
+                category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            )
+        fun observed(
+            key: Int,
+            aliases: List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
+            arity: Int = 1,
+        ) = DotNetGenericOwnerObservedLocalTypeDef(
+            physicalKey = DotNetGenericOwnerObservedPhysicalTypeDefKey(key),
+            identity = aliases.singleOrNull { alias ->
+                alias.view == DotNetGenericInterfaceView.DECLARED
+            } ?: aliases.single(),
+            aliases = aliases,
+            genericArity = arity,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        )
+
+        val declaredOnlyAuthority = EmissionIdentityAllocator()
+        val expectedDeclaredKey = declaredOnlyAuthority.expectedType(declared, description(declared))
+        val matching = declaredOnlyAuthority.actualType(observed(0, listOf(canonical, declared)))
+        assertEquals(
+            expectedDeclaredKey,
+            (matching as EmissionIdentityAllocator.ActualType.Bound).key,
+        )
+        val canonicalOnly = declaredOnlyAuthority.actualType(observed(1, listOf(canonical)))
+        assertEquals(true, canonicalOnly is EmissionIdentityAllocator.ActualType.Bound)
+        assertEquals(
+            false,
+            (canonicalOnly as EmissionIdentityAllocator.ActualType.Bound).key == expectedDeclaredKey,
+        )
+        assertEquals(
+            true,
+            declaredOnlyAuthority.actualType(
+                observed(2, listOf(canonical, declared), arity = 2),
+            ) is EmissionIdentityAllocator.ActualType.Conflict,
+        )
+
+        val twoExpectedAliases = EmissionIdentityAllocator().apply {
+            expectedType(canonical, description(canonical))
+            expectedType(declared, description(declared))
+        }
+        assertEquals(
+            true,
+            twoExpectedAliases.actualType(
+                observed(3, listOf(canonical, declared)),
+            ) is EmissionIdentityAllocator.ActualType.Conflict,
+        )
+        assertEquals(
+            setOf(
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(4),
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(5),
+            ),
+            conflictingDotNetGenericOwnerObservedPhysicalTypeDefKeys(
+                listOf(
+                    observed(4, listOf(declared)),
+                    observed(5, listOf(declared)),
                 ),
             ),
         )
@@ -294,7 +627,12 @@ class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonTest {
         genericArity: Int = 1,
         category: DotNetGenericOwnerPhysicalNamedTypeCategory =
             DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
-    ) = DotNetGenericOwnerObservedLocalTypeDef(identity, genericArity, category)
+    ) = DotNetGenericOwnerObservedLocalTypeDef(
+        physicalKey = DotNetGenericOwnerObservedPhysicalTypeDefKey(0),
+        identity = identity,
+        genericArity = genericArity,
+        category = category,
+    )
 
     private data class OwnerClassificationCase(
         val entryKind: DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind,
@@ -317,7 +655,12 @@ class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonTest {
     private fun headerSnapshot(
         physicalMethodName: String,
         result: DotNetGenericOwnerPhysicalMethodDefEmissionResultSnapshot = directResult(valueSnapshot),
+        methodRole: DotNetGenericOwnerMemberFamilyRole? =
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
     ) = DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot(
+        methodIdentity = DotNetGenericOwnerPhysicalMethodDefEmissionIdentitySnapshot(
+            methodRole,
+        ),
         owner = ownerSnapshot,
         physicalMethodNameForDiagnostics = physicalMethodName,
         visibility = DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PUBLIC,
