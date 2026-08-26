@@ -14,6 +14,23 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-value-local-placement-comparison-2026-08-26.md`](generic-owner-physical-value-local-placement-comparison-2026-08-26.md)
+  records the transactional comparison between the two-epoch carrier shadow
+  and final ordinary variable-local slots, independent source/compiler probes,
+  production-off silence, and the remaining physical-interface-view boundary.
+- [`generic-owner-physical-value-pre-remap-alias-2026-08-26.md`](generic-owner-physical-value-pre-remap-alias-2026-08-26.md)
+  records the origin-independent pre-remap prediction for immutable exact
+  aliases, two-epoch continuity, source/mutable exclusions, and the unchanged
+  authoritative emitter recognizer.
+- [`generic-owner-physical-value-shadow-first-slice-2026-08-26.md`](generic-owner-physical-value-shadow-first-slice-2026-08-26.md)
+  records the first production-inert physical-value shadow, exact-receiver and
+  genuinely broad candidate asymmetry, and fail-closed unsupported projection.
+- [`generic-owner-physical-supertype-authority-2026-08-25.md`](generic-owner-physical-supertype-authority-2026-08-25.md)
+  records complete-set symbolic edge algebra, detached generic-class artifact
+  adaptation, and fail-closed absent published-interface/foreign authority.
+- [`generic-owner-physical-value-provenance-foundation-2026-08-25.md`](generic-owner-physical-value-provenance-foundation-2026-08-25.md)
+  records the shared carrier/provenance vocabulary, declaration-authority
+  epochs, produced-versus-storage carrier boundary, and hostile join model.
 - [`generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md`](generic-owner-semantic-body-exact-current-receiver-capture-2026-08-25.md)
   records exact current-receiver capture by a reified non-ABI generic owner,
   the public-owner/broad-cache boundary, complete profile and frontend proof,

@@ -53,6 +53,8 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
+import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrVariableSymbol
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -74,8 +76,28 @@ import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.name.StandardClassIds
 
-/** A successfully rendered method and its complete IL text. */
-internal class DotNetIlRenderedMethod(val ilText: String)
+/** One final verifier-visible local selected while rendering one physical MethodDef. */
+internal data class DotNetIlRawLocalPlacementObservation(
+    val function: IrFunctionSymbol,
+    val physicalOwner: DotNetIlClassInfo,
+    val variable: IrVariableSymbol,
+    val slotIndex: Int,
+    val carrier: DotNetIlValueType,
+    val selectionKind: DotNetGenericOwnerPhysicalValueLocalSelectionKind,
+) {
+    init {
+        require(slotIndex >= 0) { "an observed IL local requires a non-negative slot index" }
+    }
+}
+
+/** A successfully rendered method, its complete IL text, and its read-only local observations. */
+internal class DotNetIlRenderedMethod(
+    val ilText: String,
+    localPlacementObservations: List<DotNetIlRawLocalPlacementObservation>,
+) {
+    val localPlacementObservations: List<DotNetIlRawLocalPlacementObservation> =
+        localPlacementObservations.toList()
+}
 
 /**
  * Renders a single function — a top-level `static` one, a user-class constructor, an instance
@@ -104,7 +126,13 @@ internal class DotNetIlMethodCodegen(
     private val genericOwnerDirectForeignOverrideDispatch:
         DotNetGenericOwnerDirectForeignOverrideDispatch? = null,
     private val genericOwnerForeignOverrideProbeTarget: IrSimpleFunction? = null,
+    private val capturePhysicalLocalPlacements: Boolean = false,
 ) {
+    private val localPlacementObservations = if (capturePhysicalLocalPlacements) {
+        mutableListOf<DotNetIlRawLocalPlacementObservation>()
+    } else {
+        null
+    }
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
         function.parameters,
@@ -328,7 +356,7 @@ internal class DotNetIlMethodCodegen(
             }
             appendLine("  }")
         }
-        return DotNetIlRenderedMethod(ilText)
+        return DotNetIlRenderedMethod(ilText, localPlacementObservations.orEmpty())
     }
 
     /**
@@ -1123,6 +1151,27 @@ internal class DotNetIlMethodCodegen(
             exactArrayStorage ?: exactGenericOwnerStorage ?:
                 localOpenNullableArrayStorage ?: nestedConstructionStorage,
         )
+        localPlacementObservations?.let { observations ->
+            val selectionKind = when {
+                exactArrayStorage != null ->
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.EXACT_ARRAY_OVERRIDE
+                exactGenericOwnerStorage != null ->
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.EXACT_GENERIC_OWNER_OVERRIDE
+                localOpenNullableArrayStorage != null ->
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.OPEN_NULLABLE_ARRAY_OVERRIDE
+                nestedConstructionStorage != null ->
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.NESTED_GENERIC_CONSTRUCTION_OVERRIDE
+                else -> DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE
+            }
+            observations += DotNetIlRawLocalPlacementObservation(
+                function = function.symbol,
+                physicalOwner = functionInfo.owner,
+                variable = variable.symbol,
+                slotIndex = slot.index,
+                carrier = slot.type,
+                selectionKind = selectionKind,
+            )
+        }
         if (initializer == null) return
         // Shared lowerings may place statement-bearing expressions in compiler-temporary
         // initializers (including a Nothing-typed break/continue on a dead value path). Route

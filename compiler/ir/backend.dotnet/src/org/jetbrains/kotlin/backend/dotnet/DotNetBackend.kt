@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.ir.IrBuiltIns
+import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.SymbolTable
@@ -72,6 +73,39 @@ object DotNetBackend {
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
         var genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot> = emptyList()
+        var genericOwnerPhysicalValueShadowRecords:
+            List<DotNetGenericOwnerPhysicalValueShadowRecord> = emptyList()
+        val successfulPhysicalValuePlacements = mutableListOf<
+                Pair<DotNetIlEmissionScope, List<DotNetGenericOwnerPhysicalValueLocalPlacementObservation>>,
+                >()
+        fun registerSuccessfulPhysicalValuePlacement(
+            scope: DotNetIlEmissionScope,
+            emission: DotNetIlEmissionResult,
+        ) {
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                successfulPhysicalValuePlacements += scope to emission.localPlacementObservations
+            } else {
+                check(emission.localPlacementObservations.isEmpty()) {
+                    "production emission must not publish generic-owner local-placement observations"
+                }
+            }
+        }
+        fun DotNetGenericOwnerPhysicalValueShadowRecord.belongsTo(scope: DotNetIlEmissionScope): Boolean =
+            (physicalFunction.owner.parent as? IrClass)?.let(scope::owns) == true
+        fun physicalValuePlacementComparisons():
+                List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot> =
+            if (!configuration.dotNetGenericOwnerRehearsal) {
+                emptyList()
+            } else {
+                successfulPhysicalValuePlacements.flatMap { successfulScope ->
+                    compareDotNetGenericOwnerPhysicalValueLocalPlacements(
+                        genericOwnerPhysicalValueShadowRecords.filter { record ->
+                            record.belongsTo(successfulScope.first)
+                        },
+                        successfulScope.second,
+                    )
+                }
+            }
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
             DotNetBackendOutput(
                 file,
@@ -79,6 +113,7 @@ object DotNetBackend {
                 genericOwnerPrototypes,
                 genericOwnerCallRoutes,
                 genericOwnerPhysicalValueShadows,
+                physicalValuePlacementComparisons(),
                 configuration.dotNetGenericOwnerRehearsal,
             )
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
@@ -212,6 +247,11 @@ object DotNetBackend {
         } else {
             emptyList()
         }
+        genericOwnerPhysicalValueShadowRecords = if (configuration.dotNetGenericOwnerRehearsal) {
+            context.genericOwnerPhysicalValueShadowRecords.toList()
+        } else {
+            emptyList()
+        }
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -277,6 +317,9 @@ object DotNetBackend {
                 null
             }
             val stdlibIlText = stdlibEmission?.ilText
+            stdlibEmission?.let { emission ->
+                registerSuccessfulPhysicalValuePlacement(DotNetIlEmissionScope.STDLIB, emission)
+            }
 
             if (producesStdlib) {
                 if (stdlibIlText == null) {
@@ -423,6 +466,7 @@ object DotNetBackend {
                 ilTarget.delete()
                 return result(ilTarget)
             }
+            registerSuccessfulPhysicalValuePlacement(DotNetIlEmissionScope.USER, emission)
             if (producesLibrary && !validateMetadataLinkage(emission.declarations)) {
                 ilTarget.delete()
                 return result(ilTarget)
@@ -620,5 +664,7 @@ data class DotNetBackendOutput(
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
     val genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
+    val genericOwnerPhysicalValuePlacementComparisons:
+        List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
     val genericOwnerRehearsal: Boolean,
 )
