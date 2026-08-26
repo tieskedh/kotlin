@@ -12,6 +12,12 @@ enum class DotNetGenericOwnerPhysicalValueShadowFunctionRole {
     OTHER,
 }
 
+/** The immutable IR epoch observed by one production-inert shadow snapshot. */
+enum class DotNetGenericOwnerPhysicalValueShadowPhase {
+    PRE_SEMANTIC_REMAP,
+    POST_FINAL_ROUTING,
+}
+
 /** Whether the shadow completed its deliberately bounded analysis for one value. */
 enum class DotNetGenericOwnerPhysicalValueShadowStatus {
     ANALYZED,
@@ -111,6 +117,7 @@ data class DotNetGenericOwnerPhysicalValueShadowSnapshot(
     val sourceFunctionName: String,
     val physicalFunctionName: String,
     val functionRole: DotNetGenericOwnerPhysicalValueShadowFunctionRole,
+    val phase: DotNetGenericOwnerPhysicalValueShadowPhase,
     val variableName: String,
     val status: DotNetGenericOwnerPhysicalValueShadowStatus,
     val initializerProducedCarrier: DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot,

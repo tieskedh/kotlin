@@ -194,6 +194,9 @@ object DotNetBackend {
             .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)
             .sortedBy(DotNetGenericOwnerCallRouteSnapshot::callSiteIndex)
         genericOwnerPhysicalValueShadows = if (configuration.dotNetGenericOwnerRehearsal) {
+            check(context.genericOwnerPhysicalValueShadowFinalAnalysisCompleted) {
+                "the rehearsal backend result requires a successfully completed final physical-value shadow"
+            }
             context.genericOwnerPhysicalValueShadows
                 .toList()
                 .sortedWith(
@@ -201,6 +204,7 @@ object DotNetBackend {
                         DotNetGenericOwnerPhysicalValueShadowSnapshot::ownerName,
                         DotNetGenericOwnerPhysicalValueShadowSnapshot::sourceFunctionName,
                         DotNetGenericOwnerPhysicalValueShadowSnapshot::physicalFunctionName,
+                        { snapshot -> snapshot.phase.ordinal },
                         { snapshot -> snapshot.functionRole.ordinal },
                         DotNetGenericOwnerPhysicalValueShadowSnapshot::variableName,
                     ),
