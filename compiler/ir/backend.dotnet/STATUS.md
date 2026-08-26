@@ -1308,6 +1308,63 @@ verification, and work state.
   before producer-recorded or retained-foreign sealed adapters. See
   [`docs/archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](docs/archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md).
 
+  The same bounded family now closes its executable MethodSpec and call-value
+  boundary. The selected physical MethodDef remains open, while each call
+  carries an exact MethodSpec vector whose arity must match that declaration.
+  TypeDef `!n` and MethodDef `!!n` bind independently, an open caller `!!n` is
+  a valid method argument, and an omitted, extra, out-of-range, or cross-binder
+  instantiation fails closed. The executable grammar remains unconstrained;
+  its sealed GenericParam rows stay declaration authority rather than a new
+  general call-site constraint solver. Natural and semantic generic-owner
+  endpoints receive the same logical method arguments; neither endpoint may
+  borrow an identically numbered parameter from another MethodDef.
+
+  Physical-library ABI 60 records exact MethodDef generic arity on ordinary
+  Function records, classifier-input entries, generic-owner capability/default/
+  semantic-hook/probe locators, interface-default and default-argument helpers,
+  and value-class compiler helpers. Portable comparison and external
+  reconstruction reject a missing, negative, stale, or disagreeing arity. The
+  MethodSpec vector is call-site data only and can never define the selected
+  MethodDef's declaration arity.
+
+  A bounded method-generic classifier input now keeps the truthful natural
+  source signature, for example `fun <T> retain(value: Producer<T>)` as
+  `Producer<!!0>`, beside one object-input compiler entry. The natural call is
+  selected only from positive physical evidence: the exact parameter of the
+  current source MethodDef, or the current bounded local non-generic direct
+  flat-closed interface edge. Value-type widening, `Nothing`, open-nullable,
+  foreign, transitive, generic-owner, and otherwise unproven carriers use the
+  paired entry. Logical ancestry or CLR/Kotlin variance alone never fabricates
+  `Producer<object>`.
+
+  Application-only paired entries are assembly-local. A producer-recorded or
+  portable interface-default entry is public compiler ABI, hidden from normal
+  C# browsing, and selected through its recorded locator; the source MethodDef
+  remains the sole natural C# entry. A natural-only precompiled C# producer is
+  callable from widened Kotlin code through its ordinary generic method with
+  the exact value-, reference-, or open-`R` MethodSpec and unchanged identity.
+  Default-argument sources and dispatchers, `@InlineOnly`, reified/intrinsic
+  remainders, nullable/projected/nested-open inputs, generic containing owners,
+  and multiple selected classifier inputs remain outside this proof.
+
+  The two hostile fixtures are green in eight focused execution lanes: PSI and
+  LightTree, Framework 4.8 and .NET 10, for both the local sealed-emission
+  MethodSpec family and the separate natural-only C# implementation. The
+  selected call-site binding, physical-value model, external-declaration, and
+  producer-authority backend suites are green, as are the physical-owner
+  round-trip and portable-ABI-difference integration gates. The full target
+  aggregate exits zero. Direct XML audit covers 199 suites/2,502 tests with no
+  failures, errors, or skips: one `dotnet.ir` suite/six tests, 187 FIR suites/
+  2,243 tests, two integration suites/127 tests, and nine backend suites/126
+  tests. The explicit-off inverse is independently green in four suites/eight
+  tests, while the aggregate supplies the property-absent inverse. Production
+  generic owners remain atomically erased and no wrapper, proxy, shadow state,
+  or second receiver identity was introduced.
+  Next add independently sourced producer-recorded and retained-foreign sealed
+  adapters, then overlapping/global-family ownership, before resuming the
+  Stdlib census. See
+  [`docs/archive/generic-owner-methodspec-call-binding-2026-08-27.md`](docs/archive/generic-owner-methodspec-call-binding-2026-08-27.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5559,19 +5616,19 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    rows. Missing evidence is unavailable, contradictions conflict, and
    production/off remains empty.
 
-   Keep that seal family-scoped while first closing method-generic MethodSpec
-   and call-value routing for the newly certified grammar. The physical
-   MethodDef remains open, the call carries the exact method instantiation,
-   and owner plus method parameters are substituted through their respective
-   TypeDef and MethodDef binders before verification or emission. Natural and
-   semantic endpoints must receive the same logical method arguments; no
-   `!!0` may be borrowed from a sibling MethodDef. Prove value- and reference-
-   type arguments through exact and widened receivers on both frontends and
-   both CLR profiles, together with the production-erased inverse.
+   Keep that seal family-scoped. Method-generic MethodSpec and call-value
+   routing for the newly certified grammar are now executable: the physical
+   MethodDef stays open, the call carries its exact instantiation, TypeDef and
+   MethodDef binders substitute independently, and natural and semantic
+   endpoints receive the same logical method arguments. Focused value- and
+   reference-type execution is green on both frontends and CLR profiles. The
+   full aggregate, direct XML audit, explicit-off inverse, and property-absent
+   inverse are green.
 
-   After that executable boundary is green, add independently sourced
-   producer-recorded and retained-foreign sealed adapters, followed by
-   overlapping/global-family ownership checks. A shared authority must require
+   Next add independently sourced producer-recorded and retained-foreign
+   sealed adapters, including the static/file-facade operation-authority join,
+   followed by overlapping/global-family ownership checks. A shared authority
+   must require
    final-live evidence from the appropriate source for every fact in its scope;
    BOUND may never fill an adapter gap. Then bind and compare the second split-
    nullable/covariant-result selection and prove its composition on the custom

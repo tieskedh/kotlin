@@ -4,7 +4,8 @@
 - Scope: C# source implementations of non-generic Kotlin-owned interfaces on
   `net48`, `netstandard2.0`, and `net10.0`; historical evidence for the removed
   implicit generic authoring prototype
-- Amended: 2026-08-25 for schema-9 split-nullable MethodDef locators in the
+- Amended: 2026-08-27 for schema-9 split-nullable MethodDef locators and
+  producer-selected method-generic classifier-input helper locators in the
   production-inert CLR-generic interface rehearsal
 
 The generic canonical/declared/exact design recorded below is no longer
@@ -481,6 +482,24 @@ the schema-7 weakened-bound rule above, and C# authors must not add a
 `where R : T` clause to the unconstrained natural method. Owner-relative
 defaults, nested or multiple relative bounds, inherited forms, and other
 constructed, special, and nullable forms remain outside the gate.
+
+When a portable method-generic default helper also needs the rehearsal's
+paired classifier-input boundary, the manifest records the already
+materialized object-input helper as the semantic locator. It must not point the
+generated semantic adapter at the natural helper and then fabricate an
+`I<object>` receiver for an object which physically implements only `I<int>`.
+The selected helper retains its own exact method generic arity, constraints,
+and `R` forwarding; generated C# instantiates that recorded MethodDef directly.
+C# authors still implement or override only the ordinary natural generic
+method.
+
+This changes locator selection, not the manifest grammar: schema 9 already
+records the complete MethodDef locator and remains current. Application-only
+paired entries are assembly-local and never enter the manifest. A public
+producer or portable-helper entry is marked compiler ABI and
+`EditorBrowsable(Never)`; tooling consumes its recorded locator while ordinary
+C# source and browsing continue to see the natural member as the user-facing
+entry.
 
 For a covariant generic property, the strongly typed declared view owns the canonical DIM body.
 The erased canonical interface remains an abstract CLR Property slot reached by an

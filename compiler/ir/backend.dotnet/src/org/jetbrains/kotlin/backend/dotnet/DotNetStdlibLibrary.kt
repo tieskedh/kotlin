@@ -479,6 +479,7 @@ internal object DotNetStdlibLibrary {
             signature = DotNetIlMethodSignature(
                 returnType = DotNetIlReturnType.Value(iteratorType),
                 parameterTypes = listOf(arrayType),
+                methodGenericParameterCount = 0,
             ),
         )
         return functionInfo.renderCallInstruction(
@@ -1009,6 +1010,7 @@ internal object DotNetStdlibLibrary {
                 DotNetIlValueType.TypeParameter(index = 0, isMethodParameter = true),
             ),
             parameterTypes = listOf(DotNetRuntimeTypes.iterableType),
+            methodGenericParameterCount = 1,
         ),
     )
     private val LIST_ELEMENT_FUNCTION_INFO = DotNetIlFunctionInfo(
@@ -1018,6 +1020,7 @@ internal object DotNetStdlibLibrary {
                 DotNetIlValueType.TypeParameter(index = 0, isMethodParameter = true),
             ),
             parameterTypes = listOf(DotNetRuntimeTypes.listType),
+            methodGenericParameterCount = 1,
         ),
     )
     private val ARRAY_FACTORY_PARAMETER_TYPE = DotNetIlValueType.TypeParameter(
@@ -1188,6 +1191,7 @@ internal object DotNetStdlibLibrary {
             signature = DotNetIlMethodSignature(
                 returnType = DotNetIlReturnType.Value(returnType),
                 parameterTypes = listOf(DotNetIlValueType.GenericArray(ARRAY_FACTORY_PARAMETER_TYPE)),
+                methodGenericParameterCount = 1,
             ),
         )
 
