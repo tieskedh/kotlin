@@ -2299,6 +2299,7 @@ internal class DotNetGenericOwnerFinalRoutingLowering(
 
         if (context.configuration.dotNetGenericOwnerRehearsal) {
             DotNetGenericOwnerPhysicalValueShadowAnalysis(context).analyze(irModule)
+            DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(context).analyze(irModule)
         }
     }
 }

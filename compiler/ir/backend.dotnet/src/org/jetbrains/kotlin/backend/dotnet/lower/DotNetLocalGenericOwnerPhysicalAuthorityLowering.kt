@@ -9,19 +9,31 @@ import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSupertypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableValueSlotReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberDispatch
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodSignatureReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceView
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalBoundInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableFamilyInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalClassEdgePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceEdgeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseSuperTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
@@ -29,8 +41,11 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.requiresExactInputView
 import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
@@ -230,7 +245,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             .associateBy(DotNetLocalGenericOwnerPhysicalTypeInput::identity)
         val recordedPlans = context.localGenericOwnerPhysicalClassEdgePlans.orEmpty()
 
-        val bound = earlyAuthority.advanceBound(additionalInputs) edgeBuilder@{ declarations ->
+        val bound = earlyAuthority.advanceBound(additionalInputs) boundBuilder@{ declarations ->
             val edgeSets = mutableListOf<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>()
             for (source in classInputs) {
                 val recordedPlan = recordedPlans[source.identity.owner.owner] ?: continue
@@ -240,16 +255,160 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     declarations,
                 )) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> edgeSets += result.value
-                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return@edgeBuilder result
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return@boundBuilder result
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
                 }
             }
-            DotNetGenericOwnerPhysicalBindingResult.Bound(edgeSets)
+            val methodDefinitions = mutableListOf<DotNetGenericOwnerPhysicalMethodDefReference>()
+            val callableFamilies = mutableListOf<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>()
+            for (entry in context.genericOwnerCapabilitySlots.entries) {
+                val source = entry.key
+                val semanticSlot = entry.value
+                val selection = bindDirectProducerCallableOrNull(
+                    source,
+                    semanticSlot,
+                    inputsByIdentity,
+                    declarations,
+                ) ?: continue
+                methodDefinitions += selection.methodDefinitions
+                callableFamilies += selection.callableFamily
+            }
+            DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalBoundInput(
+                    methodDefinitions,
+                    callableFamilies,
+                    edgeSets,
+                ),
+            )
         }
         context.localGenericOwnerPhysicalAuthority = bound
         if (bound is DotNetGenericOwnerPhysicalBindingResult.Conflict) {
             error("Internal .NET backend error: ${bound.reason}")
         }
+    }
+
+    private data class DirectProducerCallableSelection(
+        val methodDefinitions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
+        val callableFamily: DotNetLocalGenericOwnerPhysicalCallableFamilyInput,
+    )
+
+    /**
+     * First callable grammar: one abstract, parameterless, direct owner-parameter producer.
+     * Split-nullable and input-bearing contracts remain unbound until their later selection point.
+     */
+    private fun bindDirectProducerCallableOrNull(
+        source: IrSimpleFunction,
+        semanticSlot: IrSimpleFunction,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+    ): DirectProducerCallableSelection? {
+        val owner = source.parent as? IrClass ?: return null
+        if (owner.kind != ClassKind.INTERFACE || owner !in context.reifiedGenericInterfaces) return null
+        val contract = context.publishedGenericInterfaceFamilies[owner]
+            ?.takeIf { family ->
+                family.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                        family.capabilityBindingKind ==
+                        DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED
+            } ?: return null
+        val logicalMemberKey = context.preLoweringDeclarationKeys[source] ?: return null
+        if (contract.declaredMembers.singleOrNull { member ->
+                member.logicalMemberKey == logicalMemberKey
+            }?.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+        ) return null
+        val resultParameterIndex = owner.typeParameters.indexOfFirst { parameter ->
+            source.returnType == parameter.defaultType
+        }.takeIf { index -> index >= 0 } ?: return null
+        if (source.isSuspend ||
+            source.typeParameters.isNotEmpty() ||
+            source.parameters.size != 1 ||
+            source.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+            source.visibility != DescriptorVisibilities.PUBLIC ||
+            source.modality != Modality.ABSTRACT ||
+            source.body != null
+        ) return null
+
+        val capabilityOwner = context.genericOwnerCapabilityInterfaces[owner] ?: return null
+        if (semanticSlot.parent !== capabilityOwner ||
+            semanticSlot.isSuspend ||
+            semanticSlot.typeParameters.isNotEmpty() ||
+            semanticSlot.parameters.size != 1 ||
+            semanticSlot.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+            !semanticSlot.returnType.isNullableAny() ||
+            semanticSlot.visibility != DescriptorVisibilities.PUBLIC ||
+            semanticSlot.modality != Modality.ABSTRACT ||
+            semanticSlot.body != null
+        ) return null
+
+        val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            owner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            capabilityOwner.symbol,
+            view = null,
+        )
+        if (inputsByIdentity[naturalOwnerIdentity]?.role !=
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ||
+            inputsByIdentity[semanticOwnerIdentity]?.role !=
+            DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY
+        ) return null
+        val naturalResultCarrier = when (val binding = declarations.typeParameterOrError(
+            naturalOwnerIdentity,
+            resultParameterIndex,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> return null
+        }
+        val naturalMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            source.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val semanticMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            semanticSlot.symbol,
+            // The public abstract capability-interface slot is not the private-final class
+            // CAPABILITY_DISPATCHER member. Its generated IR symbol is already exact identity.
+            role = null,
+        )
+        fun method(
+            identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
+            declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+            resultCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+        ) = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = identity,
+            declaringType = declaringType,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 0,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                        resultCarrier,
+                    ),
+                ),
+                parameterSlots = emptyList(),
+            ),
+        )
+        return DirectProducerCallableSelection(
+            methodDefinitions = listOf(
+                method(naturalMethodIdentity, naturalOwnerIdentity, naturalResultCarrier),
+                method(
+                    semanticMethodIdentity,
+                    semanticOwnerIdentity,
+                    DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                ),
+            ),
+            callableFamily = DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
+                source.symbol,
+                semanticSlot.symbol,
+            ),
+        )
     }
 
     private fun bindRecordedEdgeSetOrUnavailable(
