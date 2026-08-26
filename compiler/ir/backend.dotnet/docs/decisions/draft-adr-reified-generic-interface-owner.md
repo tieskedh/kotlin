@@ -1290,11 +1290,28 @@ sealed index.
 
 This certificate is deliberately family-scoped and rehearsal-only. It changes
 no route, recognizer, field/state decision, KLIB record, or production ABI;
-production/off publishes no sealed families and remains erased. MethodDef
-GenericParam rows, producer-recorded and retained-foreign adapters,
-overlapping/compiler-wide family ownership, arbitrary members outside the
-selected family, and broader callable grammars remain open. See
+production/off publishes no sealed families and remains erased. Producer-
+recorded and retained-foreign adapters, overlapping/compiler-wide family
+ownership, arbitrary members outside the selected family, and broader callable
+grammars remain open. See
 [`../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md`](../archive/generic-owner-sealed-emission-signature-family-2026-08-26.md).
+
+The bounded family may now have coherent method arity zero or one. In the
+arity-one form every physical MethodDef owns one invariant GenericParam and
+uses its own binder-scoped `!!0` as the sole declaration-independent input.
+GenericParam rows are ordered by parameter number and carry normalized
+constraint sets; exact physical names belong only to final actual evidence and
+do not establish identity. Constraint-row order is incidental, while duplicate,
+cross-MethodDef, or out-of-range references conflict. The general sealed model
+can represent ordinary owner- and same-MethodDef-relative constraints, but the
+integrated family currently admits only one unconstrained, non-reified
+parameter and no special GenericParam flags. See
+[`../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](../archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md).
+
+This remains declaration authority, not call-site authority. A closed call
+must still prove ordinary CLR MethodSpec construction and substitute its method
+arguments through the selected natural or semantic MethodDef before those
+routes can become executable evidence.
 
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
@@ -1327,12 +1344,12 @@ fails and the bounded implementation remains authoritative.
 
 ## Remaining gates
 
-The local actual-only final-emission certificate is complete for its bounded
-direct-producer family. Before that authority can be shared across families or
-replace a recognizer, independently sourced producer-recorded and
-retained-foreign adapters, MethodDef GenericParam rows, and overlapping/global
-ownership must join the same fail-closed model. BOUND cannot fill any missing
-final fact in those adapters.
+The local actual-only final-emission certificate, including its bounded
+MethodDef GenericParam rows, is complete. The next gate is executable
+MethodSpec/call-value routing for that same family. Only after it is green
+should independently sourced producer-recorded and retained-foreign adapters,
+then overlapping/global ownership, join the fail-closed model. BOUND cannot
+fill a missing final fact in any adapter.
 
 Before another source-built Stdlib blocker is implemented, the rehearsal must
 continue consolidating the local carrier proofs behind the model above in

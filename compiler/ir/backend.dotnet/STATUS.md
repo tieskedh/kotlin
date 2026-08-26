@@ -1270,38 +1270,43 @@ verification, and work state.
   recognizer or resume the Stdlib census yet. See
   [`docs/archive/generic-owner-complete-emission-family-2026-08-26.md`](docs/archive/generic-owner-complete-emission-family-2026-08-26.md).
 
-  That bounded 4-TypeDef/6-MethodDef/2-MethodImpl implementation family now
-  has the first actual-only sealed-emission certificate. The certificate is
-  built afresh from one successful final-emission transaction; BOUND supplies
-  only opaque keys and the expected structural contract used for correlation
-  and validation. No BOUND row is copied or advanced into the seal, so an
-  omitted or evicted declaration cannot survive as falsely sealed. The result
-  retains each final TypeDef path and complete supported flag vector, each
-  final MethodDef name, supported flag vector and signature, and the two
-  actually emitted MethodImpl rows. Ordinary implicit mapping additionally
-  requires the natural interface slot and typed implementation entry to have
-  the same final name.
+  The fresh actual-only sealed-emission certificate for the bounded
+  4-TypeDef/6-MethodDef/2-MethodImpl direct-producer family now admits either
+  the original parameterless producer or one coherent method-generic
+  `fun <R> produce(marker: R): T`. Every one of the six physical MethodDefs
+  owns its own invariant GenericParam row and its own binder-scoped `!!0`
+  input. The natural slot and typed implementation entry return `!0`; the four
+  semantic entries retain `object`. A sibling MethodDef's identically numbered
+  parameter is never interchangeable.
 
-  Binding is transactional. Missing final evidence is unavailable; duplicate
-  or extra rows, cross-scope evidence, structural drift, duplicate CLR method
-  coordinates, path/nesting and category/flag disagreement, invalid
-  special-name masks, and wrong MethodImpl endpoints conflict. Only a complete
-  match publishes rows, and queries require an already selected opaque key.
-  The coordinate uses owner, exact name, instance convention, generic arity,
-  and explicit printed parameters, including the hidden split-nullable
-  `bool&`; it does not use the result or implicit receiver.
+  BOUND supplies the ordered expected GenericParam contract. The successful
+  final emitter transaction independently records the actual rows, normalized
+  constraint carriers, and exact raw metadata names from the same decision
+  which renders the IL header. GenericParam position is authoritative;
+  constraint order is metadata-incidental. Missing rows are unavailable, while
+  arity, variance, constraint, cross-MethodDef binder, out-of-range binder, or
+  duplicate-constraint disagreement conflicts and publishes no sealed family.
+  ILAsm quoting remains serialization-only and cannot alter the sealed metadata
+  name.
+
+  The integrated method-generic grammar remains deliberately narrow: exactly
+  one non-reified, unconstrained invariant method parameter used as the sole
+  declaration-independent input. The general seal can validate correctly
+  scoped ordinary constraints, but special `class`/`struct`/`new()` flags and
+  broader callable grammars remain unadmitted. This checkpoint certifies
+  declarations only; it does not yet claim MethodSpec construction or
+  executable method-generic call routing.
 
   This remains one family-scoped, read-only rehearsal certificate. It changes
   no route, recognizer, state decision, KLIB record, or production ABI;
   production/off asserts the sealed-family list is empty and remains erased.
-  MethodDef GenericParam rows, producer-recorded and retained-foreign
-  adapters, arbitrary overlapping/compiler-wide family ownership, and wider
-  callable grammars remain open. Focused evidence is green for all 109 backend
-  unit tests and for candidate plus production-inverse PSI/LightTree runs on
-  Framework 4.8 and .NET 10. The full target aggregate exits zero; direct XML
-  audit covers 198 suites and 2,481 tests with zero failures, errors, or skips.
-  See
-  [`docs/archive/generic-owner-sealed-emission-signature-family-2026-08-26.md`](docs/archive/generic-owner-sealed-emission-signature-family-2026-08-26.md).
+  Focused candidate, explicit-off, and property-absent evidence is green across
+  PSI and LightTree on Framework 4.8 and .NET 10. The full target aggregate
+  exits zero; direct XML audit covers 198 suites and 2,496 tests with zero
+  failures, errors, or skips. The next bounded feature is method-generic
+  MethodSpec and call-value routing through the natural and semantic endpoints,
+  before producer-recorded or retained-foreign sealed adapters. See
+  [`docs/archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](docs/archive/generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md).
 
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
@@ -3983,25 +3988,25 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The family-scoped sealed-emission-signature checkpoint passed every
+The MethodDef-GenericParam sealed-emission checkpoint passed every
 constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed successfully on 2026-08-26. Backend, FIR2IR,
+The latest aggregate completed successfully on 2026-08-27. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
-executed for the family-scoped sealed-emission-signature checkpoint. Direct
+executed for the MethodDef-GenericParam sealed-emission checkpoint. Direct
 audit of the four result roots covers the complete target inventory of 198
-suites and 2,481 tests, with zero failures, errors, or skips: eight backend
-suites/109 tests, 187 FIR suites/2,239 tests, two integration suites/127 tests,
+suites and 2,496 tests, with zero failures, errors, or skips: eight backend
+suites/120 tests, 187 FIR suites/2,243 tests, two integration suites/127 tests,
 and one `dotnet.ir` suite/six tests. The focused PSI/LightTree and Framework
 4.8/.NET 10 matrix proves candidate emission and the production-erased inverse
 across all four lanes. The backend model suite independently retains actual-
 only sealing, complete-family transactions, exact final path/name/flag facts,
-CLI-coordinate collision checks, split-nullable `bool&` coordinates, and
-actual MethodImpl retention.
+CLI-coordinate collision checks, split-nullable `bool&` coordinates, actual
+MethodImpl retention, and complete binder-owned MethodDef GenericParam rows.
 
 The earlier profile-specialized generic-array-fill aggregate and explicit
 model constituent exited successfully. That historical head additionally
@@ -5554,16 +5559,26 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    rows. Missing evidence is unavailable, contradictions conflict, and
    production/off remains empty.
 
-   Keep that seal family-scoped while adding independently sourced
-   producer-recorded and retained-foreign adapters, MethodDef GenericParam
-   rows, and overlapping/global-family ownership checks. A shared authority
-   must require final-live evidence from the appropriate source for every fact
-   in its scope; it may never fill an adapter gap from BOUND. Then bind and
-   compare the second split-nullable/covariant-result selection and prove its
-   composition on the custom two-parameter lookup family before applying it to
-   Map. Only after those gates may shared queries replace bounded recognizers
-   or become authoritative. No bounded recognizer is removed until the same
-   analysis explains both its positive behavior and hostile negatives.
+   Keep that seal family-scoped while first closing method-generic MethodSpec
+   and call-value routing for the newly certified grammar. The physical
+   MethodDef remains open, the call carries the exact method instantiation,
+   and owner plus method parameters are substituted through their respective
+   TypeDef and MethodDef binders before verification or emission. Natural and
+   semantic endpoints must receive the same logical method arguments; no
+   `!!0` may be borrowed from a sibling MethodDef. Prove value- and reference-
+   type arguments through exact and widened receivers on both frontends and
+   both CLR profiles, together with the production-erased inverse.
+
+   After that executable boundary is green, add independently sourced
+   producer-recorded and retained-foreign sealed adapters, followed by
+   overlapping/global-family ownership checks. A shared authority must require
+   final-live evidence from the appropriate source for every fact in its scope;
+   BOUND may never fill an adapter gap. Then bind and compare the second split-
+   nullable/covariant-result selection and prove its composition on the custom
+   two-parameter lookup family before applying it to Map. Only after those
+   gates may shared queries replace bounded recognizers or become
+   authoritative. No bounded recognizer is removed until the same analysis
+   explains both its positive behavior and hostile negatives.
 
    Continue the hardest-model-first generic-owner architecture spike within
    that consolidation. The erased hostile oracle, historical

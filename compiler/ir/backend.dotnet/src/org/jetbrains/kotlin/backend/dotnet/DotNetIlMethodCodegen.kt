@@ -153,6 +153,7 @@ internal data class DotNetIlRawMethodDefHeaderObservation(
     val isSpecialName: Boolean,
     val isRuntimeSpecialName: Boolean,
     val genericArity: Int,
+    val genericParameters: List<DotNetIlRawMethodDefGenericParameterObservation>,
     val signature: DotNetIlMethodSignature,
 ) {
     init {
@@ -160,11 +161,35 @@ internal data class DotNetIlRawMethodDefHeaderObservation(
             "an observed MethodDef requires its exact physical name"
         }
         require(genericArity >= 0) { "an observed MethodDef requires a non-negative generic arity" }
+        require(genericParameters.size == genericArity) {
+            "an observed MethodDef requires one exact GenericParam row per generic parameter"
+        }
+        require(genericParameters.all { parameter ->
+            parameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+        }) {
+            "an observed MethodDef GenericParam must be invariant"
+        }
         require(dispatch.isInstance == signature.hasThis) {
             "an observed MethodDef dispatch convention must agree with its physical signature"
         }
         require(!isRuntimeSpecialName || isSpecialName) {
             "an observed runtime-special MethodDef must also carry specialname"
+        }
+    }
+}
+
+/** One exact GenericParam row consumed by the same final MethodDef header render. */
+internal data class DotNetIlRawMethodDefGenericParameterObservation(
+    val physicalName: String,
+    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    val constraints: List<DotNetIlValueType>,
+) {
+    init {
+        require(physicalName.isNotEmpty()) {
+            "an observed MethodDef GenericParam requires its exact physical name"
+        }
+        require(constraints.size == constraints.toSet().size) {
+            "an observed MethodDef GenericParam cannot repeat a constraint row"
         }
     }
 }
@@ -556,6 +581,7 @@ internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
     val isSpecialName: Boolean,
     val isRuntimeSpecialName: Boolean,
     val genericArity: Int,
+    val genericParameters: List<DotNetGenericOwnerPhysicalMethodDefGenericParameterObservation>,
     val signature: DotNetGenericOwnerObservedMethodSignature,
 ) {
     init {
@@ -564,6 +590,25 @@ internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
         }
         require(!isRuntimeSpecialName || isSpecialName) {
             "an observed runtime-special MethodDef must also carry specialname"
+        }
+        require(genericParameters.size == genericArity) {
+            "a normalized MethodDef requires one exact GenericParam row per generic parameter"
+        }
+    }
+}
+
+/** Final-fixpoint GenericParam evidence bound to its owning physical MethodDef. */
+internal data class DotNetGenericOwnerPhysicalMethodDefGenericParameterObservation(
+    val physicalName: String,
+    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    val constraints: List<DotNetGenericOwnerObservedMethodCarrier>,
+) {
+    init {
+        require(physicalName.isNotEmpty()) {
+            "a normalized MethodDef GenericParam requires its exact physical name"
+        }
+        require(constraints.size == constraints.toSet().size) {
+            "a normalized MethodDef GenericParam cannot repeat a constraint row"
         }
     }
 }
@@ -582,10 +627,15 @@ private data class DotNetIlSimpleMethodHeaderDecision(
     val isHideBySig: Boolean,
     val isSpecialName: Boolean,
     val isRuntimeSpecialName: Boolean,
-    val genericArity: Int,
-    val renderedGenericParameters: String,
+    val genericParameters: List<DotNetIlGenericParameterDecision>,
     val signature: DotNetIlMethodSignature,
 ) {
+    val genericArity: Int
+        get() = genericParameters.size
+
+    val renderedGenericParameters: String
+        get() = genericParameters.renderDotNetIlGenericParameterDecisions().orEmpty()
+
     fun observation(): DotNetIlRawMethodDefHeaderObservation = DotNetIlRawMethodDefHeaderObservation(
         function = function.symbol,
         genericOwnerPhysicalMethodIdentity = genericOwnerPhysicalMethodIdentity,
@@ -597,6 +647,13 @@ private data class DotNetIlSimpleMethodHeaderDecision(
         isSpecialName = isSpecialName,
         isRuntimeSpecialName = isRuntimeSpecialName,
         genericArity = genericArity,
+        genericParameters = genericParameters.map { parameter ->
+            DotNetIlRawMethodDefGenericParameterObservation(
+                physicalName = parameter.physicalName,
+                variance = parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
+                constraints = parameter.constraints,
+            )
+        },
         signature = signature,
     )
 
@@ -780,14 +837,12 @@ internal class DotNetIlMethodCodegen(
                     isHideBySig = true,
                     isSpecialName = true,
                     isRuntimeSpecialName = true,
-                    genericArity = 0,
-                    renderedGenericParameters = "",
+                    genericParameters = emptyList(),
                     signature = signature,
                 )
             } else {
                 val genericParameters = simpleFunction.typeParameters
-                    .renderDotNetIlGenericParameters(typeMapper)
-                    .orEmpty()
+                    .dotNetIlGenericParameterDecisions(typeMapper)
                 DotNetIlSimpleMethodHeaderDecision(
                     function = simpleFunction,
                     genericOwnerPhysicalMethodIdentity = functionInfo.genericOwnerPhysicalMethodIdentity,
@@ -799,8 +854,7 @@ internal class DotNetIlMethodCodegen(
                     isHideBySig = true,
                     isSpecialName = simpleFunction.isPropertyAccessor,
                     isRuntimeSpecialName = false,
-                    genericArity = simpleFunction.typeParameters.size,
-                    renderedGenericParameters = genericParameters,
+                    genericParameters = genericParameters,
                     signature = signature,
                 )
             }

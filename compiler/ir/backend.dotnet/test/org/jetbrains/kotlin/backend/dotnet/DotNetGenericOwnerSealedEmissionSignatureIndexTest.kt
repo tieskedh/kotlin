@@ -158,6 +158,114 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
     }
 
     @Test
+    fun sealsMethodGenericParametersWithAConstraintBoundToTheSameMethodDef() {
+        val genericMethodKey = methodKey(2)
+        val firstParameter = methodParameter(genericMethodKey, 0)
+        val secondParameter = methodParameter(genericMethodKey, 1)
+        val genericMethod = methodDef(
+            genericMethodKey,
+            typeKey(0),
+            ownerArity = 1,
+            ownerCategory = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            visibility = DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            result = direct(secondParameter),
+            genericParameters = listOf(
+                genericParameter(),
+                genericParameter(firstParameter),
+            ),
+        )
+        val genericActualMethod = sealedMethod(
+            genericMethod,
+            physicalName = "Identity",
+            physicalGenericParameterNames = listOf("R", "U"),
+        )
+
+        val result = bindDotNetGenericOwnerSealedEmissionSignatureIndex(
+            expected.copy(methodDefs = expected.methodDefs + genericMethod),
+            actual.copy(methodDefs = actual.methodDefs + genericActualMethod),
+        )
+
+        val bound = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(result)
+        val index = assertIs<DotNetGenericOwnerSealedEmissionSignatureIndex>(bound.value)
+        val sealed = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            index.methodDef(genericMethodKey),
+        ).value as DotNetGenericOwnerSealedEmissionMethodDefRow
+        assertEquals(listOf("R", "U"), sealed.physicalGenericParameterNames)
+        assertEquals(emptyList(), sealed.structural.genericParameters[0].constraints)
+        assertEquals(listOf(firstParameter), sealed.structural.genericParameters[1].constraints)
+    }
+
+    @Test
+    fun rejectsAMethodGenericParameterConstraintBoundToAnotherMethodDef() {
+        val sourceKey = methodKey(2)
+        val targetKey = methodKey(3)
+        val crossMethodParameter = methodParameter(targetKey, 0)
+        val sourceMethod = methodDef(
+            sourceKey,
+            typeKey(0),
+            ownerArity = 1,
+            ownerCategory = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            visibility = DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            result = direct(objectCarrier),
+            genericParameters = listOf(genericParameter(crossMethodParameter)),
+        )
+        val targetMethod = methodDef(
+            targetKey,
+            typeKey(0),
+            ownerArity = 1,
+            ownerCategory = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            visibility = DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            result = direct(objectCarrier),
+            genericParameters = listOf(genericParameter()),
+        )
+
+        val result = bindDotNetGenericOwnerSealedEmissionSignatureIndex(
+            expected.copy(methodDefs = expected.methodDefs + sourceMethod + targetMethod),
+            actual.copy(
+                methodDefs = actual.methodDefs +
+                        sealedMethod(sourceMethod, "Cross", listOf("S")) +
+                        sealedMethod(targetMethod, "Target", listOf("T")),
+            ),
+        )
+
+        val conflict = assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(result)
+        assertTrue(conflict.reason.contains("outside its physical scope"))
+    }
+
+    @Test
+    fun rejectsAnOutOfRangeMethodGenericParameterConstraint() {
+        val genericMethodKey = methodKey(2)
+        val outOfRangeParameter = methodParameter(genericMethodKey, 1)
+        val genericMethod = methodDef(
+            genericMethodKey,
+            typeKey(0),
+            ownerArity = 1,
+            ownerCategory = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            visibility = DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            result = direct(objectCarrier),
+            genericParameters = listOf(genericParameter(outOfRangeParameter)),
+        )
+
+        val result = bindDotNetGenericOwnerSealedEmissionSignatureIndex(
+            expected.copy(methodDefs = expected.methodDefs + genericMethod),
+            actual.copy(
+                methodDefs = actual.methodDefs + sealedMethod(
+                    genericMethod,
+                    "OutOfRange",
+                    listOf("M"),
+                ),
+            ),
+        )
+
+        val conflict = assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(result)
+        assertTrue(conflict.reason.contains("outside its arity"))
+    }
+
+    @Test
     fun retainsExactFinalNamesAndFlagsWithoutReplacingThemFromBound() {
         val result = bindDotNetGenericOwnerSealedEmissionSignatureIndex(expected, actual)
         val bound = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(result)
@@ -205,7 +313,7 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
         genericArity = arity,
         category = category,
         genericParameters = List(arity) {
-            DotNetGenericOwnerCompleteEmissionTypeParameterRow(
+            DotNetGenericOwnerCompleteEmissionGenericParameterRow(
                 DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
                 constraints = emptyList(),
             )
@@ -221,6 +329,7 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
         visibility: DotNetGenericOwnerPhysicalMethodDefEmissionVisibility,
         dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
         result: DotNetGenericOwnerPhysicalMethodDefEmissionResultShape,
+        genericParameters: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow> = emptyList(),
     ) = DotNetGenericOwnerCompleteEmissionMethodDefRow(
         identityKey = key,
         header = DotNetGenericOwnerPhysicalMethodDefEmissionHeaderShape(
@@ -230,7 +339,7 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
             visibility = visibility,
             dispatch = dispatch,
             isInstance = true,
-            genericArity = 0,
+            genericArity = genericParameters.size,
             receiverCarrier = construction(
                 owner,
                 *(0 until ownerArity).map { index -> ownerParameter(owner, index) }.toTypedArray(),
@@ -238,6 +347,7 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
             ordinaryParameterCarriers = emptyList(),
             result = result,
         ),
+        genericParameters = genericParameters,
     )
 
     private fun typeKey(value: Int) = DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(value)
@@ -248,6 +358,33 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
         binder: DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey,
         index: Int,
     ) = DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter(binder, index)
+
+    private fun methodParameter(
+        binder: DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey,
+        index: Int,
+    ) = DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.MethodParameter(binder, index)
+
+    private fun genericParameter(
+        vararg constraints: DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape,
+    ) = DotNetGenericOwnerCompleteEmissionGenericParameterRow(
+        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+        constraints.toList(),
+    )
+
+    private fun sealedMethod(
+        structural: DotNetGenericOwnerCompleteEmissionMethodDefRow,
+        physicalName: String,
+        physicalGenericParameterNames: List<String>,
+    ) = DotNetGenericOwnerSealedEmissionMethodDefRow(
+        structural = structural,
+        physicalName = physicalName,
+        physicalGenericParameterNames = physicalGenericParameterNames,
+        visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+        dispatch = finalInstanceDispatch,
+        isHideBySig = true,
+        isSpecialName = false,
+        isRuntimeSpecialName = false,
+    )
 
     private fun construction(
         definition: DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey,
@@ -364,6 +501,7 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
             DotNetGenericOwnerSealedEmissionMethodDefRow(
                 classMethod,
                 physicalName = "Produce",
+                physicalGenericParameterNames = emptyList(),
                 visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
                 dispatch = finalInstanceDispatch,
                 isHideBySig = true,
@@ -373,6 +511,7 @@ class DotNetGenericOwnerSealedEmissionSignatureIndexTest {
             DotNetGenericOwnerSealedEmissionMethodDefRow(
                 interfaceMethod,
                 physicalName = "ProduceSemantic",
+                physicalGenericParameterNames = emptyList(),
                 visibility = DotNetIlRawMethodDefVisibility.PUBLIC,
                 dispatch = abstractInstanceDispatch,
                 isHideBySig = true,

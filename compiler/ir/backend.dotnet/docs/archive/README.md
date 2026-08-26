@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md`](generic-owner-methoddef-genericparam-sealed-emission-2026-08-27.md)
+  records complete binder-owned MethodDef GenericParam rows in BOUND and final
+  emission, exact raw metadata names, set-semantic constraints, the coherent
+  `<R>(R): T` 4/6/2 family, hostile cross-binder and arity evidence, the
+  production-empty inverse, and the remaining MethodSpec/call-route boundary.
 - [`generic-owner-sealed-emission-signature-family-2026-08-26.md`](generic-owner-sealed-emission-signature-family-2026-08-26.md)
   records the fresh actual-only, non-additive seal for the bounded
   4-TypeDef/6-MethodDef/2-MethodImpl direct-producer family, exact final

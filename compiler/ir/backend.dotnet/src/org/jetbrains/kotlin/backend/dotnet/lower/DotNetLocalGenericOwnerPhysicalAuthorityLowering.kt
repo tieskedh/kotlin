@@ -34,7 +34,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalComple
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceEdgeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeInput
@@ -325,9 +325,30 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         val family: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput,
     )
 
+    /** The first complete MethodDef grammar: no method parameter, or one unconstrained `<R>(R)`. */
+    private fun IrSimpleFunction.hasCompleteMethodGenericInputShape(expectedArity: Int): Boolean {
+        if (isSuspend || typeParameters.size != expectedArity || expectedArity !in 0..1) return false
+        val receivers = parameters.filter { parameter ->
+            parameter.kind != IrParameterKind.Regular
+        }
+        val regularParameters = parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        if (receivers.singleOrNull()?.kind != IrParameterKind.DispatchReceiver ||
+            regularParameters.size != expectedArity
+        ) return false
+        if (expectedArity == 0) return true
+        val typeParameter = typeParameters.single()
+        return typeParameter.variance == Variance.INVARIANT &&
+                !typeParameter.isReified &&
+                typeParameter.superTypes.all { bound -> bound.isAny() || bound.isNullableAny() } &&
+                regularParameters.single().type == typeParameter.defaultType
+    }
+
     /**
-     * First callable grammar: one abstract, parameterless, direct owner-parameter producer.
-     * Split-nullable and input-bearing contracts remain unbound until their later selection point.
+     * First callable grammar: one abstract direct owner-parameter producer, optionally carrying
+     * one declaration-independent unconstrained MethodDef parameter. Split-nullable and
+     * owner-dependent/broad inputs remain unbound until their later selection points.
      */
     private fun bindDirectProducerCallableOrNull(
         source: IrSimpleFunction,
@@ -357,10 +378,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         val resultParameterIndex = owner.typeParameters.indexOfFirst { parameter ->
             source.returnType == parameter.defaultType
         }.takeIf { index -> index >= 0 } ?: return null
-        if (source.isSuspend ||
-            source.typeParameters.isNotEmpty() ||
-            source.parameters.size != 1 ||
-            source.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+        val methodGenericArity = source.typeParameters.size
+        if (!source.hasCompleteMethodGenericInputShape(methodGenericArity) ||
             source.visibility != DescriptorVisibilities.PUBLIC ||
             source.modality != Modality.ABSTRACT ||
             source.body != null
@@ -368,10 +387,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
 
         val capabilityOwner = context.genericOwnerCapabilityInterfaces[owner] ?: return null
         if (semanticSlot.parent !== capabilityOwner ||
-            semanticSlot.isSuspend ||
-            semanticSlot.typeParameters.isNotEmpty() ||
-            semanticSlot.parameters.size != 1 ||
-            semanticSlot.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+            !semanticSlot.hasCompleteMethodGenericInputShape(methodGenericArity) ||
             !semanticSlot.returnType.isNullableAny() ||
             semanticSlot.visibility != DescriptorVisibilities.PUBLIC ||
             semanticSlot.modality != Modality.ABSTRACT ||
@@ -414,23 +430,44 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
             declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
             resultCarrier: DotNetGenericOwnerSymbolicCarrierReference,
-        ) = DotNetGenericOwnerPhysicalMethodDefReference(
-            identity = identity,
-            declaringType = declaringType,
-            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
-            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
-            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
-                isInstance = true,
-                genericArity = 0,
-                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
-                    DotNetGenericOwnerPhysicalCallableValueSlotReference(
-                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
-                        resultCarrier,
+        ): DotNetGenericOwnerPhysicalMethodDefReference {
+            val methodParameter = if (methodGenericArity == 1) {
+                DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                    identity,
+                    0,
+                )
+            } else {
+                null
+            }
+            return DotNetGenericOwnerPhysicalMethodDefReference(
+                identity = identity,
+                declaringType = declaringType,
+                visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+                dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+                signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                    isInstance = true,
+                    genericArity = methodGenericArity,
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                        DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                            resultCarrier,
+                        ),
                     ),
+                    parameterSlots = listOfNotNull(methodParameter?.let { carrier ->
+                        DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                            carrier,
+                        )
+                    }),
                 ),
-                parameterSlots = emptyList(),
-            ),
-        )
+                genericParameters = List(methodGenericArity) {
+                    DotNetGenericOwnerPhysicalGenericParameterReference(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                        constraints = emptyList(),
+                    )
+                },
+            )
+        }
         return DirectProducerCallableSelection(
             methodDefinitions = listOf(
                 method(naturalMethodIdentity, naturalOwnerIdentity, naturalResultCarrier),
@@ -478,6 +515,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         val classCapabilityOwner = context.genericOwnerCapabilityInterfaces[implementationOwner] ?: return null
         val classCapabilityMember = context.genericOwnerCapabilitySlots[implementation] ?: return null
         val classDispatcher = context.genericOwnerCapabilityDispatchers[implementation] ?: return null
+        val methodGenericArity = logicalMember.typeParameters.size
         if (classCapabilityMember.parent !== classCapabilityOwner ||
             interfaceDispatcher.parent !== implementationOwner ||
             classDispatcher.parent !== implementationOwner ||
@@ -498,8 +536,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 ?.classifier != interfaceCapabilityOwner.symbol ||
             implementationOwner.modality != Modality.FINAL ||
             implementation.visibility != DescriptorVisibilities.PUBLIC ||
-            implementation.parameters.size != 1 ||
-            implementation.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+            !implementation.hasCompleteMethodGenericInputShape(methodGenericArity) ||
             implementation.returnType != implementationOwner.typeParameters.single().defaultType ||
             logicalMember !in implementation.overriddenSymbols.map { overridden -> overridden.owner } ||
             classDispatcher.overriddenSymbols.singleOrNull()?.owner !== classCapabilityMember ||
@@ -512,8 +549,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             interfaceDispatcher.visibility != DescriptorVisibilities.PRIVATE ||
             interfaceDispatcher.modality != Modality.FINAL ||
             listOf(classCapabilityMember, classDispatcher, interfaceDispatcher).any { member ->
-                member.isSuspend || member.typeParameters.isNotEmpty() || member.parameters.size != 1 ||
-                        member.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+                !member.hasCompleteMethodGenericInputShape(methodGenericArity) ||
                         !member.returnType.isNullableAny()
             }
         ) return null
@@ -559,7 +595,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         }
         val typeParameters = linkedMapOf(
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE to listOf(
-                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
                     DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
                     constraints = emptyList(),
                 ),
@@ -567,7 +603,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY to
                     emptyList(),
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS to listOf(
-                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
                     DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
                     constraints = emptyList(),
                 ),
@@ -598,18 +634,39 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             visibility: DotNetGenericOwnerPhysicalMemberVisibility,
             dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
             resultCarrier: DotNetGenericOwnerSymbolicCarrierReference,
-        ) = DotNetGenericOwnerPhysicalMethodDefReference(
-            identity = identity,
-            declaringType = declaringType,
-            visibility = visibility,
-            dispatch = dispatch,
-            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
-                isInstance = true,
-                genericArity = 0,
-                resultLayout = directResult(resultCarrier),
-                parameterSlots = emptyList(),
-            ),
-        )
+        ): DotNetGenericOwnerPhysicalMethodDefReference {
+            val methodParameter = if (methodGenericArity == 1) {
+                DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                    identity,
+                    0,
+                )
+            } else {
+                null
+            }
+            return DotNetGenericOwnerPhysicalMethodDefReference(
+                identity = identity,
+                declaringType = declaringType,
+                visibility = visibility,
+                dispatch = dispatch,
+                signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                    isInstance = true,
+                    genericArity = methodGenericArity,
+                    resultLayout = directResult(resultCarrier),
+                    parameterSlots = listOfNotNull(methodParameter?.let { carrier ->
+                        DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                            carrier,
+                        )
+                    }),
+                ),
+                genericParameters = List(methodGenericArity) {
+                    DotNetGenericOwnerPhysicalGenericParameterReference(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                        constraints = emptyList(),
+                    )
+                },
+            )
+        }
 
         val naturalIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
             logicalMember.symbol,

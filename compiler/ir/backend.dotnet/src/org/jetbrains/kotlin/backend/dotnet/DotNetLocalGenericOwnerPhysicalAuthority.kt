@@ -103,25 +103,6 @@ internal enum class DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind {
     CLASS_SEMANTIC_CAPABILITY,
 }
 
-/** Verifier-visible declaration-site variance on one CLR GenericParam row. */
-internal enum class DotNetGenericOwnerPhysicalTypeParameterVariance {
-    INVARIANT,
-    COVARIANT,
-    CONTRAVARIANT,
-}
-
-/** Complete bounded GenericParam metadata attached to one selected TypeDef. */
-internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
-    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
-    val constraints: List<DotNetGenericOwnerSymbolicCarrierReference>,
-) {
-    init {
-        require(constraints.size == constraints.toSet().size) {
-            "a complete local emission-family GenericParam cannot repeat a constraint row"
-        }
-    }
-}
-
 /** Every MethodDef structurally owned by the admitted direct-producer implementation family. */
 internal enum class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind {
     NATURAL_INTERFACE_SLOT,
@@ -146,6 +127,35 @@ internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
     val identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
 )
 
+/**
+ * The bounded MethodDef-input grammar shared by the callable and complete-family certificates.
+ *
+ * Arity one deliberately means one unconstrained invariant MethodDef parameter consumed by the
+ * sole declaration-independent input slot. The carrier must be bound to this exact MethodDef;
+ * an identically shaped sibling MethodDef is not interchangeable CLR metadata.
+ */
+private fun DotNetGenericOwnerPhysicalMethodDefReference.hasBoundedDirectProducerInputShape(): Boolean =
+    when (signature.genericArity) {
+        0 -> genericParameters.isEmpty() && signature.parameterSlots.isEmpty()
+        1 -> {
+            val genericParameter = genericParameters.singleOrNull() ?: return false
+            val slot = signature.parameterSlots.singleOrNull() ?: return false
+            val parameter = slot.carrier as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                ?: return false
+            val binder = (parameter.binder as?
+                    DotNetGenericOwnerPhysicalGenericBinderReference.Method)?.definition as?
+                    DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return false
+            val localIdentity = identity as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                ?: return false
+            genericParameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT &&
+                    genericParameter.constraints.isEmpty() &&
+                    slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    parameter.index == 0 &&
+                    binder.sameLocalMethodIdentityAs(localIdentity)
+        }
+        else -> false
+    }
+
 internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference(
     val kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind,
     val implementingType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
@@ -169,7 +179,7 @@ internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput(
             >,
     val typeParameters: Map<
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
-            List<DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference>,
+            List<DotNetGenericOwnerPhysicalGenericParameterReference>,
             >,
     val methods: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput>,
     val methodImpls: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference>,
@@ -210,7 +220,7 @@ internal class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily private con
             >,
     val typeParameters: Map<
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
-            List<DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference>,
+            List<DotNetGenericOwnerPhysicalGenericParameterReference>,
             >,
     val methods: Map<
             DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
@@ -379,9 +389,17 @@ internal class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily private con
                     "a complete local emission family assigned one MethodDef to the wrong physical owner",
                 )
             }
-            if (methods.values.any { selected -> selected.second.signature.genericArity != 0 }) {
+            val methodArities = methods.values.map { selected ->
+                selected.second.signature.genericArity
+            }.toSet()
+            if (methodArities.size != 1 || methodArities.single() !in 0..1) {
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                    "the current complete local emission-family grammar requires non-generic MethodDefs",
+                    "the current complete local emission-family grammar requires one coherent zero/one-arity MethodDef shape",
+                )
+            }
+            if (methods.values.any { selected -> !selected.second.hasBoundedDirectProducerInputShape() }) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "the current complete local emission-family grammar requires an exact unconstrained MethodDef parameter vector",
                 )
             }
             val methodImpls = input.methodImpls.associateBy { methodImpl -> methodImpl.kind }
@@ -681,13 +699,13 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                     method.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
                     method.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT &&
                     method.signature.isInstance &&
-                    method.signature.genericArity == 0 &&
-                    method.signature.parameterSlots.isEmpty()
+                    method.hasBoundedDirectProducerInputShape()
             if (!hasDirectProducerShape(natural, naturalOwnerIdentity) ||
-                !hasDirectProducerShape(semantic, semanticOwnerIdentity)
+                !hasDirectProducerShape(semantic, semanticOwnerIdentity) ||
+                natural.signature.genericArity != semantic.signature.genericArity
             ) {
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                    "a bounded local callable family must contain public abstract instance producer slots",
+                    "a bounded local callable family must contain coherent public abstract instance producer slots",
                 )
             }
             val naturalResult = natural.signature.resultLayout as?

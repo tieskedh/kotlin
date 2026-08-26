@@ -15,7 +15,7 @@ internal data class DotNetGenericOwnerCompleteEmissionTypeDefEdgeRow(
     val target: DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape,
 )
 
-internal data class DotNetGenericOwnerCompleteEmissionTypeParameterRow(
+internal data class DotNetGenericOwnerCompleteEmissionGenericParameterRow(
     val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
     val constraints: List<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape>,
 ) {
@@ -32,7 +32,7 @@ internal data class DotNetGenericOwnerCompleteEmissionTypeDefRow(
     val aliases: List<DotNetGenericOwnerCompleteEmissionTypeDefAliasKey>,
     val genericArity: Int,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
-    val genericParameters: List<DotNetGenericOwnerCompleteEmissionTypeParameterRow>,
+    val genericParameters: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow>,
     val directEdges: List<DotNetGenericOwnerCompleteEmissionTypeDefEdgeRow>,
 ) {
     init {
@@ -46,7 +46,19 @@ internal data class DotNetGenericOwnerCompleteEmissionTypeDefRow(
 internal data class DotNetGenericOwnerCompleteEmissionMethodDefRow(
     val identityKey: DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey,
     val header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderShape,
-)
+    val genericParameters: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow>,
+) {
+    init {
+        require(genericParameters.size == header.genericArity) {
+            "a complete-emission MethodDef row requires a coherent GenericParam set"
+        }
+        require(genericParameters.all { parameter ->
+            parameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+        }) {
+            "a complete-emission MethodDef GenericParam must be invariant"
+        }
+    }
+}
 
 /** One exact MethodImpl row. */
 internal data class DotNetGenericOwnerCompleteEmissionMethodImplRow(
@@ -170,14 +182,14 @@ private fun compareCompleteEmissionTypeDefs(
                 expectedRow.aliases.toSet() == actualRow.aliases.toSet() &&
                 expectedRow.genericArity == actualRow.genericArity &&
                 expectedRow.category == actualRow.category &&
-                completeEmissionTypeParametersMatch(expectedRow.genericParameters, actualRow.genericParameters) &&
+                completeEmissionGenericParametersMatch(expectedRow.genericParameters, actualRow.genericParameters) &&
                 expectedRow.directEdges.toSet() == actualRow.directEdges.toSet()
     }
 }
 
-private fun completeEmissionTypeParametersMatch(
-    expected: List<DotNetGenericOwnerCompleteEmissionTypeParameterRow>,
-    actual: List<DotNetGenericOwnerCompleteEmissionTypeParameterRow>,
+private fun completeEmissionGenericParametersMatch(
+    expected: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow>,
+    actual: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow>,
 ): Boolean = expected.size == actual.size && expected.indices.all { index ->
     val expectedParameter = expected[index]
     val actualParameter = actual[index]
@@ -228,7 +240,14 @@ private fun compareCompleteEmissionMethodDefs(
             emptyList()
         }
     },
-) { expectedRow, actualRow -> expectedRow == actualRow }
+) { expectedRow, actualRow ->
+    expectedRow.identityKey == actualRow.identityKey &&
+            expectedRow.header == actualRow.header &&
+            completeEmissionGenericParametersMatch(
+                expectedRow.genericParameters,
+                actualRow.genericParameters,
+            )
+}
 
 private fun compareCompleteEmissionMethodImpls(
     expected: List<DotNetGenericOwnerCompleteEmissionMethodImplRow>,

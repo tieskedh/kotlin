@@ -22,6 +22,33 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
     }
 
     @Test
+    fun `complete family binds a coherent method generic parameter vector`() {
+        val fixture = CompleteFamilyFixture(methodGeneric = true)
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily,
+                >>(fixture.bind(fixture.input))
+    }
+
+    @Test
+    fun `complete family rejects a method parameter bound to its sibling MethodDef`() {
+        val fixture = CompleteFamilyFixture(methodGeneric = true)
+        val corruptedKind =
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_DISPATCHER
+        val sibling = fixture.methodIdentity(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                .INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            fixture.bind(
+                fixture.input,
+                methodParameterBinders = mapOf(corruptedKind to sibling),
+            ),
+        )
+    }
+
+    @Test
     fun `complete family rejects every wrong method identity role or root`() {
         val fixture = CompleteFamilyFixture()
 
@@ -128,7 +155,9 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
         )
     }
 
-    private inner class CompleteFamilyFixture {
+    private inner class CompleteFamilyFixture(
+        private val methodGeneric: Boolean = false,
+    ) {
         private val logicalMember = IrSimpleFunctionSymbolImpl()
         private val implementationMember = IrSimpleFunctionSymbolImpl()
         private val interfaceCapabilityMember = IrSimpleFunctionSymbolImpl()
@@ -187,14 +216,14 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
         }
         private val typeParameters = linkedMapOf(
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE to listOf(
-                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
                     DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
                     constraints = emptyList(),
                 ),
             ),
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY to emptyList(),
             DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS to listOf(
-                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
                     DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
                     constraints = emptyList(),
                 ),
@@ -325,25 +354,37 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
             input: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput,
             extraTypes: List<DotNetGenericOwnerPhysicalTypeDefReference> = emptyList(),
             extraMethods: List<DotNetGenericOwnerPhysicalMethodDefReference> = emptyList(),
+            methodParameterBinders: Map<
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+                    DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+                    > = emptyMap(),
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily> {
             val typeDefinitions = inputs.values.map(DotNetLocalGenericOwnerPhysicalTypeInput::asReference) +
                     extraTypes
-            val methodDefinitions = methodDefinitions(input.methods) + extraMethods
-            val declarations = boundDeclarationIndex(
+            val methodDefinitions = methodDefinitions(input.methods, methodParameterBinders) + extraMethods
+            return when (val declarations = DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
                 typeDefinitions,
                 methodDefinitions,
                 edgeSets(),
-            )
-            return DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily.bindOrError(
-                input,
-                declarations,
-                inputs.values.associateBy(DotNetLocalGenericOwnerPhysicalTypeInput::identity),
-            )
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily.bindOrError(
+                        input,
+                        declarations.value,
+                        inputs.values.associateBy(DotNetLocalGenericOwnerPhysicalTypeInput::identity),
+                    )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(declarations.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
         }
 
         fun methodDescription(
             identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
             declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            methodParameterBinder: DotNetGenericOwnerPhysicalMethodDefIdentity.Local = identity,
         ) = DotNetGenericOwnerPhysicalMethodDefReference(
             identity,
             declaringType,
@@ -351,16 +392,42 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
             DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
             DotNetGenericOwnerPhysicalMethodSignatureReference(
                 isInstance = true,
-                genericArity = 0,
+                genericArity = if (methodGeneric) 1 else 0,
                 resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void,
-                parameterSlots = emptyList(),
+                parameterSlots = if (methodGeneric) {
+                    listOf(DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                            methodParameterBinder,
+                            0,
+                        ),
+                    ))
+                } else {
+                    emptyList()
+                },
             ),
+            genericParameters = if (methodGeneric) {
+                listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                ))
+            } else {
+                emptyList()
+            },
         )
 
         private fun methodDefinitions(
             methods: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput>,
+            methodParameterBinders: Map<
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+                    DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+                    > = emptyMap(),
         ) = methods.map { method ->
-            methodDescription(method.identity, declaringType(method.kind))
+            methodDescription(
+                method.identity,
+                declaringType(method.kind),
+                methodParameterBinders[method.kind] ?: method.identity,
+            )
         }
 
         private fun declaringType(

@@ -983,10 +983,48 @@ private fun validateGenericOwnerCompleteEmissionComparison(
     comparisons: List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot>,
     testDataFile: File,
 ) {
-    if (GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER !in testDataFile.readText()) return
+    val testData = testDataFile.readText()
+    val probesParameterlessFamily = GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER in testData
+    val probesMethodGenericFamily = GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER in testData
+    if (!probesParameterlessFamily && !probesMethodGenericFamily) return
     if (!genericOwnerRehearsal) {
         check(comparisons.isEmpty()) {
             "The production erased epoch must not publish complete-emission comparisons: $comparisons"
+        }
+        return
+    }
+    if (probesMethodGenericFamily) {
+        val families = comparisons.filter { family ->
+            family.scope == DotNetIlEmissionScope.USER &&
+                    family.ownerName.endsWith("MethodGenericProducer") &&
+                    family.logicalMemberName == "produce"
+        }
+        check(families.size == 2 &&
+                families.count { family ->
+                    family.implementationOwnerName.endsWith("MethodGenericFirstView")
+                } == 1 && families.count { family ->
+                    family.implementationOwnerName.endsWith("MethodGenericSecondView")
+                } == 1 && families.all { family ->
+                    family.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                            family.typeDefs.status ==
+                            DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                            family.methodDefs.status ==
+                            DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                            family.methodImpls.status ==
+                            DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                            family.typeDefs.expectedCount == 4 && family.typeDefs.actualCount == 4 &&
+                            family.methodDefs.expectedCount == 6 && family.methodDefs.actualCount == 6 &&
+                            family.methodImpls.expectedCount == 2 && family.methodImpls.actualCount == 2 &&
+                            family.expectedMethodDefs.size == 6 &&
+                            family.expectedMethodDefs.all { method ->
+                                method.genericArity == 1 &&
+                                        method.genericParameterVariances == listOf(
+                                            DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot.INVARIANT,
+                                        ) && method.genericParameterConstraintCounts == listOf(0)
+                            }
+                }) {
+            "The method-generic complete-emission probe must publish two isolated matching " +
+                    "4/6/2 families with one complete invariant MethodDef GenericParam row: $comparisons"
         }
         return
     }
@@ -1158,7 +1196,90 @@ private fun validateGenericOwnerSealedEmissionFamilies(
         }
         return
     }
-    if (GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER !in testDataFile.readText()) return
+    val testData = testDataFile.readText()
+    val probesParameterlessFamily = GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER in testData
+    val probesMethodGenericFamily = GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER in testData
+    if (!probesParameterlessFamily && !probesMethodGenericFamily) return
+
+    if (probesMethodGenericFamily) {
+        val methodGenericFamilies = families.filter { family ->
+            family.scope == DotNetIlEmissionScope.USER &&
+                    family.ownerName.endsWith("MethodGenericProducer") &&
+                    family.logicalMemberName == "produce"
+        }
+        check(methodGenericFamilies.size == 2 &&
+                methodGenericFamilies.count { family ->
+                    family.implementationOwnerName.endsWith("MethodGenericFirstView")
+                } == 1 && methodGenericFamilies.count { family ->
+                    family.implementationOwnerName.endsWith("MethodGenericSecondView")
+                } == 1) {
+            "The method-generic sealed-emission probe must publish two isolated certificates: $families"
+        }
+        for (family in methodGenericFamilies) {
+            check(family.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                    family.diagnostics.isEmpty() && family.typeDefs.size == 4 &&
+                    family.methodDefs.size == 6 && family.methodImpls.size == 2) {
+                "Each method-generic family must seal its complete 4/6/2 projection: $family"
+            }
+            val methods = family.methodDefs.associateBy { method -> method.kind }
+            check(methods.keys == DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.entries.toSet() &&
+                    methods.values.all { method ->
+                        method.physicalGenericParameterNames == listOf("R") &&
+                                method.structural.genericArity == 1 &&
+                                method.structural.genericParameterVariances == listOf(
+                                    DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot.INVARIANT,
+                                ) && method.structural.genericParameterConstraintCounts == listOf(0) &&
+                                method.header.genericArity == 1 &&
+                                method.header.ordinaryParameterCarriers.singleOrNull()?.let { parameter ->
+                                    parameter.kind ==
+                                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.METHOD_PARAMETER &&
+                                            parameter.parameterIndex == 0 &&
+                                            parameter.typeDef == method.header.owner
+                                } == true
+                    }) {
+                "Every sealed MethodDef must own one exact unconstrained !!0 input: ${family.methodDefs}"
+            }
+            val typedKinds = setOf(
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.NATURAL_INTERFACE_SLOT,
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.IMPLEMENTATION_TYPED_ENTRY,
+            )
+            check(methods.all { entry ->
+                    val result = entry.value.header.result
+                    result.layout == DotNetGenericOwnerPhysicalMethodDefEmissionResultLayout.DIRECT &&
+                            if (entry.key in typedKinds) {
+                                result.carrier?.let { carrier ->
+                                    carrier.kind ==
+                                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OWNER_PARAMETER &&
+                                            carrier.parameterIndex == 0
+                                } == true
+                            } else {
+                                result.carrier?.kind ==
+                                DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OBJECT
+                            }
+                }) {
+                "Only the natural and typed implementation entries may retain owner !0 results: " +
+                        family.methodDefs
+            }
+        }
+        val pathsByKind = methodGenericFamilies.map { family ->
+            family.typeDefs.associate { type -> type.kind to type.physicalPath }
+        }
+        val sharedKinds = setOf(
+            DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.NATURAL_INTERFACE,
+            DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY,
+        )
+        val implementationKinds = setOf(
+            DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS,
+            DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.CLASS_SEMANTIC_CAPABILITY,
+        )
+        check(sharedKinds.all { kind -> pathsByKind[0].getValue(kind) == pathsByKind[1].getValue(kind) } &&
+                implementationKinds.all { kind ->
+                    pathsByKind[0].getValue(kind) != pathsByKind[1].getValue(kind)
+                }) {
+            "Method-generic certificates must share only interface roots: $pathsByKind"
+        }
+        return
+    }
 
     val producerFamilies = families.filter { family ->
         family.scope == DotNetIlEmissionScope.USER &&
@@ -5245,6 +5366,8 @@ private const val GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE"
 private const val GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_COMPLETE_EMISSION_PROBE"
+private const val GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =

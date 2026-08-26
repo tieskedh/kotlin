@@ -2519,6 +2519,13 @@ internal data class DotNetIlGenericParameterDecision(
     val physicalName: String,
 )
 
+internal fun Variance.toDotNetGenericOwnerPhysicalTypeParameterVariance():
+        DotNetGenericOwnerPhysicalTypeParameterVariance = when (this) {
+    Variance.INVARIANT -> DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+    Variance.OUT_VARIANCE -> DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT
+    Variance.IN_VARIANCE -> DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
+}
+
 internal fun List<IrTypeParameter>.dotNetIlGenericParameterDecisions(
     typeMapper: DotNetIlTypeMapper,
     varianceOverrides: List<Variance>? = null,
@@ -2528,7 +2535,9 @@ internal fun List<IrTypeParameter>.dotNetIlGenericParameterDecisions(
         DotNetIlGenericParameterDecision(
             variance = varianceOverrides?.get(typeParameter.index) ?: typeParameter.variance,
             constraints = typeParameter.dotNetConstraintTypes(typeMapper),
-            physicalName = typeParameter.name.asString().toIlIdentifier(),
+            // Keep the CLR GenericParam.Name value raw. ILAsm quoting is a serialization
+            // concern and must not leak into the sealed metadata-authority certificate.
+            physicalName = typeParameter.name.asString(),
         )
     }
 }
@@ -2544,7 +2553,7 @@ internal fun List<DotNetIlGenericParameterDecision>.renderDotNetIlGenericParamet
             .takeIf { it.isNotEmpty() }
             ?.joinToString(", ", "(", ") ") { it.nameInSignature }
             .orEmpty()
-        variancePrefix + constraintPrefix + decision.physicalName
+        variancePrefix + constraintPrefix + decision.physicalName.toIlIdentifier()
     }
 
 internal fun List<IrTypeParameter>.renderDotNetIlGenericParameters(

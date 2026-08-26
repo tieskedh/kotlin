@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DotNetGenericOwnerCompleteEmissionManifestComparisonTest {
@@ -106,6 +107,114 @@ class DotNetGenericOwnerCompleteEmissionManifestComparisonTest {
             assertEquals(conflict, comparison.typeDefs.status)
             assertEquals(conflict, comparison.status)
         }
+    }
+
+    @Test
+    fun matchesMethodGenericParameterConstraintsRegardlessOfMetadataRowOrder() {
+        val original = expected.methodDefs.first()
+        val constrainedMethod = original.copy(
+            header = original.header.copy(genericArity = 1),
+            genericParameters = listOf(
+                typeParameter(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    objectCarrier,
+                    construction(typeKey(1)),
+                ),
+            ),
+        )
+        val constrainedExpected = expected.copy(
+            methodDefs = listOf(constrainedMethod) + expected.methodDefs.drop(1),
+        )
+        val reorderedActual = constrainedExpected.copy(
+            methodDefs = listOf(
+                constrainedMethod.copy(
+                    genericParameters = constrainedMethod.genericParameters.map { parameter ->
+                        parameter.copy(constraints = parameter.constraints.reversed())
+                    },
+                ),
+            ) + constrainedExpected.methodDefs.drop(1),
+        )
+
+        val comparison = compareDotNetGenericOwnerCompleteEmissionManifest(
+            constrainedExpected,
+            reorderedActual.asKnownEvidence(),
+        )
+
+        assertEquals(match, comparison.methodDefs.status)
+        assertEquals(match, comparison.status)
+    }
+
+    @Test
+    fun rejectsMethodGenericParameterVarianceAndConstraintDrift() {
+        val original = expected.methodDefs.first()
+        val constrainedMethod = original.copy(
+            header = original.header.copy(genericArity = 1),
+            genericParameters = listOf(
+                typeParameter(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    objectCarrier,
+                    construction(typeKey(1)),
+                ),
+            ),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            constrainedMethod.copy(
+                genericParameters = listOf(
+                    constrainedMethod.genericParameters.single().copy(
+                        variance = DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    ),
+                ),
+            )
+        }
+
+        val constrainedExpected = expected.copy(
+            methodDefs = listOf(constrainedMethod) + expected.methodDefs.drop(1),
+        )
+        val driftedActual = constrainedExpected.copy(
+            methodDefs = listOf(
+                constrainedMethod.copy(
+                    genericParameters = listOf(
+                        constrainedMethod.genericParameters.single().copy(
+                            constraints = listOf(construction(typeKey(0), objectCarrier)),
+                        ),
+                    ),
+                ),
+            ) + constrainedExpected.methodDefs.drop(1),
+        )
+
+        val comparison = compareDotNetGenericOwnerCompleteEmissionManifest(
+            constrainedExpected,
+            driftedActual.asKnownEvidence(),
+        )
+
+        assertEquals(conflict, comparison.methodDefs.status)
+        assertEquals(conflict, comparison.status)
+    }
+
+    @Test
+    fun reportsAMissingGenericMethodDefRowAsUnavailable() {
+        val original = expected.methodDefs.first()
+        val genericMethod = original.copy(
+            header = original.header.copy(genericArity = 1),
+            genericParameters = listOf(
+                typeParameter(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT),
+            ),
+        )
+        val genericExpected = expected.copy(
+            methodDefs = listOf(genericMethod) + expected.methodDefs.drop(1),
+        )
+        val actualWithoutGenericMethod = genericExpected.copy(
+            methodDefs = genericExpected.methodDefs.drop(1),
+        )
+
+        val comparison = compareDotNetGenericOwnerCompleteEmissionManifest(
+            genericExpected,
+            actualWithoutGenericMethod.asKnownEvidence(),
+        )
+
+        assertEquals(unavailable, comparison.methodDefs.status)
+        assertEquals(unavailable, comparison.status)
     }
 
     @Test
@@ -312,7 +421,7 @@ class DotNetGenericOwnerCompleteEmissionManifestComparisonTest {
         aliases: List<DotNetGenericOwnerCompleteEmissionTypeDefAliasKey>,
         arity: Int,
         category: DotNetGenericOwnerPhysicalNamedTypeCategory,
-        genericParameters: List<DotNetGenericOwnerCompleteEmissionTypeParameterRow> =
+        genericParameters: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow> =
             List(arity) { typeParameter(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT) },
         edges: List<DotNetGenericOwnerCompleteEmissionTypeDefEdgeRow> = emptyList(),
     ) = DotNetGenericOwnerCompleteEmissionTypeDefRow(
@@ -327,7 +436,11 @@ class DotNetGenericOwnerCompleteEmissionManifestComparisonTest {
     private fun methodDef(
         identity: DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey,
         header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderShape,
-    ) = DotNetGenericOwnerCompleteEmissionMethodDefRow(identity, header)
+        genericParameters: List<DotNetGenericOwnerCompleteEmissionGenericParameterRow> =
+            List(header.genericArity) {
+                typeParameter(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT)
+            },
+    ) = DotNetGenericOwnerCompleteEmissionMethodDefRow(identity, header, genericParameters)
 
     private fun methodImpl(
         implementingType: DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey,
@@ -384,7 +497,7 @@ class DotNetGenericOwnerCompleteEmissionManifestComparisonTest {
     private fun typeParameter(
         variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
         vararg constraints: DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape,
-    ) = DotNetGenericOwnerCompleteEmissionTypeParameterRow(variance, constraints.toList())
+    ) = DotNetGenericOwnerCompleteEmissionGenericParameterRow(variance, constraints.toList())
 
     private fun typeKey(value: Int) = DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(value)
     private fun aliasKey(value: Int) = DotNetGenericOwnerCompleteEmissionTypeDefAliasKey(value)

@@ -189,6 +189,12 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 resultLayout = resultLayout,
                 parameterSlots = listOf(callableSlot(parameterDomain, parameterCarrier)),
             ),
+            genericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
         )
 
         val valid = reference()
@@ -310,6 +316,95 @@ class DotNetGenericOwnerPhysicalValueModelTest {
 
         assertEquals(listOf("Rehearsal.Snapshot`1"), identity.ownerPath)
         assertEquals(listOf(int32Type()), construction.arguments)
+    }
+
+    @Test
+    fun `MethodDef and GenericParam authority snapshot caller-owned lists`() {
+        val owner = localOwnerIdentity(IrClassSymbolImpl())
+        val method = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val mutableConstraints = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>(
+            stringType(),
+        )
+        val genericParameter = DotNetGenericOwnerPhysicalGenericParameterReference(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+            mutableConstraints,
+        )
+        val mutableGenericParameters = mutableListOf(genericParameter)
+        val reference = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = method,
+            declaringType = owner,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void,
+                parameterSlots = emptyList(),
+            ),
+            genericParameters = mutableGenericParameters,
+        )
+        val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalDeclarationIndex,
+                >>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(typeDescription(owner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS)),
+                listOf(reference),
+            ),
+        ).value
+
+        mutableConstraints += int32Type()
+        mutableGenericParameters.clear()
+
+        val retained = checkNotNull(declarations.methodDescriptionOrNull(method))
+        assertEquals(1, retained.genericParameters.size)
+        assertEquals(listOf(stringType()), retained.genericParameters.single().constraints)
+    }
+
+    @Test
+    fun `matching MethodDef descriptions ignore GenericParam constraint row order`() {
+        val owner = localOwnerIdentity(IrClassSymbolImpl())
+        val firstConstraint = localOwnerIdentity(IrClassSymbolImpl())
+        val secondConstraint = localOwnerIdentity(IrClassSymbolImpl())
+        val method = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val types = listOf(
+            typeDescription(owner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(firstConstraint, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            typeDescription(secondConstraint, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val constraints = listOf(
+            boundConstruction(provisional, firstConstraint, emptyList()),
+            boundConstruction(provisional, secondConstraint, emptyList()),
+        )
+        fun reference(
+            orderedConstraints: List<DotNetGenericOwnerSymbolicCarrierReference>,
+        ) = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = method,
+            declaringType = owner,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void,
+                parameterSlots = emptyList(),
+            ),
+            genericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    orderedConstraints,
+                ),
+            ),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                types,
+                listOf(reference(constraints), reference(constraints.reversed())),
+            ),
+        )
     }
 
     @Test
@@ -778,6 +873,130 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 ),
                 declarationIndex,
                 emptyMap(),
+            ),
+        )
+    }
+
+    @Test
+    fun `callable family rejects incoherent MethodDef generic arities`() {
+        val logicalOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Producer")
+        }
+        val resultParameter = logicalOwner.addTypeParameter {
+            name = Name.identifier("T")
+        }
+        val logicalMember = IrFactoryImpl.buildFun {
+            name = Name.identifier("produce")
+            returnType = resultParameter.defaultType
+        }.also { member ->
+            member.parent = logicalOwner
+            logicalOwner.declarations += member
+        }
+        val semanticOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ProducerSemantic")
+        }
+        val semanticMember = IrFactoryImpl.buildFun {
+            name = Name.identifier("produceSemantic")
+            returnType = resultParameter.defaultType
+        }.also { member ->
+            member.parent = semanticOwner
+            semanticOwner.declarations += member
+        }
+        val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            logicalOwner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            semanticOwner.symbol,
+            view = null,
+        )
+        val naturalInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            naturalOwnerIdentity,
+            "Producer",
+            genericArity = 1,
+            role = DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
+        )
+        val semanticInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            semanticOwnerIdentity,
+            "ProducerSemantic",
+            genericArity = 0,
+            role = DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
+        )
+        val typeOnlyIndex = boundDeclarationIndex(
+            listOf(naturalInput.asReference(), semanticInput.asReference()),
+            emptyList(),
+        )
+        val naturalIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            logicalMember.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val semanticIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            semanticMember.symbol,
+            role = null,
+        )
+        val naturalMethodParameter =
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                naturalIdentity,
+                0,
+            )
+        fun producerMethod(
+            identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+            owner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            genericArity: Int,
+            result: DotNetGenericOwnerSymbolicCarrierReference,
+        ) = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity,
+            owner,
+            DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+            DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = genericArity,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    callableSlot(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT, result),
+                ),
+                parameterSlots = if (genericArity == 1) {
+                    listOf(callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        naturalMethodParameter,
+                    ))
+                } else {
+                    emptyList()
+                },
+            ),
+            genericParameters = List(genericArity) {
+                DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                )
+            },
+        )
+        val declarations = boundDeclarationIndex(
+            listOf(naturalInput.asReference(), semanticInput.asReference()),
+            listOf(
+                producerMethod(
+                    naturalIdentity,
+                    naturalOwnerIdentity,
+                    genericArity = 1,
+                    result = boundTypeParameter(typeOnlyIndex, naturalOwnerIdentity, 0),
+                ),
+                producerMethod(
+                    semanticIdentity,
+                    semanticOwnerIdentity,
+                    genericArity = 0,
+                    result = objectType(),
+                ),
+            ),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetLocalGenericOwnerPhysicalCallableFamily.bindDirectProducerOrError(
+                DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
+                    logicalMember.symbol,
+                    semanticMember.symbol,
+                ),
+                declarations,
+                listOf(naturalInput, semanticInput).associateBy { input -> input.identity },
             ),
         )
     }
@@ -1805,6 +2024,12 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void,
             parameterSlots = emptyList(),
         ),
+        genericParameters = List(arity) {
+            DotNetGenericOwnerPhysicalGenericParameterReference(
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                constraints = emptyList(),
+            )
+        },
     )
 
     private fun callableSlot(
@@ -1828,6 +2053,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             resultLayout = resultLayout,
             parameterSlots = parameterSlots,
         ),
+        genericParameters = emptyList(),
     )
 
     private class OperationFixtureSchema {
