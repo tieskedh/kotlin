@@ -51,7 +51,6 @@ import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
-import org.jetbrains.kotlin.ir.types.makeNotNull
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
@@ -292,12 +291,11 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         }
         val parameter = (argument as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
             ?: return LogicalReceiverSelectionResult.Unsupported
-        val isOwnerParameter = owner.typeParameters.any { candidate ->
-            candidate.symbol == parameter &&
-                    (argument == candidate.defaultType ||
-                            argument.isMarkedNullable() &&
-                            argument.makeNotNull() == candidate.defaultType)
-        }
+        // Type-use nullability and annotations may make a type-parameter use unequal to the
+        // owner's freshly materialized defaultType even though both carry the same authoritative
+        // symbol. The classifier identity is the declaration fact; do not lose T? routing by
+        // rediscovering it through IrType object equality.
+        val isOwnerParameter = owner.typeParameters.any { candidate -> candidate.symbol == parameter }
         if (!isOwnerParameter) return LogicalReceiverSelectionResult.Unsupported
         if (argument.isMarkedNullable()) {
             return semanticSelection(

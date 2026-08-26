@@ -1215,6 +1215,61 @@ verification, and work state.
   recognizer or production ABI changes here. See
   [`docs/archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md`](docs/archive/generic-owner-physical-methoddef-role-alias-2026-08-26.md).
 
+  Each bounded direct-producer implementation family now has one atomic
+  final-emission manifest. Four selected TypeDefs contribute their complete
+  TypeDef GenericParam and direct BaseType/InterfaceImpl row sets; six
+  selected MethodDefs contribute their structural headers and explicit
+  lowering-assigned roles; and the two emitted semantic `.override` rows
+  contribute their exact implementing TypeDef, body, constructed declaration
+  owner, and declaration MethodDef. The typed `I<!T>` implementation remains
+  ordinary implicit CLR interface mapping, so the authority deliberately does
+  not fabricate a third MethodImpl row.
+
+  TypeDef observations come from the same decisions which render physical
+  GenericParams and direct edges, while MethodImpl observations are recorded
+  only at an actual `.override` append site. Failed and superseded fixpoint
+  products publish nothing. Missing rows are unavailable; duplicates, extras,
+  cross-scope evidence, structural drift, incoherent method roles, and wrong
+  MethodImpl endpoints conflict. Canonical/declared natural aliases are
+  allocated as one expected group before actual evidence can bind to them;
+  GenericParam constraint order is incidental but position, variance, and the
+  constraint set remain authoritative. The first grammar is explicitly
+  limited to non-generic MethodDefs and rejects MethodDef parameters in
+  TypeDef metadata.
+
+  While closing the family, a clean detached `f3b1579a41` run proved that the
+  focused operation route already failed before this feature. Owner-parameter
+  recognition now uses classifier-symbol identity with nullability handled by
+  the separate logical route policy, so exact `T` remains natural and open
+  `T?` remains semantic. Executable-only one-member producers bind their
+  recorded source/capability relation without requiring a serialized linkage
+  key; any future multi-member grammar must record an explicit relation rather
+  than rediscovering one from names.
+
+  The executable proof now admits two generic implementation classes which
+  share the same interface semantic declaration slot. Each family retains its
+  own generated interface-capability dispatcher identity and its own two
+  MethodImpl rows; the shared declaration endpoint alone cannot claim the
+  other implementation's row. This closes the first cross-implementation
+  contamination case without pretending to establish compiler-wide family
+  uniqueness.
+
+  The final aggregate exits zero. Direct XML audit covers 197 suites/2,472
+  tests with no failures, errors, or skips: seven backend suites/100 tests,
+  187 FIR suites/2,239 tests, and two integration suites/127 tests are current;
+  the unchanged `dotnet.ir` suite retains six green tests.
+  Production remains atomically erased and asserts that raw and normalized
+  complete-emission evidence is absent. This is still a bounded structural
+  projection over `BOUND_DECLARATION_INDEX`, not
+  `SEALED_EMISSION_SIGNATURE_INDEX`: physical names, full CLI flag vectors,
+  MethodDef GenericParam constraints, retained foreign/producer metadata,
+  arbitrary overlapping/global families, and broader callable grammars remain
+  open. Next
+  seal one final signature/name/flag scope non-additively from successful
+  emission, then add producer and retained-foreign adapters; do not remove a
+  recognizer or resume the Stdlib census yet. See
+  [`docs/archive/generic-owner-complete-emission-family-2026-08-26.md`](docs/archive/generic-owner-complete-emission-family-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
