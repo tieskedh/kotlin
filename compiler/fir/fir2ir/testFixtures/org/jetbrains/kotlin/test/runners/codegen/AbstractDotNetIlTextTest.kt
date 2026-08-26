@@ -71,6 +71,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberDispa
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberFamilyRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionResultLayout
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodIdentityRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodSignatureRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNamedTypeCategory
@@ -134,6 +141,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
+import org.jetbrains.kotlin.backend.dotnet.DotNetIlEmissionScope
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalDefaultDispatcherName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
@@ -477,6 +485,11 @@ private class BackendCliDotNetFacade(
             snapshots = completedOutput.genericOwnerPhysicalOperationRouteShadows,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
+        validateGenericOwnerPhysicalMethodDefEmissionComparison(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            comparisons = completedOutput.genericOwnerPhysicalMethodDefEmissionComparisons,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         validateGenericOwnerPhysicalValuePlacementComparison(
             genericOwnerRehearsal = genericOwnerRehearsal,
             comparisons = completedOutput.genericOwnerPhysicalValuePlacementComparisons,
@@ -810,6 +823,128 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
     }
 }
 
+/** Proves that BOUND callable authority agrees with both final emitted producer MethodDefs. */
+private fun validateGenericOwnerPhysicalMethodDefEmissionComparison(
+    genericOwnerRehearsal: Boolean,
+    comparisons: List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot>,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        check(comparisons.isEmpty()) {
+            "The production erased epoch must not publish MethodDef-emission comparisons: " +
+                    comparisons
+        }
+        return
+    }
+
+    val family = checkNotNull(comparisons.singleOrNull { comparison ->
+        comparison.scope == DotNetIlEmissionScope.USER &&
+                comparison.ownerName.endsWith("InlineProducer") &&
+                comparison.logicalMemberName == "produce"
+    }) {
+        "The operation probe must publish exactly one USER InlineProducer.produce " +
+                "MethodDef-emission family: $comparisons"
+    }
+    check(family.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+            family.endpoints.size == 2 &&
+            family.endpoints.all { endpoint ->
+                endpoint.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                        endpoint.observationCount == 1 && endpoint.actual != null &&
+                        endpoint.diagnostic == null
+            }) {
+        "Both final InlineProducer.produce MethodDefs must match BOUND authority: $family"
+    }
+
+    fun checkDispatch(
+        header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
+        expectsExactFlags: Boolean,
+    ): Boolean = header.dispatch.category == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT &&
+            if (expectsExactFlags) {
+                header.dispatch.isVirtual == true &&
+                        header.dispatch.isNewSlot == true &&
+                        header.dispatch.isAbstract == true &&
+                        header.dispatch.isFinal == false
+            } else {
+                header.dispatch.isVirtual == null &&
+                        header.dispatch.isNewSlot == null &&
+                        header.dispatch.isAbstract == null &&
+                        header.dispatch.isFinal == null
+            }
+
+    fun hasCommonProducerHeader(
+        header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
+        ownerArity: Int,
+        ownerView: DotNetGenericOwnerPhysicalValueShadowTypeDefView?,
+        expectsExactFlags: Boolean,
+    ): Boolean = header.owner.ownerName.endsWith("InlineProducer") &&
+            header.owner.typeDefView == ownerView &&
+            header.owner.genericArity == ownerArity &&
+            header.owner.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            header.visibility == DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PUBLIC &&
+            checkDispatch(header, expectsExactFlags) &&
+            header.isInstance && header.genericArity == 0 &&
+            header.ordinaryParameterCarriers.isEmpty() &&
+            header.receiverCarrier?.let { receiver ->
+                receiver.kind == DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.LOCAL_CONSTRUCTION &&
+                        receiver.typeDef == header.owner &&
+                        receiver.arguments.size == ownerArity
+            } == true &&
+            header.result.layout == DotNetGenericOwnerPhysicalMethodDefEmissionResultLayout.DIRECT &&
+            !header.result.hasCanonicalOutBooleanNullFlag
+
+    val natural = family.endpoints.single { endpoint ->
+        endpoint.entryKind == DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.NATURAL_INTERFACE
+    }
+    fun hasNaturalHeader(
+        header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
+        expectsExactFlags: Boolean,
+    ): Boolean {
+        if (!hasCommonProducerHeader(
+                header,
+                ownerArity = 1,
+                ownerView = DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED,
+                expectsExactFlags = expectsExactFlags,
+            )) return false
+        val receiverParameter = header.receiverCarrier?.arguments?.singleOrNull()
+        val resultCarrier = header.result.carrier
+        return receiverParameter?.let { parameter ->
+            parameter.kind == DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OWNER_PARAMETER &&
+                    parameter.typeDef == header.owner && parameter.parameterIndex == 0
+        } == true && resultCarrier?.let { carrier ->
+            carrier.kind == DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OWNER_PARAMETER &&
+                    carrier.typeDef == header.owner && carrier.parameterIndex == 0
+        } == true
+    }
+    check(natural.methodRole == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+            hasNaturalHeader(natural.expected, expectsExactFlags = false) &&
+            natural.actual?.let { header -> hasNaturalHeader(header, expectsExactFlags = true) } == true) {
+        "The natural producer must emit public abstract InlineProducer<!0>.produce(): !0: $natural"
+    }
+
+    val semantic = family.endpoints.single { endpoint ->
+        endpoint.entryKind ==
+                DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.SEMANTIC_CAPABILITY_INTERFACE_SLOT
+    }
+    fun hasSemanticHeader(
+        header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
+        expectsExactFlags: Boolean,
+    ): Boolean = hasCommonProducerHeader(
+        header,
+        ownerArity = 0,
+        ownerView = null,
+        expectsExactFlags = expectsExactFlags,
+    ) && header.receiverCarrier?.arguments?.isEmpty() == true &&
+            header.result.carrier?.kind ==
+            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.OBJECT
+    check(semantic.methodRole == null &&
+            hasSemanticHeader(semantic.expected, expectsExactFlags = false) &&
+            semantic.actual?.let { header -> hasSemanticHeader(header, expectsExactFlags = true) } == true) {
+        "The semantic producer must emit a public abstract non-generic capability slot returning object: " +
+                semantic
+    }
+}
+
 /**
  * Correlates the origin-independent shadow with the emitter's existing local selection without
  * authorizing either side to affect the other.
@@ -830,8 +965,10 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         }
         if (probesCompilerAlias) {
             val emittedIl = emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
-            check(emittedIl.isFile && "'InlineProducer`1'" !in emittedIl.readText()) {
-                "The production-erased inverse emitted a natural InlineProducer TypeDef or use: " +
+            check(emittedIl.isFile && emittedIl.readText().let { ilText ->
+                "'InlineProducer`1'" !in ilText && "IInlineProducerKotlinSemantic" !in ilText
+            }) {
+                "The production-erased inverse emitted a natural or semantic InlineProducer TypeDef or use: " +
                         emittedIl.path
             }
         }

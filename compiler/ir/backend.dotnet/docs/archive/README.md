@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](generic-owner-physical-methoddef-emission-comparison-2026-08-26.md)
+  records transactional final-fixpoint MethodDef-header capture, the atomic
+  BOUND-to-emission comparison for both producer endpoints, hostile owner and
+  signature evidence, production-off silence, and the remaining full-seal
+  boundary.
 - [`generic-owner-physical-operation-route-shadow-2026-08-26.md`](generic-owner-physical-operation-route-shadow-2026-08-26.md)
   records the opaque BOUND callable family, logical-before-provenance endpoint
   selection, pure exact-view/MethodDef route proof, final-router shadow,

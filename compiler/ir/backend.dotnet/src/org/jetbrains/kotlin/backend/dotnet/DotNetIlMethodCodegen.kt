@@ -54,6 +54,7 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrVariableSymbol
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isNothing
@@ -90,13 +91,258 @@ internal data class DotNetIlRawLocalPlacementObservation(
     }
 }
 
-/** A successfully rendered method, its complete IL text, and its read-only local observations. */
+/** The exact CLR visibility keyword selected for one successfully rendered MethodDef header. */
+internal enum class DotNetIlRawMethodDefVisibility(val ilKeyword: String) {
+    PUBLIC("public"),
+    FAMILY("family"),
+    ASSEMBLY("assembly"),
+    FAMILY_OR_ASSEMBLY("famorassem"),
+    FAMILY_AND_ASSEMBLY("famandassem"),
+    PRIVATE("private"),
+}
+
+/**
+ * The verifier-visible dispatch flags selected for one successfully rendered MethodDef header.
+ *
+ * Keep these as structured facts rather than retaining the rendered flag string: the text is an
+ * output diagnostic, while these booleans are the exact emitter decision from which that text is
+ * produced. [isInstance] is repeated beside the signature deliberately so a malformed observation
+ * cannot silently disagree with its physical parameter convention.
+ */
+internal data class DotNetIlRawMethodDefDispatch(
+    val isInstance: Boolean,
+    val isVirtual: Boolean,
+    val isNewSlot: Boolean,
+    val isAbstract: Boolean,
+    val isFinal: Boolean,
+) {
+    init {
+        require(!isNewSlot || isVirtual) { "a newslot MethodDef must be virtual" }
+        require(!isAbstract || isVirtual) { "an abstract MethodDef must be virtual" }
+        require(!isFinal || isVirtual) { "a final MethodDef flag requires a virtual slot" }
+        require(!(isAbstract && isFinal)) { "a MethodDef cannot be both abstract and final" }
+    }
+
+    val virtualFlags: String
+        get() = buildString {
+            if (isNewSlot) append("newslot ")
+            if (isAbstract) append("abstract ")
+            if (isVirtual) append("virtual ")
+            if (isFinal) append("final ")
+        }
+
+    val instanceKeyword: String
+        get() = if (isInstance) "instance" else "static"
+}
+
+/**
+ * Raw rehearsal evidence for the exact physical header emitted for one IR MethodDef.
+ *
+ * [physicalMethodNameForDiagnostics] is intentionally diagnostic text only. The exact IR symbol,
+ * emitter-owned [physicalOwner], and structured [signature]/flag facts are the non-textual
+ * identity available to the later normalization boundary.
+ */
+internal data class DotNetIlRawMethodDefHeaderObservation(
+    val function: IrSimpleFunctionSymbol,
+    val physicalOwner: DotNetIlClassInfo,
+    val physicalMethodNameForDiagnostics: String,
+    val visibility: DotNetIlRawMethodDefVisibility,
+    val dispatch: DotNetIlRawMethodDefDispatch,
+    val genericArity: Int,
+    val signature: DotNetIlMethodSignature,
+) {
+    init {
+        require(physicalMethodNameForDiagnostics.isNotEmpty()) {
+            "an observed MethodDef requires a physical diagnostic name"
+        }
+        require(genericArity >= 0) { "an observed MethodDef requires a non-negative generic arity" }
+        require(dispatch.isInstance == signature.hasThis) {
+            "an observed MethodDef dispatch convention must agree with its physical signature"
+        }
+    }
+}
+
+/** One independently observed local TypeDef after the final emitter owner map has been applied. */
+internal data class DotNetGenericOwnerObservedLocalTypeDef(
+    val identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    val genericArity: Int,
+    val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+) {
+    init {
+        require(genericArity >= 0) {
+            "an observed local TypeDef requires a non-negative physical arity"
+        }
+    }
+}
+
+/** Emitter-local MethodDef owner after the final render's owner map has been applied. */
+internal sealed interface DotNetGenericOwnerObservedMethodDefOwner {
+    data class Local(
+        val typeDef: DotNetGenericOwnerObservedLocalTypeDef,
+    ) : DotNetGenericOwnerObservedMethodDefOwner
+
+    data class Unbindable(
+        val reason: String,
+        val isConflict: Boolean,
+    ) : DotNetGenericOwnerObservedMethodDefOwner {
+        init {
+            require(reason.isNotEmpty()) { "an unbindable emitted MethodDef owner requires a reason" }
+        }
+    }
+}
+
+/**
+ * Neutral structural carrier observed in one final emitted MethodDef signature.
+ *
+ * Owner and method parameters retain their actual physical binder. A later comparator may bind
+ * these facts against a declaration index, but the emitter never seeds an expected owner or
+ * fabricates a named type when its own final TypeDef map cannot resolve one.
+ */
+internal sealed interface DotNetGenericOwnerObservedMethodCarrier {
+    data class Leaf(
+        val kind: DotNetGenericOwnerPhysicalTypeKind,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(kind in setOf(
+                DotNetGenericOwnerPhysicalTypeKind.VOID,
+                DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+                DotNetGenericOwnerPhysicalTypeKind.INT32,
+                DotNetGenericOwnerPhysicalTypeKind.STRING,
+                DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+            )) { "an observed MethodDef leaf must belong to the bounded physical vocabulary" }
+        }
+    }
+
+    data class OwnerParameter(
+        val binder: DotNetGenericOwnerObservedLocalTypeDef,
+        val index: Int,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(index >= 0) { "an observed owner parameter requires a non-negative index" }
+        }
+    }
+
+    data class MethodParameter(
+        val physicalOwner: DotNetGenericOwnerObservedLocalTypeDef,
+        val function: IrSimpleFunctionSymbol,
+        val index: Int,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(index >= 0) { "an observed method parameter requires a non-negative index" }
+        }
+    }
+
+    data class LocalConstruction(
+        val definition: DotNetGenericOwnerObservedLocalTypeDef,
+        val arguments: List<DotNetGenericOwnerObservedMethodCarrier>,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(arguments.none { argument ->
+                argument is Leaf && argument.kind == DotNetGenericOwnerPhysicalTypeKind.VOID
+            }) { "an observed local construction cannot contain void" }
+        }
+    }
+
+    data class SzArray(
+        val element: DotNetGenericOwnerObservedMethodCarrier,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(element !is Leaf || element.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                "an observed SZ-array requires a non-void element"
+            }
+        }
+    }
+
+    data class ByReference(
+        val element: DotNetGenericOwnerObservedMethodCarrier,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(element !is Leaf || element.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                "an observed managed pointer requires a non-void element"
+            }
+        }
+    }
+
+    /** A fully observed carrier outside the bounded reusable structural vocabulary. */
+    data class Other(
+        val physicalDescription: String,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(physicalDescription.isNotEmpty()) {
+                "an observed other MethodDef carrier requires its physical description"
+            }
+        }
+    }
+
+    data class Unbindable(
+        val reason: String,
+        val isConflict: Boolean,
+    ) : DotNetGenericOwnerObservedMethodCarrier {
+        init {
+            require(reason.isNotEmpty()) { "an unbindable emitted MethodDef carrier requires a reason" }
+        }
+    }
+}
+
+/** A normalized physical signature which contains no live [DotNetIlClassInfo] reference. */
+internal data class DotNetGenericOwnerObservedMethodSignature(
+    /** The independently normalized implicit receiver, or null for a static MethodDef. */
+    val receiverCarrier: DotNetGenericOwnerObservedMethodCarrier?,
+    val returnCarrier: DotNetGenericOwnerObservedMethodCarrier,
+    /** Printed CLR parameters, including the split-nullable bool& when present. */
+    val parameterCarriers: List<DotNetGenericOwnerObservedMethodCarrier>,
+    val hasSplitNullableResult: Boolean,
+)
+
+/**
+ * Final-fixpoint rehearsal evidence published by the emitter after all owner/carrier normalization.
+ * The diagnostic name is never used as physical identity.
+ */
+internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
+    val physicalFunction: IrSimpleFunctionSymbol,
+    val physicalMethodOwner: DotNetGenericOwnerObservedMethodDefOwner,
+    val physicalMethodNameForDiagnostics: String,
+    val visibility: DotNetIlRawMethodDefVisibility,
+    val dispatch: DotNetIlRawMethodDefDispatch,
+    val genericArity: Int,
+    val signature: DotNetGenericOwnerObservedMethodSignature,
+)
+
+/**
+ * One already-computed simple-function header decision. Rendering and observation both consume
+ * this value, so the rehearsal cannot accidentally reconstruct a different header afterwards.
+ */
+private data class DotNetIlSimpleMethodHeaderDecision(
+    val function: IrSimpleFunction,
+    val physicalOwner: DotNetIlClassInfo,
+    val physicalMethodName: String,
+    val visibility: DotNetIlRawMethodDefVisibility,
+    val dispatch: DotNetIlRawMethodDefDispatch,
+    val genericArity: Int,
+    val renderedGenericParameters: String,
+    val signature: DotNetIlMethodSignature,
+) {
+    fun observation(): DotNetIlRawMethodDefHeaderObservation = DotNetIlRawMethodDefHeaderObservation(
+        function = function.symbol,
+        physicalOwner = physicalOwner,
+        physicalMethodNameForDiagnostics = physicalMethodName,
+        visibility = visibility,
+        dispatch = dispatch,
+        genericArity = genericArity,
+        signature = signature,
+    )
+}
+
+/** A successfully rendered method, its complete IL text, and its read-only observations. */
 internal class DotNetIlRenderedMethod(
     val ilText: String,
     localPlacementObservations: List<DotNetIlRawLocalPlacementObservation>,
+    methodDefHeaderObservations: List<DotNetIlRawMethodDefHeaderObservation> = emptyList(),
 ) {
     val localPlacementObservations: List<DotNetIlRawLocalPlacementObservation> =
         localPlacementObservations.toList()
+    val methodDefHeaderObservations: List<DotNetIlRawMethodDefHeaderObservation> =
+        methodDefHeaderObservations.toList()
 }
 
 /**
@@ -127,6 +373,7 @@ internal class DotNetIlMethodCodegen(
         DotNetGenericOwnerDirectForeignOverrideDispatch? = null,
     private val genericOwnerForeignOverrideProbeTarget: IrSimpleFunction? = null,
     private val capturePhysicalLocalPlacements: Boolean = false,
+    private val capturePhysicalMethodDefHeaders: Boolean = false,
 ) {
     private val localPlacementObservations = if (capturePhysicalLocalPlacements) {
         mutableListOf<DotNetIlRawLocalPlacementObservation>()
@@ -232,6 +479,41 @@ internal class DotNetIlMethodCodegen(
                 )
             }
         }
+        val simpleMethodHeader = (function as? IrSimpleFunction)?.let { simpleFunction ->
+            if (simpleFunction.origin == DOTNET_STATIC_INITIALIZER) {
+                DotNetIlSimpleMethodHeaderDecision(
+                    function = simpleFunction,
+                    physicalOwner = functionInfo.owner,
+                    physicalMethodName = ".cctor",
+                    visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+                    dispatch = DotNetIlRawMethodDefDispatch(
+                        isInstance = false,
+                        isVirtual = false,
+                        isNewSlot = false,
+                        isAbstract = false,
+                        isFinal = false,
+                    ),
+                    genericArity = 0,
+                    renderedGenericParameters = "",
+                    signature = signature,
+                )
+            } else {
+                val genericParameters = simpleFunction.typeParameters
+                    .renderDotNetIlGenericParameters(typeMapper)
+                    .orEmpty()
+                DotNetIlSimpleMethodHeaderDecision(
+                    function = simpleFunction,
+                    physicalOwner = functionInfo.owner,
+                    physicalMethodName = functionInfo.physicalMethodName
+                        ?: simpleFunction.dotNetIlMethodName(),
+                    visibility = simpleFunction.dotNetRawMethodDefVisibility(),
+                    dispatch = simpleFunction.dotNetRawMethodDefDispatch(),
+                    genericArity = simpleFunction.typeParameters.size,
+                    renderedGenericParameters = genericParameters,
+                    signature = signature,
+                )
+            }
+        }
         val ilText = buildString {
             // The printed parameter list never contains the implicit `this` of an instance
             // method: the dispatch-receiver pair of the zip is dropped (an IrConstructor's
@@ -264,7 +546,11 @@ internal class DotNetIlMethodCodegen(
                 // initializer; like `.ctor`, `.cctor` is a bare keyword. The spelling is
                 // ilasm-probe-verified (statprobe_s1, objprobe_s1), including that the CLR runs
                 // it before the first active use of the non-beforefieldinit class.
-                appendLine("  .method private hidebysig specialname rtspecialname static void .cctor() cil managed")
+                val header = checkNotNull(simpleMethodHeader)
+                appendLine(
+                    "  .method ${header.visibility.ilKeyword} hidebysig specialname rtspecialname " +
+                            "${header.dispatch.instanceKeyword} void .cctor() cil managed"
+                )
             } else {
                 // Instance member methods differ from static ones only in the `instance` flag;
                 // property accessors additionally carry `specialname`, binding them to the
@@ -272,25 +558,15 @@ internal class DotNetIlMethodCodegen(
                 // companion members remain private; illegal enclosing-to-nested calls were
                 // redirected to synthetic assembly bridges by DotNetPrivateNestedAccessLowering.
                 // Members of the inheritance model additionally carry virtual flags — see
-                // [dotNetVirtualFlags].
-                val visibility = function.dotNetMemberVisibility()
+                // [dotNetRawMethodDefDispatch].
+                val header = checkNotNull(simpleMethodHeader)
                 val specialname = if (function.isPropertyAccessor) "specialname " else ""
-                val dispatch = if (signature.hasThis) "instance" else "static"
-                val methodName = functionInfo.physicalMethodName
-                    ?: (function as IrSimpleFunction).dotNetIlMethodName()
-                // A generic METHOD declares its formal list between the name and parameters:
-                // `<'T'>`, or `<(class 'Base', class 'Mark') 'T'>` with supported constraints.
-                // Class/interface members use the identical formal spelling while the owner may
-                // independently carry `!n` parameters (genprobe_s1/_s8, genconstraintprobe_s1,
-                // genmemberprobe_s1).
-                val genericParameters = function.typeParameters
-                    .renderDotNetIlGenericParameters(typeMapper)
-                    .orEmpty()
                 appendLine(
-                    "  .method $visibility hidebysig $specialname" +
-                            "${function.dotNetVirtualFlags()}$dispatch " +
+                    "  .method ${header.visibility.ilKeyword} hidebysig $specialname" +
+                            "${header.dispatch.virtualFlags}${header.dispatch.instanceKeyword} " +
                             "${signature.returnType.nameInSignature} " +
-                            "${methodName.toIlIdentifier()}$genericParameters($parameters) cil managed"
+                            "${header.physicalMethodName.toIlIdentifier()}" +
+                            "${header.renderedGenericParameters}($parameters) cil managed"
                 )
             }
             appendLine("  {")
@@ -356,7 +632,16 @@ internal class DotNetIlMethodCodegen(
             }
             appendLine("  }")
         }
-        return DotNetIlRenderedMethod(ilText, localPlacementObservations.orEmpty())
+        val methodDefHeaderObservations = if (capturePhysicalMethodDefHeaders) {
+            listOfNotNull(simpleMethodHeader?.observation())
+        } else {
+            emptyList()
+        }
+        return DotNetIlRenderedMethod(
+            ilText,
+            localPlacementObservations.orEmpty(),
+            methodDefHeaderObservations,
+        )
     }
 
     /**
@@ -813,34 +1098,70 @@ internal class DotNetIlMethodCodegen(
      * - everything else (final members of the final-class model, static facade methods) carries
      *   no virtual flags — the established plain-`call` model.
      */
-    private fun IrFunction.dotNetVirtualFlags(): String {
-        if ((this as? IrSimpleFunction)?.dotNetValueClassImplementationSourceOrNull() != null) return ""
-        if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return "newslot virtual final "
-        if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "newslot virtual final "
-        if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "newslot virtual final "
-        if (origin.isDotNetGenericInterfaceBridge) return "newslot virtual final "
-        if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "newslot virtual final "
-        if (this !is IrSimpleFunction || !signature.hasThis) return ""
-        if ((parent as? IrClass)?.isInterface == true) {
-            return if (modality == Modality.ABSTRACT) "newslot abstract virtual " else "newslot virtual "
+    private fun IrSimpleFunction.dotNetRawMethodDefDispatch(): DotNetIlRawMethodDefDispatch {
+        fun dispatch(
+            virtual: Boolean = false,
+            newSlot: Boolean = false,
+            abstract: Boolean = false,
+            final: Boolean = false,
+        ) = DotNetIlRawMethodDefDispatch(
+            isInstance = signature.hasThis,
+            isVirtual = virtual,
+            isNewSlot = newSlot,
+            isAbstract = abstract,
+            isFinal = final,
+        )
+
+        if (dotNetValueClassImplementationSourceOrNull() != null) return dispatch()
+        if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return dispatch(virtual = true, newSlot = true, final = true)
+        if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return dispatch(virtual = true, newSlot = true, final = true)
+        if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) {
+            return dispatch(virtual = true, newSlot = true, final = true)
         }
-        val abstractFlag = if (modality == Modality.ABSTRACT) "abstract " else ""
-        val final = if (modality == Modality.FINAL) "final " else ""
+        if (origin.isDotNetGenericInterfaceBridge) return dispatch(virtual = true, newSlot = true, final = true)
+        if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return dispatch(virtual = true, newSlot = true, final = true)
+        if (!signature.hasThis) return dispatch()
+        if ((parent as? IrClass)?.isInterface == true) {
+            return if (modality == Modality.ABSTRACT) {
+                dispatch(virtual = true, newSlot = true, abstract = true)
+            } else {
+                dispatch(virtual = true, newSlot = true)
+            }
+        }
+        val isAbstract = modality == Modality.ABSTRACT
+        val isFinal = modality == Modality.FINAL
         // Some built-in-interface fake-override chains do not retain kotlin.Any in
         // overriddenSymbols. dotNetAnyMethodOrNull recognizes the frontend-validated shape;
         // it must reuse System.Object's slot (virtual, never newslot) just like a direct Any
         // override, or interface-typed hashCode/toString/equals calls bypass the implementation.
-        if (dotNetAnyMethodOrNull() != null) return "${abstractFlag}virtual $final"
+        if (dotNetAnyMethodOrNull() != null) {
+            return dispatch(virtual = true, abstract = isAbstract, final = isFinal)
+        }
         val overridesClassMember = overriddenSymbols.any { (it.owner.parent as? IrClass)?.isInterface != true }
         return when {
-            this in covariantReturnImplementations -> "newslot ${abstractFlag}virtual $final"
-            overridesClassMember -> "${abstractFlag}virtual $final"
-            overriddenSymbols.isNotEmpty() -> "newslot ${abstractFlag}virtual $final"
-            modality == Modality.ABSTRACT -> "newslot abstract virtual "
-            isDotNetVirtual() -> "newslot virtual "
-            else -> ""
+            this in covariantReturnImplementations ->
+                dispatch(virtual = true, newSlot = true, abstract = isAbstract, final = isFinal)
+            overridesClassMember ->
+                dispatch(virtual = true, abstract = isAbstract, final = isFinal)
+            overriddenSymbols.isNotEmpty() ->
+                dispatch(virtual = true, newSlot = true, abstract = isAbstract, final = isFinal)
+            modality == Modality.ABSTRACT ->
+                dispatch(virtual = true, newSlot = true, abstract = true)
+            isDotNetVirtual() -> dispatch(virtual = true, newSlot = true)
+            else -> dispatch()
         }
     }
+
+    private fun IrFunction.dotNetRawMethodDefVisibility(): DotNetIlRawMethodDefVisibility =
+        when (val keyword = dotNetMemberVisibility()) {
+            "public" -> DotNetIlRawMethodDefVisibility.PUBLIC
+            "family" -> DotNetIlRawMethodDefVisibility.FAMILY
+            "assembly" -> DotNetIlRawMethodDefVisibility.ASSEMBLY
+            "famorassem" -> DotNetIlRawMethodDefVisibility.FAMILY_OR_ASSEMBLY
+            "famandassem" -> DotNetIlRawMethodDefVisibility.FAMILY_AND_ASSEMBLY
+            "private" -> DotNetIlRawMethodDefVisibility.PRIVATE
+            else -> error("Internal .NET backend error: unsupported MethodDef visibility '$keyword'")
+        }
 
     private fun StringBuilder.appendLocals() {
         val locals = methodContext.locals
