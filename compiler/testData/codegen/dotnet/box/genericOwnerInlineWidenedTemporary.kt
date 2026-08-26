@@ -1,4 +1,5 @@
 // DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE
+// DOTNET_GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE
 
 // Kotlin inference may choose Any? for the covariant receiver of an inline helper even when the
 // call originates on an exact generic owner. The inliner's immutable argument temporaries must
@@ -32,6 +33,12 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
         val sourceNullableAlias: InlineProducer<T?> = this
         return sourceNullableAlias.produce() == element
     }
+
+    fun nestedAliasMatches(element: T): Boolean {
+        val sourceNestedAlias: InlineProducer<Any?> = this
+        val nested = { sourceNestedAlias.produce() == element }
+        return nested()
+    }
 }
 
 fun box(): String {
@@ -40,6 +47,7 @@ fun box(): String {
     if (!ints.sourceAliasMatches(42) || ints.sourceAliasMatches(43)) return "value source alias"
     if (!ints.wideAliasMatches(42) || ints.wideAliasMatches(43)) return "value wide alias"
     if (!ints.nullableAliasMatches(42) || ints.nullableAliasMatches(43)) return "value nullable alias"
+    if (!ints.nestedAliasMatches(42) || ints.nestedAliasMatches(43)) return "value nested alias"
 
     val strings = InlineSelfView("inline")
     if (strings.indexOf("inline") != 0 || strings.indexOf("other") != -1) {
@@ -53,6 +61,9 @@ fun box(): String {
     }
     if (!strings.nullableAliasMatches("inline") || strings.nullableAliasMatches("other")) {
         return "reference nullable alias"
+    }
+    if (!strings.nestedAliasMatches("inline") || strings.nestedAliasMatches("other")) {
+        return "reference nested alias"
     }
 
     // A source-declared wide variable remains a semantic Kotlin view. In particular, its
