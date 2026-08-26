@@ -1709,15 +1709,33 @@ and the isolated `sourceAliasMatches` MethodDef contains one actual emitted
 emitted product. The broad controls retain `object` locals in the unchanged
 emitter.
 
-This is still shadow evidence. The emitter selects the product independently;
-the new bound index is neither sealed-emission authority nor a codegen input.
-The legacy class-owner route analyzer does not classify direct natural-
-interface calls. The next consolidation slice should therefore bind the same
-authority lineage to callable/MethodDef families and compare one general read-
-only operation-routing query with existing natural and semantic products. It
-must retain the same edge ablation and broad/open-nullable controls before any
-old local or body recognizer is removed. See
-[`../archive/generic-owner-local-physical-interface-view-2026-08-26.md`](../archive/generic-owner-local-physical-interface-view-2026-08-26.md).
+The first callable slice now binds that same authority lineage to one opaque
+logical-member family for a parameterless direct producer. The family derives
+and validates its natural and semantic interface MethodDefs; the pure route
+query receives only the endpoint already selected from the logical receiver
+shape. It can prove the required receiver view from value provenance and
+recorded physical edges, but it cannot fabricate a family, choose a different
+endpoint, or use exact provenance to narrow a broad logical request. Exact,
+broad-universal, and open-nullable aliases match the existing final routing
+maps across the four frontend/profile lanes. Removing the recorded natural
+edge or selected MethodDef makes the pure route unavailable. Duplicate callable
+families and contradictory declaration descriptions conflict; identical
+duplicate MethodDef descriptions coalesce.
+
+This remains BOUND shadow evidence. The comparison reads the stable maps after
+the routing fixpoint; calls without a unique successful POST storage fact are
+omitted. It does not yet seal either emitted MethodDef header, including the
+semantic slot, nor the hidden split-nullable flag, and it does not model every
+emitter-side fallback. The isolated natural IL operand assertion therefore
+remains part of the proof. The next consolidation slice must add a one-shot
+sealed-emission liveness/signature comparison for both endpoints and their full
+parameter/result layouts before any old route recognizer is removed. It must
+not obtain that result by additively advancing the BOUND declaration index:
+an omitted or evicted MethodDef would then survive from the prior epoch and be
+falsely labelled sealed. The shared `SEALED_EMISSION_SIGNATURE_INDEX` epoch is
+published only after every retained fact in its scope has final-live evidence;
+a narrower first comparison remains an explicitly partial overlay. See
+[`../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md`](../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md).
 
 The consolidation proceeds in bounded stages:
 
@@ -1742,7 +1760,9 @@ The consolidation proceeds in bounded stages:
    relation is not a complete InterfaceImpl set; complete published Kotlin and
    retained-foreign edge authority remain later adapters;
 6. move route selection behind one query which starts from the authoritative
-   callable family and treats exact provenance only as supporting evidence;
+   callable family and treats exact provenance only as supporting evidence.
+   The first local direct-producer BOUND shadow is complete; sealed emitted-
+   signature comparison and later producer/foreign adapters remain open;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

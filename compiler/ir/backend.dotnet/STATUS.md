@@ -1115,6 +1115,40 @@ verification, and work state.
   unchanged up-to-date `dotnet.ir` root retains one suite/six green tests. See
   [`docs/archive/generic-owner-local-physical-interface-view-2026-08-26.md`](docs/archive/generic-owner-local-physical-interface-view-2026-08-26.md).
 
+  The first physical operation-route shadow now closes the callable boundary
+  above that local interface view. `BOUND_DECLARATION_INDEX` records route-
+  relevant symbolic MethodDef descriptions and one opaque logical-member
+  family for the admitted public abstract, parameterless, non-suspend direct
+  producer. The natural endpoint is the selected `I<!T>` interface MethodDef
+  with `STRICT_OWNER_OUTPUT !T`; the semantic endpoint is the exact public
+  abstract capability-interface slot with `STRICT_OWNER_OUTPUT object`. The
+  private final class dispatcher is not that semantic MethodDef. The pure
+  operation query receives only the endpoint already selected through the
+  opaque authority and cannot fabricate a family or cross-fallback between
+  siblings.
+
+  For the admitted single-parameter covariant producer, outer logical receiver
+  shape selects the endpoint before value provenance is consulted. Exact
+  `I<T>` selects natural, while broad `I<Any?>` and open-nullable `I<T?>`
+  select semantic. Provenance then proves only the requested physical owner
+  view; it cannot narrow a broad request. Edge/MethodDef ablation makes the
+  route unavailable, malformed declarations conflict, and nested declarations
+  are traversal barriers. The independent result-layout model also composes a
+  structural exact `!K` input with `SplitNullable(!V, out bool&)`, including
+  unboxed `int32`, without a Map or member-name rule.
+
+  This is still production-inert BOUND evidence. The live comparison reads
+  the existing final router maps; calls without one unique POST storage fact
+  are omitted. Neither endpoint's emitted MethodDef header/liveness is sealed,
+  so the isolated natural IL operand assertion remains independent evidence.
+  Production/off publishes no authority, value, or
+  operation snapshots and remains erased. The final normal aggregate exits
+  zero. Direct XML audit covers 194 suites and 2,439 tests with zero failures,
+  errors, or skips: backend, FIR, and integration freshly wrote four suites/67
+  tests, 187 suites/2,239 tests, and two suites/127 tests respectively; the
+  unchanged up-to-date `dotnet.ir` root retains one suite/six green tests. See
+  [`docs/archive/generic-owner-physical-operation-route-shadow-2026-08-26.md`](docs/archive/generic-owner-physical-operation-route-shadow-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -3795,7 +3829,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The physical-value local-placement comparison checkpoint passed every
+The physical operation-route shadow checkpoint passed every
 constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
@@ -3804,17 +3838,18 @@ constituent of the strict target gate. The normal aggregate command remains:
 
 The latest aggregate completed successfully on 2026-08-26. Backend, FIR2IR,
 stdlib product, Framework/CoreCLR, Roslyn, and integration inputs were
-executed for the physical-value local-placement comparison checkpoint. Direct
+executed for the physical operation-route shadow checkpoint. Direct
 audit of the result roots covers the complete target inventory of 194 suites
-and 2,431 tests, with zero failures, errors, or skips. The FIR, integration,
+and 2,439 tests, with zero failures, errors, or skips. The FIR, integration,
 and backend-unit roots freshly wrote 187 suites/2,239 tests, two suites/127
-tests, and four suites/59 tests respectively; the unchanged `dotnet.ir` root
-retained six green tests. The focused rehearsal-on/off matrix independently
-covers both probes through PSI and LightTree on Framework 4.8 and .NET 10. It proves
-that repeated compiler aliases agree with the origin-independent exact-local
-prediction, that an independent source-alias probe retains its deliberately
-neutral exact-versus-semantic contrast, and that production-off publishes no
-placement observations or comparisons.
+tests, and four suites/67 tests respectively; the unchanged `dotnet.ir` root
+retained six green tests. The focused PSI/LightTree and Framework 4.8/.NET 10
+matrix proves exact natural, broad semantic, open-nullable semantic, and
+inlined broad operation selection for value and reference substitutions. It
+also retains the origin-independent local-placement comparison, isolated
+natural emitted-call operand, nested-declaration fence, and production-off
+silence. The backend model suite independently retains the edge/MethodDef
+ablations and split-nullable input/result composition.
 
 The earlier profile-specialized generic-array-fill aggregate and explicit
 model constituent exited successfully. That historical head additionally
@@ -5352,21 +5387,31 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    emission erased. The production-inert symbolic carrier algebra, complete-set
    physical ancestry, two-epoch value shadow, transactional comparison with
    final emitted locals, and the first bounded selection-site InterfaceImpl
-   authority are complete. An immutable public `InlineProducer<T>` source alias
-   selects only the recorded natural edge; its local and emitted call operand
-   match the unchanged emitter, while broad/open-nullable controls cannot
-   fabricate a construction. The logical destination and selected lineage may
-   choose only among independently guaranteed views; neither may prove that a
-   view exists. Next extend this same authority lineage to the callable/
-   MethodDef layer and add a read-only operation query after interface routing.
-   The natural alias must select the natural MethodDef, broad controls must
-   select the semantic member, and edge ablation must make the route
-   unavailable. Advance to `SEALED_EMISSION_SIGNATURE_INDEX` only after the
-   second split-nullable/covariant-result selection has been bound and compared.
-   Only then may the shared placement query replace the origin recognizer and
-   become authoritative for both source and compiler immutable aliases. No
-   bounded recognizer is removed until the same analysis explains both its
-   positive behavior and hostile negatives.
+   authority are complete. The same BOUND lineage now also contains route-
+   relevant MethodDef descriptions and an opaque callable family for the first
+   local direct producer. Logical exact/broad/open-nullable receiver policy is
+   selected before provenance; the pure query proves only the already required
+   view and never changes endpoints. The read-only result matches the existing
+   final router while edge or MethodDef ablation fails closed.
+
+   Next capture structured raw MethodDef headers from each successfully
+   rendered method and retain observations only from the final successful
+   emitter-fixpoint round. Compare both BOUND endpoints for exact liveness,
+   owner, visibility, dispatch, generic arity, receiver, ordinary parameters,
+   and Direct result carrier. This first check is a partial sealed-emission
+   overlay, not an epoch advance: additively advancing BOUND would silently
+   retain an evicted or omitted MethodDef and falsely label it sealed. Missing
+   final evidence is unavailable; duplicate or structurally different evidence
+   conflicts; production/off remains empty.
+
+   Advance the shared authority to `SEALED_EMISSION_SIGNATURE_INDEX` only after
+   every retained TypeDef, complete edge set, MethodDef, split-nullable hidden
+   carrier, and MethodImpl in its scope has final-live evidence. First bind and
+   compare the second split-nullable/covariant-result selection, then prove its
+   composition on the custom two-parameter lookup family before applying it to
+   Map. Only after those gates may shared queries replace bounded recognizers or
+   become authoritative. No bounded recognizer is removed until the same
+   analysis explains both its positive behavior and hostile negatives.
 
    Continue the hardest-model-first generic-owner architecture spike within
    that consolidation. The erased hostile oracle, historical

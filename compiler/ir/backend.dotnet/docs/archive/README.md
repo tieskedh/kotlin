@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-operation-route-shadow-2026-08-26.md`](generic-owner-physical-operation-route-shadow-2026-08-26.md)
+  records the opaque BOUND callable family, logical-before-provenance endpoint
+  selection, pure exact-view/MethodDef route proof, final-router shadow,
+  split-nullable composition model, and remaining sealed-emission boundary.
 - [`generic-owner-local-physical-interface-view-2026-08-26.md`](generic-owner-local-physical-interface-view-2026-08-26.md)
   records the selection-site local class InterfaceImpl authority, monotone
   early/bound lineage, natural-interface alias selection, hostile broad and

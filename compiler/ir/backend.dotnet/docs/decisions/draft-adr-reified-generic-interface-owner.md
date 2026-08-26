@@ -1189,11 +1189,46 @@ controls retain empty lineage while their unchanged emitter locals remain
 
 This authority is `BOUND`, not sealed emission truth. It cannot control
 emitter liveness, interface rows, calls, MethodDefs, MethodImpls, fields, state,
-or serialized ABI. The emitter remains authoritative until a later callable-
-family query and sealed-emission cross-check replace it. The legacy class-owner
-route analyzer does not classify direct natural-interface calls, so this slice
-makes no static-route claim. Production remains atomically erased. See
+or serialized ABI. The BOUND index and callable query remain non-authoritative
+until they are joined by a sealed-emission cross-check. The legacy class-owner
+route analyzer does not classify direct natural-interface calls, so the local-
+view slice alone makes no static-route claim. Production remains atomically
+erased. See
 [`../archive/generic-owner-local-physical-interface-view-2026-08-26.md`](../archive/generic-owner-local-physical-interface-view-2026-08-26.md).
+
+The first callable route now extends that same BOUND lineage with one opaque
+logical-member family. For the admitted parameterless direct producer, the
+family derives and validates the natural interface MethodDef and the semantic
+capability-interface MethodDef from their selected logical and capability
+members. It does not accept an arbitrary pair of MethodDef identities. Both
+endpoints must be distinct public abstract instance slots with zero method
+parameters and no ordinary value parameters; the natural result is the exact
+owner parameter under `STRICT_OWNER_OUTPUT`, while the semantic result is the
+corresponding `object` slot. Suspend callables are outside this ordinary
+signature grammar. A malformed or duplicate family conflicts, and an
+unsupported family is unavailable.
+
+For the admitted single-parameter covariant producer, logical receiver policy
+selects one endpoint before value provenance is consulted. Exact `I<T>` selects
+the natural MethodDef; `I<Any?>` and open `I<T?>` select the semantic capability
+slot. The selected MethodDef is then an input to a pure operation query, never a
+result guessed by that query. The query proves that the receiver already
+guarantees the selected MethodDef's physical owner view and then substitutes
+that construction through the recorded parameter and result layout. A required
+view is a proof goal, not evidence. Exact provenance may support an exact
+logical request, but may never narrow a genuinely broad request or trigger
+fallback to another endpoint.
+
+The live shadow runs after the existing routing fixpoint and compares this
+prediction with the stable final natural/semantic route maps. Calls without
+one unique successful POST storage fact are omitted rather than counted as
+covered. Guarded semantic routing with a natural fallback is compatible with
+the selected semantic entry, but remains distinguishable in the recorded
+actual-route field. Nested functions and classes are traversal barriers. This
+comparison neither mutates routing nor proves the final emitted MethodDef:
+the existing isolated IL operand assertion remains independent evidence.
+Production still publishes no authority or operation snapshots. See
+[`../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md`](../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md).
 
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
@@ -1205,8 +1240,8 @@ Direct(resultSlot)
 SplitNullable(payloadSlot, out bool& isNull)
 ```
 
-The auxiliary flag is part of the MethodDef identity but not a Kotlin value
-parameter. Consequently a future structural lookup can combine an
+The auxiliary flag is part of the physical MethodDef signature/ABI but not a
+Kotlin value parameter. Consequently a future structural lookup can combine an
 owner-dependent or broad-checked `!K` input with
 `SplitNullable(!V, out bool&)` without a Map, member-name, or combined-role
 exception. Split payload substitution follows the producer-recorded physical

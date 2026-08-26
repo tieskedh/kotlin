@@ -73,6 +73,8 @@ object DotNetBackend {
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
         var genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot> = emptyList()
+        var genericOwnerPhysicalOperationRouteShadows:
+            List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = emptyList()
         var genericOwnerPhysicalValueShadowRecords:
             List<DotNetGenericOwnerPhysicalValueShadowRecord> = emptyList()
         val successfulPhysicalValuePlacements = mutableListOf<
@@ -113,6 +115,7 @@ object DotNetBackend {
                 genericOwnerPrototypes,
                 genericOwnerCallRoutes,
                 genericOwnerPhysicalValueShadows,
+                genericOwnerPhysicalOperationRouteShadows,
                 physicalValuePlacementComparisons(),
                 configuration.dotNetGenericOwnerRehearsal,
             )
@@ -249,6 +252,14 @@ object DotNetBackend {
         }
         genericOwnerPhysicalValueShadowRecords = if (configuration.dotNetGenericOwnerRehearsal) {
             context.genericOwnerPhysicalValueShadowRecords.toList()
+        } else {
+            emptyList()
+        }
+        genericOwnerPhysicalOperationRouteShadows = if (configuration.dotNetGenericOwnerRehearsal) {
+            check(context.genericOwnerPhysicalOperationRouteShadowAnalysisCompleted) {
+                "the rehearsal backend result requires a completed physical-operation route shadow"
+            }
+            context.genericOwnerPhysicalOperationRouteShadows.toList()
         } else {
             emptyList()
         }
@@ -664,6 +675,8 @@ data class DotNetBackendOutput(
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
     val genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
+    val genericOwnerPhysicalOperationRouteShadows:
+        List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
     val genericOwnerPhysicalValuePlacementComparisons:
         List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
     val genericOwnerRehearsal: Boolean,

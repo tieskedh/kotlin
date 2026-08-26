@@ -60,12 +60,10 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
-import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
-import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
@@ -392,44 +390,17 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         private fun exactNaturalDestinationSelectorOrNull(
             type: IrType,
             ownerAuthority: OwnerAuthority,
-        ): DotNetGenericOwnerPhysicalView? {
-            val simple = type as? IrSimpleType ?: return null
-            val targetOwner = (simple.classifier as? IrClassSymbol)?.owner ?: return null
-            val targetIdentity = ownerAuthority.physicalAuthority
-                .naturalInterfaceIdentityOrNull(targetOwner.symbol)
-                ?: return null
-            if (simple.arguments.size != targetOwner.typeParameters.size) return null
-            val arguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
-            for (argument in simple.arguments) {
-                val projection = argument as? IrTypeProjection ?: return null
-                if (projection.variance != Variance.INVARIANT || projection.type.isMarkedNullable()) return null
-                val parameter = (projection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-                    ?: return null
-                val parameterIndex = owner.typeParameters.indexOfFirst { candidate ->
-                    candidate.symbol == parameter &&
-                            projection.type == candidate.defaultType &&
-                            candidate.superTypes.all { bound -> bound.isAny() || bound.isNullableAny() }
-                }.takeIf { index -> index >= 0 } ?: return null
-                when (val result = ownerAuthority.declarations.typeParameterOrError(
-                    ownerAuthority.identity,
-                    parameterIndex,
-                )) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> arguments += result.value
-                    is DotNetGenericOwnerPhysicalBindingResult.Conflict,
-                    DotNetGenericOwnerPhysicalBindingResult.Unavailable,
-                    -> return null
-                }
-            }
-            val construction = when (val result = ownerAuthority.declarations.constructTypeOrError(
-                targetIdentity,
-                arguments,
-            )) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
-                -> return null
-            }
-            return DotNetGenericOwnerPhysicalView(construction)
+        ): DotNetGenericOwnerPhysicalView? = when (val binding =
+            bindExactLocalGenericOwnerNaturalViewOrError(
+                type,
+                owner,
+                ownerAuthority.physicalAuthority,
+            )
+        ) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> null
         }
 
         private fun evaluateInitializerOrNull(

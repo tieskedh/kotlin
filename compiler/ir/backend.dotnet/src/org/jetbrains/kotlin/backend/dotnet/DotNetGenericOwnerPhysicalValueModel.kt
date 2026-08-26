@@ -151,17 +151,137 @@ private fun DotNetGenericOwnerPhysicalMethodDefIdentity.retainedGenericArityOrNu
     is DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr -> method.signature.genericParameterCount
 }
 
+private fun DotNetGenericOwnerPhysicalMethodDefIdentity.retainedDeclaringTypeOrNull():
+        DotNetGenericOwnerPhysicalTypeDefIdentity? = when (this) {
+    is DotNetGenericOwnerPhysicalMethodDefIdentity.Local -> null
+    is DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer ->
+        DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer(artifact, method.physicalOwnerPath)
+    is DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr ->
+        DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(source)
+}
+
+/** One logical value domain and its already selected symbolic physical carrier. */
+internal data class DotNetGenericOwnerPhysicalCallableValueSlotReference(
+    val domain: DotNetGenericOwnerPhysicalSlotDomain,
+    val carrier: DotNetGenericOwnerSymbolicCarrierReference,
+) {
+    init {
+        require(carrier != DotNetGenericOwnerSymbolicCarrierReference.voidCarrier()) {
+            "a physical callable value slot cannot use void as a carrier"
+        }
+    }
+}
+
+internal enum class DotNetGenericOwnerPhysicalHiddenParameterPassing {
+    VALUE,
+    REF,
+    OUT,
+}
+
+/** One physical parameter introduced solely by a calling convention, not by Kotlin source. */
+internal data class DotNetGenericOwnerPhysicalHiddenParameterReference(
+    val carrier: DotNetGenericOwnerSymbolicCarrierReference,
+    val passing: DotNetGenericOwnerPhysicalHiddenParameterPassing,
+) {
+    init {
+        require(carrier != DotNetGenericOwnerSymbolicCarrierReference.voidCarrier()) {
+            "a hidden physical parameter cannot use void as a carrier"
+        }
+    }
+}
+
+/** Result calling convention, independent from every input-domain decision. */
+internal sealed interface DotNetGenericOwnerPhysicalCallableResultLayoutReference {
+    data object Void : DotNetGenericOwnerPhysicalCallableResultLayoutReference
+
+    data class Direct(
+        val slot: DotNetGenericOwnerPhysicalCallableValueSlotReference,
+    ) : DotNetGenericOwnerPhysicalCallableResultLayoutReference
+
+    /** [nullFlag] is the final physical parameter and is not a Kotlin value parameter. */
+    data class SplitNullable(
+        val payloadSlot: DotNetGenericOwnerPhysicalCallableValueSlotReference,
+        val nullFlag: DotNetGenericOwnerPhysicalHiddenParameterReference =
+            DotNetGenericOwnerPhysicalHiddenParameterReference(
+                DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier(),
+                DotNetGenericOwnerPhysicalHiddenParameterPassing.OUT,
+            ),
+    ) : DotNetGenericOwnerPhysicalCallableResultLayoutReference {
+        init {
+            require(nullFlag == DotNetGenericOwnerPhysicalHiddenParameterReference(
+                DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier(),
+                DotNetGenericOwnerPhysicalHiddenParameterPassing.OUT,
+            )) { "a split-nullable result requires one trailing hidden [out] bool& parameter" }
+        }
+    }
+}
+
+/** Symbolic MethodDef signature selected before final emitter binding. */
+internal class DotNetGenericOwnerPhysicalMethodSignatureReference(
+    val isInstance: Boolean,
+    val genericArity: Int,
+    val resultLayout: DotNetGenericOwnerPhysicalCallableResultLayoutReference,
+    parameterSlots: Iterable<DotNetGenericOwnerPhysicalCallableValueSlotReference>,
+) {
+    val parameterSlots: List<DotNetGenericOwnerPhysicalCallableValueSlotReference> =
+        parameterSlots.toList()
+
+    init {
+        require(genericArity >= 0) { "a physical MethodDef signature requires non-negative arity" }
+        require(parameterSlots.all { slot ->
+            slot.domain in setOf(
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+            )
+        }) { "a physical MethodDef parameter has a non-input domain" }
+        require(!isInstance || parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER
+        }) { "an instance physical MethodDef cannot expose a separate exact receiver" }
+        val resultDomain = when (resultLayout) {
+            is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
+                resultLayout.slot.domain
+            is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+                resultLayout.payloadSlot.domain
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> null
+        }
+        require(resultDomain == null || resultDomain in setOf(
+            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+        )) { "a physical MethodDef result has a non-output domain" }
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetGenericOwnerPhysicalMethodSignatureReference &&
+                isInstance == other.isInstance &&
+                genericArity == other.genericArity &&
+                resultLayout == other.resultLayout &&
+                parameterSlots == other.parameterSlots
+
+    override fun hashCode(): Int {
+        var result = isInstance.hashCode()
+        result = 31 * result + genericArity
+        result = 31 * result + resultLayout.hashCode()
+        result = 31 * result + parameterSlots.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "MethodSignature(instance=$isInstance, arity=$genericArity, " +
+                "parameters=$parameterSlots, result=$resultLayout)"
+}
+
 /** Epoch-specific description candidate for one MethodDef identity. It never enters value flow. */
 internal data class DotNetGenericOwnerPhysicalMethodDefReference(
     val identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
-    val genericArity: Int,
+    val declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    val visibility: DotNetGenericOwnerPhysicalMemberVisibility,
+    val dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+    val signature: DotNetGenericOwnerPhysicalMethodSignatureReference,
 ) {
-    init {
-        require(genericArity >= 0) { "a physical MethodDef description requires non-negative arity" }
-    }
-
     fun conflictsWith(other: DotNetGenericOwnerPhysicalMethodDefReference): Boolean =
-        identity == other.identity && genericArity != other.genericArity
+        identity == other.identity && this != other
 }
 
 /** Scope of a physical generic parameter; `!0` from different scopes is never the same fact. */
@@ -398,7 +518,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             is DotNetGenericOwnerPhysicalGenericBinderReference.Type ->
                 typeDefinitions[binder.definition]?.genericArity
             is DotNetGenericOwnerPhysicalGenericBinderReference.Method ->
-                methodDefinitions[binder.definition]?.genericArity
+                methodDefinitions[binder.definition]?.signature?.genericArity
         }
         genericArity ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         if (index !in 0 until genericArity) {
@@ -601,11 +721,26 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     >()
             for (candidate in methodDefinitions) {
                 val retainedGenericArity = candidate.identity.retainedGenericArityOrNull()
-                if (retainedGenericArity != null && retainedGenericArity != candidate.genericArity) {
+                if (retainedGenericArity != null &&
+                    retainedGenericArity != candidate.signature.genericArity
+                ) {
                     return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                         "physical MethodDef description contradicts retained generic arity " +
                                 "$retainedGenericArity for ${candidate.identity}",
                     )
+                }
+                val retainedDeclaringType = candidate.identity.retainedDeclaringTypeOrNull()
+                if (retainedDeclaringType != null && retainedDeclaringType != candidate.declaringType) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "physical MethodDef description contradicts its retained declaring TypeDef " +
+                                "for ${candidate.identity}",
+                    )
+                }
+                if (candidate.identity !is DotNetGenericOwnerPhysicalMethodDefIdentity.Local) {
+                    // A retained MethodDef already owns its complete physical signature. Until a
+                    // producer/foreign adapter normalizes and cross-checks every signature and
+                    // flag, accepting a caller-supplied partial description would invert authority.
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
                 val existing = methodsByIdentity[candidate.identity]
                 if (existing != null && existing.conflictsWith(candidate)) {
@@ -622,6 +757,61 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 methodsByIdentity,
                 emptyMap(),
             )
+            for (candidate in methodsByIdentity.values) {
+                if (typesByIdentity[candidate.declaringType] == null) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                val slotCarriers = buildList {
+                    addAll(candidate.signature.parameterSlots.map { slot -> slot.carrier })
+                    when (val result = candidate.signature.resultLayout) {
+                        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
+                            add(result.slot.carrier)
+                        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+                            add(result.payloadSlot.carrier)
+                        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> Unit
+                    }
+                }
+                for (carrier in slotCarriers) {
+                    val foreignBinder = carrier.firstGenericBinderNotOwnedByOrNull(
+                        declaringType = candidate.declaringType,
+                        method = candidate.identity,
+                    )
+                    if (foreignBinder != null) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                            "physical MethodDef signature references generic binder $foreignBinder " +
+                                    "outside ${candidate.identity}",
+                        )
+                    }
+                    when (val validation = declarationsWithoutEdges.validateCarrierOrError(carrier)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                }
+                val resultSlot = when (val result = candidate.signature.resultLayout) {
+                    is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct -> result.slot
+                    is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+                        result.payloadSlot
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> null
+                }
+                if (resultSlot?.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    resultSlot.carrier.referencesTypeParameterOf(candidate.declaringType)
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "owner-dependent physical MethodDef result requires an owner slot domain",
+                    )
+                }
+                if (candidate.signature.parameterSlots.any { slot ->
+                        slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                                slot.carrier.referencesTypeParameterOf(candidate.declaringType)
+                    }
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "owner-dependent physical MethodDef parameter requires an owner slot domain",
+                    )
+                }
+            }
             val edgesBySource = linkedMapOf<
                     DotNetGenericOwnerPhysicalTypeDefIdentity,
                     DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet,
@@ -741,6 +931,19 @@ internal sealed interface DotNetGenericOwnerSymbolicCarrierReference {
                 index,
             )
 
+            /**
+             * Creates an unbound self-reference while a MethodDef candidate is being assembled.
+             * [DotNetGenericOwnerPhysicalDeclarationIndex.bind] remains the only authority that
+             * can validate the referenced MethodDef, its generic arity, and binder ownership.
+             */
+            fun methodParameterReference(
+                definition: DotNetGenericOwnerPhysicalMethodDefIdentity,
+                index: Int,
+            ): Parameter = Parameter(
+                DotNetGenericOwnerPhysicalGenericBinderReference.Method(definition),
+                index,
+            )
+
             private fun bind(
                 declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
                 binder: DotNetGenericOwnerPhysicalGenericBinderReference,
@@ -804,6 +1007,37 @@ internal sealed interface DotNetGenericOwnerSymbolicCarrierReference {
         fun stringCarrier() = Leaf(DotNetGenericOwnerPhysicalTypeKind.STRING)
         fun objectCarrier() = Leaf(DotNetGenericOwnerPhysicalTypeKind.OBJECT)
     }
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.firstGenericBinderNotOwnedByOrNull(
+    declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    method: DotNetGenericOwnerPhysicalMethodDefIdentity,
+): DotNetGenericOwnerPhysicalGenericBinderReference? = when (this) {
+    is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> null
+    is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> when (val parameterBinder = binder) {
+        is DotNetGenericOwnerPhysicalGenericBinderReference.Type ->
+            parameterBinder.takeUnless { it.definition == declaringType }
+        is DotNetGenericOwnerPhysicalGenericBinderReference.Method ->
+            parameterBinder.takeUnless { it.definition == method }
+    }
+    is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+        arguments.firstNotNullOfOrNull { argument ->
+            argument.firstGenericBinderNotOwnedByOrNull(declaringType, method)
+        }
+    is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+        element.firstGenericBinderNotOwnedByOrNull(declaringType, method)
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.referencesTypeParameterOf(
+    declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+): Boolean = when (this) {
+    is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> false
+    is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+        binder == DotNetGenericOwnerPhysicalGenericBinderReference.Type(declaringType)
+    is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+        arguments.any { argument -> argument.referencesTypeParameterOf(declaringType) }
+    is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+        element.referencesTypeParameterOf(declaringType)
 }
 
 private fun voidCarrier() = DotNetGenericOwnerSymbolicCarrierReference.voidCarrier()

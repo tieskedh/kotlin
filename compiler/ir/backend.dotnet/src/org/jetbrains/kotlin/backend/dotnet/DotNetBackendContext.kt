@@ -215,6 +215,11 @@ internal class DotNetBackendContext(
         MutableList<DotNetGenericOwnerPhysicalValueShadowRecord> = mutableListOf()
     /** Distinguishes a successfully completed final shadow from pre-remap capture or no run. */
     var genericOwnerPhysicalValueShadowFinalAnalysisCompleted: Boolean = false
+    /** Read-only comparison between BOUND callable authority and the existing final router. */
+    val genericOwnerPhysicalOperationRouteShadows:
+        MutableList<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = mutableListOf()
+    /** Distinguishes a completed operation shadow from an unavailable BOUND authority. */
+    var genericOwnerPhysicalOperationRouteShadowAnalysisCompleted: Boolean = false
     /** One rehearsal-only, monotone local TypeDef/InterfaceImpl authority lineage. */
     var localGenericOwnerPhysicalAuthority:
             DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalAuthority> =

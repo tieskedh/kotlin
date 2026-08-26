@@ -284,9 +284,6 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // capability is materialized only for physical slots which cannot name one honest I<X>.
     ::DotNetReifiedGenericInterfaceLowering,
     ::DotNetGenericInterfaceBridgeLowering,
-    // Freeze one rehearsal-only symbolic copy of the selected local TypeDef/InterfaceImpl graph.
-    // It is read only by the provenance shadow and cannot change routing or emitted metadata.
-    ::DotNetLocalGenericOwnerPhysicalAuthorityLowering,
     // Select the producer-recorded open-nullable convention after generic-interface lowering has
     // bound separate-consumer declarations, but before covariant bridge planning. The latter must
     // compare split payload carriers, not the still-logical `T?` carriers.
@@ -299,6 +296,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // Propagate the already selected convention to any lowering-generated natural MethodImpls.
     // Kotlin IR/KLIB still retain the logical `T?` signature throughout both passes.
     ::DotNetSplitNullableResultLowering,
+    // Freeze one rehearsal-only symbolic copy of the selected local TypeDef/MethodDef/edge graph
+    // only after the split/covariant callable fixpoint. The current BOUND slice records direct
+    // producers; this placement also leaves one honest epoch for later split-result MethodImpl
+    // authority. It is read only by shadows and cannot change routing or emitted metadata.
+    ::DotNetLocalGenericOwnerPhysicalAuthorityLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: the shared ForLoopsLowering is a body pass, so a `for` loop inside an `init {}`
     // block must already have been inlined into a constructor before the loop rewrite runs.

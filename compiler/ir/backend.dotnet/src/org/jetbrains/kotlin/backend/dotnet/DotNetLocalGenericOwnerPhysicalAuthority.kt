@@ -5,7 +5,10 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.types.defaultType
 
 /** Bounded compilation-local role of one selected CLR TypeDef. */
 internal enum class DotNetLocalGenericOwnerPhysicalTypeRole {
@@ -80,6 +83,158 @@ internal data class DotNetLocalGenericOwnerPhysicalClassEdgePlan(
     }
 }
 
+internal data class DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
+    val logicalMember: IrSimpleFunctionSymbol,
+    val semanticCapabilityMember: IrSimpleFunctionSymbol,
+)
+
+internal enum class DotNetLocalGenericOwnerPhysicalCallableEntryKind {
+    NATURAL_INTERFACE,
+    SEMANTIC_CAPABILITY_INTERFACE_SLOT,
+}
+
+/**
+ * Opaque logical-member-to-MethodDef relation admitted only by the BOUND local authority.
+ * Physical operation proof consumes one already selected endpoint and cannot invent a family.
+ */
+internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor(
+    private val naturalMethod: DotNetGenericOwnerPhysicalMethodDefIdentity,
+    private val semanticCapabilityMethod: DotNetGenericOwnerPhysicalMethodDefIdentity,
+) {
+    fun selectedMethod(kind: DotNetLocalGenericOwnerPhysicalCallableEntryKind):
+            DotNetGenericOwnerPhysicalMethodDefIdentity = when (kind) {
+        DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE -> naturalMethod
+        DotNetLocalGenericOwnerPhysicalCallableEntryKind.SEMANTIC_CAPABILITY_INTERFACE_SLOT ->
+            semanticCapabilityMethod
+    }
+
+    companion object {
+        fun bindDirectProducerOrError(
+            input: DotNetLocalGenericOwnerPhysicalCallableFamilyInput,
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+            inputsByIdentity: Map<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                    DotNetLocalGenericOwnerPhysicalTypeInput,
+                    >,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalCallableFamily> {
+            val logicalMember = input.logicalMember.owner
+            val logicalOwner = logicalMember.parent as? IrClass
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a local callable family requires an interface-owned logical member",
+                )
+            val semanticMember = input.semanticCapabilityMember.owner
+            val semanticOwner = semanticMember.parent as? IrClass
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a local callable family requires an interface-owned capability member",
+                )
+            if (logicalMember.isSuspend || semanticMember.isSuspend) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a suspend callable cannot use the ordinary direct-producer MethodDef grammar",
+                )
+            }
+            val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                logicalOwner.symbol,
+                DotNetGenericInterfaceView.DECLARED,
+            )
+            val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                semanticOwner.symbol,
+                view = null,
+            )
+            if (inputsByIdentity[naturalOwnerIdentity]?.role !=
+                DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ||
+                inputsByIdentity[semanticOwnerIdentity]?.role !=
+                DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a local callable family must use its selected natural and capability TypeDefs",
+                )
+            }
+            val resultParameterIndex = logicalOwner.typeParameters.indexOfFirst { parameter ->
+                logicalMember.returnType == parameter.defaultType
+            }.takeIf { index -> index >= 0 }
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "the bounded direct-producer family must return one exact owner parameter",
+                )
+            val naturalIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                input.logicalMember,
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            )
+            val semanticIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                input.semanticCapabilityMember,
+                role = null,
+            )
+            if (naturalIdentity == semanticIdentity) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "natural and semantic callable entries require distinct MethodDefs",
+                )
+            }
+            val natural = declarations.methodDescriptionOrNull(naturalIdentity)
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            val semantic = declarations.methodDescriptionOrNull(semanticIdentity)
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            fun hasDirectProducerShape(
+                method: DotNetGenericOwnerPhysicalMethodDefReference,
+                owner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            ): Boolean = method.declaringType == owner &&
+                    method.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+                    method.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT &&
+                    method.signature.isInstance &&
+                    method.signature.genericArity == 0 &&
+                    method.signature.parameterSlots.isEmpty()
+            if (!hasDirectProducerShape(natural, naturalOwnerIdentity) ||
+                !hasDirectProducerShape(semantic, semanticOwnerIdentity)
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a bounded local callable family must contain public abstract instance producer slots",
+                )
+            }
+            val naturalResult = natural.signature.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "the bounded natural producer requires a direct result",
+                )
+            val semanticResult = semantic.signature.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "the bounded semantic producer requires a direct result",
+                )
+            val expectedNaturalCarrier = when (val binding = declarations.typeParameterOrError(
+                naturalOwnerIdentity,
+                resultParameterIndex,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            if (naturalResult.slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+                naturalResult.slot.carrier != expectedNaturalCarrier ||
+                semanticResult.slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+                semanticResult.slot.carrier != DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a bounded local producer family has incompatible natural or semantic result authority",
+                )
+            }
+            return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalCallableFamily(naturalIdentity, semanticIdentity),
+            )
+        }
+    }
+}
+
+/** All declaration facts selected together for the one BOUND authority epoch. */
+internal class DotNetLocalGenericOwnerPhysicalBoundInput(
+    methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
+    callableFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>,
+    directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+) {
+    val methodDefinitions = methodDefinitions.toList()
+    val callableFamilies = callableFamilies.toList()
+    val directSupertypeEdgeSets = directSupertypeEdgeSets.toList()
+}
+
 /**
  * One context-owned declaration-authority lineage for compilation-local generic owners.
  *
@@ -92,8 +247,11 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     val earlyDeclarations: DotNetGenericOwnerPhysicalDeclarationIndex,
     val boundDeclarations: DotNetGenericOwnerPhysicalDeclarationIndex?,
     inputsByIdentity: Map<DotNetGenericOwnerPhysicalTypeDefIdentity.Local, DotNetLocalGenericOwnerPhysicalTypeInput>,
+    callableFamiliesByLogicalMember:
+            Map<IrSimpleFunctionSymbol, DotNetLocalGenericOwnerPhysicalCallableFamily>,
 ) {
     private val inputsByIdentity = inputsByIdentity.toMap()
+    private val callableFamiliesByLogicalMember = callableFamiliesByLogicalMember.toMap()
 
     fun inputOrNull(
         identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
@@ -107,11 +265,17 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
         DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner, DotNetGenericInterfaceView.DECLARED)
             .takeIf { identity -> inputsByIdentity[identity]?.role == DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE }
 
+    fun callableMethodOrNull(
+        logicalMember: IrSimpleFunctionSymbol,
+        kind: DotNetLocalGenericOwnerPhysicalCallableEntryKind,
+    ): DotNetGenericOwnerPhysicalMethodDefIdentity? =
+        callableFamiliesByLogicalMember[logicalMember]?.selectedMethod(kind)
+
     fun advanceBound(
         additionalInputs: Iterable<DotNetLocalGenericOwnerPhysicalTypeInput>,
-        buildCompleteEdgeSets: (
+        buildBoundInput: (
             DotNetGenericOwnerPhysicalDeclarationIndex,
-        ) -> DotNetGenericOwnerPhysicalBindingResult<List<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>>,
+        ) -> DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalBoundInput>,
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalAuthority> {
         if (boundDeclarations != null) {
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -145,7 +309,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         }
-        val edgeSets = when (val binding = buildCompleteEdgeSets(provisional)) {
+        val boundInput = when (val binding = buildBoundInput(provisional)) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
             is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
@@ -155,8 +319,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
         val bound = when (val binding = earlyDeclarations.advance(
             nextEpoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
             typeDefinitions = additionalReferences,
-            methodDefinitions = emptyList(),
-            directSupertypeEdgeSets = edgeSets,
+            methodDefinitions = boundInput.methodDefinitions,
+            directSupertypeEdgeSets = boundInput.directSupertypeEdgeSets,
         )) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
             is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
@@ -164,11 +328,40 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         }
+        val mergedCallableFamilies = linkedMapOf<
+                IrSimpleFunctionSymbol,
+                DotNetLocalGenericOwnerPhysicalCallableFamily,
+                >()
+        mergedCallableFamilies.putAll(callableFamiliesByLogicalMember)
+        val seenCandidates = linkedSetOf<IrSimpleFunctionSymbol>()
+        for (candidate in boundInput.callableFamilies) {
+            if (!seenCandidates.add(candidate.logicalMember) ||
+                mergedCallableFamilies.containsKey(candidate.logicalMember)
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "one logical callable received duplicate physical MethodDef family authority",
+                )
+            }
+            val family = when (val binding =
+                DotNetLocalGenericOwnerPhysicalCallableFamily.bindDirectProducerOrError(
+                    candidate,
+                    bound,
+                    mergedInputs,
+                )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            mergedCallableFamilies[candidate.logicalMember] = family
+        }
         return DotNetGenericOwnerPhysicalBindingResult.Bound(
             DotNetLocalGenericOwnerPhysicalAuthority(
                 earlyDeclarations = earlyDeclarations,
                 boundDeclarations = bound,
                 inputsByIdentity = mergedInputs,
+                callableFamiliesByLogicalMember = mergedCallableFamilies,
             ),
         )
     }
@@ -287,6 +480,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                     earlyDeclarations = declarations,
                     boundDeclarations = null,
                     inputsByIdentity = byIdentity,
+                    callableFamiliesByLogicalMember = emptyMap(),
                 ),
             )
         }
