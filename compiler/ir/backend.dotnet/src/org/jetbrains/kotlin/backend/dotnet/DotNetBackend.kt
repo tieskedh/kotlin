@@ -34,6 +34,8 @@ private fun buildGenericOwnerPhysicalMethodDefEmissionBindings(
     defaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction>,
     semanticHooks: Map<IrSimpleFunction, IrSimpleFunction>,
     capabilityDispatchers: Map<IrSimpleFunction, IrSimpleFunction>,
+    interfaceCapabilityDispatchers:
+            List<DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection>,
 ): Map<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> {
     val bindings = IdentityHashMap<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local>()
 
@@ -75,6 +77,13 @@ private fun buildGenericOwnerPhysicalMethodDefEmissionBindings(
         val dispatcher = entry.value
         bindTypedSource(source)
         bind(dispatcher, source, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+    }
+    interfaceCapabilityDispatchers.forEach { selection ->
+        bind(
+            selection.dispatcher.owner,
+            selection.dispatcher.owner,
+            role = null,
+        )
     }
     return bindings
 }
@@ -144,6 +153,8 @@ object DotNetBackend {
         val successfulPhysicalMethodDefHeaders = mutableListOf<
                 Pair<DotNetIlEmissionScope, List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>>,
                 >()
+        val successfulCompleteEmissionObservations =
+            mutableListOf<DotNetGenericOwnerCompleteEmissionScopeObservations>()
         fun registerSuccessfulPhysicalValuePlacement(
             scope: DotNetIlEmissionScope,
             emission: DotNetIlEmissionResult,
@@ -151,12 +162,25 @@ object DotNetBackend {
             if (configuration.dotNetGenericOwnerRehearsal) {
                 successfulPhysicalValuePlacements += scope to emission.localPlacementObservations
                 successfulPhysicalMethodDefHeaders += scope to emission.methodDefHeaderObservations
+                successfulCompleteEmissionObservations +=
+                    DotNetGenericOwnerCompleteEmissionScopeObservations(
+                        scope,
+                        emission.typeDefEmissionObservations,
+                        emission.methodDefHeaderObservations,
+                        emission.methodImplObservations,
+                    )
             } else {
                 check(emission.localPlacementObservations.isEmpty()) {
                     "production emission must not publish generic-owner local-placement observations"
                 }
                 check(emission.methodDefHeaderObservations.isEmpty()) {
                     "production emission must not publish generic-owner MethodDef-header observations"
+                }
+                check(emission.typeDefEmissionObservations.isEmpty()) {
+                    "production emission must not publish generic-owner TypeDef observations"
+                }
+                check(emission.methodImplObservations.isEmpty()) {
+                    "production emission must not publish generic-owner MethodImpl observations"
                 }
             }
         }
@@ -206,6 +230,19 @@ object DotNetBackend {
                     DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::logicalMemberName,
                 ))
         }
+        fun physicalCompleteEmissionComparisons():
+                List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot> {
+            if (!configuration.dotNetGenericOwnerRehearsal) return emptyList()
+            val authority = when (val binding = localPhysicalAuthorityForEmissionComparison) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> return emptyList()
+            }
+            return authority.compareFinalCompleteEmissionFamilies(
+                successfulCompleteEmissionObservations.toList(),
+            )
+        }
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
             DotNetBackendOutput(
                 file,
@@ -216,6 +253,7 @@ object DotNetBackend {
                 genericOwnerPhysicalOperationRouteShadows,
                 physicalValuePlacementComparisons(),
                 physicalMethodDefEmissionComparisons(),
+                physicalCompleteEmissionComparisons(),
                 configuration.dotNetGenericOwnerRehearsal,
             )
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
@@ -370,6 +408,7 @@ object DotNetBackend {
                     context.genericOwnerDefaultCapabilitySlots,
                     context.genericOwnerSemanticHooks,
                     context.genericOwnerCapabilityDispatchers,
+                    context.localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections,
                 )
             } else {
                 emptyMap()
@@ -796,5 +835,7 @@ data class DotNetBackendOutput(
         List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
     val genericOwnerPhysicalMethodDefEmissionComparisons:
         List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot>,
+    val genericOwnerCompleteEmissionComparisons:
+        List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot>,
     val genericOwnerRehearsal: Boolean,
 )

@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-complete-emission-family-2026-08-26.md`](generic-owner-complete-emission-family-2026-08-26.md)
+  records a bounded per-implementation 4-TypeDef/6-MethodDef/2-MethodImpl
+  final-emission manifest, two shared-interface implementation families,
+  transactional complete-row capture, atomic alias/constraint semantics,
+  fail-closed hostile evidence, and the remaining non-additive sealed
+  signature boundary.
 - [`generic-owner-physical-methoddef-role-alias-2026-08-26.md`](generic-owner-physical-methoddef-role-alias-2026-08-26.md)
   records per-emission MethodDef roles, independently observed physical
   TypeDef aliases, expected-first one-way identity binding, hostile role/alias

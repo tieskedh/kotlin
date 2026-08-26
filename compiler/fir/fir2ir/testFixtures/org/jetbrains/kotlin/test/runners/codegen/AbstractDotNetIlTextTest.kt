@@ -60,6 +60,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionMode
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorArgumentMapping
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorDelegationKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionRouteKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionMethodImplKindSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionMethodKindSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionTypeKindSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSupertypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDelegatingConstructorRecord
@@ -488,6 +493,11 @@ private class BackendCliDotNetFacade(
         validateGenericOwnerPhysicalMethodDefEmissionComparison(
             genericOwnerRehearsal = genericOwnerRehearsal,
             comparisons = completedOutput.genericOwnerPhysicalMethodDefEmissionComparisons,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
+        validateGenericOwnerCompleteEmissionComparison(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            comparisons = completedOutput.genericOwnerCompleteEmissionComparisons,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
         validateGenericOwnerPhysicalValuePlacementComparison(
@@ -957,6 +967,175 @@ private fun validateGenericOwnerPhysicalMethodDefEmissionComparison(
             semantic.actual?.let { header -> hasSemanticHeader(header, expectsExactFlags = true) } == true) {
         "The semantic producer must emit a public abstract non-generic capability slot returning object: " +
                 semantic
+    }
+}
+
+/** Proves complete final-emission liveness for one bounded generic-owner family. */
+private fun validateGenericOwnerCompleteEmissionComparison(
+    genericOwnerRehearsal: Boolean,
+    comparisons: List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot>,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        check(comparisons.isEmpty()) {
+            "The production erased epoch must not publish complete-emission comparisons: $comparisons"
+        }
+        return
+    }
+
+    val families = comparisons.filter { family ->
+        family.scope == DotNetIlEmissionScope.USER &&
+                family.ownerName.endsWith("InlineProducer") &&
+                family.logicalMemberName == "produce"
+    }
+    check(families.size == 2 &&
+            families.count { family -> family.implementationOwnerName.endsWith("InlineSelfView") } == 1 &&
+            families.count { family -> family.implementationOwnerName.endsWith("InlineSecondView") } == 1 &&
+            families.all { family ->
+                family.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                        listOf(family.typeDefs, family.methodDefs, family.methodImpls).all { rows ->
+                            rows.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                                    rows.expectedCount == rows.actualCount && rows.diagnostics.isEmpty()
+                        } && family.typeDefs.expectedCount == 4 &&
+                        family.methodDefs.expectedCount == 6 &&
+                        family.methodImpls.expectedCount == 2
+            }) {
+        "The complete-emission probe must publish two isolated matching USER " +
+                "InlineProducer.produce implementation families: $comparisons"
+    }
+    val family = families.single { comparison ->
+        comparison.implementationOwnerName.endsWith("InlineSelfView")
+    }
+
+    val types = family.expectedTypeDefs.associateBy { type -> type.kind }
+    check(types.keys == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.entries.toSet()) {
+        "The complete family must retain all four physical TypeDef authority kinds: ${family.expectedTypeDefs}"
+    }
+    val natural = types.getValue(DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.NATURAL_INTERFACE)
+    check(natural.ownerName.endsWith("InlineProducer") &&
+            natural.physicalAliasViews == listOf(
+                DotNetGenericOwnerPhysicalValueShadowTypeDefView.CANONICAL,
+                DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED,
+            ) && natural.genericArity == 1 &&
+            natural.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            natural.genericParameterVariances == listOf(
+                DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot.COVARIANT,
+            ) && natural.genericParameterConstraintCounts == listOf(0) &&
+            natural.baseTypeEdgeCount == 0 && natural.interfaceEdgeCount == 0) {
+        "The natural interface must be the covariant canonical/declared InlineProducer<T> TypeDef: $natural"
+    }
+    val interfaceCapability = types.getValue(
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY,
+    )
+    check(interfaceCapability.ownerName.endsWith("InlineProducer") &&
+            interfaceCapability.physicalAliasViews == listOf(null) &&
+            interfaceCapability.genericArity == 0 &&
+            interfaceCapability.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            interfaceCapability.genericParameterVariances.isEmpty() &&
+            interfaceCapability.genericParameterConstraintCounts.isEmpty() &&
+            interfaceCapability.baseTypeEdgeCount == 0 && interfaceCapability.interfaceEdgeCount == 0) {
+        "The interface semantic capability must be a distinct non-generic root interface: " +
+                interfaceCapability
+    }
+    val implementation = types.getValue(
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS,
+    )
+    check(implementation.ownerName.endsWith("InlineSelfView") &&
+            implementation.physicalAliasViews == listOf(null) &&
+            implementation.genericArity == 1 &&
+            implementation.category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+            implementation.genericParameterVariances == listOf(
+                DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot.INVARIANT,
+            ) && implementation.genericParameterConstraintCounts == listOf(0) &&
+            implementation.baseTypeEdgeCount == 1 && implementation.interfaceEdgeCount == 3) {
+        "The implementation must retain invariant !T and its complete Object-plus-three-interface ancestry: " +
+                implementation
+    }
+    val classCapability = types.getValue(
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.CLASS_SEMANTIC_CAPABILITY,
+    )
+    check(classCapability.ownerName.endsWith("InlineSelfView") &&
+            classCapability.physicalAliasViews == listOf(null) &&
+            classCapability.genericArity == 0 &&
+            classCapability.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            classCapability.genericParameterVariances.isEmpty() &&
+            classCapability.genericParameterConstraintCounts.isEmpty() &&
+            classCapability.baseTypeEdgeCount == 0 && classCapability.interfaceEdgeCount == 1) {
+        "The class semantic capability must extend exactly the interface semantic capability: " +
+                classCapability
+    }
+    check(family.expectedTypeDefs.flatMap { type -> type.physicalAliasViews }.none { view ->
+        view == DotNetGenericOwnerPhysicalValueShadowTypeDefView.EXACT
+    }) {
+        "The output-only producer family must not fabricate an exact sibling: ${family.expectedTypeDefs}"
+    }
+
+    val methods = family.expectedMethodDefs.associateBy { method -> method.kind }
+    check(methods.size == 6 &&
+            methods.getValue(DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.NATURAL_INTERFACE_SLOT).let {
+                it.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                        it.ownerKind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.NATURAL_INTERFACE
+            } &&
+            methods.getValue(
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+            ).let {
+                it.role == null &&
+                        it.ownerKind ==
+                        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY
+            } &&
+            methods.getValue(DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.IMPLEMENTATION_TYPED_ENTRY).let {
+                it.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                        it.ownerKind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS
+            } &&
+            methods.getValue(
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.CLASS_SEMANTIC_CAPABILITY_SLOT,
+            ).let {
+                it.role == null &&
+                        it.ownerKind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.CLASS_SEMANTIC_CAPABILITY
+            } &&
+            methods.getValue(
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.CLASS_SEMANTIC_CAPABILITY_DISPATCHER,
+            ).let {
+                it.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+                        it.ownerKind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS
+            } &&
+            methods.getValue(
+                DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+            ).let {
+                it.role == null &&
+                        it.ownerKind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS
+            }) {
+        "The complete family must retain all six authoritative MethodDef roles and owners: " +
+                family.expectedMethodDefs
+    }
+
+    val methodImpls = family.expectedMethodImpls.associateBy { methodImpl -> methodImpl.kind }
+    fun methodImplMatches(
+        kind: DotNetGenericOwnerCompleteEmissionMethodImplKindSnapshot,
+        body: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
+        declarationOwner: DotNetGenericOwnerCompleteEmissionTypeKindSnapshot,
+        declaration: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
+    ): Boolean = methodImpls[kind]?.let { methodImpl ->
+        methodImpl.implementingTypeKind ==
+                DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS &&
+                methodImpl.bodyMethodKind == body &&
+                methodImpl.declarationOwnerTypeKind == declarationOwner &&
+                methodImpl.declarationMethodKind == declaration
+    } == true
+    check(methodImpls.size == 2 && methodImplMatches(
+        DotNetGenericOwnerCompleteEmissionMethodImplKindSnapshot.CLASS_SEMANTIC_CAPABILITY_IMPLEMENTATION,
+        DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.CLASS_SEMANTIC_CAPABILITY_DISPATCHER,
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.CLASS_SEMANTIC_CAPABILITY,
+        DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.CLASS_SEMANTIC_CAPABILITY_SLOT,
+    ) && methodImplMatches(
+        DotNetGenericOwnerCompleteEmissionMethodImplKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_IMPLEMENTATION,
+        DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY,
+        DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+    )) {
+        "The complete family must retain both explicit semantic MethodImpl endpoint relationships: " +
+                family.expectedMethodImpls
     }
 }
 
@@ -4952,6 +5131,8 @@ private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE_MA
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE"
 private const val GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE"
+private const val GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_COMPLETE_EMISSION_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =

@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot
 import org.jetbrains.kotlin.cli.pipeline.Fir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.FrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
@@ -63,6 +64,8 @@ data class DotNetBackendPipelineArtifact(
         List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
     val genericOwnerPhysicalMethodDefEmissionComparisons:
         List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot>,
+    val genericOwnerCompleteEmissionComparisons:
+        List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot>,
     val genericOwnerRehearsal: Boolean,
 ) : PipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)

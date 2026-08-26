@@ -1,5 +1,6 @@
 // DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE
 // DOTNET_GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE
+// DOTNET_GENERIC_OWNER_COMPLETE_EMISSION_PROBE
 
 // Kotlin inference may choose Any? for the covariant receiver of an inline helper even when the
 // call originates on an exact generic owner. The inliner's immutable argument temporaries must
@@ -41,6 +42,12 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
     }
 }
 
+// Both implementations share InlineProducer's semantic declaration slot. Their explicit
+// MethodImpl rows must remain owned by their respective implementation families.
+private class InlineSecondView<T>(private val value: T) : InlineProducer<T> {
+    override fun produce(): T = value
+}
+
 fun box(): String {
     val ints = InlineSelfView(42)
     if (ints.indexOf(42) != 0 || ints.indexOf(43) != -1) return "value self-view"
@@ -72,6 +79,12 @@ fun box(): String {
     if (widened !== ints || widened.produce() != 42) return "value widened view"
     widened = strings
     if (widened !== strings || widened.produce() != "inline") return "reference widened view"
+
+    // Execute the second implementation through the same shared semantic declaration slot. Its
+    // private MethodImpl body must remain distinct from InlineSelfView's dispatcher.
+    val secondExact = InlineSecondView(7)
+    val second: InlineProducer<Any?> = secondExact
+    if (second !== secondExact || second.produce() != 7) return "second implementation"
 
     return "OK"
 }

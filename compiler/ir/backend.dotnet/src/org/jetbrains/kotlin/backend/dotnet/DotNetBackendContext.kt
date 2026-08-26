@@ -227,6 +227,10 @@ internal class DotNetBackendContext(
     /** Complete class-edge plans recorded only by the rehearsal bridge selection itself. */
     var localGenericOwnerPhysicalClassEdgePlans:
             MutableMap<IrClass, DotNetLocalGenericOwnerPhysicalClassEdgePlan>? = null
+    /** Creation-site bindings for concrete reified-interface capability forwarding MethodDefs. */
+    val localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections:
+            MutableList<DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection> =
+        mutableListOf()
     /** Rehearsal-only logical owner to its materialized non-generic semantic capability interface. */
     val genericOwnerCapabilityInterfaces: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Local reified subinterface to the external logical ancestor whose capability it inherits. */

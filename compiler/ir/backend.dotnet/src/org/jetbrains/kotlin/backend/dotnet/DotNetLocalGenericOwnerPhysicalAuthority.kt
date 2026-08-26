@@ -83,6 +83,508 @@ internal data class DotNetLocalGenericOwnerPhysicalClassEdgePlan(
     }
 }
 
+/**
+ * One forwarding MethodDef selected while a concrete class is bound to a reified interface's
+ * semantic capability. The relation is recorded at creation time: later authority must not
+ * rediscover this member from a generated name or IR origin.
+ */
+internal data class DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection(
+    val logicalInterfaceMember: IrSimpleFunctionSymbol,
+    val implementationMember: IrSimpleFunctionSymbol,
+    val interfaceCapabilityMember: IrSimpleFunctionSymbol,
+    val dispatcher: IrSimpleFunctionSymbol,
+)
+
+/** The four physical TypeDefs in the first complete implementation-family liveness slice. */
+internal enum class DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind {
+    NATURAL_INTERFACE,
+    INTERFACE_SEMANTIC_CAPABILITY,
+    IMPLEMENTATION_CLASS,
+    CLASS_SEMANTIC_CAPABILITY,
+}
+
+/** Verifier-visible declaration-site variance on one CLR GenericParam row. */
+internal enum class DotNetGenericOwnerPhysicalTypeParameterVariance {
+    INVARIANT,
+    COVARIANT,
+    CONTRAVARIANT,
+}
+
+/** Complete bounded GenericParam metadata attached to one selected TypeDef. */
+internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+    val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    val constraints: List<DotNetGenericOwnerSymbolicCarrierReference>,
+) {
+    init {
+        require(constraints.size == constraints.toSet().size) {
+            "a complete local emission-family GenericParam cannot repeat a constraint row"
+        }
+    }
+}
+
+/** Every MethodDef structurally owned by the admitted direct-producer implementation family. */
+internal enum class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind {
+    NATURAL_INTERFACE_SLOT,
+    INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+    IMPLEMENTATION_TYPED_ENTRY,
+    CLASS_SEMANTIC_CAPABILITY_SLOT,
+    CLASS_SEMANTIC_CAPABILITY_DISPATCHER,
+    INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+}
+
+/** Every explicit MethodImpl row structurally owned by that same implementation family. */
+internal enum class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind {
+    CLASS_SEMANTIC_CAPABILITY_IMPLEMENTATION,
+    INTERFACE_SEMANTIC_CAPABILITY_IMPLEMENTATION,
+}
+
+internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+    val kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+    /** The concrete IR MethodDef which final emission must observe. */
+    val emittedFunction: IrSimpleFunctionSymbol,
+    /** The lowering-selected logical MethodDef identity carried by that emission instance. */
+    val identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+)
+
+internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference(
+    val kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind,
+    val implementingType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    val body: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    val declarationOwner: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    val declaration: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+)
+
+/** Selection handles needed to bind one complete family only after BOUND declarations exist. */
+internal data class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput(
+    val logicalMember: IrSimpleFunctionSymbol,
+    val implementationMember: IrSimpleFunctionSymbol,
+    val types: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            >,
+    /** Every logical identity which lowering expects to alias each one physical TypeDef. */
+    val typeAliases: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
+            >,
+    val typeParameters: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            List<DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference>,
+            >,
+    val methods: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput>,
+    val methodImpls: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference>,
+) {
+    init {
+        require(types.keys == DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.entries.toSet() &&
+                typeAliases.keys == types.keys && typeParameters.keys == types.keys &&
+                methods.map { method -> method.kind }.toSet() ==
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.entries.toSet() &&
+                methods.size == DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.entries.size &&
+                methods.map { method -> method.emittedFunction }.toSet().size == methods.size &&
+                methods.map { method -> method.identity }.toSet().size == methods.size &&
+                methodImpls.map { methodImpl -> methodImpl.kind }.toSet() ==
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.entries.toSet() &&
+                methodImpls.size == DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.entries.size) {
+            "a complete local emission-family input requires every bounded physical row exactly once"
+        }
+    }
+}
+
+/**
+ * Opaque BOUND manifest for one complete direct-producer implementation family.
+ *
+ * "Complete" is deliberately scoped to the selected logical member family. Other Kotlin members
+ * on the implementation TypeDef are outside this structural projection, while all four selected
+ * TypeDefs' direct edges and every MethodDef/MethodImpl belonging to this family are included.
+ */
+internal class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily private constructor(
+    val logicalMember: IrSimpleFunctionSymbol,
+    val implementationMember: IrSimpleFunctionSymbol,
+    val types: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            >,
+    val typeAliases: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
+            >,
+    val typeParameters: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            List<DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference>,
+            >,
+    val methods: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+            Pair<IrSimpleFunctionSymbol, DotNetGenericOwnerPhysicalMethodDefReference>,
+            >,
+    val methodImpls: Map<
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind,
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference,
+            >,
+) {
+    companion object {
+        fun bindOrError(
+            input: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput,
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+            inputsByIdentity: Map<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                    DotNetLocalGenericOwnerPhysicalTypeInput,
+                    >,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily> {
+            val expectedRoles = mapOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE to
+                        DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY to
+                        DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS to
+                        DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.CLASS_SEMANTIC_CAPABILITY to
+                        DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
+            )
+            if (input.types.size != input.types.values.toSet().size || input.types.any { entry ->
+                    inputsByIdentity[entry.value]?.role != expectedRoles.getValue(entry.key)
+                }
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family requires four distinct BOUND TypeDefs with exact roles",
+                )
+            }
+            if (input.typeAliases.any { entry ->
+                    val kind = entry.key
+                    val aliases = entry.value
+                    val primary = input.types.getValue(kind)
+                    aliases.isEmpty() || aliases.distinctBy { alias -> alias.view }.size != aliases.size ||
+                            aliases.none(primary::sameLocalTypeIdentityAs) ||
+                            aliases.any { alias -> alias.owner !== primary.owner } ||
+                            when (kind) {
+                                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE ->
+                                    aliases.mapTo(linkedSetOf()) { alias -> alias.view } != setOf(
+                                        DotNetGenericInterfaceView.CANONICAL,
+                                        DotNetGenericInterfaceView.DECLARED,
+                                    )
+                                else -> aliases.size != 1
+                            }
+                }
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family has an incoherent physical TypeDef alias set",
+                )
+            }
+            if (input.typeParameters.any { entry ->
+                    entry.value.size != inputsByIdentity.getValue(input.types.getValue(entry.key)).genericArity
+                }
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family has an incoherent physical GenericParam set",
+                )
+            }
+            val methods = linkedMapOf<
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+                    Pair<IrSimpleFunctionSymbol, DotNetGenericOwnerPhysicalMethodDefReference>,
+            >()
+            for (method in input.methods) {
+                val reference = declarations.methodDescriptionOrNull(method.identity)
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                methods[method.kind] = method.emittedFunction to reference
+            }
+            val expectedMethodIdentities = mapOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.NATURAL_INTERFACE_SLOT to
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                            input.logicalMember,
+                            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.INTERFACE_SEMANTIC_CAPABILITY_SLOT to
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                            methods.getValue(
+                                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                                    .INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+                            ).first,
+                            role = null,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.IMPLEMENTATION_TYPED_ENTRY to
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                            input.implementationMember,
+                            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_SLOT to
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                            methods.getValue(
+                                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                                    .CLASS_SEMANTIC_CAPABILITY_SLOT,
+                            ).first,
+                            role = null,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_DISPATCHER to
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                            input.implementationMember,
+                            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                    .INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER to
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+                            methods.getValue(
+                                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                                    .INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+                            ).first,
+                            role = null,
+                        ),
+            )
+            if (methods.any { entry ->
+                    val identity = entry.value.second.identity as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                        ?: return@any true
+                    !identity.sameLocalMethodIdentityAs(expectedMethodIdentities.getValue(entry.key))
+                }
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family assigned one MethodDef an incoherent physical identity",
+                )
+            }
+            if (methods.getValue(
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.NATURAL_INTERFACE_SLOT,
+                ).first !== input.logicalMember || methods.getValue(
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.IMPLEMENTATION_TYPED_ENTRY,
+                ).first !== input.implementationMember
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family assigned a source MethodDef to the wrong emission instance",
+                )
+            }
+            val expectedDeclaringTypes = mapOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.NATURAL_INTERFACE_SLOT to
+                        input.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.INTERFACE_SEMANTIC_CAPABILITY_SLOT to
+                        input.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.IMPLEMENTATION_TYPED_ENTRY to
+                        input.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_SLOT to
+                        input.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.CLASS_SEMANTIC_CAPABILITY,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_DISPATCHER to
+                        input.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+                        ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER to
+                        input.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+                        ),
+            )
+            if (methods.any { entry -> entry.value.second.declaringType != expectedDeclaringTypes.getValue(entry.key) }) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family assigned one MethodDef to the wrong physical owner",
+                )
+            }
+            if (methods.values.any { selected -> selected.second.signature.genericArity != 0 }) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "the current complete local emission-family grammar requires non-generic MethodDefs",
+                )
+            }
+            val methodImpls = input.methodImpls.associateBy { methodImpl -> methodImpl.kind }
+            val implementationType = input.types.getValue(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+            )
+            val expectedMethodImplEndpoints = mapOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind
+                    .CLASS_SEMANTIC_CAPABILITY_IMPLEMENTATION to Pair(
+                        DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                            .CLASS_SEMANTIC_CAPABILITY_DISPATCHER,
+                        DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                            .CLASS_SEMANTIC_CAPABILITY_SLOT,
+                    ),
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind
+                    .INTERFACE_SEMANTIC_CAPABILITY_IMPLEMENTATION to Pair(
+                        DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                            .INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+                        DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                            .INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+                    ),
+            )
+            for (methodImpl in methodImpls.values) {
+                val expectedEndpoints = expectedMethodImplEndpoints.getValue(methodImpl.kind)
+                val expectedBody = methods.getValue(expectedEndpoints.first).second.identity as
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                val expectedDeclaration = methods.getValue(expectedEndpoints.second).second.identity as
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                if (!methodImpl.implementingType.sameLocalTypeIdentityAs(implementationType) ||
+                    !methodImpl.body.sameLocalMethodIdentityAs(expectedBody) ||
+                    !methodImpl.declaration.sameLocalMethodIdentityAs(expectedDeclaration)
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a complete local emission family assigned a MethodImpl to incoherent endpoints",
+                    )
+                }
+                val implementingType = declarations.typeDescriptionOrNull(methodImpl.implementingType)
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                val body = declarations.methodDescriptionOrNull(methodImpl.body)
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                val declaration = declarations.methodDescriptionOrNull(methodImpl.declaration)
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                if (implementingType.category != DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS ||
+                    body.declaringType != methodImpl.implementingType ||
+                    declaration.declaringType != methodImpl.declarationOwner.definition
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a complete local emission family contains an incoherent MethodImpl row",
+                    )
+                }
+            }
+            val edgeBindings = DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.entries.associateWith { kind ->
+                declarations.directSupertypeEdgesOrUnavailable(input.types.getValue(kind))
+            }
+            edgeBindings.values.filterIsInstance<DotNetGenericOwnerPhysicalBindingResult.Conflict>()
+                .firstOrNull()?.let { conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(conflict.reason)
+                }
+            if (edgeBindings.values.any { binding ->
+                    binding == DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            ) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            fun edges(kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind):
+                    Set<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference> =
+                when (val binding = edgeBindings.getValue(kind)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                    -> error("complete emission-family edge bindings were not fail-closed")
+                }
+            fun containsMethodParameter(carrier: DotNetGenericOwnerSymbolicCarrierReference): Boolean =
+                when (carrier) {
+                    is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> false
+                    is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+                        carrier.binder is DotNetGenericOwnerPhysicalGenericBinderReference.Method
+                    is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+                        carrier.arguments.any(::containsMethodParameter)
+                    is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+                        containsMethodParameter(carrier.element)
+                }
+            if (input.typeParameters.values.flatten().any { parameter ->
+                    parameter.constraints.any(::containsMethodParameter)
+                } || DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.entries.any { kind ->
+                    edges(kind).any { edge -> containsMethodParameter(edge.target) }
+                }
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "complete TypeDef metadata cannot refer to a MethodDef generic parameter",
+                )
+            }
+            val naturalEdges = edges(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE,
+            )
+            val interfaceCapabilityEdges = edges(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY,
+            )
+            val implementationEdges = edges(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+            )
+            val classCapabilityEdges = edges(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.CLASS_SEMANTIC_CAPABILITY,
+            )
+            val implementationParameter = when (val binding = declarations.typeParameterOrError(
+                implementationType,
+                0,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val naturalConstruction = when (val binding = declarations.constructTypeOrError(
+                input.types.getValue(
+                    DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE,
+                ),
+                listOf(implementationParameter),
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            fun nonGenericConstruction(
+                kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind,
+            ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference.Constructed> =
+                declarations.constructTypeOrError(input.types.getValue(kind), emptyList())
+            val classCapabilityConstruction = when (val binding = nonGenericConstruction(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.CLASS_SEMANTIC_CAPABILITY,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val interfaceCapabilityConstruction = when (val binding = nonGenericConstruction(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val expectedMethodImplDeclarationOwners = mapOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.CLASS_SEMANTIC_CAPABILITY_IMPLEMENTATION to
+                        classCapabilityConstruction,
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.INTERFACE_SEMANTIC_CAPABILITY_IMPLEMENTATION to
+                        interfaceCapabilityConstruction,
+            )
+            if (methodImpls.any { entry ->
+                    entry.value.declarationOwner != expectedMethodImplDeclarationOwners.getValue(entry.key)
+                }
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family assigned a MethodImpl to the wrong construction",
+                )
+            }
+            val expectedClassCapabilityEdges = setOf(
+                DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    interfaceCapabilityConstruction,
+                ),
+            )
+            val expectedImplementationEdges = setOf(
+                DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                    DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
+                    DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                ),
+                DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    naturalConstruction,
+                ),
+                DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    classCapabilityConstruction,
+                ),
+                DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    interfaceCapabilityConstruction,
+                ),
+            )
+            if (naturalEdges.isNotEmpty() || interfaceCapabilityEdges.isNotEmpty() ||
+                classCapabilityEdges != expectedClassCapabilityEdges ||
+                implementationEdges != expectedImplementationEdges
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a complete local emission family has an incompatible direct TypeDef edge set",
+                )
+            }
+            return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily(
+                    input.logicalMember,
+                    input.implementationMember,
+                    input.types.toMap(),
+                    input.typeAliases.mapValues { entry -> entry.value.toList() },
+                    input.typeParameters.mapValues { entry -> entry.value.toList() },
+                    methods,
+                    methodImpls,
+                ),
+            )
+        }
+    }
+}
+
 internal data class DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
     val logicalMember: IrSimpleFunctionSymbol,
     val semanticCapabilityMember: IrSimpleFunctionSymbol,
@@ -229,10 +731,12 @@ internal class DotNetLocalGenericOwnerPhysicalBoundInput(
     methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
     callableFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>,
     directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+    completeEmissionFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput> = emptyList(),
 ) {
     val methodDefinitions = methodDefinitions.toList()
     val callableFamilies = callableFamilies.toList()
     val directSupertypeEdgeSets = directSupertypeEdgeSets.toList()
+    val completeEmissionFamilies = completeEmissionFamilies.toList()
 }
 
 /**
@@ -249,9 +753,11 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     inputsByIdentity: Map<DotNetGenericOwnerPhysicalTypeDefIdentity.Local, DotNetLocalGenericOwnerPhysicalTypeInput>,
     callableFamiliesByLogicalMember:
             Map<IrSimpleFunctionSymbol, DotNetLocalGenericOwnerPhysicalCallableFamily>,
+    completeEmissionFamilies: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily>,
 ) {
     private val inputsByIdentity = inputsByIdentity.toMap()
     private val callableFamiliesByLogicalMember = callableFamiliesByLogicalMember.toMap()
+    private val completeEmissionFamilies = completeEmissionFamilies.toList()
 
     fun inputOrNull(
         identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
@@ -270,6 +776,9 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
         kind: DotNetLocalGenericOwnerPhysicalCallableEntryKind,
     ): DotNetGenericOwnerPhysicalMethodDefIdentity? =
         callableFamiliesByLogicalMember[logicalMember]?.selectedMethod(kind)
+
+    internal fun completeEmissionFamilies(): List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily> =
+        completeEmissionFamilies
 
     /**
      * Compares only the opaque families already admitted by BOUND authority with one successful
@@ -294,6 +803,20 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
         }.sortedWith(compareBy(
             DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::ownerName,
             DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::logicalMemberName,
+        ))
+
+    internal fun compareFinalCompleteEmissionFamilies(
+        successfulEmissions: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
+    ): List<DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot> =
+        completeEmissionFamilies.map { family ->
+            compareDotNetGenericOwnerCompleteEmissionFamily(this, family, successfulEmissions)
+        }.sortedWith(compareBy(
+            { comparison: DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot ->
+                comparison.scope.ordinal
+            },
+            DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot::ownerName,
+            DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot::logicalMemberName,
+            DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot::implementationOwnerName,
         ))
 
     fun advanceBound(
@@ -381,12 +904,34 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             }
             mergedCallableFamilies[candidate.logicalMember] = family
         }
+        val completeEmissionFamilies = mutableListOf<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily>()
+        val seenCompleteFamilies = linkedSetOf<Pair<IrSimpleFunctionSymbol, IrSimpleFunctionSymbol>>()
+        for (candidate in boundInput.completeEmissionFamilies) {
+            if (!seenCompleteFamilies.add(candidate.logicalMember to candidate.implementationMember)) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "one implementation received duplicate complete physical emission-family authority",
+                )
+            }
+            when (val binding = DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily.bindOrError(
+                candidate,
+                bound,
+                mergedInputs,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    completeEmissionFamilies += binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+        }
         return DotNetGenericOwnerPhysicalBindingResult.Bound(
             DotNetLocalGenericOwnerPhysicalAuthority(
                 earlyDeclarations = earlyDeclarations,
                 boundDeclarations = bound,
                 inputsByIdentity = mergedInputs,
                 callableFamiliesByLogicalMember = mergedCallableFamilies,
+                completeEmissionFamilies = completeEmissionFamilies,
             ),
         )
     }
@@ -506,6 +1051,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                     boundDeclarations = null,
                     inputsByIdentity = byIdentity,
                     callableFamiliesByLogicalMember = emptyMap(),
+                    completeEmissionFamilies = emptyList(),
                 ),
             )
         }

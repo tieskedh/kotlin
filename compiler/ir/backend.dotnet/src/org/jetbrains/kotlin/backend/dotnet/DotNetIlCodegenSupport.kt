@@ -2513,23 +2513,45 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
  * Interface declaration-site variance prefixes the existing constraint/name canon with `+` or
  * `-`; the gates guarantee every class/method parameter reaching here is invariant.
  */
+internal data class DotNetIlGenericParameterDecision(
+    val variance: Variance,
+    val constraints: List<DotNetIlValueType>,
+    val physicalName: String,
+)
+
+internal fun List<IrTypeParameter>.dotNetIlGenericParameterDecisions(
+    typeMapper: DotNetIlTypeMapper,
+    varianceOverrides: List<Variance>? = null,
+): List<DotNetIlGenericParameterDecision> {
+    require(varianceOverrides == null || varianceOverrides.size == size)
+    return map { typeParameter ->
+        DotNetIlGenericParameterDecision(
+            variance = varianceOverrides?.get(typeParameter.index) ?: typeParameter.variance,
+            constraints = typeParameter.dotNetConstraintTypes(typeMapper),
+            physicalName = typeParameter.name.asString().toIlIdentifier(),
+        )
+    }
+}
+
+internal fun List<DotNetIlGenericParameterDecision>.renderDotNetIlGenericParameterDecisions(): String? =
+    takeIf { it.isNotEmpty() }?.joinToString(", ", "<", ">") { decision ->
+        val variancePrefix = when (decision.variance) {
+            Variance.OUT_VARIANCE -> "+ "
+            Variance.IN_VARIANCE -> "- "
+            Variance.INVARIANT -> ""
+        }
+        val constraintPrefix = decision.constraints
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(", ", "(", ") ") { it.nameInSignature }
+            .orEmpty()
+        variancePrefix + constraintPrefix + decision.physicalName
+    }
+
 internal fun List<IrTypeParameter>.renderDotNetIlGenericParameters(
     typeMapper: DotNetIlTypeMapper,
     varianceOverrides: List<Variance>? = null,
-): String? = takeIf { it.isNotEmpty() }?.joinToString(", ", "<", ">") { typeParameter ->
-    require(varianceOverrides == null || varianceOverrides.size == size)
-    val physicalVariance = varianceOverrides?.get(typeParameter.index) ?: typeParameter.variance
-    val variancePrefix = when (physicalVariance) {
-        Variance.OUT_VARIANCE -> "+ "
-        Variance.IN_VARIANCE -> "- "
-        Variance.INVARIANT -> ""
-    }
-    val constraintPrefix = typeParameter.dotNetConstraintTypes(typeMapper)
-        .takeIf { it.isNotEmpty() }
-        ?.joinToString(", ", "(", ") ") { it.nameInSignature }
-        .orEmpty()
-    variancePrefix + constraintPrefix + typeParameter.name.asString().toIlIdentifier()
-}
+): String? = dotNetIlGenericParameterDecisions(typeMapper, varianceOverrides)
+    .renderDotNetIlGenericParameterDecisions()
 
 /**
  * The base-class SUPERTYPE of [this] class within the inheritance model as the declared

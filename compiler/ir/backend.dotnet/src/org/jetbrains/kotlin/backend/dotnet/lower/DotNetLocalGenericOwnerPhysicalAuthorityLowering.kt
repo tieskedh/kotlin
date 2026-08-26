@@ -28,12 +28,21 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthor
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalBoundInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableFamilyInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalClassEdgePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceEdgeInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseSuperTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
@@ -261,6 +270,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             }
             val methodDefinitions = mutableListOf<DotNetGenericOwnerPhysicalMethodDefReference>()
             val callableFamilies = mutableListOf<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>()
+            val directProducerSelections = IdentityHashMap<IrSimpleFunction, DirectProducerCallableSelection>()
             for (entry in context.genericOwnerCapabilitySlots.entries) {
                 val source = entry.key
                 val semanticSlot = entry.value
@@ -272,12 +282,29 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 ) ?: continue
                 methodDefinitions += selection.methodDefinitions
                 callableFamilies += selection.callableFamily
+                directProducerSelections[source] = selection
+            }
+            val completeEmissionFamilies =
+                mutableListOf<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput>()
+            for (dispatcherSelection in
+                context.localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections
+            ) {
+                val completeSelection = bindCompleteDirectProducerImplementationOrNull(
+                    dispatcherSelection,
+                    directProducerSelections,
+                    inputsByIdentity,
+                    declarations,
+                ) ?: continue
+                methodDefinitions += completeSelection.methodDefinitions
+                edgeSets += completeSelection.edgeSets
+                completeEmissionFamilies += completeSelection.family
             }
             DotNetGenericOwnerPhysicalBindingResult.Bound(
                 DotNetLocalGenericOwnerPhysicalBoundInput(
-                    methodDefinitions,
+                    methodDefinitions.distinct(),
                     callableFamilies,
-                    edgeSets,
+                    edgeSets.distinct(),
+                    completeEmissionFamilies,
                 ),
             )
         }
@@ -290,6 +317,12 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
     private data class DirectProducerCallableSelection(
         val methodDefinitions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
         val callableFamily: DotNetLocalGenericOwnerPhysicalCallableFamilyInput,
+    )
+
+    private data class CompleteDirectProducerImplementationSelection(
+        val methodDefinitions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
+        val edgeSets: List<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+        val family: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput,
     )
 
     /**
@@ -313,10 +346,13 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                         family.capabilityBindingKind ==
                         DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED
             } ?: return null
-        val logicalMemberKey = context.preLoweringDeclarationKeys[source] ?: return null
-        if (contract.declaredMembers.singleOrNull { member ->
-                member.logicalMemberKey == logicalMemberKey
-            }?.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+        // This first callable grammar admits exactly one declared member. The source symbol and
+        // its capability slot are already creation-site authority inside this compilation, so a
+        // pre-lowering linkage key is not required for executable-only producers (which do not
+        // publish library linkage keys). Multi-member grammars must bind an explicit recorded
+        // member relation rather than rediscovering one from names.
+        if (contract.declaredMembers.singleOrNull()?.role !=
+            DotNetPublishedGenericInterfaceMemberRole.PRODUCER
         ) return null
         val resultParameterIndex = owner.typeParameters.indexOfFirst { parameter ->
             source.returnType == parameter.defaultType
@@ -407,6 +443,310 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             callableFamily = DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
                 source.symbol,
                 semanticSlot.symbol,
+            ),
+        )
+    }
+
+    /**
+     * First non-empty complete liveness grammar: one final generic class directly implements one
+     * root, output-only reified interface producer. The restriction is intentionally structural
+     * and temporary; it gives the complete-set algebra real TypeDef edges and MethodImpl rows
+     * without pretending that unrelated members of the implementation class belong to this
+     * logical member family.
+     */
+    private fun bindCompleteDirectProducerImplementationOrNull(
+        selection: DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection,
+        directProducerSelections: IdentityHashMap<IrSimpleFunction, DirectProducerCallableSelection>,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+    ): CompleteDirectProducerImplementationSelection? {
+        val logicalMember = selection.logicalInterfaceMember.owner
+        val directProducer = directProducerSelections[logicalMember] ?: return null
+        val interfaceCapabilityMember = selection.interfaceCapabilityMember.owner
+        if (directProducer.callableFamily.logicalMember !== logicalMember.symbol ||
+            directProducer.callableFamily.semanticCapabilityMember !== interfaceCapabilityMember.symbol
+        ) return null
+
+        val implementation = selection.implementationMember.owner
+        val interfaceDispatcher = selection.dispatcher.owner
+        val logicalOwner = logicalMember.parent as? IrClass ?: return null
+        val implementationOwner = implementation.parent as? IrClass ?: return null
+        val interfaceCapabilityOwner = interfaceCapabilityMember.parent as? IrClass ?: return null
+        val classCapabilityOwner = context.genericOwnerCapabilityInterfaces[implementationOwner] ?: return null
+        val classCapabilityMember = context.genericOwnerCapabilitySlots[implementation] ?: return null
+        val classDispatcher = context.genericOwnerCapabilityDispatchers[implementation] ?: return null
+        if (classCapabilityMember.parent !== classCapabilityOwner ||
+            interfaceDispatcher.parent !== implementationOwner ||
+            classDispatcher.parent !== implementationOwner ||
+            context.genericOwnerSemanticHooks[implementation] != null ||
+            logicalOwner.typeParameters.size != 1 ||
+            implementationOwner.typeParameters.size != 1 ||
+            logicalOwner.typeParameters.single().variance != Variance.OUT_VARIANCE ||
+            implementationOwner.typeParameters.single().variance != Variance.INVARIANT ||
+            logicalOwner.typeParameters.single().superTypes.any { bound ->
+                !bound.isAny() && !bound.isNullableAny()
+            } ||
+            implementationOwner.typeParameters.single().superTypes.any { bound ->
+                !bound.isAny() && !bound.isNullableAny()
+            } ||
+            logicalOwner.dotNetDirectInterfaceTypes().isNotEmpty() ||
+            interfaceCapabilityOwner.dotNetDirectInterfaceTypes().isNotEmpty() ||
+            classCapabilityOwner.dotNetDirectInterfaceTypes().singleOrNull()
+                ?.classifier != interfaceCapabilityOwner.symbol ||
+            implementationOwner.modality != Modality.FINAL ||
+            implementation.visibility != DescriptorVisibilities.PUBLIC ||
+            implementation.parameters.size != 1 ||
+            implementation.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+            implementation.returnType != implementationOwner.typeParameters.single().defaultType ||
+            logicalMember !in implementation.overriddenSymbols.map { overridden -> overridden.owner } ||
+            classDispatcher.overriddenSymbols.singleOrNull()?.owner !== classCapabilityMember ||
+            interfaceDispatcher.overriddenSymbols.singleOrNull()?.owner !== interfaceCapabilityMember ||
+            classCapabilityMember.visibility != DescriptorVisibilities.PUBLIC ||
+            classCapabilityMember.modality != Modality.ABSTRACT ||
+            classCapabilityMember.body != null ||
+            classDispatcher.visibility != DescriptorVisibilities.PRIVATE ||
+            classDispatcher.modality != Modality.FINAL ||
+            interfaceDispatcher.visibility != DescriptorVisibilities.PRIVATE ||
+            interfaceDispatcher.modality != Modality.FINAL ||
+            listOf(classCapabilityMember, classDispatcher, interfaceDispatcher).any { member ->
+                member.isSuspend || member.typeParameters.isNotEmpty() || member.parameters.size != 1 ||
+                        member.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+                        !member.returnType.isNullableAny()
+            }
+        ) return null
+
+        val naturalType = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            logicalOwner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val interfaceCapabilityType = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            interfaceCapabilityOwner.symbol,
+            view = null,
+        )
+        val implementationType = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            implementationOwner.symbol,
+            view = null,
+        )
+        val classCapabilityType = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            classCapabilityOwner.symbol,
+            view = null,
+        )
+        val types = linkedMapOf(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE to naturalType,
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY to
+                    interfaceCapabilityType,
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS to
+                    implementationType,
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.CLASS_SEMANTIC_CAPABILITY to
+                    classCapabilityType,
+        )
+        if (types.values.any { identity -> identity !in inputsByIdentity }) return null
+        val typeAliases = types.mapValuesTo(linkedMapOf()) { entry ->
+            if (entry.key == DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE) {
+                listOf(
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                        logicalOwner.symbol,
+                        DotNetGenericInterfaceView.CANONICAL,
+                    ),
+                    entry.value,
+                )
+            } else {
+                listOf(entry.value)
+            }
+        }
+        val typeParameters = linkedMapOf(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE to listOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.INTERFACE_SEMANTIC_CAPABILITY to
+                    emptyList(),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS to listOf(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.CLASS_SEMANTIC_CAPABILITY to
+                    emptyList(),
+        )
+
+        val implementationParameter = when (val binding = declarations.typeParameterOrError(
+            implementationType,
+            0,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> return null
+        }
+        fun directResult(carrier: DotNetGenericOwnerSymbolicCarrierReference) =
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    carrier,
+                ),
+            )
+        fun method(
+            identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+            declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            visibility: DotNetGenericOwnerPhysicalMemberVisibility,
+            dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+            resultCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+        ) = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = identity,
+            declaringType = declaringType,
+            visibility = visibility,
+            dispatch = dispatch,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 0,
+                resultLayout = directResult(resultCarrier),
+                parameterSlots = emptyList(),
+            ),
+        )
+
+        val naturalIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            logicalMember.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val interfaceCapabilityIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            interfaceCapabilityMember.symbol,
+            role = null,
+        )
+        val implementationIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            implementation.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val classCapabilityIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            classCapabilityMember.symbol,
+            role = null,
+        )
+        val classDispatcherIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            implementation.symbol,
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+        )
+        val interfaceDispatcherIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            interfaceDispatcher.symbol,
+            role = null,
+        )
+        val objectCarrier = DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+        val additionalMethods = listOf(
+            method(
+                implementationIdentity,
+                implementationType,
+                DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+                DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE,
+                implementationParameter,
+            ),
+            method(
+                classCapabilityIdentity,
+                classCapabilityType,
+                DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+                DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+                objectCarrier,
+            ),
+            method(
+                classDispatcherIdentity,
+                implementationType,
+                DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+                DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+                objectCarrier,
+            ),
+            method(
+                interfaceDispatcherIdentity,
+                implementationType,
+                DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+                DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+                objectCarrier,
+            ),
+        )
+        val methodInputs = listOf(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.NATURAL_INTERFACE_SLOT,
+                logicalMember.symbol,
+                naturalIdentity,
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+                interfaceCapabilityMember.symbol,
+                interfaceCapabilityIdentity,
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.IMPLEMENTATION_TYPED_ENTRY,
+                implementation.symbol,
+                implementationIdentity,
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_SLOT,
+                classCapabilityMember.symbol,
+                classCapabilityIdentity,
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.CLASS_SEMANTIC_CAPABILITY_DISPATCHER,
+                classDispatcher.symbol,
+                classDispatcherIdentity,
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodInput(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+                interfaceDispatcher.symbol,
+                interfaceDispatcherIdentity,
+            ),
+        )
+        fun nonGenericConstruction(type: DotNetGenericOwnerPhysicalTypeDefIdentity.Local) =
+            when (val binding = declarations.constructTypeOrError(type, emptyList())) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> null
+            }
+        val interfaceCapabilityConstruction = nonGenericConstruction(interfaceCapabilityType)
+            ?: return null
+        val classCapabilityConstruction = nonGenericConstruction(classCapabilityType)
+            ?: return null
+        val methodImpls = listOf(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.CLASS_SEMANTIC_CAPABILITY_IMPLEMENTATION,
+                implementationType,
+                classDispatcherIdentity,
+                classCapabilityConstruction,
+                classCapabilityIdentity,
+            ),
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplReference(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.INTERFACE_SEMANTIC_CAPABILITY_IMPLEMENTATION,
+                implementationType,
+                interfaceDispatcherIdentity,
+                interfaceCapabilityConstruction,
+                interfaceCapabilityIdentity,
+            ),
+        )
+        val edgeSets = listOf(
+            DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(naturalType, emptyList()),
+            DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(interfaceCapabilityType, emptyList()),
+            DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
+                classCapabilityType,
+                listOf(DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    interfaceCapabilityConstruction,
+                )),
+            ),
+        )
+        return CompleteDirectProducerImplementationSelection(
+            methodDefinitions = directProducer.methodDefinitions + additionalMethods,
+            edgeSets = edgeSets,
+            family = DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput(
+                logicalMember.symbol,
+                implementation.symbol,
+                types,
+                typeAliases,
+                typeParameters,
+                methodInputs,
+                methodImpls,
             ),
         )
     }

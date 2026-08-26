@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -529,15 +530,33 @@ class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonTest {
                 observed(3, listOf(canonical, declared)),
             ) is EmissionIdentityAllocator.ActualType.Conflict,
         )
+
+        val groupedAliases = EmissionIdentityAllocator()
+        val expectedAliasGroupKey = groupedAliases.expectedTypeAliasGroup(
+            listOf(canonical, declared),
+            description(declared),
+        )
+        assertEquals(
+            expectedAliasGroupKey,
+            (groupedAliases.actualType(
+                observed(4, listOf(canonical, declared)),
+            ) as EmissionIdentityAllocator.ActualType.Bound).key,
+        )
+        assertFailsWith<IllegalStateException> {
+            EmissionIdentityAllocator().apply {
+                expectedType(canonical, description(canonical))
+                expectedTypeAliasGroup(listOf(canonical, declared), description(declared))
+            }
+        }
         assertEquals(
             setOf(
-                DotNetGenericOwnerObservedPhysicalTypeDefKey(4),
                 DotNetGenericOwnerObservedPhysicalTypeDefKey(5),
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(6),
             ),
             conflictingDotNetGenericOwnerObservedPhysicalTypeDefKeys(
                 listOf(
-                    observed(4, listOf(declared)),
                     observed(5, listOf(declared)),
+                    observed(6, listOf(declared)),
                 ),
             ),
         )
