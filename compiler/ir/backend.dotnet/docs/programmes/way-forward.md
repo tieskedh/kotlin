@@ -1737,6 +1737,31 @@ published only after every retained fact in its scope has final-live evidence;
 a narrower first comparison remains an explicitly partial overlay. See
 [`../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md`](../archive/generic-owner-physical-operation-route-shadow-2026-08-26.md).
 
+The first bounded final-emission overlay now closes that immediate liveness
+gap for the same direct-producer family. The structured decision which prints
+each simple MethodDef header is retained in successful rendered products and
+collected only from the final emitter fixpoint. Independent normalization
+preserves the actual owner identity, arity/category, explicit receiver,
+binder-scoped generic parameters, ordinary parameters, and result layout. The
+BOUND natural and semantic capability-interface endpoints are then compared
+as one atomic family. Missing evidence stays unavailable; duplicates,
+unexpected owners, cross-scope evidence, and structural drift conflict. The
+only ignored same-symbol owner is the natural entry's independently observed
+invariant exact sibling with matching logical owner, arity, and interface
+category.
+
+This remains a partial overlay and deliberately does not advance the additive
+declaration index to `SEALED_EMISSION_SIGNATURE_INDEX`. BOUND does not yet
+seal the exact CLI flag vector or method name, although the current product
+fixture independently pins the actual public abstract flags. Emitted
+MethodDef-role identity, canonical/declared physical aliases, exact-sibling
+headers, complete TypeDef/BaseType/InterfaceImpl sets, MethodImpl rows,
+retained foreign/core carriers, and broader live callable families still need
+complete final evidence. No existing route recognizer may be removed and no
+sealed epoch may be published until every fact in the selected scope is
+observed rather than inherited from BOUND. See
+[`../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](../archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md).
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
@@ -1761,8 +1786,10 @@ The consolidation proceeds in bounded stages:
    retained-foreign edge authority remain later adapters;
 6. move route selection behind one query which starts from the authoritative
    callable family and treats exact provenance only as supporting evidence.
-   The first local direct-producer BOUND shadow is complete; sealed emitted-
-   signature comparison and later producer/foreign adapters remain open;
+   The first local direct-producer BOUND shadow and partial final-fixpoint
+   MethodDef comparison are complete. Exact emitted role/alias identity, a
+   complete sealed signature set, and later producer/foreign adapters remain
+   open;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

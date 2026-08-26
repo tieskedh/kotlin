@@ -1149,6 +1149,37 @@ verification, and work state.
   unchanged up-to-date `dotnet.ir` root retains one suite/six green tests. See
   [`docs/archive/generic-owner-physical-operation-route-shadow-2026-08-26.md`](docs/archive/generic-owner-physical-operation-route-shadow-2026-08-26.md).
 
+  The first final-fixpoint MethodDef comparison now joins that BOUND callable
+  authority with the exact structured header decisions used by successful IL
+  rendering. Raw observations belong to rendered products and survive only
+  the final converged emitter round, including nested and exact-interface
+  views. Independent normalization records the actual TypeDef identity,
+  physical arity/category, explicit receiver, scoped generic parameters,
+  ordinary parameter carriers, and direct/split result layout without seeding
+  an expected owner or using diagnostic text as identity. Production capture
+  is disabled and redundantly asserted empty in both emitter and backend.
+
+  The current opaque direct-producer family compares its natural and semantic
+  capability-interface endpoints atomically. Missing evidence is unavailable;
+  duplicate, cross-scope, wrong-owner, and structural drift conflict. The
+  natural source symbol's independently observed invariant exact sibling is
+  the sole ignored owner and only with the same logical owner, arity, and real
+  interface category. Exact emitted virtual/newslot/abstract/final flags and
+  physical names remain diagnostic because BOUND does not yet seal them; the
+  four-lane product fixture separately pins the actual public abstract flag
+  vector. This is an explicitly partial final-emission overlay, not an advance
+  to `SEALED_EMISSION_SIGNATURE_INDEX`.
+
+  The final normal aggregate exits zero. Direct XML audit covers 195 suites
+  and 2,449 tests with zero failures, errors, or skips: five backend suites/77
+  tests, 187 FIR suites/2,239 tests, and two integration suites/127 tests are
+  current; the unchanged up-to-date `dotnet.ir` root retains one suite/six
+  green tests. Production remains atomically erased. The next bounded work is
+  exact emitted MethodDef-role and physical TypeDef-alias identity, followed
+  by complete-set TypeDef/edge/MethodDef/MethodImpl liveness before a shared
+  sealed epoch or recognizer removal. See
+  [`docs/archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md`](docs/archive/generic-owner-physical-methoddef-emission-comparison-2026-08-26.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null

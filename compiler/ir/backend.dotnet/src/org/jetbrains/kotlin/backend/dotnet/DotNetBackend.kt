@@ -75,10 +75,16 @@ object DotNetBackend {
         var genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot> = emptyList()
         var genericOwnerPhysicalOperationRouteShadows:
             List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = emptyList()
+        var localPhysicalAuthorityForEmissionComparison:
+                DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalAuthority> =
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable
         var genericOwnerPhysicalValueShadowRecords:
             List<DotNetGenericOwnerPhysicalValueShadowRecord> = emptyList()
         val successfulPhysicalValuePlacements = mutableListOf<
                 Pair<DotNetIlEmissionScope, List<DotNetGenericOwnerPhysicalValueLocalPlacementObservation>>,
+                >()
+        val successfulPhysicalMethodDefHeaders = mutableListOf<
+                Pair<DotNetIlEmissionScope, List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>>,
                 >()
         fun registerSuccessfulPhysicalValuePlacement(
             scope: DotNetIlEmissionScope,
@@ -86,9 +92,13 @@ object DotNetBackend {
         ) {
             if (configuration.dotNetGenericOwnerRehearsal) {
                 successfulPhysicalValuePlacements += scope to emission.localPlacementObservations
+                successfulPhysicalMethodDefHeaders += scope to emission.methodDefHeaderObservations
             } else {
                 check(emission.localPlacementObservations.isEmpty()) {
                     "production emission must not publish generic-owner local-placement observations"
+                }
+                check(emission.methodDefHeaderObservations.isEmpty()) {
+                    "production emission must not publish generic-owner MethodDef-header observations"
                 }
             }
         }
@@ -108,6 +118,36 @@ object DotNetBackend {
                     )
                 }
             }
+        fun physicalMethodDefEmissionComparisons():
+                List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot> {
+            if (!configuration.dotNetGenericOwnerRehearsal) return emptyList()
+            val authority = when (val binding = localPhysicalAuthorityForEmissionComparison) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> return emptyList()
+            }
+            return successfulPhysicalMethodDefHeaders
+                .flatMap { successfulScope ->
+                    val otherScopeObservations = successfulPhysicalMethodDefHeaders
+                        .asSequence()
+                        .filter { candidate -> candidate.first != successfulScope.first }
+                        .flatMap { candidate -> candidate.second.asSequence() }
+                        .toList()
+                    authority.compareFinalMethodDefHeaders(
+                        successfulScope.first,
+                        successfulScope.second,
+                        otherScopeObservations,
+                    )
+                }
+                .sortedWith(compareBy(
+                    { comparison: DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot ->
+                        comparison.scope.ordinal
+                    },
+                    DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::ownerName,
+                    DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::logicalMemberName,
+                ))
+        }
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
             DotNetBackendOutput(
                 file,
@@ -117,6 +157,7 @@ object DotNetBackend {
                 genericOwnerPhysicalValueShadows,
                 genericOwnerPhysicalOperationRouteShadows,
                 physicalValuePlacementComparisons(),
+                physicalMethodDefEmissionComparisons(),
                 configuration.dotNetGenericOwnerRehearsal,
             )
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
@@ -228,6 +269,7 @@ object DotNetBackend {
         genericOwnerPrototypes = context.genericOwnerArchitecturePlans.values
             .map { plan -> plan.toPrototypeSnapshot(preLoweringDeclarationKeys) }
             .sortedBy(DotNetGenericOwnerPrototypeSnapshot::ownerName)
+        localPhysicalAuthorityForEmissionComparison = context.localGenericOwnerPhysicalAuthority
         genericOwnerCallRoutes = context.genericOwnerCallRoutes
             .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)
             .sortedBy(DotNetGenericOwnerCallRouteSnapshot::callSiteIndex)
@@ -679,5 +721,7 @@ data class DotNetBackendOutput(
         List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
     val genericOwnerPhysicalValuePlacementComparisons:
         List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
+    val genericOwnerPhysicalMethodDefEmissionComparisons:
+        List<DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot>,
     val genericOwnerRehearsal: Boolean,
 )
