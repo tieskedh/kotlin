@@ -195,6 +195,8 @@ internal class DotNetIlEmitter(
             Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = emptyMap(),
     private val genericOwnerDefaultCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerSemanticHooks: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerPhysicalMethodDefEmissionBindings:
+            Map<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> = emptyMap(),
     private val genericOwnerFunctionInputEntries: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerFunctionInputEntryObjectParameters:
             Map<IrSimpleFunction, Set<Int>> = emptyMap(),
@@ -240,6 +242,9 @@ internal class DotNetIlEmitter(
      * executable was requested without a main function).
      */
     fun emit(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
+        check(genericOwnerRehearsal || genericOwnerPhysicalMethodDefEmissionBindings.isEmpty()) {
+            "production emission must not receive generic-owner MethodDef diagnostic bindings"
+        }
         check((genericOwnerCallRouteTraceHooks == null) == (genericOwnerCallRouteTraceSiteCount == null)) {
             "Generic-owner call-route trace hooks and their site count must be configured together"
         }
@@ -1124,6 +1129,8 @@ internal class DotNetIlEmitter(
                         availableFunctions[member] = DotNetIlFunctionInfo(
                             implementationOwner,
                             member.dotNetSignature(implementationMapper),
+                            genericOwnerPhysicalMethodIdentity =
+                                genericOwnerPhysicalMethodDefEmissionBindings[member],
                         )
                         continue
                     }
@@ -1193,6 +1200,7 @@ internal class DotNetIlEmitter(
                         physicalOwner,
                         signature,
                         physicalMethodName,
+                        genericOwnerPhysicalMethodDefEmissionBindings[member],
                     )
                 }
                 for (member in irClass.dotNetMemberFakeOverrides()) {
@@ -1381,6 +1389,7 @@ internal class DotNetIlEmitter(
                         availableFunctions.getValue(function).owner,
                         function.dotNetSignature(typeMapper),
                         availableFunctions.getValue(function).physicalMethodName,
+                        availableFunctions.getValue(function).genericOwnerPhysicalMethodIdentity,
                     )
                     availableFunctions[function] = functionInfo
                     renderedMethods[function] = DotNetIlMethodCodegen(
@@ -1991,18 +2000,25 @@ internal class DotNetIlEmitter(
         } else {
             emptyList()
         }
-        val localTypeDefsByClassInfo = java.util.IdentityHashMap<
+        val localTypeDefCandidatesByClassInfo = java.util.IdentityHashMap<
                 DotNetIlClassInfo,
-                MutableSet<DotNetGenericOwnerObservedLocalTypeDef>,
+                MutableList<DotNetGenericOwnerObservedLocalTypeDefCandidate>,
+                >()
+        val localTypeDefPhysicalKeys = java.util.IdentityHashMap<
+                DotNetIlClassInfo,
+                DotNetGenericOwnerObservedPhysicalTypeDefKey,
                 >()
         fun recordLocalTypeDefIdentity(
             classInfo: DotNetIlClassInfo,
             identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
             category: DotNetGenericOwnerPhysicalNamedTypeCategory,
         ) {
-            localTypeDefsByClassInfo
-                .getOrPut(classInfo) { linkedSetOf() }
-                .add(DotNetGenericOwnerObservedLocalTypeDef(
+            localTypeDefPhysicalKeys.getOrPut(classInfo) {
+                DotNetGenericOwnerObservedPhysicalTypeDefKey(localTypeDefPhysicalKeys.size)
+            }
+            localTypeDefCandidatesByClassInfo
+                .getOrPut(classInfo) { mutableListOf() }
+                .add(DotNetGenericOwnerObservedLocalTypeDefCandidate(
                     identity = identity,
                     genericArity = classInfo.typeParameterCount,
                     category = category,
@@ -2013,20 +2029,27 @@ internal class DotNetIlEmitter(
                 val owner = entry.key
                 val classInfo = entry.value
                 val interfaceInfo = genericInterfaces[owner]
-                val view = when {
-                    interfaceInfo?.declaredClassInfo === classInfo -> DotNetGenericInterfaceView.DECLARED
-                    interfaceInfo?.canonicalClassInfo === classInfo -> DotNetGenericInterfaceView.CANONICAL
-                    else -> null
+                val category = if (owner.isInterface) {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                } else {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
                 }
-                recordLocalTypeDefIdentity(
-                    classInfo,
-                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view),
-                    if (owner.isInterface) {
-                        DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
-                    } else {
-                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
-                    },
-                )
+                val aliasedViews = buildList {
+                    if (interfaceInfo?.canonicalClassInfo === classInfo) {
+                        add(DotNetGenericInterfaceView.CANONICAL)
+                    }
+                    if (interfaceInfo?.declaredClassInfo === classInfo) {
+                        add(DotNetGenericInterfaceView.DECLARED)
+                    }
+                    if (isEmpty()) add(null)
+                }
+                aliasedViews.forEach { view ->
+                    recordLocalTypeDefIdentity(
+                        classInfo,
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view),
+                        category,
+                    )
+                }
                 interfaceInfo?.exactClassInfo?.let { exactClassInfo ->
                     recordLocalTypeDefIdentity(
                         exactClassInfo,
@@ -2039,12 +2062,46 @@ internal class DotNetIlEmitter(
                 }
             }
         }
+        val localTypeDefsByClassInfo = java.util.IdentityHashMap<
+                DotNetIlClassInfo,
+                DotNetGenericOwnerObservedLocalTypeDefResolution,
+                >().apply {
+            localTypeDefCandidatesByClassInfo.forEach { entry ->
+                put(
+                    entry.key,
+                    resolveDotNetGenericOwnerObservedLocalTypeDef(
+                        checkNotNull(localTypeDefPhysicalKeys[entry.key]),
+                        entry.value,
+                    ),
+                )
+            }
+            val duplicateKeys = conflictingDotNetGenericOwnerObservedPhysicalTypeDefKeys(
+                values.filterIsInstance<DotNetGenericOwnerObservedLocalTypeDefResolution.Known>()
+                    .map { resolution -> resolution.typeDef },
+            )
+            if (duplicateKeys.isNotEmpty()) {
+                entries.toList().forEach { entry ->
+                    val known = entry.value as?
+                            DotNetGenericOwnerObservedLocalTypeDefResolution.Known ?: return@forEach
+                    if (known.typeDef.physicalKey in duplicateKeys) {
+                        put(
+                            entry.key,
+                            DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict(
+                                "one logical TypeDef alias was attached to multiple emitted physical TypeDefs",
+                            ),
+                        )
+                    }
+                }
+            }
+        }
         val localTypeDefByClassInfo = java.util.IdentityHashMap<
                 DotNetIlClassInfo,
                 DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
                 >().apply {
             localTypeDefsByClassInfo.forEach { entry ->
-                entry.value.singleOrNull()?.let { typeDef -> put(entry.key, typeDef.identity) }
+                (entry.value as? DotNetGenericOwnerObservedLocalTypeDefResolution.Known)
+                    ?.typeDef
+                    ?.let { typeDef -> put(entry.key, typeDef.identity) }
             }
         }
         val capabilityOwnersByClassInfo =
@@ -2152,7 +2209,8 @@ internal class DotNetIlEmitter(
                     )
                 carrier.isMethodParameter -> DotNetGenericOwnerObservedMethodCarrier.MethodParameter(
                     physicalOwner = physicalOwner,
-                    function = raw.function,
+                    physicalFunction = raw.function,
+                    physicalMethodIdentity = raw.genericOwnerPhysicalMethodIdentity,
                     index = carrier.index,
                 )
                 carrier.index >= physicalOwner.genericArity -> unbindableMethodCarrier(
@@ -2165,46 +2223,50 @@ internal class DotNetIlEmitter(
                 )
             }
             is DotNetIlValueType.UserClass -> {
-                val definitions = localTypeDefsByClassInfo[carrier.classInfo].orEmpty()
-                when {
-                    definitions.isEmpty() -> DotNetGenericOwnerObservedMethodCarrier.Other(
+                when (val resolution = localTypeDefsByClassInfo[carrier.classInfo]) {
+                    null -> DotNetGenericOwnerObservedMethodCarrier.Other(
                         carrier.nameInSignature,
                     )
-                    definitions.size > 1 -> unbindableMethodCarrier(
-                        "the emitted MethodDef class carrier has conflicting local physical TypeDef identities",
-                        isConflict = true,
-                    )
-                    carrier.classInfo.typeParameterCount != 0 -> unbindableMethodCarrier(
-                        "the emitted MethodDef uses an open generic TypeDef as a non-constructed carrier",
-                        isConflict = true,
-                    )
-                    else -> DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
-                        definition = definitions.single(),
-                        arguments = emptyList(),
-                    )
+                    is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict ->
+                        unbindableMethodCarrier(
+                            resolution.reason,
+                            isConflict = true,
+                        )
+                    is DotNetGenericOwnerObservedLocalTypeDefResolution.Known -> when {
+                        carrier.classInfo.typeParameterCount != 0 -> unbindableMethodCarrier(
+                            "the emitted MethodDef uses an open generic TypeDef as a non-constructed carrier",
+                            isConflict = true,
+                        )
+                        else -> DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                            definition = resolution.typeDef,
+                            arguments = emptyList(),
+                        )
+                    }
                 }
             }
             is DotNetIlValueType.GenericInstance -> {
-                val definitions = localTypeDefsByClassInfo[carrier.classInfo].orEmpty()
-                when {
-                    definitions.isEmpty() -> DotNetGenericOwnerObservedMethodCarrier.Other(
+                when (val resolution = localTypeDefsByClassInfo[carrier.classInfo]) {
+                    null -> DotNetGenericOwnerObservedMethodCarrier.Other(
                         carrier.nameInSignature,
                     )
-                    definitions.size > 1 -> unbindableMethodCarrier(
-                        "the emitted generic MethodDef carrier has conflicting local physical TypeDef identities",
-                        isConflict = true,
-                    )
-                    carrier.arguments.size != carrier.classInfo.typeParameterCount ->
+                    is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict ->
                         unbindableMethodCarrier(
-                            "the emitted generic MethodDef carrier disagrees with its physical TypeDef arity",
+                            resolution.reason,
                             isConflict = true,
-                    )
-                    else -> DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
-                        definition = definitions.single(),
-                        arguments = carrier.arguments.map { argument ->
-                            normalizeObservedMethodCarrier(argument, raw, physicalOwner)
-                        },
-                    )
+                        )
+                    is DotNetGenericOwnerObservedLocalTypeDefResolution.Known -> when {
+                        carrier.arguments.size != carrier.classInfo.typeParameterCount ->
+                            unbindableMethodCarrier(
+                                "the emitted generic MethodDef carrier disagrees with its physical TypeDef arity",
+                                isConflict = true,
+                            )
+                        else -> DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                            definition = resolution.typeDef,
+                            arguments = carrier.arguments.map { argument ->
+                                normalizeObservedMethodCarrier(argument, raw, physicalOwner)
+                            },
+                        )
+                    }
                 }
             }
             is DotNetIlValueType.GenericArray -> DotNetGenericOwnerObservedMethodCarrier.SzArray(
@@ -2218,18 +2280,21 @@ internal class DotNetIlEmitter(
             )
         }
         val methodDefHeaderObservations = rawMethodDefHeaderObservations.map { raw ->
-            val ownerTypeDefs = localTypeDefsByClassInfo[raw.physicalOwner].orEmpty()
-            val physicalOwner = ownerTypeDefs.singleOrNull()
-            val observedOwner = when {
-                ownerTypeDefs.isEmpty() -> DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
+            val ownerResolution = localTypeDefsByClassInfo[raw.physicalOwner]
+            val physicalOwner = (ownerResolution as?
+                    DotNetGenericOwnerObservedLocalTypeDefResolution.Known)?.typeDef
+            val observedOwner = when (ownerResolution) {
+                null -> DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
                     "the emitted MethodDef owner does not belong to a local physical TypeDef",
                     isConflict = false,
                 )
-                ownerTypeDefs.size > 1 -> DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
-                    "the emitted MethodDef owner has conflicting local physical TypeDef identities",
-                    isConflict = true,
-                )
-                else -> DotNetGenericOwnerObservedMethodDefOwner.Local(checkNotNull(physicalOwner))
+                is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict ->
+                    DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
+                        ownerResolution.reason,
+                        isConflict = true,
+                    )
+                is DotNetGenericOwnerObservedLocalTypeDefResolution.Known ->
+                    DotNetGenericOwnerObservedMethodDefOwner.Local(ownerResolution.typeDef)
             }
             val returnCarrier = when (val returnType = raw.signature.returnType) {
                 DotNetIlReturnType.Void -> DotNetGenericOwnerObservedMethodCarrier.Leaf(
@@ -2255,6 +2320,7 @@ internal class DotNetIlEmitter(
                 }
             DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
                 physicalFunction = raw.function,
+                physicalMethodIdentity = raw.genericOwnerPhysicalMethodIdentity,
                 physicalMethodOwner = observedOwner,
                 physicalMethodNameForDiagnostics = raw.physicalMethodNameForDiagnostics,
                 visibility = raw.visibility,
@@ -3351,6 +3417,7 @@ internal class DotNetIlEmitter(
                 return
             }
             val memberTypeMapper = typeMapperForMember(member)
+            val recordedInfo = classFunctions[member]
             val memberInfo = DotNetIlFunctionInfo(
                 classInfo,
                 if (member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
@@ -3358,7 +3425,12 @@ internal class DotNetIlEmitter(
                 } else {
                     member.dotNetSignature(memberTypeMapper)
                 },
-                classFunctions[member]?.physicalMethodName,
+                recordedInfo?.physicalMethodName,
+                if (recordedInfo != null) {
+                    recordedInfo.genericOwnerPhysicalMethodIdentity
+                } else {
+                    genericOwnerPhysicalMethodDefEmissionBindings[member]
+                },
             )
             classFunctions.putLocal(member, memberInfo)
             val rendered = try {
@@ -3661,6 +3733,11 @@ internal class DotNetIlEmitter(
                 classInfo,
                 member.dotNetSignature(signatureTypeMapper),
                 recordedInfo?.physicalMethodName,
+                if (recordedInfo != null) {
+                    recordedInfo.genericOwnerPhysicalMethodIdentity
+                } else {
+                    genericOwnerPhysicalMethodDefEmissionBindings[member]
+                },
             )
             viewFunctions[member] = memberInfo
             val rendered = DotNetIlMethodCodegen(

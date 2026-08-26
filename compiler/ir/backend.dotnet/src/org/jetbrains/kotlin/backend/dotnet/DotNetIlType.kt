@@ -460,6 +460,13 @@ internal class DotNetIlFunctionInfo(
     val owner: DotNetIlClassInfo,
     val signature: DotNetIlMethodSignature,
     val physicalMethodName: String? = null,
+    /**
+     * Lowering-selected generic-owner MethodDef identity materialized on this concrete emission
+     * instance. Null means that this MethodDef is outside the currently recorded generic-owner
+     * families; [DotNetGenericOwnerPhysicalMethodDefIdentity.Local.role] may itself be null for
+     * the explicitly role-less semantic capability-interface slot.
+     */
+    val genericOwnerPhysicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local? = null,
 ) {
     /** Whether this is an instance method of a user class (see [DotNetIlMethodSignature.hasThis]). */
     val isInstance: Boolean
