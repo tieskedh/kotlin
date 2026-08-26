@@ -634,6 +634,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             val hook = entry.value
             val owner = source.parent as IrClass
             hook.body = source.moveBodyTo(hook)?.also { body ->
+                if (context.configuration.dotNetGenericOwnerRehearsal) {
+                    DotNetGenericOwnerPhysicalValueShadowAnalysis(context).captureBeforeSemanticRemap(
+                        owner = owner,
+                        source = source,
+                        physical = hook,
+                        body = body,
+                    )
+                }
+
                 fun IrExpression?.isCurrentHookReceiver(): Boolean = when (this) {
                     is IrGetValue -> symbol.owner === hook.parameters[0]
                     is IrTypeOperatorCall ->
