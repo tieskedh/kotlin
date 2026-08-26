@@ -104,6 +104,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowStatus
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueLocalSelectionKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementContinuity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementRelation
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalizedOverrideSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
@@ -459,6 +463,11 @@ private class BackendCliDotNetFacade(
             snapshots = completedOutput.genericOwnerPhysicalValueShadows,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
+        validateGenericOwnerPhysicalValuePlacementComparison(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            comparisons = completedOutput.genericOwnerPhysicalValuePlacementComparisons,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         System.getProperty(GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY)?.let { exportPath ->
             check(genericOwnerRehearsal) {
                 "A generic-owner rehearsal product can only be exported from the rehearsal epoch"
@@ -655,6 +664,99 @@ private class BackendCliDotNetFacade(
             }
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+/**
+ * Correlates the origin-independent shadow with the emitter's existing local selection without
+ * authorizing either side to affect the other.
+ */
+private fun validateGenericOwnerPhysicalValuePlacementComparison(
+    genericOwnerRehearsal: Boolean,
+    comparisons: List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
+    testDataFile: File,
+) {
+    val testData = testDataFile.readText()
+    val probesSourceAlias = GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE_MARKER in testData
+    val probesCompilerAlias = GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE_MARKER in testData
+    if (!probesSourceAlias && !probesCompilerAlias) return
+    if (!genericOwnerRehearsal) {
+        check(comparisons.isEmpty()) {
+            "The production erased epoch must not publish local-placement comparisons: $comparisons"
+        }
+        return
+    }
+
+    fun hasExactSelfPrediction(
+        comparison: DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot,
+        ownerSuffix: String,
+    ): Boolean = comparison.prediction.let { prediction ->
+        prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                prediction.initializerProducedCarrier.let { carrier ->
+                    carrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                            carrier.localOwnerName?.endsWith(ownerSuffix) == true &&
+                            carrier.ownerParameterIndices == listOf(0) &&
+                            carrier.parameterBinderOwnerName?.endsWith(ownerSuffix) == true
+                } && prediction.storageCarrier == prediction.initializerProducedCarrier &&
+                prediction.guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                prediction.guaranteedViews.singleOrNull()?.let { view ->
+                    view.carrier == prediction.storageCarrier &&
+                            DotNetGenericOwnerPhysicalValueShadowEvidence.CURRENT_PHYSICAL_RECEIVER in
+                            view.evidence
+                } == true && prediction.selectedViewLineage.isEmpty() &&
+                prediction.initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                prediction.contentsNullState == DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL
+    }
+
+    if (probesSourceAlias) {
+        val sourceAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("ShadowOwner") &&
+                    comparison.prediction.sourceFunctionName == "observe" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
+                    comparison.prediction.variableName == "sourceDeclaredExactWidening"
+        }
+        check(sourceAlias?.let { comparison ->
+            hasExactSelfPrediction(comparison, "ShadowOwner") &&
+                    comparison.continuity == DotNetGenericOwnerPhysicalValuePlacementContinuity.STABLE &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("ShadowOwner") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.DIFFERENT &&
+                    comparison.actualStorageCarrier.let { carrier ->
+                        carrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+                                carrier.localOwnerName?.endsWith("ShadowOwner") == true
+                    }
+        } == true) {
+            "The explicit source alias must expose one stable exact-to-semantic contrast: " +
+                    "source=$sourceAlias, all=$comparisons"
+        }
+    }
+
+    if (probesCompilerAlias) {
+        val observed = comparisons.filter { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSelfView") &&
+                    comparison.prediction.sourceFunctionName == "indexOf" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER
+        }
+        val compilerAliases = observed.filter { comparison ->
+            hasExactSelfPrediction(comparison, "InlineSelfView")
+        }
+        check(compilerAliases.isNotEmpty() && compilerAliases.all { comparison ->
+            comparison.continuity != DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.EXACT_GENERIC_OWNER_OVERRIDE &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH &&
+                    comparison.actualStorageCarrier == comparison.prediction.storageCarrier
+        }) {
+            "Compiler aliases must match the origin-independent exact prediction: " +
+                    "observed=$observed, all=$comparisons"
+        }
+        check(observed.size == compilerAliases.size) {
+            "The compiler-alias probe contains an unexplained final local: $observed"
+        }
     }
 }
 
@@ -4394,6 +4496,10 @@ private const val GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsalDir"
 private const val GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE"
+private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE"
+private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =

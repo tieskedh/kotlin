@@ -28,7 +28,15 @@ enum class DotNetGenericOwnerPhysicalValueShadowStatus {
 enum class DotNetGenericOwnerPhysicalValueShadowCarrierKind {
     OBJECT,
     LOCAL_OWNER_CONSTRUCTION,
+    SEMANTIC_CAPABILITY,
     UNKNOWN,
+}
+
+/** Which physical TypeDef of one local Kotlin interface owns a construction. */
+enum class DotNetGenericOwnerPhysicalValueShadowTypeDefView {
+    CANONICAL,
+    DECLARED,
+    EXACT,
 }
 
 /** Unknown proof differs from a known, possibly empty, guaranteed-view set. */
@@ -64,19 +72,93 @@ data class DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
     val kind: DotNetGenericOwnerPhysicalValueShadowCarrierKind,
     val localOwnerName: String? = null,
     val ownerParameterIndices: List<Int> = emptyList(),
+    val localTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView? = null,
+    val parameterBinderOwnerName: String? = null,
+    val parameterBinderTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView? = null,
 ) {
     init {
         require(ownerParameterIndices.all { index -> index >= 0 }) {
             "a physical-value shadow carrier cannot reference a negative owner-parameter index"
         }
         require(
-            if (kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION) {
-                !localOwnerName.isNullOrEmpty() && ownerParameterIndices.isNotEmpty()
-            } else {
-                localOwnerName == null && ownerParameterIndices.isEmpty()
+            when (kind) {
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION ->
+                    !localOwnerName.isNullOrEmpty() && ownerParameterIndices.isNotEmpty() &&
+                            !parameterBinderOwnerName.isNullOrEmpty()
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY ->
+                    !localOwnerName.isNullOrEmpty() && ownerParameterIndices.isEmpty() &&
+                            localTypeDefView == null && parameterBinderOwnerName == null &&
+                            parameterBinderTypeDefView == null
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN,
+                -> localOwnerName == null && ownerParameterIndices.isEmpty() &&
+                        localTypeDefView == null && parameterBinderOwnerName == null &&
+                        parameterBinderTypeDefView == null
             }
         ) {
-            "only a local-owner carrier may name an owner or its parameter indices"
+            "a physical-value shadow carrier has incoherent owner, parameter, or view data"
+        }
+    }
+}
+
+/** Existing reason why the emitter selected one verifier-visible local carrier. */
+enum class DotNetGenericOwnerPhysicalValueLocalSelectionKind {
+    DECLARED_TYPE,
+    EXACT_ARRAY_OVERRIDE,
+    EXACT_GENERIC_OWNER_OVERRIDE,
+    OPEN_NULLABLE_ARRAY_OVERRIDE,
+    NESTED_GENERIC_CONSTRUCTION_OVERRIDE,
+}
+
+/** Whether an optional pre-remap record remained the same value fact at final routing. */
+enum class DotNetGenericOwnerPhysicalValuePlacementContinuity {
+    NOT_OBSERVED,
+    STABLE,
+    DIVERGED,
+}
+
+/** Read-only relation between predicted storage and the final emitted local slot. */
+enum class DotNetGenericOwnerPhysicalValuePlacementRelation {
+    MATCH,
+    DIFFERENT,
+    PREDICTION_UNSUPPORTED,
+    PRE_FINAL_DIVERGENCE,
+    NOT_EMITTED,
+    AMBIGUOUS,
+    ACTUAL_UNBINDABLE,
+}
+
+/**
+ * IR-free comparison produced only after the final successful emitter fixpoint.
+ *
+ * It observes local placement; it does not prove the carrier produced by the initializer or the
+ * conversions used to place it, and no compiler decision may consume it.
+ */
+data class DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot(
+    val prediction: DotNetGenericOwnerPhysicalValueShadowSnapshot,
+    val actualPhysicalMethodOwnerName: String?,
+    val actualPhysicalMethodOwnerTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView?,
+    val actualStorageCarrier: DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot,
+    val actualSelectionKind: DotNetGenericOwnerPhysicalValueLocalSelectionKind?,
+    val continuity: DotNetGenericOwnerPhysicalValuePlacementContinuity,
+    val relation: DotNetGenericOwnerPhysicalValuePlacementRelation,
+    val diagnostic: String?,
+) {
+    init {
+        require(prediction.phase == DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING) {
+            "an emitted local placement must compare with the final-routing prediction"
+        }
+        require(actualPhysicalMethodOwnerName != null ||
+                actualPhysicalMethodOwnerTypeDefView == null) {
+            "an emitted local placement view requires its physical MethodDef owner"
+        }
+        require(relation != DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH ||
+                prediction.storageCarrier == actualStorageCarrier &&
+                prediction.storageCarrier.kind != DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN) {
+            "a matching physical-value placement requires equal known carriers"
+        }
+        require(diagnostic == null || diagnostic.isNotEmpty()) {
+            "a physical-value placement diagnostic cannot be empty"
         }
     }
 }
