@@ -90,6 +90,99 @@ data class DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot(
     }
 }
 
+/** Public diagnostic vocabulary for an exact final TypeDef accessibility mask. */
+enum class DotNetGenericOwnerSealedEmissionTypeDefVisibilitySnapshot {
+    PUBLIC,
+    NOT_PUBLIC,
+    NESTED_PUBLIC,
+    NESTED_PRIVATE,
+    NESTED_ASSEMBLY,
+    NESTED_FAMILY,
+}
+
+data class DotNetGenericOwnerSealedEmissionTypeDefFlagsSnapshot(
+    val visibility: DotNetGenericOwnerSealedEmissionTypeDefVisibilitySnapshot,
+    val isAutoLayout: Boolean,
+    val isAnsi: Boolean,
+    val isInterface: Boolean,
+    val isAbstract: Boolean,
+    val isSealed: Boolean,
+    val isBeforeFieldInit: Boolean,
+)
+
+data class DotNetGenericOwnerSealedEmissionMethodDefFlagsSnapshot(
+    val visibility: DotNetGenericOwnerPhysicalMethodDefEmissionVisibility,
+    val isInstance: Boolean,
+    val isVirtual: Boolean,
+    val isNewSlot: Boolean,
+    val isAbstract: Boolean,
+    val isFinal: Boolean,
+    val isHideBySig: Boolean,
+    val isSpecialName: Boolean,
+    val isRuntimeSpecialName: Boolean,
+)
+
+data class DotNetGenericOwnerSealedEmissionTypeDefSnapshot(
+    val kind: DotNetGenericOwnerCompleteEmissionTypeKindSnapshot,
+    val physicalPath: List<String>,
+    val flags: DotNetGenericOwnerSealedEmissionTypeDefFlagsSnapshot,
+    val structural: DotNetGenericOwnerCompleteEmissionTypeDefSnapshot,
+)
+
+data class DotNetGenericOwnerSealedEmissionMethodDefSnapshot(
+    val kind: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
+    val physicalName: String,
+    val flags: DotNetGenericOwnerSealedEmissionMethodDefFlagsSnapshot,
+    val structural: DotNetGenericOwnerCompleteEmissionMethodDefSnapshot,
+    val header: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
+)
+
+/** One fail-closed family-scoped outcome at the sealed-emission authority epoch. */
+data class DotNetGenericOwnerSealedEmissionFamilySnapshot(
+    val scope: DotNetIlEmissionScope,
+    val ownerName: String,
+    val logicalMemberName: String,
+    val implementationOwnerName: String,
+    val status: DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus,
+    val diagnostics: List<String>,
+    val typeDefs: List<DotNetGenericOwnerSealedEmissionTypeDefSnapshot>,
+    val methodDefs: List<DotNetGenericOwnerSealedEmissionMethodDefSnapshot>,
+    val methodImpls: List<DotNetGenericOwnerCompleteEmissionMethodImplSnapshot>,
+) {
+    init {
+        require(ownerName.isNotEmpty() && logicalMemberName.isNotEmpty() &&
+                implementationOwnerName.isNotEmpty() && diagnostics.all(String::isNotEmpty)) {
+            "a sealed-emission family outcome requires non-empty labels and diagnostics"
+        }
+        if (status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH) {
+            require(diagnostics.isEmpty() &&
+                    typeDefs.size == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.entries.size &&
+                    typeDefs.map { row -> row.kind }.toSet() ==
+                    DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.entries.toSet() &&
+                    typeDefs.all { row -> row.kind == row.structural.kind } &&
+                    methodDefs.size == DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.entries.size &&
+                    methodDefs.map { row -> row.kind }.toSet() ==
+                    DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.entries.toSet() &&
+                    methodDefs.all { row -> row.kind == row.structural.kind } &&
+                    methodImpls.size == DotNetGenericOwnerCompleteEmissionMethodImplKindSnapshot.entries.size &&
+                    methodImpls.map { row -> row.kind }.toSet() ==
+                    DotNetGenericOwnerCompleteEmissionMethodImplKindSnapshot.entries.toSet()) {
+                "a matching sealed-emission family requires every actual physical row exactly once"
+            }
+        } else {
+            require(diagnostics.isNotEmpty() && typeDefs.isEmpty() && methodDefs.isEmpty() &&
+                    methodImpls.isEmpty()) {
+                "an unsealed family must retain its failure and publish no authoritative rows"
+            }
+        }
+    }
+}
+
+internal data class DotNetGenericOwnerCompleteEmissionFamilyProducts(
+    val comparison: DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot,
+    val sealed: DotNetGenericOwnerSealedEmissionFamilySnapshot,
+)
+
 internal data class DotNetGenericOwnerCompleteEmissionScopeObservations(
     val scope: DotNetIlEmissionScope,
     val typeDefs: List<DotNetGenericOwnerPhysicalTypeDefEmissionObservation>,
@@ -103,6 +196,11 @@ private data class CompleteExpectedMethod(
     val identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
     val reference: DotNetGenericOwnerPhysicalMethodDefReference,
     val key: DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey,
+)
+
+private data class CompleteActualMethod(
+    val sealedRow: DotNetGenericOwnerSealedEmissionMethodDefRow,
+    val snapshot: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
 )
 
 private sealed interface CompleteConversion<out T> {
@@ -139,11 +237,78 @@ private class CompleteRowsAccumulator<T> {
     }
 }
 
+private fun <T, R> DotNetGenericOwnerCompleteEmissionRowsEvidence<T>.mapRows(
+    transform: (T) -> R,
+): DotNetGenericOwnerCompleteEmissionRowsEvidence<R> = when (this) {
+    is DotNetGenericOwnerCompleteEmissionRowsEvidence.Known ->
+        DotNetGenericOwnerCompleteEmissionRowsEvidence.Known(rows.map(transform))
+    is DotNetGenericOwnerCompleteEmissionRowsEvidence.Unavailable ->
+        DotNetGenericOwnerCompleteEmissionRowsEvidence.Unavailable(reason)
+    is DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict ->
+        DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(reason)
+}
+
+private fun sealedManifestEvidence(
+    typeDefs: DotNetGenericOwnerCompleteEmissionRowsEvidence<DotNetGenericOwnerSealedEmissionTypeDefRow>,
+    methodDefs: DotNetGenericOwnerCompleteEmissionRowsEvidence<CompleteActualMethod>,
+    methodImpls: DotNetGenericOwnerCompleteEmissionRowsEvidence<DotNetGenericOwnerCompleteEmissionMethodImplRow>,
+): DotNetGenericOwnerSealedEmissionManifestEvidence {
+    val evidence = listOf(typeDefs, methodDefs, methodImpls)
+    val conflicts = evidence.filterIsInstance<DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict>()
+    if (conflicts.isNotEmpty()) {
+        return DotNetGenericOwnerSealedEmissionManifestEvidence.Conflict(
+            conflicts.joinToString("; ") { conflict -> conflict.reason },
+        )
+    }
+    val unavailable = evidence.filterIsInstance<DotNetGenericOwnerCompleteEmissionRowsEvidence.Unavailable>()
+    if (unavailable.isNotEmpty()) {
+        return DotNetGenericOwnerSealedEmissionManifestEvidence.Unavailable(
+            unavailable.joinToString("; ") { missing -> missing.reason },
+        )
+    }
+    return DotNetGenericOwnerSealedEmissionManifestEvidence.Known(
+        typeDefs = (typeDefs as DotNetGenericOwnerCompleteEmissionRowsEvidence.Known).rows,
+        methodDefs = (methodDefs as DotNetGenericOwnerCompleteEmissionRowsEvidence.Known).rows.map { method ->
+            method.sealedRow
+        },
+        methodImpls = (methodImpls as DotNetGenericOwnerCompleteEmissionRowsEvidence.Known).rows,
+    )
+}
+
+private fun DotNetGenericOwnerSealedEmissionManifestEvidence.requireImplicitNaturalImplementationNameMatch(
+    expectedMethods: List<CompleteExpectedMethod>,
+): DotNetGenericOwnerSealedEmissionManifestEvidence {
+    if (this !is DotNetGenericOwnerSealedEmissionManifestEvidence.Known) return this
+    val naturalKey = expectedMethods.single { method ->
+        method.kind == DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.NATURAL_INTERFACE_SLOT
+    }.key
+    val implementationKey = expectedMethods.single { method ->
+        method.kind == DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.IMPLEMENTATION_TYPED_ENTRY
+    }.key
+    val rowsByKey = methodDefs.associateBy { row -> row.structural.identityKey }
+    val natural = rowsByKey[naturalKey] ?: return this
+    val implementation = rowsByKey[implementationKey] ?: return this
+    return if (natural.physicalName == implementation.physicalName) {
+        this
+    } else {
+        DotNetGenericOwnerSealedEmissionManifestEvidence.Conflict(
+            "implicit natural-interface mapping requires the final slot and implementation MethodDefs to share a name",
+        )
+    }
+}
+
 internal fun compareDotNetGenericOwnerCompleteEmissionFamily(
     authority: DotNetLocalGenericOwnerPhysicalAuthority,
     family: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily,
     successfulEmissions: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
-): DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot {
+): DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot =
+    inspectDotNetGenericOwnerCompleteEmissionFamily(authority, family, successfulEmissions).comparison
+
+internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
+    authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    family: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily,
+    successfulEmissions: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
+): DotNetGenericOwnerCompleteEmissionFamilyProducts {
     val declarations = checkNotNull(authority.boundDeclarations) {
         "complete final-emission comparison requires BOUND declaration authority"
     }
@@ -231,7 +396,7 @@ internal fun compareDotNetGenericOwnerCompleteEmissionFamily(
         )
     }
     val methodsByIdentity = expectedMethods.associateBy { method -> method.identity }
-    val expectedMethodImplRows = family.methodImpls.map { entry ->
+    val expectedMethodImplRowsByKind = family.methodImpls.mapValues { entry ->
         val methodImpl = entry.value
         val body = methodsByIdentity.entries.single { entry ->
             entry.key.sameLocalMethodIdentityAs(methodImpl.body)
@@ -255,6 +420,7 @@ internal fun compareDotNetGenericOwnerCompleteEmissionFamily(
             declarationMethodDefKey = declaration.key,
         )
     }
+    val expectedMethodImplRows = expectedMethodImplRowsByKind.values.toList()
     val expected = DotNetGenericOwnerCompleteEmissionManifest(
         expectedTypeRows,
         expectedMethodRows,
@@ -276,42 +442,50 @@ internal fun compareDotNetGenericOwnerCompleteEmissionFamily(
         matchingScopes.size > 1 -> "one physical emission scope published more than one final observation set"
         else -> null
     }
-    val actual = if (sharedConflict != null) {
-        DotNetGenericOwnerCompleteEmissionManifestEvidence(
-            DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(sharedConflict),
-            DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(sharedConflict),
-            DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(sharedConflict),
-        )
+    val actualTypeDefs: DotNetGenericOwnerCompleteEmissionRowsEvidence<
+            DotNetGenericOwnerSealedEmissionTypeDefRow,
+            >
+    val actualMethodDefs: DotNetGenericOwnerCompleteEmissionRowsEvidence<CompleteActualMethod>
+    val actualMethodImpls: DotNetGenericOwnerCompleteEmissionRowsEvidence<
+            DotNetGenericOwnerCompleteEmissionMethodImplRow,
+            >
+    if (sharedConflict != null) {
+        actualTypeDefs = DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(sharedConflict)
+        actualMethodDefs = DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(sharedConflict)
+        actualMethodImpls = DotNetGenericOwnerCompleteEmissionRowsEvidence.Conflict(sharedConflict)
     } else {
         val currentTypeDefs = current?.typeDefs.orEmpty()
         val currentMethodDefs = current?.methodDefs.orEmpty()
         val currentMethodImpls = current?.methodImpls.orEmpty()
-        DotNetGenericOwnerCompleteEmissionManifestEvidence(
-            actualCompleteTypeDefs(
-                authority,
-                allocator,
-                family,
-                currentMethod,
-                currentTypeDefs,
-                other.flatMap { emission -> emission.typeDefs },
-            ),
-            actualCompleteMethodDefs(
-                authority,
-                allocator,
-                expectedMethods,
-                currentMethodDefs,
-                other.flatMap { emission -> emission.methodDefs },
-            ),
-            actualCompleteMethodImpls(
-                authority,
-                allocator,
-                family,
-                expectedMethods,
-                currentMethodImpls,
-                other.flatMap { emission -> emission.methodImpls },
-            ),
+        actualTypeDefs = actualCompleteTypeDefs(
+            authority,
+            allocator,
+            family,
+            currentMethod,
+            currentTypeDefs,
+            other.flatMap { emission -> emission.typeDefs },
+        )
+        actualMethodDefs = actualCompleteMethodDefs(
+            authority,
+            allocator,
+            expectedMethods,
+            currentMethodDefs,
+            other.flatMap { emission -> emission.methodDefs },
+        )
+        actualMethodImpls = actualCompleteMethodImpls(
+            authority,
+            allocator,
+            family,
+            expectedMethods,
+            currentMethodImpls,
+            other.flatMap { emission -> emission.methodImpls },
         )
     }
+    val actual = DotNetGenericOwnerCompleteEmissionManifestEvidence(
+        actualTypeDefs.mapRows { row -> row.structural },
+        actualMethodDefs.mapRows { method -> method.sealedRow.structural },
+        actualMethodImpls,
+    )
     val comparison = compareDotNetGenericOwnerCompleteEmissionManifest(expected, actual)
     val expectedTypeSnapshots = family.types.map { entry ->
         val kind = entry.key
@@ -366,15 +540,18 @@ internal fun compareDotNetGenericOwnerCompleteEmissionFamily(
             methodKind(methodImpl.declaration).toSnapshot(),
         )
     }
-    return DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot(
+    val ownerName = checkNotNull(authority.inputOrNull(
+        family.types.getValue(DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE),
+    )).logicalOwnerName
+    val implementationOwnerName = checkNotNull(authority.inputOrNull(
+        family.types.getValue(DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS),
+    )).logicalOwnerName
+    val logicalMemberName = family.logicalMember.owner.name.asString()
+    val comparisonSnapshot = DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot(
         scope = expectedScope,
-        ownerName = checkNotNull(authority.inputOrNull(
-            family.types.getValue(DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.NATURAL_INTERFACE),
-        )).logicalOwnerName,
-        logicalMemberName = family.logicalMember.owner.name.asString(),
-        implementationOwnerName = checkNotNull(authority.inputOrNull(
-            family.types.getValue(DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS),
-        )).logicalOwnerName,
+        ownerName = ownerName,
+        logicalMemberName = logicalMemberName,
+        implementationOwnerName = implementationOwnerName,
         status = comparison.status,
         typeDefs = comparison.typeDefs.toSnapshot(expected.typeDefs.size, actual.typeDefs),
         methodDefs = comparison.methodDefs.toSnapshot(expected.methodDefs.size, actual.methodDefs),
@@ -383,6 +560,145 @@ internal fun compareDotNetGenericOwnerCompleteEmissionFamily(
         expectedMethodDefs = expectedMethodSnapshots,
         expectedMethodImpls = expectedMethodImplSnapshots,
     )
+    val actualSealedEvidence = sealedManifestEvidence(
+        actualTypeDefs,
+        actualMethodDefs,
+        actualMethodImpls,
+    ).requireImplicitNaturalImplementationNameMatch(expectedMethods)
+    val sealedInspection = inspectDotNetGenericOwnerSealedEmissionSignatureIndex(
+        expected,
+        actualSealedEvidence,
+    )
+    val sealedSnapshot = when (val sealedBinding = sealedInspection.binding) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+            val index = sealedBinding.value
+            val typeKindsByKey = family.types.map { entry ->
+                allocator.expectedType(entry.value, typeDescriptions.getValue(entry.key)) to entry.key
+            }.toMap()
+            val typeOwnerNamesByKey = family.types.map { entry ->
+                allocator.expectedType(entry.value, typeDescriptions.getValue(entry.key)) to
+                        checkNotNull(authority.inputOrNull(entry.value)).logicalOwnerName
+            }.toMap()
+            val aliasViewsByKey = family.typeAliases.values.flatten().associate { alias ->
+                allocator.alias(alias) to alias.view?.toSnapshot()
+            }
+            val methodsByKey = expectedMethods.associateBy(CompleteExpectedMethod::key)
+            val methodKindsByKey = expectedMethods.associate { method -> method.key to method.kind }
+            val actualMethodsByKey = (actualMethodDefs as
+                    DotNetGenericOwnerCompleteEmissionRowsEvidence.Known).rows.associateBy { method ->
+                method.sealedRow.structural.identityKey
+            }
+            val sealedTypeDefs = typeKindsByKey.map { entry ->
+                val key = entry.key
+                val kind = entry.value.toSnapshot()
+                val row = when (val binding = index.typeDef(key)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    else -> error("a bound sealed family lost a selected TypeDef")
+                }
+                val structural = row.structural
+                DotNetGenericOwnerSealedEmissionTypeDefSnapshot(
+                    kind = kind,
+                    physicalPath = row.physicalPath,
+                    flags = row.flags.toSnapshot(),
+                    structural = DotNetGenericOwnerCompleteEmissionTypeDefSnapshot(
+                        kind = kind,
+                        ownerName = typeOwnerNamesByKey.getValue(key),
+                        physicalAliasViews = structural.aliases.map { alias ->
+                            aliasViewsByKey.getValue(alias)
+                        },
+                        genericArity = structural.genericArity,
+                        category = structural.category,
+                        genericParameterVariances = structural.genericParameters.map { parameter ->
+                            parameter.variance.toSnapshot()
+                        },
+                        genericParameterConstraintCounts = structural.genericParameters.map { parameter ->
+                            parameter.constraints.size
+                        },
+                        baseTypeEdgeCount = structural.directEdges.count { edge ->
+                            edge.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+                        },
+                        interfaceEdgeCount = structural.directEdges.count { edge ->
+                            edge.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE
+                        },
+                    ),
+                )
+            }
+            val sealedMethodDefs = methodKindsByKey.map { entry ->
+                val key = entry.key
+                val kind = entry.value.toSnapshot()
+                val row = when (val binding = index.methodDef(key)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    else -> error("a bound sealed family lost a selected MethodDef")
+                }
+                val method = methodsByKey.getValue(key)
+                DotNetGenericOwnerSealedEmissionMethodDefSnapshot(
+                    kind = kind,
+                    physicalName = row.physicalName,
+                    flags = row.toFlagsSnapshot(),
+                    structural = DotNetGenericOwnerCompleteEmissionMethodDefSnapshot(
+                        kind = kind,
+                        role = method.identity.role,
+                        ownerKind = typeKindsByKey.getValue(row.structural.header.owner).toSnapshot(),
+                    ),
+                    header = actualMethodsByKey.getValue(key).snapshot,
+                )
+            }
+            val sealedMethodImpls = expectedMethodImplRowsByKind.map { entry ->
+                val expectedRow = entry.value
+                val row = index.methodImpls(
+                    expectedRow.implementingTypeDefKey,
+                    expectedRow.bodyMethodDefKey,
+                ).single { actualRow -> actualRow == expectedRow }
+                val declarationOwnerType = when (val carrier = row.declarationOwner) {
+                    is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction -> carrier.definition
+                    else -> error("a bound complete-family MethodImpl requires a constructed declaration owner")
+                }
+                DotNetGenericOwnerCompleteEmissionMethodImplSnapshot(
+                    kind = entry.key.toSnapshot(),
+                    implementingTypeKind = typeKindsByKey.getValue(row.implementingTypeDefKey).toSnapshot(),
+                    bodyMethodKind = methodKindsByKey.getValue(row.bodyMethodDefKey).toSnapshot(),
+                    declarationOwnerTypeKind = typeKindsByKey.getValue(declarationOwnerType).toSnapshot(),
+                    declarationMethodKind = methodKindsByKey.getValue(row.declarationMethodDefKey).toSnapshot(),
+                )
+            }
+            DotNetGenericOwnerSealedEmissionFamilySnapshot(
+                scope = expectedScope,
+                ownerName = ownerName,
+                logicalMemberName = logicalMemberName,
+                implementationOwnerName = implementationOwnerName,
+                status = DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH,
+                diagnostics = emptyList(),
+                typeDefs = sealedTypeDefs,
+                methodDefs = sealedMethodDefs,
+                methodImpls = sealedMethodImpls,
+            )
+        }
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+            DotNetGenericOwnerSealedEmissionFamilySnapshot(
+                expectedScope,
+                ownerName,
+                logicalMemberName,
+                implementationOwnerName,
+                DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.CONFLICT,
+                sealedInspection.diagnostics.ifEmpty { listOf(sealedBinding.reason) },
+                emptyList(),
+                emptyList(),
+                emptyList(),
+            )
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            DotNetGenericOwnerSealedEmissionFamilySnapshot(
+                expectedScope,
+                ownerName,
+                logicalMemberName,
+                implementationOwnerName,
+                DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.UNAVAILABLE,
+                sealedInspection.diagnostics,
+                emptyList(),
+                emptyList(),
+                emptyList(),
+            )
+    }
+    return DotNetGenericOwnerCompleteEmissionFamilyProducts(comparisonSnapshot, sealedSnapshot)
 }
 
 private fun actualCompleteTypeDefs(
@@ -392,7 +708,7 @@ private fun actualCompleteTypeDefs(
     currentMethod: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
     observations: List<DotNetGenericOwnerPhysicalTypeDefEmissionObservation>,
     otherScopeObservations: List<DotNetGenericOwnerPhysicalTypeDefEmissionObservation>,
-): DotNetGenericOwnerCompleteEmissionRowsEvidence<DotNetGenericOwnerCompleteEmissionTypeDefRow> {
+): DotNetGenericOwnerCompleteEmissionRowsEvidence<DotNetGenericOwnerSealedEmissionTypeDefRow> {
     val ownerSymbols = family.typeAliases.values.flatten().map { identity -> identity.owner }.toSet()
     fun touches(observation: DotNetGenericOwnerPhysicalTypeDefEmissionObservation): Boolean =
         observation.claimedAliases.any { alias -> alias.owner in ownerSymbols }
@@ -401,7 +717,7 @@ private fun actualCompleteTypeDefs(
             "a complete-family TypeDef was observed in another physical emission scope",
         )
     }
-    val accumulator = CompleteRowsAccumulator<DotNetGenericOwnerCompleteEmissionTypeDefRow>()
+    val accumulator = CompleteRowsAccumulator<DotNetGenericOwnerSealedEmissionTypeDefRow>()
     observations.filter(::touches).forEach { observation ->
         val owner = when (val physicalType = observation.physicalType) {
             is DotNetGenericOwnerObservedMethodDefOwner.Local -> physicalType.typeDef
@@ -464,13 +780,17 @@ private fun actualCompleteTypeDefs(
             }
         }
         accumulator.add(CompleteConversion.Known(
-            DotNetGenericOwnerCompleteEmissionTypeDefRow(
-                typeKey,
-                owner.aliases.map(allocator::alias),
-                owner.genericArity,
-                owner.category,
-                genericParameters,
-                edges,
+            DotNetGenericOwnerSealedEmissionTypeDefRow(
+                structural = DotNetGenericOwnerCompleteEmissionTypeDefRow(
+                    typeKey,
+                    owner.aliases.map(allocator::alias),
+                    owner.genericArity,
+                    owner.category,
+                    genericParameters,
+                    edges,
+                ),
+                physicalPath = observation.physicalTypePath,
+                flags = observation.flags,
             ),
         ))
     }
@@ -483,7 +803,7 @@ private fun actualCompleteMethodDefs(
     expected: List<CompleteExpectedMethod>,
     observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
     otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
-): DotNetGenericOwnerCompleteEmissionRowsEvidence<DotNetGenericOwnerCompleteEmissionMethodDefRow> {
+): DotNetGenericOwnerCompleteEmissionRowsEvidence<CompleteActualMethod> {
     fun touches(observation: DotNetGenericOwnerPhysicalMethodDefHeaderObservation): Boolean =
         expected.any { method ->
             method.emittedFunction === observation.physicalFunction ||
@@ -494,7 +814,7 @@ private fun actualCompleteMethodDefs(
             "a complete-family MethodDef was observed in another physical emission scope",
         )
     }
-    val accumulator = CompleteRowsAccumulator<DotNetGenericOwnerCompleteEmissionMethodDefRow>()
+    val accumulator = CompleteRowsAccumulator<CompleteActualMethod>()
     observations.filter(::touches).forEach { observation ->
         val identity = observation.physicalMethodIdentity
         if (identity == null) {
@@ -532,7 +852,21 @@ private fun actualCompleteMethodDefs(
         )) {
             is DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Known ->
                 accumulator.add(CompleteConversion.Known(
-                    DotNetGenericOwnerCompleteEmissionMethodDefRow(method.key, actual.shape),
+                    CompleteActualMethod(
+                        sealedRow = DotNetGenericOwnerSealedEmissionMethodDefRow(
+                            structural = DotNetGenericOwnerCompleteEmissionMethodDefRow(
+                                method.key,
+                                actual.shape,
+                            ),
+                            physicalName = observation.physicalMethodName,
+                            visibility = observation.visibility,
+                            dispatch = observation.dispatch,
+                            isHideBySig = observation.isHideBySig,
+                            isSpecialName = observation.isSpecialName,
+                            isRuntimeSpecialName = observation.isRuntimeSpecialName,
+                        ),
+                        snapshot = actual.snapshot,
+                    ),
                 ))
             is DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Unavailable ->
                 accumulator.add(CompleteConversion.Unavailable(actual.reason))
@@ -730,3 +1064,40 @@ private fun DotNetGenericOwnerPhysicalTypeParameterVariance.toSnapshot() =
 
 private fun DotNetGenericInterfaceView.toSnapshot() =
     DotNetGenericOwnerPhysicalValueShadowTypeDefView.valueOf(name)
+
+private fun DotNetIlRawTypeDefFlags.toSnapshot() =
+    DotNetGenericOwnerSealedEmissionTypeDefFlagsSnapshot(
+        visibility = DotNetGenericOwnerSealedEmissionTypeDefVisibilitySnapshot.valueOf(visibility.name),
+        isAutoLayout = layout == DotNetIlRawTypeDefLayout.AUTO,
+        isAnsi = stringFormat == DotNetIlRawTypeDefStringFormat.ANSI,
+        isInterface = isInterface,
+        isAbstract = isAbstract,
+        isSealed = isSealed,
+        isBeforeFieldInit = isBeforeFieldInit,
+    )
+
+private fun DotNetGenericOwnerSealedEmissionMethodDefRow.toFlagsSnapshot() =
+    DotNetGenericOwnerSealedEmissionMethodDefFlagsSnapshot(
+        visibility = when (visibility) {
+            DotNetIlRawMethodDefVisibility.PUBLIC ->
+                DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PUBLIC
+            DotNetIlRawMethodDefVisibility.FAMILY ->
+                DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.FAMILY
+            DotNetIlRawMethodDefVisibility.ASSEMBLY ->
+                DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.ASSEMBLY
+            DotNetIlRawMethodDefVisibility.FAMILY_OR_ASSEMBLY ->
+                DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.FAMILY_OR_ASSEMBLY
+            DotNetIlRawMethodDefVisibility.FAMILY_AND_ASSEMBLY ->
+                DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.FAMILY_AND_ASSEMBLY
+            DotNetIlRawMethodDefVisibility.PRIVATE ->
+                DotNetGenericOwnerPhysicalMethodDefEmissionVisibility.PRIVATE
+        },
+        isInstance = dispatch.isInstance,
+        isVirtual = dispatch.isVirtual,
+        isNewSlot = dispatch.isNewSlot,
+        isAbstract = dispatch.isAbstract,
+        isFinal = dispatch.isFinal,
+        isHideBySig = isHideBySig,
+        isSpecialName = isSpecialName,
+        isRuntimeSpecialName = isRuntimeSpecialName,
+    )

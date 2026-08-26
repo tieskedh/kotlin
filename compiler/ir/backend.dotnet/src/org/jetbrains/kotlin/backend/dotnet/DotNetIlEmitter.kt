@@ -2348,9 +2348,12 @@ internal class DotNetIlEmitter(
                 physicalFunction = raw.function,
                 physicalMethodIdentity = raw.genericOwnerPhysicalMethodIdentity,
                 physicalMethodOwner = observedOwner,
-                physicalMethodNameForDiagnostics = raw.physicalMethodNameForDiagnostics,
+                physicalMethodName = raw.physicalMethodName,
                 visibility = raw.visibility,
                 dispatch = raw.dispatch,
+                isHideBySig = raw.isHideBySig,
+                isSpecialName = raw.isSpecialName,
+                isRuntimeSpecialName = raw.isRuntimeSpecialName,
                 genericArity = raw.genericArity,
                 signature = DotNetGenericOwnerObservedMethodSignature(
                     receiverCarrier = receiverCarrier,
@@ -2492,6 +2495,8 @@ internal class DotNetIlEmitter(
                         if (distinct.none(identity::sameLocalTypeIdentityAs)) distinct += identity
                         distinct
                     },
+                physicalTypePath = raw.physicalTypePath,
+                flags = raw.flags,
                 genericParameters = raw.genericParameters.map { parameter ->
                     DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation(
                         parameter.variance,
@@ -3613,42 +3618,12 @@ internal class DotNetIlEmitter(
         } else {
             null
         }
-        typeDefEmissionObservations?.add(
-            DotNetIlRawTypeDefEmissionObservation(
-                physicalType = classInfo,
-                category = if (irClass.isInterface) {
-                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
-                } else {
-                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
-                },
-                genericParameters = emittedGenericParameterDecisions.map { decision ->
-                    DotNetIlRawTypeDefGenericParameterObservation(
-                        decision.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
-                        decision.constraints,
-                    )
-                },
-                directSupertypes = buildList {
-                    if (!irClass.isInterface) {
-                        add(DotNetIlRawTypeDefEdgeObservation(
-                            DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
-                            if (baseClassRef == null) {
-                                DotNetIlRawTypeDefEdgeTarget.CoreObject
-                            } else if (observedBaseClassType != null) {
-                                DotNetIlRawTypeDefEdgeTarget.Type(checkNotNull(observedBaseClassType))
-                            } else {
-                                DotNetIlRawTypeDefEdgeTarget.Other(baseClassRef)
-                            },
-                        ))
-                    }
-                    finalInterfaceTypes.forEach { interfaceType ->
-                        add(DotNetIlRawTypeDefEdgeObservation(
-                            DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
-                            DotNetIlRawTypeDefEdgeTarget.Type(interfaceType),
-                        ))
-                    }
-                },
-            ),
-        )
+        val observedTypeDefGenericParameters = emittedGenericParameterDecisions.map { decision ->
+            DotNetIlRawTypeDefGenericParameterObservation(
+                decision.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
+                decision.constraints,
+            )
+        }
         var hasClassInitializer = false
         val declaredSignatureTypeMapper = declaredGenericTypeMapper.declaredGenericInterfaceSignatureView()
         val exactSignatureTypeMapper = exactGenericTypeMapper.declaredGenericInterfaceSignatureView()
@@ -3890,48 +3865,83 @@ internal class DotNetIlEmitter(
             }
         }
         var renderedExactView: RenderedClass? = null
-        val physicalIlText = buildString {
-            DotNetIlClassCodegen(
-                classInfo.ilClassName,
-                renderedMethods,
-                renderedFields,
-                renderedProperties,
-                renderedAttributes = irClass.dotNetPhysicalTypeAttributes(physicalTypeMapper),
-                isStaticHolder = irClass.origin == DOTNET_STATIC_HOLDER,
-                hasClassInitializer = hasClassInitializer,
-                isNested = classInfo.isNested,
-                nestedVisibility = irClass.dotNetNestedTypeVisibility(),
-                exported = !irClass.isOriginallyLocalDeclaration &&
-                        (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
-                renderedNestedClasses = renderedNestedClasses,
-                // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
-                // the JVM's ACC_FINAL); companions and objects never reach here as open — the
-                // shape gate keeps them final-only.
-                isOpen = irClass.modality == Modality.OPEN && !irClass.isAnnotationClass,
-                // Kotlin abstract and sealed classes are non-instantiable. Sealing remains a
-                // frontend restriction, like the sealed-interface model (abstractprobe_s1).
-                isAbstract = irClass.modality == Modality.ABSTRACT || irClass.modality == Modality.SEALED,
-                baseClassRef = baseClassRef,
-                isInterface = irClass.isInterface,
-                // JVM's class-signature writer also uses a LinkedHashSet here. A logical
-                // SuspendFunctionN and the Common-added FunctionN+1 capability intentionally map
-                // to the same physical CLR interface; retain one metadata edge without erasing
-                // either logical Kotlin supertype from IR/KLIB.
-                interfaceRefs = finalInterfaceTypes.map { interfaceType ->
-                    when (interfaceType) {
-                        is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
-                        is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature
-                        else -> error("Internal .NET backend error: non-class interface type $interfaceType")
+        val classCodegen = DotNetIlClassCodegen(
+            classInfo.ilClassName,
+            renderedMethods,
+            renderedFields,
+            renderedProperties,
+            renderedAttributes = irClass.dotNetPhysicalTypeAttributes(physicalTypeMapper),
+            isStaticHolder = irClass.origin == DOTNET_STATIC_HOLDER,
+            hasClassInitializer = hasClassInitializer,
+            isNested = classInfo.isNested,
+            nestedVisibility = irClass.dotNetNestedTypeVisibility(),
+            exported = !irClass.isOriginallyLocalDeclaration &&
+                    (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
+            renderedNestedClasses = renderedNestedClasses,
+            // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
+            // the JVM's ACC_FINAL); companions and objects never reach here as open — the
+            // shape gate keeps them final-only.
+            isOpen = irClass.modality == Modality.OPEN && !irClass.isAnnotationClass,
+            // Kotlin abstract and sealed classes are non-instantiable. Sealing remains a
+            // frontend restriction, like the sealed-interface model (abstractprobe_s1).
+            isAbstract = irClass.modality == Modality.ABSTRACT || irClass.modality == Modality.SEALED,
+            baseClassRef = baseClassRef,
+            isInterface = irClass.isInterface,
+            // JVM's class-signature writer also uses a LinkedHashSet here. A logical
+            // SuspendFunctionN and the Common-added FunctionN+1 capability intentionally map
+            // to the same physical CLR interface; retain one metadata edge without erasing
+            // either logical Kotlin supertype from IR/KLIB.
+            interfaceRefs = finalInterfaceTypes.map { interfaceType ->
+                when (interfaceType) {
+                    is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
+                    is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature
+                    else -> error("Internal .NET backend error: non-class interface type $interfaceType")
+                }
+            },
+            // The formal type-parameter list of a generic class/interface: `<'T'>`, the
+            // stage-2 constrained `<(class 'Base', class 'Mark') 'T'>`, or the interface
+            // variance form `<+ 'T'>` / `<- 'T'>` (genprobe_s8, genconstraintprobe_s1,
+            // genifaceprobe_s1).
+            genericParameters = emittedGenericParameterDecisions
+                .renderDotNetIlGenericParameterDecisions(),
+            coreLibraryReference = coreLibrary.reference,
+            physicalTypePath = classInfo.physicalPathComponents(),
+        )
+        typeDefEmissionObservations?.add(
+            DotNetIlRawTypeDefEmissionObservation(
+                physicalType = classInfo,
+                physicalTypePath = classCodegen.physicalTypePath,
+                flags = classCodegen.flags,
+                category = if (classCodegen.flags.isInterface) {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                } else {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                },
+                genericParameters = observedTypeDefGenericParameters,
+                directSupertypes = buildList {
+                    if (!classCodegen.flags.isInterface) {
+                        add(DotNetIlRawTypeDefEdgeObservation(
+                            DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
+                            if (baseClassRef == null) {
+                                DotNetIlRawTypeDefEdgeTarget.CoreObject
+                            } else if (observedBaseClassType != null) {
+                                DotNetIlRawTypeDefEdgeTarget.Type(checkNotNull(observedBaseClassType))
+                            } else {
+                                DotNetIlRawTypeDefEdgeTarget.Other(baseClassRef)
+                            },
+                        ))
+                    }
+                    finalInterfaceTypes.forEach { interfaceType ->
+                        add(DotNetIlRawTypeDefEdgeObservation(
+                            DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                            DotNetIlRawTypeDefEdgeTarget.Type(interfaceType),
+                        ))
                     }
                 },
-                // The formal type-parameter list of a generic class/interface: `<'T'>`, the
-                // stage-2 constrained `<(class 'Base', class 'Mark') 'T'>`, or the interface
-                // variance form `<+ 'T'>` / `<- 'T'>` (genprobe_s8, genconstraintprobe_s1,
-                // genifaceprobe_s1).
-                genericParameters = emittedGenericParameterDecisions
-                    .renderDotNetIlGenericParameterDecisions(),
-                coreLibraryReference = coreLibrary.reference,
-            ).generate(this)
+            ),
+        )
+        val physicalIlText = buildString {
+            classCodegen.generate(this)
             splitGenericInfo?.exactClassInfo?.let { exactClassInfo ->
                 val rendered = renderExactGenericInterfaceView(
                     irClass = irClass,
@@ -3991,24 +4001,7 @@ internal class DotNetIlEmitter(
             varianceOverrides = List(irClass.typeParameters.size) { Variance.INVARIANT },
         )
         val typeDefEmissionObservations = if (genericOwnerRehearsal) {
-            mutableListOf(
-                DotNetIlRawTypeDefEmissionObservation(
-                    physicalType = classInfo,
-                    category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
-                    genericParameters = emittedGenericParameterDecisions.map { decision ->
-                        DotNetIlRawTypeDefGenericParameterObservation(
-                            decision.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
-                            decision.constraints,
-                        )
-                    },
-                    directSupertypes = exactInterfaceTypes.map { interfaceType ->
-                        DotNetIlRawTypeDefEdgeObservation(
-                            DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
-                            DotNetIlRawTypeDefEdgeTarget.Type(interfaceType),
-                        )
-                    },
-                ),
-            )
+            mutableListOf<DotNetIlRawTypeDefEmissionObservation>()
         } else {
             null
         }
@@ -4077,31 +4070,57 @@ internal class DotNetIlEmitter(
             }
         }
 
-        val ilText = buildString {
-            DotNetIlClassCodegen(
-                classInfo.ilClassName,
-                renderedMethods,
-                renderedProperties = renderedProperties,
-                renderedAttributes = irClass.dotNetPhysicalTypeAttributes(signatureTypeMapper),
-                isNested = classInfo.isNested,
-                nestedVisibility = irClass.dotNetNestedTypeVisibility(),
-                exported = !irClass.isOriginallyLocalDeclaration &&
-                        (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
-                isAbstract = true,
-                isInterface = true,
-                interfaceRefs = exactInterfaceTypes.map { interfaceType ->
-                    when (interfaceType) {
-                        is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
-                        is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature
-                        else -> error(
-                            "Internal .NET backend error: non-class exact interface type $interfaceType"
-                        )
-                    }
+        val classCodegen = DotNetIlClassCodegen(
+            classInfo.ilClassName,
+            renderedMethods,
+            renderedProperties = renderedProperties,
+            renderedAttributes = irClass.dotNetPhysicalTypeAttributes(signatureTypeMapper),
+            isNested = classInfo.isNested,
+            nestedVisibility = irClass.dotNetNestedTypeVisibility(),
+            exported = !irClass.isOriginallyLocalDeclaration &&
+                    (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
+            isAbstract = true,
+            isInterface = true,
+            interfaceRefs = exactInterfaceTypes.map { interfaceType ->
+                when (interfaceType) {
+                    is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
+                    is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature
+                    else -> error(
+                        "Internal .NET backend error: non-class exact interface type $interfaceType"
+                    )
+                }
+            },
+            genericParameters = emittedGenericParameterDecisions
+                .renderDotNetIlGenericParameterDecisions(),
+            coreLibraryReference = coreLibrary.reference,
+            physicalTypePath = classInfo.physicalPathComponents(),
+        )
+        typeDefEmissionObservations?.add(
+            DotNetIlRawTypeDefEmissionObservation(
+                physicalType = classInfo,
+                physicalTypePath = classCodegen.physicalTypePath,
+                flags = classCodegen.flags,
+                category = if (classCodegen.flags.isInterface) {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                } else {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
                 },
-                genericParameters = emittedGenericParameterDecisions
-                    .renderDotNetIlGenericParameterDecisions(),
-                coreLibraryReference = coreLibrary.reference,
-            ).generate(this)
+                genericParameters = emittedGenericParameterDecisions.map { decision ->
+                    DotNetIlRawTypeDefGenericParameterObservation(
+                        decision.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
+                        decision.constraints,
+                    )
+                },
+                directSupertypes = exactInterfaceTypes.map { interfaceType ->
+                    DotNetIlRawTypeDefEdgeObservation(
+                        DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                        DotNetIlRawTypeDefEdgeTarget.Type(interfaceType),
+                    )
+                },
+            ),
+        )
+        val ilText = buildString {
+            classCodegen.generate(this)
         }
         return RenderedClass(
             ilText,

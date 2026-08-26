@@ -65,6 +65,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionMet
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionMethodKindSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionTypeKindSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionTypeParameterVarianceSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSealedEmissionFamilySnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSealedEmissionTypeDefVisibilitySnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSupertypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDelegatingConstructorRecord
@@ -498,6 +500,11 @@ private class BackendCliDotNetFacade(
         validateGenericOwnerCompleteEmissionComparison(
             genericOwnerRehearsal = genericOwnerRehearsal,
             comparisons = completedOutput.genericOwnerCompleteEmissionComparisons,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
+        validateGenericOwnerSealedEmissionFamilies(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            families = completedOutput.genericOwnerSealedEmissionFamilies,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
         validateGenericOwnerPhysicalValuePlacementComparison(
@@ -1136,6 +1143,111 @@ private fun validateGenericOwnerCompleteEmissionComparison(
     )) {
         "The complete family must retain both explicit semantic MethodImpl endpoint relationships: " +
                 family.expectedMethodImpls
+    }
+}
+
+/** Proves an actual-only sealed certificate for each bounded implementation family. */
+private fun validateGenericOwnerSealedEmissionFamilies(
+    genericOwnerRehearsal: Boolean,
+    families: List<DotNetGenericOwnerSealedEmissionFamilySnapshot>,
+    testDataFile: File,
+) {
+    if (!genericOwnerRehearsal) {
+        check(families.isEmpty()) {
+            "The production erased epoch must not publish sealed generic-owner families: $families"
+        }
+        return
+    }
+    if (GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER !in testDataFile.readText()) return
+
+    val producerFamilies = families.filter { family ->
+        family.scope == DotNetIlEmissionScope.USER &&
+                family.ownerName.endsWith("InlineProducer") &&
+                family.logicalMemberName == "produce"
+    }
+    check(producerFamilies.size == 2 &&
+            producerFamilies.count { family ->
+                family.implementationOwnerName.endsWith("InlineSelfView")
+            } == 1 && producerFamilies.count { family ->
+                family.implementationOwnerName.endsWith("InlineSecondView")
+            } == 1) {
+        "The sealed-emission probe must publish two isolated implementation certificates: $families"
+    }
+
+    for (family in producerFamilies) {
+        check(family.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH &&
+                family.diagnostics.isEmpty()) {
+            "Each bounded producer family must reach a successful sealed-emission outcome: $family"
+        }
+        check(family.typeDefs.size == 4 && family.methodDefs.size == 6 && family.methodImpls.size == 2) {
+            "Each sealed family must contain exactly the bounded 4/6/2 projection: $family"
+        }
+        check(family.typeDefs.all { type ->
+                type.physicalPath.isNotEmpty() && type.physicalPath.all(String::isNotEmpty) &&
+                        type.flags.isAutoLayout && type.flags.isAnsi &&
+                        type.flags.isInterface ==
+                        (type.structural.category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE)
+            } && family.typeDefs.map { type -> type.physicalPath }.toSet().size == 4) {
+            "A sealed family must retain four distinct exact TypeDef paths and flag vectors: ${family.typeDefs}"
+        }
+        check(family.typeDefs.filter { type -> type.flags.isInterface }.all { type ->
+                type.flags.isAbstract && !type.flags.isSealed && !type.flags.isBeforeFieldInit
+            }) {
+            "Every sealed interface TypeDef must retain its exact abstract/non-sealed flag shape: ${family.typeDefs}"
+        }
+        val implementationType = family.typeDefs.single { type ->
+            type.kind == DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS
+        }
+        check(!implementationType.flags.isInterface && implementationType.flags.isSealed &&
+                implementationType.flags.visibility ==
+                DotNetGenericOwnerSealedEmissionTypeDefVisibilitySnapshot.NOT_PUBLIC) {
+            "The private final implementation TypeDef must be sealed independently per family: $implementationType"
+        }
+
+        val methods = family.methodDefs.associateBy { method -> method.kind }
+        val natural = methods.getValue(
+            DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.NATURAL_INTERFACE_SLOT,
+        )
+        val implementation = methods.getValue(
+            DotNetGenericOwnerCompleteEmissionMethodKindSnapshot.IMPLEMENTATION_TYPED_ENTRY,
+        )
+        check(natural.physicalName == implementation.physicalName) {
+            "Implicit CLR interface mapping requires the natural slot and typed implementation name to match: $family"
+        }
+        check(family.methodDefs.all { method ->
+                method.physicalName.isNotEmpty() && method.flags.isHideBySig &&
+                        !method.flags.isSpecialName && !method.flags.isRuntimeSpecialName &&
+                        method.header.physicalMethodNameForDiagnostics == method.physicalName &&
+                        method.header.visibility == method.flags.visibility &&
+                        method.header.isInstance == method.flags.isInstance &&
+                        method.header.dispatch.isVirtual == method.flags.isVirtual &&
+                        method.header.dispatch.isNewSlot == method.flags.isNewSlot &&
+                        method.header.dispatch.isAbstract == method.flags.isAbstract &&
+                        method.header.dispatch.isFinal == method.flags.isFinal
+            }) {
+            "Every sealed MethodDef must expose the exact final name, full flags, and signature from one decision: " +
+                    family.methodDefs
+        }
+    }
+
+    val pathsByKind = producerFamilies.map { family ->
+        family.typeDefs.associate { type -> type.kind to type.physicalPath }
+    }
+    val sharedKinds = setOf(
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.NATURAL_INTERFACE,
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.INTERFACE_SEMANTIC_CAPABILITY,
+    )
+    val implementationKinds = setOf(
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.IMPLEMENTATION_CLASS,
+        DotNetGenericOwnerCompleteEmissionTypeKindSnapshot.CLASS_SEMANTIC_CAPABILITY,
+    )
+    check(sharedKinds.all { kind -> pathsByKind[0].getValue(kind) == pathsByKind[1].getValue(kind) } &&
+            implementationKinds.all { kind ->
+                pathsByKind[0].getValue(kind) != pathsByKind[1].getValue(kind)
+            } && pathsByKind[0].values.toSet().intersect(pathsByKind[1].values.toSet()) ==
+            sharedKinds.mapTo(linkedSetOf()) { kind -> pathsByKind[0].getValue(kind) }) {
+        "The two family certificates must share only interface roots and isolate implementation-owned roots: " +
+                pathsByKind
     }
 }
 
