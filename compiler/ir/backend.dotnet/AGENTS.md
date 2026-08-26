@@ -1581,7 +1581,9 @@ answer has been incorporated into the owning ADR and implementation plan.
 
 Also:
 
-- preserve unrelated worktree changes and do not modify another branch;
+- preserve unrelated changes in every worktree, and never repurpose or modify
+  a pre-existing or user-owned branch outside the explicitly selected
+  worktree plan;
 - keep `dotnet` as the authoritative integration branch, but not necessarily as
   the only active worktree. Once a coherent feature has passed its focused
   proofs and local review, an immutable local checkpoint may be created before
