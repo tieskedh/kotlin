@@ -5,8 +5,10 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 
@@ -219,6 +221,41 @@ class DotNetGenericInterfaceCompleteSurfaceVariancePlannerTest {
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(result)
     }
 
+    @Test
+    fun reportsAnEscapedOwnerParameterBeforeMissingNestedAuthority() {
+        val owner = identity("Owner")
+        val unknown = identity("Unknown")
+
+        val result = plan(
+            owner(
+                owner,
+                COVARIANT,
+                positions = listOf(position(OUT, construction(unknown, parameter(1)))),
+            ),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(result)
+    }
+
+    @Test
+    fun rejectsRetainedAuthorityAsALocalVarianceCandidate() {
+        assertFailsWith<IllegalArgumentException> {
+            owner(
+                DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary(
+                    listOf("CompleteSurfaceTest", "Retained"),
+                ),
+                COVARIANT,
+            )
+        }
+    }
+
+    @Test
+    fun rejectsAManuallyConstructedIllegalDecision() {
+        assertFailsWith<IllegalArgumentException> {
+            decision(COVARIANT, IN, COVARIANT)
+        }
+    }
+
     private fun assertSelected(
         plan: DotNetGenericInterfaceCompleteSurfaceVariancePlan,
         owner: DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -272,8 +309,11 @@ class DotNetGenericInterfaceCompleteSurfaceVariancePlannerTest {
 
     private fun independentType() = DotNetGenericInterfaceCompleteSurfaceTypeReference.Independent
 
-    private fun identity(name: String) =
-        DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary(listOf("CompleteSurfaceTest", name))
+    @Suppress("UNUSED_PARAMETER")
+    private fun identity(name: String) = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+        IrClassSymbolImpl(),
+        DotNetGenericInterfaceView.DECLARED,
+    )
 
     private fun decision(
         logicalMaximum: DotNetGenericOwnerPhysicalTypeParameterVariance,
