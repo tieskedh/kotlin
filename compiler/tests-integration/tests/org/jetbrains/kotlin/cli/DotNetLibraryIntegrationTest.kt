@@ -23826,6 +23826,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         sink.Accept(value)
                     }
 
+                    public fun exactProducerLocal(
+                        selectLeft: Boolean,
+                        left: Producer<Int>,
+                        right: Producer<Int>,
+                    ): Producer<Int> {
+                        val selected = if (selectLeft) left else right
+                        return selected
+                    }
+
+                    public fun referenceProducerLocal(
+                        selectNarrow: Boolean,
+                        narrow: Producer<String>,
+                        wide: Producer<Any>,
+                    ): Producer<Any> {
+                        val selected = if (selectNarrow) narrow else wide
+                        return selected
+                    }
+
                     public fun nestedReferenceCovariance(
                         value: Producer<Producer<String>>,
                     ): Producer<Producer<Any>> = value
@@ -23877,6 +23895,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """.trimIndent()
                 )
             }
+            val lateRejectedSource = directory.resolve("lateRejectedVariance.kt").apply {
+                writeText(
+                    """
+                    package lateRejected
+
+                    import ForeignVariance.Producer
+
+                    public fun hiddenProducerJoin(
+                        selectExact: Boolean,
+                        exact: Producer<Int>,
+                        alreadyWide: Producer<Any>,
+                    ): Producer<Any> {
+                        val selected = if (selectExact) exact else alreadyWide
+                        return selected
+                    }
+                    """.trimIndent()
+                )
+            }
             for (useLightTree in listOf(false, true)) {
                 val parserSuffix = if (useLightTree) "LightTree" else "Psi"
                 val acceptedOutput = directory.resolve("AcceptedForeignVariance-$parserSuffix.il")
@@ -23901,6 +23937,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
                 assertTrue("'exactPrimitiveNestedArgument'" in acceptedOutput.readText()) {
                     "An exact primitive nested argument was mistaken for CLR variance for " +
+                            "${profile.target}/$parserSuffix:\n$acceptedDiagnostics"
+                }
+                assertTrue("'exactProducerLocal'" in acceptedOutput.readText()) {
+                    "An exact selected local lost its retained CLR construction for " +
+                            "${profile.target}/$parserSuffix:\n$acceptedDiagnostics"
+                }
+                assertTrue("'referenceProducerLocal'" in acceptedOutput.readText()) {
+                    "A legal reference-only selected local was rejected for " +
                             "${profile.target}/$parserSuffix:\n$acceptedDiagnostics"
                 }
 
@@ -23943,6 +23987,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertFalse("not supported by the .NET backend" in diagnostics) {
                     "The source checker deferred to late backend eviction for " +
                             "${profile.target}/$parserSuffix:\n$diagnostics"
+                }
+
+                val [lateDiagnostics, lateExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        lateRejectedSource.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument, classpath,
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument,
+                        "LateRejectedForeignVariance$parserSuffix",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        directory.resolve("LateRejectedForeignVariance-$parserSuffix.il").path,
+                        "-Xuse-fir-lt=$useLightTree",
+                        K2DotNetCompilerArguments::renderInternalDiagnosticNames.cliArgument,
+                    )
+                )
+                assertEquals(ExitCode.COMPILATION_ERROR, lateExitCode, lateDiagnostics)
+                assertFalse(diagnosticName in lateDiagnostics) {
+                    "The hostile join no longer reaches the late physical gate for " +
+                            "${profile.target}/$parserSuffix:\n$lateDiagnostics"
+                }
+                assertTrue("Invalid CLR physical conversion at initialization of local 'selected'" in lateDiagnostics) {
+                    "The hostile join was not rejected by the mandatory late physical gate for " +
+                            "${profile.target}/$parserSuffix:\n$lateDiagnostics"
+                }
+                assertFalse("not supported by the .NET backend" in lateDiagnostics) {
+                    "The mandatory late physical failure degraded to declaration eviction for " +
+                            "${profile.target}/$parserSuffix:\n$lateDiagnostics"
                 }
             }
         }
