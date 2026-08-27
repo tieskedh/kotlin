@@ -24,4 +24,10 @@ private interface InputChildSurface<out T> : InputParentSurface<T> {
     fun readChild(): T
 }
 
+private value class BlockedCarrier<T>(val value: T)
+
+private interface BlockedCarrierSurface<T> {
+    fun readBlocked(): BlockedCarrier<T>
+}
+
 fun box(): String = "OK"
