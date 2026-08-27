@@ -709,6 +709,25 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /** Actual-only sealed physical family published by one Kotlin producer. */
+    data class GenericOwnerSealedFamily(
+        val logicalInterfaceMemberKey: String,
+        val implementationOwnerKey: String,
+        val implementationMemberKey: String,
+        /** Canonical URL-safe Base64 encoding of the versioned producer-family record. */
+        val encodedPublication: String,
+    ) : DotNetPhysicalDeclaration {
+        override val ownerPath: List<String> =
+            DotNetLibraryAbiCodec.requireProducerGenericOwnerSealedFamilyPublication(
+                logicalInterfaceMemberKey,
+                implementationOwnerKey,
+                implementationMemberKey,
+                encodedPublication,
+            ).body.typeDefs.single { typeDef ->
+                typeDef.role == DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS
+            }.row.physicalPath
+    }
+
 }
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
@@ -738,6 +757,35 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry.indexKey()
 
 internal fun DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily.indexKey(): String =
     "H:${contract.logicalOwnerKey}"
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): String =
+    "J:" + DotNetLibraryAbiCodec.logicalIdentityDigest(
+        buildString {
+            append("producer-generic-owner-sealed-family-v1:")
+            listOf(
+                logicalInterfaceMemberKey,
+                implementationOwnerKey,
+                implementationMemberKey,
+            ).forEach { component ->
+                append(component.length)
+                append(':')
+                append(component)
+            }
+        },
+    )
+
+internal fun DotNetProducerGenericOwnerSealedFamilyPublication.toPhysicalDeclaration():
+        DotNetPhysicalDeclaration.GenericOwnerSealedFamily =
+    DotNetLibraryAbiCodec.producerGenericOwnerSealedFamilyDeclaration(this)
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.publication():
+        DotNetProducerGenericOwnerSealedFamilyPublication =
+    DotNetLibraryAbiCodec.requireProducerGenericOwnerSealedFamilyPublication(
+        logicalInterfaceMemberKey,
+        implementationOwnerKey,
+        implementationMemberKey,
+        encodedPublication,
+    )
 
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
 data class DotNetPortablePhysicalAbiDifference(
@@ -799,7 +847,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "60"
+    const val ABI_VERSION = "61"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -811,6 +859,8 @@ object DotNetLibraryAbiCodec {
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"
     const val FRIEND_ASSEMBLIES_PROPERTY = "dotnet_friend_assembly_identities"
     const val DECLARATION_PROPERTY_PREFIX = "dotnet_decl_"
+    /** Far above the bounded 4/6/2 family's canonical payload, but below hostile decoder allocations. */
+    internal const val MAX_PRODUCER_GENERIC_OWNER_SEALED_FAMILY_BASE64_CHARS = 16 * 1_048_576
 
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -838,8 +888,9 @@ object DotNetLibraryAbiCodec {
         }
     }
 
-    fun encode(declarations: Map<String, DotNetPhysicalDeclaration>): Map<String, String> =
-        declarations.toSortedMap().mapKeys { entry ->
+    fun encode(declarations: Map<String, DotNetPhysicalDeclaration>): Map<String, String> {
+        requireProducerGenericOwnerSealedFamilyIndexes(declarations)
+        return declarations.toSortedMap().mapKeys { entry ->
             DECLARATION_PROPERTY_PREFIX + encodeText(entry.key)
         }.mapValues { entry ->
             val declaration = entry.value
@@ -857,37 +908,44 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerMemberFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerSealedFamily -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
+    }
 
-    fun decode(properties: Properties): Map<String, DotNetPhysicalDeclaration> = buildMap {
-        for (propertyName in properties.stringPropertyNames().sorted()) {
-            if (!propertyName.startsWith(DECLARATION_PROPERTY_PREFIX)) continue
-            val logicalKey = decodeText(propertyName.removePrefix(DECLARATION_PROPERTY_PREFIX))
-            val fields = decodeText(properties.getProperty(propertyName)).split('\u0000')
-            val declaration = when (fields.firstOrNull()) {
-                "C" -> decodeClass(fields, logicalKey)
-                "F" -> decodeFunction(fields, logicalKey)
-                "S" -> decodeGenericOwnerFunctionCarrier(fields, logicalKey)
-                "Q" -> decodeGenericOwnerFunctionInputEntry(fields, logicalKey)
-                "E" -> decodeEnumEntry(fields, logicalKey)
-                "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
-                "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
-                "B" -> decodeGenericInterfaceViewBridge(fields, logicalKey)
-                "I" -> throw IllegalArgumentException(
-                    "declaration '$logicalKey' uses a removed typed generic-interface intersection slot"
-                )
-                "R" -> decodeCovariantReturnBridge(fields, logicalKey)
-                "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
-                "G" -> decodeGenericOwnerMemberFamily(fields, logicalKey)
-                "H" -> decodePublishedGenericInterfaceFamily(fields, logicalKey)
-                "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
-                "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
-                else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
+    fun decode(properties: Properties): Map<String, DotNetPhysicalDeclaration> {
+        val declarations = buildMap {
+            for (propertyName in properties.stringPropertyNames().sorted()) {
+                if (!propertyName.startsWith(DECLARATION_PROPERTY_PREFIX)) continue
+                val logicalKey = decodeText(propertyName.removePrefix(DECLARATION_PROPERTY_PREFIX))
+                val fields = decodeText(properties.getProperty(propertyName)).split('\u0000')
+                val declaration = when (fields.firstOrNull()) {
+                    "C" -> decodeClass(fields, logicalKey)
+                    "F" -> decodeFunction(fields, logicalKey)
+                    "S" -> decodeGenericOwnerFunctionCarrier(fields, logicalKey)
+                    "Q" -> decodeGenericOwnerFunctionInputEntry(fields, logicalKey)
+                    "E" -> decodeEnumEntry(fields, logicalKey)
+                    "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
+                    "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
+                    "B" -> decodeGenericInterfaceViewBridge(fields, logicalKey)
+                    "I" -> throw IllegalArgumentException(
+                        "declaration '$logicalKey' uses a removed typed generic-interface intersection slot"
+                    )
+                    "R" -> decodeCovariantReturnBridge(fields, logicalKey)
+                    "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
+                    "G" -> decodeGenericOwnerMemberFamily(fields, logicalKey)
+                    "H" -> decodePublishedGenericInterfaceFamily(fields, logicalKey)
+                    "J" -> decodeGenericOwnerSealedFamily(fields, logicalKey)
+                    "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
+                    "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
+                    else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
+                }
+                require(put(logicalKey, declaration) == null) { "duplicate CLR declaration identity '$logicalKey'" }
             }
-            require(put(logicalKey, declaration) == null) { "duplicate CLR declaration identity '$logicalKey'" }
         }
+        requireProducerGenericOwnerSealedFamilyIndexes(declarations)
+        return declarations
     }
 
     /**
@@ -1711,6 +1769,323 @@ object DotNetLibraryAbiCodec {
         ).also { forwarder ->
             require(forwarder.indexKey() == logicalKey) {
                 "interface-default class forwarder '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
+    internal fun producerGenericOwnerSealedFamilyDeclaration(
+        publication: DotNetProducerGenericOwnerSealedFamilyPublication,
+    ): DotNetPhysicalDeclaration.GenericOwnerSealedFamily {
+        val key = publication.key
+        return DotNetPhysicalDeclaration.GenericOwnerSealedFamily(
+            logicalInterfaceMemberKey = key.logicalInterfaceMemberKey,
+            implementationOwnerKey = key.implementationOwnerKey,
+            implementationMemberKey = key.implementationMemberKey,
+            encodedPublication = encoder.encodeToString(
+                DotNetProducerGenericOwnerSealedFamilyCodec.encode(publication),
+            ),
+        )
+    }
+
+    internal fun requireProducerGenericOwnerSealedFamilyPublication(
+        logicalInterfaceMemberKey: String,
+        implementationOwnerKey: String,
+        implementationMemberKey: String,
+        encodedPublication: String,
+    ): DotNetProducerGenericOwnerSealedFamilyPublication {
+        require(logicalInterfaceMemberKey.isNotEmpty() && implementationOwnerKey.isNotEmpty() &&
+                implementationMemberKey.isNotEmpty()) {
+            "a producer-sealed family envelope requires every exact logical declaration key"
+        }
+        require(encodedPublication.isNotEmpty()) {
+            "a producer-sealed family envelope requires an encoded publication"
+        }
+        require(encodedPublication.length <= MAX_PRODUCER_GENERIC_OWNER_SEALED_FAMILY_BASE64_CHARS) {
+            "a producer-sealed family envelope exceeds the bounded encoded-publication size"
+        }
+        val bytes = try {
+            decoder.decode(encodedPublication)
+        } catch (failure: IllegalArgumentException) {
+            throw IllegalArgumentException("a producer-sealed family envelope has invalid Base64", failure)
+        }
+        val publication = when (val decoded = DotNetProducerGenericOwnerSealedFamilyCodec.decode(bytes)) {
+            is DotNetProducerGenericOwnerSealedFamilyDecodeResult.Success -> decoded.publication
+            is DotNetProducerGenericOwnerSealedFamilyDecodeResult.Malformed -> throw IllegalArgumentException(
+                "a producer-sealed family envelope has a malformed publication: ${decoded.reason}",
+            )
+        }
+        require(
+            publication.key == DotNetProducerGenericOwnerSealedFamilyKey(
+                logicalInterfaceMemberKey,
+                implementationOwnerKey,
+                implementationMemberKey,
+            ),
+        ) {
+            "a producer-sealed family envelope disagrees with its encoded logical declaration keys"
+        }
+        require(
+            encodedPublication == encoder.encodeToString(
+                DotNetProducerGenericOwnerSealedFamilyCodec.encode(publication),
+            ),
+        ) {
+            "a producer-sealed family envelope is not canonically encoded"
+        }
+        return publication
+    }
+
+    private fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.encodeFields(): List<String> {
+        requireProducerGenericOwnerSealedFamilyPublication(
+            logicalInterfaceMemberKey,
+            implementationOwnerKey,
+            implementationMemberKey,
+            encodedPublication,
+        )
+        return listOf(
+            "J",
+            logicalInterfaceMemberKey,
+            implementationOwnerKey,
+            implementationMemberKey,
+            encodedPublication,
+        )
+    }
+
+    private fun decodeGenericOwnerSealedFamily(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerSealedFamily {
+        require(fields.size == 5) {
+            "producer-sealed family '$logicalKey' has an incomplete or trailing envelope"
+        }
+        return DotNetPhysicalDeclaration.GenericOwnerSealedFamily(
+            logicalInterfaceMemberKey = fields[1],
+            implementationOwnerKey = fields[2],
+            implementationMemberKey = fields[3],
+            encodedPublication = fields[4],
+        ).also { family ->
+            require(family.indexKey() == logicalKey) {
+                "producer-sealed family '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
+    /**
+     * A `J` row seals actual emitter evidence; it is not an independent parallel declaration
+     * graph.  Its logical joins and every externally indexed physical endpoint must therefore
+     * agree with the ordinary producer C/F/G/H records in the same complete library index.
+     */
+    private fun requireProducerGenericOwnerSealedFamilyIndexes(
+        declarations: Map<String, DotNetPhysicalDeclaration>,
+    ) {
+        fun requiredDeclaration(key: String, role: String): DotNetPhysicalDeclaration =
+            declarations[key] ?: throw IllegalArgumentException(
+                "producer-sealed family requires its $role record '$key'",
+            )
+
+        declarations.forEach { [indexKey, declaration] ->
+            if (declaration !is DotNetPhysicalDeclaration.GenericOwnerSealedFamily) return@forEach
+            require(declaration.indexKey() == indexKey) {
+                "producer-sealed family '$indexKey' is inconsistent with its structured identity"
+            }
+            val publication = declaration.publication()
+            val key = publication.key
+            val typeDefs = publication.body.typeDefs.associateBy { row -> row.role }
+            val methodDefs = publication.body.methodDefs.associateBy { row -> row.role }
+
+            fun typeDef(role: DotNetProducerGenericOwnerSealedTypeDefRole) =
+                typeDefs.getValue(role).row
+            fun methodDef(role: DotNetProducerGenericOwnerSealedMethodDefRole) =
+                methodDefs.getValue(role).row
+            fun function(logicalKey: String, role: String): DotNetPhysicalDeclaration.Function =
+                requiredDeclaration(logicalKey, role) as? DotNetPhysicalDeclaration.Function
+                    ?: throw IllegalArgumentException(
+                        "producer-sealed family '$indexKey' has a non-function $role record '$logicalKey'",
+                    )
+            fun memberFamily(logicalKey: String, role: String):
+                    DotNetPhysicalDeclaration.GenericOwnerMemberFamily {
+                val familyKey = "G:$logicalKey"
+                return requiredDeclaration(familyKey, role) as? DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+                    ?: throw IllegalArgumentException(
+                        "producer-sealed family '$indexKey' has a non-family $role record '$familyKey'",
+                    )
+            }
+
+            val naturalType = typeDef(DotNetProducerGenericOwnerSealedTypeDefRole.NATURAL_INTERFACE)
+            val interfaceCapabilityType = typeDef(
+                DotNetProducerGenericOwnerSealedTypeDefRole.INTERFACE_SEMANTIC_CAPABILITY,
+            )
+            val implementationType = typeDef(
+                DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS,
+            )
+            val classCapabilityType = typeDef(
+                DotNetProducerGenericOwnerSealedTypeDefRole.CLASS_SEMANTIC_CAPABILITY,
+            )
+            val logicalInterfaceFunction = function(key.logicalInterfaceMemberKey, "logical-interface member")
+            val implementationClass = requiredDeclaration(
+                key.implementationOwnerKey,
+                "implementation-owner class",
+            ) as? DotNetPhysicalDeclaration.Class ?: throw IllegalArgumentException(
+                "producer-sealed family '$indexKey' has a non-class implementation-owner record " +
+                        "'${key.implementationOwnerKey}'",
+            )
+            val implementationFunction = function(key.implementationMemberKey, "implementation member")
+            val interfaceMemberFamily = memberFamily(
+                key.logicalInterfaceMemberKey,
+                "logical-interface member-family",
+            )
+            val implementationMemberFamily = memberFamily(
+                key.implementationMemberKey,
+                "implementation member-family",
+            )
+            val interfaceFamilyKey = "H:${interfaceMemberFamily.ownerLogicalKey}"
+            val interfaceFamily = requiredDeclaration(
+                interfaceFamilyKey,
+                "logical-interface family",
+            ) as? DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
+                ?: throw IllegalArgumentException(
+                    "producer-sealed family '$indexKey' has a non-interface-family record '$interfaceFamilyKey'",
+                )
+            val interfaceClass = requiredDeclaration(
+                interfaceFamily.contract.logicalOwnerKey,
+                "logical-interface class",
+            ) as? DotNetPhysicalDeclaration.Class ?: throw IllegalArgumentException(
+                "producer-sealed family '$indexKey' has a non-class logical-interface record " +
+                        "'${interfaceFamily.contract.logicalOwnerKey}'",
+            )
+
+            require(interfaceFamily.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                    interfaceFamily.contract.capabilityBindingKind ==
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+                    interfaceFamily.contract.rootLogicalOwnerKeys ==
+                    listOf(interfaceFamily.contract.logicalOwnerKey) &&
+                    interfaceFamily.contract.directParents.isEmpty() &&
+                    interfaceFamily.contract.lineageDepth == 0 &&
+                    interfaceFamily.contract.reusedParentLogicalOwnerKey == null &&
+                    interfaceFamily.exactOwnerPath == null
+            ) {
+                "producer-sealed family '$indexKey' requires the bounded root-owned interface-family shape"
+            }
+            val interfaceCapability = interfaceClass.genericOwnerAbi
+            require(interfaceClass.ownerPath == naturalType.physicalPath &&
+                    interfaceClass.physicalTypeParameterCount == naturalType.structural.genericArity &&
+                    interfaceCapability != null &&
+                    interfaceCapability.capabilityAssemblyName == interfaceFamily.capabilityAssemblyName &&
+                    interfaceCapability.capabilityOwnerPath == interfaceCapabilityType.physicalPath &&
+                    interfaceCapability.capabilitySuperInterfaces.isEmpty()
+            ) {
+                "producer-sealed family '$indexKey' disagrees with its logical-interface class record"
+            }
+
+            require(implementationClass.ownerPath == implementationType.physicalPath &&
+                    implementationClass.physicalTypeParameterCount == implementationType.structural.genericArity
+            ) {
+                "producer-sealed family '$indexKey' disagrees with its implementation-owner class record"
+            }
+            val implementationCapability = implementationClass.genericOwnerAbi
+            require(implementationCapability != null &&
+                    implementationCapability.capabilityAssemblyName == interfaceFamily.capabilityAssemblyName &&
+                    implementationCapability.capabilityOwnerPath == classCapabilityType.physicalPath &&
+                    implementationCapability.capabilitySuperInterfaces ==
+                    listOf(DotNetGenericOwnerCapabilitySuperInterfaceAbi(
+                        interfaceFamily.capabilityAssemblyName,
+                        interfaceCapabilityType.physicalPath,
+                    ))
+            ) {
+                "producer-sealed family '$indexKey' disagrees with its implementation capability paths"
+            }
+
+            fun requireFunctionEndpoint(
+                function: DotNetPhysicalDeclaration.Function,
+                sealed: DotNetGenericOwnerSealedEmissionMethodDefRow,
+                ownerPath: List<String>,
+                role: String,
+            ) {
+                val header = sealed.structural.header
+                require(function.ownerPath == ownerPath && function.methodName == sealed.physicalName &&
+                        function.isInstance == header.isInstance &&
+                        function.methodGenericParameterCount == header.genericArity
+                ) {
+                    "producer-sealed family '$indexKey' disagrees with its $role F record"
+                }
+            }
+            requireFunctionEndpoint(
+                logicalInterfaceFunction,
+                methodDef(DotNetProducerGenericOwnerSealedMethodDefRole.NATURAL_INTERFACE_SLOT),
+                naturalType.physicalPath,
+                "logical-interface member",
+            )
+            requireFunctionEndpoint(
+                implementationFunction,
+                methodDef(DotNetProducerGenericOwnerSealedMethodDefRole.IMPLEMENTATION_TYPED_ENTRY),
+                implementationType.physicalPath,
+                "implementation member",
+            )
+
+            fun requireMemberFamilyEndpoint(
+                family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
+                logicalMemberKey: String,
+                ownerLogicalKey: String,
+                sealedType: DotNetGenericOwnerSealedEmissionTypeDefRow,
+                sealedMethod: DotNetGenericOwnerSealedEmissionMethodDefRow,
+                role: String,
+            ) {
+                require(family.logicalMemberKey == logicalMemberKey &&
+                        family.ownerLogicalKey == ownerLogicalKey &&
+                        family.ownerPath == sealedType.physicalPath &&
+                        family.capabilityMethodName == sealedMethod.physicalName &&
+                        family.capabilityMethodGenericParameterCount ==
+                        sealedMethod.structural.header.genericArity
+                ) {
+                    "producer-sealed family '$indexKey' disagrees with its $role G record"
+                }
+                require(family.defaultCapabilityMethodName == null &&
+                        family.defaultCapabilityMethodGenericParameterCount == null &&
+                        family.semanticHookOwnerPath == null && family.semanticHookMethodName == null &&
+                        family.semanticHookMethodGenericParameterCount == null &&
+                        family.foreignOverrideProbeMethodName == null &&
+                        family.foreignOverrideProbeMethodGenericParameterCount == null
+                ) {
+                    "producer-sealed family '$indexKey' has unsupported auxiliary $role G endpoints"
+                }
+            }
+            requireMemberFamilyEndpoint(
+                interfaceMemberFamily,
+                key.logicalInterfaceMemberKey,
+                interfaceFamily.contract.logicalOwnerKey,
+                interfaceCapabilityType,
+                methodDef(
+                    DotNetProducerGenericOwnerSealedMethodDefRole.INTERFACE_SEMANTIC_CAPABILITY_SLOT,
+                ),
+                "logical-interface member-family",
+            )
+            requireMemberFamilyEndpoint(
+                implementationMemberFamily,
+                key.implementationMemberKey,
+                key.implementationOwnerKey,
+                classCapabilityType,
+                methodDef(DotNetProducerGenericOwnerSealedMethodDefRole.CLASS_SEMANTIC_CAPABILITY_SLOT),
+                "implementation member-family",
+            )
+            val naturalResult = methodDef(
+                DotNetProducerGenericOwnerSealedMethodDefRole.NATURAL_INTERFACE_SLOT,
+            ).structural.header.result
+            val expectedMemberRole = when (naturalResult) {
+                is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct ->
+                    DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+                is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable ->
+                    DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
+                DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void -> throw IllegalArgumentException(
+                    "producer-sealed family '$indexKey' has no natural producer result",
+                )
+            }
+            val publishedMember = interfaceFamily.contract.declaredMembers.singleOrNull { member ->
+                member.logicalMemberKey == key.logicalInterfaceMemberKey
+            }
+            require(interfaceFamily.ownerPath == naturalType.physicalPath &&
+                    interfaceFamily.capabilityOwnerPath == interfaceCapabilityType.physicalPath &&
+                    interfaceFamily.contract.genericArity == naturalType.structural.genericArity &&
+                    publishedMember?.role == expectedMemberRole
+            ) {
+                "producer-sealed family '$indexKey' disagrees with its logical-interface H record"
             }
         }
     }

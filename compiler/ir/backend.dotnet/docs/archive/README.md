@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-producer-sealed-library-abi-2026-08-27.md`](generic-owner-producer-sealed-library-abi-2026-08-27.md)
+  records the rehearsal-only ABI-61 `J` envelope for one producer's actual
+  4-TypeDef/6-MethodDef/2-MethodImpl sealed family, canonical role-based
+  encoding, conjunctive `C/F/G/H/J` validation, separate-compilation
+  publication, the production-erased inverse, and the remaining retained-
+  foreign/static-operation route boundary.
 - [`generic-owner-methodspec-call-binding-2026-08-27.md`](generic-owner-methodspec-call-binding-2026-08-27.md)
   records physical-library ABI 60 MethodDef-arity authority, independent
   TypeDef/MethodDef call-site substitution, executable natural and semantic
