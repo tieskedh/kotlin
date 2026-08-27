@@ -19,6 +19,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteTraceHooks
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
@@ -489,6 +493,11 @@ private class BackendCliDotNetFacade(
             snapshots = completedOutput.genericOwnerPhysicalValueShadows,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
+        validateGenericInterfaceCompleteSurfaceVarianceShadow(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            snapshots = completedOutput.genericInterfaceCompleteSurfaceVarianceShadows,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         validateGenericOwnerPhysicalOperationRouteShadow(
             genericOwnerRehearsal = genericOwnerRehearsal,
             snapshots = completedOutput.genericOwnerPhysicalOperationRouteShadows,
@@ -725,6 +734,68 @@ private class BackendCliDotNetFacade(
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
     }
+}
+
+/** Proves structural, name-independent variance selection before the old exact-interface split. */
+private fun validateGenericInterfaceCompleteSurfaceVarianceShadow(
+    genericOwnerRehearsal: Boolean,
+    snapshots: List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot>,
+    testDataFile: File,
+) {
+    if (GENERIC_INTERFACE_COMPLETE_SURFACE_VARIANCE_SHADOW_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        check(snapshots.isEmpty()) {
+            "The production erased epoch must not publish complete-surface variance shadows: $snapshots"
+        }
+        return
+    }
+
+    fun snapshot(ownerSuffix: String): DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot =
+        checkNotNull(snapshots.singleOrNull { snapshot -> snapshot.ownerName.endsWith(ownerSuffix) }) {
+            "The complete-surface probe requires one '$ownerSuffix' shadow: $snapshots"
+        }.also { snapshot ->
+            check(snapshot.status == DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus.BOUND &&
+                    snapshot.blocker == null
+            ) {
+                "The complete-surface probe must bind '$ownerSuffix': $snapshot"
+            }
+        }
+
+    fun assertParameters(
+        ownerSuffix: String,
+        vararg expected: Triple<
+                DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance,
+                DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity,
+                DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance,
+                >,
+    ) {
+        val actual = snapshot(ownerSuffix).parameters
+        check(actual.size == expected.size && actual.indices.all { index ->
+            val parameter = actual[index]
+            val expectedParameter = expected[index]
+            parameter.index == index &&
+                    parameter.logicalMaximumVariance == expectedParameter.first &&
+                    parameter.requiredPolarity == expectedParameter.second &&
+                    parameter.selectedPhysicalVariance == expectedParameter.third
+        }) {
+            "Unexpected complete-surface variance for '$ownerSuffix': $actual"
+        }
+    }
+
+    val covariant = DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance.COVARIANT
+    val invariant = DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance.INVARIANT
+    val out = DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity.OUT
+    val input = DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity.IN
+    val both = DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity.BOTH
+    assertParameters("OutputOnlySurface", Triple(covariant, out, covariant))
+    assertParameters("InputBearingSurface", Triple(covariant, both, invariant))
+    assertParameters(
+        "PerParameterSurface",
+        Triple(covariant, input, invariant),
+        Triple(covariant, out, covariant),
+    )
+    assertParameters("InputParentSurface", Triple(covariant, input, invariant))
+    assertParameters("InputChildSurface", Triple(covariant, both, invariant))
 }
 
 /** Proves that logical call policy wins before exact receiver provenance is consulted. */
@@ -5705,6 +5776,8 @@ private const val GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerRehearsalDir"
 private const val GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_SHADOW_PROBE"
+private const val GENERIC_INTERFACE_COMPLETE_SURFACE_VARIANCE_SHADOW_PROBE_MARKER =
+    "// DOTNET_GENERIC_INTERFACE_COMPLETE_SURFACE_VARIANCE_SHADOW_PROBE"
 private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_SOURCE_PROBE"
 private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE_MARKER =
