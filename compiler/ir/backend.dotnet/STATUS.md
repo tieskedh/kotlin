@@ -11,8 +11,9 @@ and follow the owning ADR or active programme for design detail.
   `codex/rebase-probe-20260827` rehearsal until promotion completes.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- Last semantic checkpoint:
-  `375174e6ea3ce496f3a7635b23c89c169aa5116c`.
+- The current semantic checkpoint includes the bounded same-TypeDef
+  retained-foreign CLR variance source diagnostic. Git owns the exact
+  checkpoint identity; this snapshot records only its verified state.
 - The 253-commit upstream range was replayed without conflicts. All 640 target
   patches remain accounted for: 639 are patch-identical and one is
   context-adjusted. Three post-rebase integration commits remove obsolete
@@ -26,14 +27,14 @@ physical identities may still be corrected atomically.
 
 ## Latest full gate
 
-The strict target aggregate passed at the semantic checkpoint above on
-2026-08-27:
+The strict target aggregate passed on 2026-08-27 at the immediately preceding
+source-guard checkpoint:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-Direct JUnit XML audit found 201 suites and 2,524 tests, with zero failures,
+Direct JUnit XML audit found 201 suites and 2,525 tests, with zero failures,
 errors, or skips:
 
 | Root | Suites | Tests |
@@ -41,11 +42,27 @@ errors, or skips:
 | backend | 11 | 148 |
 | `dotnet.ir` | 1 | 6 |
 | FIR2IR | 187 | 2,243 |
-| integration | 2 | 127 |
+| integration | 2 | 128 |
 
-This has the same suite/test totals as before the rebase. It covers PSI and LightTree,
-Framework 4.8 and .NET 10, Runtime/Stdlib production, C# interop, separate
-compilation, the generic-owner rehearsal, and the production-erased inverse.
+This adds one hostile imported-CLR variance boundary test to the rebased
+baseline. It covers PSI and LightTree, Framework 4.8 and .NET 10,
+Runtime/Stdlib production, C# interop, separate compilation, the generic-owner
+rehearsal, and the production-erased inverse.
+
+The current delta after that aggregate only makes the target-specific FIR query
+more conservative and strengthens the same integration method. Its focused
+lane passed with both FIR parsers and both runtime profiles:
+
+```text
+.\gradlew.bat :compiler:tests-integration:test `
+  --tests "org.jetbrains.kotlin.cli.DotNetLibraryIntegrationTest.testForeignClrVarianceRejectsVerifierInvalidBoundaryConversions" -q
+```
+
+No emitted signature/body, mapping, artifact, Runtime/Stdlib surface, or
+production ABI changed, so this checkpoint inherits the full aggregate under
+the focused-lane rule in [`AGENTS.md`](AGENTS.md). A fresh full aggregate is
+mandatory for the next final-emission physical-boundary feature and before
+promotion.
 
 The backend compilation, scoped Build Tools generators/API check and metadata
 argument compatibility test, and Gradle statistics schema test also pass.
@@ -102,10 +119,19 @@ also has:
 - a producer-recorded ABI-61 sealed-family certificate whose transport is
   independently validated but which is not yet a consumer route.
 
+The first bounded source slice of step 1 is complete: FIR now rejects explicit
+return/argument conversions between two constructions of the same retained
+foreign TypeDef when the complete closed argument relation proves that CLR
+variance would require reference arguments. Exact and proved reference/nested
+reference cases remain accepted. Open parameters, projections, implementation
+or inherited roots, varargs, placement-hidden joins, and every ambiguous
+physical view deliberately remain unknown for the mandatory late gate.
+
 The next bounded sequence is:
 
-1. close the imported CLR variance soundness gap with one mandatory physical-
-   conversion gate while retaining legal reference-only CLR variance;
+1. close the remaining imported CLR variance soundness gap with one mandatory
+   final-emission physical-conversion gate for boundaries hidden from source
+   analysis by placement and control-flow joins;
 2. add a shadow complete-surface variance planner and prove one custom
    input-bearing interface as a single natural TypeDef without an exact sibling;
 3. route broad foreign operations through real constructed interface MethodDefs
@@ -136,8 +162,11 @@ Class-owner admission, state, C# surface, and migration boundaries:
 - The generic-owner sealed authority is not yet complete for retained foreign
   declarations, static/file-facade calls, or overlapping/global ownership.
 - Imported CLR declaration-site variance is logically broader than the CLR's
-  reference-only physical conversion. The emitter fails closed, but a mandatory
-  pre-emission conversion gate and source diagnostic are still missing.
+  reference-only physical conversion. One bounded same-TypeDef source slice is
+  now diagnosed, but a mandatory final-emission gate is still missing for
+  inherited/implementation views, open or projected shapes, varargs, and
+  invalid conversions exposed only after local/storage placement or
+  control-flow joins.
 - The current exact-sibling rehearsal does not give ordinary CLR languages one
   complete statically checked natural interface. Its replacement proof has not
   yet been emitted or executed.

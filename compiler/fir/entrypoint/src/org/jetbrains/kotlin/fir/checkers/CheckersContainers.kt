@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.fir.analysis.checkers.*
 import org.jetbrains.kotlin.fir.analysis.dotnet.checkers.DotNetExpressionCheckers
 import org.jetbrains.kotlin.fir.analysis.diagnostics.CliFrontendDiagnostics
 import org.jetbrains.kotlin.fir.analysis.diagnostics.FirErrors
+import org.jetbrains.kotlin.fir.analysis.diagnostics.dotnet.FirDotNetErrors
 import org.jetbrains.kotlin.fir.analysis.diagnostics.js.FirJsErrors
 import org.jetbrains.kotlin.fir.analysis.diagnostics.jvm.FirJvmErrors
 import org.jetbrains.kotlin.fir.analysis.diagnostics.native.FirNativeErrors
@@ -52,6 +53,7 @@ fun FirSessionConfigurator.registerExperimentalCheckers() {
 
 fun FirSessionConfigurator.registerDotNetCheckers() {
     useCheckers(DotNetExpressionCheckers)
+    registerDiagnosticContainers(FirDotNetErrors)
 }
 
 fun FirSessionConfigurator.registerJvmCheckers() {
