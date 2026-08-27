@@ -16,7 +16,7 @@ import java.io.File
 
 /*
     The first argument is the name of the project to generate
-     [checkers.jvm|checkers.js|checkers.native|checkers.wasm|checkers.web.common|raw-fir.common|checkers]
+     [checkers.jvm|checkers.js|checkers.native|checkers.dotnet|checkers.wasm|checkers.web.common|raw-fir.common|checkers]
 
      The second argument is optional, and it's generationPath, there is a hardcoded default for each
 
@@ -55,6 +55,17 @@ fun main(args: Array<String>) {
             generationPath ?: File("compiler/fir/checkers/checkers.native/gen"),
             "$packageName.native",
             NATIVE_DIAGNOSTICS_LIST,
+            starImportsToAdd = setOf(
+                ErrorListDiagnosticListRenderer.BASE_PACKAGE,
+                ErrorListDiagnosticListRenderer.DIAGNOSTICS_PACKAGE
+            )
+        )
+    }
+    if (args.isEmpty() || args[0] == "checkers.dotnet") {
+        generateDiagnostics(
+            generationPath ?: File("compiler/fir/checkers/checkers.dotnet/gen"),
+            "$packageName.dotnet",
+            DOTNET_DIAGNOSTICS_LIST,
             starImportsToAdd = setOf(
                 ErrorListDiagnosticListRenderer.BASE_PACKAGE,
                 ErrorListDiagnosticListRenderer.DIAGNOSTICS_PACKAGE

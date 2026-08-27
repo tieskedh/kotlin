@@ -1122,6 +1122,10 @@ class DotNetClrFirSymbolProvider(
                 annotations += buildDeprecatedAnnotation(obsolete)
             }
         }.apply {
+            recordDotNetClrImportedTypeAuthority(
+                importedGraph,
+                candidate.genericContext,
+            )
             replaceDeprecationsProvider(
                 annotations.getDeprecationsProviderFromAnnotations(session, fromJava = true)
             )
