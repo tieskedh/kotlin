@@ -1,6 +1,6 @@
 # ADR: semantic erasure for Kotlin-owned generic classes
 
-- Status: **Accepted — pre-ABI**
+- Status: **Accepted production baseline — pre-ABI; replacement under rehearsal**
 - Date: 2026-08-04
 - Amended: 2026-08-05 to distinguish canonical erasure from private
   implementation reification; 2026-08-07 to park the materially different
@@ -34,14 +34,15 @@ fail-closed export product and must not redefine Kotlin runtime identity.
 Internal specialization is permitted only when it is removable and invisible
 behind this complete erased ABI.
 
-Erasure is therefore not merely the default public ABI. It is the
-authoritative semantic model: generic arguments never become Kotlin runtime
-identity, casts remain declaration-erased, and every cross-module Kotlin path
-has a complete erased route. It is not a permanent prohibition on physically
-reified private implementation. No optimization, annotation, compiler switch,
-manifest, or export may add a second observable Kotlin implementation whose
-CLR construction determines the classifier, class-dependent dispatch, or a
-competing authoritative state.
+Erasure is the binding production ABI until the generic-owner rehearsal either
+replaces this decision atomically or is rejected. Under this epoch, generic
+arguments do not become physical Kotlin runtime identity, casts remain
+declaration-erased, and every cross-module Kotlin path has a complete erased
+route. The durable semantic requirements are one Kotlin declaration identity,
+one receiver identity, one authoritative state, and complete Kotlin behavior;
+this ADR does not permanently require those properties to be implemented by a
+non-generic TypeDef. No optimization, annotation, compiler switch, manifest, or
+export may add a second observable Kotlin implementation or competing state.
 
 CLR generics remain first-class capabilities where they do not redefine that
 identity. This includes imported CLR types, method-owned generic parameters,
@@ -59,8 +60,9 @@ the following:
 
 - the complete erased execution route remains available;
 - the object retains one identity and one authoritative state;
-- unchecked views retain delayed-use behavior, including incompatible erased
-  writes where Kotlin permits them;
+- the current erased production epoch retains its delayed-use behavior; a
+  future public reified epoch follows only the separately accepted BK-1 cast
+  boundary;
 - virtual dispatch, reflection, and separate compilation remain unchanged;
 - disabling the optimization changes no supported DLL signature or observable
   Kotlin behavior; and
@@ -83,10 +85,10 @@ supported observations, the mechanism is a new ABI and requires a separate
 architecture decision.
 
 The long-term implementation objective is to maximize truthful and measured
-CLR reification, especially where it removes value-type boxing, while keeping
-semantic erasure authoritative. “Maximize” does not make specialization an end
-in itself: an unmeasured mechanism whose complexity exceeds its benefit should
-not land.
+CLR reification, especially where it removes value-type boxing, without
+weakening the durable semantic requirements above. “Maximize” does not make
+specialization an end in itself: an unmeasured mechanism whose complexity
+exceeds its benefit should not land.
 
 This is the Kotlin/.NET target authors' pre-ABI decision. It follows the
 architecture of mature Kotlin targets, but it is not a Kotlin core-team
@@ -140,7 +142,8 @@ For a Kotlin-owned `Box<T>`:
   inheritance chain; and
 - generic results are narrowed or unboxed only at their logical use site.
 
-Kotlin/.NET deliberately selects classifier-only behavior for unchecked casts:
+The current production-erased epoch selects classifier-only behavior for
+unchecked casts:
 
 ```kotlin
 val original = Box("text")
@@ -153,17 +156,15 @@ check(star.value == 7)
 original.value         // fails when the result is consumed as String
 ```
 
-The Kotlin language permits a platform to fail a not-fully-checkable cast
-earlier. This target nevertheless chooses the familiar erased, delayed-use
-behavior because the CLR does not force an earlier failure and mature Kotlin
-targets establish that user expectation.
+This is the behavior of the accepted erased representation, not a permanent
+language choice for every future physical owner.
 
 That choice and the planned replacement are constrained by the accepted
 [semantic-authority and platform-freedom ADR](kotlin-semantic-authority-and-platform-freedom.md).
-Only the implementation-defined failure point of a parameterized throwing
-`as` may move earlier. Parameterized `as?` continues to ignore generic
-arguments for subtyping and therefore uses the logical classifier rather than
-an exact constructed-owner predicate.
+The production-inert reified-owner candidate instead follows BK-1: structurally
+unchecked parameterized `as`, `as?`, and any admitted parameterized `is` share
+one Kotlin-aware predicate. That exception has no effect on this erased
+production epoch until the complete owner family is migrated atomically.
 
 The Common `containsAll` case is stronger: it is ordinary source-legal
 behavior, not an unchecked-cast preference. The target must execute the Common
@@ -396,8 +397,8 @@ to fail early.
 The exact question, admissible failures, forbidden rejections, evidence matrix,
 and locked scope are recorded in
 [`../programmes/generic-class-owner-reopening.md`](../programmes/generic-class-owner-reopening.md).
-Until that programme is explicitly activated and this ADR is revised, the
-non-generic owner and delayed-use behavior above remain authoritative.
+Until that programme succeeds and this ADR is replaced atomically, the
+non-generic owner and its production-erased behavior remain authoritative.
 
 ## Verification gate
 
@@ -419,11 +420,12 @@ The accepted ABI must cover:
 - unchanged generic-interface, array, nullability, friend/compiler-ABI, and
   stdlib behavior.
 
-The semantic assertions above are permanent. Tests that require one canonical
-public/protected erased signature are ABI tests. Tests that literally require
-one private `.field object` or forbid every private generic helper describe the
-current baseline layout and must be labelled as such; they may change after a
-specialization ADR without weakening any semantic assertion.
+The one-identity, one-state, dispatch, Common-behavior, and separate-compilation
+assertions above are permanent. Tests that require one canonical
+public/protected erased signature describe this accepted production epoch and
+must be labelled as inverse/ABI tests, not permanent semantic laws. Tests that
+literally require one private `.field object` or forbid every private generic
+helper likewise describe the current baseline layout.
 
 The implementation is complete only when the old class-only runtime helpers,
 bridges, metadata records, TypeDefs, and tests no longer survive as active

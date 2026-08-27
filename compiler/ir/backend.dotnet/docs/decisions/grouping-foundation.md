@@ -41,6 +41,11 @@ and every inline body. One non-generic CLR interface
 - source iteration returning the canonical Kotlin `Iterator`; and
 - key selection accepting and returning the erased object carrier.
 
+That is the binding production representation, not an independent permanent
+ban on a truthful `Grouping<T,K>` owner. An atomic generic-owner cutover updates
+this physical clause through the owning interface ADR while the Common grouping
+algorithms, identity, and evaluation order remain unchanged.
+
 Anonymous factory results are ordinary Kotlin-owned classes implementing that
 one interface. They retain the original source and key-selector callback, so
 iterator acquisition, repeated traversal, callback order, exceptions, and

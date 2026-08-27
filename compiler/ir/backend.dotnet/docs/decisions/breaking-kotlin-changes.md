@@ -20,10 +20,18 @@ enough by itself.
 ### Source boundary
 
 For a true CLR-generic Kotlin-owned owner, an explicit parameterized `as` or
-`as?` whose generic-argument check receives Kotlin's `UNCHECKED_CAST` warning
-uses the runtime generic construction to check Kotlin subtyping. A star target
-such as `Producer<*>` is not in this entry. Neither are ordinary assignments,
-implicit conversions, declaration-site variance, or use-site projections.
+`as?` with at least one non-star argument uses the runtime generic construction
+to check Kotlin subtyping when that argument relation is not already proved by
+the source type. An admitted parameterized `is` check uses the same predicate;
+the only currently general `is` form, `Producer<*>`, remains classifier-only.
+A star target such as `Producer<*>` is otherwise not in this entry. Neither are
+ordinary assignments, implicit conversions, declaration-site variance, or
+use-site projections.
+
+This boundary is structural. It does not depend on whether the compiler happens
+to render an `UNCHECKED_CAST` diagnostic, whether diagnostics evolve, or whether
+the warning is suppressed. The diagnostic is required evidence that the source
+operation is unsafe; `@Suppress` is not runtime input.
 
 The current bounded implementation covers admitted covariant producer owners,
 including recursively nested one-parameter instances and the parentless
@@ -52,17 +60,19 @@ The last two operations must succeed even when the physical object implements
 variance and recursively compares the physical argument graph. It does not use
 constructed CLR equality as Kotlin subtyping.
 
-`as` and `as?` use the same compatibility predicate. Only their mismatch
-result differs. A successful cast preserves object identity and may retain an
-`object`/semantic carrier when the Kotlin view has no truthful constructed CLR
-type.
+`as`, `as?`, and an admitted parameterized `is` use the same compatibility
+predicate. Only their mismatch result differs. A successful cast preserves
+object identity and may retain an `object`/semantic carrier when the Kotlin view
+has no truthful constructed CLR type.
 
 ### Intentional incompatibility
 
 The Kotlin cast-expression rules state that generic arguments of a
 parameterized safe-cast target are not checked with respect to subtyping. This
-entry deliberately chooses a stricter .NET result at a source location which
-already has an unchecked-cast warning. Code which relied on
+entry deliberately chooses a stricter .NET result for the structurally
+unchecked parameterized operation described above. Such an operation is
+expected to carry Kotlin's unchecked-cast warning unless it is suppressed, but
+the warning does not select runtime behavior. Code which relied on
 `Producer<Int> as? Producer<String>` returning a non-null semantic view is not
 portable to this target.
 

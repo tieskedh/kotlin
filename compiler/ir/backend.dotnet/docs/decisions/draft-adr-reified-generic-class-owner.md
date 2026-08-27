@@ -1,908 +1,395 @@
-# Draft ADR: one reified CLR owner with semantic capability views
+# Draft ADR: one natural CLR-generic class owner with semantic capability
 
-- Status: **Draft — architecture spike only; production emission remains erased**
-- Date: 2026-08-12
-- Current authority:
+- Status: **Draft — production-inert candidate; production remains erased**
+- Current production authority:
   [`generic-class-erased-identity.md`](generic-class-erased-identity.md)
-- Cross-cutting semantic boundary:
+- Shared physical authority and value provenance:
+  [`draft-adr-generic-owner-physical-authority.md`](draft-adr-generic-owner-physical-authority.md)
+- Kotlin semantic boundary:
   [`kotlin-semantic-authority-and-platform-freedom.md`](kotlin-semantic-authority-and-platform-freedom.md)
 - Programme:
   [`../programmes/generic-class-owner-reopening.md`](../programmes/generic-class-owner-reopening.md)
-- Design matrix:
-  [`../programmes/generic-class-owner-carrier-matrix.md`](../programmes/generic-class-owner-carrier-matrix.md)
-- Migration plan:
+- Migration and inverse:
   [`../programmes/generic-class-owner-migration-plan.md`](../programmes/generic-class-owner-migration-plan.md)
-- Direct C# surface:
+- C# surface:
   [`../programmes/generic-class-owner-csharp-surface.md`](../programmes/generic-class-owner-csharp-surface.md)
 
-## Intended outcome
+## Context
 
-Kotlin-owned generic classes should use a true CLR-generic implementation
-owner wherever the complete Kotlin contract can be preserved. The target is
-not merely fewer boxes: Kotlin should construct, inherit, override, and call
-native `C<T>` shapes, and C# should see that natural owner without an adapter
-when the logical declaration/use is representable.
+The desired .NET representation of a Kotlin-owned generic class is an ordinary
+CLR generic owner whenever the complete Kotlin contract permits it:
 
-The production change is not authorized by this draft. The current erased
-owner remains the correctness oracle until the hostile model, physical
-bindings, reflection, and atomic migration all pass.
-
-## Hardest-model-first candidate
-
-For one logical declaration `open class C<T>` the candidate has:
-
-1. one CLR implementation TypeDef `C<T>`;
-2. one authoritative set of fields and object state on that instance;
-3. one non-generic compiler-ABI semantic capability implemented by every
-   construction of `C<T>`; and
-4. KLIB as the authority for logical arguments, variance, projections,
-   nullability, and bounds.
-
-The semantic capability is an interface view of the same object, not a second
-implementation owner, wrapper, proxy, copied store, or alternate Kotlin
-classifier. Constructed `C<string>`, `C<int>`, and fallback constructions all
-normalize to the one Kotlin declaration classifier. The open CLR TypeDef and
-capability identities are recorded in the physical binding; consumers never
-reconstruct them from a name.
-
-The first spike must use an open mutable invariant owner and compose:
-
-- reference, value, nullable-value, open-nullable, and arbitrary CLR-struct
-  substitutions;
-- star, output, and input projections;
-- candidate-accepting widened calls such as Common `contains`/`containsAll`;
-- exact and owner-relative generic interfaces and methods;
-- multi-level Kotlin and C# inheritance, overrides, `super`, and default
-  dispatch;
-- checked, safe, star, projected, and unchecked casts;
-- arrays and nested generic constructions;
-- metadata-fixed open-nullable base edges such as `D<T> : C<T?>` for both
-  value and reference substitutions;
-- a general user `@UnsafeVariance` body whose widened incompatible candidate
-  must execute Kotlin logic rather than a collection-specific fixed default;
-- class/callable reflection normalization; and
-- portable producer/consumer assemblies on both target profiles.
-
-Final/read-only/reference-only owners are reductions of that model, not an
-earlier production ABI.
-
-## Repairing the removed typed-primary model
-
-The removed model used the same broad shape—`C<T>` plus a non-generic
-capability—but made the typed member authoritative. Its erased bridge first
-narrowed every owner-dependent argument to physical `T` and then forwarded to
-the typed body. That is unsound for ordinary legal Kotlin calls:
-
-```kotlin
-val ints: Collection<Int> = ...
-val widened: Collection<Any?> = ints
-widened.contains("not an Int") // must return false
+```text
+Kotlin:  open class Box<T>(var value: T)
+CLR:     open class Box<T> { ... }
 ```
 
-Forwarding `object` into an `AbstractCollection<int>.contains(int)` slot throws
-before Common's algorithm can inspect and reject the candidate. This is not an
-unchecked-cast corner; it is the normal covariant Collection contract.
-
-The new candidate assigns authority by member-slot domain instead of choosing
-one bridge direction for an entire owner:
-
-- a strict input that is legal only as `T` may use a natural typed virtual and
-  narrow at its real typed-use barrier;
-- a strict output may use a typed virtual and box/reference-convert only for
-  the semantic capability;
-- a widened, nested, or `@UnsafeVariance` candidate must reach a semantic body
-  as an object and return/throw exactly as Common specifies, unless Kotlin's
-  shared special-bridge contract supplies a type-safe incompatible result;
-- a broad candidate uses separate typed virtual, semantic hook, and capability
-  dispatcher roles where a semantic body is required, while a shared
-  type-safe-barrier member may return its specified `false`/`null`/`-1`/second
-  argument result directly; compatible calls still observe a C# typed
-  override and incompatible candidates are never narrowed first; and
-- all roles form one coherent override family for Kotlin, C#, `super`,
-  defaults, and separate compilation.
-
-The current erased implementation is therefore useful infrastructure: its
-body behavior is the oracle and prospective semantic path. Reification adds a
-typed owner and optimized entries around it; it must not replace the proven
-semantic body with a narrowing bridge.
-
-For a general semantic-body family, the producer direction is therefore the
-inverse of the removed design. The Kotlin source body is lowered over semantic
-carriers into the semantic virtual hook. A Kotlin typed virtual converts its
-typed arguments into those carriers and invokes that hook; it does not own a
-second implementation. The capability dispatcher invokes the typed virtual
-for compatible candidates so ordinary C# overrides remain observable, and
-invokes the semantic hook directly for incompatible candidates. A semantic
-`super` call targets the recorded base semantic hook non-virtually. This body
-transformation, including defaults and nested carriers, must be compiler-
-produced and validated before admission.
-
-The same analysis applies to state, not only methods. Kotlin can use
-`@UnsafeVariance` to write an incompatible value through a widened covariant
-owner and observe the failure only when a later exact consumer requires a
-physical conversion. Merely invoking an erased getter and discarding its
-result performs no cast. A physical `!T`
-field in `C<int>` cannot reproduce that sequence because the CLR rejects the
-write immediately. Any field reachable from such a semantic mutation path
-therefore needs one semantic/object carrier with typed accessors around the
-same slot, or the declaration is unadmitted. Reified TypeDef identity does not
-authorize typed storage that changes Kotlin failure timing.
-
-Object-carried state is necessary but may still be insufficient for an open
-typed C# override. After an incompatible semantic write, a widened Kotlin read
-must return the stored object while an exact `Read(): T` may fail converting
-it. One CLR typed override cannot implement both entries automatically. The
-current rehearsal closes the concrete no-input output case without making the
-C# author implement compiler ABI. Each Kotlin declaration in the override
-family emits a protected virtual last-Kotlin probe paired with its exact typed
-MethodDef. The capability dispatcher invokes the most-derived probe. That
-probe compares the runtime typed target (`ldvirtftn`) with its own exact Kotlin
-entry (`ldftn`): a mismatch means a later foreign subclass overrode the natural
-typed member, so dispatch uses that member and widens its valid `T` result. A
-match keeps the raw semantic hook and therefore preserves an incompatible
-value installed through a widened `@UnsafeVariance` path. No reflection,
-allocation, state shadow, or C#-authored bridge is involved.
-
-The probe is compiler ABI rather than C# API: C# can technically see the
-protected method but neither calls nor overrides it. A Kotlin override emits
-the paired probe automatically. Across separate Kotlin DLLs, ABI-37 binds the
-producer semantic hook and probe MethodDefs so the later Kotlin declarations
-reuse those virtual slots rather than opening sibling slots. ABI-37 also
-records which otherwise ordinary function parameters/results were physically
-emitted as non-generic semantic capabilities; a consumer must not infer that
-choice merely from a widened Kotlin type. A three-assembly Kotlin base ->
-Kotlin override -> C# subclass oracle proves both the raw semantic negative
-path and the later C# typed-override path. Broad-input and abstract semantic
-obligations remain separate; the concrete output proof must not be used to
-narrow them or to claim that every dual-domain family can be implemented by a
-typed-only C# declaration.
-
-A closed verifier additionally audits the emitted probe IL and publishes that
-actual Kotlin base/override plus ordinary C# subclass product under JIT,
-ReadyToRun, full trimming, and NativeAOT. Both the unchanged-Kotlin semantic
-path and the later-C# typed path execute successfully in every mode, including
-a real Windows x64 NativeAOT link/run. This closes deployment only for the
-admitted concrete no-input output family; it supplies no evidence for the
-separate broad-input or abstract-family gates.
-
-## Cast and mutation policy
-
-Kotlin diagnoses the generic-argument part of `value as C<X>` or
-`value as? C<X>` as unchecked. Under pre-ABI breaking entry BK-1, both forms
-use one Kotlin-aware generic-argument subtyping predicate rather than exposing
-the CLR's constructed-generic equality directly:
-
-- incompatible `C<string> as C<int>` throws `InvalidCastException`, logically
-  classified as Kotlin `ClassCastException`, at the throwing cast;
-- the corresponding `C<string> as? C<int>` returns null;
-- a source-legal declaration-site variance relation succeeds in both forms;
-  for example, covariant `C<Int> -> C<Any>` retains the same object even when
-  CLR value-type variance cannot name the constructed target;
-- `is C<*>`, `as C<*>`, star/projection conversions, and ordinary widened
-  calls test the open declaration/capability and preserve the same object;
-- every source-legal mutation through an exact or input-projected view updates
-  the one typed field/store; and
-- no two-store synchronization or deoptimization is introduced merely to
-  preserve the current baseline's deliberately later failure for an invalid
-  unchecked construction.
-
-Early failure never permits a valid star, projection, variance, widened
-candidate, or separate-module call to fail. The hostile matrix, rather than a
-microbenchmark, decides that boundary. The stricter safe-cast behavior is a
-deliberate Kotlin incompatibility, not an inference from CLR convenience. See
-the accepted
-[semantic-authority and platform-freedom ADR](kotlin-semantic-authority-and-platform-freedom.md)
-and the mandatory
-[breaking-change ledger](breaking-kotlin-changes.md).
-
-## Physical carrier rule
-
-An exact construction which has a truthful CLR type uses it directly:
-
-- `C<String>` becomes `C<string>`;
-- `C<Int>` becomes `C<int>`;
-- closed `C<Int?>` may become `C<Nullable<int>>`; and
-- a method-owned exact `C<T>` may use `C<!!T>`.
-
-Stars, projections, and a construction which has no uniform truthful CLR
-spelling use the same object's semantic capability. This is a carrier choice,
-not another Kotlin identity.
-
-When that logical generic-owner value itself becomes an argument of another
-CLR generic construction, its capability is not automatically a universal
-nested argument. Ordinary precompiled CLR implementations may implement only
-the natural `I<X>` and cannot be retrofitted with the Kotlin capability. The
-enclosing construction therefore substitutes `object` only when the concrete
-logical argument can denote multiple CLR-incompatible natural constructions.
-For the first proved case:
-
-- open `Box<T>` still has one `!T` field;
-- `Box<Int>`, `Box<String>`, and `Box<Producer<String>>` remain exact; and
-- logical `Box<Producer<Any?>>` is physical `Box<object>`, because its slot may
-  contain `Producer<int>`, `Producer<string>`, or an ordinary foreign producer.
-
-Reads from that slot remain object-carried through type-agnostic consumers and
-enter the generic-owner semantic dispatcher at an actual member operation.
-They must not reconstruct `Producer<object>`. This isolates instability in one
-closed outer construction; it does not erase the open `Box<T>` field, change
-all `List<T>` element storage, add shadow state, or wrap the value.
-
-The covariant stability test is not limited to a universal argument which
-already maps to object. A non-universal reference argument is also unstable
-when one of the target's admitted CLR value carriers is a proper Kotlin
-subtype. For example, `Int : Comparable<Int>` makes logical
-`Producer<Comparable<Int>>` capable of carrying physical `Producer<int>`, but
-CLR variance cannot convert that value-type construction to
-`Producer<IComparable<int>>`. The enclosing construction must use object. In
-contrast, `Cat : Animal` is reference-only and ordinary CLR covariance keeps
-`Producer<Animal>` truthful. The rehearsal computes this with Kotlin IR
-subtyping over the eight admitted signed Common scalar carriers and caches the
-result per logical argument; it must not recognize `Number`, `Comparable`, or
-any stdlib declaration by name.
-
-The dual input-variant case follows the same construction-local rule. A
-physical `Consumer<object>` can be the legal Kotlin view `Consumer<Int>`, but
-CLR variance cannot construct `Consumer<int>` from it. Consequently the
-specific enclosing `Box<Consumer<Int>>` uses `Box<object>` and selects the
-same object's non-generic input capability only at `consume`. A physical
-`Consumer<Animal>` is naturally convertible to `Consumer<Cat>` under ordinary
-CLR reference contravariance, so `Box<Consumer<Cat>>` remains exact. The open
-`Box<T>` still owns one `!T` field in both cases. A natural `I<T>` MethodDef
-must retain its typed dispatch receiver; marking that receiver as semantic
-would silently turn the public CLR method into a capability member even when
-no capability call target was selected.
-
-Producer and separately compiled consumer must re-derive the same stability
-decision from the logical Kotlin type even when the consumer owns no local
-capability TypeDef. Therefore the cached supported-value-subtype predicate is
-available in every emitter rather than being conditional on local capability
-ownership. Epoch-off emitters do not build that type-system/cache. Value
-classes, open arguments, and invariant/mixed/multi-parameter owners remain
-separate stability gates.
-
-Cross-module Kotlin ABI cannot assume that a value with a closed logical type
-was born from a closed construction. A generic producer can return a value
-whose physical construction was selected under an open type expression.
-Consequently, public/protected fields, parameters, and returns remain on the
-semantic carrier until a declaration-stable proof shows that every legal
-producer uses the same exact `C<X>`. Local SSA values may retain an exact
-construction only while joins, stores, calls, casts, and escapes preserve that
-proof. The physical binding, never the consumer's substituted static type,
-describes the carrier at a call boundary.
-
-This conservative Kotlin ABI does not hide the CLR class. C# can construct and
-subclass `C<T>` directly, and explicit export can publish exact typed
-parameters/returns where the complete call boundary is truthful. An export may
-not cast a semantic fallback to an incompatible construction or silently copy
-it.
-
-## Open nullable owner arguments are a primary gate
-
-An unconstrained logical `T?` has no single CLR generic argument:
-
-- reference `T` uses the same reference token plus nullable metadata;
-- value `T` requires `Nullable<T>`; and
-- ECMA-335 cannot instantiate `Nullable<T>` for an unconstrained token that
-  may be a reference type.
-
-Therefore `fun <T> make(value: T?): C<T?>` cannot be implemented by pretending
-that either `C<T>`, `C<Nullable<T>>`, or `C<object>` is the exact static
-construction for every substitution.
-
-The same distinction applies to a member of an already selected `C<T>`.
-`fun read(): T?` cannot have one truthful CLR `!T` result: `C<int>` must still
-represent null. The bounded prototype therefore records `object` for an open
-nullable parameter/result position. CLR boxing represents a nullable value as
-either its boxed underlying value or null, while nullable references already
-fit that carrier. An invariant/projected array whose component is not one
-statically exact CLR type uses `System.Array`; neither `!T[]` nor `object[]` is
-a universal value/reference vector. These are physical carriers under an
-owner-dependent logical slot domain, not erasure of the Kotlin `T?` contract.
-Direct non-null `T`, invariant `Array<T>`, and independent method-generic
-`Array<R>` remain native GenericParam signatures where proved.
-
-Cross-assembly override binding must therefore never use the presence of a
-GenericParam reference in the physical signature as a proxy for logical owner
-dependence. The producer's logical slot-domain vector is merged first; exact
-typed and semantic/capability physical signatures are then compared. A
-semantic role first discovered from the producer may use the consumer's
-already-planned capability signature as its local owner-erased witness.
-
-A direct CLR probe now establishes that guarding a statically emitted
-`Nullable<!!T>` construction with `typeof(T).IsValueType` still fails at
-execution on CLR 4 and CoreCLR. The runtimes validate the invalid constructed
-token independently of the source-level branch. The same probe establishes
-that runtime type construction can create the truthful closed owner—
-`C<Nullable<int>>` or `C<string>`—and preserve null and mutation through one
-semantic capability on both JIT runtimes.
-
-That is feasibility evidence, not a selected product mechanism. The spike
-must compare dynamic exact construction with an honest semantic fallback
-construction of the same open `C<>` TypeDef, including reference/value/null
-state, identity, mutation, casts, arrays, joins, trimming, NativeAOT, and
-separate compilation. If neither composes without rejecting a source-legal
-operation or creating an unacceptable permanent runtime dependency, the
-admission model must be revised before any production owner lands. Easy
-`C<Int>` success does not defer this gate.
-
-Runtime exact closure does not solve metadata-fixed inheritance. In particular,
-one CLR `D<T>` TypeDef for the source shape `D<T> : C<T?>` cannot select
-`C<Nullable<T>>` for value substitutions and `C<T>` for reference
-substitutions: its base TypeSpec is fixed before either closed construction
-exists. The hostile spike must therefore test a deliberately fixed fallback
-against Kotlin override, `super`, shared state, casts, reflection, and direct
-C# ancestry. If that fallback is not semantically complete and honest to C#,
-the whole `D<T>` declaration shape remains erased or unadmitted; successful
-runtime construction of standalone `C<>` objects is not evidence otherwise.
-
-A direct CLR 4/CoreCLR fallback probe now pins the trade-off. One fixed
-`C<object>` base can retain one inherited state, virtual dispatch, direct
-`super`, and null/value/reference mutation. CLR reflection and C# also
-correctly report exactly that base: `D<int>` is not assignable to
-`C<Nullable<int>>`, and `D<string>` is not assignable to `C<string>`. This is
-an operational semantic fallback, not a truthfully reified `D<T>` surface.
-Under the intended interop criterion the declaration must therefore remain in
-the erased/fallback admission class unless a different one-owner
-representation proves the exact ancestry; an export must not conceal it.
-
-A bounded .NET 10 application probe also passed ReadyToRun and full-trimming
-execution for the exercised closed value/reference cases. NativeAOT analysis
-flagged the runtime `MakeGenericType` route as requiring dynamic code, and the
-available machine lacked the native platform linker, so no NativeAOT execution
-claim is made. Arbitrary structs, external assemblies, finite rooting, and a
-complete native toolchain remain acceptance gates.
-
-A follow-up removes that unbounded reflection mechanism from the candidate
-vocabulary. A consumer-side plan accepts only finite concrete runtime roots,
-derives statically visible exact constructions from the decoded producer, and
-adds one mandatory `C<object>` semantic fallback for unlisted types. Exact
-value, already-nullable value, reference, and consumer-struct roots plus
-unlisted struct/reference fallbacks execute on both CLRs with one state and
-capability. Under IL3050/IL2026-as-error NativeAOT analysis, the old control
-fails at `MakeGenericType`; the finite table is warning-clean. A later explicit
-signed-MSVC run completes its native link and execution with the same checksum
-as JIT, ReadyToRun, and full trimming. Representative product measurements
-remain open; bounded NativeAOT success does not authorize production emission.
-
-A second direct CLR probe validates the proposed strict-versus-candidate
-dispatch split on CLR 4 and CoreCLR. A single generic owner/state can expose
-typed virtual read/write/candidate members and an explicit non-generic
-capability; compatible capability candidates observe multi-level C# typed
-overrides, while incompatible candidates reach an object-domain semantic hook
-without narrowing. Nullable values, references, and a user struct retain the
-same state. This proves the runtime shape is possible, but does not yet prove
-compiler-generated Kotlin override, `super`, default, binding, reflection, or
-separate-assembly behavior.
-
-A follow-up producer/consumer probe validates the same dispatch families
-across separate C# assemblies on both runtimes. Compatible candidates observe
-consumer-owned typed overrides; shared fixed-result barriers reject
-incompatible candidates without entering an arbitrary body; general widened
-operations enter the protected semantic hook; and multi-level overrides keep
-one inherited state. A deliberately incomplete subclass of an abstract broad
-operation fails C# compilation because implementing only the typed member does
-not satisfy the wider semantic obligation. This remains physical feasibility
-evidence: the producer is not yet emitted from Kotlin IR.
-
-Physical-family schema 18 now advances that feasibility result to
-compiler-derived Kotlin evidence for broad properties. An abstract covariant
-property records a distinct raw getter obligation from its paired abstract
-broad setter even though it has no local state. Its typed PropertyDef
-accessors and protected semantic hooks are all abstract, with only the
-explicit capability dispatchers implemented on the base. The record-driven
-producer causes both supported C# compilers to reject a typed-only concrete
-subclass and executes a complete subclass across separate assemblies.
-
-The same oracle found that inherited semantic roles were previously merged
-after state-carrier selection in a concrete Kotlin override. That ordering is
-invalid: a base capability can reach the derived semantic setter and mutate
-derived state. The planner now includes inherited logical semantic
-obligations in reachability before selecting storage, so the concrete override
-uses one `object` field rather than a prematurely approved `!T` field. This is
-still production-inert architecture evidence and does not admit the public
-generic owner ABI.
-
-Physical-family schema 19 closes the generated-name collision exposed by
-overloads. Two Kotlin declarations may truthfully share one natural C# name
-because their typed CLR parameter types differ, while their semantic hooks
-both erase that parameter to `object`. Semantic-hook and capability names are
-now derived unconditionally from the complete sorted logical override-root
-set, and default-dispatcher names from the logical declaration key. Allocation
-therefore does not depend on which overload happens to be present today, and a
-separate consumer binds producer-recorded identities rather than reconstructing
-suffixes.
-
-The physical family also validates C# source identity separately from CLR
-MethodDef identity. Return type, instance/static distinction, and nullable
-metadata cannot distinguish a C# overload; methods, properties, and fields
-cannot collide by source name. The hostile producer and separate C# subclass
-execute both the natural typed overload and the matching semantic override on
-Framework 4.8 and .NET 10. This internal deterministic allocation is not a
-public source naming annotation and still does not admit production `C<T>`.
-
-The backend now also contains a production-inert, fail-closed architecture
-planner immediately before the existing erased generic-owner/interface work.
-For each local Kotlin-owned generic class it records member authority, explicit
-nullable-owner metadata-fixed supertypes, open owner-dependent outputs, and a
-projection of one module-wide producer field/call graph. That graph covers
-functions, constructors, general function-access edges, field initializers,
-and anonymous initializers. Private helpers are strict graph nodes, not broad
-entries; an exposed semantic body propagates reachability through them. A
-private field additionally records the provenance of every actual write.
-Typed and semantic callable-boundary seeds flow through call arguments, local
-definitions/assignments, returns, and casts; a cast to `T` preserves rather
-than upgrades its input domain. All-typed producers select typed state, any
-object-domain producer selects semantic state, and unsupported/source-free
-paths retain a typed-value-provenance obligation. A non-private field remains
-cross-assembly incomplete. Its dispositions are limited to established blockers and
-further proof obligations. There is intentionally no `ADMITTED` result, no compiler
-switch, and no emitter consumer; the next lowering asserts that every Kotlin
-generic class was planned and then retains it in the erased owner set.
-
-That seam now constructs a detached real-IR member family for every planned
-source member. The role set contains the natural typed entry, an object-domain
-semantic hook where broad behavior or paired open output requires it, and a
-private capability dispatcher where the non-generic capability needs a slot.
-The generic owner remains the receiver; only explicit semantic parameters and
-results erase. The family also observes the already-selected masked default
-dispatcher, real `superQualifierSymbol` calls, and any pre-lowering logical
-owner/member key. A hard invariant rejects a prototype member in the owner's
-declaration list. The backend exposes an immutable IR-free snapshot to the
-test pipeline, but neither the emitter nor DLL/KLIB serialization consumes it.
-
-The hostile snapshot is asserted in all eight Kotlin lanes. Its
-`HostileNullableDerived<T>` records one conditional `T?` base edge and its
-direct base read; its open covariant unsafe store records an object-required
-field reached through `writeUnsafe -> installUnchecked -> <set-stored> ->
-stored`, its declaration initializer, a general semantic write
-hook/dispatcher, a paired semantic read hook/dispatcher, and typed explicit
-inputs/outputs. Its read-only unsafe producer separately records typed private
-state after the closed producer graph. A second invariant hostile store routes
-exact `T` through a private `Any?` parameter and `as T`; its initializer and
-lowered setter both remain physically typed, proving that the cast shape is
-classified by producer domain rather than syntax. The test-owned CLR physicalizer consumes
-those exact state/member snapshots to generate a temporary generic producer
-and separately compiled C# subclass/consumer. It validates GenericParam, exact
-non-generic InterfaceImpl, private-final-virtual explicit MethodImpl targets,
-typed `!T` virtuals, protected object hooks, single object field, and paired
-override behavior on both runtimes. This closes the base snapshot-to-CLR seam,
-not Kotlin-produced subclass families or the production TypeDef/emitter/
-binding-schema gate.
-
-The test-owned producer ABI is no longer reconstructed by switching on hostile
-member names. Those names remain fixture-scenario/body labels only. Lowered IR
-supplies exact constructor and typed/semantic/
-capability signatures through a deliberately bounded structural type grammar;
-the actual lowered default helper supplies its static tail and mask slots, and
-the producer access graph supplies state read/write families. Uniform role
-suffixes extend the compiler-selected ordinary MethodDef name. Unsupported
-types and helper shapes leave the whole exact proof unavailable rather than
-falling back to `object`. Pre-normalization inner metadata whose captured
-parameter disagrees with its recorded slot domain is likewise unavailable. A
-regression copy rewrites only diagnostic source labels and must yield an equal
-artifact. A generated role identity which collides with another logical member
-rejects the artifact atomically. Local exact signatures are discarded after
-an external producer merge changes a consumer role or domain, preserving the
-decoded producer record as the sole cross-assembly physical authority. This
-generalizes the architecture proof; it does not change production emission.
-
-The detached graph now covers local Kotlin-produced generic subclasses as
-well. Typed entries point to ancestor typed prototypes, inherited semantic
-hooks are propagated and point to ancestor semantic prototypes, and private
-capability dispatchers never form override chains. When the base generic owner
-is external, the consumer records the overridden logical member key and the
-candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
-slot is inferred from the current erased artifact. A production-inert family
-artifact, now at schema 14, makes the first external link objective: it
-fingerprints the exact temporary producer and records logical joins,
-owner/capability paths, arity, disposition, state requirements, complete
-roles/reasons, selected
-MethodDef owners/names, slot dispatch, complete slot-domain vectors, and neutral
-structural signatures. A capability dispatcher names the exact interface
-MethodDef it implements; nested owner/method parameters, named generic
-instances, and SZ arrays remain structural records rather than IL strings.
-Only a fully decoded artifact may resolve the typed and semantic obligations;
-stale, truncated, wrong-producer, duplicate,
-incomplete, and missing-member artifacts fail. The resolved snapshot advances
-only to member physicalization proof, never admission. Production DLL/KLIB and
-the erased emitter do not consume this artifact. Version 3 gives separate
-typed/semantic direct-super targets and the static masked-default helper exact
-signatures as well; the helper remains outside override roles and preserves
-derived typed dispatch. Version 4 records the exact target profile,
-open-TypeDef classification mode, statically exact constructor MethodDefs and
-visibility, constructed owner, exact `this`/`base` edges, and the selected
-field carrier's paired typed/semantic read/write MethodDefs and boundary
-conversions. It admits no runtime-selected or semantic-fallback construction.
-Version 5 adds an exact producer-open-TypeDef-to-KLIB-classifier join and one
-logical callable record for each complete physical MethodDef family. Exact
-classifier lookup never accepts the semantic capability or a foreign subclass;
-logical instance classification separately follows recorded open-TypeDef
-ancestry. Multiple closed constructions normalize to the same classifier,
-while names, logical type arguments, variance, projections, nullability, and
-bounds remain exclusively in the KLIB graph. Capability TypeDefs and physical
-hooks/dispatchers/default helpers remain hidden from Kotlin member identity;
-semantic callables select the capability dispatcher and strict callables select
-the typed entry. Constructors continue to use the version-4 construction
-records rather than becoming ordinary members. Schema 6 adds ordered physical
-GenericParam constraints. Schema 7 separately catalogs every logically
-bindable producer candidate by owner key, arity, disposition, and complete
-constructor/member key sets. Physical families form an exact checked subset of
-that catalog. A known candidate without a family therefore reports its producer
-disposition; it can no longer be confused with an omitted, stale, or foreign
-declaration. In particular, metadata-fixed `D<T> : C<T?>` is recorded as
-`BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE` without a dishonest CLR family.
-Schema 8 adds fixed zeroed SZ-array state initializers with exact element
-counts and base-delegating constructor roots. Their writes compose with typed
-identity member access; no missing setter is inferred or generated merely to
-satisfy the state record.
-Schema 9 separates those logical member-family paths from producer-private
-physical state methods. A private path carries no KLIB callable identity,
-member role, or reflection entry; it must be a private typed identity method
-on the same physical TypeDef and must not collide with a logical member
-MethodDef. Object storage may use exactly such a private READ/WRITE pair only
-when no semantic path or conversion exists. Any semantic crossing retains the
-complete paired typed/semantic matrix.
-Schema 10 records exact owner TypeDef visibility/dispatch and member MethodDef
-visibility. Typed entries retain source visibility, semantic hooks require
-protected visibility, and explicit capability implementations require private/
-final. A decoded producer record must not reconstruct public/internal or
-final/open/abstract/sealed shapes from roles or ancestry.
-Schema 14 records plain/volatile memory semantics and constructor-input
-conversion for every selected state. An owner-dependent volatile field cannot
-use arbitrary unconstrained `!T` storage, so the bounded hostile family records
-one reference-safe volatile `object` field with widening/boxing construction
-and writes plus checked cast/unbox reads. The ordinary proven sibling remains
-true `!T` state. Semantic widening takes precedence over the volatile physical
-reason, and every typed/capability access must share the same field. This is a
-migration invariant, not authorization for production `C<T>` emission or the
-public concurrency API.
-The bounded external Kotlin-subclass physicalizer now joins compiler-derived
-child visibility, modality, exact admitted constructor
-signature, fake-override roots, and direct `super`
-edges to the decoded producer record. Only the child TypeDef path is caller-
-selected. Constructor delegation determines the immediate base independently
-of a MethodDef's declaring ancestor; exact signature equality and positional
-identity forwarding of every child parameter are required, and producer slot
-identities are copied without name inference. Producer and child GenericParam
-constraint rows must be exactly equal in the currently supported grammar;
-matching arity is not proof. The current proof further requires a public open
-non-inner child with one direct base/constructor and no added interface, field,
-initializer, nested type, state, or non-fake member. Inherited fake overrides
-remain inherited. The result drives only the hostile temporary C# oracle and
-does not change production emission.
-
-Runtime roots remain outside the producer artifact. A separate consumer-side
-record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
-open unconstrained owner, capability, and public strict one-`!T` constructor.
-It normalizes an already-nullable value idempotently, returns the semantic
-capability, and
-contains exactly one default `C<object>` fallback. No unbounded dynamic-code
-route is representable; invalid nullable roots and constrained owners reject
-the plan. This is executable JIT/analyzer evidence; native
-link/run is still required before the construction modes can be admitted.
-
-The hostile source now exports a paired application corpus containing the
-actual production-erased Kotlin producer/consumer, a direct C# consumer and
-two-level subclass of that erased owner, and the record-driven candidate
-producer/consumer. Both CLR profiles and FIR parsers execute framework/user
-structs, nullable and mixed state, arrays, method generics, reflection, and
-multi-level dispatch. The direct C# oracle records that the production owner
-is arity zero with `object`/`System.Array` positions while independent method
-generics remain native. Strict closed manifests and frontend-equivalence
-checks make this a stable comparison input; no production `C<T>` is emitted
-and representative cost review remains open. See
-[`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
-
-The exact pair now has a bounded Framework CLR 4 plus .NET 10 JIT,
-ReadyToRun, trimming, and NativeAOT measurement. The candidate retains the
-correct checksum but takes 1.62–2.96× the erased workload time and allocates
-6.89–7.52% more in the deliberately semantic-heavy call mix. This does not
-reverse the desired direct `C<T>` interop direction and does not establish an
-intrinsic CLR-generics cost. It prevents this draft from advancing on typed
-identity alone: route-specific bridge cost and representative complete Kotlin
-products are separate gates. Full trimming also established a metadata invariant:
-a class-owned canonical MethodImpl rebuilt over an external base requires a
-direct canonical InterfaceImpl reimplementation. The backend and verifier now
-enforce that shape without wrappers or duplicate state. See
-[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
-
-The bounded route-specific gate is now closed. The current candidate's
-compiler-derived owner state is `SEMANTIC_OBJECT_REQUIRED`: typed value entry
-still boxes into object state, compatible capability value entry adds a
-runtime check plus a re-box, and allocation-free reference/array capability
-routes retain material dispatch cost. Equal-layout fallback structs eliminate
-payload-size bias. Owner-independent method generics stay near parity, and
-some NativeAOT typed/override routes are competitive, so CLR generics are not
-rejected; the present capability/object-state architecture is the cost center.
-Framework 4.8 and .NET 10 failure behavior also differ enough to remain
-independent evidence lanes. Representative complete Kotlin applications,
-typed-storage/deoptimization feasibility, and the atomic migration remain
-open. See
-[`../archive/generic-owner-route-attribution-2026-08-14.md`](../archive/generic-owner-route-attribution-2026-08-14.md).
-
-The other state decision produced by the same compiler graph is now
-physicalized in the bounded hostile family. An invariant mutable owner whose
-initializer and every transitive write retain physically typed provenance may
-publish `!T` state. Its exact typed read/write entries access that field by
-identity and never cross the non-generic capability. The capability remains
-mandatory for widened and star operations: strict input dispatch checks and
-narrows to `!T`, strict output dispatch widens or boxes from `!T`, and no
-incompatible input may mutate typed state. This remains one owner and one field,
-not a typed cache beside canonical object state.
-
-The paired `Int32`, non-trivial struct, and nullable routes prove the field and
-exact signatures use the owner GenericParam on Framework CLR 4 and every .NET
-10 deployment lane. Exact access eliminates per-iteration allocation. The
-capability still pays two object-domain conversions and one check per iteration
-and remains materially slower; large-struct exact timing is deployment-
-sensitive even without allocation. This physicalizes the hostile fixture's
-existing compiler-proven state case. It does not admit an easy production
-owner, weaken the complete hostile semantic owner, or authorize atomic
-migration. See
-[`../archive/generic-owner-typed-storage-attribution-2026-08-14.md`](../archive/generic-owner-typed-storage-attribution-2026-08-14.md).
-
-Representative call mixes must be derived from Kotlin IR rather than assigned
-by a benchmark author. The production-inert planner therefore records every
-call whose receiver is a Kotlin-owned generic class and traces the receiver's
-physical-construction provenance through local definitions, assignments,
-returns, callable arguments, fields, branches, and casts. A cast preserves its
-input provenance and cannot manufacture an exact construction. A route is an
-exact typed-entry candidate only when all reachable receiver producers prove
-the same closed physical construction required at that use. Any semantic view,
-merge with an incompatible construction, unsupported/source-free producer, or
-open assembly boundary whose invariant signature does not uniquely fix the
-physical construction requires the capability. A closed invariant public
-signature may retain exact provenance; a star, projected, or variant signature
-may not. If that member has no complete capability slot, the census records a
-missing proof obligation rather than guessing an exact call.
-
-This census counts static call sites, not executions, and never drives today's
-emitter. Dynamic weights come only from executing complete applications. An
-external owner also remains unresolved until its decoded producer family joins
-the exact logical member key; consumer source names, static types, and today's
-erased MethodDefs are not sufficient. Swift-style devirtualization or VTA may
-later prove more exact routes, but disabling it must leave the capability route
-and every DLL signature unchanged.
-
-The join is producer-scoped. A decoded artifact resolves only member keys in
-its complete classification catalog; unrelated external owners remain pending
-for their own producer. A classified owner with no physical family is recorded
-as producer-erased rather than mistaken for an incomplete record. Default-
-argument calls participate through the existing dispatcher binding and moved
-receiver parameter, never through a `$default` spelling heuristic.
-
-The initial separate hostile census contained 40 producer-owned static call
-sites: 24 producer-erased, 11 exact typed-entry candidates, four semantic-
-capability requirements, and one missing capability. Those figures are not
-dynamic weights and do not validate the earlier handwritten three-typed/
-24-semantic benchmark mix. See
-[`../archive/generic-owner-call-route-census-2026-08-14.md`](../archive/generic-owner-call-route-census-2026-08-14.md).
-
-Application evidence must carry that census as a versioned, profile-neutral
-artifact before execution weights can be attached. Each producer-owned record
-retains the original compilation-wide site index, optional caller logical key,
-required callee logical key, provenance, and resolved requirement. It excludes
-diagnostic and physical names; filtered indices remain sparse and unresolved
-external routes cannot enter the artifact. The closed application bundle
-fingerprints it and requires byte identity across PSI, LightTree, Framework
-4.8, and net10. The index is a join to instrumentation from the same
-compilation, not a source-stable identity after program/compiler changes. See
-[`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
-
-The same-compilation join is now executable without changing the candidate or
-production ABI. The architecture harness supplies a private module-local
-recorder declaration; the planner retains the exact analyzed call and wraps it
-only in that explicit product. Receiver and arguments are evaluated once into
-temporaries in their original order, the stable compilation index is recorded,
-and the original virtual/static dispatch follows. Thus argument failure emits
-no event while a callee failure is a counted attempt. No source/physical name,
-CLI flag, Runtime helper, KLIB payload, or normal-emission branch participates.
-
-The hostile profile records 49 complete-census events: 40 join the producer
-manifest and nine belong to unrelated generic owners. Producer events retain
-the static route distribution (24 erased, 11 exact, four capability, one
-missing capability), but this is verified through the exact 40-entry count
-vector: one exact site is zero and another is two. Both frontends and both CLR
-profiles produce identical route/count bytes, while normal pre/post products
-remain byte-identical. This proves the index/frequency mechanism only. Console
-events perturb execution and the hostile application is non-representative;
-neither result can select owner admission or quantify production cost. See
-[`../archive/generic-owner-call-route-trace-2026-08-14.md`](../archive/generic-owner-call-route-trace-2026-08-14.md).
-
-Representative-frequency collection uses the same insertion point but not the
-per-call console transport. Only the explicitly instrumented executable gains
-one private `Int64[]` sized to the complete route census and private physical
-recorder/flusher bodies. Recording is one linearizable
-`Interlocked.Increment`; after `box()` returns, atomic reads emit one line per
-visited site under trace schema 2's `FINAL_FLUSH` protocol. The application is
-responsible for joining its workers before returning. This removes output
-growth with dynamic call count and preserves the exact cross-frontend/profile
-hostile vector without adding CLI, Runtime, KLIB, or published ABI, but its
-overhead still excludes the instrumented run from timing evidence. See
-[`../archive/generic-owner-call-route-counter-flush-2026-08-15.md`](../archive/generic-owner-call-route-counter-flush-2026-08-15.md).
-
-The first non-hostile application census now stages exact repository
-ArrayCopy source. Its 5,664 local dynamic events are all exact typed-entry
-candidates across both frontends and both CLRs, while its unchecked
-`Any[] as Array<T?>` initialization correctly classifies the owner-relative
-array field as semantic state. This supports a small observed capability call
-mix without conflating exact receiver provenance with typed field provenance.
-It is not yet a paired candidate/C# product or representative breadth. See
-[`../archive/generic-owner-array-copy-application-census-2026-08-15.md`](../archive/generic-owner-array-copy-application-census-2026-08-15.md).
-
-The second exact input is recursive OctoTree. Twenty-five local exact sites
-receive 5,941 events; nine semantic-capability sites receive 3,096. Its
-`Array<Node<T>?>` field can truthfully use the current erased classifier's
-`Node[]`, while direct `Array<T>` remains `System.Array` and production
-`Leaf.value: T` remains `object`. The candidate provenance proof recognizes
-the exact local owner-classifier allocation without treating a bounded direct
-`T` as physically stable. This is an independently useful optimization and
-broader distribution evidence, not production `C<T>` admission. See
-[`../archive/generic-owner-octo-tree-application-census-2026-08-15.md`](../archive/generic-owner-octo-tree-application-census-2026-08-15.md).
-
-State and callable prototypes must use one path-unbound classifier grammar.
-A Kotlin-owned constructed type is identified by its pre-lowering logical key,
-never a source/display name, until a complete physical-family builder selects
-its TypeDef path. Constructor, member, and default-helper signatures bind that
-tree atomically into the existing physical signature record. Non-exact
-semantic roles may widen only after the complete bounded classifier shape has
-been validated; an unknown `Foreign<T>` must not become `object` merely because
-it mentions the owner parameter. Generic value classes remain excluded while
-the grammar's logical classifier binds as a CLR class. The separate recursive
-OctoTree producer pins typed `Node<T>[]`, capability `System.Array`, missing-
-path rejection, and equality between the bound getter return and field. See
-[`../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md`](../archive/generic-owner-path-unbound-member-signatures-2026-08-16.md).
-
-Schema 11 applies that rule to the complete four-owner OctoTree family. A
-producer-scoped type or MethodDef owner not present in the same artifact
-rejects the artifact atomically. `Branch.nodes` combines exact `Node<T>[]`
-storage with its fixed-vector constructor recipe; `Leaf.value` combines `!T`
-storage with the exact logical constructor and parameter index which initialize
-it. Explicit default null may be omitted only after the planner proves it is
-the CLR object-field default. This remains a production-inert architecture
-record and does not authorize a mixed owner ABI. See
-[`../archive/generic-owner-complete-octo-tree-family-2026-08-17.md`](../archive/generic-owner-complete-octo-tree-family-2026-08-17.md).
-
-Schema 12 fixes the sealed-base mapping before the complete product is built.
-Kotlin `sealed` is not the CLI sealed flag: known subclasses still need a legal
-base edge. The physical base is abstract and its constructors are
-`FamilyAndAssembly` (C# `private protected`), which admits only a derived
-TypeDef in the producer assembly. `Assembly` would unnecessarily admit every
-producer type; `Family` or `FamilyOrAssembly` would admit an external C#
-subclass. A decoded OctoTree record now drives an executable `Node<T>`/`Leaf<T>`
-producer with true `!T` state. A separate C# consumer constructs and reflects
-`Leaf<int>`, while a separate C# subclass must fail compilation on Framework
-4.8 and .NET 10. This is a construction/Leaf-state slice of the candidate, not
-the atomic owner cutover. See
-[`../archive/generic-owner-sealed-construction-closure-2026-08-17.md`](../archive/generic-owner-sealed-construction-closure-2026-08-17.md).
-
-That decoded product now also physicalizes final `Branch<T> : Node<T>`. Its
-two public constructors retain the recorded base/this edges, and only the base
-root executes the recorded private `Node<T>[8]` initializer. Direct C# proves
-the open field is `Node<T>[]`, the closed value is `Node<int>[]`, and empty and
-populated constructor behavior share the same typed vector/Leaf state on both
-profiles. At that checkpoint the source-body loop remained an explicit bounded
-scenario oracle; all declaration and ABI identities came from the artifact.
-The typed callable
-part now emits the recorded abstract `Node.set` plus ordinary non-final virtual
-Leaf/Branch overrides and exact typed identity accessors. Direct C# proves
-base-reference dispatch and same-field mutation. The non-generic strict
-capability interfaces and private-final object-to-`!T` dispatchers now prove
-inherited and owner-specific routes reach the same most-derived typed override,
-while incompatible input fails before mutation. The recorded Leaf state
-capability now reads/writes the same true `T` field through its non-generic
-`object` boundary, and the Branch state capability returns the same
-`Node<T>[]` reference through `System.Array`. Direct C# proves value boxing at
-only the Leaf capability boundary, incompatible pre-mutation failure, array
-identity, and private/final interface-map targets. The outer open Tree now
-materializes its recorded public constructor and members over one private
-semantic `object` root. Its physicalizer consumes the compiler census and
-requires Tree.get-to-Leaf-read, Tree.get-to-Branch-read, and Tree.set-to-
-Node.set to remain semantic-capability calls. Direct C# proves typed and
-non-generic calls share one object graph, incompatible input fails before
-mutation, and an external subclass inherits the base-declared dispatchers.
-Whole-family metadata/reflection normalization is now closed for this detached
-candidate. An inverse join takes the KLIB-selected logical classifier as
-mandatory context and maps every exact physical MethodDef family to one
-callable while hiding capability TypeDefs and producer-private methods. The
-context cannot be removed: the hostile derived owner legitimately reuses its
-base capability TypeDef and inherited dispatcher for a distinct override. An
-independently compiled `System.Reflection.Metadata` product reads each
-Framework/net10 candidate and exhaustively checks its TypeDef, GenericParam,
-InterfaceImpl, MethodImpl, field, method, signature, and flag rows. It found
-and closed previously omitted Leaf/Branch rendering overrides which inherited
-Object rendering had hidden from the execution oracle. Schema 13 now records
-every declaration-independent field with its exact carrier, initializer,
-access, and init-only contract, plus each ordinary private non-KLIB helper as a
-private-final implementation MethodDef outside capabilities and logical
-reflection. The record-driven product executes the complete recursive OctoTree
-algorithms over its real depth/actual fields. The next product is paired
-representative measurement across Framework 4.8 and every required .NET 10
-deployment lane.
-See
-[`../archive/generic-owner-octo-tree-branch-product-2026-08-17.md`](../archive/generic-owner-octo-tree-branch-product-2026-08-17.md).
-The typed callable checkpoint is recorded in
-[`../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md`](../archive/generic-owner-octo-tree-typed-callables-2026-08-17.md).
-The strict capability checkpoint is recorded in
-[`../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md`](../archive/generic-owner-octo-tree-strict-capability-2026-08-17.md).
-The state-access capability checkpoint is recorded in
-[`../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md`](../archive/generic-owner-octo-tree-state-capabilities-2026-08-17.md).
-The outer-root checkpoint is recorded in
-[`../archive/generic-owner-octo-tree-root-product-2026-08-17.md`](../archive/generic-owner-octo-tree-root-product-2026-08-17.md).
-The whole-family metadata/reflection checkpoint is recorded in
-[`../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md`](../archive/generic-owner-octo-tree-metadata-reflection-product-2026-08-17.md).
-The schema-13 ordinary-body closure is recorded in
-[`../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md`](../archive/generic-owner-octo-tree-ordinary-body-closure-2026-08-17.md).
-
-A broad candidate input is inherited semantic authority, not a property that
-may be narrowed by re-reading only the overriding declaration. Local families
-therefore propagate broad positions to a fixed point across their override
-roots. A separate consumer merges the producer record's broad positions into
-its own snapshot before any physical binding is returned.
-
-## Inheritance, interfaces, and reflection
-
-The generic implementation retains its exact CLR base construction and exact
-truthful interface edges. A C# subclass of `C<T>` and a Kotlin subclass must
-both remain visible through typed and semantic virtual calls. `MethodImpl`
-rows may connect capability slots to semantic entries, but a bridge may not
-bypass the most-derived override or narrow a candidate before dispatch.
-
-CLR declaration-site variance may be used only on capability interfaces and
-delegates whose complete member surface satisfies ECMA-335 variance. CLR
-classes remain invariant. A member excluded from a variant interface remains
-available through the non-generic semantic capability; no fictitious
-`C<object>` or `I<object>` edge is emitted.
-
-`KClass` normalizes every construction of the recorded open `C<>` TypeDef to
-one Kotlin declaration. `KType` continues to obtain logical arguments from
-KLIB, not from a guessed runtime construction. Callable reflection exposes
-one Kotlin member and dispatches through the same semantic/typed override
-family; compiler capability members do not leak into `members`.
-
-## Devirtualization and specialization
-
-Kotlin/Native Variable Type Analysis and Swift SIL devirtualization are useful
-proof precedents. A finite receiver/construction set can select a direct typed
-entry, clone a semantic body for an exact value type, or invoke an exact BCL
-operation. At public/cross-assembly roots the analysis must retain the
-semantic virtual fallback.
-
-Devirtualization cannot create a missing public `!T`, prove future C#
-subclasses, or turn an unrepresentable open-nullable construction into an
-exact CLR type. It is a consumer of this representation model, not its
-correctness argument.
-
-## Rejected recurrence of earlier bugs
-
-- Do not make an erased capability bridge cast every argument and forward to
-  the typed slot.
-- Do not use `C<object>` as star identity or a universal exact construction.
-- Do not select canonical ABI from source visibility, a static Kotlin type,
-  or one local allocation while ignoring joins and separate producers.
-- Do not keep typed and erased authoritative stores.
-- Do not wrap/copy after casts or projections.
-- Do not let a typed fast path change receiver/argument evaluation count,
-  virtual target, exception identity/timing for valid calls, or returned object
-  identity.
-- Do not publish easy owners before the open mutable hostile model is green.
+That shape gives Kotlin typed fields and calls where they are truthful and gives
+C# a natural type to construct, consume, and subclass. It is not sufficient by
+itself. Kotlin also admits stars, projections, logical widening, broad candidate
+inputs, unchecked casts, and override families which the CLR cannot always name
+as one constructed class type.
+
+The accepted production representation therefore remains the non-generic
+erased owner. This draft defines the class-specific candidate that may replace
+it only after one complete atomic rehearsal. The shared physical-authority ADR
+owns declaration epochs, callable contracts, value provenance, joins, and late
+operation routing. This ADR selects only the class owner, state, inheritance,
+C# subclassing, and migration rules.
+
+Historical schema evolution, bounded recognizers, measurements, and individual
+proofs belong in the programme and dated archive. They are evidence for this
+decision, not additional representation rules.
+
+## Decision
+
+### 1. One natural implementation owner
+
+For an admitted logical declaration `class C<T...>`, the candidate emits:
+
+1. one natural CLR implementation TypeDef `C<T...>`;
+2. one receiver identity and one authoritative object state;
+3. only where required, a non-generic compiler-ABI semantic capability
+   implemented by that same object; and
+4. producer-recorded physical owner, state, member, inheritance, and bridge
+   identities joined to the logical KLIB declaration.
+
+There is no second erased implementation owner, typed sibling class, wrapper,
+proxy, or alternate Kotlin classifier. A semantic capability is only another
+physical view of the same receiver. It is not the canonical class, does not own
+state, and does not appear as another Kotlin declaration.
+
+KLIB remains authoritative for logical type arguments, variance, nullability,
+projections, bounds, overrides, and reflection identity. The emitted TypeDef,
+MethodDefs, fields, base/interface edges, and MethodImpls are authoritative for
+their physical CLR shape. Neither side may be reconstructed from the other by
+name or by a later type approximation.
+
+### 2. Admission is declaration-wide; exactness is construction-local
+
+Admission is decided for the complete open declaration and every producer-
+visible obligation. A class is not admitted merely because one closed use such
+as `C<Int>` is easy. Unsupported inheritance, state, member, reflection, or
+separate-compilation shapes keep that declaration on the production erased
+representation until the missing mechanism exists.
+
+After a class family is admitted, a particular value may carry an exact natural
+construction when physical authority proves it, for example:
+
+```text
+C<String>       -> C<string>
+C<Int>          -> C<int32>
+C<R> in method  -> C<!!R>
+```
+
+Stars, projections, widened views, open-nullable arguments, or nested generic
+arguments may have no single truthful constructed CLR spelling. Such a value is
+carried through an authority-selected semantic capability or object boundary.
+This is construction-local loss of precision; it does not erase the open
+`C<T>` TypeDef, every construction of `C`, or every field whose type mentions
+`T`.
+
+An outer generic construction chooses its physical argument from the complete
+logical and physical production contract for that construction. It may use an
+exact nested construction only when every legal value at that boundary has the
+same verifier-valid carrier. Otherwise it uses an honest semantic/object
+carrier. It must never claim `I<object>` or `C<object>` as a runtime view of an
+object known only to implement `I<int>` or `C<int>`.
+
+A logical widening does not erase independently preserved exact provenance,
+but the logical type alone never creates it. Public parameters, mutable joins,
+fields, and separately compiled results receive exactness only from their
+producer-recorded physical contract and the shared provenance model.
+
+Open-nullable construction and metadata-fixed ancestry are admission gates. If
+one CLR TypeSpec cannot truthfully encode a base such as `D<T> : C<T?>` for all
+legal substitutions, the backend may not repair it with runtime reflection or
+pretend a fixed `C<object>` edge is exact. The declaration remains erased or
+unadmitted until an honest one-owner representation is proved.
+
+### 3. State is selected once from every legal producer
+
+Each field or equivalent state slot has one producer-wide storage decision.
+The decision considers at least:
+
+- every constructor, initializer, and write path;
+- broad and semantic entries which can reach the state;
+- overrides, inherited obligations, and external callers;
+- visibility, object escape, and separate compilation; and
+- required memory and atomicity semantics.
+
+The state may use `!T`, another exact constructed carrier, a semantic
+capability, `System.Array`, or `object`. A `!T` field is selected only when every
+legal producer and escape proves that carrier and no semantic path can install
+an incompatible representation. One unsupported or genuinely broad writer
+selects a truthful wider carrier for that state slot or leaves the declaration
+unadmitted. It does not automatically widen unrelated fields.
+
+The CLR-generic owner is therefore not a promise that every owner-dependent
+field is typed. Conversely, one semantic field is not permission to route all
+other state or calls through `object`. State is selected before local value
+provenance; exact local facts may optimize access to the selected field but may
+not specialize or duplicate it.
+
+Typed and semantic accessors operate on the same field. Required conversions
+occur at the real boundary selected by the callable contract. No typed cache,
+erased mirror, shadow state, lazy synchronization, wrapper, or proxy may repair
+an incompatible state plan.
+
+### 4. Member routes compose with the shared callable model
+
+This ADR does not assign one carrier to every `T`, `T?`, property, or method.
+Each physical member uses the independent parameter-domain and result-layout
+policies in the shared physical-authority ADR. In particular, a direct logical
+`T?` result may use a producer-recorded split-nullable layout; this ADR does not
+require it to return `object` merely because it belongs to a class.
+
+The natural typed MethodDef or PropertyDef is the normal Kotlin-exact and C#
+entry whenever its complete contract is truthful. A compiler-generated hook or
+capability dispatcher exists only for an operation whose Kotlin view cannot be
+served by that entry. Broad candidate inputs reach their semantic body or
+shared Kotlin special-bridge result without first being narrowed to `!T`.
+Strict inputs check only at their actual typed-use boundary. Output-safe calls
+may retain an already-proven exact receiver construction through logical
+widening and widen the result after the natural call.
+
+A semantic lowering may not replace an already-proven natural route merely
+because the logical view is broad. It may do so only when the operation's
+recorded Kotlin contract requires a broader input, result, override, or state
+domain, or when new physical authority invalidates the earlier proof. Equally,
+an exact carrier may never narrow a genuinely broad source value.
+
+Member roles and routes are derived from logical override families, producer-
+recorded physical contracts, state decisions, and value provenance. Class,
+package, stdlib, member name, IR origin, generated-name pattern, or one current
+call shape is never authority.
+
+### 5. Ordinary C# subclasses use the natural surface
+
+For an admitted public/open class, C# constructs and subclasses the natural
+`C<T>` owner directly. Source-visible typed constructors, methods, and
+properties are the supported ordinary C# contract. A C# author must not need to
+know or implement a generated Kotlin semantic capability merely to use a
+semantic result which the compiler can derive mechanically from those natural
+slots.
+
+Kotlin semantic dispatch must observe the most-derived ordinary C# override
+whenever the operation can be implemented from that override without changing
+Kotlin behavior. The compiler owns any bridge, MethodImpl, dispatcher, or
+override-detection mechanism needed to connect the natural slot to its semantic
+view. Kotlin-produced subclasses emit their corresponding compiler ABI
+automatically. Compatible exact and widened calls must not diverge merely
+because the most-derived subclass was written in C#.
+
+The compiler cannot invent user behavior or storage that is absent from the
+natural CLR contract. If an abstract or broad Kotlin obligation admits values
+or results that no natural typed override can represent, the class shape is not
+therefore silently accepted by requiring every C# subclass to implement a
+hidden convention. It remains unadmitted for wrapper-free subclassing, or an
+explicitly specified adapter/authoring contract must own that semantic
+boundary. A future source generator may provide such an explicitly selected
+adapter; its absence is not an admission requirement for semantics that the
+compiler can derive. Compiler/runtime code, rather than hidden foreign-source
+ABI, owns optimization of derivable semantic routes. If generated code makes an
+otherwise unsupported semantic contract possible, that code is a distinct,
+visible interop adapter rather than a hidden completion of the natural owner.
+
+Imported CLR generic classes are a separate case. Their retained CLR TypeDefs,
+MethodDefs, inheritance, constraints, and variance are native physical
+authority. They do not acquire this Kotlin-owned semantic capability merely
+because Kotlin imports or uses them.
+
+### 6. Inheritance and virtual dispatch retain emitted physical truth
+
+Every base-class and implemented-interface edge must be a truthful, metadata-
+fixed CLR construction. Later logical substitution cannot rewrite an emitted
+base MethodDef, foreign MethodDef, InterfaceImpl, or MethodImpl. When a derived
+Kotlin body has a different physical signature, the producer records and emits
+the required bridge or MethodImpl against the authoritative inherited slot.
+
+The complete override family must preserve:
+
+- most-derived Kotlin and C# virtual dispatch through natural and semantic
+  routes;
+- non-virtual `super` calls to the producer-recorded base endpoint;
+- abstract members, reabstraction, defaults, and diamonds where admitted;
+- constructor delegation and one inherited state graph; and
+- the original declaring owner and slot across separately compiled assemblies.
+
+A bridge may convert around a call; it may not narrow a broad candidate before
+the Kotlin operation has made its semantic decision, bypass an override, open a
+sibling virtual slot, or reinterpret an inherited signature from the current
+consumer's substituted Kotlin type.
+
+CLR classes remain invariant. Kotlin declaration- or use-site variance is a
+logical rule serviced by an exact natural construction only when the CLR has a
+verifier-valid physical view, and otherwise by the same object's semantic
+route. No fictitious variant class edge is emitted.
+
+### 7. Casts use only the accepted BK-1 boundary
+
+This class candidate does not create a general “CLR casts are stricter” rule.
+The accepted [BK-1 entry](breaking-kotlin-changes.md) alone governs
+structurally unchecked parameterized `as`, `as?`, and any admitted
+parameterized `is` for a true CLR-generic owner. They use the same Kotlin-aware
+compatibility predicate; only mismatch behavior differs. Diagnostic suppression
+does not select runtime behavior. Valid Kotlin variance and projection
+conversions continue to succeed with the same object even when their logical
+view has no constructed CLR spelling.
+
+Star tests and casts classify the recorded open declaration/capability, not
+`C<object>`. A successful conversion preserves identity, state, synchronization,
+and virtual dispatch. No warning-free Kotlin operation, `@UnsafeVariance`, or
+available CLR `isinst` check extends BK-1.
+
+### 8. Reflection exposes one Kotlin declaration
+
+All recorded constructions of the natural open `C<>` TypeDef normalize to one
+Kotlin `KClass`. `KType` obtains logical arguments, projections, nullability,
+and bounds from KLIB rather than reverse-engineering a closed CLR construction.
+Callable reflection maps every typed, semantic, bridge, default, and helper
+MethodDef in one recorded family to its one logical callable, or hides it when
+it has no Kotlin declaration.
+
+Raw CLR reflection may truthfully show `C<T>` and compiler-generated physical
+members. Those members must be marked and named as compiler ABI, stay out of
+ordinary supported C# authoring and IntelliSense where the platform permits,
+and never appear as extra Kotlin declarations.
+
+### 9. Separate compilation consumes producer facts, not guesses
+
+The producer serializes the admitted open TypeDef, generic binders and
+constraints, exact base/interface constructions, constructor and member
+families, state decisions, virtual slots, MethodImpls, capability endpoints,
+visibility, memory semantics, and callable layouts. A consumer binds those
+facts by artifact, logical declaration key, and physical owner/member identity.
+
+The consumer does not regenerate compiler names, infer a slot from arity or
+current erased metadata, substitute a later logical type into an old MethodDef,
+or fill missing final-emission evidence from an earlier plan. Missing, stale,
+ambiguous, contradictory, or incomplete family records fail closed before a
+physical route is selected.
+
+Per-value provenance remains compilation-local and follows the shared ADR. It
+is not serialized as hidden state. A cross-assembly boundary retains an exact
+carrier only when its producer-recorded physical signature guarantees it.
+
+### 10. Production cutover and rollback are atomic
+
+This draft authorizes production-inert planning, physical families, metadata
+records, hostile products, shadow provenance, and inverse tests only. The
+accepted non-generic class owner remains production authority.
+
+Production may switch only after the complete selected class/interface,
+Runtime, Stdlib, reflection, importer/exporter, compiler, build-tool, C#,
+deployment, and separate-compilation family passes the migration gates. The
+switch must:
+
+1. replace the erased owner family and its physical binding in one schema
+   epoch;
+2. reject stale artifacts instead of supporting a mixed erased/generic period;
+3. contain no per-class or easy-owner pilot that gives one logical declaration
+   different physical identities across modules; and
+4. retain and execute the exact inverse which restores the production-erased
+   owner, routes, artifacts, and tests without a compatibility shim.
+
+A failed rehearsal or inverse keeps production erased. A successful bounded
+owner is evidence, not authority to migrate it alone.
+
+## Non-negotiable invariants
+
+1. Kotlin IR/KLIB owns logical Kotlin semantics; emitted or retained CLR
+   metadata owns physical declarations.
+2. An admitted logical class has one natural `C<T...>` implementation owner.
+3. Every object has one identity and one authoritative state.
+4. A semantic capability is a same-object compiler view, never a second owner
+   or Kotlin classifier.
+5. Typed state is selected only from the complete producer-wide write, escape,
+   inheritance, memory, and separate-compilation proof.
+6. Construction-local loss of exactness never globally erases unrelated
+   constructions, fields, or calls.
+7. Logical subtyping or a later substitution never fabricates a CLR
+   construction or rewrites an emitted/foreign MethodDef.
+8. Broad semantic inputs do not contaminate unrelated exact receiver-derived
+   state, and exact provenance never narrows a genuinely broad value.
+9. Ordinary C# subclassing uses the natural surface; compiler ABI is not a
+   hidden default author obligation.
+10. Natural and semantic routes preserve one override family, including C#
+    overrides and `super`.
+11. Callable parameter/result layout, including split-nullable results, follows
+    the shared physical-authority ADR rather than a class-specific rule.
+12. BK-1 is the only accepted parameterized-cast incompatibility.
+13. No wrapper, proxy, copied store, shadow state, or reflective fiction repairs
+    representation.
+14. Production stays erased until one atomic cutover, and the exact erased
+    inverse remains executable.
+
+## Rejected alternatives
+
+- **Typed primary members with narrowing erased bridges.** They reject ordinary
+  widened candidate inputs before Kotlin can produce its required result.
+- **A permanent erased implementation twin.** It creates competing owner and
+  state identities rather than a semantic view of one object.
+- **`C<object>` as star, projection, or universal fallback identity.** CLR
+  class invariance and value-type constructions make that claim false.
+- **Local allocation or static Kotlin type selects field/ABI layout.** It
+  ignores other writers, escapes, overrides, and separately compiled producers.
+- **Two stores or representation-repair wrappers.** They break identity,
+  mutation, synchronization, dispatch, or memory semantics.
+- **Hidden compiler ABI as the ordinary C# subclass contract.** Mechanically
+  derivable behavior belongs in compiler-generated routing; non-derivable
+  semantics require an explicit contract or remain unadmitted.
+- **Unbounded runtime generic construction as the correctness mechanism.** It
+  is not a truthful metadata-fixed ancestry model and is incompatible with the
+  required AOT and trimming contract.
+- **Per-owner production pilots.** They create a mixed ABI before the complete
+  family and inverse have proved the selected representation.
 
 ## Evidence required before acceptance
 
-Acceptance requires:
+Acceptance requires one declaration- and package-independent hostile matrix
+covering at least:
 
-1. the hostile Kotlin oracle in same and separate compilation;
-2. a C# producer/subclass/consumer matrix including arbitrary structs;
-3. completion of the current snapshot-driven base owner into compiler-produced
-   Kotlin subclass override families with one `C<T>`/state/capability product;
-4. exact CIL assertions for TypeDefs, GenericParams, InterfaceImpls,
-   MethodImpls, fields, virtual slots, constraints, and physical bindings;
-5. class/callable/KType normalization and no capability-member leakage;
-6. both CLR profiles, both FIR parsers, and stale-schema rejection;
-7. representative JIT, ReadyToRun, and NativeAOT measurements for boxing,
-   allocations, throughput, code size, metadata, compile time, and memory; and
-8. an atomic migration/rollback plan which removes the old erased owner rather
-   than supporting a mixed period for one logical declaration.
+- open, abstract, final, and sealed classes with one and multiple parameters;
+- reference, primitive, nullable primitive, enum, tuple, framework struct,
+  user struct, value-class, bounded, and open-nullable substitutions;
+- exact, semantic, star, projected, widened, nested-generic, array, and joined
+  constructions, including multiple incompatible reaching constructions;
+- constructor, initializer, typed-state, semantic-state, volatile-state, field,
+  custom-property, broad-input, broad-output, and `@UnsafeVariance` paths;
+- Kotlin/Kotlin, Kotlin/C#, and C#/Kotlin inheritance across multiple levels and
+  assemblies, including abstract obligations, defaults, reabstraction,
+  diamonds, overloads, direct `super`, and ordinary C# subclasses which do not
+  implement hidden compiler ABI;
+- exact MethodDef, TypeDef, GenericParam, constraint, base/interface,
+  MethodImpl, field, property, nullability, visibility, and memory-semantics
+  metadata;
+- classifier, `KClass`, `KType`, callable, and member-reflection normalization;
+- BK-1 mismatch and valid variance/projection identity on the same objects;
+- stale, incomplete, conflicting, and version-skewed producer records;
+- both FIR parsers, Framework 4.8, .NET 10 JIT and ReadyToRun, trimming, and
+  NativeAOT; and
+- representative Kotlin and C# applications measuring boxing, allocation,
+  throughput, startup, code/metadata size, compilation cost, and memory.
 
-Only then may this draft replace the current erased-owner ADR and authorize
-production Kotlin-owned `C<T>` TypeDefs.
+Every positive state case proves one physical field/store and every positive
+route identifies the selected MethodDef or MethodImpl. Every negative case
+fails closed without a fabricated construction, wrapper, shadow state, or
+silent fallback. The final rehearsal must execute both the complete candidate
+and its exact production-erased inverse before this draft may replace the
+current production ADR.
+
+## Consequences
+
+- Truthful `C<T>` identity, typed state, and typed calls become the normal class
+  surface where complete proof permits them.
+- Semantic/object routing remains a narrow operation or storage escape hatch,
+  not a contagious default and not a second implementation model.
+- Some Kotlin class declarations may remain erased because their metadata-fixed
+  inheritance or open semantic obligations cannot yet support one honest CLR
+  owner.
+- C# receives a normal generic owner for admitted declarations; explicit export
+  remains useful for naming, overload conveniences, BCL projections, and real
+  semantic adapters, not to duplicate an already truthful owner.
+- The candidate remains free to improve callable layouts and value provenance
+  through their shared ADR without reopening the class-owner decision.

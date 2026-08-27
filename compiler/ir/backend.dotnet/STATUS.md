@@ -83,9 +83,19 @@ under [`docs/README.md`](docs/README.md).
 
 ## Active work
 
-The source-built Stdlib census is paused while physical declaration authority
-and per-value carrier provenance are consolidated in shadow/rehearsal mode.
-The current generic-owner checkpoint has:
+The source-built Stdlib census is paused while the generic-owner architecture
+is consolidated in shadow/rehearsal mode. The review selected two
+production-inert replacement hypotheses:
+
+- one shared physical-declaration/value-provenance model, separate from
+  producer-wide state selection; and
+- one complete natural CLR-generic interface whose physical variance is
+  weakened where its full contract requires it, plus semantic routing only for
+  Kotlin views the CLR cannot name.
+
+The former exact-sibling interface and natural-only public-method convention
+remain implementation evidence, not the desired ABI. The current checkpoint
+also has:
 
 - a local final-emission signature certificate for one complete family;
 - binder-correct MethodDef generic parameters and MethodSpec call routing; and
@@ -94,19 +104,29 @@ The current generic-owner checkpoint has:
 
 The next bounded sequence is:
 
-1. add retained-foreign final-evidence adaptation;
-2. prove static/file-facade operation authority;
-3. prove overlapping and global family ownership without allowing earlier
+1. close the imported CLR variance soundness gap with one mandatory physical-
+   conversion gate while retaining legal reference-only CLR variance;
+2. add a shadow complete-surface variance planner and prove one custom
+   input-bearing interface as a single natural TypeDef without an exact sibling;
+3. route broad foreign operations through real constructed interface MethodDefs
+   and recorded Kotlin policy, never concrete public-method name/arity lookup;
+4. migrate the rehearsal family and remove exact-sibling ABI only after the
+   hostile inverse proves every retained behavior;
+5. add retained-foreign final-evidence adaptation and prove static/file-facade
+   operation authority;
+6. prove overlapping and global family ownership without allowing earlier
    BOUND evidence to fill a missing final fact;
-4. compose owner-dependent input policy with split-nullable result layout on a
+7. compose owner-dependent input policy with split-nullable result layout on a
    custom two-parameter lookup family before applying it to `Map`;
-5. replace bounded recognizers only after the shared provenance model explains
+8. replace bounded recognizers only after the shared provenance model explains
    both their positive cases and hostile negatives; and
-6. run the complete Runtime/Stdlib, separate Kotlin/C# assembly, Framework 4.8,
+9. run the complete Runtime/Stdlib, separate Kotlin/C# assembly, Framework 4.8,
    .NET 10 JIT/ReadyToRun/trimmed/NativeAOT, production-erased inverse, and
    rollback decision gates.
 
-Authority and remaining hostile cases:
+Shared authority and provenance:
+[`docs/decisions/draft-adr-generic-owner-physical-authority.md`](docs/decisions/draft-adr-generic-owner-physical-authority.md).
+Interface shape and remaining hostile cases:
 [`docs/decisions/draft-adr-reified-generic-interface-owner.md`](docs/decisions/draft-adr-reified-generic-interface-owner.md).
 Class-owner admission, state, C# surface, and migration boundaries:
 [`docs/programmes/generic-class-owner-reopening.md`](docs/programmes/generic-class-owner-reopening.md).
@@ -115,6 +135,22 @@ Class-owner admission, state, C# surface, and migration boundaries:
 
 - The generic-owner sealed authority is not yet complete for retained foreign
   declarations, static/file-facade calls, or overlapping/global ownership.
+- Imported CLR declaration-site variance is logically broader than the CLR's
+  reference-only physical conversion. The emitter fails closed, but a mandatory
+  pre-emission conversion gate and source diagnostic are still missing.
+- The current exact-sibling rehearsal does not give ordinary CLR languages one
+  complete statically checked natural interface. Its replacement proof has not
+  yet been emitted or executed.
+- The active Roslyn authoring analyzer still requires `partial` for every
+  manifest contract outside a narrow invariant-natural fallback, including
+  non-generic and old generic-capability shapes. That conflicts with the
+  complete-natural-contract direction. The diagnostic cannot simply be
+  disabled: producer metadata and compiler routing must first make generated
+  capability unnecessary for admission, then the rule must be removed and an
+  ordinary precompiled non-partial implementation proved.
+- Raw `System.Array` is physically broader than Kotlin `Array<*>` and
+  `Array<out E>`. Foreign-entry SZ-array and bounded-element guards are now a
+  required decision but are not yet proven across every entry form.
 - Shared carrier provenance is still a shadow comparison; bounded recognizers
   remain authoritative until their hostile matrices are derived generally.
 - No production generic-interface or generic-class cutover is authorized until

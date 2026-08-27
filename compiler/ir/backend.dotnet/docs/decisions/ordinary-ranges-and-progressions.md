@@ -22,6 +22,11 @@ progression classes are non-generic CLR classes with exact `char`, `int32`, or
 `int64` state. Their generic `Iterable<T>` and range-interface edges use the
 ordinary erased Kotlin interface views and bridges.
 
+The erased interface wording describes the current production epoch. A later
+atomic generic-owner replacement changes those inherited physical views through
+the owning interface ADR; it does not reopen the Common range/progression
+algorithms or the exact signed primitive class carriers here.
+
 The eight shared primitive iterator base classes become ordinary public
 Kotlin.Stdlib classes. Each owns its exact `nextByte`, `nextInt`, and analogous
 primitive member plus the authoritative boxed `next` bridge from Common

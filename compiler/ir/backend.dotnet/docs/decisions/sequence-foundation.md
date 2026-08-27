@@ -28,6 +28,11 @@ generic-class ABI. Intermediate operations therefore return ordinary
 Kotlin-owned objects whose iterator acquisition, callback order, laziness,
 exception identity, and one-shot behavior come from Common source.
 
+That physical clause describes the binding production epoch. If the generic-
+owner family later switches atomically, `Sequence` follows the then-selected
+owner ADR without reopening its Common laziness, ordering, exception, identity,
+or source-ownership decisions here.
+
 The initial closure deliberately excluded every declaration whose body reached
 an independent unavailable substrate:
 
