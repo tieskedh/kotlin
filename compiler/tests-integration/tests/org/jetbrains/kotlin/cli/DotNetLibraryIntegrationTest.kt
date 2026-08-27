@@ -23704,6 +23704,208 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrVarianceRejectsVerifierInvalidBoundaryConversions() {
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCSharp != null,
+            ".NET Framework C# compiler is not available",
+        )
+        val frameworkCoreLibrary = checkNotNull(frameworkCSharp).parentFile.resolve("mscorlib.dll")
+        assertTrue(frameworkCoreLibrary.isFile) {
+            "Framework compiler has no adjacent mscorlib reference: $frameworkCoreLibrary"
+        }
+        val modernSystemRuntime =
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(modernSystemRuntime.isFile) {
+            "Modern reference pack has no System.Runtime reference: $modernSystemRuntime"
+        }
+
+        data class Profile(
+            val target: String,
+            val systemReference: File,
+            val compileFixture: (File, File) -> CSharpCompilerResult,
+        )
+
+        val profiles = listOf(
+            Profile(
+                target = "net48",
+                systemReference = frameworkCoreLibrary,
+                compileFixture = { source, output ->
+                    runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
+                },
+            ),
+            Profile(
+                target = "net10.0",
+                systemReference = modernSystemRuntime,
+                compileFixture = { source, output ->
+                    runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
+                },
+            ),
+        )
+
+        for (profile in profiles) {
+            val directory = File(
+                tmpdir,
+                "foreign-variance-${profile.target.replace('.', '-')}",
+            ).apply { mkdirs() }
+            val fixtureSource = directory.resolve("ForeignVariance.cs").apply {
+                writeText(
+                    """
+                    namespace ForeignVariance
+                    {
+                        public interface Producer<out T>
+                        {
+                            T Produce();
+                        }
+
+                        public interface Consumer<in T>
+                        {
+                            void Consume(T value);
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val fixtureAssembly = directory.resolve("Foreign.Variance.dll")
+            val fixtureResult = profile.compileFixture(fixtureSource, fixtureAssembly)
+            assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+            val classpath = listOf(fixtureAssembly, profile.systemReference)
+                .joinToString(File.pathSeparator, transform = File::getPath)
+
+            val acceptedSource = directory.resolve("acceptedVariance.kt").apply {
+                writeText(
+                    """
+                    package accepted
+
+                    import ForeignVariance.Consumer
+                    import ForeignVariance.Producer
+
+                    public fun referenceCovariance(
+                        value: Producer<String>,
+                    ): Producer<Any> = value
+
+                    public fun referenceContravariance(
+                        value: Consumer<Any>,
+                    ): Consumer<String> = value
+
+                    public fun exactValueConstruction(
+                        value: Producer<Int>,
+                    ): Producer<Int> = value
+
+                    public fun <T> exactOpenConstruction(
+                        value: Producer<T>,
+                    ): Producer<T> = value
+
+                    public fun nestedReferenceCovariance(
+                        value: Producer<Producer<String>>,
+                    ): Producer<Producer<Any>> = value
+                    """.trimIndent()
+                )
+            }
+            val rejectedSource = directory.resolve("rejectedVariance.kt").apply {
+                writeText(
+                    """
+                    package rejected
+
+                    import ForeignVariance.Consumer
+                    import ForeignVariance.Producer
+
+                    public fun rejectedCovariantReturn(
+                        value: Producer<Int>,
+                    ): Producer<Any> = value
+
+                    private fun consume(value: Producer<Any>) {}
+
+                    public fun rejectedArgument(value: Producer<Int>) {
+                        consume(value)
+                    }
+
+                    public fun rejectedContravariantReturn(
+                        value: Consumer<Any>,
+                    ): Consumer<Int> = value
+
+                    public fun <T : Any> rejectedOpenReturn(
+                        value: Producer<T>,
+                    ): Producer<Any> = value
+
+                    public fun <T : Any> rejectedOpenContravariantReturn(
+                        value: Consumer<Any>,
+                    ): Consumer<T> = value
+
+                    public fun rejectedNullableValueReturn(
+                        value: Producer<Int?>,
+                    ): Producer<Any?> = value
+                    """.trimIndent()
+                )
+            }
+            for (useLightTree in listOf(false, true)) {
+                val parserSuffix = if (useLightTree) "LightTree" else "Psi"
+                val [acceptedDiagnostics, acceptedExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        acceptedSource.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument, classpath,
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument,
+                        "AcceptedForeignVariance$parserSuffix",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        directory.resolve("AcceptedForeignVariance-$parserSuffix.il").path,
+                        "-Xuse-fir-lt=$useLightTree",
+                    )
+                )
+                assertEquals(ExitCode.OK, acceptedExitCode, acceptedDiagnostics)
+
+                val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        rejectedSource.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument, classpath,
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument,
+                        "RejectedForeignVariance$parserSuffix",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        directory.resolve("RejectedForeignVariance-$parserSuffix.il").path,
+                        "-Xuse-fir-lt=$useLightTree",
+                        K2DotNetCompilerArguments::renderInternalDiagnosticNames.cliArgument,
+                    )
+                )
+                assertEquals(
+                    ExitCode.COMPILATION_ERROR,
+                    exitCode,
+                    "Verifier-invalid variance was accepted for ${profile.target}/$parserSuffix:\n$diagnostics",
+                )
+                val diagnosticName = "[DOTNET_CLR_VARIANCE_REQUIRES_REFERENCE_ARGUMENTS]"
+                assertTrue(diagnosticName in diagnostics) {
+                    "No stable physical-conversion diagnostic for ${profile.target}/$parserSuffix:\n$diagnostics"
+                }
+                assertEquals(
+                    6,
+                    Regex(Regex.escape(diagnosticName))
+                        .findAll(diagnostics)
+                        .count(),
+                    "Not every explicit foreign-variance boundary was diagnosed for " +
+                            "${profile.target}/$parserSuffix:\n$diagnostics",
+                )
+                assertTrue("CLR variance conversion" in diagnostics) {
+                    "The physical-conversion diagnostic lost its explanation for " +
+                            "${profile.target}/$parserSuffix:\n$diagnostics"
+                }
+                assertFalse("not supported by the .NET backend" in diagnostics) {
+                    "The source checker deferred to late backend eviction for " +
+                            "${profile.target}/$parserSuffix:\n$diagnostics"
+                }
+            }
+        }
+    }
+
+    @Test
     fun testForeignClrInterfaceCallsRetainPhysicalBindingAcrossRuntimeProfiles() {
         val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(
