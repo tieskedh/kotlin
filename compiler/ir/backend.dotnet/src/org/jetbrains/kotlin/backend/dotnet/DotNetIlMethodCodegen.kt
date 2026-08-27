@@ -1870,8 +1870,13 @@ internal class DotNetIlMethodCodegen(
         // Shared lowerings may place statement-bearing expressions in compiler-temporary
         // initializers (including a Nothing-typed break/continue on a dead value path). Route
         // them through the same method-scope value emitter as try/when branch results; ordinary
-        // expressions still delegate directly to expression codegen.
-        emitValueExpression(initializer, slot.type)
+        // expressions still delegate directly to expression codegen. Placement is complete
+        // before this boundary is installed, so validation cannot feed back into slot choice.
+        expressionCodegen.withFixedPhysicalBoundary(
+            DotNetIlFixedPhysicalBoundary("initialization of local '${variable.name.asString()}'")
+        ) {
+            emitValueExpression(initializer, slot.type)
+        }
         if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
     }
@@ -2043,18 +2048,22 @@ internal class DotNetIlMethodCodegen(
      * singleton through the object-shaped ABI slot.
      */
     private fun emitReturnValue(expression: IrExpression, expectedType: DotNetIlValueType) {
-        if (signature.hasSplitNullableResult) {
-            emitSplitNullableReturnValue(expression, expectedType)
-        } else if (
-            function is IrSimpleFunction &&
-            function.isDotNetErasedObjectResult() &&
-            expectedType == DotNetIlValueType.Object &&
-            expression.type.isUnit()
+        expressionCodegen.withFixedPhysicalBoundary(
+            DotNetIlFixedPhysicalBoundary("return of '${function.name.asString()}'")
         ) {
-            emitVoidExpression(expression)
-            if (!methodContext.isTerminated) expressionCodegen.emitRuntimeUnitInstance()
-        } else {
-            expressionCodegen.emitExpression(expression, expectedType)
+            if (signature.hasSplitNullableResult) {
+                emitSplitNullableReturnValue(expression, expectedType)
+            } else if (
+                function is IrSimpleFunction &&
+                function.isDotNetErasedObjectResult() &&
+                expectedType == DotNetIlValueType.Object &&
+                expression.type.isUnit()
+            ) {
+                emitVoidExpression(expression)
+                if (!methodContext.isTerminated) expressionCodegen.emitRuntimeUnitInstance()
+            } else {
+                expressionCodegen.emitExpression(expression, expectedType)
+            }
         }
     }
 
@@ -2153,9 +2162,12 @@ internal class DotNetIlMethodCodegen(
     private fun emitSplitPayloadCoercion(from: DotNetIlValueType, to: DotNetIlValueType) {
         if (from.isDotNetAssignableTo(to)) return
         val coercion = dotNetWideningCoercionOrNull(from, to, expressionCodegen.coreLibraryReference)
-            ?: dotNetUnsupported(
-                "split nullable payload ${from.nameInSignature} cannot be converted to ${to.nameInSignature}"
-            )
+            ?: run {
+                expressionCodegen.validateFixedPhysicalBoundary(from, to)
+                dotNetUnsupported(
+                    "split nullable payload ${from.nameInSignature} cannot be converted to ${to.nameInSignature}"
+                )
+            }
         expressionCodegen.emitWideningCoercion(coercion)
     }
 
@@ -2267,7 +2279,11 @@ internal class DotNetIlMethodCodegen(
 
     private fun emitSetValue(expression: IrSetValue) {
         val slot = methodContext.reference(expression.symbol)
-        expressionCodegen.emitExpression(expression.value, slot.type)
+        expressionCodegen.emitAtFixedPhysicalBoundary(
+            expression.value,
+            slot.type,
+            DotNetIlFixedPhysicalBoundary("store to '${expression.symbol.owner.name.asString()}'"),
+        )
         if (methodContext.isTerminated) return
         val instruction = when (slot) {
             is DotNetIlSlot.Local -> storeLocalInstruction(slot.index)
