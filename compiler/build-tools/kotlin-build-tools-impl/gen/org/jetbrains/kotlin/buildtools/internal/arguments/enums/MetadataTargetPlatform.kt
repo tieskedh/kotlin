@@ -16,5 +16,6 @@ public enum class MetadataTargetPlatform(
   WASM_JS("WasmJs"),
   WASM_WASI("WasmWasi"),
   NATIVE("Native"),
+  DOTNET("DotNet"),
   ;
 }
