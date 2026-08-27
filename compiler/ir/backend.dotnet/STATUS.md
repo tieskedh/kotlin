@@ -11,9 +11,11 @@ and follow the owning ADR or active programme for design detail.
   `codex/rebase-probe-20260827` rehearsal until promotion completes.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- The current semantic checkpoint includes the bounded same-TypeDef
-  retained-foreign CLR variance source diagnostic. Git owns the exact
-  checkpoint identity; this snapshot records only its verified state.
+- The current semantic checkpoint includes both the bounded same-TypeDef
+  retained-foreign CLR variance source diagnostic and its mandatory late
+  physical-boundary closure for closed value-type variance hidden by placement
+  or control-flow joins. Git owns the exact checkpoint identity; this snapshot
+  records only its verified state.
 - The 253-commit upstream range was replayed without conflicts. All 640 target
   patches remain accounted for: 639 are patch-identical and one is
   context-adjusted. Three post-rebase integration commits remove obsolete
@@ -27,8 +29,8 @@ physical identities may still be corrected atomically.
 
 ## Latest full gate
 
-The strict target aggregate passed on 2026-08-27 at the immediately preceding
-source-guard checkpoint:
+The strict target aggregate passed on 2026-08-27 at the current late
+physical-boundary checkpoint:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -44,25 +46,20 @@ errors, or skips:
 | FIR2IR | 187 | 2,243 |
 | integration | 2 | 128 |
 
-This adds one hostile imported-CLR variance boundary test to the rebased
-baseline. It covers PSI and LightTree, Framework 4.8 and .NET 10,
-Runtime/Stdlib production, C# interop, separate compilation, the generic-owner
-rehearsal, and the production-erased inverse.
-
-The current delta after that aggregate only makes the target-specific FIR query
-more conservative and strengthens the same integration method. Its focused
-lane passed with both FIR parsers and both runtime profiles:
+The focused retained-CLR variance lane also passed with both FIR parsers and
+both runtime profiles:
 
 ```text
 .\gradlew.bat :compiler:tests-integration:test `
   --tests "org.jetbrains.kotlin.cli.DotNetLibraryIntegrationTest.testForeignClrVarianceRejectsVerifierInvalidBoundaryConversions" -q
 ```
 
-No emitted signature/body, mapping, artifact, Runtime/Stdlib surface, or
-production ABI changed, so this checkpoint inherits the full aggregate under
-the focused-lane rule in [`AGENTS.md`](AGENTS.md). A fresh full aggregate is
-mandatory for the next final-emission physical-boundary feature and before
-promotion.
+The matrix proves legal exact/reference-only conversions, conservative unknown
+reference relations, source-diagnosed explicit conversions, and late-fatal
+local and MethodDef-argument joins. The final emitter consults exact retained
+TypeDef identity only after normal physical assignability and coercions fail;
+it never reconstructs Kotlin logical subtyping. The target remains production
+erased.
 
 The backend compilation, scoped Build Tools generators/API check and metadata
 argument compatibility test, and Gradle statistics schema test also pass.
@@ -119,34 +116,34 @@ also has:
 - a producer-recorded ABI-61 sealed-family certificate whose transport is
   independently validated but which is not yet a consumer route.
 
-The first bounded source slice of step 1 is complete: FIR now rejects explicit
-return/argument conversions between two constructions of the same retained
-foreign TypeDef when the complete closed argument relation proves that CLR
-variance would require reference arguments. Exact and proved reference/nested
-reference cases remain accepted. Open parameters, projections, implementation
-or inherited roots, varargs, placement-hidden joins, and every ambiguous
-physical view deliberately remain unknown for the mandatory late gate.
+The first retained-foreign variance slice is closed at both ends. FIR rejects
+explicit return/argument conversions between two constructions of the same
+retained foreign TypeDef when the complete closed argument relation proves
+that CLR variance would require reference arguments. At final emission, every
+already-selected local, argument, return, field, and slot boundary rechecks the
+actual physical producer and turns a recursively proven closed value-type
+variance step into a module-fatal error rather than silently evicting an API.
+Unknown reference hierarchies, open parameters, projections,
+implementation/inherited roots, varargs, and ambiguous multi-view lineage
+remain conservative unknowns for the shared provenance model.
 
 The next bounded sequence is:
 
-1. close the remaining imported CLR variance soundness gap with one mandatory
-   final-emission physical-conversion gate for boundaries hidden from source
-   analysis by placement and control-flow joins;
-2. add a shadow complete-surface variance planner and prove one custom
+1. add a shadow complete-surface variance planner and prove one custom
    input-bearing interface as a single natural TypeDef without an exact sibling;
-3. route broad foreign operations through real constructed interface MethodDefs
+2. route broad foreign operations through real constructed interface MethodDefs
    and recorded Kotlin policy, never concrete public-method name/arity lookup;
-4. migrate the rehearsal family and remove exact-sibling ABI only after the
+3. migrate the rehearsal family and remove exact-sibling ABI only after the
    hostile inverse proves every retained behavior;
-5. add retained-foreign final-evidence adaptation and prove static/file-facade
+4. add retained-foreign final-evidence adaptation and prove static/file-facade
    operation authority;
-6. prove overlapping and global family ownership without allowing earlier
+5. prove overlapping and global family ownership without allowing earlier
    BOUND evidence to fill a missing final fact;
-7. compose owner-dependent input policy with split-nullable result layout on a
+6. compose owner-dependent input policy with split-nullable result layout on a
    custom two-parameter lookup family before applying it to `Map`;
-8. replace bounded recognizers only after the shared provenance model explains
+7. replace bounded recognizers only after the shared provenance model explains
    both their positive cases and hostile negatives; and
-9. run the complete Runtime/Stdlib, separate Kotlin/C# assembly, Framework 4.8,
+8. run the complete Runtime/Stdlib, separate Kotlin/C# assembly, Framework 4.8,
    .NET 10 JIT/ReadyToRun/trimmed/NativeAOT, production-erased inverse, and
    rollback decision gates.
 
@@ -162,11 +159,10 @@ Class-owner admission, state, C# surface, and migration boundaries:
 - The generic-owner sealed authority is not yet complete for retained foreign
   declarations, static/file-facade calls, or overlapping/global ownership.
 - Imported CLR declaration-site variance is logically broader than the CLR's
-  reference-only physical conversion. One bounded same-TypeDef source slice is
-  now diagnosed, but a mandatory final-emission gate is still missing for
-  inherited/implementation views, open or projected shapes, varargs, and
-  invalid conversions exposed only after local/storage placement or
-  control-flow joins.
+  reference-only physical conversion. The closed same-TypeDef source and late
+  physical-boundary slice is now complete, but inherited/implementation views,
+  open or projected shapes, varargs, and ambiguous multi-view lineage still
+  require the shared provenance model rather than local inference.
 - The current exact-sibling rehearsal does not give ordinary CLR languages one
   complete statically checked natural interface. Its replacement proof has not
   yet been emitted or executed.

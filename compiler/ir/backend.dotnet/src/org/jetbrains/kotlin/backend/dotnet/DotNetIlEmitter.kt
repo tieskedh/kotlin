@@ -243,10 +243,18 @@ internal class DotNetIlEmitter(
      * initialization cannot be partially preserved. Skipped declarations are reported as
      * warnings; remaining unsupported top-level declaration kinds are warned by a closing sweep
      * (typealiases are deliberately ignored without a warning). Returns null after reporting an
-     * error when the module cannot be emitted at all (unsupported or ambiguous main, or an
-     * executable was requested without a main function).
+     * error when the module cannot be emitted at all (unsupported or ambiguous main, an
+     * executable was requested without a main function, or a mandatory physical-boundary check
+     * proves that an otherwise accepted Kotlin conversion cannot satisfy the retained CLR ABI).
      */
-    fun emit(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
+    fun emit(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? = try {
+        emitOrThrow(moduleFragment)
+    } catch (failure: DotNetIlInvalidPhysicalBoundaryException) {
+        messageCollector.report(CompilerMessageSeverity.ERROR, failure.reason)
+        null
+    }
+
+    private fun emitOrThrow(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
         check(genericOwnerRehearsal || genericOwnerPhysicalMethodDefEmissionBindings.isEmpty()) {
             "production emission must not receive generic-owner MethodDef diagnostic bindings"
         }

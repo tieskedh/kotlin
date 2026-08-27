@@ -23803,6 +23803,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         value: Producer<String>,
                     ): Producer<Any> = value
 
+                    // String's physical System.IComparable<String> relation is valid CLR
+                    // reference covariance but is not part of the backend's closed BCL
+                    // hierarchy model. The late gate must leave that relation unknown rather
+                    // than misdiagnosing it as a value-type variance failure.
+                    public fun unmodeledReferenceCovariance(
+                        value: Producer<String>,
+                    ): Producer<Comparable<String>> = value
+
                     public fun referenceContravariance(
                         value: Consumer<Any>,
                     ): Consumer<String> = value
@@ -23913,6 +23921,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """.trimIndent()
                 )
             }
+            val lateArgumentRejectedSource = directory.resolve("lateArgumentRejectedVariance.kt").apply {
+                writeText(
+                    """
+                    package lateArgumentRejected
+
+                    import ForeignVariance.Producer
+
+                    private fun consume(value: Producer<Any>) {}
+
+                    public fun hiddenProducerArgument(
+                        selectExact: Boolean,
+                        exact: Producer<Int>,
+                        alreadyWide: Producer<Any>,
+                    ) {
+                        consume(if (selectExact) exact else alreadyWide)
+                    }
+                    """.trimIndent()
+                )
+            }
             for (useLightTree in listOf(false, true)) {
                 val parserSuffix = if (useLightTree) "LightTree" else "Psi"
                 val acceptedOutput = directory.resolve("AcceptedForeignVariance-$parserSuffix.il")
@@ -24009,13 +24036,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "The hostile join no longer reaches the late physical gate for " +
                             "${profile.target}/$parserSuffix:\n$lateDiagnostics"
                 }
-                assertTrue("Invalid CLR physical conversion at initialization of local 'selected'" in lateDiagnostics) {
+                assertTrue("invalid CLR physical conversion at initialization of local 'selected'" in lateDiagnostics) {
                     "The hostile join was not rejected by the mandatory late physical gate for " +
                             "${profile.target}/$parserSuffix:\n$lateDiagnostics"
                 }
                 assertFalse("not supported by the .NET backend" in lateDiagnostics) {
                     "The mandatory late physical failure degraded to declaration eviction for " +
                             "${profile.target}/$parserSuffix:\n$lateDiagnostics"
+                }
+
+                val [lateArgumentDiagnostics, lateArgumentExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        lateArgumentRejectedSource.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument, classpath,
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument,
+                        "LateArgumentRejectedForeignVariance$parserSuffix",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        directory.resolve("LateArgumentRejectedForeignVariance-$parserSuffix.il").path,
+                        "-Xuse-fir-lt=$useLightTree",
+                        K2DotNetCompilerArguments::renderInternalDiagnosticNames.cliArgument,
+                    )
+                )
+                assertEquals(ExitCode.COMPILATION_ERROR, lateArgumentExitCode, lateArgumentDiagnostics)
+                assertFalse(diagnosticName in lateArgumentDiagnostics) {
+                    "The hostile argument no longer reaches the late physical gate for " +
+                            "${profile.target}/$parserSuffix:\n$lateArgumentDiagnostics"
+                }
+                assertTrue("invalid CLR physical conversion at argument 0 of 'consume'" in lateArgumentDiagnostics) {
+                    "The hostile argument was not rejected at its fixed MethodDef boundary for " +
+                            "${profile.target}/$parserSuffix:\n$lateArgumentDiagnostics"
+                }
+                assertFalse("not supported by the .NET backend" in lateArgumentDiagnostics) {
+                    "The mandatory argument failure degraded to declaration eviction for " +
+                            "${profile.target}/$parserSuffix:\n$lateArgumentDiagnostics"
                 }
             }
         }
