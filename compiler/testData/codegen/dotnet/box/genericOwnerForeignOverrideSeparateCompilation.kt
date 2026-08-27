@@ -1,4 +1,5 @@
 // DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE
+// DOTNET_GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE
 
 // MODULE: lib
 // FILE: lib.kt
@@ -32,6 +33,18 @@ public class RehearsalSeparateLateRoutedIterator<out T>(private val value: T) : 
 
 public interface RehearsalSeparateProducer<out T> {
     public fun produce(): T
+}
+
+// Dedicated local interface/implementation pair for the producer-sealed library-ABI proof. It
+// must be emitted, observed, sealed, and joined back to these exact pre-lowering declarations in
+// the lib artifact; later modules consume only the ordinary Kotlin declaration.
+public interface RehearsalSeparateSealedPublicationProducer<out T> {
+    public fun publishedValue(): T
+}
+
+public class RehearsalSeparateSealedPublicationValue<T>(private val value: T) :
+    RehearsalSeparateSealedPublicationProducer<T> {
+    public override fun publishedValue(): T = value
 }
 
 // First general-family prerequisite for Iterable/Collection/Set: one covariant owner combines
@@ -1189,6 +1202,12 @@ private fun rehearsalSeparateLateRoutedLoop(
 }
 
 fun box(): String {
+    val sealedPublication: RehearsalSeparateSealedPublicationProducer<Int> =
+        RehearsalSeparateSealedPublicationValue(29)
+    if (sealedPublication.publishedValue() != 29) {
+        return "fail: separate producer-sealed publication"
+    }
+
     val store = RehearsalSeparateKotlinOverrideStore("kotlin-middle")
     if (RehearsalSeparateReader().read(store) != "kotlin-middle") {
         return "fail: separate Kotlin override"

@@ -1366,6 +1366,65 @@ custom two-parameter lookup or `Map.get` proof and does not authorize a
 Map-specific route. See
 [`../archive/generic-owner-methodspec-call-binding-2026-08-27.md`](../archive/generic-owner-methodspec-call-binding-2026-08-27.md).
 
+### First producer-recorded sealed library ABI
+
+The local actual-only seal now has one independently transported Kotlin-
+producer adapter. After a successful final emitter fixpoint, rehearsal
+physical-library ABI 61 may publish declaration kind `J`: a versioned,
+canonical encoding of the complete four-TypeDef, six-MethodDef, two-MethodImpl
+family. The four TypeDef roles, six MethodDef roles, and two MethodImpl roles
+are fixed and appear exactly once. Role order is canonical; set-semantic
+aliases, edges, and constraints are normalized as sets, while ordered generic
+arguments, method parameters, and binder positions remain ordered.
+
+The publication identity is the exact pre-lowering triple of logical
+interface-member key, implementation-owner key, and implementation-member key.
+All components are mandatory and the structural `J` key is derived from their
+unambiguous length-delimited tuple. Selected-view lineage may not supply a key,
+and physical names, IR origins, or a consumer's current reconstruction may not
+manufacture one. A non-exported implementation with both implementation keys
+absent publishes nothing; partial key evidence conflicts.
+
+`J` does not establish a parallel declaration graph. The complete physical
+index accepts it only when the decoded actual rows agree conjunctively with
+the ordinary producer records:
+
+```text
+C  interface and implementation classes
+F  interface and implementation source functions
+G  interface and implementation generic-owner member families
+H  the admitted root-owned published interface family
+J  the complete actual-only sealed family
+```
+
+That join validates logical keys, physical owners and arities, capability
+paths and edge, MethodDef endpoints and generic arities, member-family
+endpoints, the bounded `H` shape, and result role. Any missing, wrong-kind,
+stale, auxiliary, malformed, or disagreeing fact rejects the index; neither
+BOUND nor another ABI record may fill an omitted actual row. The inner codec
+may decode a structurally valid non-canonical byte sequence, but the outer `J`
+envelope re-encodes it and requires exact canonical payload equality. Portable
+ABI comparison preserves the complete structural record.
+
+ABI 61 is intentionally observable even in an artifact with no `J` record.
+Only a schema-aware producer can authoritatively classify that record as
+absent; an ABI-60 artifact must not be interpreted as equivalent negative
+evidence. The dedicated separate-compilation proof round-trips the producer's
+complete physical index and checks that its executable consumer does not
+republish the producer seal. This proves publication, not routing: no consumer
+operation query uses `J` yet.
+
+Production and explicit-off compilation remain atomically erased and publish
+no `J`. Before any ABI freeze, removing this rehearsal record and returning the
+whole provisional schema to the preceding epoch remains the exact rollback;
+no per-interface mixed production ABI or compatibility shim is introduced.
+See
+[`../archive/generic-owner-producer-sealed-library-abi-2026-08-27.md`](../archive/generic-owner-producer-sealed-library-abi-2026-08-27.md).
+
+Current executable evidence and audited totals are owned by
+[`../../STATUS.md`](../../STATUS.md) and the dated archive checkpoint above;
+this ADR records only the durable rule.
+
 Open-nullable results compose through an independent physical result layout,
 not a mutually exclusive member role. A callable contract records its
 parameter domains, semantic input policies, virtual/MethodImpl identities,
@@ -1398,11 +1457,12 @@ fails and the bounded implementation remains authoritative.
 ## Remaining gates
 
 The local actual-only final-emission certificate, its bounded MethodDef
-GenericParam rows, and executable MethodSpec/call-value routing are complete
-for the selected family. The next gates are independently sourced producer-
-recorded and retained-foreign sealed adapters, including static/file-facade
-operation authority, followed by overlapping/global ownership. BOUND cannot
-fill a missing final fact in any adapter.
+GenericParam rows, executable MethodSpec/call-value routing, and the
+independently transported Kotlin-producer `J` certificate are complete for the
+selected family. `J` is not yet a consumer route. The next gates are the
+retained-foreign sealed adapter and static/file-facade operation authority,
+followed by overlapping/global ownership. BOUND cannot fill a missing final
+fact in any adapter.
 
 Before another source-built Stdlib blocker is implemented, the rehearsal must
 continue consolidating the local carrier proofs behind the model above in

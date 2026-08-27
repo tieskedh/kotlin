@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 
 enum class DotNetGenericOwnerCompleteEmissionTypeKindSnapshot {
@@ -186,7 +187,49 @@ data class DotNetGenericOwnerSealedEmissionFamilySnapshot(
 internal data class DotNetGenericOwnerCompleteEmissionFamilyProducts(
     val comparison: DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot,
     val sealed: DotNetGenericOwnerSealedEmissionFamilySnapshot,
-)
+    val producerSealedFamilyBody: DotNetProducerGenericOwnerSealedFamilyBody?,
+    private val logicalMember: IrSimpleFunctionSymbol,
+    private val implementationMember: IrSimpleFunctionSymbol,
+) {
+    sealed interface ProducerPublication {
+        data object Unavailable : ProducerPublication
+        data class Published(
+            val publication: DotNetProducerGenericOwnerSealedFamilyPublication,
+        ) : ProducerPublication
+        data class Conflict(val reason: String) : ProducerPublication
+    }
+
+    /** Joins final physical evidence to exact pre-lowering KLIB keys without using CLR names. */
+    fun producerSealedFamilyPublication(
+        preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    ): ProducerPublication {
+        val body = producerSealedFamilyBody ?: return ProducerPublication.Unavailable
+        val implementationOwner = implementationMember.owner.parent as? IrClass
+            ?: return ProducerPublication.Conflict(
+                "a producer-sealed implementation member has no class owner",
+            )
+        val implementationOwnerKey = preLoweringDeclarationKeys[implementationOwner]
+        val implementationMemberKey = preLoweringDeclarationKeys[implementationMember.owner]
+        if (implementationOwnerKey == null && implementationMemberKey == null) {
+            return ProducerPublication.Unavailable
+        }
+        if (implementationOwnerKey == null || implementationMemberKey == null) {
+            return ProducerPublication.Conflict(
+                "an exported producer-sealed implementation lost either its owner or member logical key",
+            )
+        }
+        val logicalInterfaceMemberKey = preLoweringDeclarationKeys[logicalMember.owner]
+            ?: return ProducerPublication.Conflict(
+                "an exported producer-sealed implementation lost its logical interface-member key",
+            )
+        val key = DotNetProducerGenericOwnerSealedFamilyKey(
+            logicalInterfaceMemberKey = logicalInterfaceMemberKey,
+            implementationOwnerKey = implementationOwnerKey,
+            implementationMemberKey = implementationMemberKey,
+        )
+        return ProducerPublication.Published(body.publish(key))
+    }
+}
 
 internal data class DotNetGenericOwnerCompleteEmissionScopeObservations(
     val scope: DotNetIlEmissionScope,
@@ -592,6 +635,7 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
         expected,
         actualSealedEvidence,
     )
+    var producerSealedFamilyBody: DotNetProducerGenericOwnerSealedFamilyBody? = null
     val sealedSnapshot = when (val sealedBinding = sealedInspection.binding) {
         is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
             val index = sealedBinding.value
@@ -692,6 +736,52 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
                     declarationMethodKind = methodKindsByKey.getValue(row.declarationMethodDefKey).toSnapshot(),
                 )
             }
+            producerSealedFamilyBody = DotNetProducerGenericOwnerSealedFamilyBody(
+                typeDefs = DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.entries.map { kind ->
+                    val key = allocator.expectedType(
+                        family.types.getValue(kind),
+                        typeDescriptions.getValue(kind),
+                    )
+                    val row = when (val binding = index.typeDef(key)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                        else -> error("a bound sealed family lost a producer TypeDef row")
+                    }
+                    DotNetProducerGenericOwnerSealedTypeDef(
+                        DotNetProducerGenericOwnerSealedTypeDefRole.valueOf(kind.name),
+                        row,
+                    )
+                },
+                methodDefs = DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.entries.map { kind ->
+                    val method = expectedMethods.single { candidate -> candidate.kind == kind }
+                    val row = when (val binding = index.methodDef(method.key)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                        else -> error("a bound sealed family lost a producer MethodDef row")
+                    }
+                    val resultDomain = when (val result = method.reference.signature.resultLayout) {
+                        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct -> result.slot.domain
+                        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+                            result.payloadSlot.domain
+                        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> null
+                    }
+                    DotNetProducerGenericOwnerSealedMethodDef(
+                        DotNetProducerGenericOwnerSealedMethodDefRole.valueOf(kind.name),
+                        row,
+                        method.reference.signature.parameterSlots.map { slot -> slot.domain },
+                        resultDomain,
+                    )
+                },
+                methodImpls = DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodImplKind.entries.map { kind ->
+                    val expectedRow = expectedMethodImplRowsByKind.getValue(kind)
+                    val row = index.methodImpls(
+                        expectedRow.implementingTypeDefKey,
+                        expectedRow.bodyMethodDefKey,
+                    ).single { candidate -> candidate == expectedRow }
+                    DotNetProducerGenericOwnerSealedMethodImpl(
+                        DotNetProducerGenericOwnerSealedMethodImplRole.valueOf(kind.name),
+                        row,
+                    )
+                },
+            )
             DotNetGenericOwnerSealedEmissionFamilySnapshot(
                 scope = expectedScope,
                 ownerName = ownerName,
@@ -729,7 +819,13 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
                 emptyList(),
             )
     }
-    return DotNetGenericOwnerCompleteEmissionFamilyProducts(comparisonSnapshot, sealedSnapshot)
+    return DotNetGenericOwnerCompleteEmissionFamilyProducts(
+        comparisonSnapshot,
+        sealedSnapshot,
+        producerSealedFamilyBody,
+        family.logicalMember,
+        family.implementationMember,
+    )
 }
 
 private fun actualCompleteTypeDefs(

@@ -20,6 +20,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetNullableReferenceFlag
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
@@ -505,6 +507,13 @@ private class BackendCliDotNetFacade(
         validateGenericOwnerSealedEmissionFamilies(
             genericOwnerRehearsal = genericOwnerRehearsal,
             families = completedOutput.genericOwnerSealedEmissionFamilies,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
+        validateGenericOwnerProducerSealedPublication(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            declarations = completedOutput.declarations,
+            producer = completedOutput.output,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
         validateGenericOwnerMethodGenericExecutableCalls(
@@ -1375,6 +1384,68 @@ private fun validateGenericOwnerSealedEmissionFamilies(
             sharedKinds.mapTo(linkedSetOf()) { kind -> pathsByKind[0].getValue(kind) }) {
         "The two family certificates must share only interface roots and isolate implementation-owned roots: " +
                 pathsByKind
+    }
+}
+
+/** Proves that a separately compiled producer publishes only its final actual 4/6/2 seal. */
+private fun validateGenericOwnerProducerSealedPublication(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    producer: File,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE_MARKER !in testDataFile.readText()) return
+    val sealedEntries = declarations.entries.filter { entry ->
+        entry.value is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+    }
+    if (!genericOwnerRehearsal) {
+        check(sealedEntries.isEmpty()) {
+            "The production erased epoch must not publish producer-sealed generic-owner families: " +
+                    sealedEntries
+        }
+        return
+    }
+    if (!producesLibrary) {
+        check(sealedEntries.isEmpty()) {
+            "An executable consumer must not republish producer-sealed generic-owner families: " +
+                    sealedEntries
+        }
+        return
+    }
+
+    // Encoding the whole index and decoding it again proves that the J record participates in
+    // the same deterministic library ABI as its C/F/G/H peers, rather than living in a side file.
+    val encoded = DotNetLibraryAbiCodec.encode(declarations)
+    val roundTripped = DotNetLibraryAbiCodec.decode(java.util.Properties().apply {
+        encoded.forEach { [key, value] -> setProperty(key, value) }
+    })
+    check(roundTripped == declarations) {
+        "The producer-sealed family did not survive the library-ABI round trip"
+    }
+
+    if (!producer.name.equals("lib.dll", ignoreCase = true)) return
+    val candidates = sealedEntries.map { entry ->
+        entry.key to (entry.value as DotNetPhysicalDeclaration.GenericOwnerSealedFamily)
+    }.filter { candidate ->
+        val family = candidate.second
+        family.ownerPath.lastOrNull()?.substringBefore('`') ==
+                "RehearsalSeparateSealedPublicationValue"
+    }
+    val candidate = checkNotNull(candidates.singleOrNull()) {
+        "The lib producer must publish one final actual seal for the dedicated family: " +
+                sealedEntries
+    }
+    val indexKey = candidate.first
+    val family = candidate.second
+    check(indexKey.startsWith("J:") &&
+            declarations[family.logicalInterfaceMemberKey] is DotNetPhysicalDeclaration.Function &&
+            declarations[family.implementationOwnerKey] is DotNetPhysicalDeclaration.Class &&
+            declarations[family.implementationMemberKey] is DotNetPhysicalDeclaration.Function &&
+            (declarations[family.implementationOwnerKey] as DotNetPhysicalDeclaration.Class).ownerPath ==
+            family.ownerPath
+    ) {
+        "The producer seal was not joined to its exact pre-lowering C/F declarations: $family"
     }
 }
 
@@ -5644,6 +5715,8 @@ private const val GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_COMPLETE_EMISSION_PROBE"
 private const val GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE"
+private const val GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =

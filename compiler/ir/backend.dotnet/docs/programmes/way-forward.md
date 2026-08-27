@@ -1878,6 +1878,40 @@ execution matrix, full aggregate, direct XML audit, and explicit-off plus
 property-absent production inverses are green. See
 [`../archive/generic-owner-methodspec-call-binding-2026-08-27.md`](../archive/generic-owner-methodspec-call-binding-2026-08-27.md).
 
+The first Kotlin-producer sealed adapter now crosses a real library boundary.
+After a successful final emitter fixpoint, rehearsal physical-library ABI 61
+may publish one `J` record containing the canonical actual-only
+4-TypeDef/6-MethodDef/2-MethodImpl family. Fixed role identities determine row
+order; set-semantic aliases, edges, and constraints are canonicalized without
+reordering construction arguments, parameters, or binder positions. The
+record is joined to the exact pre-lowering logical interface-member,
+implementation-owner, and implementation-member KLIB keys. Its structural
+index uses the complete length-delimited key triple; selected views, emitted
+names, and IR-origin inference are forbidden.
+
+`J` is admitted only as part of a consistent producer index. Its actual rows
+must agree conjunctively with the existing `C` class, `F` function, `G`
+generic-owner member-family, and `H` published-interface records. Missing,
+wrong-kind, stale, malformed, endpoint-disagreeing, or cross-binder evidence
+rejects the index; BOUND cannot fill the gap. The inner codec may decode a
+structurally valid non-canonical byte sequence, but the outer `J` envelope
+requires exact equality with its canonical re-encoding. ABI 61 is
+schema-visible even when no family qualifies for `J`, so absence produced by
+a schema-aware compiler is not confused with an ABI-60 producer that had no
+way to express the certificate.
+
+The dedicated producer library round-trips this complete index and its
+separately compiled executable consumer neither republishes the producer seal
+nor receives a wrapper or replacement receiver from this feature. This proves
+publication and transport only: no consumer operation route is sourced from
+`J` yet. Production/off remains atomically erased and publishes no `J`; the
+provisional change retains an exact atomic inverse before ABI freeze. See
+[`../archive/generic-owner-producer-sealed-library-abi-2026-08-27.md`](../archive/generic-owner-producer-sealed-library-abi-2026-08-27.md).
+
+Current executable evidence and audited totals are owned by
+[`../../STATUS.md`](../../STATUS.md) and the dated archive checkpoint above;
+this programme records only the remaining gates.
+
 The consolidation proceeds in bounded stages:
 
 1. expose the existing producer records, retained foreign metadata, physical
@@ -1905,9 +1939,11 @@ The consolidation proceeds in bounded stages:
    The local direct-producer BOUND shadow, emitted role/alias identity,
    complete 4/6/2 comparison, fresh actual-only seal, and bounded MethodDef
    GenericParam rows are implemented. Bounded method-generic MethodSpec/call
-   routing is executable as well. Producer-recorded and retained-foreign
-   adapters, including static/file-facade operation authority, and then
-   overlapping/global-family closure follow it;
+   routing is executable as well. The Kotlin-producer adapter now publishes
+   its canonical actual-only family through rehearsal ABI 61 with conjunctive
+   `C/F/G/H/J` validation. Retained-foreign sealing and the static/file-facade
+   operation-authority route are next, followed by overlapping/global-family
+   closure;
 7. replace blanket semantic-body remapping and the temporary alias, helper,
    result-chain, and generated-capture recognizers one by one;
 8. normalize split-nullable as a result layout independent of parameter

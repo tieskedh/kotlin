@@ -1365,6 +1365,46 @@ verification, and work state.
   Stdlib census. See
   [`docs/archive/generic-owner-methodspec-call-binding-2026-08-27.md`](docs/archive/generic-owner-methodspec-call-binding-2026-08-27.md).
 
+  The first independently transported Kotlin-producer seal is now represented
+  in physical-library ABI 61. After one successful final emitter fixpoint, the
+  rehearsal library may publish its complete actual-only generic-owner family:
+  four TypeDefs, six MethodDefs, and two MethodImpls with fixed role identities
+  and canonical role order. The envelope is keyed by the exact pre-lowering
+  logical interface-member, implementation-owner, and implementation-member
+  KLIB identities. All three keys participate in a length-delimited structural
+  digest; selected views, CLR names, IR origins, and consumer reconstruction
+  provide no identity or missing evidence.
+
+  Declaration kind `J` is not a second declaration graph. Whole-index
+  validation requires its decoded actual rows to agree conjunctively with the
+  producer's existing `C` class, `F` function, `G` member-family, and `H`
+  published-interface records. Missing/wrong-kind/stale peers, outer/inner-key
+  disagreement, unsupported or duplicate roles, wrong endpoints, malformed or
+  non-canonical payloads, and cross-binder evidence reject the index. ABI 61 is
+  intentionally schema-visible even when a library publishes no `J`: an older
+  ABI-60 producer cannot be mistaken for a producer that understood the schema
+  and authoritatively classified the certificate as absent.
+
+  The separate-compilation fixture publishes one dedicated library family,
+  round-trips the complete physical index, and proves that an executable
+  consumer neither republishes producer evidence nor needs a second receiver.
+  This closes publication and transport only. No consumer route reads `J` yet,
+  and production/off remains atomically erased with no `J` records. Exact
+  inverse rollback therefore remains available before ABI freeze without a
+  mixed per-family production epoch.
+
+  The property-absent full aggregate exits zero on the final semantic tree.
+  Direct XML audit records 201 suites/2,524 tests with zero failures, errors,
+  or skips: backend 11/148, dotnet.ir 1/6, FIR 187/2,243, and integration
+  2/127. The two new producer-seal unit suites contribute the exact
+  2-suite/22-test increase over the preceding checkpoint. The focused
+  rehearsal and explicit-off separate-compilation matrices each add four
+  audited PSI/LightTree x Framework-4.8/.NET-10 executions with no failure,
+  error, or skip. Next add the retained-foreign sealed adapter and
+  static/file-facade operation-authority route, then close overlapping/global-
+  family ownership. See
+  [`docs/archive/generic-owner-producer-sealed-library-abi-2026-08-27.md`](docs/archive/generic-owner-producer-sealed-library-abi-2026-08-27.md).
+
   The preceding general multi-member root prerequisite is closed as well.
   A public top-level covariant owner may combine exactly one abstract no-input
   `T` producer with one or more abstract owner-independent no-input non-null
@@ -5625,10 +5665,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    full aggregate, direct XML audit, explicit-off inverse, and property-absent
    inverse are green.
 
-   Next add independently sourced producer-recorded and retained-foreign
-   sealed adapters, including the static/file-facade operation-authority join,
-   followed by overlapping/global-family ownership checks. A shared authority
-   must require
+   The independently sourced Kotlin-producer adapter is now complete at the
+   library-ABI boundary. Rehearsal ABI 61 publishes the producer's canonical
+   actual-only 4/6/2 seal as a `J` record and admits it only through a
+   conjunctive `C/F/G/H/J` join. This is transport authority, not consumer
+   routing; production/off remains erased and publishes no `J`.
+
+   Next add the retained-foreign sealed adapter and the static/file-facade
+   operation-authority route, followed by overlapping/global-family ownership
+   checks. A shared authority must require
    final-live evidence from the appropriate source for every fact in its scope;
    BOUND may never fill an adapter gap. Then bind and compare the second split-
    nullable/covariant-result selection and prove its composition on the custom
