@@ -152,6 +152,13 @@ For a bounded semantic or representation feature:
    foreign use, and hostile negatives in proportion to the boundary; and
 8. commit and push the completed feature with its current-status update.
 
+`dotnet` is the target's main integration branch. A feature may be developed
+there directly or proven in an isolated worktree, but once it is coherent and
+green under the applicable verification lane, commit it and push `dotnet`
+before starting unrelated feature work. Do not let completed features
+accumulate only on a private/probe branch, and do not present a red or partial
+checkpoint as a completed feature.
+
 Use focused checks for internal slices and one proportionate final gate for the
 coherent feature. Do not create artificial microcommits merely to repeat a long
 gate, and do not batch unrelated semantics merely to amortize it.
@@ -230,22 +237,28 @@ Slowness is never a reason to skip relevant verification, but it is also not a
 reason to rerun unrelated target layers. Use these lanes:
 
 1. **Focused lane.** During development, and as the commit gate for a bounded
-   target-specific frontend checker, diagnostic, or logical importer query that
-   changes no emitted signature/body, physical mapping, artifact, Runtime/
-   Stdlib surface, shared test infrastructure, or production ABI, run the
-   narrowest integration/unit test which exercises every affected parser,
-   target profile, and positive/negative semantic branch. Compile/generator
-   consistency for every changed module remains mandatory.
+   pure model, production-inert read-only shadow, target-specific frontend
+   checker, diagnostic, or logical importer query that changes no selected IR,
+   emitted signature/body, physical mapping, artifact, Runtime/Stdlib surface,
+   shared test infrastructure, or production ABI, run the narrowest
+   integration/unit test which exercises every affected parser, target profile,
+   and positive/negative semantic branch. Compile/generator consistency for
+   every changed module remains mandatory. A profile-independent shadow need
+   not repeat the same observation on an unaffected runtime profile.
 2. **Boundary lane.** For a bounded change inside one compiler layer, run that
    layer's complete relevant .NET suite plus any cross-layer integration test
    which consumes its output. Escalate to the full aggregate when the selected
    physical carrier, emitted metadata/CIL, executable behavior, or packaged
    artifact can change.
-3. **Full target lane.** Run the aggregate below after changes to mapping,
-   lowering, codegen, Runtime/Stdlib surfaces, generic or array representation,
-   physical ABI, artifacts, profiles, toolchain integration, shared test
-   infrastructure, upstream integration, before promotion to the integration
-   branch, and before an ABI-readiness checkpoint.
+3. **Full target lane.** Run the aggregate below after changes which can affect
+   production-selected type mapping, lowering output, codegen output, Runtime/
+   Stdlib surfaces, generic or array representation, physical ABI, artifacts,
+   profiles, toolchain integration, shared test infrastructure, or upstream
+   integration, and before an ABI-readiness checkpoint. Moving a coherent
+   checkpoint to `dotnet` does not by itself escalate its verification lane. A
+   phase implemented as a lowering does not enter this lane solely because of
+   its class name: a proven production-inert analysis which mutates no IR and
+   has no routing/emission consumer uses the focused or boundary lane above.
 
 The full target aggregate is:
 
@@ -253,12 +266,13 @@ The full target aggregate is:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-One already-green full checkpoint may be inherited by later focused-lane
-commits only when `STATUS.md` records both the checkpoint and the exact focused
-delta evidence. It may not be inherited across a physical-boundary change, and
-accumulated focused/boundary work must pass one fresh full aggregate before
-promotion. A test failure, missing required tool, or incomplete profile/parser
-matrix always blocks the selected lane.
+One already-green full checkpoint may be inherited by later focused- or
+boundary-lane commits only when `STATUS.md` records both the checkpoint and the
+exact delta evidence. It may not be inherited across a physical-boundary
+change, and accumulated focused/boundary work must pass one fresh full aggregate
+before it is declared a new target-wide or ABI-readiness checkpoint. A test
+failure, missing required tool, or incomplete affected profile/parser matrix
+always blocks the selected lane.
 
 Do not trust Gradle exit alone. Audit JUnit XML under all four roots:
 
