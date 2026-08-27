@@ -7,8 +7,9 @@ and follow the owning ADR or active programme for design detail.
 
 ## Integration state
 
-- Integration branch target: `dotnet`. This checkout is the isolated
-  `codex/rebase-probe-20260827` rehearsal until promotion completes.
+- Integration branch and current checkout: `dotnet`. The reviewed rebase and
+  completed post-rebase feature checkpoints have been promoted; local
+  `dotnet` and `fork/dotnet` are kept synchronized feature by feature.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
 - The current semantic checkpoint includes the bounded same-TypeDef retained-
