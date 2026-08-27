@@ -230,6 +230,8 @@ object DotNetBackend {
                 >()
         val successfulCompleteEmissionObservations =
             mutableListOf<DotNetGenericOwnerCompleteEmissionScopeObservations>()
+        var cachedPhysicalCompleteEmissionProducts:
+                List<DotNetGenericOwnerCompleteEmissionFamilyProducts>? = null
         fun registerSuccessfulPhysicalValuePlacement(
             scope: DotNetIlEmissionScope,
             emission: DotNetIlEmissionResult,
@@ -244,6 +246,7 @@ object DotNetBackend {
                         emission.methodDefHeaderObservations,
                         emission.methodImplObservations,
                     )
+                cachedPhysicalCompleteEmissionProducts = null
             } else {
                 check(emission.localPlacementObservations.isEmpty()) {
                     "production emission must not publish generic-owner local-placement observations"
@@ -307,6 +310,7 @@ object DotNetBackend {
         }
         fun physicalCompleteEmissionProducts(): List<DotNetGenericOwnerCompleteEmissionFamilyProducts> {
             if (!configuration.dotNetGenericOwnerRehearsal) return emptyList()
+            cachedPhysicalCompleteEmissionProducts?.let { products -> return products }
             val authority = when (val binding = localPhysicalAuthorityForEmissionComparison) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict,
@@ -315,7 +319,37 @@ object DotNetBackend {
             }
             return authority.inspectFinalCompleteEmissionFamilies(
                 successfulCompleteEmissionObservations.toList(),
-            )
+            ).also { products -> cachedPhysicalCompleteEmissionProducts = products }
+        }
+        fun Map<String, DotNetPhysicalDeclaration>.withProducerSealedGenericOwnerFamilies(
+            scope: DotNetIlEmissionScope,
+            declarationKeys: Map<IrDeclaration, String>,
+        ): Map<String, DotNetPhysicalDeclaration> {
+            if (!configuration.dotNetGenericOwnerRehearsal) return this
+            val publications = physicalCompleteEmissionProducts()
+                .asSequence()
+                .filter { product -> product.comparison.scope == scope }
+                .mapNotNull { product ->
+                    when (val publication = product.producerSealedFamilyPublication(declarationKeys)) {
+                        is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Published ->
+                            publication.publication
+                        is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Conflict ->
+                            error(publication.reason)
+                        DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Unavailable -> null
+                    }
+                }
+                .map { publication -> publication.toPhysicalDeclaration() }
+                .toList()
+            if (publications.isEmpty()) return this
+            return buildMap(size + publications.size) {
+                putAll(this@withProducerSealedGenericOwnerFamilies)
+                publications.forEach { declaration ->
+                    val key = declaration.indexKey()
+                    check(put(key, declaration) == null) {
+                        "multiple final generic-owner producer families claim '$key'"
+                    }
+                }
+            }
         }
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()):
                 DotNetBackendOutput {
@@ -564,6 +598,11 @@ object DotNetBackend {
             stdlibEmission?.let { emission ->
                 registerSuccessfulPhysicalValuePlacement(DotNetIlEmissionScope.STDLIB, emission)
             }
+            val stdlibDeclarations = stdlibEmission?.declarations
+                ?.withProducerSealedGenericOwnerFamilies(
+                    DotNetIlEmissionScope.STDLIB,
+                    preLoweringStdlibDeclarationKeys,
+                )
 
             if (producesStdlib) {
                 if (stdlibIlText == null) {
@@ -573,7 +612,8 @@ object DotNetBackend {
                     )
                     return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
                 }
-                if (!validateMetadataLinkage(stdlibEmission.declarations)) {
+                val publishedStdlibDeclarations = checkNotNull(stdlibDeclarations)
+                if (!validateMetadataLinkage(publishedStdlibDeclarations)) {
                     return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
                 }
                 val stdlibOutput = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
@@ -585,7 +625,7 @@ object DotNetBackend {
                     target,
                     messageCollector,
                     stdlibEmission.managedResources.withKotlinMetadata(
-                        stdlibEmission.declarations,
+                        publishedStdlibDeclarations,
                         kotlinMetadataResourceFactory,
                     ),
                 )
@@ -601,7 +641,7 @@ object DotNetBackend {
                     assembledStdlib.delete()
                     return result(stdlibOutput)
                 }
-                return result(assembledStdlib, stdlibEmission.declarations)
+                return result(assembledStdlib, publishedStdlibDeclarations)
             }
 
             // Treat a stdlib emitted from injected bootstrap sources exactly like a separately
@@ -618,7 +658,7 @@ object DotNetBackend {
                         DotNetStdlibLibrary.ASSEMBLY_VERSION,
                     ),
                     assemblyFile = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
-                    declarations = stdlibEmission.declarations,
+                    declarations = checkNotNull(stdlibDeclarations),
                     friendAssemblies = emptySet(),
                 )
             } else {
@@ -715,7 +755,11 @@ object DotNetBackend {
                 return result(ilTarget)
             }
             registerSuccessfulPhysicalValuePlacement(DotNetIlEmissionScope.USER, emission)
-            if (producesLibrary && !validateMetadataLinkage(emission.declarations)) {
+            val userDeclarations = emission.declarations.withProducerSealedGenericOwnerFamilies(
+                DotNetIlEmissionScope.USER,
+                preLoweringDeclarationKeys,
+            )
+            if (producesLibrary && !validateMetadataLinkage(userDeclarations)) {
                 ilTarget.delete()
                 return result(ilTarget)
             }
@@ -824,11 +868,11 @@ object DotNetBackend {
                     target,
                     messageCollector,
                     emission.managedResources.withKotlinMetadata(
-                        emission.declarations,
+                        userDeclarations,
                         kotlinMetadataResourceFactory,
                     ),
                 )
-                return result(assemblyOutput, emission.declarations)
+                return result(assemblyOutput, userDeclarations)
             }
 
             if (emitsExecutable) {
@@ -927,6 +971,11 @@ data class DotNetBackendOutput(
     init {
         require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
             "the production erased epoch cannot publish sealed generic-owner families"
+        }
+        require(genericOwnerRehearsal || declarations.values.none { declaration ->
+            declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+        }) {
+            "the production erased epoch cannot publish producer-sealed generic-owner ABI records"
         }
     }
 }
