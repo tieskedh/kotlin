@@ -1,6 +1,6 @@
 # Generic class owner migration and rollback plan
 
-- Status: **Complete Kotlin-emitter/inverse-rollback rehearsal selected next; no production migration yet authorized**
+- Status: **Authority/provenance consolidation precedes the complete rehearsal; no production migration authorized**
 - Date: 2026-08-12
 - Programme:
   [`generic-class-owner-reopening.md`](generic-class-owner-reopening.md)
@@ -13,15 +13,12 @@ This plan answers when and how the target may move from the accepted erased
 generic-class owner to the candidate real CLR-generic owner without cycling
 through incompatible intermediate ABIs.
 
-The 2026-08-17 atomic checkpoint selected **no-go for now**. Schema 20 closes
-the named hostile representation conditions, but the executable candidate is
-still a generated C# physicalization of a production-inert compiler record,
-not a normal Kotlin-emitted self-describing product. Temporary uncommitted
-global and bounded TypeDef-arity probes confirmed that existing erased-contract
-bodies and bridges cannot be changed after registration: Runtime/Stdlib fail
-across receiver, static, open-nullable, and RTTI seams, while the bounded
-`Box<T>` inheritance cluster reaches an erased-contract covariant-return bridge
-which cannot convert concrete `int32`/`string` to open `!0`. See
+The 2026-08-17 checkpoint selected **no-go for then**, not a permanent
+architecture verdict. It proved that the old typed-primary model and a partial
+post-registration switch were unsound. Later compiler-emitted families,
+semantic-capability routing, BK-1, and physical-authority evidence reopened the
+candidate without changing production. The exact historical checkpoint remains
+in
 [`../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md`](../archive/generic-owner-atomic-cutover-checkpoint-2026-08-17.md).
 
 ## Timing decision
@@ -43,33 +40,18 @@ permanent construction and dispatch cost before the backend can measure real
 applications. The split keeps architectural direction early and ABI
 publication late.
 
-The selected ordinary-stdlib breadth interlude ended with the complete Map
-min/max adapter closure on 2026-08-18. The next major work is now one complete
-temporary-epoch rehearsal of the atomic cutover and its exact inverse rollback.
-This is not permission for a per-owner pilot or production ABI change: failure
-at any entry condition restores the erased epoch and records a new no-go
-checkpoint.
+The current rehearsal is deliberately earlier than the complete cutover
+exercise. It consolidates final physical-declaration authority and per-value
+carrier provenance in shadow mode, including local and producer-recorded
+sealed families, before trusting the Runtime/Stdlib migration. Retained-foreign
+evidence, static/file-facade routes, overlapping/global ownership, and the
+composed split-nullable lookup family remain immediate gates. The exact current
+sequence belongs in [`../../STATUS.md`](../../STATUS.md).
 
-The first implementation follows that split. A normal backend lowering now
-builds fail-closed architecture plans for local Kotlin generic classes, but
-the plan vocabulary has no admitted result and physical emission ignores it.
-The subsequent erased-owner lowering verifies complete planning coverage and
-then keeps every class erased. This seam lets the semantic corpus continuously
-exercise metadata-fixed, broad-body, state, and output analysis without
-creating a mixed ABI or an easy-owner pilot.
-
-The seam now goes one step further without crossing the boundary: it creates
-detached real-IR typed/semantic/dispatcher members and returns immutable
-test snapshots containing state, signature, default, direct-super, logical
-binding, and complete local producer-graph evidence. The graph is built once
-per module over functions, constructors, all function-access edges, and field/
-anonymous initializers, then projected per owner. Tests assert the hostile
-snapshots, and a test-owned physicalizer consumes their state/member roles to
-generate a temporary generic producer plus a separately compiled C# subclass/
-consumer. The emitter cannot see the detached members, and neither snapshots
-nor prototype metadata are serialized. Promoting these shapes into
-`dotnet.ir` or normal TypeDefs remains part of the one atomic production
-cutover, not an incremental vocabulary leak.
+This remains production-inert. No per-owner pilot or production ABI change is
+permitted; failure at any entry condition keeps the erased epoch and records a
+GO, CONSTRAIN, or NO-GO architecture result. Only a later complete rehearsal
+may exercise the atomic cutover and exact inverse described below.
 
 The temporary producer now derives exact constructor, member-role, and lowered
 default-helper signatures from those compiler snapshots. Its bounded carrier
