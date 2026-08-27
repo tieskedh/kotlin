@@ -73,6 +73,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassAutoboxingLower
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassImplementationSignatureLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalGenericOwnerPhysicalAuthorityLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerArchitecturePlanningLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerFinalRoutingLowering
@@ -255,6 +256,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInnerClassPhysicalizationLowering,
     // Then record fail-closed candidate evidence for the CLR-generic class-owner ABI.
     ::DotNetGenericOwnerArchitecturePlanningLowering,
+    // Select a hypothetical complete natural interface's physical variance from its original
+    // members and direct parent edges. This rehearsal-only shadow runs before the current exact
+    // split and cannot influence IR, routing, metadata, ABI publication, or emission.
+    ::DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering,
     // Reopen only the first structurally complete producer-interface family in the same atomic
     // rehearsal. Its natural I<T> is the normal CLR path; a non-generic declaration-semantic
     // capability is materialized only for physical slots which cannot name one honest I<X>.

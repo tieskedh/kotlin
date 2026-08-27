@@ -11,11 +11,11 @@ and follow the owning ADR or active programme for design detail.
   `codex/rebase-probe-20260827` rehearsal until promotion completes.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- The current semantic checkpoint includes both the bounded same-TypeDef
-  retained-foreign CLR variance source diagnostic and its mandatory late
-  physical-boundary closure for closed value-type variance hidden by placement
-  or control-flow joins. Git owns the exact checkpoint identity; this snapshot
-  records only its verified state.
+- The current semantic checkpoint includes the bounded same-TypeDef retained-
+  foreign CLR variance diagnostic and late physical-boundary closure, followed
+  by the production-inert complete-surface variance planner and IR shadow. Git
+  owns the exact checkpoint identity; this snapshot records only its verified
+  state.
 - The 253-commit upstream range was replayed without conflicts. All 640 target
   patches remain accounted for: 639 are patch-identical and one is
   context-adjusted. Three post-rebase integration commits remove obsolete
@@ -72,6 +72,13 @@ surfaces are being checked separately because they are not constituents of
 Markdown-only commits after the semantic checkpoint inherit this gate only
 when their link, whitespace, and staged-file audits pass.
 
+The later complete-surface variance work changes no selected carrier, IR body,
+emitted metadata, artifact, or production ABI and therefore inherits the full
+checkpoint under the focused/boundary policy. Its IR-free planner passed all
+160 backend unit tests. Both the production-empty and rehearsal-bound modes
+passed the exact probe once under PSI and once under LightTree on `net10`, with
+two JUnit tests per mode and zero failures, errors, or skips.
+
 ## Binding production state
 
 - Kotlin Common declarations, shared compiler machinery, and generated stdlib
@@ -98,14 +105,15 @@ under [`docs/README.md`](docs/README.md).
 ## Active work
 
 The source-built Stdlib census is paused while the generic-owner architecture
-is consolidated in shadow/rehearsal mode. The review selected two
-production-inert replacement hypotheses:
+is consolidated in shadow/rehearsal mode. The review selected two replacement
+directions:
 
 - one shared physical-declaration/value-provenance model, separate from
   producer-wide state selection; and
 - one complete natural CLR-generic interface whose physical variance is
   weakened where its full contract requires it, plus semantic routing only for
-  Kotlin views the CLR cannot name.
+  Kotlin views the CLR cannot name. Its general IR-free fixpoint and first
+  production-inert IR shadow are now executable.
 
 The former exact-sibling interface and natural-only public-method convention
 remain implementation evidence, not the desired ABI. The current checkpoint
@@ -129,8 +137,8 @@ remain conservative unknowns for the shared provenance model.
 
 The next bounded sequence is:
 
-1. add a shadow complete-surface variance planner and prove one custom
-   input-bearing interface as a single natural TypeDef without an exact sibling;
+1. use the complete-surface shadow to prove one custom input-bearing interface
+   as a single natural TypeDef without an exact sibling;
 2. route broad foreign operations through real constructed interface MethodDefs
    and recorded Kotlin policy, never concrete public-method name/arity lookup;
 3. migrate the rehearsal family and remove exact-sibling ABI only after the

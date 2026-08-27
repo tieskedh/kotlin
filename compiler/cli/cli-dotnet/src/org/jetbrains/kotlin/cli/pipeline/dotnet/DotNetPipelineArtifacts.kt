@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
@@ -58,6 +59,8 @@ data class DotNetBackendPipelineArtifact(
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+    val genericInterfaceCompleteSurfaceVarianceShadows:
+        List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot>,
     val genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
     val genericOwnerPhysicalOperationRouteShadows:
         List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
@@ -72,6 +75,9 @@ data class DotNetBackendPipelineArtifact(
     val genericOwnerRehearsal: Boolean,
 ) : PipelineArtifact() {
     init {
+        require(genericOwnerRehearsal || genericInterfaceCompleteSurfaceVarianceShadows.isEmpty()) {
+            "the production erased epoch cannot publish complete-surface variance shadows"
+        }
         require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
             "the production erased epoch cannot publish sealed generic-owner families"
         }
