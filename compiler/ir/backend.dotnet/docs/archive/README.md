@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`upstream-sync-2026-08-27.md`](upstream-sync-2026-08-27.md)
+  records the tested 253-commit upstream integration rehearsal from `f9a1706c` through
+  `c72fbd7b`, preservation of all 640 target patches, shared-path and semantic
+  FIR/IR audit, three bounded post-rebase adaptations, the exact 2,524-test
+  target gate, rollback boundary, and the remaining Windows symlink-privilege
+  gate for the repository-wide BTA forward suite.
 - [`generic-owner-producer-sealed-library-abi-2026-08-27.md`](generic-owner-producer-sealed-library-abi-2026-08-27.md)
   records the rehearsal-only ABI-61 `J` envelope for one producer's actual
   4-TypeDef/6-MethodDef/2-MethodImpl sealed family, canonical role-based
