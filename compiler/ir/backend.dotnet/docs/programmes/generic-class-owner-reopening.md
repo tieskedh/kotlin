@@ -1,6 +1,6 @@
 # Programme: true CLR-generic Kotlin class owners where semantically sound
 
-- Status: **Active — complete Kotlin-emitter/rollback rehearsal next; current erased implementation remains binding**
+- Status: **Active — physical-authority and carrier-provenance consolidation in rehearsal; current erased implementation remains binding**
 - Current authority: [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md)
 - Candidate model: [`../decisions/draft-adr-reified-generic-class-owner.md`](../decisions/draft-adr-reified-generic-class-owner.md)
 - Carrier and member admission matrix:
@@ -643,33 +643,32 @@ production typed-owner infrastructure must not be implemented merely to make
 one side pass. Each explicitly selected implementation spike must remain
 bounded and must not publish a third ABI.
 
-## What the design phase locks
+## Rehearsal boundary
 
-Until the hostile model, admission rules, and atomic migration plan are
-accepted, do not:
+The hostile model, admission artifacts, BK-1 cast boundary, typed/semantic
+families, and producer-recorded sealed evidence now exist in production-inert
+form. They authorize continued rehearsal, not a production owner migration.
 
-- emit a CLR-generic TypeDef as the implementation owner of an ordinary
-  Kotlin-owned generic class;
-- change the accepted delayed-use cast behavior or its tests;
-- reintroduce canonical class interfaces, ancestry classifiers, generic-class
-  bridge manifests, or typed-owner capability probes;
-- freeze public ABI or export rules that assume the internal Kotlin class is
-  CLR `C<T>`; or
+Until the complete migration-plan entry conditions pass, do not:
+
+- emit a CLR-generic TypeDef as the production implementation owner of an
+  ordinary Kotlin-owned generic class or interface;
+- publish an easy/read-only owner as a pilot ABI;
+- allow a bounded recognizer, generated name, or earlier BOUND fact to stand in
+  for missing final declaration authority;
+- freeze public reflection, export, or C# rules that assume every Kotlin owner
+  is CLR `C<T>`; or
 - describe CLI generic capability as authorization for that representation.
 
-This design phase does **not** block:
+Production-inert compiler-emitted families, capability probes, physical
+binding records, and exact rollback tests are deliberately allowed: they are
+the evidence the current consolidation is building. BK-1 is governed by the
+accepted breaking-change ledger and must not be described as the old delayed-
+failure baseline. Independent Common features, structured CLI work, imported
+CLR generics, exact CLR-generic methods, and explicit export work remain
+available when they do not pre-commit this owner decision.
 
-- Common stdlib and language-feature foundations using the accepted erased
-  owner;
-- callable invocation, member reflection, annotations, or contracts;
-- structured CLI IR and complete support for physical generic metadata;
-- imported CLR generic classes and interfaces;
-- CLR-generic methods and truthful exact interface capabilities;
-- explicit fail-closed .NET export facades/adapters; or
-- removable private specialization whose disablement changes no supported ABI
-  or behavior.
-
-## Reopened direction and next design artifacts
+## Reopened direction and current gate
 
 The programme is explicitly reopened with truthful CLR reification as the
 destination wherever the complete Kotlin contract permits it. Before the first
@@ -683,11 +682,16 @@ export/import tooling, tests, and documentation. There is no easy-owner pilot
 ABI and no mixed compatibility period for one logical owner on this pre-ABI
 branch.
 
-The hostile representation, schema-20 family, application corpus, deployment
-measurements, and selected ordinary-stdlib breadth are now recorded. The next
-major task is therefore the complete rehearsal itself, not another detached
-physicalizer variant or erased leaf API. It must materialize the compiler-
-derived typed/semantic/capability families into normal Kotlin-emitted products,
-switch Runtime/Stdlib and binding epochs together on the rehearsal branch, run
-the complete gates, and execute the exact inverse rollback. This scheduling
-does not authorize a production `C<T>` TypeDef before the rehearsal passes.
+The hostile representation, application corpus, deployment measurements,
+compiler-emitted generic-interface families, and producer-recorded sealed
+evidence now exist in rehearsal form. The immediate gate is no longer another
+detached physicalizer or erased leaf API: declaration authority and per-value
+carrier provenance must first become one general, shadow-verified model. The
+current completed evidence and exact next steps are owned by the
+[generic-interface reopening draft](../decisions/draft-adr-reified-generic-interface-owner.md)
+and [`../../STATUS.md`](../../STATUS.md).
+
+Only after that consolidation may the rehearsal materialize the complete
+Runtime/Stdlib family, execute every Kotlin/C# and AOT gate, and prove the exact
+production-erased inverse. This scheduling does not authorize a production
+`C<T>` TypeDef before the atomic rehearsal passes.
