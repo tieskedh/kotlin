@@ -7,10 +7,16 @@ package org.jetbrains.kotlin.fir.analysis.dotnet.checkers
 
 import org.jetbrains.kotlin.fir.analysis.checkers.expression.ExpressionCheckers
 import org.jetbrains.kotlin.fir.analysis.checkers.expression.FirFunctionCallChecker
+import org.jetbrains.kotlin.fir.analysis.checkers.expression.FirReturnExpressionChecker
 import org.jetbrains.kotlin.fir.analysis.checkers.expression.FirSuperCallWithDefaultsChecker
 
 object DotNetExpressionCheckers : ExpressionCheckers() {
     override val functionCallCheckers: Set<FirFunctionCallChecker> = setOf(
         FirSuperCallWithDefaultsChecker,
+        FirDotNetClrVarianceArgumentChecker,
+    )
+
+    override val returnExpressionCheckers: Set<FirReturnExpressionChecker> = setOf(
+        FirDotNetClrVarianceReturnChecker,
     )
 }

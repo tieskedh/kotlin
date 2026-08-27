@@ -29,6 +29,7 @@ fun generateNonSuppressibleErrorNamesFile(generationPath: File, packageName: Str
                     JVM_DIAGNOSTICS_LIST +
                     JS_DIAGNOSTICS_LIST +
                     NATIVE_DIAGNOSTICS_LIST +
+                    DOTNET_DIAGNOSTICS_LIST +
                     WEB_COMMON_DIAGNOSTICS_LIST +
                     WASM_DIAGNOSTICS_LIST +
                     SYNTAX_DIAGNOSTIC_LIST
