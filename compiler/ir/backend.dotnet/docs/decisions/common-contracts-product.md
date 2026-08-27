@@ -82,6 +82,11 @@ accepted erased Kotlin-owned interface ABI. `InvocationKind` uses the accepted
 ordinary enum representation. These are compositions of existing general
 decisions, not contract-specific physical exceptions.
 
+The erased interface phrase is the current production binding. If the complete
+generic-owner family later cuts over atomically, contract declarations follow
+the then-selected owner ADR without changing Common contract semantics or the
+separate CLR annotation projection in this decision.
+
 ## Cross-target evidence
 
 - JVM, JS, Wasm, and Native all consume the Common contracts declarations and

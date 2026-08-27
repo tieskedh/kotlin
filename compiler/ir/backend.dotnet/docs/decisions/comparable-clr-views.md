@@ -97,10 +97,12 @@ values implementing that interface are therefore admissible foreign
 comparables. This does not reinterpret a foreign value as a Kotlin primitive
 or grant it another Kotlin declaration identity.
 
-Parameterized casts remain erased. A cast such as `String as Comparable<Int>`
-may succeed; the incompatible argument fails only when `compareTo` performs
-the later checked typed use. This is the same Kotlin erasure rule used by
-ordinary Kotlin-owned generic interfaces.
+Under this accepted mapped representation, parameterized casts remain erased.
+A cast such as `String as Comparable<Int>` may succeed; the incompatible
+argument fails only when `compareTo` performs the later checked typed use. BK-1
+does not silently extend from the production-inert generic-owner rehearsal to
+this independently mapped BCL capability. Applying it here would require an
+explicit amendment with the same `as`/`as?`/`is` predicate and inverse gates.
 
 A foreign value implementing only `System.IComparable<T>` does not satisfy
 this logical identity: that typed CLR interface has no universal erased

@@ -115,7 +115,8 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)
-- [Draft CLR-generic interface owner with declaration-semantic capability](decisions/draft-adr-reified-generic-interface-owner.md)
+- [Draft physical authority and value provenance for generic owners](decisions/draft-adr-generic-owner-physical-authority.md)
+- [Draft one-natural-interface CLR-generic owner with semantic routing](decisions/draft-adr-reified-generic-interface-owner.md)
 - [Exact foreign CLR generic methods](decisions/foreign-clr-generic-methods.md)
 - [Native identity for foreign CLR generic interfaces](decisions/foreign-clr-generic-type-identities.md)
 - [Ordinary Kotlin enums as reference classes](decisions/ordinary-enum-reference-classes.md)
@@ -128,6 +129,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 ## Interop, integration, and supporting decisions
 
 - [Generic nullability and covariant returns](decisions/adr-hybrid-generic-nullability-and-covariant-returns.md)
+- [Draft split-nullable callable result layout](decisions/draft-adr-split-nullable-callable-result.md)
 - [C# interface source authoring](decisions/adr-csharp-interface-source-authoring.md)
 - [Companion/static placement and initialization](decisions/adr-companion-static-placement-and-initialization.md)
 - [Static-initialization failures](decisions/adr-kotlin-static-initialization-failures.md)

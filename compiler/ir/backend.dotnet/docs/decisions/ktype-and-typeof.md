@@ -1,6 +1,6 @@
 # `KType` and `typeOf` retain the logical Kotlin type graph
 
-**Status:** Accepted for the pre-ABI prototype
+- Status: **Accepted for the pre-ABI prototype**
 
 ## Scope
 
