@@ -91,6 +91,6 @@ enum class StringListMetrics(
 
 
     companion object {
-        const val VERSION = 5
+        const val VERSION = 6
     }
 }
