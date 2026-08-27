@@ -227,6 +227,11 @@ internal class DotNetBackendContext(
     val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
     /** Static call-site evidence only; codegen must never consume these route requirements. */
     val genericOwnerCallRoutes: MutableList<DotNetGenericOwnerCallRoutePlan> = mutableListOf()
+    /** Read-only complete-surface variance evidence; no lowering or emitter may consume it. */
+    val genericInterfaceCompleteSurfaceVarianceShadows:
+        MutableList<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot> = mutableListOf()
+    /** Distinguishes a completed rehearsal shadow from an unavailable run or production epoch. */
+    var genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted: Boolean = false
     /** Read-only physical-value shadow evidence; no lowering or emitter may consume it. */
     val genericOwnerPhysicalValueShadows: MutableList<DotNetGenericOwnerPhysicalValueShadowSnapshot> =
         mutableListOf()

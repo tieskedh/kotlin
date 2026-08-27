@@ -753,7 +753,10 @@ private fun validateGenericInterfaceCompleteSurfaceVarianceShadow(
     fun snapshot(ownerSuffix: String): DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot =
         checkNotNull(snapshots.singleOrNull { snapshot -> snapshot.ownerName.endsWith(ownerSuffix) }) {
             "The complete-surface probe requires one '$ownerSuffix' shadow: $snapshots"
-        }.also { snapshot ->
+        }
+
+    fun boundSnapshot(ownerSuffix: String): DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot =
+        snapshot(ownerSuffix).also { snapshot ->
             check(snapshot.status == DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus.BOUND &&
                     snapshot.blocker == null
             ) {
@@ -769,7 +772,7 @@ private fun validateGenericInterfaceCompleteSurfaceVarianceShadow(
                 DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance,
                 >,
     ) {
-        val actual = snapshot(ownerSuffix).parameters
+        val actual = boundSnapshot(ownerSuffix).parameters
         check(actual.size == expected.size && actual.indices.all { index ->
             val parameter = actual[index]
             val expectedParameter = expected[index]
@@ -796,6 +799,13 @@ private fun validateGenericInterfaceCompleteSurfaceVarianceShadow(
     )
     assertParameters("InputParentSurface", Triple(covariant, input, invariant))
     assertParameters("InputChildSurface", Triple(covariant, both, invariant))
+    snapshot("BlockedCarrierSurface").also { blocked ->
+        check(blocked.status == DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus.UNAVAILABLE &&
+                blocked.parameters.isEmpty() && !blocked.blocker.isNullOrEmpty()
+        ) {
+            "A planned but non-reified generic class cannot become physical variance authority: $blocked"
+        }
+    }
 }
 
 /** Proves that logical call policy wins before exact receiver provenance is consulted. */

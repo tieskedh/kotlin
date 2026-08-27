@@ -214,6 +214,8 @@ object DotNetBackend {
         val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
+        var genericInterfaceCompleteSurfaceVarianceShadows:
+            List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot> = emptyList()
         var genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot> = emptyList()
         var genericOwnerPhysicalOperationRouteShadows:
             List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = emptyList()
@@ -359,6 +361,7 @@ object DotNetBackend {
                 declarations,
                 genericOwnerPrototypes,
                 genericOwnerCallRoutes,
+                genericInterfaceCompleteSurfaceVarianceShadows,
                 genericOwnerPhysicalValueShadows,
                 genericOwnerPhysicalOperationRouteShadows,
                 physicalValuePlacementComparisons(),
@@ -482,6 +485,20 @@ object DotNetBackend {
         genericOwnerCallRoutes = context.genericOwnerCallRoutes
             .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)
             .sortedBy(DotNetGenericOwnerCallRouteSnapshot::callSiteIndex)
+        genericInterfaceCompleteSurfaceVarianceShadows =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                check(context.genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted) {
+                    "the rehearsal backend result requires a completed complete-surface variance shadow"
+                }
+                context.genericInterfaceCompleteSurfaceVarianceShadows
+                    .toList()
+                    .sortedBy(DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot::ownerName)
+            } else {
+                check(context.genericInterfaceCompleteSurfaceVarianceShadows.isEmpty()) {
+                    "the production erased epoch cannot publish complete-surface variance shadows"
+                }
+                emptyList()
+            }
         genericOwnerPhysicalValueShadows = if (configuration.dotNetGenericOwnerRehearsal) {
             check(context.genericOwnerPhysicalValueShadowFinalAnalysisCompleted) {
                 "the rehearsal backend result requires a successfully completed final physical-value shadow"
@@ -955,6 +972,8 @@ data class DotNetBackendOutput(
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+    val genericInterfaceCompleteSurfaceVarianceShadows:
+        List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot>,
     val genericOwnerPhysicalValueShadows: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
     val genericOwnerPhysicalOperationRouteShadows:
         List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
@@ -969,6 +988,9 @@ data class DotNetBackendOutput(
     val genericOwnerRehearsal: Boolean,
 ) {
     init {
+        require(genericOwnerRehearsal || genericInterfaceCompleteSurfaceVarianceShadows.isEmpty()) {
+            "the production erased epoch cannot publish complete-surface variance shadows"
+        }
         require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
             "the production erased epoch cannot publish sealed generic-owner families"
         }
