@@ -32,8 +32,7 @@ private fun createSyntheticAccessorGeneration(context: LoweringContext): Synthet
 }
 
 fun loweringsOfTheFirstPhase(
-    languageVersionSettings: LanguageVersionSettings,
-    includeLateinitLowering: Boolean = true,
+    languageVersionSettings: LanguageVersionSettings
 ): List<(PreSerializationLoweringContext) -> ModuleLoweringPass> {
     val inlineIntraModule = languageVersionSettings.supportsFeature(LanguageFeature.IrIntraModuleInlinerBeforeKlibSerialization)
     val inlineCrossModuleFunctions =
@@ -75,9 +74,7 @@ fun loweringsOfTheFirstPhase(
         this += ::VersionOverloadsLowering
         this += ::InlineCallCycleCheckerLowering
         if (inlineIntraModule) {
-            if (includeLateinitLowering) {
-                this += ::LateinitLowering
-            }
+            this += ::LateinitLowering
             this += ::createSharedVariablesLoweringPhase
             this += ::LocalClassesInInlineLambdasLowering
             this += ::ArrayConstructorLowering
