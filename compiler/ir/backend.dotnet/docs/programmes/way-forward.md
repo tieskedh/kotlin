@@ -76,11 +76,13 @@ Exit this phase only when one shared authority/provenance model explains every
 bounded recognizer and its hostile negatives without declaration, package,
 collection, member-name, or IR-origin exceptions.
 
-Before retained-foreign authority is extended, close the imported CLR variance
-gap: legal reference-only CLR covariance/contravariance must remain available,
-while value/open-argument conversions that Kotlin's broader logical variance
-would accept must fail at a mandatory physical-conversion gate with a stable
-source diagnostic.
+The first closed same-TypeDef imported-variance slice now has both a bounded
+source diagnostic and a mandatory final-emission gate for conversions hidden
+by physical placement or control-flow joins. Before retained-foreign authority
+is extended, derive its remaining inherited, implementation, open, projected,
+vararg, and multiple-view cases from the shared provenance model. Legal
+reference-only CLR covariance/contravariance must remain available; a missing
+reference-hierarchy proof is not evidence of an invalid CLR conversion.
 
 ### 2. Make the generic-owner go/no-go decision
 

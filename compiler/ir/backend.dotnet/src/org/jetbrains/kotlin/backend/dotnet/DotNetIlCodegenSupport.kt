@@ -1373,6 +1373,10 @@ internal class DotNetIlTypeMapper private constructor(
         return DotNetIlValueType.UserClass(classInfo)
     }
 
+    /** Physical authority marker: true only for an exact TypeDef retained from CLR metadata. */
+    fun isRetainedForeignClrClassInfo(classInfo: DotNetIlClassInfo): Boolean =
+        importedClrDeclarations.isRetainedClassInfo(classInfo)
+
     /**
      * Maps a reified CLR generic argument. Kotlin value classes are nominal objects in generic
      * positions, just as JVM generic positions use their wrapper: substituting the exact carrier

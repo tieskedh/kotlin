@@ -38,6 +38,7 @@ internal class DotNetClrImportedDeclarations(
 ) {
     private val classInfos = IdentityHashMap<IrClass, DotNetIlClassInfo>()
     private val resolvedClassInfos = hashMapOf<DotNetClrResolvedTypeDefinition, DotNetIlClassInfo>()
+    private val retainedClassInfos = IdentityHashMap<DotNetIlClassInfo, Unit>()
     private val initializedHierarchies = hashSetOf<DotNetClrResolvedTypeDefinition>()
     private val hierarchiesInProgress = hashSetOf<DotNetClrResolvedTypeDefinition>()
 
@@ -162,6 +163,10 @@ internal class DotNetClrImportedDeclarations(
         )
     }
 
+    /** Whether [classInfo] is the exact physical TypeDef retained from imported CLR metadata. */
+    fun isRetainedClassInfo(classInfo: DotNetIlClassInfo): Boolean =
+        retainedClassInfos.containsKey(classInfo)
+
     private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedDeclarationSource? =
         dotNetImportedClrSourceOrNull()
 
@@ -193,7 +198,8 @@ internal class DotNetClrImportedDeclarations(
                 }
             },
             assemblyName = type.assembly.identity.name,
-        ).also {
+        ).also { classInfo ->
+            retainedClassInfos[classInfo] = Unit
             assemblyReferenceSink(selectedAssembly)
         }
     }

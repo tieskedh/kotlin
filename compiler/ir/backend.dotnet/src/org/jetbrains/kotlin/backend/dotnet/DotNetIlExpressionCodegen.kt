@@ -119,6 +119,31 @@ internal class DotNetIlExpressionCodegen(
     private val exactGenericSignatureTypeMapper by lazy(LazyThreadSafetyMode.NONE) {
         typeMapper.exactGenericInterfaceSignatureView()
     }
+    private var fixedPhysicalBoundary: DotNetIlFixedPhysicalBoundary? = null
+
+    /** Executes [block] while failed conversions belong to one already-selected CLR destination. */
+    fun <T> withFixedPhysicalBoundary(
+        boundary: DotNetIlFixedPhysicalBoundary,
+        block: () -> T,
+    ): T {
+        val previous = fixedPhysicalBoundary
+        fixedPhysicalBoundary = boundary
+        return try {
+            block()
+        } finally {
+            fixedPhysicalBoundary = previous
+        }
+    }
+
+    fun emitAtFixedPhysicalBoundary(
+        expression: IrExpression,
+        expectedType: DotNetIlValueType,
+        boundary: DotNetIlFixedPhysicalBoundary,
+    ) {
+        withFixedPhysicalBoundary(boundary) {
+            emitExpression(expression, expectedType)
+        }
+    }
 
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
@@ -491,6 +516,23 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(DotNetRuntimeTypes.unitInstanceLoadInstruction, pushes = 1)
     }
 
+    /**
+     * Consults only retained/emitted CLR facts after ordinary assignability and coercion failed.
+     * The destination description is scoped by [withFixedPhysicalBoundary]; it is never an input
+     * to local placement or logical Kotlin type selection.
+     */
+    fun validateFixedPhysicalBoundary(
+        producedType: DotNetIlValueType,
+        requiredType: DotNetIlValueType,
+    ) {
+        val boundary = fixedPhysicalBoundary ?: return
+        typeMapper.requireValidRetainedForeignClrBoundary(
+            produced = producedType,
+            required = requiredType,
+            boundary = boundary,
+        )
+    }
+
     fun emitExpression(expression: IrExpression?, expectedType: DotNetIlValueType) {
         if (expression.isNullDefaultArgumentPlaceholder()) {
             emitDefaultValue(expectedType)
@@ -614,6 +656,10 @@ internal class DotNetIlExpressionCodegen(
                     emitWideningCoercion(coercion)
                     return
                 }
+                // The normal physical relation and all explicit coercions failed. A fixed
+                // verifier-visible destination must not be silently removed when this is the
+                // closed value-type variance gap of a retained foreign CLR TypeDef.
+                validateFixedPhysicalBoundary(naturalType, expectedType)
             }
         }
         when (expression) {
@@ -1877,11 +1923,14 @@ internal class DotNetIlExpressionCodegen(
                             methodContext.emit("box ${operandType.nameInSignature}", pops = 1, pushes = 1)
                             methodContext.emit(narrowing, pops = 1, pushes = 1)
                         }
-                        else -> dotNetUnsupported(
-                            "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
-                                    "is not a reference upcast and is not supported " +
-                                    "(${expression.argument.type.render()} -> ${expression.typeOperand.render()})"
-                        )
+                        else -> {
+                            validateFixedPhysicalBoundary(operandType, castType)
+                            dotNetUnsupported(
+                                "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
+                                        "is not a reference upcast and is not supported " +
+                                        "(${expression.argument.type.render()} -> ${expression.typeOperand.render()})"
+                            )
+                        }
                     }
                 }
             }
@@ -2783,13 +2832,21 @@ internal class DotNetIlExpressionCodegen(
         }
         val receiver = arguments[0]
             ?: dotNetUnsupported("call to $calleeDescription has a missing dispatch receiver")
-        emitExpression(receiver, receiverType)
+        emitAtFixedPhysicalBoundary(
+            receiver,
+            receiverType,
+            DotNetIlFixedPhysicalBoundary("receiver of $calleeDescription"),
+        )
         val receiverSlot = spillToSyntheticLocal(receiverType, "<constrainedReceiver>")
         val argumentSlots = arguments.drop(1).indices.map { index ->
             val argument = arguments[index + 1]
                 ?: dotNetUnsupported("call to $calleeDescription relies on default argument values")
             val parameterType = parameterTypes[index + 1]
-            emitExpression(argument, parameterType)
+            emitAtFixedPhysicalBoundary(
+                argument,
+                parameterType,
+                DotNetIlFixedPhysicalBoundary("argument ${index + 1} of $calleeDescription"),
+            )
             spillToSyntheticLocal(parameterType, "<constrainedArgument>")
         }
         if (virtual) {
@@ -2831,7 +2888,11 @@ internal class DotNetIlExpressionCodegen(
                 val argument = indexedArgument.value.first
                 val parameterType = indexedArgument.value.second
                 try {
-                    emitExpression(argument, parameterType)
+                    emitAtFixedPhysicalBoundary(
+                        argument,
+                        parameterType,
+                        DotNetIlFixedPhysicalBoundary("argument $index of $calleeDescription"),
+                    )
                 } catch (failure: DotNetIlUnsupportedException) {
                     dotNetUnsupported(
                         "argument $index of $calleeDescription (${argument.type.render()} -> " +
@@ -2846,8 +2907,13 @@ internal class DotNetIlExpressionCodegen(
                 "call to $calleeDescription containing a protected expression has older evaluation-stack operands"
             )
         }
-        val slots = actualArguments.zip(parameterTypes).map { [argument, parameterType] ->
-            emitExpression(argument, parameterType)
+        val slots = actualArguments.zip(parameterTypes).mapIndexed { index, pair ->
+            val [argument, parameterType] = pair
+            emitAtFixedPhysicalBoundary(
+                argument,
+                parameterType,
+                DotNetIlFixedPhysicalBoundary("argument $index of $calleeDescription"),
+            )
             spillToSyntheticLocal(parameterType, "<protectedArgument>")
         }
         for (slot in slots) {
@@ -3084,6 +3150,7 @@ internal class DotNetIlExpressionCodegen(
                 )
             if (!producedType.isDotNetAssignableTo(expectedType)) {
                 if (producedType != DotNetIlValueType.Object) {
+                    validateFixedPhysicalBoundary(producedType, expectedType)
                     dotNetUnsupported(
                         "generic-owner semantic getter for '${field.name.asString()}' produces " +
                                 "${producedType.nameInSignature} where ${expectedType.nameInSignature} is expected"
@@ -3102,6 +3169,7 @@ internal class DotNetIlExpressionCodegen(
             val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
             if (!fieldType.isDotNetAssignableTo(expectedType)) {
                 if (declaredFieldType != DotNetIlValueType.Object) {
+                    validateFixedPhysicalBoundary(fieldType, expectedType)
                     dotNetUnsupported(
                         "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
                                 "where ${expectedType.nameInSignature} is expected"
@@ -3146,6 +3214,7 @@ internal class DotNetIlExpressionCodegen(
                 emitErasedCarrierAs(expectedType, "field '${field.name.asString()}'")
                 return
             }
+            validateFixedPhysicalBoundary(declaredFieldType, expectedType)
             dotNetUnsupported(
                 "field '${field.name.asString()}' has type ${declaredFieldType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
@@ -3183,7 +3252,11 @@ internal class DotNetIlExpressionCodegen(
             val [ownerView, receiver, receiverType] = resolveGenericFieldOwner(expression.receiver, field, isStatic)
             val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
             emitExpression(receiver, receiverType)
-            emitExpression(expression.value, fieldType)
+            emitAtFixedPhysicalBoundary(
+                expression.value,
+                fieldType,
+                DotNetIlFixedPhysicalBoundary("store to field '${field.name.asString()}'"),
+            )
             emitVolatilePrefix(field, fieldType)
             methodContext.emit(
                 "stfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
@@ -3192,13 +3265,21 @@ internal class DotNetIlExpressionCodegen(
             return
         }
         if (isStatic) {
-            emitExpression(expression.value, declaredFieldType)
+            emitAtFixedPhysicalBoundary(
+                expression.value,
+                declaredFieldType,
+                DotNetIlFixedPhysicalBoundary("store to field '${field.name.asString()}'"),
+            )
             emitVolatilePrefix(field, declaredFieldType)
             methodContext.emit("stsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pops = 1)
             return
         }
         emitFieldReceiver(expression.receiver, field, classInfo)
-        emitExpression(expression.value, declaredFieldType)
+        emitAtFixedPhysicalBoundary(
+            expression.value,
+            declaredFieldType,
+            DotNetIlFixedPhysicalBoundary("store to field '${field.name.asString()}'"),
+        )
         emitVolatilePrefix(field, declaredFieldType)
         methodContext.emit("stfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pops = 2)
     }
@@ -3344,10 +3425,13 @@ internal class DotNetIlExpressionCodegen(
             emitErasedCarrierAs(expectedType, "${call.symbol.owner.name.asString()} result")
         } else if (producedType != null && !producedType.isDotNetAssignableTo(expectedType)) {
             val coercion = dotNetWideningCoercionOrNull(producedType, expectedType, coreLibraryReference)
-                ?: dotNetUnsupported(
-                    "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
-                            "where ${expectedType.nameInSignature} is expected"
-                )
+                ?: run {
+                    validateFixedPhysicalBoundary(producedType, expectedType)
+                    dotNetUnsupported(
+                        "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
             emitWideningCoercion(coercion)
         } else if (
             producedType == null &&
@@ -5107,6 +5191,7 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
                 return
             }
+            validateFixedPhysicalBoundary(slotType, expectedType)
             dotNetUnsupported(
                 "value '${expression.symbol.owner.name.asString()}' has type ${slotType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected " +
