@@ -92,11 +92,9 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.inline.OuterThisInInlineFunctionsSpecialAccessorLowering
 import org.jetbrains.kotlin.ir.inline.SyntheticAccessorLowering
-import org.jetbrains.kotlin.ir.inline.isConsideredAsPrivateForInlining
 import org.jetbrains.kotlin.ir.symbols.IrSymbol
 import org.jetbrains.kotlin.ir.util.IrTreeSymbolsVisitor
 import org.jetbrains.kotlin.ir.util.render
-import org.jetbrains.kotlin.ir.util.isTypeOfIntrinsic
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 
 private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendContext) :
@@ -104,28 +102,6 @@ private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendCo
 
 private fun createSyntheticAccessorGenerationPhase(context: DotNetBackendContext): SyntheticAccessorLowering =
     SyntheticAccessorLowering(context)
-
-private fun createIrValidationAfterInliningPrivateFunctionsKlibPhase(
-    context: DotNetBackendContext,
-): IrValidationAfterInliningPrivateFunctionsKlibPhase<DotNetBackendContext> =
-    IrValidationAfterInliningPrivateFunctionsKlibPhase(
-        context,
-        checkInlineFunctionCallSites = { useSite ->
-            !useSite.symbol.isConsideredAsPrivateForInlining()
-        },
-    )
-
-private fun createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase(
-    context: DotNetBackendContext,
-): IrValidationAfterInliningAllFunctionsKlibSecondStagePhase<DotNetBackendContext> =
-    IrValidationAfterInliningAllFunctionsKlibSecondStagePhase(
-        context,
-        checkInlineFunctionCallSites = { useSite ->
-            val function = useSite.symbol.owner
-            function.symbol.isTypeOfIntrinsic() ||
-                    function.body == null
-        },
-    )
 
 private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
     // BEGIN: Common Native/JS/Wasm inline prefix. The .NET identity pass only records rich
@@ -141,10 +117,10 @@ private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext,
     ::DotNetPrivateFunctionInlining,
     ::OuterThisInInlineFunctionsSpecialAccessorLowering,
     ::createSyntheticAccessorGenerationPhase,
-    ::createIrValidationAfterInliningPrivateFunctionsKlibPhase,
+    ::IrValidationAfterInliningPrivateFunctionsKlibPhase,
     ::DotNetAllFunctionInlining,
     ::RedundantCastsRemoverLowering,
-    ::createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase,
+    ::IrValidationAfterInliningAllFunctionsKlibSecondStagePhase,
     // END: Common Native/JS/Wasm inline prefix.
 )
 
@@ -154,7 +130,7 @@ private val dotNetReifiedInlineCompletionLowerings:
     // remaining Kotlin-owned reified substitutions after KLIB serialization without repeating
     // the non-idempotent shared prefix that already handled ordinary inline declarations.
     ::DotNetAllFunctionInlining,
-    ::createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase,
+    ::IrValidationAfterInliningAllFunctionsKlibSecondStagePhase,
 )
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
