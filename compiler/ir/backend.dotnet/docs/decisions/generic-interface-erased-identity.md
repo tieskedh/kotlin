@@ -1,6 +1,6 @@
 # ADR: erased ABI for Kotlin-owned generic interfaces
 
-- Status: **Accepted — pre-ABI**
+- Status: **Accepted production baseline — pre-ABI; replacement under rehearsal**
 - Date: 2026-08-04
 - Scope: Kotlin-owned ordinary generic interfaces, including member ABI,
   inheritance, variance, casts, defaults, implementation, separate
@@ -30,12 +30,18 @@ binding records the single interface owner and its erased member locations. It
 does not record declaration-variant or invariant-exact sibling TypeDefs,
 typed-view bridges, capability guards, or split-view intersection slots.
 
-Erasure is the semantic runtime ABI, not merely the fallback ABI. Every
-Kotlin construction and projection of one declaration uses the same physical
+Erasure is the binding production runtime ABI for this epoch. Every Kotlin
+construction and projection of one declaration currently uses the same physical
 interface identity for storage, calls, inheritance, `is`, `as`, and `as?`.
 Class and method implementations may require ordinary erased-signature or
 covariant-return bridges, but those bridges satisfy slots on the one interface
 hierarchy; they do not create another interface representation.
+
+The durable semantic requirements are one logical Kotlin declaration, one
+receiver identity, complete Kotlin behavior, and truthful separate-compilation
+binding. They do not permanently require a non-generic TypeDef if the active
+rehearsal proves one complete natural generic interface plus compiler semantic
+routing and an exact erased inverse.
 
 This rule applies to Kotlin-owned ordinary interfaces. Imported CLR generic
 interfaces retain their native constructed identity and CLR variance rules.
@@ -105,8 +111,9 @@ For a Kotlin-owned `Source<T>`:
   interface identity;
 - a call through the interface executes the one erased slot and narrows or
   unboxes its result at the logical use site;
-- an incompatible unchecked argument or result fails at the operation which
-  consumes the wrong logical type, not at an earlier CLR capability probe;
+- in this erased production epoch, an incompatible unchecked argument or result
+  fails at the operation which consumes the wrong logical type; a future
+  reified epoch follows only the separately accepted BK-1 cast boundary;
 - virtual dispatch, defaults, `super` selection, and intersections follow the
   Kotlin override graph; and
 - separate producers and consumers bind through recorded physical owner and

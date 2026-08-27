@@ -53,15 +53,20 @@ MethodDef, public symbol, Runtime operation, or library ABI entry is emitted.
 
 ## Generic-owner boundary
 
-An ordinary Kotlin generic class still has one canonical non-generic CLR
-owner. An owner-dependent `Array<T>` field remains authoritative
-`System.Array` state. Passing that field to `joinTo` does not reify the owner
+Under the accepted production epoch, an ordinary Kotlin generic class still
+has one canonical non-generic CLR owner. An owner-dependent `Array<T>` field
+remains authoritative `System.Array` state. Passing that field to `joinTo` does
+not reify the owner
 or create shadow state: the method probes the actual vector once and either
 uses its compatible typed read capability or retains the erased fallback.
 
 This is incremental use of an existing method-generic CLR token. It supplies
 evidence that typed physical operations can coexist with the accepted erased
 owner, but it is not production admission of a Kotlin-owned `C<T>`.
+
+After any later atomic generic-owner cutover, the owner and storage plan follow
+the selected owner ADR. This decision continues to govern only the local array
+join fast path over an already-proven carrier.
 
 ## ABI and semantic consequences
 

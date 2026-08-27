@@ -59,7 +59,8 @@ the best shared-runtime route.
 
 ## Erased generic-owner boundary
 
-An ordinary Kotlin generic class remains one canonical non-generic CLR owner.
+Under the accepted production epoch, an ordinary Kotlin generic class remains
+one canonical non-generic CLR owner.
 Its owner-dependent `Array<T>` field is authoritative `System.Array` state,
 and a member which fills that field stays on the Runtime fallback. This
 decision does not introduce a reified owner, duplicate typed storage, cache,
@@ -76,6 +77,11 @@ The optimization changes only private method bodies. KLIB remains the logical
 authority; no declaration, metadata schema, Runtime method, or exported C#
 surface changes. The existing Runtime helper remains required for erased
 capabilities and keeps its surface-37 signature.
+
+If the generic-owner family later changes atomically, owner and field carriers
+follow that decision. The durable rule here is route selection from the actual
+array carrier: an exact vector uses its direct fill path, while a genuinely
+semantic `System.Array` capability uses the Runtime helper.
 
 The .NET 10 MemberRef is emitted only when the selected core-library profile
 admits it. A netstandard library must never acquire the newer call and remains

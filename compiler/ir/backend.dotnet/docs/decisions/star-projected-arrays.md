@@ -64,11 +64,17 @@ allocation, wrapper, copy, or identity change. The star projection remains in
 KLIB metadata; consumers must not infer it merely from a `System.Array`
 signature.
 
-The natural C# view is likewise `System.Array`. This is an intentionally broad
-foreign-language surface paired with a narrower Kotlin-only contract, in the
-same sense that CLR nullable attributes do not replace authoritative KLIB
-nullability. C# callers may pass any `System.Array`; Kotlin-originated calls
-and metadata-aware tooling retain the declared `Array<*>` contract.
+The low-level C# signature is likewise `System.Array`, but a foreign value does
+not enter a Kotlin `Array<*>` body merely because that CLR assignment is legal.
+Every public/protected constructor, method, property, delegate, reflection, or
+other foreign entry validates the SZ-array classifier below before the Kotlin
+body can observe the value. A compiler-proven Kotlin-originated path may elide
+the repeated check. If a boundary cannot carry that guard, the raw entry is
+unsupported and an explicit checked adapter is required.
+
+Thus raw CLR metadata remains physically broad while the executable boundary
+enforces the narrower KLIB contract. Rectangular and non-zero-based arrays are
+never admitted as Kotlin generic arrays through C#.
 
 ### One runtime classifier
 

@@ -48,14 +48,25 @@ The consolidation separates:
 - per-value physical-carrier provenance; and
 - producer-wide state/storage selection.
 
+The interface review additionally replaces the desired exact-sibling ABI with
+one complete natural CLR-generic TypeDef plus semantic routing. Physical
+variance is retained only where the complete interface surface is CLR-legal;
+otherwise the affected parameter is physically invariant while Kotlin's
+logical variance remains in KLIB. Ordinary CLR-language implementations must
+not require a hidden generated ABI for behavior derivable from real interface
+slots. The existing split implementation remains comparison evidence until a
+custom hostile proof and exact inverse pass.
+
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to
 create physical evidence. Broad semantic input may not contaminate unrelated
 exact receiver-derived state. Exact provenance may not narrow a genuinely
 broad source value.
 
-The detailed model, current completed evidence, and remaining hostile grammar
-are owned by the
+The shared model is owned by the
+[physical-authority/provenance draft](../decisions/draft-adr-generic-owner-physical-authority.md).
+Interface shape, current comparison boundary, and remaining hostile grammar are
+owned by the
 [generic-interface reopening draft](../decisions/draft-adr-reified-generic-interface-owner.md),
 the [generic-class-owner programme](generic-class-owner-reopening.md), its
 [carrier/admission matrix](generic-class-owner-carrier-matrix.md), and its
@@ -64,6 +75,12 @@ the [generic-class-owner programme](generic-class-owner-reopening.md), its
 Exit this phase only when one shared authority/provenance model explains every
 bounded recognizer and its hostile negatives without declaration, package,
 collection, member-name, or IR-origin exceptions.
+
+Before retained-foreign authority is extended, close the imported CLR variance
+gap: legal reference-only CLR covariance/contravariance must remain available,
+while value/open-argument conversions that Kotlin's broader logical variance
+would accept must fail at a mandatory physical-conversion gate with a stable
+source diagnostic.
 
 ### 2. Make the generic-owner go/no-go decision
 

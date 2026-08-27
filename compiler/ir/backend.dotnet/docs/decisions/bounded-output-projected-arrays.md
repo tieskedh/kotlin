@@ -80,11 +80,18 @@ schema version moves with every producer and consumer; no compatibility inferenc
 
 ## CLR and C# boundary
 
-Raw C# sees `System.Array`, which is broader than the Kotlin declaration. That is truthful as a
-low-level physical view but is not an idiomatic typed export: the embedded KLIB alone carries the
-bounded element contract. A future explicit .NET export may generate a checked typed adapter when
-it can preserve the declared element relationship. It must not change Kotlin array identity or
-make the internal physical signature pretend to be `E[]` for value-array covariance.
+Raw C# sees `System.Array`, which is broader than the Kotlin declaration. Every
+foreign entry must therefore validate both the Kotlin SZ-array classifier and
+the producer-recorded bounded element relationship before the Kotlin body can
+observe the value. A compiler-proven Kotlin-originated route may elide the
+guard. If the open bound cannot be checked truthfully on that boundary, raw
+entry is unsupported and an explicit checked adapter is required.
+
+The low-level carrier is not an idiomatic typed export: embedded KLIB carries
+the logical bounded contract. A future explicit .NET export may generate a
+checked typed adapter when it can preserve the declared element relationship.
+It must not change Kotlin array identity or make the internal physical
+signature pretend to be `E[]` for value-array covariance.
 
 Imported CLR `T[]` parameters remain native CLR signatures. This decision applies to
 Kotlin-owned projected generic-array declarations, not to foreign metadata.

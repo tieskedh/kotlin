@@ -134,9 +134,12 @@ For a reified variant input default, the natural `I<!T>` slot remains the ordina
 entry. A Kotlin view whose CLR construction is unavailable calls the same object's semantic
 capability. That capability must dispatch back through the natural virtual slot when a Kotlin or
 C# implementation overrides it; it may not bypass a foreign override by invoking a stale
-interface-owned body. On Framework the generated C# implementation forwards the abstract natural
-slot to the recorded helper. On .NET 10 ordinary C# inherits the DIM without authored compiler
-ABI, while an ordinary natural C# override is observed by exact and semantic Kotlin calls alike.
+interface-owned body. On Framework a C# implementation may implement the
+abstract natural slot directly or use optional tooling to forward it to the
+recorded helper. The tooling removes boilerplate; it is not hidden admission
+ABI. On .NET 10 ordinary C# inherits the DIM without authored compiler ABI,
+while an ordinary natural C# override is observed by exact and compiler-
+derivable semantic Kotlin calls alike.
 
 When a concrete non-generic `net10.0` interface overrides a member inherited from an erased
 generic Kotlin interface, it maps that one inherited slot and dispatches virtually to the
@@ -204,7 +207,8 @@ valid logical hierarchy; it is not the Kotlin source-language conflict resolver.
 default. A class bridge is generated only when Kotlin's selected implementation cannot be
 represented by natural CLR slot mapping, including:
 
-- erased, declared, or exact generic-interface views;
+- multiple authority-recorded physical views required by the active generic-
+  interface representation;
 - value or boxing representation adapters;
 - covariant-return adapters;
 - one Kotlin override satisfying multiple physical CLR slots;
@@ -281,11 +285,13 @@ This is required for upward compatibility: targeting `net10.0` does not make an 
 slot executable by itself, while a recorded DIM promotion is a real implementation the CLR can
 select.
 
-Cross-profile metadata verification compares semantic slot obligations, not `MethodImpl` table
-rows. One obligation is keyed by the existing Kotlin logical member identity, its canonical,
-erased, declared, exact, or helper role, and the complete normalized CLR signature recorded by
-the producer. The manifest locator must resolve to exactly one MethodDef by owner, method name,
-generic arity, return type, and parameter types; a name-only match is invalid.
+Cross-profile metadata verification compares semantic slot obligations, not
+`MethodImpl` table rows. One obligation is keyed by the existing Kotlin logical
+member identity, its producer-recorded natural, erased-baseline, semantic,
+adapter, or helper role for the active representation epoch, and the complete
+normalized CLR signature recorded by the producer. The manifest locator must
+resolve to exactly one MethodDef by owner, method name, generic arity, return
+type, and parameter types; a name-only match is invalid.
 
 For each externally consumable concrete portable type, every manifest-addressable interface-map
 entry whose target is concrete is an upward-compatibility obligation. The corresponding runtime
@@ -320,14 +326,16 @@ A more-derived provider shadows an ancestor provider for this calculation. Two p
 implement the same logical Kotlin declaration are not assumed to be harmless: unless one is more
 specific, the backend must materialize Kotlin's already-resolved choice before CLR execution.
 
-This provider rule applies once to the erased owner of a Kotlin-owned generic interface. If two
-`net10.0` interfaces promote the same portable generic default, a derived diamond emits one
-resolving DIM whose body calls the original declaring interface's helper identity. It does not
-inherit CLR ambiguity, choose one branch arbitrarily, or lower another copy of the body. An
-independently mapped host capability may need its own bridge, but cannot become a second Kotlin
-default-body owner. Kotlin source cannot implicitly combine an unrelated concrete default with a
-separate abstract or concrete declaration: common override resolution requires an explicit
-derived override, which then follows the ordinary declared-body path above.
+This provider rule applies once to the active authority-recorded physical owner
+of a Kotlin-owned generic interface. If two `net10.0` interfaces promote the
+same portable generic default, a derived diamond emits one resolving DIM whose
+body calls the original declaring interface's helper identity. It does not
+inherit CLR ambiguity, choose one branch arbitrarily, or lower another copy of
+the body. An independently mapped semantic capability may need its own bridge,
+but cannot become a second Kotlin default-body owner. Kotlin source cannot
+implicitly combine an unrelated concrete default with a separate abstract or
+concrete declaration: common override resolution requires an explicit derived
+override, which then follows the ordinary declared-body path above.
 
 ### 10. Pure no-compatibility mode is deferred
 
@@ -346,9 +354,11 @@ record must additionally describe:
 - the exact owner and method identity of the ordinary masked default-argument dispatcher,
   independently of whether the interface member has a body;
 - the helper's receiver and generic-parameter mapping;
-- the one erased interface slot supplied by the logical member;
-- every final erased interface adapter inherited by downstream implementors, keyed by its owning
-  logical interface and inherited logical member; and
+- the one primary physical interface slot supplied by the logical member in the
+  active representation epoch;
+- every final semantic or representation adapter inherited by downstream
+  implementors, keyed by its owning logical interface and inherited logical
+  member; and
 - every covariant-return `MethodImpl`, keyed by its logical owner and inherited logical member, so
   downstream classes can recognize an interface-owned mapping without inspecting generated IL; and
 - every generated class `MethodImpl` mapping needed to preserve Kotlin resolution, keyed by its
@@ -366,7 +376,7 @@ records of the real source members. Every helper type name is deliberately a val
 Portable C# source-authoring tools must be able to forward an inherited default to that single
 Kotlin body; copying the body into generated C# is forbidden. The exact helper owner is
 producer-recorded ABI and must not be reconstructed from the interface name or digest.
-The supported generated implementation path and its DLL-owned helper/view metadata are specified
+The optional generated authoring path and its DLL-owned helper/view metadata are specified
 by [`adr-csharp-interface-source-authoring.md`](adr-csharp-interface-source-authoring.md).
 
 
@@ -390,8 +400,9 @@ Before the representation is considered implemented, tests must cover:
 - a reified contravariant generic interface default through exact and value-type-narrowed Kotlin
   views, with the same object and body on both runtime profiles, plus ordinary C# default
   inheritance and a natural C# override observed through both Kotlin routes;
-- generic declared/canonical/exact views, boxing adapters, and covariant returns, including a
-  precise derived default mapped to a wider inherited slot without a redundant class bridge;
+- the production erased view and candidate natural/semantic views, boxing
+  adapters, and covariant returns, including a precise derived default mapped
+  to a wider inherited slot without a redundant class bridge;
 - a portable generic default promoted through two incomparable `net10.0` branches and resolved by
   a derived generic-interface diamond, including Kotlin and C# calls through root, branch, derived,
   exact, method-generic, and widened views;
@@ -419,10 +430,12 @@ slot adapters. Exact nonvirtual DIM invocation must remain pinned by direct IL a
 
 ## Final rule
 
-> `net48` and `netstandard2.0` use a Kotlin/JVM-`disable`-style representation: interface slots are
-> abstract, the one canonical body resides in a static helper, and Kotlin implementations receive
-> only physically necessary forwarding or representation adapters. `net10.0` uses an
-> `enable`-derived representation: one strongly typed CLR interface slot owns the canonical body,
-> erased and secondary typed views virtually adapt to it, and the same stable helper selects it
-> nonvirtually for compatibility and exact qualified-super calls. No adapter owns another lowered
-> body.
+> `net48` and `netstandard2.0` use a Kotlin/JVM-`disable`-style
+> representation: interface slots are abstract, the one canonical body resides
+> in a static helper, and Kotlin implementations receive only physically
+> necessary forwarding or representation adapters. `net10.0` uses an
+> `enable`-derived representation: the authority-recorded primary CLR interface
+> slot owns the canonical body, any required semantic or representation views
+> virtually adapt to it, and the same stable helper selects it nonvirtually for
+> compatibility and exact qualified-super calls. No adapter owns another
+> lowered body.

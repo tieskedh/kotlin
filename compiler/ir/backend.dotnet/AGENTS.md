@@ -64,7 +64,16 @@ Kotlin semantics.
   runtime check is not a general semantic waiver.
 - Imported CLR generic declarations retain their native TypeDef, MethodDef,
   construction, and variance identity. Never route them through the erased or
-  rehearsal ABI for Kotlin-owned generic declarations.
+  rehearsal ABI for Kotlin-owned generic declarations. Native variance permits
+  only verifier-valid reference-argument conversions; Kotlin logical variance,
+  boxing, or an open parameter never fabricates a value-type CLR conversion.
+- An ordinary CLR-language implementation of an admitted Kotlin-owned
+  interface satisfies one complete statically checkable natural CLR contract.
+  Compiler/runtime lowering owns compiler-derivable semantic routes; generated
+  foreign source must not implement hidden compiler ABI even as an optimization.
+  Optional tooling may forward declared defaults or build a visible, explicitly
+  selected adapter. A genuinely non-derivable route needs such an explicit
+  adapter/diagnostic or remains unadmitted.
 - Kotlin-produced libraries are one self-describing DLL containing their KLIB
   and physical binding data. Do not create a sibling standalone KLIB or infer
   Kotlin-only contracts from CLR annotations.

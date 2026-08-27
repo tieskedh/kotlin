@@ -68,8 +68,9 @@ admitted `Box<Int>` remains the actual `Box<int32>` capability.
 The importer removes only the metadata arity suffix from the Kotlin source name.
 It creates owner type-parameter symbols before bounds, receiver types, properties,
 and methods. Every `!n` use resolves to that graph; method-owned `!!n` continues
-to use the method-generic graph. Declaration-site CLR variance becomes the
-corresponding Kotlin variance.
+to use the method-generic graph. Declaration-site CLR variance is exposed as the
+corresponding Kotlin source variance, but that logical projection is not by
+itself authority for a physical CLR conversion.
 
 The selected assembly and exact TypeDef, resolved hierarchy, MethodDef, Property,
 MethodSemantics rows, and resolved member signature remain attached to the
@@ -84,6 +85,56 @@ Kotlin-owned erased generic interface ABI, invents a split interface, rediscover
 a slot by display name, or resolves a second nominal graph after FIR enhancement.
 Its class literal uses the selected open generic TypeDef as CLR evidence, while a
 constructed `KType` retains the logical Kotlin arguments.
+
+### Native variance is reference-only physical authority
+
+CLR variance applies only to reference-type generic arguments. Kotlin logical
+variance also relates value-type substitutions, so ordinary Kotlin subtype
+checking can accept a relation which has no corresponding CLR conversion:
+
+```text
+IProducer<string> -> IProducer<object>    valid CLR covariance
+IProducer<int>    -> IProducer<object>    no CLR conversion
+```
+
+The target retains the imported `out`/`in` metadata and the useful source
+projection. Every resolved implicit conversion must additionally pass one
+mandatory physical-conversion query over the produced and required carriers:
+
+- identical constructions pass, including identical value-type arguments;
+- an invariant changed argument fails;
+- a changed covariant argument passes only when both physical arguments are
+  reference-shaped and the source argument is physically assignable to the
+  destination argument;
+- a changed contravariant argument passes only when both are reference-shaped
+  and the destination argument is physically assignable to the source argument;
+- changed value, nullable-value, or open generic arguments fail; and
+- nested constructed reference arguments are classified by their outer CLR
+  carrier rather than by value types nested inside them.
+
+Open `!T` is not reference-shaped merely because one current use is a reference;
+the declaration may be instantiated with a value type unless an exact retained
+CLR constraint proves otherwise. Boxing a value or interface reference does not
+make an absent variant construction exist.
+
+The physical query is required for assignments, initializers, arguments,
+returns, inferred joins and generic calls, captures, delegation, overrides, and
+generated forwarders. It validates the resolved Kotlin program; it does not
+teach the common constraint solver a fabricated subtype. A .NET FIR diagnostic
+should report the source boundary, while the backend gate remains mandatory for
+inlining, generated IR, and separate-compilation soundness. Emitter
+assignability checks remain defense in depth.
+
+For an object implementing several constructed forms, a previously selected
+view may choose only among views proven by retained metadata. A value selected
+as `IProducer<int>` cannot switch to another construction merely because its
+concrete runtime class might also implement one. Every branch of a join must be
+physically convertible to the selected storage carrier.
+
+Explicit `as`, `as?`, and `is` checks are governed by the cast decision rather
+than this implicit-conversion rule. They test the requested constructed CLR
+view where available; they do not repair an invalid implicit variance edge with
+an erased or semantic adapter.
 
 ### Platform flexibility survives FIR2IR
 
@@ -250,6 +301,9 @@ Kotlin ABI; only proven boundary differences receive adapters.
   bounds, open generic inheritance, recursively constructed member types,
   declaration-owned `KType` reflection, and separate compilation share one
   declaration graph and one retained physical identity.
+- Legal CLR reference covariance and contravariance remain available, while
+  value/open substitutions which only Kotlin's broader logical variance relates
+  are rejected before emission without wrappers or semantic repair.
 - Foreign `Nullable<V>` scalar parameters, returns, properties, and recursively
   constructed arguments use logical `V?` semantics and the exact original CLR
   carrier without a wrapper or name-based rebinding.
@@ -270,6 +324,13 @@ Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
 - open generic class-literal identity and constructed `KType` arguments;
 - String, Int, and `Int?` owner constructions, mutable properties, owner plus
   method parameters, vectors, `params`, variance, and admitted bounds;
+- reference covariance and contravariance through assignments, calls, returns,
+  inference, inheritance, and separate assemblies;
+- rejection of covariant and contravariant value, nullable-value, and open
+  substitutions at initializers, mutable writes, calls, returns, control-flow
+  joins, inferred generic calls, delegation, captures, and override bridges;
+- multi-construction objects with and without an unambiguous selected physical
+  view, proving that one legal branch cannot launder an illegal branch;
 - all eight exact foreign `System.Nullable<V>` scalar method carriers, nullable
   values, mutable properties, nested `Box<V?>` constructions, and rejection of
   unsupported nullable user structs;
