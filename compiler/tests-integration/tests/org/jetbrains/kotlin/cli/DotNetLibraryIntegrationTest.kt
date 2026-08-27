@@ -23767,6 +23767,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             void Consume(T value);
                         }
+
+                        public interface Duo<out TFirst, out TSecond>
+                        {
+                            TFirst First();
+                            TSecond Second();
+                        }
+
+                        public interface Sink<T>
+                        {
+                            void Accept(Producer<T> value);
+                        }
                     }
                     """.trimIndent()
                 )
@@ -23784,6 +23795,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     import ForeignVariance.Consumer
                     import ForeignVariance.Producer
+                    import ForeignVariance.Sink
+
+                    public abstract class StringProducer : Producer<String>
 
                     public fun referenceCovariance(
                         value: Producer<String>,
@@ -23801,6 +23815,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         value: Producer<T>,
                     ): Producer<T> = value
 
+                    public fun implementationReferenceCovariance(
+                        value: StringProducer,
+                    ): Producer<Any> = value
+
+                    public fun exactPrimitiveNestedArgument(
+                        sink: Sink<Int>,
+                        value: Producer<Int>,
+                    ) {
+                        sink.Accept(value)
+                    }
+
                     public fun nestedReferenceCovariance(
                         value: Producer<Producer<String>>,
                     ): Producer<Producer<Any>> = value
@@ -23813,6 +23838,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     package rejected
 
                     import ForeignVariance.Consumer
+                    import ForeignVariance.Duo
                     import ForeignVariance.Producer
 
                     public fun rejectedCovariantReturn(
@@ -23840,11 +23866,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun rejectedNullableValueReturn(
                         value: Producer<Int?>,
                     ): Producer<Any?> = value
+
+                    public fun rejectedNestedValueReturn(
+                        value: Producer<Producer<Int>>,
+                    ): Producer<Producer<Any>> = value
+
+                    public fun deferredProjectedSlot(
+                        value: Duo<Int, String>,
+                    ): Duo<Any, *> = value
                     """.trimIndent()
                 )
             }
             for (useLightTree in listOf(false, true)) {
                 val parserSuffix = if (useLightTree) "LightTree" else "Psi"
+                val acceptedOutput = directory.resolve("AcceptedForeignVariance-$parserSuffix.il")
                 val [acceptedDiagnostics, acceptedExitCode] = AbstractCliTest.executeCompilerGrabOutput(
                     K2DotNetCompiler(),
                     listOf(
@@ -23855,11 +23890,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         K2DotNetCompilerArguments::moduleName.cliArgument,
                         "AcceptedForeignVariance$parserSuffix",
                         K2DotNetCompilerArguments::destination.cliArgument,
-                        directory.resolve("AcceptedForeignVariance-$parserSuffix.il").path,
+                        acceptedOutput.path,
                         "-Xuse-fir-lt=$useLightTree",
                     )
                 )
                 assertEquals(ExitCode.OK, acceptedExitCode, acceptedDiagnostics)
+                assertTrue("'implementationReferenceCovariance'" in acceptedOutput.readText()) {
+                    "A verifier-valid implementation-to-foreign variance boundary was silently " +
+                            "evicted for ${profile.target}/$parserSuffix:\n$acceptedDiagnostics"
+                }
+                assertTrue("'exactPrimitiveNestedArgument'" in acceptedOutput.readText()) {
+                    "An exact primitive nested argument was mistaken for CLR variance for " +
+                            "${profile.target}/$parserSuffix:\n$acceptedDiagnostics"
+                }
 
                 val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
                     K2DotNetCompiler(),
@@ -23886,7 +23929,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "No stable physical-conversion diagnostic for ${profile.target}/$parserSuffix:\n$diagnostics"
                 }
                 assertEquals(
-                    6,
+                    5,
                     Regex(Regex.escape(diagnosticName))
                         .findAll(diagnostics)
                         .count(),
