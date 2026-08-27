@@ -225,18 +225,40 @@ See the [CIL/PE decision](docs/decisions/cil-and-pe-production.md) and
 
 ## Verification
 
-Choose tests from the changed boundary, not the file count. The full target
-aggregate is:
+Choose tests from the changed boundary and observable risk, not the file count.
+Slowness is never a reason to skip relevant verification, but it is also not a
+reason to rerun unrelated target layers. Use these lanes:
+
+1. **Focused lane.** During development, and as the commit gate for a bounded
+   target-specific frontend checker, diagnostic, or logical importer query that
+   changes no emitted signature/body, physical mapping, artifact, Runtime/
+   Stdlib surface, shared test infrastructure, or production ABI, run the
+   narrowest integration/unit test which exercises every affected parser,
+   target profile, and positive/negative semantic branch. Compile/generator
+   consistency for every changed module remains mandatory.
+2. **Boundary lane.** For a bounded change inside one compiler layer, run that
+   layer's complete relevant .NET suite plus any cross-layer integration test
+   which consumes its output. Escalate to the full aggregate when the selected
+   physical carrier, emitted metadata/CIL, executable behavior, or packaged
+   artifact can change.
+3. **Full target lane.** Run the aggregate below after changes to mapping,
+   lowering, codegen, Runtime/Stdlib surfaces, generic or array representation,
+   physical ABI, artifacts, profiles, toolchain integration, shared test
+   infrastructure, upstream integration, before promotion to the integration
+   branch, and before an ABI-readiness checkpoint.
+
+The full target aggregate is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-Run it after changes to mapping, lowering, codegen, Runtime/Stdlib surfaces,
-generic or array representation, physical ABI, artifacts, profiles, toolchain
-integration, shared test infrastructure, upstream integration, and before an
-ABI-readiness checkpoint. Use focused tests during development and for a
-bounded Common-source addition that changes none of those boundaries.
+One already-green full checkpoint may be inherited by later focused-lane
+commits only when `STATUS.md` records both the checkpoint and the exact focused
+delta evidence. It may not be inherited across a physical-boundary change, and
+accumulated focused/boundary work must pass one fresh full aggregate before
+promotion. A test failure, missing required tool, or incomplete profile/parser
+matrix always blocks the selected lane.
 
 Do not trust Gradle exit alone. Audit JUnit XML under all four roots:
 
