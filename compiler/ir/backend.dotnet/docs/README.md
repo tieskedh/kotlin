@@ -33,8 +33,8 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [`programmes/way-forward.md`](programmes/way-forward.md) owns release gates and the
   ordered pre-ABI programme.
 - [`programmes/common-collections.md`](programmes/common-collections.md)
-  keeps Common and the stdlib generator authoritative while expanding the
-  collection product in bounded dependency closures.
+  records the admitted Common/generated collection frontier and its pause at
+  the generic-owner architecture checkpoint.
 - [`programmes/clr-annotations.md`](programmes/clr-annotations.md)
   tracks the still-open standard CLR metadata mappings. Durable importer
   authority rules belong in the importer ADR.
@@ -55,9 +55,13 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
   The [`direct C# surface`](programmes/generic-class-owner-csharp-surface.md)
   distinguishes wrapper-free truthful owner interop from optional export
   conveniences and real semantic adapters.
-- [`programmes/inline-functions.md`](programmes/inline-functions.md)
-  owns the selected ordinary inline/KLIB IR infrastructure programme while
-  keeping reified and suspend inline support separate.
+
+## Completed programme records
+
+- [`programmes/inline-functions.md`](programmes/inline-functions.md) retains the
+  chronological proof record for the completed ordinary/reified inline
+  foundation. Current representation authority belongs to its linked ADRs;
+  later `KType` and coroutine programmes compose with that foundation.
 
 ## Foundational decisions
 
