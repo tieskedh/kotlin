@@ -186,6 +186,20 @@ enum class DotNetPublishedGenericInterfaceFamilyKind {
     INTERSECTION,
 }
 
+private fun DotNetGenericOwnerPhysicalTypeParameterVariance.toDotNetIlVariance(): Variance = when (this) {
+    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT -> Variance.INVARIANT
+    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT -> Variance.OUT_VARIANCE
+    DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT -> Variance.IN_VARIANCE
+}
+
+private fun DotNetGenericOwnerPhysicalTypeParameterVariance.isNoStrongerThan(
+    logicalVariance: Variance,
+): Boolean = when (logicalVariance) {
+    Variance.INVARIANT -> this == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+    Variance.OUT_VARIANCE -> this != DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
+    Variance.IN_VARIANCE -> this != DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT
+}
+
 /** Logical role of one member declared directly by a published interface family. */
 enum class DotNetPublishedGenericInterfaceMemberRole {
     PRODUCER,
@@ -339,6 +353,11 @@ sealed interface DotNetPhysicalDeclaration {
         override val ownerPath: List<String>,
         /** Exact GenericParam arity of this physical TypeDef; zero is the erased owner epoch. */
         val physicalTypeParameterCount: Int = 0,
+        /** Ordered verifier-visible GenericParam variance of this exact physical TypeDef. */
+        val physicalTypeParameterVariances: List<DotNetGenericOwnerPhysicalTypeParameterVariance> =
+            List(physicalTypeParameterCount) {
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+            },
         val staticInitialization: DotNetStaticInitialization? = null,
         val objectInstance: DotNetObjectInstance? = null,
         val valueClassAbi: DotNetValueClassAbi? = null,
@@ -347,6 +366,9 @@ sealed interface DotNetPhysicalDeclaration {
         init {
             require(physicalTypeParameterCount >= 0) {
                 "a physical CLR class cannot have negative generic arity"
+            }
+            require(physicalTypeParameterVariances.size == physicalTypeParameterCount) {
+                "a physical CLR class requires one variance fact per GenericParam"
             }
             require(genericOwnerAbi == null || physicalTypeParameterCount > 0) {
                 "an erased or non-generic physical class cannot publish a generic-owner capability"
@@ -682,6 +704,8 @@ sealed interface DotNetPhysicalDeclaration {
         val capabilityAssemblyName: String,
         val capabilityOwnerPath: List<String>,
         val exactOwnerPath: List<String>? = null,
+        /** Ordered verifier-visible GenericParam variance on the natural TypeDef. */
+        val naturalTypeParameterVariances: List<DotNetGenericOwnerPhysicalTypeParameterVariance>,
         val contract: DotNetPublishedGenericInterfaceFamilyContract,
     ) : DotNetPhysicalDeclaration {
         init {
@@ -690,6 +714,10 @@ sealed interface DotNetPhysicalDeclaration {
             }
             require(capabilityAssemblyName.matches(Regex("[A-Za-z_][A-Za-z0-9_.-]*"))) {
                 "published generic-interface family '${contract.logicalOwnerKey}' has an invalid assembly"
+            }
+            require(naturalTypeParameterVariances.size == contract.genericArity) {
+                "published generic-interface family '${contract.logicalOwnerKey}' has a physical variance count " +
+                        "${naturalTypeParameterVariances.size}; expected ${contract.genericArity}"
             }
             val requiresExactInputView = contract.declaredMembers.any { member ->
                 member.role.requiresExactInputView
@@ -847,7 +875,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "61"
+    const val ABI_VERSION = "62"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1636,10 +1664,12 @@ object DotNetLibraryAbiCodec {
             capabilityAssemblyName,
             capabilityOwnerPath.size.toString(),
             exactOwner.size.toString(),
+            naturalTypeParameterVariances.size.toString(),
             roots.size.toString(),
             parents.size.toString(),
             members.size.toString(),
-        ) + ownerPath + capabilityOwnerPath + exactOwner + roots +
+        ) + ownerPath + capabilityOwnerPath + exactOwner +
+                naturalTypeParameterVariances.map { variance -> variance.name } + roots +
                 parents.flatMap { parent ->
                     listOf(parent.logicalOwnerKey, parent.parameterMapping.joinToString(","))
                 } + members.flatMap { member ->
@@ -1651,7 +1681,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily {
-        require(fields.size >= 17) {
+        require(fields.size >= 19) {
             "published generic-interface family '$logicalKey' has an incomplete physical contract"
         }
         fun positiveCount(index: Int, role: String): Int = fields[index].toIntOrNull().also { count ->
@@ -1679,15 +1709,20 @@ object DotNetLibraryAbiCodec {
         val ownerSize = positiveCount(7, "natural-owner path")
         val capabilitySize = positiveCount(9, "capability-owner path")
         val exactOwnerSize = nonNegativeCount(10, "exact-owner path")
-        val rootCount = positiveCount(11, "root")
-        val parentCount = nonNegativeCount(12, "parent")
-        val memberCount = nonNegativeCount(13, "member")
-        val expectedSize = 14 + ownerSize + capabilitySize + exactOwnerSize +
-                rootCount + parentCount * 2 + memberCount * 2
+        val physicalVarianceCount = positiveCount(11, "physical-variance")
+        require(physicalVarianceCount == genericArity) {
+            "published generic-interface family '$logicalKey' has physical variance count " +
+                    "$physicalVarianceCount; expected generic arity $genericArity"
+        }
+        val rootCount = positiveCount(12, "root")
+        val parentCount = nonNegativeCount(13, "parent")
+        val memberCount = nonNegativeCount(14, "member")
+        val expectedSize = 15 + ownerSize + capabilitySize + exactOwnerSize +
+                physicalVarianceCount + rootCount + parentCount * 2 + memberCount * 2
         require(fields.size == expectedSize) {
             "published generic-interface family '$logicalKey' has an inconsistent physical payload"
         }
-        var offset = 14
+        var offset = 15
         fun take(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
         val ownerPath = take(ownerSize).requireOwnerPath(logicalKey, "published natural owner")
         val capabilityOwnerPath = take(capabilitySize)
@@ -1695,6 +1730,13 @@ object DotNetLibraryAbiCodec {
         val exactOwnerPath = take(exactOwnerSize)
             .takeIf { path -> path.isNotEmpty() }
             ?.requireOwnerPath(logicalKey, "published exact input owner")
+        val physicalVariances = take(physicalVarianceCount).map { varianceName ->
+            DotNetGenericOwnerPhysicalTypeParameterVariance.entries.singleOrNull { variance ->
+                variance.name == varianceName
+            } ?: throw IllegalArgumentException(
+                "published generic-interface family '$logicalKey' has invalid physical variance '$varianceName'"
+            )
+        }
         val roots = take(rootCount)
         val parents = List(parentCount) {
             val parentKey = fields[offset++]
@@ -1720,6 +1762,7 @@ object DotNetLibraryAbiCodec {
             capabilityAssemblyName = fields[8],
             capabilityOwnerPath = capabilityOwnerPath,
             exactOwnerPath = exactOwnerPath,
+            naturalTypeParameterVariances = physicalVariances,
             contract = DotNetPublishedGenericInterfaceFamilyContract(
                 logicalOwnerKey = fields[1],
                 genericArity = genericArity,
@@ -1967,6 +2010,10 @@ object DotNetLibraryAbiCodec {
             val interfaceCapability = interfaceClass.genericOwnerAbi
             require(interfaceClass.ownerPath == naturalType.physicalPath &&
                     interfaceClass.physicalTypeParameterCount == naturalType.structural.genericArity &&
+                    interfaceClass.physicalTypeParameterVariances ==
+                    naturalType.structural.genericParameters.map { parameter -> parameter.variance } &&
+                    interfaceFamily.naturalTypeParameterVariances ==
+                    naturalType.structural.genericParameters.map { parameter -> parameter.variance } &&
                     interfaceCapability != null &&
                     interfaceCapability.capabilityAssemblyName == interfaceFamily.capabilityAssemblyName &&
                     interfaceCapability.capabilityOwnerPath == interfaceCapabilityType.physicalPath &&
@@ -1976,7 +2023,9 @@ object DotNetLibraryAbiCodec {
             }
 
             require(implementationClass.ownerPath == implementationType.physicalPath &&
-                    implementationClass.physicalTypeParameterCount == implementationType.structural.genericArity
+                    implementationClass.physicalTypeParameterCount == implementationType.structural.genericArity &&
+                    implementationClass.physicalTypeParameterVariances ==
+                    implementationType.structural.genericParameters.map { parameter -> parameter.variance }
             ) {
                 "producer-sealed family '$indexKey' disagrees with its implementation-owner class record"
             }
@@ -2112,7 +2161,8 @@ object DotNetLibraryAbiCodec {
             genericOwnerAbi?.capabilityAssemblyName.orEmpty(),
             genericOwnerCapabilityPath.size.toString(),
             genericOwnerCapabilitySuperInterfaces.size.toString(),
-        ) + ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath +
+        ) + physicalTypeParameterVariances.map { variance -> variance.name } +
+                ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath +
                 genericOwnerCapabilitySuperInterfaces.flatMap { superInterface ->
                     listOf(superInterface.assemblyName, superInterface.ownerPath.size.toString()) +
                             superInterface.ownerPath
@@ -2182,6 +2232,19 @@ object DotNetLibraryAbiCodec {
             "class declaration '$logicalKey' has an inconsistent generic-owner capability assembly"
         }
         var offset = 16
+        require(offset + physicalTypeParameterCount <= fields.size) {
+            "class declaration '$logicalKey' has a truncated GenericParam variance payload"
+        }
+        val physicalTypeParameterVariances = fields
+            .subList(offset, offset + physicalTypeParameterCount)
+            .map { varianceName ->
+                DotNetGenericOwnerPhysicalTypeParameterVariance.entries.singleOrNull { variance ->
+                    variance.name == varianceName
+                } ?: throw IllegalArgumentException(
+                    "class declaration '$logicalKey' has invalid physical variance '$varianceName'"
+                )
+            }
+        offset += physicalTypeParameterCount
         fun takePath(size: Int): List<String> {
             require(offset + size <= fields.size) {
                 "class declaration '$logicalKey' has a truncated CLR owner-path payload"
@@ -2240,6 +2303,7 @@ object DotNetLibraryAbiCodec {
         return DotNetPhysicalDeclaration.Class(
             ownerPath = ownerPath,
             physicalTypeParameterCount = physicalTypeParameterCount,
+            physicalTypeParameterVariances = physicalTypeParameterVariances,
             staticInitialization = initialization,
             objectInstance = objectInstance,
             valueClassAbi = fields[7].takeIf(String::isNotEmpty)?.let { primaryConstructorMethodName ->
@@ -2710,6 +2774,8 @@ internal class DotNetExternalDeclarationIndex(
             require(classBinding?.library === boundFamily.library && classDeclaration != null &&
                     classDeclaration.ownerPath == family.ownerPath &&
                     classDeclaration.physicalTypeParameterCount == family.contract.genericArity &&
+                    classDeclaration.physicalTypeParameterVariances ==
+                    family.naturalTypeParameterVariances &&
                     genericOwnerAbi != null &&
                     genericOwnerAbi.capabilityAssemblyName == family.capabilityAssemblyName &&
                     genericOwnerAbi.capabilityOwnerPath == family.capabilityOwnerPath
@@ -2857,6 +2923,47 @@ internal class DotNetExternalDeclarations(
         return publishedGenericInterfaceFamiliesByLogicalKey[logicalKey]?.family?.contract
     }
 
+    /** Producer-recorded identity and GenericParam variance of an external natural TypeDef. */
+    fun publishedGenericInterfaceNaturalFixedTypeInputOrNull(
+        irClass: IrClass,
+    ): DotNetGenericInterfaceCompleteSurfaceFixedTypeInput? {
+        if (!irClass.isInterface || irClass.typeParameters.isEmpty()) return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
+        if (declaration.genericOwnerAbi == null) return null
+        val family = publishedGenericInterfaceFamiliesByLogicalKey[logicalKey]
+            ?: throw IllegalArgumentException(
+                "external Kotlin/.NET interface '$logicalKey' has a reified CLR owner without " +
+                        "a producer-recorded physical variance family"
+            )
+        require(family.library === bound.library && family.family.ownerPath == declaration.ownerPath) {
+            "external Kotlin/.NET interface '$logicalKey' has a cross-wired physical variance family"
+        }
+        require(family.family.naturalTypeParameterVariances.size == irClass.typeParameters.size &&
+                family.family.naturalTypeParameterVariances.indices.all { index ->
+                    family.family.naturalTypeParameterVariances[index]
+                        .isNoStrongerThan(irClass.typeParameters[index].variance)
+                }
+        ) {
+            "external Kotlin/.NET interface '$logicalKey' records physical variance stronger than its KLIB contract"
+        }
+        val identity = DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer(
+            bound.library.artifact,
+            family.family.ownerPath,
+        )
+        return DotNetGenericInterfaceCompleteSurfaceFixedTypeInput(
+            identity,
+            family.family.naturalTypeParameterVariances,
+        )
+    }
+
+    /** Producer-recorded GenericParam variance on one external natural interface TypeDef. */
+    fun publishedGenericInterfaceNaturalTypeParameterVariancesOrNull(
+        irClass: IrClass,
+    ): List<DotNetGenericOwnerPhysicalTypeParameterVariance>? =
+        publishedGenericInterfaceNaturalFixedTypeInputOrNull(irClass)?.physicalVariances
+
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
         val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
         canonicalClassInfoByLogicalKey[logicalKey]?.let { return it }
@@ -2869,11 +2976,15 @@ internal class DotNetExternalDeclarations(
                     "${declaration.physicalTypeParameterCount}; expected erased arity 0 or complete logical arity " +
                     irClass.typeParameters.size
         }
-        // CLR class GenericParams remain invariant. A producer-recorded reified interface instead
-        // owns the same declaration-site variance as its natural I<T> metadata; its separate
-        // capability handles Kotlin views which cannot name one constructed interface.
+        // CLR class GenericParams remain invariant. A producer-recorded reified interface binds
+        // the variance emitted on its natural TypeDef; logical KLIB variance may deliberately be
+        // stronger and therefore cannot reconstruct this physical fact.
         val canonicalVariances = if (irClass.isInterface && declaration.genericOwnerAbi != null) {
-            irClass.typeParameters.map { parameter -> parameter.variance }
+            checkNotNull(publishedGenericInterfaceNaturalFixedTypeInputOrNull(irClass)) {
+                "external Kotlin/.NET interface '$logicalKey' lost its physical variance family"
+            }.physicalVariances.map { variance ->
+                variance.toDotNetIlVariance()
+            }
         } else {
             List(declaration.physicalTypeParameterCount) { Variance.INVARIANT }
         }
@@ -3647,6 +3758,9 @@ internal fun collectDotNetLibraryDeclarations(
                 DotNetPhysicalDeclaration.Class(
                     ownerPath = classInfo.physicalPathComponents(),
                     physicalTypeParameterCount = classInfo.typeParameterCount,
+                    physicalTypeParameterVariances = classInfo.typeParameterVariances.map { variance ->
+                        variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+                    },
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
                     valueClassAbi = valueClassAbi,
@@ -3670,6 +3784,10 @@ internal fun collectDotNetLibraryDeclarations(
                 DotNetPhysicalDeclaration.Class(
                     ownerPath = canonicalOwnerPath,
                     physicalTypeParameterCount = genericInterface.canonicalClassInfo.typeParameterCount,
+                    physicalTypeParameterVariances =
+                        genericInterface.canonicalClassInfo.typeParameterVariances.map { variance ->
+                            variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+                        },
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
                     valueClassAbi = valueClassAbi,
@@ -4032,6 +4150,9 @@ internal fun collectDotNetLibraryDeclarations(
             capabilityAssemblyName = capabilityInfo.assemblyName ?: currentAssemblyName,
             capabilityOwnerPath = capabilityInfo.physicalPathComponents(),
             exactOwnerPath = genericInterfaces[owner]?.exactClassInfo?.physicalPathComponents(),
+            naturalTypeParameterVariances = ownerInfo.typeParameterVariances.map { variance ->
+                variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+            },
             contract = contract,
         )
         contract.declaredMembers.forEach { member ->

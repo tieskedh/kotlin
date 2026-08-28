@@ -256,9 +256,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInnerClassPhysicalizationLowering,
     // Then record fail-closed candidate evidence for the CLR-generic class-owner ABI.
     ::DotNetGenericOwnerArchitecturePlanningLowering,
-    // Select a hypothetical complete natural interface's physical variance from its original
-    // members and direct parent edges. This rehearsal-only shadow runs before the current exact
-    // split and cannot influence IR, routing, metadata, ABI publication, or emission.
+    // Select a possible complete natural interface's physical variance from its original
+    // declared members and direct parent edges before the current exact split. The public shadow
+    // remains diagnostic-only; the parallel IR-bound plan may influence representation only
+    // after the following lowering independently admits one bounded complete surface.
     ::DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering,
     // Reopen only the first structurally complete producer-interface family in the same atomic
     // rehearsal. Its natural I<T> is the normal CLR path; a non-generic declaration-semantic

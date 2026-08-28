@@ -5,6 +5,11 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrPropertySymbol
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.types.IrType
+
 /** ECMA-335 input/output occurrence set for one physical TypeDef parameter. */
 internal enum class DotNetGenericInterfaceCompleteSurfacePolarity(private val mask: Int) {
     NONE(0),
@@ -154,6 +159,109 @@ internal data class DotNetGenericInterfaceCompleteSurfaceOwnerDecision(
             "a complete-surface owner decision requires ordered parameter decisions"
         }
     }
+}
+
+/** Exact getter/setter membership of one property in the analyzed pre-split surface. */
+internal data class DotNetGenericInterfaceCompleteSurfacePropertyAccessorInventory(
+    val property: IrPropertySymbol,
+    val getter: IrSimpleFunctionSymbol?,
+    val setter: IrSimpleFunctionSymbol?,
+) {
+    init {
+        require(getter != null || setter != null) {
+            "a complete-surface property inventory requires at least one accessor"
+        }
+    }
+}
+
+/**
+ * Frozen IR-bound inventory from which one pre-split complete surface was calculated.
+ *
+ * [directCallableMembers] is the exact ordered function/accessor vector analyzed by the planner;
+ * [directPropertyAccessors] additionally preserves property grouping instead of asking a later
+ * consumer to reconstruct it from mutable IR. Parent types retain their complete logical
+ * constructions. This inventory is evidence of what was analyzed, not admission authority.
+ */
+internal class DotNetGenericInterfaceCompleteSurfaceInventory(
+    directCallableMembers: List<IrSimpleFunctionSymbol>,
+    directPropertyAccessors: List<DotNetGenericInterfaceCompleteSurfacePropertyAccessorInventory>,
+    directParentTypes: List<IrType>,
+) {
+    val directCallableMembers: List<IrSimpleFunctionSymbol> = directCallableMembers.toList()
+    val directPropertyAccessors: List<DotNetGenericInterfaceCompleteSurfacePropertyAccessorInventory> =
+        directPropertyAccessors.toList()
+    val directParentTypes: List<IrType> = directParentTypes.toList()
+
+    init {
+        require(this.directCallableMembers.size == this.directCallableMembers.toSet().size) {
+            "a complete-surface inventory cannot repeat a direct callable"
+        }
+        require(this.directPropertyAccessors.map { accessor -> accessor.property }.toSet().size ==
+                this.directPropertyAccessors.size) {
+            "a complete-surface inventory cannot repeat a direct property"
+        }
+        val callableSet = this.directCallableMembers.toSet()
+        require(this.directPropertyAccessors.all { accessor ->
+            listOfNotNull(accessor.getter, accessor.setter).all(callableSet::contains)
+        }) {
+            "every inventoried property accessor must occur in the analyzed callable surface"
+        }
+    }
+}
+
+/**
+ * Early, IR-bound physical-variance plan for one possible complete natural interface.
+ *
+ * This is stronger than the public diagnostic shadow because it retains exact symbols, the typed
+ * planner input, and the typed decision. It remains only EARLY_REPRESENTATION_PLAN evidence: a
+ * later lowering must independently apply a bounded admission grammar before routing or emission
+ * may consume it. In particular, presence in the all-plans context map is not admission.
+ */
+internal class DotNetGenericInterfaceCompleteNaturalAuthorityPlan(
+    val owner: IrClassSymbol,
+    val inventory: DotNetGenericInterfaceCompleteSurfaceInventory,
+    surfaceInput: DotNetGenericInterfaceCompleteSurfaceOwnerInput,
+    surfaceDecision: DotNetGenericInterfaceCompleteSurfaceOwnerDecision,
+) {
+    val surfaceInput: DotNetGenericInterfaceCompleteSurfaceOwnerInput = surfaceInput.frozen()
+    val surfaceDecision: DotNetGenericInterfaceCompleteSurfaceOwnerDecision = surfaceDecision.frozen()
+    val selectedPhysicalVariances: List<DotNetGenericOwnerPhysicalTypeParameterVariance> =
+        this.surfaceDecision.parameters.map { parameter -> parameter.selectedPhysicalVariance }
+
+    init {
+        val localIdentity = this.surfaceInput.identity as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+        require(localIdentity?.owner === owner && localIdentity.view == DotNetGenericInterfaceView.DECLARED) {
+            "a complete-natural authority plan must bind its exact local natural TypeDef"
+        }
+        require(this.surfaceDecision.identity == this.surfaceInput.identity) {
+            "a complete-natural authority plan has different input and decision TypeDefs"
+        }
+        require(this.surfaceDecision.parameters.map { parameter -> parameter.logicalMaximumVariance } ==
+                this.surfaceInput.logicalMaximumVariances) {
+            "a complete-natural authority plan changed its ordered logical variance vector"
+        }
+    }
+}
+
+private fun DotNetGenericInterfaceCompleteSurfaceOwnerInput.frozen() = copy(
+    logicalMaximumVariances = logicalMaximumVariances.toList(),
+    positions = positions.map { position ->
+        position.copy(type = position.type.frozen())
+    },
+)
+
+private fun DotNetGenericInterfaceCompleteSurfaceOwnerDecision.frozen() = copy(
+    parameters = parameters.toList(),
+)
+
+private fun DotNetGenericInterfaceCompleteSurfaceTypeReference.frozen():
+        DotNetGenericInterfaceCompleteSurfaceTypeReference = when (this) {
+    DotNetGenericInterfaceCompleteSurfaceTypeReference.Independent -> this
+    is DotNetGenericInterfaceCompleteSurfaceTypeReference.OwnerParameter -> copy()
+    is DotNetGenericInterfaceCompleteSurfaceTypeReference.Constructed -> copy(
+        arguments = arguments.map { argument -> argument.frozen() },
+    )
+    is DotNetGenericInterfaceCompleteSurfaceTypeReference.SzArray -> copy(element = element.frozen())
 }
 
 internal class DotNetGenericInterfaceCompleteSurfaceVariancePlan(

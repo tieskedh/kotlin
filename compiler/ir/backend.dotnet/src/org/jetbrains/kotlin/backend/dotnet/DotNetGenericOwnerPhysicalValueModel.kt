@@ -281,7 +281,7 @@ internal class DotNetGenericOwnerPhysicalMethodSignatureReference(
 }
 
 /** Verifier-visible declaration-site variance on one CLR GenericParam row. */
-internal enum class DotNetGenericOwnerPhysicalTypeParameterVariance {
+enum class DotNetGenericOwnerPhysicalTypeParameterVariance {
     INVARIANT,
     COVARIANT,
     CONTRAVARIANT,

@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerAbi
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCapabilitySuperInterfaceAbi
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpErasedOwnerRelativeConstraint
@@ -10294,6 +10295,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         capabilityAssemblyName = "sample.CapabilityAssembly",
                         capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
                         exactOwnerPath = listOf("sample.IGenericOwnerKotlinExact`2"),
+                        naturalTypeParameterVariances = listOf(
+                            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                        ),
                         contract = broadInputFamilyContract(
                             DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
                         ),
@@ -10415,6 +10420,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ownerPath = listOf("sample.GenericOwner`2"),
                 capabilityAssemblyName = "sample.CapabilityAssembly",
                 capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
+                naturalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ),
                 contract = broadInputFamilyContract(
                     DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT
                 ),
@@ -10426,6 +10435,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 capabilityAssemblyName = "sample.CapabilityAssembly",
                 capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
                 exactOwnerPath = listOf("sample.GenericOwner`2"),
+                naturalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ),
                 contract = broadInputFamilyContract(
                     DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT
                 ),
@@ -10437,6 +10450,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 capabilityAssemblyName = "sample.CapabilityAssembly",
                 capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
                 exactOwnerPath = listOf("sample.IGenericOwnerKotlinExact`1"),
+                naturalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ),
                 contract = broadInputFamilyContract(
                     DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
                 ),
@@ -10448,6 +10465,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 capabilityAssemblyName = "sample.CapabilityAssembly",
                 capabilityOwnerPath = listOf("sample.IGenericOwnerKotlinSemantic"),
                 exactOwnerPath = listOf("sample.IGenericOwnerKotlinExact`2"),
+                naturalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ),
                 contract = broadInputFamilyContract(
                     DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
                 ),
