@@ -543,6 +543,14 @@ object DotNetBackend {
             } else {
                 emptyMap()
             }
+        val completeNaturalInterfacePhysicalVariances =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                context.admittedGenericInterfaceCompleteNaturalAuthorityPlans.values.associate { plan ->
+                    plan.owner.owner to plan.selectedPhysicalVariances
+                }
+            } else {
+                emptyMap()
+            }
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -574,6 +582,8 @@ object DotNetBackend {
                     genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                     publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
+                    completeNaturalInterfacePhysicalVariances =
+                        completeNaturalInterfacePhysicalVariances,
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                     externalReifiedGenericInterfaceCapabilityProviders =
                         context.externalReifiedGenericInterfaceCapabilityProviders,
@@ -730,6 +740,8 @@ object DotNetBackend {
                 genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                 publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
+                completeNaturalInterfacePhysicalVariances =
+                    completeNaturalInterfacePhysicalVariances,
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                 externalReifiedGenericInterfaceCapabilityProviders =
                     context.externalReifiedGenericInterfaceCapabilityProviders,

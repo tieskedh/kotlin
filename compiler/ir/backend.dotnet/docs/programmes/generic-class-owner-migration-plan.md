@@ -61,8 +61,9 @@ Before any cutover proposal, complete these stages in order:
 1. Freeze logical versus physical vocabulary and declaration authority epochs.
 2. Run value-carrier provenance in shadow mode; do not let it select public ABI
    or producer-wide state.
-3. Close retained/imported CLR physical-conversion validation, including
-   reference-only variance and SZ-array entry guards.
+3. Close the bounded retained/imported same-TypeDef physical-conversion
+   prerequisite: preserve legal reference-only variance and reject recursively
+   proven closed value-type variance at source and final emission boundaries.
 4. Prove one complete natural input-bearing interface with ordinary non-partial
    CLR implementations and no exact sibling or hidden author obligation.
 5. Replace concrete-name structural fallback with actual MethodDef/MethodImpl
@@ -72,12 +73,22 @@ Before any cutover proposal, complete these stages in order:
    inheritance, escape, and construction must not confuse the two plans.
 7. Compose independent callable parameter policies with direct and
    split-nullable result layouts on custom declarations.
-8. Migrate the rehearsal family, deleting old recognizers only after the shared
-   model derives their positive and hostile-negative behavior.
-9. Run the full selected Runtime/Stdlib, Kotlin/C# assembly, reflection,
+8. Close the remaining retained/foreign entry validation, including inherited,
+   open, projected, vararg, and multiple-view generic cases plus SZ-array and
+   bounded-element entry guards.
+9. Freeze and migrate the complete selected rehearsal family, deleting old
+   recognizers only after the shared model derives their positive and hostile-
+   negative behavior.
+10. Run the full selected Runtime/Stdlib, Kotlin/C# assembly, reflection,
    deployment, and representative application matrix.
-10. Run the exact erased inverse from the same source and compare the recorded
+11. Run the exact erased inverse from the same source and compare the recorded
     semantic corpus before deciding GO, CONSTRAIN, or NO-GO.
+
+After stage 5, any bounded interface slice which has independently passed
+stages 1–5 may replace its own split comparison surface inside the rehearsal so
+the recorded MethodDef/MethodImpl route can be exercised end to end. That
+bounded replacement is not stage 9's complete selected-family freeze and does
+not authorize a production cutover.
 
 The source-built Stdlib census must not drive one-off representation rules.
 When it exposes a blocker, reduce that blocker to a structurally custom proof

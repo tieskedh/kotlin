@@ -1177,10 +1177,14 @@ internal fun collectDotNetCSharpImplementationManifest(
                     .takeIf { isReifiedGenericInterface },
                 exactOwnerPath = exactClassInfo?.physicalPathComponents(),
                 typeParameters = if (isReifiedGenericInterface) {
-                    irClass.typeParameters.map { parameter ->
+                    check(naturalClassInfo.typeParameterVariances.size == irClass.typeParameters.size) {
+                        "Reified C# implementation owner has inconsistent physical generic arity"
+                    }
+                    irClass.typeParameters.zip(naturalClassInfo.typeParameterVariances).map {
+                            [parameter, physicalVariance] ->
                         DotNetCSharpTypeParameter(
                             parameter.name.asString(),
-                            when (parameter.variance) {
+                            when (physicalVariance) {
                                 Variance.INVARIANT -> DotNetCSharpTypeParameterVariance.INVARIANT
                                 Variance.IN_VARIANCE -> DotNetCSharpTypeParameterVariance.IN
                                 Variance.OUT_VARIANCE -> DotNetCSharpTypeParameterVariance.OUT

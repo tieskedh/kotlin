@@ -55,7 +55,9 @@ otherwise the affected parameter is physically invariant while Kotlin's
 logical variance remains in KLIB. Ordinary CLR-language implementations must
 not require a hidden generated ABI for behavior derivable from real interface
 slots. The existing split implementation remains comparison evidence until a
-custom hostile proof and exact inverse pass.
+broad foreign MethodDef/MethodImpl route is proven. One bounded slice may then
+stop emitting that split surface inside the rehearsal, but complete removal
+waits for the selected-family freeze and full hostile inverse.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to
@@ -76,13 +78,11 @@ Exit this phase only when one shared authority/provenance model explains every
 bounded recognizer and its hostile negatives without declaration, package,
 collection, member-name, or IR-origin exceptions.
 
-The first closed same-TypeDef imported-variance slice now has both a bounded
-source diagnostic and a mandatory final-emission gate for conversions hidden
-by physical placement or control-flow joins. Before retained-foreign authority
-is extended, derive its remaining inherited, implementation, open, projected,
-vararg, and multiple-view cases from the shared provenance model. Legal
-reference-only CLR covariance/contravariance must remain available; a missing
-reference-hierarchy proof is not evidence of an invalid CLR conversion.
+Retained-foreign physical-conversion coverage must derive inherited,
+implementation, open, projected, vararg, and multiple-view cases from the
+shared provenance model. Legal reference-only CLR covariance/contravariance
+must remain available; a missing reference-hierarchy proof is not evidence of
+an invalid CLR conversion.
 
 ### 2. Make the generic-owner go/no-go decision
 

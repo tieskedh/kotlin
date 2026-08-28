@@ -83,6 +83,15 @@ import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 
+private fun List<DotNetGenericOwnerPhysicalTypeParameterVariance>.toKotlinVariances(): List<Variance> =
+    map { variance ->
+        when (variance) {
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT -> Variance.INVARIANT
+            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT -> Variance.OUT_VARIANCE
+            DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT -> Variance.IN_VARIANCE
+        }
+    }
+
 /**
  * A canonical bridge's MethodDef must have the exact physical slot signature. Its synthetic IR
  * still keeps the implementing-class dispatch receiver and a body-friendly type graph, so retain
@@ -189,6 +198,9 @@ internal class DotNetIlEmitter(
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val publishedGenericInterfaceFamilies:
             Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
+    /** Explicitly admitted complete-natural owners and their selected CLR GenericParam rows. */
+    private val completeNaturalInterfacePhysicalVariances:
+            Map<IrClass, List<DotNetGenericOwnerPhysicalTypeParameterVariance>> = emptyMap(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
     private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
@@ -255,6 +267,15 @@ internal class DotNetIlEmitter(
     }
 
     private fun emitOrThrow(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
+        completeNaturalInterfacePhysicalVariances.forEach { [owner, variances] ->
+            check(genericOwnerRehearsal && owner in reifiedGenericInterfaces &&
+                    publishedGenericInterfaceFamilies.containsKey(owner) &&
+                    variances.size == owner.typeParameters.size) {
+                "Internal .NET backend error: complete-natural physical variance lacks an " +
+                        "admitted reified interface of matching arity"
+            }
+        }
+
         check(genericOwnerRehearsal || genericOwnerPhysicalMethodDefEmissionBindings.isEmpty()) {
             "production emission must not receive generic-owner MethodDef diagnostic bindings"
         }
@@ -566,6 +587,8 @@ internal class DotNetIlEmitter(
                     irClass !in reifiedGenericInterfaces
             val reifiedInterfaceFamily = publishedGenericInterfaceFamilies[irClass]
                 ?.takeIf { irClass in reifiedGenericInterfaces }
+            val completeNaturalPhysicalVariances =
+                completeNaturalInterfacePhysicalVariances[irClass]?.toKotlinVariances()
             val requiresExactInterface = reifiedInterfaceFamily?.requiresExactInputView == true
             val isErasedGenericClass = irClass.isDotNetGenericClassDeclaration &&
                     (!genericOwnerRehearsal ||
@@ -586,7 +609,8 @@ internal class DotNetIlEmitter(
                     typeParameterVariances = when {
                         isErasedGenericInterface || isErasedGenericClass -> emptyList()
                         irClass.isInterface && irClass in reifiedGenericInterfaces ->
-                            irClass.typeParameters.map { it.variance }
+                            completeNaturalPhysicalVariances
+                                ?: irClass.typeParameters.map { it.variance }
                         else -> List(irClass.typeParameters.size) { Variance.INVARIANT }
                     },
                 )
@@ -3621,8 +3645,11 @@ internal class DotNetIlEmitter(
         }
         val emittedGenericParameterDecisions = emittedTypeParameters.dotNetIlGenericParameterDecisions(
             physicalTypeMapper,
-            varianceOverrides = if (irClass.isInterface) null
-            else List(emittedTypeParameters.size) { Variance.INVARIANT },
+            varianceOverrides = if (irClass.isInterface) {
+                completeNaturalInterfacePhysicalVariances[irClass]?.toKotlinVariances()
+            } else {
+                List(emittedTypeParameters.size) { Variance.INVARIANT }
+            },
         )
         val renderedNestedClasses = mutableListOf<String>()
         val renderedFields = mutableListOf<String>()

@@ -23,9 +23,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurface
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetNullableReferenceFlag
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
@@ -582,6 +586,18 @@ private class BackendCliDotNetFacade(
             producer = completedOutput.output,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-exact-interface-inputs"),
+        )
+        validateGenericOwnerCompleteNaturalInterfaceCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            declarations = completedOutput.declarations,
+            varianceShadows = completedOutput.genericInterfaceCompleteSurfaceVarianceShadows,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-complete-natural-interface"
+            ),
         )
         validateGenericOwnerSplitNullableResultCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
@@ -5806,6 +5822,8 @@ private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE"
 private const val GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE"
+private const val GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE"
 private const val GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
@@ -5882,7 +5900,7 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
         "The admitted reified generic interface is not supported for C# source authoring"
     }
     check(contract.typeParameters.single().variance == expectedVariance) {
-        "The reified generic-interface manifest lost Kotlin declaration-site variance"
+        "The reified generic-interface manifest recorded the wrong natural CLR variance"
     }
     check(contract.exactOwnerPath == null &&
             contract.canonicalOwnerPath != contract.declaredOwnerPath) {
@@ -11955,6 +11973,647 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
     check("KotlinSemantic" !in source.readText() && "__KotlinExact" !in source.readText()) {
         "Authored C# source must not name either compiler-owned interface ABI"
     }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
+ * Requires one logically covariant, input-bearing Kotlin interface to expose one complete,
+ * physically invariant natural CLR contract. Ordinary C# implements that contract without a
+ * generator; widened Kotlin execution is deliberately proved only on a Kotlin-owned object here.
+ */
+private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    varianceShadows: List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot>,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!genericOwnerRehearsal ||
+        GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE_MARKER !in testDataFile.readText()
+    ) {
+        return
+    }
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The complete-natural-interface C# probe requires an executable target"
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+
+    fun requireInvariantVarianceShadow(ownerName: String) {
+        val variance = checkNotNull(varianceShadows.singleOrNull { snapshot ->
+            snapshot.ownerName.endsWith(ownerName)
+        }) {
+            "The complete natural probe has no unique '$ownerName' variance shadow: " +
+                    varianceShadows
+        }
+        check(variance.status == DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus.BOUND &&
+                variance.blocker == null && variance.parameters.singleOrNull()?.let { parameter ->
+                    parameter.index == 0 &&
+                            parameter.logicalMaximumVariance ==
+                            DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance.COVARIANT &&
+                            parameter.requiredPolarity ==
+                            DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity.BOTH &&
+                            parameter.selectedPhysicalVariance ==
+                            DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance.INVARIANT
+                } == true
+        ) {
+            "The hostile '$ownerName' surface did not select physical invariance: $variance"
+        }
+    }
+
+    fun requirePublishedFamily(ownerName: String): DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily {
+        val family = checkNotNull(declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+            .singleOrNull { candidate ->
+                candidate.ownerPath.lastOrNull()?.substringAfterLast('.') == "$ownerName`1"
+            }) {
+            "The complete natural probe has no unique producer ABI family for '$ownerName': " +
+                    declarations.values.filterIsInstance<
+                            DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
+                            >().map { candidate -> candidate.ownerPath }
+        }
+        check(family.naturalTypeParameterVariances ==
+                listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT) &&
+                family.exactOwnerPath == null
+        ) {
+            "The producer ABI did not preserve one invariant natural '$ownerName' family: $family"
+        }
+        return family
+    }
+
+    if (producesLibrary) {
+        if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            requireInvariantVarianceShadow("CompleteNaturalContract")
+            val family = requirePublishedFamily("CompleteNaturalContract")
+            check(family.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                    family.contract.directParents.isEmpty() &&
+                    family.contract.capabilityBindingKind ==
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+                    family.contract.reusedParentLogicalOwnerKey == null &&
+                    family.contract.declaredMembers.mapTo(linkedSetOf()) { member -> member.role } ==
+                    setOf(
+                        DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+                        DotNetPublishedGenericInterfaceMemberRole.CONSUMER,
+                    )
+            ) {
+                "The complete natural root published the wrong producer ABI topology: $family"
+            }
+            validateReifiedGenericInterfaceCSharpManifest(
+                producer,
+                expectedDeclaredOwner = "CompleteNaturalContract`1",
+                expectedMemberName = "fetch",
+                expectedContractMemberCount = 2,
+                expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+            )
+            validateReifiedGenericInterfaceCSharpManifest(
+                producer,
+                expectedDeclaredOwner = "CompleteNaturalContract`1",
+                expectedMemberName = "accept",
+                expectedContractMemberCount = 2,
+                expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                expectedSemanticReturnType = "void",
+                expectedSemanticParameterTypes = listOf("object"),
+                expectedNaturalReturnType = "void",
+                expectedNaturalParameterTypes = listOf("!0"),
+            )
+        } else if (producer.name.equals("middle.dll", ignoreCase = true)) {
+            requireInvariantVarianceShadow("CompleteNaturalChild")
+            requireInvariantVarianceShadow("CompleteNaturalOuter")
+            val childFamily = requirePublishedFamily("CompleteNaturalChild")
+            check(childFamily.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.DERIVED &&
+                    childFamily.contract.declaredMembers.isEmpty() &&
+                    childFamily.contract.capabilityBindingKind ==
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT &&
+                    childFamily.contract.directParents.singleOrNull()?.let { parent ->
+                        parent.parameterMapping == listOf(0) &&
+                                parent.logicalOwnerKey in childFamily.contract.rootLogicalOwnerKeys &&
+                                childFamily.contract.reusedParentLogicalOwnerKey ==
+                                parent.logicalOwnerKey
+                    } == true
+            ) {
+                "The memberless child did not publish one identity-mapped parent ABI edge: $childFamily"
+            }
+            val outerFamily = requirePublishedFamily("CompleteNaturalOuter")
+            check(outerFamily.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                    outerFamily.contract.directParents.isEmpty() &&
+                    outerFamily.contract.capabilityBindingKind ==
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+                    outerFamily.contract.reusedParentLogicalOwnerKey == null &&
+                    outerFamily.contract.declaredMembers.singleOrNull()?.role ==
+                    DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
+            ) {
+                "The nested-result owner did not publish one constructed-producer ABI member: $outerFamily"
+            }
+            validateReifiedGenericInterfaceCSharpManifest(
+                producer,
+                expectedDeclaredOwner = "CompleteNaturalOuter`1",
+                expectedMemberName = "nested",
+                expectedVariance = DotNetCSharpTypeParameterVariance.INVARIANT,
+                expectedNaturalReturnType =
+                    "class [lib]'generic.owner.complete.natural.CompleteNaturalContract`1'<!0>",
+            )
+        }
+        return
+    }
+
+    val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+    check(emittedIl.isFile) {
+        "The complete-natural-interface consumer has no emitted IL sibling: ${emittedIl.path}"
+    }
+    val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+        .map { match -> match.range.first }
+        .toList()
+    val methodWindows = methodStarts.mapIndexed { index, start ->
+        ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+    }
+    val boxMethod = methodWindows.singleOrNull { window ->
+        "'box'(" in window.substringBefore('{')
+    }
+    check(boxMethod != null) {
+        "Cannot isolate the complete-natural-interface consumer box MethodDef: ${emittedIl.path}"
+    }
+    val calls = boxMethod.lineSequence().map(String::trim).filter { line ->
+        line.startsWith("call ") || line.startsWith("callvirt ")
+    }.toList()
+    val factoryCalls = calls.withIndex().filter { indexedCall ->
+        "::'completeNaturalStringFactory'()" in indexedCall.value
+    }
+    check(factoryCalls.singleOrNull()?.value?.let { call ->
+        call.startsWith(
+            "call class [lib]'generic.owner.complete.natural.CompleteNaturalContract`1'" +
+                    "<string> ",
+        )
+    } == true) {
+        "The consumer did not retain the producer-recorded natural factory result: $factoryCalls"
+    }
+    val factoryCallIndex = factoryCalls.single().index
+    val factoryFetchCall = calls.getOrNull(factoryCallIndex + 1)
+    check(factoryFetchCall != null &&
+            factoryFetchCall.startsWith("callvirt instance !0 ") &&
+            "class [lib]'generic.owner.complete.natural.CompleteNaturalContract`1'<string>" in
+            factoryFetchCall &&
+            "::'fetch'()" in factoryFetchCall && "KotlinSemantic" !in factoryFetchCall
+    ) {
+        "A producer-recorded natural MethodDef result was degraded to the semantic route: " +
+                "factory=$factoryFetchCall, calls=$calls"
+    }
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The complete-natural-interface C# probe lacks its separately compiled libraries"
+    }
+
+    val middleManifestResource = checkNotNull(
+        DotNetManagedResourceReader.read(
+            middle,
+            DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+        )
+    ) {
+        "The complete-natural-interface middle assembly has no C# implementation manifest"
+    }
+    val middleManifest = DotNetCSharpImplementationManifestCodec.decodeManagedResource(
+        middleManifestResource.content
+    )
+    val childContract = checkNotNull(middleManifest.interfaces.singleOrNull { contract ->
+        contract.declaredOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                "CompleteNaturalChild`1"
+    }) {
+        "The complete-natural-interface manifest has no unique memberless child: " +
+                middleManifest.interfaces.map { contract -> contract.declaredOwnerPath }
+    }
+    check(childContract.sourceAuthoringSupported &&
+            childContract.unsupportedReasons.isEmpty() &&
+            childContract.typeParameters.singleOrNull()?.variance ==
+            DotNetCSharpTypeParameterVariance.INVARIANT &&
+            childContract.exactOwnerPath == null &&
+            childContract.canonicalOwnerPath != childContract.declaredOwnerPath &&
+            childContract.members.isEmpty()
+    ) {
+        "The memberless child manifest lost its invariant single-surface contract: $childContract"
+    }
+    val outerContract = checkNotNull(middleManifest.interfaces.singleOrNull { contract ->
+        contract.declaredOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                "CompleteNaturalOuter`1"
+    }) {
+        "The complete-natural-interface manifest has no unique nested-result owner: " +
+                middleManifest.interfaces.map { contract -> contract.declaredOwnerPath }
+    }
+    check(outerContract.sourceAuthoringSupported &&
+            outerContract.unsupportedReasons.isEmpty() &&
+            outerContract.typeParameters.singleOrNull()?.variance ==
+            DotNetCSharpTypeParameterVariance.INVARIANT &&
+            outerContract.exactOwnerPath == null &&
+            outerContract.canonicalOwnerPath != outerContract.declaredOwnerPath
+    ) {
+        "The nested-result manifest lost its invariant single-surface contract: $outerContract"
+    }
+
+    val libManifestResource = checkNotNull(
+        DotNetManagedResourceReader.read(
+            lib,
+            DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+        )
+    ) {
+        "The complete-natural-interface library has no C# implementation manifest"
+    }
+    val libManifest = DotNetCSharpImplementationManifestCodec.decodeManagedResource(
+        libManifestResource.content
+    )
+    val rootContract = checkNotNull(libManifest.interfaces.singleOrNull { contract ->
+        contract.declaredOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
+                "CompleteNaturalContract`1"
+    }) {
+        "The complete-natural-interface library manifest has no unique root contract"
+    }
+    fun semanticMethodName(
+        contract: org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceContract,
+        memberName: String,
+    ): String = checkNotNull(contract.members.singleOrNull { member ->
+        member.sourceName == memberName
+    }?.slots?.singleOrNull { slot -> slot.role == DotNetCSharpSlotRole.ERASED }?.methodName) {
+        "The '$memberName' contract has no unique semantic capability MethodDef: $contract"
+    }
+    fun List<String>.reflectionTypeName(): String = joinToString("+")
+    fun String.csharpLiteral(): String = "\"" +
+            replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+    val rootCapabilityName = rootContract.canonicalOwnerPath.reflectionTypeName().csharpLiteral()
+    val childCapabilityName = childContract.canonicalOwnerPath.reflectionTypeName().csharpLiteral()
+    val outerCapabilityName = outerContract.canonicalOwnerPath.reflectionTypeName().csharpLiteral()
+    val semanticFetchName = semanticMethodName(rootContract, "fetch").csharpLiteral()
+    val semanticAcceptName = semanticMethodName(rootContract, "accept").csharpLiteral()
+    val semanticNestedName = semanticMethodName(outerContract, "nested").csharpLiteral()
+
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The complete-natural-interface C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val references = listOf(lib, middle, runtime, stdlib)
+    val source = directory.resolve("CompleteNaturalInterfaceConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.complete.natural;
+
+            public sealed class ReferenceContract : CompleteNaturalContract<string>
+            {
+                private string value;
+
+                public ReferenceContract(string value)
+                {
+                    this.value = value;
+                }
+
+                public string fetch() => value;
+
+                public void accept(string value)
+                {
+                    this.value = value;
+                }
+            }
+
+            public sealed class ValueContract : CompleteNaturalContract<int>
+            {
+                private int value;
+
+                public ValueContract(int value)
+                {
+                    this.value = value;
+                }
+
+                public int fetch() => value;
+
+                public void accept(int value)
+                {
+                    this.value = value;
+                }
+            }
+
+            public static class Program
+            {
+                private static MethodInfo[] DeclaredInstanceMethods(Type owner)
+                {
+                    return owner.GetMethods(
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic |
+                        BindingFlags.Instance |
+                        BindingFlags.DeclaredOnly);
+                }
+
+                private static void AssertInvariantInterface(Type owner)
+                {
+                    if (!owner.IsInterface || !owner.IsGenericTypeDefinition ||
+                        owner.GetGenericArguments().Length != 1 ||
+                        (owner.GetGenericArguments()[0].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.None)
+                        throw new InvalidOperationException(
+                            owner + " is not one physically invariant generic interface");
+                }
+
+                private static void AssertAbstractVirtual(MethodInfo method, string description)
+                {
+                    if (method == null || !method.IsAbstract || !method.IsVirtual || method.IsStatic)
+                        throw new InvalidOperationException(
+                            description + " is not an abstract virtual instance MethodDef");
+                }
+
+                private static Type RequireCapability(Assembly assembly, string physicalName)
+                {
+                    Type capability = assembly.GetType(physicalName, false);
+                    if (capability == null || !capability.IsInterface || capability.IsGenericType)
+                        throw new InvalidOperationException(
+                            "missing non-generic semantic capability " + physicalName);
+                    return capability;
+                }
+
+                private static void AssertNaturalDoesNotInheritCapability(
+                    Type natural,
+                    Type capability)
+                {
+                    if (Array.Exists(natural.GetInterfaces(), candidate => candidate == capability))
+                        throw new InvalidOperationException(
+                            natural + " inherited its compiler semantic capability");
+                }
+
+                private static MethodInfo AssertSemanticMethod(
+                    Type capability,
+                    string physicalName,
+                    Type returnType,
+                    Type[] parameterTypes)
+                {
+                    MethodInfo[] methods = DeclaredInstanceMethods(capability);
+                    MethodInfo method = Array.Find(methods, candidate =>
+                        candidate.Name == physicalName);
+                    if (method == null || method.ReturnType != returnType)
+                        throw new InvalidOperationException(
+                            capability + " lost semantic MethodDef " + physicalName);
+                    ParameterInfo[] parameters = method.GetParameters();
+                    if (parameters.Length != parameterTypes.Length)
+                        throw new InvalidOperationException(
+                            physicalName + " has the wrong semantic arity");
+                    for (int index = 0; index < parameters.Length; index++)
+                    {
+                        if (parameters[index].ParameterType != parameterTypes[index])
+                            throw new InvalidOperationException(
+                                physicalName + " left the object domain");
+                    }
+                    AssertAbstractVirtual(method, "semantic " + physicalName);
+                    return method;
+                }
+
+                private static bool IsCompleteNaturalExactSurface(Type candidate)
+                {
+                    if (!candidate.IsInterface || !candidate.IsGenericTypeDefinition ||
+                        candidate.GetGenericArguments().Length != 1)
+                        return false;
+                    Type parameter = candidate.GetGenericArguments()[0];
+                    MethodInfo[] methods = DeclaredInstanceMethods(candidate);
+                    if (methods.Length != 2) return false;
+                    MethodInfo producer = Array.Find(methods, method =>
+                        method.ReturnType == parameter && method.GetParameters().Length == 0);
+                    MethodInfo consumer = Array.Find(methods, method =>
+                        method.ReturnType == typeof(void) &&
+                        method.GetParameters().Length == 1 &&
+                        method.GetParameters()[0].ParameterType == parameter);
+                    return producer != null && consumer != null && producer != consumer;
+                }
+
+                private static void AssertClosedChild(Type child, Type expectedParent)
+                {
+                    Type[] parents = child.GetInterfaces();
+                    if (parents.Length != 1 || parents[0] != expectedParent)
+                        throw new InvalidOperationException(
+                            child + " lost its exact constructed natural parent");
+                }
+
+                private static void AssertClosedOuter(Type outer, Type expectedResult)
+                {
+                    MethodInfo nested = outer.GetMethod("nested");
+                    if (nested == null || nested.ReturnType != expectedResult)
+                        throw new InvalidOperationException(
+                            outer + " lost its exact constructed natural result");
+                }
+
+                public static int Main()
+                {
+                    Type contract = typeof(CompleteNaturalContract<>);
+                    Type parameter = contract.GetGenericArguments()[0];
+                    AssertInvariantInterface(contract);
+                    Type[] applicationGenericInterfaces = Array.FindAll(
+                        contract.Assembly.GetTypes(),
+                        candidate => candidate.IsInterface && candidate.IsGenericTypeDefinition);
+                    if (applicationGenericInterfaces.Length != 1 ||
+                        applicationGenericInterfaces[0] != contract)
+                        throw new InvalidOperationException(
+                            "the root library retained a second generic interface surface");
+                    Type[] exactSurfaces = Array.FindAll(
+                        contract.Assembly.GetTypes(),
+                        IsCompleteNaturalExactSurface);
+                    if (exactSurfaces.Length != 1 || exactSurfaces[0] != contract)
+                        throw new InvalidOperationException(
+                            "the complete natural contract has a second structural exact surface");
+
+                    MethodInfo[] methods = DeclaredInstanceMethods(contract);
+                    MethodInfo fetch = Array.Find(methods, method => method.Name == "fetch");
+                    MethodInfo accept = Array.Find(methods, method => method.Name == "accept");
+                    if (methods.Length != 2 || fetch == null || accept == null ||
+                        fetch.ReturnType != parameter || fetch.GetParameters().Length != 0 ||
+                        accept.ReturnType != typeof(void) ||
+                        accept.GetParameters().Length != 1 ||
+                        accept.GetParameters()[0].ParameterType != parameter)
+                        throw new InvalidOperationException(
+                            "the natural TypeDef does not own both exact !T MethodDefs");
+                    AssertAbstractVirtual(fetch, "natural fetch");
+                    AssertAbstractVirtual(accept, "natural accept");
+
+                    Type rootCapability = RequireCapability(
+                        contract.Assembly,
+                        $rootCapabilityName);
+                    if (DeclaredInstanceMethods(rootCapability).Length != 2)
+                        throw new InvalidOperationException(
+                            "the root semantic capability copied or lost a MethodDef");
+                    AssertSemanticMethod(
+                        rootCapability,
+                        $semanticFetchName,
+                        typeof(object),
+                        Type.EmptyTypes);
+                    AssertSemanticMethod(
+                        rootCapability,
+                        $semanticAcceptName,
+                        typeof(void),
+                        new Type[] { typeof(object) });
+                    AssertNaturalDoesNotInheritCapability(contract, rootCapability);
+
+                    Type child = typeof(CompleteNaturalChild<>);
+                    AssertInvariantInterface(child);
+                    Type childParameter = child.GetGenericArguments()[0];
+                    Type outer = typeof(CompleteNaturalOuter<>);
+                    Type[] applicationGenericInterfaces = Array.FindAll(
+                        child.Assembly.GetTypes(),
+                        candidate => candidate.IsInterface && candidate.IsGenericTypeDefinition);
+                    if (applicationGenericInterfaces.Length != 2 ||
+                        Array.IndexOf(applicationGenericInterfaces, child) < 0 ||
+                        Array.IndexOf(applicationGenericInterfaces, outer) < 0)
+                        throw new InvalidOperationException(
+                            "a dependent interface retained a second generic surface");
+                    Type expectedChildParent = contract.MakeGenericType(childParameter);
+                    Type[] childParents = child.GetInterfaces();
+                    if (childParents.Length != 1 || childParents[0] != expectedChildParent)
+                        throw new InvalidOperationException(
+                            "the open child base is not exactly CompleteNaturalContract<!0>");
+                    Type childCapability = RequireCapability(
+                        contract.Assembly,
+                        $childCapabilityName);
+                    AssertNaturalDoesNotInheritCapability(child, childCapability);
+
+                    AssertInvariantInterface(outer);
+                    Type outerParameter = outer.GetGenericArguments()[0];
+                    MethodInfo nested = outer.GetMethod("nested");
+                    if (DeclaredInstanceMethods(outer).Length != 1 || nested == null ||
+                        nested.ReturnType != contract.MakeGenericType(outerParameter))
+                        throw new InvalidOperationException(
+                            "the open outer result is not exactly CompleteNaturalContract<!0>");
+                    AssertAbstractVirtual(nested, "natural nested");
+                    Type outerCapability = RequireCapability(
+                        outer.Assembly,
+                        $outerCapabilityName);
+                    if (DeclaredInstanceMethods(outerCapability).Length != 1)
+                        throw new InvalidOperationException(
+                            "the outer semantic capability copied or lost a MethodDef");
+                    AssertSemanticMethod(
+                        outerCapability,
+                        $semanticNestedName,
+                        typeof(object),
+                        Type.EmptyTypes);
+                    AssertNaturalDoesNotInheritCapability(outer, outerCapability);
+
+                    AssertClosedChild(
+                        typeof(CompleteNaturalChild<int>),
+                        typeof(CompleteNaturalContract<int>));
+                    AssertClosedChild(
+                        typeof(CompleteNaturalChild<string>),
+                        typeof(CompleteNaturalContract<string>));
+                    AssertClosedOuter(
+                        typeof(CompleteNaturalOuter<int>),
+                        typeof(CompleteNaturalContract<int>));
+                    AssertClosedOuter(
+                        typeof(CompleteNaturalOuter<string>),
+                        typeof(CompleteNaturalContract<string>));
+
+                    CompleteNaturalContract<string> reference =
+                        new ReferenceContract("reference");
+                    reference.accept("changed-reference");
+                    if (reference.fetch() != "changed-reference")
+                        throw new InvalidOperationException(
+                            "ordinary exact reference implementation did not dispatch");
+
+                    CompleteNaturalContract<int> value = new ValueContract(17);
+                    value.accept(23);
+                    if (value.fetch() != 23)
+                        throw new InvalidOperationException(
+                            "ordinary exact value implementation did not dispatch");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "CompleteNaturalInterfaceConsumer.exe"
+        else "CompleteNaturalInterfaceConsumer.dll"
+    )
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the complete-natural-interface probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the complete-natural-interface probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable complete-natural-interface probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+
+    val missingSource = directory.resolve("MissingCompleteNaturalMember.cs").apply {
+        writeText(
+            """
+            using generic.owner.complete.natural;
+
+            public sealed class MissingAccept : CompleteNaturalContract<string>
+            {
+                public string fetch() => "missing";
+            }
+
+            public sealed class MissingFetch : CompleteNaturalContract<string>
+            {
+                public void accept(string value) {}
+            }
+            """.trimIndent()
+        )
+    }
+    val missingOutput = directory.resolve("MissingCompleteNaturalMember.dll")
+    val missingCompilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the missing-member probe"
+            },
+            missingSource,
+            missingOutput,
+            references = references,
+            executable = false,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the missing-member probe"
+            },
+            missingSource,
+            missingOutput,
+            references = references,
+            executable = false,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable complete-natural-interface probe")
+    }
+    check(missingCompilation.exitCode != 0 &&
+            "CS0535" in missingCompilation.output &&
+            "CompleteNaturalContract" in missingCompilation.output &&
+            "accept" in missingCompilation.output &&
+            "fetch" in missingCompilation.output
+    ) {
+        "C# implementations which omit either natural member were not both rejected:\n" +
+                missingCompilation.output
+    }
+
     listOf(runtime, stdlib).forEach { dependency ->
         dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
     }
