@@ -183,6 +183,9 @@ class DotNetProducerGenericInterfacePhysicalAuthorityTest {
                     DotNetPhysicalDeclaration.Class(
                         ownerPath = ownerPath,
                         physicalTypeParameterCount = 1,
+                        physicalTypeParameterVariances = listOf(
+                            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                        ),
                         genericOwnerAbi = DotNetGenericOwnerAbi(
                             capabilityAssemblyName = artifact.assemblyName,
                             capabilityOwnerPath = capabilityOwnerPath,
@@ -215,6 +218,9 @@ class DotNetProducerGenericInterfacePhysicalAuthorityTest {
                         capabilityAssemblyName = artifact.assemblyName,
                         capabilityOwnerPath = capabilityOwnerPath,
                         exactOwnerPath = exactOwnerPath,
+                        naturalTypeParameterVariances = listOf(
+                            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                        ),
                         contract = DotNetPublishedGenericInterfaceFamilyContract(
                             logicalOwnerKey = logicalOwnerKey,
                             genericArity = 1,

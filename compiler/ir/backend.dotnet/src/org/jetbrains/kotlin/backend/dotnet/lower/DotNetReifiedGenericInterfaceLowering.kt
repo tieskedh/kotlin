@@ -20,7 +20,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionInputEntryAuthority
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionInputEntryAuthorityKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteNaturalAuthorityPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePolarity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.isDotNetInlineOnly
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
@@ -49,6 +52,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetNumberType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
+import org.jetbrains.kotlin.backend.dotnet.toDotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -402,7 +406,25 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
         if (!finalRoutingOnly) {
+            fun admitCompleteNaturalPlan(
+                owner: IrClass,
+                plan: DotNetGenericInterfaceCompleteNaturalAuthorityPlan?,
+            ) {
+                if (plan == null) return
+                check(
+                    context.admittedGenericInterfaceCompleteNaturalAuthorityPlans.put(
+                        owner.symbol,
+                        plan,
+                    ) == null
+                ) {
+                    "Internal .NET backend error: complete-natural interface '${owner.name}' " +
+                            "was admitted more than once"
+                }
+            }
+
             fun publishRoot(owner: IrClass) {
+                val completeNaturalPlan = owner.completeNaturalAuthorityPlanOrNull()
+                    ?: owner.completeNaturalConstructedResultAuthorityPlanOrNull()
                 val file = checkNotNull(owner.fileOrNull) {
                     "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
                 }
@@ -429,6 +451,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     declaredMembers = owner.declaredInterfaceMembers(),
                     capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                 )
+                admitCompleteNaturalPlan(owner, completeNaturalPlan)
             }
 
             // Preserve the old root-admission snapshot. Re-evaluating every historical grammar
@@ -465,6 +488,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 for (owner in genericInterfaces) {
                     if (owner in context.reifiedGenericInterfaces) continue
                     val shape = owner.reifiedInterfaceChildShapeOrNull() ?: continue
+                    val completeNaturalPlan = owner
+                        .completeNaturalMemberlessChildAuthorityPlanOrNull(shape)
                     if (shape.parents.any { parent -> publishedFamilyOrNull(parent) == null }) continue
                     if (shape.parents.any { parent ->
                             parent !in context.genericOwnerCapabilityInterfaces &&
@@ -500,6 +525,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
                             reusedParent,
                         )
+                        admitCompleteNaturalPlan(owner, completeNaturalPlan)
                         changed = true
                         continue
                     }
@@ -520,6 +546,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
                             reusedParent,
                         )
+                        admitCompleteNaturalPlan(owner, completeNaturalPlan)
                         changed = true
                         continue
                     }
@@ -549,6 +576,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         shape.declaredMembers,
                         DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                     )
+                    admitCompleteNaturalPlan(owner, completeNaturalPlan)
                     changed = true
                 }
             } while (changed)
@@ -581,10 +609,28 @@ internal class DotNetReifiedGenericInterfaceLowering(
             val simpleType = this as? IrSimpleType ?: return null
             val owner = reifiedInterfaceOwnerOrNull() ?: return null
             if (simpleType.arguments.size != owner.typeParameters.size) return owner
-            owner.typeParameters.zip(simpleType.arguments).forEach { pair ->
+            val physicalVariances = context
+                .admittedGenericInterfaceCompleteNaturalAuthorityPlans[owner.symbol]
+                ?.selectedPhysicalVariances
+                ?: externalDeclarations
+                    .publishedGenericInterfaceNaturalTypeParameterVariancesOrNull(owner)
+                ?: owner.typeParameters.map { parameter ->
+                    parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+                }
+            if (physicalVariances.size != owner.typeParameters.size) return owner
+            owner.typeParameters.zip(simpleType.arguments).forEachIndexed { index, pair ->
                 val parameter = pair.first
                 val projection = pair.second as? IrTypeProjection ?: return owner
                 if (projection.variance != Variance.INVARIANT) return owner
+                if (parameter.variance != Variance.INVARIANT &&
+                    physicalVariances[index] ==
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                ) {
+                    // The logical Kotlin view may have widened even though the natural CLR
+                    // TypeDef cannot. Keep it in the semantic domain unless producer provenance
+                    // at the declaration/expression proves the exact natural construction.
+                    return owner
+                }
                 val argumentClassifier = (projection.type as? IrSimpleType)?.classifier
                 val requiresSemanticCarrier = when (parameter.variance) {
                     Variance.OUT_VARIANCE ->
@@ -894,6 +940,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
                 is IrGetField -> exactInterfaceDeclarationTypes[symbol.owner]?.let { exactType ->
                     return exactType.hasExactPhysicalInterfaceView(expected)
+                }
+                is IrCall -> {
+                    val source = symbol.owner
+                    if (externalDeclarations.hasNaturalGenericOwnerFunctionReturn(source) &&
+                        type.hasExactPhysicalInterfaceView(expected)
+                    ) {
+                        // A producer-indexed Kotlin MethodDef owns its exact constructed result.
+                        // Logical widening elsewhere must not make this natural result require a
+                        // compiler capability. Retained foreign MethodDef results require their
+                        // own reverse-interop proof before they may become authority here.
+                        return true
+                    }
                 }
                 is IrTypeOperatorCall -> if (operator == IrTypeOperator.IMPLICIT_CAST) {
                     return argument.provesExactPhysicalInterfaceView(expected)
@@ -1855,6 +1913,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         }
         if (!hasFirstReifiedInterfaceOwnerShape()) return false
         if (parent !is IrFile || dotNetDirectInterfaceTypes().isNotEmpty()) return false
+        if (completeNaturalAuthorityPlanOrNull() != null) return true
         val parameter = typeParameters.single()
         val members = declaredInterfaceMembers()
         val properties = declaredInterfaceProperties()
@@ -1892,6 +1951,162 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                 members.count { member ->
                                     member.isDirectConsumerMember(parameter)
                                 } == 1)
+        }
+    }
+
+    /**
+     * First bounded consumer of the pre-split complete-surface authority.
+     *
+     * The planner is general, but presence in its map is not admission. This proof admits only a
+     * top-level root whose complete frozen surface consists of one direct producer and one direct
+     * consumer. The logical `out T` contract therefore selects one physically invariant natural
+     * TypeDef containing both MethodDefs; no exact sibling is needed. Every condition below is a
+     * structural proof restriction, never a declaration, package, member-name, or stdlib rule.
+     */
+    private fun IrClass.completeNaturalAuthorityPlanOrNull():
+            DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
+        val plan = context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans[symbol]
+            ?: return null
+        if (!hasFirstReifiedInterfaceOwnerShape() || parent !is IrFile ||
+            dotNetDirectInterfaceTypes().isNotEmpty()
+        ) {
+            return null
+        }
+        val parameter = typeParameters.single()
+        if (parameter.variance != Variance.OUT_VARIANCE ||
+            plan.inventory.directPropertyAccessors.isNotEmpty() ||
+            plan.inventory.directParentTypes != superTypes
+        ) {
+            return null
+        }
+        val members = declaredInterfaceMembers()
+        if (members.size != 2 ||
+            plan.inventory.directCallableMembers != members.map { member -> member.symbol } ||
+            members.map { member -> member.name }.distinct().size != members.size ||
+            members.any { member ->
+                member.visibility != DescriptorVisibilities.PUBLIC ||
+                        member.modality != Modality.ABSTRACT || member.body != null ||
+                        member.correspondingPropertySymbol != null || member.isSuspend ||
+                        member.typeParameters.isNotEmpty() ||
+                        member in context.interfaceDefaultImplementations
+            } ||
+            members.count { member -> member.isDirectProducerMember(parameter) } != 1 ||
+            members.count { member -> member.isDirectConsumerMember(parameter) } != 1
+        ) {
+            return null
+        }
+        val input = plan.surfaceInput
+        val decision = plan.surfaceDecision
+        val selected = decision.parameters.singleOrNull() ?: return null
+        if (input.logicalMaximumVariances !=
+            listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT) ||
+            selected.index != 0 ||
+            selected.logicalMaximumVariance !=
+            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT ||
+            selected.requiredPolarity != DotNetGenericInterfaceCompleteSurfacePolarity.BOTH ||
+            selected.selectedPhysicalVariance !=
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+        ) {
+            return null
+        }
+        return plan
+    }
+
+    private fun IrClass.completeNaturalDependencyPlanOrNull():
+            DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
+        val plan = context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans[symbol]
+            ?: return null
+        val members = declaredInterfaceMembers()
+        if (plan.inventory.directCallableMembers != members.map { member -> member.symbol } ||
+            plan.inventory.directPropertyAccessors.isNotEmpty() ||
+            plan.inventory.directParentTypes != superTypes ||
+            plan.surfaceInput.logicalMaximumVariances != typeParameters.map { parameter ->
+                parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+            } ||
+            plan.surfaceDecision.parameters.size != typeParameters.size ||
+            plan.surfaceDecision.parameters.none { parameter ->
+                parameter.selectedPhysicalVariance != parameter.logicalMaximumVariance
+            }
+        ) {
+            return null
+        }
+        return plan
+    }
+
+    private fun IrClass.publishedNaturalPhysicalVariancesOrNull():
+            List<DotNetGenericOwnerPhysicalTypeParameterVariance>? =
+        context.admittedGenericInterfaceCompleteNaturalAuthorityPlans[symbol]
+            ?.selectedPhysicalVariances
+            ?: externalDeclarations
+                .publishedGenericInterfaceNaturalTypeParameterVariancesOrNull(this)
+
+    /**
+     * Closes the bounded complete-natural choice through one existing constructed-result root.
+     *
+     * Kotlin permits `out T` below another logically covariant interface, but that occurrence is
+     * verifier-invariant when the nested natural TypeDef was deliberately weakened to invariant.
+     * The complete-surface fixpoint already records that pressure. Consume it only for the old,
+     * independently admitted one-member producer shape and only when the nested producer's local
+     * or ABI-recorded physical variance proves the weakening which caused it.
+     */
+    private fun IrClass.completeNaturalConstructedResultAuthorityPlanOrNull():
+            DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
+        val plan = completeNaturalDependencyPlanOrNull() ?: return null
+        if (parent !is IrFile || dotNetDirectInterfaceTypes().isNotEmpty() ||
+            typeParameters.size != 1 || typeParameters.single().variance != Variance.OUT_VARIANCE
+        ) {
+            return null
+        }
+        val member = declaredInterfaceMembers().singleOrNull() ?: return null
+        if (member.visibility != DescriptorVisibilities.PUBLIC ||
+            member.modality != Modality.ABSTRACT || member.body != null || member.isSuspend ||
+            member.typeParameters.isNotEmpty() ||
+            !member.isConstructedInterfaceProducerMember(this)
+        ) {
+            return null
+        }
+        val nestedOwner = ((member.returnType as? IrSimpleType)?.classifier as? IrClassSymbol)
+            ?.owner ?: return null
+        val nestedPhysical = nestedOwner.publishedNaturalPhysicalVariancesOrNull() ?: return null
+        if (nestedPhysical.size != nestedOwner.typeParameters.size ||
+            nestedPhysical == nestedOwner.typeParameters.map { parameter ->
+                parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+            }
+        ) {
+            return null
+        }
+        val selected = plan.surfaceDecision.parameters.singleOrNull() ?: return null
+        return plan.takeIf {
+            selected.requiredPolarity == DotNetGenericInterfaceCompleteSurfacePolarity.BOTH &&
+                    selected.selectedPhysicalVariance ==
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+        }
+    }
+
+    /** Same bounded closure for one memberless identity-substituted child interface. */
+    private fun IrClass.completeNaturalMemberlessChildAuthorityPlanOrNull(
+        shape: ReifiedInterfaceChildShape,
+    ): DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
+        val plan = completeNaturalDependencyPlanOrNull() ?: return null
+        if (shape.declaredMembers.isNotEmpty() || shape.parents.size != 1 ||
+            typeParameters.size != 1 || typeParameters.single().variance != Variance.OUT_VARIANCE
+        ) {
+            return null
+        }
+        val parentOwner = shape.parents.single()
+        val parentPhysical = parentOwner.publishedNaturalPhysicalVariancesOrNull() ?: return null
+        if (parentPhysical.size != parentOwner.typeParameters.size ||
+            parentPhysical == parentOwner.typeParameters.map { parameter ->
+                parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+            }
+        ) {
+            return null
+        }
+        val selected = plan.surfaceDecision.parameters.singleOrNull() ?: return null
+        return plan.takeIf {
+            selected.requiredPolarity == DotNetGenericInterfaceCompleteSurfacePolarity.BOTH &&
+                    selected.selectedPhysicalVariance ==
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
         }
     }
 

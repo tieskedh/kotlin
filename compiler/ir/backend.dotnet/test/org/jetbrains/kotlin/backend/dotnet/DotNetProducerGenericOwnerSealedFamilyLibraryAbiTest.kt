@@ -22,7 +22,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("61", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("62", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -31,6 +31,13 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             .single()
         assertEquals(publication, decodedFamily.publication())
         assertEquals(listOf("demo.Store`1"), decodedFamily.ownerPath)
+        assertEquals(
+            listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT),
+            decoded.values
+                .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                .single()
+                .naturalTypeParameterVariances,
+        )
     }
 
     @Test
@@ -84,7 +91,20 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
 
         val hostileIndexes = listOf(
             declarations.replacing(logicalInterfaceOwnerKey) { declaration ->
-                (declaration as DotNetPhysicalDeclaration.Class).copy(physicalTypeParameterCount = 2)
+                (declaration as DotNetPhysicalDeclaration.Class).copy(
+                    physicalTypeParameterCount = 2,
+                    physicalTypeParameterVariances = listOf(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    ),
+                )
+            },
+            declarations.replacing(logicalInterfaceOwnerKey) { declaration ->
+                (declaration as DotNetPhysicalDeclaration.Class).copy(
+                    physicalTypeParameterVariances = listOf(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    ),
+                )
             },
             declarations.replacing(logicalInterfaceOwnerKey) { declaration ->
                 val type = declaration as DotNetPhysicalDeclaration.Class
@@ -95,6 +115,13 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             },
             declarations.replacing(key.implementationOwnerKey) { declaration ->
                 (declaration as DotNetPhysicalDeclaration.Class).copy(ownerPath = listOf("demo.OtherStore`1"))
+            },
+            declarations.replacing(key.implementationOwnerKey) { declaration ->
+                (declaration as DotNetPhysicalDeclaration.Class).copy(
+                    physicalTypeParameterVariances = listOf(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    ),
+                )
             },
             declarations.replacing(key.implementationMemberKey) { declaration ->
                 (declaration as DotNetPhysicalDeclaration.Function).copy(isInstance = false)
@@ -119,6 +146,12 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             declarations.replacing(interfaceFamilyKey) { declaration ->
                 val family = declaration as DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
                 family.copy(capabilityOwnerPath = listOf("demo.OtherSourceSemantic"))
+            },
+            declarations.replacing(interfaceFamilyKey) { declaration ->
+                val family = declaration as DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
+                family.copy(naturalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ))
             },
             declarations.replacing(interfaceFamilyKey) { declaration ->
                 val family = declaration as DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
@@ -176,6 +209,31 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 directPublication,
                 DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
             ))
+        }
+    }
+
+    @Test
+    fun rejectsMalformedOrPreAbi62PublishedPhysicalVariancePayloads() {
+        val valid = DotNetLibraryAbiCodec.encode(producerSealedFamilyAbiFixture())
+
+        val invalidVariance = valid.mutatePublishedInterfaceDeclarationValue { encodedValue ->
+            encodedValue.mutateEnvelopeFields { fields ->
+                fields[physicalVarianceOffset(fields)] = "BIVARIANT"
+            }
+        }
+        val invalidVarianceFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(invalidVariance.toProperties())
+        }
+        assertTrue(invalidVarianceFailure.message.orEmpty().contains("invalid physical variance"))
+
+        val preAbi62Payload = valid.mutatePublishedInterfaceDeclarationValue { encodedValue ->
+            encodedValue.mutateEnvelopeFields { fields ->
+                fields.removeAt(physicalVarianceOffset(fields))
+                fields.removeAt(11)
+            }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(preAbi62Payload.toProperties())
         }
     }
 
@@ -335,6 +393,9 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             val interfaceClass = DotNetPhysicalDeclaration.Class(
                 naturalType.physicalPath,
                 naturalType.structural.genericArity,
+                physicalTypeParameterVariances = naturalType.structural.genericParameters.map { parameter ->
+                    parameter.variance
+                },
                 genericOwnerAbi = DotNetGenericOwnerAbi(
                     "Demo",
                     interfaceCapabilityType.physicalPath,
@@ -372,6 +433,9 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 naturalType.physicalPath,
                 "Demo",
                 interfaceCapabilityType.physicalPath,
+                naturalTypeParameterVariances = naturalType.structural.genericParameters.map { parameter ->
+                    parameter.variance
+                },
                 contract = DotNetPublishedGenericInterfaceFamilyContract(
                     logicalInterfaceOwnerKey,
                     naturalType.structural.genericArity,
@@ -454,6 +518,16 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             val entry = entries.single { candidate -> decodePropertyKey(candidate.key).startsWith("J:") }
             return this + (entry.key to transform(entry.value))
         }
+
+        fun Map<String, String>.mutatePublishedInterfaceDeclarationValue(
+            transform: (String) -> String,
+        ): Map<String, String> {
+            val entry = entries.single { candidate -> decodePropertyKey(candidate.key).startsWith("H:") }
+            return this + (entry.key to transform(entry.value))
+        }
+
+        fun physicalVarianceOffset(fields: List<String>): Int =
+            15 + fields[7].toInt() + fields[9].toInt() + fields[10].toInt()
 
         fun String.mutateEnvelopeFields(transform: (MutableList<String>) -> Unit): String {
             val fields = decoder.decode(this).toString(Charsets.UTF_8).split('\u0000').toMutableList()

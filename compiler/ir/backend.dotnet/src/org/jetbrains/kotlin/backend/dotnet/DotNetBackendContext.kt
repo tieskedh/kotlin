@@ -230,6 +230,12 @@ internal class DotNetBackendContext(
     /** Read-only complete-surface variance evidence; no lowering or emitter may consume it. */
     val genericInterfaceCompleteSurfaceVarianceShadows:
         MutableList<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot> = mutableListOf()
+    /** Every BOUND pre-split plan; presence here alone never admits a physical interface shape. */
+    val genericInterfaceCompleteSurfaceVarianceAuthorityPlans:
+        MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    /** Explicitly admitted subset populated later by bounded reified-interface admission only. */
+    val admittedGenericInterfaceCompleteNaturalAuthorityPlans:
+        MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
     /** Distinguishes a completed rehearsal shadow from an unavailable run or production epoch. */
     var genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted: Boolean = false
     /** Read-only physical-value shadow evidence; no lowering or emitter may consume it. */

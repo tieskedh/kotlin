@@ -8,11 +8,15 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceFixedTypeInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteNaturalAuthorityPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceOwnerDecision
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceOwnerInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePolarity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceInventory
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePosition
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePropertyAccessorInventory
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceTypeReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceParameterSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceShadowStatus
@@ -44,6 +48,7 @@ import org.jetbrains.kotlin.ir.types.IrStarProjection
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -53,19 +58,29 @@ import org.jetbrains.kotlin.types.Variance
  * Computes the proposed variance of one complete natural CLR interface without changing IR.
  *
  * This phase deliberately runs before the current declared/exact interface split. It observes
- * source members and direct parent edges only, translates them to the IR-free physical-surface
- * vocabulary, and publishes diagnostic snapshots. Nothing in lowering, routing, serialization,
- * or emission may consume its result.
+ * source members and direct parent edges only and translates them to the IR-free physical-surface
+ * vocabulary. Public snapshots remain diagnostic-only. The parallel IR-bound plans are early
+ * evidence, not admission: only a later lowering which independently validates a bounded grammar
+ * may copy one into the context's explicitly admitted complete-natural plan map.
  */
 internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
+    private val externalDeclarations: DotNetExternalDeclarations =
+        context.externalDeclarationsForLowering()
+
     override fun lower(irModule: IrModuleFragment) {
         check(!context.genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted) {
             "Internal .NET backend error: complete-surface variance shadow ran more than once"
         }
         check(context.genericInterfaceCompleteSurfaceVarianceShadows.isEmpty()) {
             "Internal .NET backend error: complete-surface variance shadow had pre-existing output"
+        }
+        check(context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans.isEmpty()) {
+            "Internal .NET backend error: complete-surface variance analysis had pre-existing authority plans"
+        }
+        check(context.admittedGenericInterfaceCompleteNaturalAuthorityPlans.isEmpty()) {
+            "Internal .NET backend error: complete-natural admission preceded complete-surface analysis"
         }
 
         if (!context.configuration.dotNetGenericOwnerRehearsal) {
@@ -86,6 +101,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                 >()
         val builder = SurfaceBuilder(
             context = context,
+            externalDeclarations = externalDeclarations,
             candidateIdentities = identitiesByOwner,
             fixedTypes = fixedTypes,
         )
@@ -137,7 +153,21 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                                 val decision = checkNotNull(result.value.ownerOrNull(identity)) {
                                     "Internal .NET backend error: complete-surface plan omitted its root owner"
                                 }
-                                owner.snapshot(decision)
+                                val authorityPlan = DotNetGenericInterfaceCompleteNaturalAuthorityPlan(
+                                    owner = owner.symbol,
+                                    inventory = build.inventory,
+                                    surfaceInput = build.input,
+                                    surfaceDecision = decision,
+                                )
+                                check(
+                                    context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans.put(
+                                        owner.symbol,
+                                        authorityPlan,
+                                    ) == null
+                                ) {
+                                    "Internal .NET backend error: complete-surface analysis repeated one owner plan"
+                                }
+                                owner.snapshot(authorityPlan.surfaceDecision)
                             }
                         }
                     }
@@ -254,6 +284,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
         data class Bound(
             val input: DotNetGenericInterfaceCompleteSurfaceOwnerInput,
             val candidateDependencies: Set<DotNetGenericOwnerPhysicalTypeDefIdentity>,
+            val inventory: DotNetGenericInterfaceCompleteSurfaceInventory,
         ) : OwnerBuild
 
         data class Unavailable(val reason: String) : OwnerBuild
@@ -271,6 +302,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
 
     private class SurfaceBuilder(
         private val context: DotNetBackendContext,
+        private val externalDeclarations: DotNetExternalDeclarations,
         private val candidateIdentities: Map<IrClass, DotNetGenericOwnerPhysicalTypeDefIdentity>,
         private val fixedTypes: MutableMap<
                 DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -280,7 +312,26 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
         fun buildOwner(owner: IrClass): OwnerBuild {
             val dependencies = linkedSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity>()
             val positions = mutableListOf<DotNetGenericInterfaceCompleteSurfacePosition>()
-            for (member in owner.directSimpleFunctions()) {
+            val directCallableMembers = owner.directSimpleFunctions()
+            val directParentTypes = owner.superTypes.toList()
+            val inventory = DotNetGenericInterfaceCompleteSurfaceInventory(
+                directCallableMembers = directCallableMembers.map { member -> member.symbol },
+                directPropertyAccessors = owner.declarations.filterIsInstance<IrProperty>()
+                    .filter { property ->
+                        listOfNotNull(property.getter, property.setter).any { accessor ->
+                            !accessor.isFakeOverride
+                        }
+                    }
+                    .map { property ->
+                        DotNetGenericInterfaceCompleteSurfacePropertyAccessorInventory(
+                            property = property.symbol,
+                            getter = property.getter?.takeUnless(IrSimpleFunction::isFakeOverride)?.symbol,
+                            setter = property.setter?.takeUnless(IrSimpleFunction::isFakeOverride)?.symbol,
+                        )
+                    },
+                directParentTypes = directParentTypes,
+            )
+            for (member in directCallableMembers) {
                 if (member.typeParameters.any { parameter ->
                         parameter.superTypes.any { bound -> bound.referencesTypeParameterOf(owner) }
                     }
@@ -309,7 +360,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                     }
                 }
             }
-            for (parent in owner.superTypes) {
+            for (parent in directParentTypes) {
                 when (val result = parent.surfaceType(owner, dependencies)) {
                     is TypeBuild.Bound -> positions += DotNetGenericInterfaceCompleteSurfacePosition(
                         DotNetGenericInterfaceCompleteSurfacePolarity.OUT,
@@ -328,6 +379,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                     positions = positions,
                 ),
                 candidateDependencies = dependencies,
+                inventory = inventory,
             )
         }
 
@@ -338,7 +390,8 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                     is IrProperty -> listOfNotNull(declaration.getter, declaration.setter)
                     else -> emptyList()
                 }
-            }.distinctBy { function -> function.symbol }
+            }.filterNot(IrSimpleFunction::isFakeOverride)
+                .distinctBy { function -> function.symbol }
 
         private fun IrType.surfaceType(
             owner: IrClass,
@@ -413,6 +466,22 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                 return TypeBuild.Bound(
                     DotNetGenericInterfaceCompleteSurfaceTypeReference.Constructed(
                         candidateIdentity,
+                        arguments,
+                    ),
+                )
+            }
+            val externalFixed = externalDeclarations
+                .publishedGenericInterfaceNaturalFixedTypeInputOrNull(classifier)
+            if (externalFixed != null) {
+                val existing = fixedTypes.putIfAbsent(externalFixed.identity, externalFixed)
+                if (existing != null && existing.physicalVariances != externalFixed.physicalVariances) {
+                    return TypeBuild.Conflict(
+                        "one producer-recorded nested TypeDef has conflicting physical variance",
+                    )
+                }
+                return TypeBuild.Bound(
+                    DotNetGenericInterfaceCompleteSurfaceTypeReference.Constructed(
+                        externalFixed.identity,
                         arguments,
                     ),
                 )

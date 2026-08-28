@@ -65,33 +65,35 @@ this programme.
 
 The source-built Stdlib census is paused. Work proceeds in this order:
 
-1. **Close foreign variance soundness.** Retain legal CLR reference covariance
-   and contravariance, but reject implicit value/open-argument conversions at a
-   mandatory physical-conversion gate with a stable source diagnostic.
-2. **Plan the complete natural interface surface in shadow mode.** Compute the
-   strongest CLR-legal physical variance per parameter over all members,
-   constraints, properties, inherited constructions, defaults, and MethodImpl
-   obligations.
-3. **Prove a custom input-bearing interface.** Emit one natural TypeDef with no
-   exact sibling; compile a complete non-partial C# implementation; prove exact
-   value/reference calls and logically widened Kotlin calls on Framework 4.8
-   and .NET 10.
-4. **Replace structural foreign fallback.** Broad operations select recorded
+1. **Replace structural foreign fallback.** Broad operations select recorded
    constructed interface MethodDefs and MethodImpls. Public concrete method
    name/arity discovery is removed, including for explicit-interface and
    overload-hostile C# implementations.
-5. **Migrate the rehearsal, not production.** Re-prove the custom and Runtime
-   families, then atomically remove exact-sibling TypeDefs, manifest roles,
-   generator obligations, and runtime conventions from the candidate epoch.
-6. **Complete declaration authority.** Add retained-foreign, static/file-facade,
+2. **Migrate the currently proven interface slice in rehearsal.** Re-prove the
+   custom slice and only the Runtime interface shapes supported by the new
+   route, then remove their exact-sibling TypeDefs, manifest roles, generator
+   obligations, and runtime conventions from the candidate epoch. This bounded
+   replacement is not the final selected-family freeze.
+3. **Prove natural class state selection.** Prove one natural generic class
+   whose complete writer set permits typed state and a separate hostile owner
+   whose semantic writes force broad state. Inheritance, escape, and
+   construction must not confuse the two producer-wide plans.
+4. **Complete declaration authority.** Add retained-foreign, static/file-facade,
    overlapping-family, and global final-emission evidence without letting an
    earlier expected record fill a missing final fact.
-7. **Complete value provenance.** Make the shared operation query authoritative
+5. **Complete value provenance.** Make the shared operation query authoritative
    one bounded case at a time and delete a recognizer only after the general
    model derives both its positive and hostile-negative behavior.
-8. **Compose callable contracts.** Prove owner-dependent input plus
+6. **Compose callable contracts.** Prove owner-dependent input plus
    `SplitNullable(!V, out bool)` on a custom `Lookup<K,V>` before applying it to
    `Map`.
+7. **Complete retained/foreign entry validation.** Derive inherited,
+   implementation, open, projected, vararg, multiple-view, SZ-array, and
+   bounded-element cases from the shared authority/provenance model.
+8. **Freeze the complete selected rehearsal family.** Migrate the selected
+   Runtime/Stdlib candidate family only after the preceding proofs derive every
+   remaining bounded recognizer and hostile negative. This is the final
+   rehearsal-family migration, not a production cutover.
 9. **Run the go/no-go rehearsal and exact inverse.** Only then resume the
    generic-owner-dependent Stdlib census.
 
