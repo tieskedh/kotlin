@@ -3328,6 +3328,14 @@ internal class DotNetIlEmitter(
         typeMapper: DotNetIlTypeMapper,
         externalDeclarations: DotNetExternalDeclarations,
     ) {
+        // A memberless derived interface owns only its exact InterfaceImpl edge. Its inherited
+        // fake override is a logical view of the parent's already-authoritative MethodDef, not
+        // an implementation which must be implicitly rebound to a newly declared slot. Mapping
+        // that fake view from its logical substituted return can therefore manufacture a false
+        // object-vs-!T mismatch (notably for producer-recorded split-nullable results). Classes
+        // remain checked below because an inherited class MethodDef really can be selected as
+        // the implementation of an interface slot and must match it or have a MethodImpl.
+        if ((member.parent as? IrClass)?.isInterface == true) return
         // allOverridden also contains intermediate fake views. They own no CLR slot and may
         // already carry closed substitutions which are illegal to map as method metadata.
         val overriddenInterfaceMembers = member.allOverridden()

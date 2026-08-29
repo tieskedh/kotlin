@@ -33,6 +33,12 @@ public fun widenStringSource(source: NullableSource<String>): NullableSource<Any
 
 package generic.owner.split.nullable
 
+/**
+ * A separately compiled, memberless open child must retain the parent's real natural
+ * construction without republishing the inherited split-nullable MethodDef.
+ */
+public interface OpenChild<out T> : NullableSource<T>
+
 private class IntNullableSource(private val value: Int) : NullableSource<Int> {
     override fun read(missing: Boolean): Int? = if (missing) null else value
 }
@@ -62,6 +68,18 @@ private class OverloadedIntNullableSource(
 public fun overloadedIntSource(value: Int): OverloadedNullableSource<Int> =
     OverloadedIntNullableSource(value)
 
+private class IntOpenChild(private val value: Int) : OpenChild<Int> {
+    override fun read(missing: Boolean): Int? = if (missing) null else value
+}
+
+private class StringOpenChild(private val value: String) : OpenChild<String> {
+    override fun read(missing: Boolean): String? = if (missing) null else value
+}
+
+public fun intOpenChild(value: Int): OpenChild<Int> = IntOpenChild(value)
+
+public fun stringOpenChild(value: String): OpenChild<String> = StringOpenChild(value)
+
 // MODULE: main(middle)
 // FILE: main.kt
 
@@ -81,6 +99,26 @@ public fun downstreamOverloadedIntRead(
     source: OverloadedNullableSource<Any?>,
     index: Int,
 ): Any? = source.read(index)
+
+public fun downstreamOpenChildExactIntRead(
+    source: OpenChild<Int>,
+    missing: Boolean,
+): Int? = source.read(missing)
+
+public fun downstreamOpenChildExactStringRead(
+    source: OpenChild<String>,
+    missing: Boolean,
+): String? = source.read(missing)
+
+public fun downstreamOpenChildWidenedRead(
+    source: OpenChild<Any?>,
+    missing: Boolean,
+): Any? = source.read(missing)
+
+public fun downstreamOpenChildSame(
+    source: OpenChild<Any?>,
+    expected: Any?,
+): Boolean = source === expected
 
 fun box(): String {
     val reader = NullableSourceReader()
@@ -118,6 +156,37 @@ fun box(): String {
     }
     if (downstreamOverloadedIntRead(overloadedWide, 2) != 45) return "overloaded int hit"
     if (downstreamOverloadedIntRead(overloadedWide, -1) != null) return "overloaded int null"
+
+    val intChild = intOpenChild(47)
+    if (downstreamOpenChildExactIntRead(intChild, false) != 47) return "child int exact hit"
+    if (downstreamOpenChildExactIntRead(intChild, true) != null) return "child int exact null"
+    val wideIntChild: OpenChild<Any?> = intChild
+    if (!downstreamOpenChildSame(wideIntChild, intChild)) return "child int identity"
+    if (downstreamOpenChildWidenedRead(wideIntChild, false) != 47) {
+        return "child int widened hit"
+    }
+    if (downstreamOpenChildWidenedRead(wideIntChild, true) != null) {
+        return "child int widened null"
+    }
+    val wideIntParent: NullableSource<Any?> = intChild
+    if (downstreamWidenedRead(wideIntParent, false) != 47) return "child int parent hit"
+    if (downstreamWidenedRead(wideIntParent, true) != null) return "child int parent null"
+
+    val stringChild = stringOpenChild("open-child")
+    if (downstreamOpenChildExactStringRead(stringChild, false) != "open-child") {
+        return "child string exact hit"
+    }
+    if (downstreamOpenChildExactStringRead(stringChild, true) != null) {
+        return "child string exact null"
+    }
+    val wideStringChild: OpenChild<Any?> = stringChild
+    if (!downstreamOpenChildSame(wideStringChild, stringChild)) return "child string identity"
+    if (downstreamOpenChildWidenedRead(wideStringChild, false) != "open-child") {
+        return "child string widened hit"
+    }
+    if (downstreamOpenChildWidenedRead(wideStringChild, true) != null) {
+        return "child string widened null"
+    }
 
     return "OK"
 }

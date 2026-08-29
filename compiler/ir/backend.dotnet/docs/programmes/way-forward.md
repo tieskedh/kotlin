@@ -55,12 +55,16 @@ otherwise the affected parameter is physically invariant while Kotlin's
 logical variance remains in KLIB. Ordinary CLR-language implementations must
 not require a hidden generated ABI for behavior derivable from real interface
 slots. ABI 63 closes the bounded root/edge-free external MethodDef-authority
-proof; current evidence belongs in [status](../../STATUS.md) and its
-[dated archive record](../archive/generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md).
-Next, that bounded slice may stop emitting its split comparison surface inside
-the rehearsal. Complete removal still waits for the selected-family freeze and
-full hostile inverse; edge-bearing, inherited, constrained, and wider callable
-forms remain later authority gates.
+proof; its dated evidence is
+[archived](../archive/generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md).
+It also preserves that root seal through one exact memberless child edge
+without fabricating a child MethodDef; current child-edge evidence belongs in
+[status](../../STATUS.md).
+Class fake overrides, declared overrides, retained foreign slots, constraints,
+and wider callable forms next extend the same physical-signature authority
+model. Only after downstream owner closure is an epoch invariant may a bounded
+slice stop emitting its comparison surface inside the rehearsal. Complete
+removal still waits for the selected-family freeze and full hostile inverse.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to
