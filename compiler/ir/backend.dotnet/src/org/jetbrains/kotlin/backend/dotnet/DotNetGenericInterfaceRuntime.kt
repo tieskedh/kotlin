@@ -898,6 +898,336 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
+    // Invokes one compiler-recorded interface MethodDef on the unique runtime construction of
+    // its declaring generic interface. The MethodDef handle is physical authority: names,
+    // regular arity, and concrete public methods never participate in selection. The mandatory
+    // two-handle GetMethodFromHandle overload binds the open declaration token to the selected
+    // I<X>; invoking that interface MethodInfo leaves ordinary and explicit MethodImpl dispatch
+    // to the CLR. Result layout is independent from input policy so the same route can later
+    // compose owner-dependent inputs with a split-nullable `T + out bool` result.
+    .method public hidebysig static object 'InvokeRecordedMember'(
+        object 'instance',
+        $typeType 'openDefinition',
+        valuetype ${coreLibraryReference}System.RuntimeMethodHandle 'declaration',
+        $typeType[] 'methodArguments',
+        int32[] 'parameterDomains',
+        object[] 'arguments',
+        int32 'resultLayout') cil managed
+    {
+      .maxstack 6
+      .locals init (
+        [0] $typeType[] 'interfaces',
+        [1] int32 'index',
+        [2] $typeType 'selected',
+        [3] $typeType 'candidate',
+        [4] $methodType 'method',
+        [5] class ${coreLibraryReference}System.Reflection.TargetInvocationException 'invocationException',
+        [6] object 'result',
+        [7] object[] 'invocationArguments',
+        [8] int32 'argumentCount',
+        [9] class ${coreLibraryReference}System.Reflection.ParameterInfo[] 'parameters',
+        [10] int32 'parameterIndex',
+        [11] $typeType 'parameterType',
+        [12] object 'argument',
+        [13] $typeType 'nullableUnderlyingType',
+        [14] int32 'parameterDomain'
+      )
+      ldarg.0
+      brtrue.s GIF_RecordedInstanceReady
+      newobj instance void ${coreLibraryReference}System.NullReferenceException::.ctor()
+      throw
+    GIF_RecordedInstanceReady:
+      ldarg.s 'resultLayout'
+      ldc.i4.0
+      blt GIF_RecordedInvalidLayout
+      ldarg.s 'resultLayout'
+      ldc.i4.1
+      ble.s GIF_RecordedLayoutReady
+    GIF_RecordedInvalidLayout:
+      ldstr "The recorded CLR generic-interface call has an invalid result layout"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedLayoutReady:
+      ldarg.s 'arguments'
+      brtrue.s GIF_RecordedArgumentsPresent
+      ldc.i4.0
+      br.s GIF_RecordedArgumentCountReady
+    GIF_RecordedArgumentsPresent:
+      ldarg.s 'arguments'
+      ldlen
+      conv.i4
+    GIF_RecordedArgumentCountReady:
+      stloc.s 8
+      ldarg.0
+      callvirt instance $typeType ${coreLibraryReference}System.Object::GetType()
+      call $stateType Kotlin.Runtime.Internal.GenericInterfaceDispatch::'GetProducerState'($typeType)
+      ldfld $typeType[] Kotlin.Runtime.Internal.GenericInterfaceProducerDispatchState::'interfaces'
+      stloc.0
+      ldc.i4.0
+      stloc.1
+      ldnull
+      stloc.2
+    GIF_RecordedConstructionNext:
+      ldloc.1
+      ldloc.0
+      ldlen
+      conv.i4
+      bge GIF_RecordedConstructionComplete
+      ldloc.0
+      ldloc.1
+      ldelem.ref
+      stloc.3
+      ldloc.3
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
+      brfalse.s GIF_RecordedConstructionContinue
+      ldloc.3
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
+      ldarg.1
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brfalse.s GIF_RecordedConstructionContinue
+      ldloc.2
+      brfalse.s GIF_RecordedConstructionSelect
+      ldloc.2
+      ldloc.3
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brtrue.s GIF_RecordedConstructionContinue
+      ldstr "A foreign Kotlin generic-interface view has multiple CLR constructions"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedConstructionSelect:
+      ldloc.3
+      stloc.2
+    GIF_RecordedConstructionContinue:
+      ldloc.1
+      ldc.i4.1
+      add
+      stloc.1
+      br.s GIF_RecordedConstructionNext
+    GIF_RecordedConstructionComplete:
+      ldloc.2
+      brtrue.s GIF_RecordedConstructionReady
+      ldstr "The value does not implement the required CLR generic interface"
+      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor(string)
+      throw
+    GIF_RecordedConstructionReady:
+      ldarg.2
+      ldloc.2
+      callvirt instance valuetype ${coreLibraryReference}System.RuntimeTypeHandle ${coreLibraryReference}System.Type::get_TypeHandle()
+      call class ${coreLibraryReference}System.Reflection.MethodBase ${coreLibraryReference}System.Reflection.MethodBase::GetMethodFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeMethodHandle,
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      isinst $methodType
+      stloc.s 4
+      ldloc.s 4
+      brtrue.s GIF_RecordedMethodReady
+      ldstr "The recorded CLR generic-interface MethodDef is not an invokable method"
+      newobj instance void ${coreLibraryReference}System.MissingMethodException::.ctor(string)
+      throw
+    GIF_RecordedMethodReady:
+      ldarg.3
+      brfalse.s GIF_RecordedMethodInstantiationReady
+      ldloc.s 4
+      ldarg.3
+      callvirt instance $methodType ${coreLibraryReference}System.Reflection.MethodInfo::MakeGenericMethod(
+          $typeType[])
+      stloc.s 4
+    GIF_RecordedMethodInstantiationReady:
+      ldarg.s 'parameterDomains'
+      brtrue.s GIF_RecordedDomainsPresent
+      ldstr "The recorded CLR generic-interface call has no parameter-domain policy"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedDomainsPresent:
+      ldarg.s 'parameterDomains'
+      ldlen
+      conv.i4
+      ldloc.s 8
+      beq.s GIF_RecordedDomainCountReady
+      ldstr "The recorded CLR generic-interface call has inconsistent parameter-domain policy"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedDomainCountReady:
+      ldloc.s 4
+      callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
+      stloc.s 9
+      ldloc.s 9
+      ldlen
+      conv.i4
+      ldloc.s 8
+      ldarg.s 'resultLayout'
+      add
+      beq.s GIF_RecordedParameterShapeReady
+      ldstr "The recorded CLR generic-interface MethodDef disagrees with its callable layout"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedParameterShapeReady:
+      ldarg.s 'resultLayout'
+      brfalse GIF_RecordedArgumentsCheckStart
+      ldloc.s 9
+      ldloc.s 8
+      ldelem.ref
+      callvirt instance bool ${coreLibraryReference}System.Reflection.ParameterInfo::get_IsOut()
+      brfalse GIF_RecordedInvalidSplitLayout
+      ldloc.s 9
+      ldloc.s 8
+      ldelem.ref
+      callvirt instance $typeType ${coreLibraryReference}System.Reflection.ParameterInfo::get_ParameterType()
+      dup
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsByRef()
+      brfalse.s GIF_RecordedDiscardSplitParameter
+      callvirt instance $typeType ${coreLibraryReference}System.Type::GetElementType()
+      ldtoken ${coreLibraryReference}System.Boolean
+      call $typeType ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brtrue.s GIF_RecordedArgumentsCheckStart
+      br.s GIF_RecordedInvalidSplitLayout
+    GIF_RecordedDiscardSplitParameter:
+      pop
+    GIF_RecordedInvalidSplitLayout:
+      ldstr "The recorded CLR generic-interface MethodDef has no trailing out Boolean"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedArgumentsCheckStart:
+      ldc.i4.0
+      stloc.s 10
+    GIF_RecordedArgumentsCheckNext:
+      ldloc.s 10
+      ldloc.s 8
+      bge GIF_RecordedInvocationArgumentsStart
+      ldarg.s 'parameterDomains'
+      ldloc.s 10
+      ldelem.i4
+      stloc.s 14
+      ldloc.s 14
+      ldc.i4.0
+      blt GIF_RecordedInvalidDomain
+      ldloc.s 14
+      ldc.i4.2
+      bgt GIF_RecordedInvalidDomain
+      ldloc.s 9
+      ldloc.s 10
+      ldelem.ref
+      callvirt instance $typeType ${coreLibraryReference}System.Reflection.ParameterInfo::get_ParameterType()
+      stloc.s 11
+      ldloc.s 11
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsByRef()
+      brfalse.s GIF_RecordedParameterTypeReady
+      ldstr "The recorded CLR generic-interface call has an unsupported ordinary by-reference parameter"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedParameterTypeReady:
+      ldarg.s 'arguments'
+      ldloc.s 10
+      ldelem.ref
+      stloc.s 12
+      ldloc.s 12
+      brtrue.s GIF_RecordedNonNullArgument
+      ldloc.s 11
+      callvirt instance bool ${coreLibraryReference}System.Type::get_IsValueType()
+      brfalse.s GIF_RecordedArgumentCompatible
+      ldloc.s 11
+      call $typeType ${coreLibraryReference}System.Nullable::GetUnderlyingType($typeType)
+      brtrue.s GIF_RecordedArgumentCompatible
+      br GIF_RecordedArgumentIncompatible
+    GIF_RecordedNonNullArgument:
+      ldloc.s 11
+      ldloc.s 12
+      callvirt instance bool ${coreLibraryReference}System.Type::IsInstanceOfType(object)
+      brtrue.s GIF_RecordedArgumentCompatible
+      ldloc.s 11
+      call $typeType ${coreLibraryReference}System.Nullable::GetUnderlyingType($typeType)
+      stloc.s 13
+      ldloc.s 13
+      brfalse.s GIF_RecordedArgumentIncompatible
+      ldloc.s 13
+      ldloc.s 12
+      callvirt instance bool ${coreLibraryReference}System.Type::IsInstanceOfType(object)
+      brtrue.s GIF_RecordedArgumentCompatible
+    GIF_RecordedArgumentIncompatible:
+      ldloc.s 14
+      brtrue.s GIF_RecordedThrowInvalidCast
+      ldstr "A declaration-independent CLR generic-interface argument has the wrong physical carrier"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedThrowInvalidCast:
+      ldstr "A widened Kotlin argument is incompatible with the foreign CLR generic-interface slot"
+      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor(string)
+      throw
+    GIF_RecordedArgumentCompatible:
+      ldloc.s 10
+      ldc.i4.1
+      add
+      stloc.s 10
+      br GIF_RecordedArgumentsCheckNext
+    GIF_RecordedInvalidDomain:
+      ldstr "The recorded CLR generic-interface call has an invalid parameter domain"
+      newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+      throw
+    GIF_RecordedInvocationArgumentsStart:
+      ldarg.s 'arguments'
+      stloc.s 7
+      ldarg.s 'resultLayout'
+      brfalse.s GIF_RecordedInvocationArgumentsReady
+      ldloc.s 8
+      ldc.i4.1
+      add
+      newarr ${coreLibraryReference}System.Object
+      stloc.s 7
+      ldloc.s 8
+      brfalse.s GIF_RecordedInvocationArgumentsReady
+      ldarg.s 'arguments'
+      ldc.i4.0
+      ldloc.s 7
+      ldc.i4.0
+      ldloc.s 8
+      call void ${coreLibraryReference}System.Array::Copy(
+          class ${coreLibraryReference}System.Array,
+          int32,
+          class ${coreLibraryReference}System.Array,
+          int32,
+          int32)
+    GIF_RecordedInvocationArgumentsReady:
+      .try
+      {
+        ldloc.s 4
+        ldarg.0
+        ldloc.s 7
+        callvirt instance object ${coreLibraryReference}System.Reflection.MethodBase::Invoke(object, object[])
+        stloc.s 6
+        leave GIF_RecordedReturn
+      }
+      catch ${coreLibraryReference}System.Reflection.TargetInvocationException
+      {
+        stloc.s 5
+        ldloc.s 5
+        callvirt instance class ${coreLibraryReference}System.Exception ${coreLibraryReference}System.Exception::get_InnerException()
+        dup
+        brtrue.s GIF_RecordedRethrowInner
+        pop
+        rethrow
+      GIF_RecordedRethrowInner:
+        call class ${coreLibraryReference}System.Runtime.ExceptionServices.ExceptionDispatchInfo ${coreLibraryReference}System.Runtime.ExceptionServices.ExceptionDispatchInfo::Capture(class ${coreLibraryReference}System.Exception)
+        callvirt instance void ${coreLibraryReference}System.Runtime.ExceptionServices.ExceptionDispatchInfo::Throw()
+        ldnull
+        stloc.s 6
+        leave GIF_RecordedReturn
+      }
+    GIF_RecordedReturn:
+      ldarg.s 'resultLayout'
+      brfalse.s GIF_RecordedReturnResult
+      ldloc.s 7
+      ldloc.s 8
+      ldelem.ref
+      unbox.any ${coreLibraryReference}System.Boolean
+      brfalse.s GIF_RecordedReturnResult
+      ldnull
+      ret
+    GIF_RecordedReturnResult:
+      ldloc.s 6
+      ret
+    }
+
     // A covariant natural Collection<T>/Set<T> cannot expose its input methods directly. A
     // foreign implementation may nevertheless provide ordinary public Contains(T) and
     // ContainsAll(Collection<T>) methods. Preserve that exact method when the argument has the
@@ -1152,6 +1482,14 @@ internal object DotNetGenericInterfaceRuntime {
                 "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
                 "${"InvokeUniqueMember".toIlIdentifier()}(" +
                 "object, class ${coreLibraryReference}System.Type, string, object[])"
+
+    fun invokeRecordedMemberCallInstruction(coreLibraryReference: String): String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.GenericInterfaceDispatch".toIlIdentifier()}::" +
+                "${"InvokeRecordedMember".toIlIdentifier()}(" +
+                "object, class ${coreLibraryReference}System.Type, " +
+                "valuetype ${coreLibraryReference}System.RuntimeMethodHandle, " +
+                "class ${coreLibraryReference}System.Type[], int32[], object[], int32)"
 
     fun invokeUniqueConcreteUnaryMemberCallInstruction(coreLibraryReference: String): String =
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +

@@ -566,7 +566,7 @@ internal class DotNetIlFunctionInfo(
      * declaration is identified by arity (`<[n]>`), not by a MethodSpec instantiation such as
      * `<!!0>`; the latter is valid on call operands but is a syntax error in a MethodImpl row.
      */
-    fun renderOverrideMethodReference(
+    fun renderMethodDeclarationReference(
         methodName: String,
         ownerToken: String = owner.ilTypeRef,
     ): String {
@@ -577,6 +577,12 @@ internal class DotNetIlFunctionInfo(
         }
         return renderMethodReferenceWithSuffix(methodName, ownerToken, arity)
     }
+
+    /** The same exact MethodDef grammar is used by `.override method` and `ldtoken method`. */
+    fun renderOverrideMethodReference(
+        methodName: String,
+        ownerToken: String = owner.ilTypeRef,
+    ): String = renderMethodDeclarationReference(methodName, ownerToken)
 
     private fun renderMethodReferenceWithSuffix(
         methodName: String,

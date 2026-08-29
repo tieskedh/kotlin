@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteNaturalAuthorityPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePolarity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.isDotNetInlineOnly
@@ -419,6 +420,38 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ) {
                     "Internal .NET backend error: complete-natural interface '${owner.name}' " +
                             "was admitted more than once"
+                }
+                plan.inventory.directCallableMembers.forEach { memberSymbol ->
+                    val member = memberSymbol.owner
+                    check(member.parent === owner) {
+                        "Internal .NET backend error: complete-natural interface '${owner.name}' " +
+                                "inventoried a callable from another owner"
+                    }
+                    val specialArgumentsToCheck = specialBridgeMethods
+                        .findSpecialWithOverride(member, includeSelf = true)
+                        ?.second
+                        ?.argumentsToCheck
+                        ?: 0
+                    val domains = member.parameters
+                        .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                        .mapIndexed { index, parameter ->
+                            when {
+                                !parameter.type.referencesGenericOwnerParameter(owner) ->
+                                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                                index < specialArgumentsToCheck ||
+                                        !parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN) ->
+                                    DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+                                else -> DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                            }
+                        }
+                    val previous = context.genericInterfaceNaturalMethodParameterDomains.put(
+                        member,
+                        domains,
+                    )
+                    check(previous == null || previous == domains) {
+                        "Internal .NET backend error: complete-natural interface member " +
+                                "'${member.name}' acquired contradictory input domains"
+                    }
                 }
             }
 

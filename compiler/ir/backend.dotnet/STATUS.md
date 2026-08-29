@@ -11,8 +11,9 @@ and follow the owning ADR or active programme for design detail.
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- The current integration checkpoint closes the bounded complete-natural
-  generic-interface family proof described below. Git owns its exact identity.
+- The current integration checkpoint closes the bounded same-producer
+  recorded-MethodDef dispatch proof described below. Git owns its exact
+  identity.
 - Reviewed upstream synchronization evidence:
   [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
 
@@ -21,8 +22,8 @@ physical identities may still be corrected atomically.
 
 ## Latest full gate
 
-The strict target aggregate passed on 2026-08-29 at the complete-natural family
-checkpoint:
+The production-erased strict target aggregate passed on 2026-08-29 at the
+bounded local recorded-MethodDef checkpoint:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -38,9 +39,11 @@ errors, or skips:
 | FIR2IR | 187 | 2,251 |
 | integration | 2 | 128 |
 
-The focused hostile proof also passed under PSI and LightTree on Framework 4.8
-and .NET 10. Its `lib -> middle -> main` graph exercises the same final producer
-schema and separate-compilation bindings used by this aggregate.
+The focused candidate and production-erased inverse both passed under PSI and
+LightTree on Framework 4.8 and .NET 10. The candidate reader carries exact
+`fetch` and `accept` MethodDef tokens; separately compiled generator-free C#
+ordinary and explicit implementations preserve one identity and state, reject
+incompatible widened input before mutation, and never select public decoys.
 
 ## Binding production state
 
@@ -71,7 +74,7 @@ The source-built Stdlib census remains paused while generic-owner architecture
 is consolidated in rehearsal mode. Production Kotlin-owned generic owners
 remain erased.
 
-The completed bounded proof emits logically covariant
+The admitted family emits logically covariant
 `CompleteNaturalContract<T>` as one physically invariant natural TypeDef with
 exact `fetch(): !T` and `accept(!T)` slots and no exact sibling. The separately
 compiled `CompleteNaturalChild<T>` inheritance edge and
@@ -86,13 +89,23 @@ omitting either natural member fails in the C# compiler. Kotlin exact and
 widened calls retain one object identity and behavior on both runtimes, and a
 producer-recorded natural factory result retains its exact carrier.
 
-The next active slice replaces public concrete method name/arity fallback with
-recorded constructed interface MethodDefs and MethodImpls. After that route is
-proved, this bounded interface slice may replace its split comparison surface
-inside the rehearsal. The following stage proves natural generic-class typed
-state against a hostile owner whose broad writes require semantic state. The
-remaining order and final selected-family freeze are owned by the generic-owner
-programme and migration plan linked below.
+The first half of the MethodDef/MethodImpl stage is now complete. A
+same-producer reader emits the exact open `ldtoken method`, binds it to the
+unique implemented closed construction with the mandatory two-handle CLR API,
+and leaves ordinary or explicit `MethodImpl` selection to the CLR. Input-domain
+policy is frozen at producer admission; unsupported or missing authority fails
+closed instead of being reconstructed from a late signature. Physical library
+ABI remains 62 and compiler-runtime surface level is 60.
+
+The next active slice is ABI 63: publish one exact natural MethodDef descriptor
+per logical member, with parameter domains and direct/void/split-nullable result
+layout kept orthogonal, validate it against the producer DLL, and consume it in
+a downstream assembly. Stage 5 remains open until that cross-assembly route and
+the hostile same-name/same-regular-arity interface-MethodDef proof pass. Only
+then may this bounded family retire its split comparison surface inside the
+rehearsal. Natural generic-class typed-versus-broad state follows. The remaining
+order and final selected-family freeze are owned by the generic-owner programme
+and migration plan linked below.
 
 Shared authority and provenance:
 [`docs/decisions/draft-adr-generic-owner-physical-authority.md`](docs/decisions/draft-adr-generic-owner-physical-authority.md).
@@ -105,9 +118,11 @@ Ordered generic-owner migration stages:
 
 ## Current blockers
 
-- Broad foreign operations do not yet route through recorded constructed
-  MethodDefs and MethodImpls, so Runtime still uses split/fallback machinery and
-  wider Roslyn authoring remains constrained.
+- ABI 62 does not publish exact natural MethodDef authority. A downstream
+  consumer therefore cannot yet emit the proven token route; outside the
+  bounded same-producer slice Runtime still uses split/fallback machinery.
+- The hostile overloaded-interface MethodDef, cross-assembly descriptor,
+  trimming, and NativeAOT gates remain open for stage 5.
 - Natural generic-class typed versus broad state selection is not yet proven.
 - Retained/static/global declaration authority and shared value provenance
   remain incomplete.
