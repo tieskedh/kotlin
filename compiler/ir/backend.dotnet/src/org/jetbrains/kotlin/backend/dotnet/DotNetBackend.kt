@@ -533,6 +533,40 @@ object DotNetBackend {
             ilTarget.delete()
         }
 
+        if (!configuration.dotNetGenericOwnerRehearsal) {
+            val rehearsalDependencies = externalLibraries.mapNotNull { library ->
+                val records = library.declarations.genericOwnerRehearsalEpochRecords()
+                if (records.isEmpty()) null else library to records
+            }
+            if (rehearsalDependencies.isNotEmpty()) {
+                val dependencies = rehearsalDependencies.joinToString(separator = "; ") { dependency ->
+                    val library = dependency.first
+                    val records = dependency.second
+                    val tags = records.map(DotNetGenericOwnerRehearsalEpochRecord::kind)
+                        .distinct()
+                        .sortedBy(DotNetGenericOwnerRehearsalEpochRecordKind::ordinal)
+                        .joinToString { kind -> kind.wireTag }
+                    "${library.artifact.assemblyName} '${library.assemblyFile.path}' " +
+                            "[$tags]"
+                }
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "The production-erased .NET epoch cannot consume generic-owner rehearsal ABI " +
+                            "records from selected Kotlin/.NET libraries: $dependencies. Recompile the " +
+                            "complete dependency graph for the production-erased epoch; mixed erased and " +
+                            "rehearsal generic-owner epochs are not supported.",
+                )
+                if (emitsExecutable) {
+                    binaryOutput.delete()
+                    if (target == DotNetTarget.NET10_0) binaryOutput.runtimeConfigFile().delete()
+                } else if (producedLibraryArtifact != null) {
+                    output.resolve(producedLibraryArtifact.assemblyFileName).delete()
+                }
+                ilTarget.delete()
+                return result(if (emitsExecutable) binaryOutput else ilTarget)
+            }
+        }
+
         val context = DotNetBackendContext(
             irBuiltIns,
             configuration,
@@ -1095,10 +1129,8 @@ data class DotNetBackendOutput(
         require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
             "the production erased epoch cannot publish sealed generic-owner families"
         }
-        require(genericOwnerRehearsal || declarations.values.none { declaration ->
-            declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
-        }) {
-            "the production erased epoch cannot publish producer-sealed generic-owner ABI records"
+        require(genericOwnerRehearsal || declarations.genericOwnerRehearsalEpochRecords().isEmpty()) {
+            "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/J)"
         }
     }
 }
