@@ -11981,8 +11981,11 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
 /**
  * Requires one logically covariant, input-bearing Kotlin interface to expose one complete,
- * physically invariant natural CLR contract. Ordinary C# implements that contract without a
- * generator; widened Kotlin execution is deliberately proved only on a Kotlin-owned object here.
+ * physically invariant natural CLR contract. Ordinary and explicit-interface C# implementations
+ * live in a separately compiled generator-free DLL. Widened Kotlin dispatch must bind the
+ * producer-recorded interface MethodDef and let the CLR select its MethodImpl. The IL assertion
+ * proves that this bounded route no longer uses name/arity selection; concrete public decoys are
+ * additional dispatch witnesses, not the still-pending hostile interface-overload proof.
  */
 private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
     genericOwnerRehearsal: Boolean,
@@ -12082,6 +12085,34 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                 expectedNaturalReturnType = "void",
                 expectedNaturalParameterTypes = listOf("!0"),
             )
+            val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+            check(emittedIl.isFile) {
+                "The complete-natural-interface producer has no emitted IL sibling: ${emittedIl.path}"
+            }
+            val ilText = emittedIl.readText().removePrefix("\uFEFF")
+            val readerStart = Regex(
+                """(?m)^\s*\.class\b[^\r\n]*\bCompleteNaturalReader\b"""
+            ).find(ilText)?.range?.first ?: -1
+            check(readerStart >= 0) {
+                "The complete-natural-interface producer has no reader TypeDef"
+            }
+            val readerEnd = Regex("""(?m)^\.class\b""")
+                .find(ilText, startIndex = readerStart + 1)
+                ?.range?.first
+                ?: ilText.length
+            val readerIl = ilText.substring(readerStart, readerEnd)
+            check("::'InvokeRecordedMember'(" in readerIl &&
+                    "ldtoken method instance !0 'generic.owner.complete.natural.CompleteNaturalContract`1'::'fetch'()" in
+                    readerIl &&
+                    "ldtoken method instance void 'generic.owner.complete.natural.CompleteNaturalContract`1'::'accept'(!0)" in
+                    readerIl &&
+                    "::'InvokeUniqueMember'(" !in readerIl &&
+                    "ldstr \"fetch\"" !in readerIl &&
+                    "ldstr \"accept\"" !in readerIl
+            ) {
+                "The widened reader does not carry the producer's exact natural MethodDef token:\n" +
+                        readerIl
+            }
         } else if (producer.name.equals("middle.dll", ignoreCase = true)) {
             requireInvariantVarianceShadow("CompleteNaturalChild")
             requireInvariantVarianceShadow("CompleteNaturalOuter")
@@ -12260,7 +12291,105 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
     check(runtime.isFile && stdlib.isFile) {
         "The complete-natural-interface C# probe lacks reusable Runtime/Stdlib artifacts"
     }
-    val references = listOf(lib, middle, runtime, stdlib)
+    val platformReferences = listOf(lib, middle, runtime, stdlib)
+    val foreignSource = directory.resolve("CompleteNaturalForeignImplementations.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.complete.natural;
+
+            public sealed class OrdinaryForeignContract : CompleteNaturalContract<string>
+            {
+                private string value;
+
+                public OrdinaryForeignContract(string value)
+                {
+                    this.value = value;
+                }
+
+                public int DecoyFetchCalls { get; private set; }
+                public int DecoyAcceptCalls { get; private set; }
+
+                public string fetch() => value;
+
+                public void accept(string value)
+                {
+                    this.value = value;
+                }
+
+                public object fetch<TIgnored>()
+                {
+                    DecoyFetchCalls++;
+                    return "ordinary-decoy";
+                }
+
+                public void accept(object value)
+                {
+                    DecoyAcceptCalls++;
+                }
+            }
+
+            public sealed class ExplicitForeignContract : CompleteNaturalContract<string>
+            {
+                private string value;
+
+                public ExplicitForeignContract(string value)
+                {
+                    this.value = value;
+                }
+
+                public string Value => value;
+                public int DecoyFetchCalls { get; private set; }
+                public int DecoyAcceptCalls { get; private set; }
+
+                string CompleteNaturalContract<string>.fetch() => value;
+
+                void CompleteNaturalContract<string>.accept(string value)
+                {
+                    this.value = value;
+                }
+
+                public object fetch()
+                {
+                    DecoyFetchCalls++;
+                    return "explicit-decoy";
+                }
+
+                public void accept(object value)
+                {
+                    DecoyAcceptCalls++;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val foreign = directory.resolve("CompleteNaturalForeignImplementations.dll")
+    val foreignCompilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the complete-natural foreign DLL"
+            },
+            foreignSource,
+            foreign,
+            references = platformReferences,
+            executable = false,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the complete-natural foreign DLL"
+            },
+            foreignSource,
+            foreign,
+            references = platformReferences,
+            executable = false,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable complete-natural-interface probe")
+    }
+    check(foreignCompilation.exitCode == 0) { foreignCompilation.output }
+    val references = platformReferences + foreign
     val source = directory.resolve("CompleteNaturalInterfaceConsumer.cs").apply {
         writeText(
             """
@@ -12408,6 +12537,47 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                             outer + " lost its exact constructed natural result");
                 }
 
+                private static void AssertForeignInterfaceMap(
+                    Type implementation,
+                    bool explicitImplementation)
+                {
+                    Type contract = typeof(CompleteNaturalContract<string>);
+                    InterfaceMapping map = implementation.GetInterfaceMap(contract);
+                    if (map.InterfaceMethods.Length != 2 || map.TargetMethods.Length != 2)
+                        throw new InvalidOperationException(
+                            implementation + " has an incomplete natural interface map");
+                    for (int index = 0; index < map.InterfaceMethods.Length; index++)
+                    {
+                        MethodInfo declaration = map.InterfaceMethods[index];
+                        MethodInfo target = map.TargetMethods[index];
+                        if (declaration.DeclaringType != contract || target.DeclaringType != implementation)
+                            throw new InvalidOperationException(
+                                implementation + " maps outside the recorded natural slot");
+                        if (explicitImplementation && (!target.IsPrivate || !target.IsFinal))
+                            throw new InvalidOperationException(
+                                implementation + " did not retain a private final explicit MethodImpl");
+                        if (target.ReturnType == typeof(object) ||
+                            (target.GetParameters().Length == 1 &&
+                                target.GetParameters()[0].ParameterType == typeof(object)))
+                            throw new InvalidOperationException(
+                                implementation + " mapped a public object-domain decoy");
+                    }
+                }
+
+                private static void AssertInvalidCast(Action operation, string scenario)
+                {
+                    try
+                    {
+                        operation();
+                    }
+                    catch (InvalidCastException)
+                    {
+                        return;
+                    }
+                    throw new InvalidOperationException(
+                        scenario + " did not fail at the typed foreign boundary");
+                }
+
                 public static int Main()
                 {
                     Type contract = typeof(CompleteNaturalContract<>);
@@ -12462,12 +12632,12 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                     AssertInvariantInterface(child);
                     Type childParameter = child.GetGenericArguments()[0];
                     Type outer = typeof(CompleteNaturalOuter<>);
-                    Type[] applicationGenericInterfaces = Array.FindAll(
+                    Type[] downstreamGenericInterfaces = Array.FindAll(
                         child.Assembly.GetTypes(),
                         candidate => candidate.IsInterface && candidate.IsGenericTypeDefinition);
-                    if (applicationGenericInterfaces.Length != 2 ||
-                        Array.IndexOf(applicationGenericInterfaces, child) < 0 ||
-                        Array.IndexOf(applicationGenericInterfaces, outer) < 0)
+                    if (downstreamGenericInterfaces.Length != 2 ||
+                        Array.IndexOf(downstreamGenericInterfaces, child) < 0 ||
+                        Array.IndexOf(downstreamGenericInterfaces, outer) < 0)
                         throw new InvalidOperationException(
                             "a dependent interface retained a second generic surface");
                     Type expectedChildParent = contract.MakeGenericType(childParameter);
@@ -12526,6 +12696,64 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                     if (value.fetch() != 23)
                         throw new InvalidOperationException(
                             "ordinary exact value implementation did not dispatch");
+
+                    CompleteNaturalReader reader = new CompleteNaturalReader();
+                    if (!reader.same(value, value) ||
+                        !Object.Equals(reader.fetch(value), 23))
+                        throw new InvalidOperationException(
+                            "value-type foreign widened dispatch lost value or identity");
+                    reader.accept(value, 29);
+                    if (value.fetch() != 29 ||
+                        !Object.Equals(reader.fetch(value), 29))
+                        throw new InvalidOperationException(
+                            "compatible value-type foreign widened input did not dispatch");
+                    AssertInvalidCast(
+                        () => reader.accept(value, null),
+                        "null-to-value foreign widened input");
+                    if (value.fetch() != 29)
+                        throw new InvalidOperationException(
+                            "null-to-value foreign widened input mutated authoritative state");
+                    OrdinaryForeignContract ordinary =
+                        new OrdinaryForeignContract("ordinary-initial");
+                    CompleteNaturalContract<string> ordinaryExact = ordinary;
+                    ordinaryExact.accept("ordinary-exact");
+                    if (ordinaryExact.fetch() != "ordinary-exact")
+                        throw new InvalidOperationException(
+                            "ordinary foreign exact dispatch missed its interface slot");
+                    if (!reader.same(ordinary, ordinary) ||
+                        !Object.Equals(reader.fetch(ordinary), "ordinary-exact"))
+                        throw new InvalidOperationException(
+                            "ordinary foreign widened dispatch lost value or identity");
+                    reader.accept(ordinary, "ordinary-widened");
+                    AssertInvalidCast(
+                        () => reader.accept(ordinary, 17),
+                        "incompatible ordinary foreign widened input");
+                    if (ordinary.fetch() != "ordinary-widened" ||
+                        ordinary.DecoyFetchCalls != 0 || ordinary.DecoyAcceptCalls != 0)
+                        throw new InvalidOperationException(
+                            "ordinary foreign widened dispatch selected a public decoy");
+                    AssertForeignInterfaceMap(typeof(OrdinaryForeignContract), false);
+
+                    ExplicitForeignContract explicitValue =
+                        new ExplicitForeignContract("explicit-initial");
+                    CompleteNaturalContract<string> explicitExact = explicitValue;
+                    explicitExact.accept("explicit-exact");
+                    if (explicitExact.fetch() != "explicit-exact")
+                        throw new InvalidOperationException(
+                            "explicit foreign exact dispatch missed its MethodImpl");
+                    if (!reader.same(explicitValue, explicitValue) ||
+                        !Object.Equals(reader.fetch(explicitValue), "explicit-exact"))
+                        throw new InvalidOperationException(
+                            "explicit foreign widened dispatch lost value or identity");
+                    reader.accept(explicitValue, "explicit-widened");
+                    AssertInvalidCast(
+                        () => reader.accept(explicitValue, 29),
+                        "incompatible explicit foreign widened input");
+                    if (explicitValue.Value != "explicit-widened" ||
+                        explicitValue.DecoyFetchCalls != 0 || explicitValue.DecoyAcceptCalls != 0)
+                        throw new InvalidOperationException(
+                            "explicit foreign widened dispatch selected a public decoy");
+                    AssertForeignInterfaceMap(typeof(ExplicitForeignContract), true);
                     return 0;
                 }
             }

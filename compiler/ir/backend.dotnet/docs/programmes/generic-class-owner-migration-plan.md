@@ -67,7 +67,16 @@ Before any cutover proposal, complete these stages in order:
 4. Prove one complete natural input-bearing interface with ordinary non-partial
    CLR implementations and no exact sibling or hidden author obligation.
 5. Replace concrete-name structural fallback with actual MethodDef/MethodImpl
-   routing.
+   routing:
+   - first prove that a final same-producer MethodDef can be carried by an exact
+     open-declaration token and rebound to the selected closed construction;
+   - then publish the complete physical MethodDef and orthogonal result-layout
+     descriptor required for a separate consumer to emit the same token without
+     rebuilding it from logical IR.
+   Stage 5 is complete only after validated cross-assembly descriptor
+   consumption and the hostile same-name/same-regular-arity interface-MethodDef
+   proof, with missing, contradictory, ambiguous, or stale producer authority
+   failing closed.
 6. Prove one natural generic class whose complete writer set permits typed
    state, and a separate hostile owner whose semantic writes force broad state;
    inheritance, escape, and construction must not confuse the two plans.

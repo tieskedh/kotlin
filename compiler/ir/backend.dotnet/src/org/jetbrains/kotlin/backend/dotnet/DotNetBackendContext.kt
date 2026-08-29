@@ -236,6 +236,10 @@ internal class DotNetBackendContext(
     /** Explicitly admitted subset populated later by bounded reified-interface admission only. */
     val admittedGenericInterfaceCompleteNaturalAuthorityPlans:
         MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    /** Producer-planned input domains for final local natural interface MethodDefs. */
+    val genericInterfaceNaturalMethodParameterDomains:
+        MutableMap<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> =
+        java.util.IdentityHashMap()
     /** Distinguishes a completed rehearsal shadow from an unavailable run or production epoch. */
     var genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted: Boolean = false
     /** Read-only physical-value shadow evidence; no lowering or emitter may consume it. */

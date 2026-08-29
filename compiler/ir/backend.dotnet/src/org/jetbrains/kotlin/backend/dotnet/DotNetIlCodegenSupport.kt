@@ -779,6 +779,8 @@ internal class DotNetIlTypeMapper private constructor(
     private val genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction>,
     private val genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction>,
+    private val genericOwnerNaturalMethodParameterDomains:
+            Map<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>>,
     private val genericOwnerWrongShapePolicies:
             Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy>,
     private val genericOwnerCapabilityDeclarations: Set<IrDeclaration>,
@@ -814,6 +816,8 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerCapabilityCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
         genericOwnerForeignDispatchCallTargets: Map<IrCall, IrSimpleFunction> = emptyMap(),
+        genericOwnerNaturalMethodParameterDomains:
+                Map<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> = emptyMap(),
         genericOwnerWrongShapePolicies:
                 Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = emptyMap(),
         genericOwnerCapabilityDeclarations: Set<IrDeclaration> = emptySet(),
@@ -854,6 +858,7 @@ internal class DotNetIlTypeMapper private constructor(
         genericOwnerReflectionCapabilities,
         genericOwnerCapabilityCallTargets,
         genericOwnerForeignDispatchCallTargets,
+        genericOwnerNaturalMethodParameterDomains,
         genericOwnerWrongShapePolicies,
         genericOwnerCapabilityDeclarations,
         genericOwnerCapabilityBearingDeclarations,
@@ -890,6 +895,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets,
+            genericOwnerNaturalMethodParameterDomains,
             genericOwnerWrongShapePolicies,
             genericOwnerCapabilityDeclarations,
             genericOwnerCapabilityBearingDeclarations,
@@ -949,6 +955,7 @@ internal class DotNetIlTypeMapper private constructor(
             genericOwnerReflectionCapabilities,
             genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets,
+            genericOwnerNaturalMethodParameterDomains,
             genericOwnerWrongShapePolicies,
             genericOwnerCapabilityDeclarations,
             genericOwnerCapabilityBearingDeclarations,
@@ -1088,6 +1095,9 @@ internal class DotNetIlTypeMapper private constructor(
      * omitted by the live emission set must never be resurrected through those fallback paths.
      */
     fun isLocallyEmittableClass(irClass: IrClass): Boolean = irClass in availableClasses
+
+    /** Whether this exact IR declaration belongs to the module whose MethodDefs are being emitted. */
+    fun isCurrentModuleClass(irClass: IrClass): Boolean = irClass in localClasses
 
     /**
      * Whether a `System.Array` carrier still has a source-legal element-write contract.
@@ -1576,6 +1586,12 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericOwnerForeignDispatchCallTarget(call: IrCall): IrSimpleFunction? =
         genericOwnerForeignDispatchCallTargets[call]
+
+    /** Same-producer logical input policy paired with a final local natural MethodDef. */
+    fun genericOwnerNaturalMethodParameterDomains(
+        function: IrSimpleFunction,
+    ): List<DotNetGenericOwnerPhysicalSlotDomain>? =
+        genericOwnerNaturalMethodParameterDomains[function]
 
     fun genericOwnerWrongShapePolicy(function: IrSimpleFunction): DotNetCSharpWrongShapePolicy? =
         genericOwnerWrongShapePolicies[function]
