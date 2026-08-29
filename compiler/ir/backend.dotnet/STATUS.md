@@ -11,8 +11,9 @@ and follow the owning ADR or active programme for design detail.
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- The current integration checkpoint closes the ABI-63 root-MethodDef-through-
-  memberless-child proof described below. Git owns its exact promoted identity.
+- The current integration checkpoint closes the ABI-63 root/child MethodDef
+  authority through the bounded same-module class-slot composition described
+  below. Git owns its exact promoted identity.
 - Reviewed upstream synchronization evidence:
   [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
 
@@ -38,11 +39,16 @@ errors, or skips:
 | FIR2IR | 187 | 2,251 |
 | integration | 2 | 128 |
 
-The ABI-63 memberless-child candidate matrix and focused production-erased
-inverse have each passed 4 suites and 4 tests across PSI/LightTree and
-Framework 4.8 and .NET 10, with zero failures, errors, or skips. The inverse
-also checks the producer index and PE metadata for arity-zero owners and the
-absence of rehearsal H/N/J records.
+The current ABI-63 class-slot checkpoint inherits that production full gate
+under the rehearsal-physical lane. Its new complete callable-shape path is
+selected only by rehearsal split-nullable state or producer records, while the
+production non-split override/fake-override gate and covariant-return lowering
+remain structurally unchanged. The class-slot candidate matrix and focused
+production-erased inverse have each passed 4 suites and 4 tests across
+PSI/LightTree and Framework 4.8 and .NET 10, with zero failures, errors, or
+skips. The inverse also checks the producer index and PE metadata for arity-zero
+owners and the absence of rehearsal H/N/J records. The changed backend module
+compiles independently.
 
 ## Binding production state
 
@@ -91,23 +97,34 @@ seal remains optional; when present, its complete projected `N`, including
 logical domains and result layout, must equal the declaration `N`. `J` is never
 the source of declaration authority.
 
-The current checkpoint composes that root authority through one separately
-compiled, single-parent, identity-mapped memberless child,
-`OpenChild<out T> : NullableSource<T>`. The middle assembly publishes only the
-real `OpenChild<!0> -> NullableSource<!0>` `InterfaceImpl` topology and reuses
-the parent capability; it publishes no inherited member family or natural
-MethodDef. Downstream exact and widened value/reference calls use the
-PE-validated `[lib] NullableSource<!0>::read(bool, bool&)` token, preserve
-receiver identity, and neither fabricate `OpenChild::read` nor fall back to
-name/arity lookup. A generator-free `NaturalGenericSource<T>` closes the same
-recorded route for ordinary C# `Int32` and `String` implementations.
+The current checkpoint first composes that root authority through the
+separately compiled memberless child
+`OpenChild<out T> : NullableSource<T>` without fabricating a child MethodDef,
+then closes three same-module concrete class shapes over that root and child.
+An inherited exact split implementation, including through an open generic
+base, is reused without a leaf method. An inherited unsplit `String?` member
+receives one private split adapter. A declared split `Int?` override keeps the
+public root slot and receives one separate private adapter to the unchanged
+unsplit class-base MethodDef. Reflection, emitted MethodImpl text, exact and
+widened Kotlin calls, stored nulls, and `===` prove one receiver identity and no
+compiler-generated wrapper, proxy, or shadow state.
+
+The bounded split-nullable class-slot gate binds the inherited target and
+producer-recorded root slot at the leaf and compares instance/static form,
+MethodDef generic arity, explicit parameters, and direct versus split-nullable
+result layout. It does not map the logical fake return. Repeated identical
+physical constructions deduplicate; distinct retained constructions have no
+arbitrary traversal-order winner and fail closed pending unambiguous
+declaration/dispatch authority. General non-split overrides retain the existing
+return-carrier gate. A generator-free `NaturalGenericSource<T>` continues to
+close the recorded route for ordinary C# `Int32` and `String` implementations.
 
 The `N` publication grammar remains declaration-local, constraint-free, and
-root/edge-free. This checkpoint extends consumption through one exact child
-edge; it does not extend `N` publication. Class fake overrides which select an
-inherited implementation, declared overrides and MethodImpl obligations,
-retained foreign slots, constraints, and wider callable forms remain the next
-authority work. The bounded comparison surface remains until admitted
+root/edge-free. This checkpoint extends consumption, not `N` publication, and
+proves only local concrete classes over the separately compiled root and child.
+Retained/external concrete bases, deeper inheritance, different or dual
+constructed views, constraints, and general non-split callable forms remain the
+next authority work. The bounded comparison surface remains until admitted
 downstream-owner closure is an epoch invariant. Compiler-runtime surface level
 remains 60.
 
@@ -124,8 +141,9 @@ Ordered generic-owner migration stages:
 
 - Publishing `N` remains limited to directly declared, root/edge-free,
   constraint-free, declaration-local slots. Reusing a root `N` through one
-  identity-mapped memberless child edge is closed; class fake overrides,
-  declared override/MethodImpl obligations, other inherited/edge-bearing forms,
+  identity-mapped memberless child and the bounded local concrete class
+  fake/declared-override shapes is closed. Retained/external class MethodDefs,
+  deeper and distinct-construction inheritance, other edge-bearing forms,
   constraints, and wider callable shapes remain open.
 - Trimming and NativeAOT remain deployment/freeze gates for the eventual
   selected family; they are not part of the now-closed bounded stage-5

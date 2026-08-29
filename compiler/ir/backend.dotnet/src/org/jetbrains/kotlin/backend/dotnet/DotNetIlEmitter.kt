@@ -1202,7 +1202,7 @@ internal class DotNetIlEmitter(
                         if (member.isReifiedInlinePhysicalRemainder()) continue
                         throw e
                     }
-                    checkOverrideKeepsIlReturnType(member, signature, signatureMapper)
+                    checkOverrideKeepsIlSignature(member, signature, signatureMapper, ::memberTypeMapper)
                     val genericInterfaceInfo = genericInterfaces[irClass]
                     val sourceMemberView = if (
                         genericInterfaceInfo?.exactClassInfo != null &&
@@ -1261,7 +1261,12 @@ internal class DotNetIlEmitter(
                     )
                 }
                 for (member in irClass.dotNetMemberFakeOverrides()) {
-                    checkInheritedInterfaceImplKeepsIlReturnType(member, typeMapper, externalDeclarations)
+                    checkInheritedInterfaceImplKeepsIlSignature(
+                        member,
+                        typeMapper,
+                        externalDeclarations,
+                        ::memberTypeMapper,
+                    )
                 }
                 val fieldsByIlIdentity = hashMapOf<String, IrField>()
                 for (field in irClass.dotNetMemberFields()) {
@@ -2646,7 +2651,7 @@ internal class DotNetIlEmitter(
      * must resolve to VIRTUAL members (`ifaceprobe_s5a`/`_s5b` — the non-virtual shape
      * load-poisons the type) whose mapped IL signature matches the slot exactly, return type
      * included (`ifaceprobe_s10`; the covariant half runs in the member pre-pass,
-     * [checkInheritedInterfaceImplKeepsIlReturnType], because it needs the type mapper).
+     * [checkInheritedInterfaceImplKeepsIlSignature], because it needs the type mapper).
      * Interface delegation (`by`) uses FIR's ordinary forwarding members and private delegate
      * fields. Exception supertypes, out-of-module bases, and overrides of
      * `kotlin.Any` members stay rejected. Abstract and sealed plain classes map to CLR `abstract`;
@@ -2967,7 +2972,7 @@ internal class DotNetIlEmitter(
         // slot's exactly, return type included — the covariant-return variant load-poisons the
         // type the same way (ifaceprobe_s10) — but that comparison needs the type mapper, which
         // does not exist yet at gate time, so it lives in the member pre-pass
-        // (checkInheritedInterfaceImplKeepsIlReturnType). Declared overrides need no virtualness
+        // (checkInheritedInterfaceImplKeepsIlSignature). Declared overrides need no virtualness
         // check: every Kotlin `override` is emitted virtual (see isDotNetVirtual). A fake
         // A compiler-generated portable interface-default forwarder is a hidden MethodImpl, not
         // the fake override's resolved Kotlin declaration. It can also be inherited through an
@@ -3226,11 +3231,144 @@ internal class DotNetIlEmitter(
         }
     }
 
-    /** Verifies that every mapped return mismatch has the lowering-owned MethodImpl adapter. */
-    private fun checkOverrideKeepsIlReturnType(
+    /** One verifier-visible result convention after binding the declaring TypeDef's `!n` leaves. */
+    private sealed class DotNetBoundPhysicalResultLayout {
+        object Void : DotNetBoundPhysicalResultLayout()
+        data class Direct(val carrier: DotNetIlValueType) : DotNetBoundPhysicalResultLayout()
+        data class SplitNullable(val payload: DotNetIlValueType) : DotNetBoundPhysicalResultLayout()
+
+        fun render(): String = when (this) {
+            Void -> "void"
+            is Direct -> carrier.nameInSignature
+            is SplitNullable -> "${payload.nameInSignature} + out bool"
+        }
+    }
+
+    /**
+     * The complete MethodDef layout relevant to CLR override/interface-slot identity. The
+     * dispatch receiver's owner token is deliberately omitted: a class implementation and its
+     * interface slot necessarily have different receiver owners. Every explicit parameter,
+     * MethodDef generic binder, instance/static bit, and result convention remains physical.
+     */
+    private data class DotNetBoundPhysicalMethodShape(
+        val isInstance: Boolean,
+        val methodGenericParameterCount: Int,
+        val parameterTypes: List<DotNetIlValueType>,
+        val resultLayout: DotNetBoundPhysicalResultLayout,
+    ) {
+        fun render(): String = buildString {
+            if (isInstance) append("instance ")
+            append(resultLayout.render())
+            if (methodGenericParameterCount > 0) append(" <").append(methodGenericParameterCount).append('>')
+            append('(')
+            append(parameterTypes.joinToString(", ") { it.nameInSignature })
+            append(')')
+        }
+    }
+
+    /**
+     * Selects the already-authoritative physical MethodDef information for [this]. A
+     * producer-recorded natural generic-owner MethodDef is stronger than a KLIB reconstruction,
+     * while retained foreign CLR metadata remains stronger than remapping its enhanced Kotlin
+     * signature. Only a current-module declaration without either authority is mapped locally.
+     */
+    private fun IrSimpleFunction.dotNetAuthoritativePhysicalInfo(
+        typeMapper: DotNetIlTypeMapper,
+        physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo {
+        val declarationOwner = parent as? IrClass
+            ?: dotNetUnsupported("physical member '${name.asString()}' has no declaring class")
+        if (
+            declarationOwner.isInterface &&
+            !typeMapper.isCurrentModuleClass(declarationOwner) &&
+            typeMapper.isReifiedGenericInterface(declarationOwner)
+        ) {
+            val recordedNaturalMethods = typeMapper.externalGenericOwnerNaturalMethodDefCandidates(listOf(this))
+            check(recordedNaturalMethods.size <= 1) {
+                "Internal .NET backend error: interface member '${render()}' reaches multiple " +
+                        "producer-recorded natural MethodDefs: " +
+                        recordedNaturalMethods.joinToString { candidate ->
+                            candidate.first.declaration.logicalMemberKey
+                        }
+            }
+            recordedNaturalMethods.singleOrNull()?.second?.let { return it }
+        }
+        typeMapper.referencedFunctionInfoOrNull(this)?.let { return it }
+        val mapper = physicalSignatureMapper(this)
+        val physicalOwner = mapper.classInfoOrNull(declarationOwner)
+            ?: dotNetUnsupported(
+                "physical owner of '${declarationOwner.diagnosticName()}.${name.asString()}' is unavailable"
+            )
+        val signature = if (origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
+            dotNetCanonicalBridgeSignature(mapper)
+        } else {
+            dotNetSignature(mapper)
+        }
+        return DotNetIlFunctionInfo(physicalOwner, signature)
+    }
+
+    /**
+     * Binds one authoritative open MethodDef signature at [useSiteOwner]. `!n` comes only from
+     * the exact physical supertype construction already present in the linked graph; `!!n`
+     * remains an identity binder. No logical fake-override type is consulted or reconstructed.
+     */
+    private fun IrSimpleFunction.dotNetBoundPhysicalShapeAt(
+        useSiteOwner: IrClass,
+        typeMapper: DotNetIlTypeMapper,
+        physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
+        knownInfo: DotNetIlFunctionInfo? = null,
+    ): DotNetBoundPhysicalMethodShape {
+        val declarationOwner = parent as? IrClass
+            ?: dotNetUnsupported("physical member '${name.asString()}' has no declaring class")
+        val info = knownInfo ?: dotNetAuthoritativePhysicalInfo(typeMapper, physicalSignatureMapper)
+        val ownerArity = info.owner.typeParameterCount
+        val ownerArguments = when {
+            ownerArity == 0 -> emptyList()
+            declarationOwner.typeParameters.size != ownerArity -> dotNetUnsupported(
+                "physical owner '${info.owner.ilTypeRef}' of '${declarationOwner.diagnosticName()}." +
+                        "${name.asString()}' has arity $ownerArity, but its logical declaration has " +
+                        "${declarationOwner.typeParameters.size}; refusing to fabricate a CLR construction"
+            )
+            else -> useSiteOwner.dotNetTypeArgumentsFor(info.owner, typeMapper)
+                ?.takeIf { arguments -> arguments.size == ownerArity }
+                ?: dotNetUnsupported(
+                    "class '${useSiteOwner.diagnosticName()}' has no unique exact physical view of " +
+                            "'${info.owner.ilTypeRef}' required by '${name.asString()}'"
+                )
+        }
+        val methodArguments = (0 until info.signature.methodGenericParameterCount).map { index ->
+            DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+        }
+        val binding = info.signature.bindCallSite(ownerArity, ownerArguments, methodArguments)
+        val boundReturn = binding.verifierReturnType
+        val resultLayout = when {
+            info.signature.hasSplitNullableResult -> {
+                val payload = (boundReturn as? DotNetIlReturnType.Value)?.type
+                    ?: dotNetUnsupported(
+                        "split-nullable MethodDef '${declarationOwner.diagnosticName()}.${name.asString()}' " +
+                                "has a void payload"
+                    )
+                DotNetBoundPhysicalResultLayout.SplitNullable(payload)
+            }
+            boundReturn == DotNetIlReturnType.Void -> DotNetBoundPhysicalResultLayout.Void
+            boundReturn is DotNetIlReturnType.Value ->
+                DotNetBoundPhysicalResultLayout.Direct(boundReturn.type)
+            else -> error("unreachable .NET return layout")
+        }
+        return DotNetBoundPhysicalMethodShape(
+            isInstance = info.signature.hasThis,
+            methodGenericParameterCount = info.signature.methodGenericParameterCount,
+            parameterTypes = binding.verifierParameterTypes.drop(if (info.signature.hasThis) 1 else 0),
+            resultLayout = resultLayout,
+        )
+    }
+
+    /** Verifies that every mapped MethodDef-layout mismatch has a lowering-owned adapter. */
+    private fun checkOverrideKeepsIlSignature(
         member: IrSimpleFunction,
         signature: DotNetIlMethodSignature,
         typeMapper: DotNetIlTypeMapper,
+        physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
     ) {
         if (member.origin == DOTNET_COVARIANT_RETURN_BRIDGE) return
         if (member.overriddenSymbols.isEmpty()) return
@@ -3254,42 +3392,73 @@ internal class DotNetIlEmitter(
                 // bridge generated by DotNetGenericInterfaceBridgeLowering owns the canonical slot.
                 continue
             }
-            // A retained foreign MethodDef (and a producer-recorded Kotlin function) owns its
-            // physical slot signature. Its enhanced Kotlin return can be a flexible projected
-            // view such as Array<out E>? even though the CLR slot is the exact E[] vector which
-            // the rigid implementation already emits. Only fall back to logical mapping for a
-            // same-module declaration with no external physical record.
-            val overriddenReturnType = typeMapper.referencedFunctionInfoOrNull(overridden)
-                ?.signature?.returnType
-                ?: typeMapper.toDotNetIlReturnType(overridden)
-                ?: continue
             val overriddenClass = overridden.parent as? IrClass
-            if (overriddenClass?.isInterface != true && overridden !in directClassSlots) {
-                // A wider transitive class slot is already mapped by the inherited bridge chain.
-                // Abstract interfaces cannot own such a chain and remain checked independently.
+            val referencedOverriddenInfo = typeMapper.referencedFunctionInfoOrNull(overridden)
+            val comparesSplitResultLayout = signature.hasSplitNullableResult ||
+                    overridden in splitNullableResultPayloadTypes ||
+                    referencedOverriddenInfo?.signature?.hasSplitNullableResult == true
+            if (!comparesSplitResultLayout) {
+                // Non-split declarations retain the established return-carrier gate. Expanding
+                // the complete-layout query to every special runtime owner requires the broader
+                // declaration-authority migration; this feature must not infer exact sibling
+                // owners from logical Function/SuspendFunction fakes.
+                val overriddenReturnType = referencedOverriddenInfo?.signature?.returnType
+                    ?: typeMapper.toDotNetIlReturnType(overridden)
+                    ?: continue
+                if (overriddenClass?.isInterface != true && overridden !in directClassSlots) {
+                    // A wider transitive class slot is already mapped by the inherited bridge chain.
+                    // Abstract interfaces cannot own such a chain and remain checked independently.
+                    continue
+                }
+                val substitutedReturnType =
+                    if (memberClass != null && overriddenClass != null && overriddenClass.typeParameters.isNotEmpty()) {
+                        val classArguments = memberClass.dotNetTypeArgumentsFor(overriddenClass, typeMapper)
+                            ?: continue
+                        overriddenReturnType.substituteDotNetTypeParameters(
+                            classArguments,
+                            overridden.dotNetOpenMethodTypeArguments(),
+                        )
+                    } else overriddenReturnType
+                if (substitutedReturnType != signature.returnType) {
+                    val hasBridge = memberClass != null && covariantReturnBridges.any { bridge ->
+                        bridge.owner == memberClass &&
+                                bridge.target == member &&
+                                bridge.inheritedMember == overridden
+                    }
+                    if (hasBridge) continue
+                    val overriddenOwner = overriddenClass?.diagnosticName() ?: "?"
+                    dotNetUnsupported(
+                        "member '${member.name.asString()}' overrides '$overriddenOwner.${overridden.name.asString()}' " +
+                                "with a different IL return type (${signature.returnType.nameInSignature} vs " +
+                                "${substitutedReturnType.nameInSignature}) but has no covariant-return MethodImpl bridge; " +
+                                "the covariant-return lowering did not materialize the required physical adapter"
+                    )
+                }
                 continue
             }
-            // An overridden member of a GENERIC base declares its return against the base's type
-            // parameters (`fun describe(): T` maps to `!0`); CLR slot matching for the derived
-            // override then runs against the SUBSTITUTED signature — the override MUST be spelled
-            // with the substituted type (`int32`), which lands in the base slot (probe-verified,
-            // genprobe_s5 for returns, genprobe_s8 for parameters), while the open `!0` spelling
-            // assembles warning-free and silently splits the slot (the s5b poison shape this
-            // backend never emits: derived members are mapped from their own concrete Kotlin
-            // types). So the comparison substitutes the derived class's instantiation of the
-            // base before comparing — otherwise every substituted override would falsely trip
-            // the covariant-return rejection.
-            val substitutedReturnType =
-                if (memberClass != null && overriddenClass != null && overriddenClass.typeParameters.isNotEmpty()) {
-                    val classArguments = memberClass.dotNetTypeArgumentsFor(overriddenClass, typeMapper) ?: continue
-                    overriddenReturnType.substituteDotNetTypeParameters(
-                        classArguments,
-                        overridden.dotNetOpenMethodTypeArguments(),
-                    )
-                } else overriddenReturnType
-            if (substitutedReturnType != signature.returnType) {
-                val hasBridge = memberClass != null && covariantReturnBridges.any { bridge ->
-                    bridge.owner == memberClass &&
+            if (overriddenClass?.isInterface != true && overridden !in directClassSlots) {
+                continue
+            }
+            val physicalMemberClass = memberClass ?: continue
+            val memberInfo = DotNetIlFunctionInfo(
+                physicalSignatureMapper(member).classInfoOrNull(physicalMemberClass)
+                    ?: dotNetUnsupported("physical owner of '${member.render()}' is unavailable"),
+                signature,
+            )
+            val memberShape = member.dotNetBoundPhysicalShapeAt(
+                physicalMemberClass,
+                typeMapper,
+                physicalSignatureMapper,
+                memberInfo,
+            )
+            val overriddenShape = overridden.dotNetBoundPhysicalShapeAt(
+                physicalMemberClass,
+                typeMapper,
+                physicalSignatureMapper,
+            )
+            if (overriddenShape != memberShape) {
+                val hasBridge = covariantReturnBridges.any { bridge ->
+                    bridge.owner == physicalMemberClass &&
                             bridge.target == member &&
                             bridge.inheritedMember == overridden
                 }
@@ -3297,8 +3466,8 @@ internal class DotNetIlEmitter(
                 val overriddenOwner = overriddenClass?.diagnosticName() ?: "?"
                 dotNetUnsupported(
                     "member '${member.name.asString()}' overrides '$overriddenOwner.${overridden.name.asString()}' " +
-                            "with a different IL return type (${signature.returnType.nameInSignature} vs " +
-                            "${substitutedReturnType.nameInSignature}) but has no covariant-return MethodImpl bridge; " +
+                            "with a different IL signature (${memberShape.render()} vs " +
+                            "${overriddenShape.render()}) but has no covariant-return MethodImpl bridge; " +
                             "the covariant-return lowering did not materialize the required physical adapter"
                 )
             }
@@ -3306,12 +3475,25 @@ internal class DotNetIlEmitter(
     }
 
     /**
-     * The IL type arguments [this] class supplies for the generic [target] through either its
+     * The IL type arguments [this] class supplies for the authoritative physical [target] through either its
      * base chain or its interface DAG. The emitter's already-linked structural supertype graph
      * performs every open-parameter substitution, so `IntBox : Box<Int>` yields `[int32]`,
      * `class C<A, B> : PairView<B, A>` yields `[!1, !0]`, and transitive generic-interface
      * inheritance composes without a second IR-level substitution implementation. Null means
      * another gate owns an unavailable/broken edge, so callers skip rather than double-report.
+     */
+    private fun IrClass.dotNetTypeArgumentsFor(
+        target: DotNetIlClassInfo,
+        typeMapper: DotNetIlTypeMapper,
+    ): List<DotNetIlValueType>? {
+        val receiverType = typeMapper.toDotNetIlValueType(defaultType) ?: return null
+        return receiverType.dotNetUniqueViewAsGenericOwner(target)?.arguments
+    }
+
+    /**
+     * Logical-owner entry retained byte-for-byte in behavior for the established non-split
+     * return-carrier gate. Its first-view semantics are intentionally not authority for the new
+     * complete-layout path, which uses the physical-owner overload above and requires uniqueness.
      */
     private fun IrClass.dotNetTypeArgumentsFor(
         target: IrClass,
@@ -3322,11 +3504,12 @@ internal class DotNetIlEmitter(
         return receiverType.dotNetViewAsGenericOwner(targetInfo)?.arguments
     }
 
-    /** Verifies the fake-override case where an inherited class method fills a wider interface slot. */
-    private fun checkInheritedInterfaceImplKeepsIlReturnType(
+    /** Verifies the fake-override case where an inherited class MethodDef fills an interface slot. */
+    private fun checkInheritedInterfaceImplKeepsIlSignature(
         member: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
         externalDeclarations: DotNetExternalDeclarations,
+        physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
     ) {
         // A memberless derived interface owns only its exact InterfaceImpl edge. Its inherited
         // fake override is a logical view of the parent's already-authoritative MethodDef, not
@@ -3350,57 +3533,125 @@ internal class DotNetIlEmitter(
         val implicitlyMappedInterfaceMembers = overriddenInterfaceMembers
             .filterNot { (it.parent as? IrClass)?.let(typeMapper::isErasedGenericInterface) == true }
         if (implicitlyMappedInterfaceMembers.isEmpty()) return
-        // The fake override's own return type equals the inherited implementation's; when it
-        // does not map, the implementation's declaring class fails its own pre-pass and this
-        // class falls through the base-chain cascade with a carried reason instead.
-        val memberReturnType = typeMapper.toDotNetIlReturnType(member.returnType) ?: return
+        // Preserve the production-erased gate's original fail-closed ordering. Rehearsal split
+        // members deliberately defer this logical fake mapping until a non-split slot needs it.
+        val productionMemberReturnType = if (!genericOwnerRehearsal) {
+            typeMapper.toDotNetIlReturnType(member.returnType) ?: return
+        } else {
+            null
+        }
         val memberClass = member.parent as? IrClass
         val target = member.resolveFakeOverride()
         val logicalInterfaceMembers = member.allOverridden().toSet()
         for (overridden in implicitlyMappedInterfaceMembers) {
-            val overriddenReturnType = typeMapper.referencedFunctionInfoOrNull(overridden)
-                ?.signature?.returnType
-                ?: typeMapper.toDotNetIlReturnType(overridden)
-                ?: continue
             val interfaceClass = overridden.parent as? IrClass
-            val substitutedReturnType =
-                if (memberClass != null && interfaceClass != null && interfaceClass.typeParameters.isNotEmpty()) {
-                    val interfaceArguments = memberClass.dotNetTypeArgumentsFor(interfaceClass, typeMapper) ?: continue
-                    overriddenReturnType.substituteDotNetTypeParameters(
-                        interfaceArguments,
-                        overridden.dotNetOpenMethodTypeArguments(),
+            val referencedInterfaceInfo = typeMapper.referencedFunctionInfoOrNull(overridden)
+            val referencedTargetInfo = if (genericOwnerRehearsal) {
+                target?.let(typeMapper::referencedFunctionInfoOrNull)
+            } else {
+                null
+            }
+            val comparesSplitResultLayout = overridden in splitNullableResultPayloadTypes ||
+                    (target != null && target in splitNullableResultPayloadTypes) ||
+                    referencedInterfaceInfo?.signature?.hasSplitNullableResult == true ||
+                    referencedTargetInfo?.signature?.hasSplitNullableResult == true
+            if (!comparesSplitResultLayout) {
+                // Keep the established non-split validation path unchanged. In particular, an
+                // unmappable fake return leaves this whole check to the implementation/base
+                // cascade rather than borrowing authority from a different interface slot.
+                val memberReturnType = productionMemberReturnType
+                    ?: typeMapper.toDotNetIlReturnType(member.returnType)
+                    ?: return
+                val overriddenReturnType = referencedInterfaceInfo?.signature?.returnType
+                    ?: typeMapper.toDotNetIlReturnType(overridden)
+                    ?: continue
+                val substitutedReturnType =
+                    if (memberClass != null && interfaceClass != null && interfaceClass.typeParameters.isNotEmpty()) {
+                        val interfaceArguments = memberClass.dotNetTypeArgumentsFor(interfaceClass, typeMapper)
+                            ?: continue
+                        overriddenReturnType.substituteDotNetTypeParameters(
+                            interfaceArguments,
+                            overridden.dotNetOpenMethodTypeArguments(),
+                        )
+                    } else overriddenReturnType
+                if (substitutedReturnType != memberReturnType) {
+                    val defaultForwarder = memberClass?.declarations
+                        ?.filterIsInstance<IrSimpleFunction>()
+                        ?.firstOrNull { candidate ->
+                            candidate.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER &&
+                                    overridden.symbol in candidate.overriddenSymbols
+                    }
+                    val physicalTargets = listOfNotNull(target, defaultForwarder)
+                    val hasBridge = covariantReturnBridges.any { bridge ->
+                        if (bridge.inheritedMember != overridden) return@any false
+                        val classOwnedAdapter = memberClass != null &&
+                                bridge.owner == memberClass &&
+                                bridge.target in physicalTargets
+                        val selectedDimAdapter = memberClass != null &&
+                                bridge.owner.isInterface &&
+                                memberClass.isSubclassOf(bridge.owner) &&
+                                bridge.target in logicalInterfaceMembers
+                        classOwnedAdapter || selectedDimAdapter
+                    }
+                    val externalSelectedDimAdapter = memberClass?.inheritsExternalInterfaceCovariantBridge(
+                        overridden,
+                        externalDeclarations,
+                    ) == true
+                    if (hasBridge || externalSelectedDimAdapter) continue
+                    val interfaceName = interfaceClass?.diagnosticName() ?: "?"
+                    dotNetUnsupported(
+                        "member '${member.name.asString()}' implements interface member " +
+                                "'$interfaceName.${overridden.name.asString()}' through an inherited member with a " +
+                                "different IL return type (${memberReturnType.nameInSignature} vs " +
+                                "${substitutedReturnType.nameInSignature}) but has no covariant-return MethodImpl bridge"
                     )
-                } else overriddenReturnType
-            if (substitutedReturnType != memberReturnType) {
-                val defaultForwarder = memberClass?.declarations
-                    ?.filterIsInstance<IrSimpleFunction>()
-                    ?.firstOrNull { candidate ->
+                }
+                continue
+            }
+
+            val physicalMemberClass = memberClass ?: continue
+            val physicalInterfaceClass = interfaceClass ?: continue
+            // An abstract class may carry a split logical fake without selecting a concrete
+            // MethodDef. Its first body-owning subclass receives the emission obligation.
+            if (target == null && physicalMemberClass.modality == Modality.ABSTRACT) continue
+            val targetShape = target?.dotNetBoundPhysicalShapeAt(
+                physicalMemberClass,
+                typeMapper,
+                physicalSignatureMapper,
+            )
+            val interfaceShape = overridden.dotNetBoundPhysicalShapeAt(
+                physicalMemberClass,
+                typeMapper,
+                physicalSignatureMapper,
+            )
+            if (targetShape == null || interfaceShape != targetShape) {
+                val defaultForwarder = physicalMemberClass.declarations
+                    .filterIsInstance<IrSimpleFunction>()
+                    .firstOrNull { candidate ->
                         candidate.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER &&
                                 overridden.symbol in candidate.overriddenSymbols
                 }
                 val physicalTargets = listOfNotNull(target, defaultForwarder)
                 val hasBridge = covariantReturnBridges.any { bridge ->
                     if (bridge.inheritedMember != overridden) return@any false
-                    val classOwnedAdapter = memberClass != null &&
-                            bridge.owner == memberClass &&
+                    val classOwnedAdapter = bridge.owner == physicalMemberClass &&
                             bridge.target in physicalTargets
-                    val selectedDimAdapter = memberClass != null &&
-                            bridge.owner.isInterface &&
-                            memberClass.isSubclassOf(bridge.owner) &&
+                    val selectedDimAdapter = bridge.owner.isInterface &&
+                            physicalMemberClass.isSubclassOf(bridge.owner) &&
                             bridge.target in logicalInterfaceMembers
                     classOwnedAdapter || selectedDimAdapter
                 }
-                val externalSelectedDimAdapter = memberClass?.inheritsExternalInterfaceCovariantBridge(
+                val externalSelectedDimAdapter = physicalMemberClass.inheritsExternalInterfaceCovariantBridge(
                     overridden,
                     externalDeclarations,
-                ) == true
+                )
                 if (hasBridge || externalSelectedDimAdapter) continue
-                val interfaceName = interfaceClass?.diagnosticName() ?: "?"
                 dotNetUnsupported(
                     "member '${member.name.asString()}' implements interface member " +
-                            "'$interfaceName.${overridden.name.asString()}' through an inherited member with a " +
-                            "different IL return type (${memberReturnType.nameInSignature} vs " +
-                            "${substitutedReturnType.nameInSignature}) but has no covariant-return MethodImpl bridge"
+                            "'${physicalInterfaceClass.diagnosticName()}.${overridden.name.asString()}' through an " +
+                            "inherited member with a different IL signature " +
+                            "(${targetShape?.render() ?: "no inherited physical MethodDef"} vs " +
+                            "${interfaceShape.render()}) but has no covariant-return MethodImpl bridge"
                 )
             }
         }
@@ -3429,11 +3680,7 @@ internal class DotNetIlEmitter(
         return false
     }
 
-    /**
-     * Positional identity instantiation for a generic method's own parameters. Override checks
-     * substitute the declaring OWNER's `!n` view while the compared method signature must keep
-     * its independent `!!n` leaves open (`genmemberprobe_s1`).
-     */
+    /** Identity binding for a MethodDef's independent `!!n` parameter vector. */
     private fun IrSimpleFunction.dotNetOpenMethodTypeArguments(): List<DotNetIlValueType> =
         typeParameters.indices.map { index ->
             DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
