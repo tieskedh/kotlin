@@ -13093,6 +13093,23 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     val methodWindows = methodStarts.mapIndexed { index, start ->
         ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
     }
+    // Executables do not publish a consumer physical index. Prove the class MethodImpl endpoint
+    // from emitted metadata text and use reflection below for the exact declaring types, flags,
+    // signatures, and absence/presence of adapters.
+    val declaredBaseBridgeWindow = methodWindows.firstOrNull { window ->
+        ".override method instance" in window &&
+                "'generic.owner.split.nullable.PlainIntBase'::'read'(bool)" in window
+    }
+    check(declaredBaseBridgeWindow != null &&
+            "NullableSource`1" !in declaredBaseBridgeWindow.substringAfter(".override method instance")
+    ) {
+        "The declared split override's private adapter did not retain the plain class MethodImpl endpoint:\n" +
+                (declaredBaseBridgeWindow ?: methodWindows
+                    .filter { window -> "PlainIntBase" in window }
+                    .joinToString("\n--- PlainIntBase window ---\n")
+                    .ifEmpty { "<missing PlainIntBase.read override>" })
+    }
+
     val downstreamRead = methodWindows.singleOrNull { window ->
         "'downstreamWidenedRead'(" in window.substringBefore('{')
     }
@@ -13229,6 +13246,61 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
 
             public static class Program
             {
+                private static MethodInfo[] DeclaredInstanceMethods(Type owner)
+                {
+                    return owner.GetMethods(
+                        BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                }
+
+                private static bool IsSplit(
+                    MethodInfo method,
+                    Type resultType)
+                {
+                    var parameters = method.GetParameters();
+                    return method.ReturnType == resultType && parameters.Length == 2 &&
+                        parameters[0].ParameterType == typeof(bool) &&
+                        parameters[1].ParameterType == typeof(bool).MakeByRefType() &&
+                        parameters[1].IsOut;
+                }
+
+                private static bool IsUnsplit(
+                    MethodInfo method,
+                    Type resultType)
+                {
+                    var parameters = method.GetParameters();
+                    return method.ReturnType == resultType && parameters.Length == 1 &&
+                        parameters[0].ParameterType == typeof(bool);
+                }
+
+                private static MethodInfo NaturalTarget(
+                    Type implementation,
+                    Type contract)
+                {
+                    var map = implementation.GetInterfaceMap(contract);
+                    if (map.InterfaceMethods.Length != 1 || map.TargetMethods.Length != 1)
+                        throw new InvalidOperationException(
+                            implementation + " has an ambiguous natural interface map");
+                    return map.TargetMethods[0];
+                }
+
+                private static MethodInfo RequireUniquePrivateBridge(
+                    Type owner,
+                    Type resultType,
+                    bool split)
+                {
+                    var methods = Array.FindAll(
+                        DeclaredInstanceMethods(owner),
+                        candidate => candidate.IsPrivate && candidate.IsVirtual &&
+                            candidate.IsFinal && !candidate.IsStatic &&
+                            (split ? IsSplit(candidate, resultType) :
+                                IsUnsplit(candidate, resultType)));
+                    if (methods.Length != 1)
+                        throw new InvalidOperationException(
+                            owner + " does not have one structurally unique private MethodImpl adapter");
+                    return methods[0];
+                }
+
                 public static int Main()
                 {
                     var method = typeof(NullableSource<>).GetMethod("read");
@@ -13257,6 +13329,67 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                         declaredOpenChildMethods.Length != 0)
                         throw new InvalidOperationException(
                             "OpenChild<T> did not retain one covariant NullableSource<T> edge");
+
+                    var reusedTarget = NaturalTarget(
+                        typeof(ReusedIntOpenChild), typeof(NullableSource<int>));
+                    if (reusedTarget.DeclaringType != typeof(SplitIntBase) ||
+                        !reusedTarget.IsPublic || !reusedTarget.IsVirtual ||
+                        !IsSplit(reusedTarget, typeof(int)) ||
+                        Array.Exists(
+                            DeclaredInstanceMethods(typeof(ReusedIntOpenChild)),
+                            candidate => IsSplit(candidate, typeof(int)) ||
+                                IsUnsplit(candidate, typeof(int?))))
+                        throw new InvalidOperationException(
+                            "the exact inherited split MethodDef was not reused directly");
+
+                    var reusedGenericType = typeof(ReusedGenericOpenChild<int>);
+                    var reusedGenericTarget = NaturalTarget(
+                        reusedGenericType, typeof(NullableSource<int>));
+                    if (reusedGenericTarget.DeclaringType == null ||
+                        !reusedGenericTarget.DeclaringType.IsGenericType ||
+                        reusedGenericTarget.DeclaringType.GetGenericTypeDefinition() !=
+                            typeof(SplitGenericBase<>) ||
+                        !IsSplit(reusedGenericTarget, typeof(int)) ||
+                        Array.Exists(
+                            DeclaredInstanceMethods(reusedGenericType),
+                            candidate => IsSplit(candidate, typeof(int)) ||
+                                IsUnsplit(candidate, typeof(int?))))
+                        throw new InvalidOperationException(
+                            "the generic base's exact split MethodDef was not reused directly");
+
+                    var plainStringRead = typeof(PlainStringBase).GetMethod(
+                        "read",
+                        BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                    var fakeBridge = RequireUniquePrivateBridge(
+                        typeof(AdaptedFakeStringOpenChild),
+                        typeof(string),
+                        true);
+                    if (plainStringRead == null || !plainStringRead.IsVirtual ||
+                        !IsUnsplit(plainStringRead, typeof(string)) ||
+                        NaturalTarget(
+                            typeof(AdaptedFakeStringOpenChild),
+                            typeof(NullableSource<string>)) != fakeBridge)
+                        throw new InvalidOperationException(
+                            "the inherited plain String? member lost its split adapter");
+
+                    var plainIntRead = typeof(PlainIntBase).GetMethod(
+                        "read",
+                        BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                    var declaredBridge = RequireUniquePrivateBridge(
+                        typeof(AdaptedDeclaredIntOpenChild),
+                        typeof(int?),
+                        false);
+                    var declaredRootTarget = NaturalTarget(
+                        typeof(AdaptedDeclaredIntOpenChild), typeof(NullableSource<int>));
+                    if (plainIntRead == null || !plainIntRead.IsVirtual ||
+                        !IsUnsplit(plainIntRead, typeof(int?)) ||
+                        declaredRootTarget == declaredBridge ||
+                        declaredRootTarget.DeclaringType !=
+                            typeof(AdaptedDeclaredIntOpenChild) ||
+                        !declaredRootTarget.IsPublic || !declaredRootTarget.IsVirtual ||
+                        !IsSplit(declaredRootTarget, typeof(int)))
+                        throw new InvalidOperationException(
+                            "the declared split override conflated its root and class slots");
 
                     var ints = new NaturalIntSource();
                     bool isNull;

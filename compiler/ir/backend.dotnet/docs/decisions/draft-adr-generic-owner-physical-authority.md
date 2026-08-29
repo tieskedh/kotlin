@@ -372,6 +372,22 @@ is not an additional lattice dimension and must not affect convergence.
   recorded `InterfaceImpl` edge. This rule does not exempt a class fake
   override, which can select a concrete inherited implementation and must still
   satisfy the recorded slot or an explicit MethodImpl obligation.
+- When a base already owns every required exact constructed interface view, its
+  interface obligation is already discharged; classifier equality alone is
+  insufficient to prove that fact. Otherwise bind the inherited target and
+  recorded interface slot at the leaf construction and compare their complete
+  verifier-visible callable shapes: instance/static form, MethodDef generic
+  arity, ordinary explicit parameters, and the direct or split-nullable result
+  layout including its physical trailing `bool&`. Repeated paths to one exact
+  construction deduplicate. Distinct constructions require unambiguous
+  declaration, override, `InterfaceImpl`, and `MethodImpl` authority or fail
+  closed; per-value selected lineage is never declaration authority. An equal
+  shape may implement the leaf slot implicitly; a mismatch requires an explicit
+  adapter/MethodImpl.
+- A declared split override which also overrides an unsplit class MethodDef
+  preserves two physical slots: the natural split interface MethodDef and an
+  adapter to the unchanged base MethodDef. Neither logical substitution nor a
+  fake override rewrites either slot.
 - A derived exact body with a different physical signature receives an explicit
   bridge/MethodImpl obligation. It does not rewrite the base slot.
 - Direct-`super` calls target the producer-recorded base MethodDef non-virtually.

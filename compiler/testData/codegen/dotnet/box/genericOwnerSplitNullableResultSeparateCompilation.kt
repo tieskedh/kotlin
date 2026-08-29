@@ -120,6 +120,38 @@ public fun downstreamOpenChildSame(
     expected: Any?,
 ): Boolean = source === expected
 
+/** An inherited split implementation already satisfies the root MethodDef exactly. */
+public open class SplitIntBase(private val value: Int) : NullableSource<Int> {
+    override fun read(missing: Boolean): Int? = if (missing) null else value
+}
+
+public class ReusedIntOpenChild(value: Int) : SplitIntBase(value), OpenChild<Int>
+
+/** The same exact inherited slot must survive substitution through a generic base. */
+public open class SplitGenericBase<T>(private val value: T) : NullableSource<T> {
+    override fun read(missing: Boolean): T? = if (missing) null else value
+}
+
+public class ReusedGenericOpenChild<T>(value: T) : SplitGenericBase<T>(value), OpenChild<T>
+
+/** This ordinary Kotlin member needs a split-result adapter when it fills OpenChild<String>. */
+public open class PlainStringBase(private val value: String?) {
+    public open fun read(missing: Boolean): String? = if (missing) null else value
+}
+
+public class AdaptedFakeStringOpenChild(value: String?) :
+    PlainStringBase(value), OpenChild<String>
+
+/** A declared split override must not rewrite this pre-existing nullable-value MethodDef. */
+public open class PlainIntBase(private val value: Int?) {
+    public open fun read(missing: Boolean): Int? = if (missing) null else value
+}
+
+public class AdaptedDeclaredIntOpenChild(private val leaf: Int?) :
+    PlainIntBase(-901), OpenChild<Int> {
+    override fun read(missing: Boolean): Int? = if (missing) null else leaf
+}
+
 fun box(): String {
     val reader = NullableSourceReader()
 
@@ -186,6 +218,91 @@ fun box(): String {
     }
     if (downstreamOpenChildWidenedRead(wideStringChild, true) != null) {
         return "child string widened null"
+    }
+
+    val reused = ReusedIntOpenChild(53)
+    if ((reused as SplitIntBase).read(false) != 53) return "reused split base hit"
+    if (reused.read(true) != null) return "reused split base null"
+    val reusedExact: OpenChild<Int> = reused
+    if (downstreamOpenChildExactIntRead(reusedExact, false) != 53) {
+        return "reused split child hit"
+    }
+    val reusedWide: OpenChild<Any?> = reused
+    if (!downstreamOpenChildSame(reusedWide, reused)) return "reused split identity"
+    if (downstreamOpenChildWidenedRead(reusedWide, true) != null) {
+        return "reused split child null"
+    }
+
+    val reusedGeneric = ReusedGenericOpenChild(57)
+    val reusedGenericExact: OpenChild<Int> = reusedGeneric
+    if (downstreamOpenChildExactIntRead(reusedGenericExact, false) != 57) {
+        return "reused generic child hit"
+    }
+    val reusedGenericWide: OpenChild<Any?> = reusedGeneric
+    if (!downstreamOpenChildSame(reusedGenericWide, reusedGeneric) ||
+        downstreamOpenChildWidenedRead(reusedGenericWide, true) != null
+    ) {
+        return "reused generic child widened"
+    }
+
+    val adaptedFake = AdaptedFakeStringOpenChild("adapted-fake")
+    if ((adaptedFake as PlainStringBase).read(false) != "adapted-fake") {
+        return "adapted fake base hit"
+    }
+    if (adaptedFake.read(true) != null) return "adapted fake base null"
+    val adaptedFakeExact: OpenChild<String> = adaptedFake
+    if (downstreamOpenChildExactStringRead(adaptedFakeExact, false) != "adapted-fake") {
+        return "adapted fake child hit"
+    }
+    val adaptedFakeWide: OpenChild<Any?> = adaptedFake
+    if (!downstreamOpenChildSame(adaptedFakeWide, adaptedFake)) return "adapted fake identity"
+    if (downstreamOpenChildWidenedRead(adaptedFakeWide, true) != null) {
+        return "adapted fake child null"
+    }
+    val adaptedFakeNull = AdaptedFakeStringOpenChild(null)
+    if ((adaptedFakeNull as PlainStringBase).read(false) != null) {
+        return "adapted fake base stored null"
+    }
+    val adaptedFakeNullExact: OpenChild<String> = adaptedFakeNull
+    if (downstreamOpenChildExactStringRead(adaptedFakeNullExact, false) != null) {
+        return "adapted fake child stored null"
+    }
+    val adaptedFakeNullWide: OpenChild<Any?> = adaptedFakeNull
+    if (!downstreamOpenChildSame(adaptedFakeNullWide, adaptedFakeNull) ||
+        downstreamOpenChildWidenedRead(adaptedFakeNullWide, false) != null
+    ) {
+        return "adapted fake widened stored null"
+    }
+
+    val adaptedDeclared = AdaptedDeclaredIntOpenChild(59)
+    if ((adaptedDeclared as PlainIntBase).read(false) != 59) {
+        return "adapted declared base hit"
+    }
+    if (adaptedDeclared.read(true) != null) return "adapted declared base null"
+    val adaptedDeclaredExact: OpenChild<Int> = adaptedDeclared
+    if (downstreamOpenChildExactIntRead(adaptedDeclaredExact, false) != 59) {
+        return "adapted declared child hit"
+    }
+    val adaptedDeclaredWide: OpenChild<Any?> = adaptedDeclared
+    if (!downstreamOpenChildSame(adaptedDeclaredWide, adaptedDeclared)) {
+        return "adapted declared identity"
+    }
+    if (downstreamOpenChildWidenedRead(adaptedDeclaredWide, true) != null) {
+        return "adapted declared child null"
+    }
+    val adaptedDeclaredNull = AdaptedDeclaredIntOpenChild(null)
+    if ((adaptedDeclaredNull as PlainIntBase).read(false) != null) {
+        return "adapted declared base stored null"
+    }
+    val adaptedDeclaredNullExact: OpenChild<Int> = adaptedDeclaredNull
+    if (downstreamOpenChildExactIntRead(adaptedDeclaredNullExact, false) != null) {
+        return "adapted declared child stored null"
+    }
+    val adaptedDeclaredNullWide: OpenChild<Any?> = adaptedDeclaredNull
+    if (!downstreamOpenChildSame(adaptedDeclaredNullWide, adaptedDeclaredNull) ||
+        downstreamOpenChildWidenedRead(adaptedDeclaredNullWide, false) != null
+    ) {
+        return "adapted declared widened stored null"
     }
 
     return "OK"
