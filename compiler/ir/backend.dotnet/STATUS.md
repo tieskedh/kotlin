@@ -11,9 +11,8 @@ and follow the owning ADR or active programme for design detail.
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- The current integration checkpoint closes the bounded ABI-63 external
-  recorded-MethodDef dispatch proof described below. Git owns its exact
-  promoted identity.
+- The current integration checkpoint closes the ABI-63 root-MethodDef-through-
+  memberless-child proof described below. Git owns its exact promoted identity.
 - Reviewed upstream synchronization evidence:
   [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
 
@@ -23,25 +22,27 @@ physical identities may still be corrected atomically.
 ## Latest full gate
 
 The production-erased strict target aggregate passed on 2026-08-29 at the
-bounded ABI-63 external recorded-MethodDef checkpoint:
+ABI-63 memberless derived-interface authority checkpoint:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-Direct JUnit XML audit found 204 suites and 2,568 tests, with zero failures,
+Direct JUnit XML audit found 204 suites and 2,570 tests, with zero failures,
 errors, or skips:
 
 | Root | Suites | Tests |
 | --- | ---: | ---: |
-| backend | 14 | 183 |
+| backend | 14 | 185 |
 | `dotnet.ir` | 1 | 6 |
 | FIR2IR | 187 | 2,251 |
 | integration | 2 | 128 |
 
-The ABI-63 complete candidate matrix and focused production-erased inverse
-have each passed 4 suites and 8 tests across PSI/LightTree and Framework 4.8
-and .NET 10, with zero failures, errors, or skips.
+The ABI-63 memberless-child candidate matrix and focused production-erased
+inverse have each passed 4 suites and 4 tests across PSI/LightTree and
+Framework 4.8 and .NET 10, with zero failures, errors, or skips. The inverse
+also checks the producer index and PE metadata for arity-zero owners and the
+absence of rehearsal H/N/J records.
 
 ## Binding production state
 
@@ -90,31 +91,25 @@ seal remains optional; when present, its complete projected `N`, including
 logical domains and result layout, must equal the declaration `N`. `J` is never
 the source of declaration authority.
 
-A separately compiled consumer now emits the producer-recorded open
-`ldtoken method` for direct and split-nullable results without logical
-reconstruction of physical identity, public-name lookup, or regular-arity
-selection. Before routing, it independently authenticates the PE-validated `N`
-against KLIB's logical instance shape, ordinary parameter carriers, owner-result
-parameter index, and split-nullability bit; KLIB can reject but cannot construct
-physical authority. The hostile same-name/same-regular-arity split-nullable
-family records distinct `bool` and `int32` MethodDefs, and downstream IL asserts
-the corresponding distinct tokens.
+The current checkpoint composes that root authority through one separately
+compiled, single-parent, identity-mapped memberless child,
+`OpenChild<out T> : NullableSource<T>`. The middle assembly publishes only the
+real `OpenChild<!0> -> NullableSource<!0>` `InterfaceImpl` topology and reuses
+the parent capability; it publishes no inherited member family or natural
+MethodDef. Downstream exact and widened value/reference calls use the
+PE-validated `[lib] NullableSource<!0>::read(bool, bool&)` token, preserve
+receiver identity, and neither fabricate `OpenChild::read` nor fall back to
+name/arity lookup. A generator-free `NaturalGenericSource<T>` closes the same
+recorded route for ordinary C# `Int32` and `String` implementations.
 
-A generator-free C# class implements only the natural
-`OverloadedNullableSource<string>` interface. Through its covariantly widened
-`OverloadedNullableSource<object>` view, it calls public functions in the final
-separately compiled Kotlin consumer; Boolean/Int32 overloads and hit/null paths
-all dispatch correctly without compiler capability ABI. This closes the
-bounded stage-5 descriptor and overload gate. Compiler-runtime surface level
+The `N` publication grammar remains declaration-local, constraint-free, and
+root/edge-free. This checkpoint extends consumption through one exact child
+edge; it does not extend `N` publication. Class fake overrides which select an
+inherited implementation, declared overrides and MethodImpl obligations,
+retained foreign slots, constraints, and wider callable forms remain the next
+authority work. The bounded comparison surface remains until admitted
+downstream-owner closure is an epoch invariant. Compiler-runtime surface level
 remains 60.
-
-The initial `N` grammar is deliberately limited to declaration-local,
-constraint-free, root/edge-free natural TypeDefs. The next active slice may
-retire the old comparison surface only for this bounded rehearsal family, then
-proceeds to natural generic-class typed-versus-broad state. Inherited,
-edge-bearing, constrained, and wider callable forms remain later authority
-work; the remaining order and final selected-family freeze are owned by the
-generic-owner programme and migration plan linked below.
 
 Shared authority and provenance:
 [`docs/decisions/draft-adr-generic-owner-physical-authority.md`](docs/decisions/draft-adr-generic-owner-physical-authority.md).
@@ -127,17 +122,19 @@ Ordered generic-owner migration stages:
 
 ## Current blockers
 
-- The external natural-MethodDef seal remains bounded to directly declared
-  root/edge-free, constraint-free, declaration-local carrier shapes. Inherited,
-  edge-bearing, constrained, and wider callable forms remain open.
+- Publishing `N` remains limited to directly declared, root/edge-free,
+  constraint-free, declaration-local slots. Reusing a root `N` through one
+  identity-mapped memberless child edge is closed; class fake overrides,
+  declared override/MethodImpl obligations, other inherited/edge-bearing forms,
+  constraints, and wider callable shapes remain open.
 - Trimming and NativeAOT remain deployment/freeze gates for the eventual
   selected family; they are not part of the now-closed bounded stage-5
   descriptor/overload proof.
 - Natural generic-class typed versus broad state selection is not yet proven.
 - Retained/static/global declaration authority and shared value provenance
   remain incomplete.
-- Remaining inherited/open/projected foreign conversions and SZ-array entry
-  guards remain unproved.
+- Remaining retained-foreign inherited/open/projected conversions and SZ-array
+  entry guards remain unproved.
 - Complete Runtime/Stdlib, deployment, tooling, production-erased inverse, and
   rollback gates still block any production cutover.
 - Wider target gaps and release gates are intentionally listed only in the

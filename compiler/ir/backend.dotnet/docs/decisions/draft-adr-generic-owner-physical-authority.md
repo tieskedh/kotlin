@@ -365,6 +365,13 @@ is not an additional lattice dimension and must not affect convergence.
   physical slots.
 - Existing base/interface MethodDefs, retained MethodImpls, and foreign slots
   remain authoritative.
+- A memberless derived interface owns only its exact `InterfaceImpl` edge. Its
+  inherited fake override is a logical view of the parent slot: it does not
+  copy the parent's MethodDef or result layout and does not create a bridge.
+  Calls through that logical view bind the parent MethodDef through the
+  recorded `InterfaceImpl` edge. This rule does not exempt a class fake
+  override, which can select a concrete inherited implementation and must still
+  satisfy the recorded slot or an explicit MethodImpl obligation.
 - A derived exact body with a different physical signature receives an explicit
   bridge/MethodImpl obligation. It does not rewrite the base slot.
 - Direct-`super` calls target the producer-recorded base MethodDef non-virtually.
