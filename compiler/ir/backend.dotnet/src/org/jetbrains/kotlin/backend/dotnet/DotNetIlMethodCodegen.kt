@@ -55,6 +55,7 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrVariableSymbol
 import org.jetbrains.kotlin.ir.types.isAny
@@ -221,6 +222,21 @@ internal data class DotNetIlRawTypeDefGenericParameterObservation(
     val constraints: List<DotNetIlValueType>,
 )
 
+/** One ordinary FieldDef selected during the same successful TypeDef render. */
+internal data class DotNetIlRawFieldDefObservation(
+    val field: IrFieldSymbol,
+    val physicalFieldIdentity: DotNetGenericOwnerPhysicalFieldDefIdentity.Local?,
+    val physicalName: String,
+    val visibility: DotNetIlRawMethodDefVisibility,
+    val isStatic: Boolean,
+    val isInitOnly: Boolean,
+    val carrier: DotNetIlValueType,
+) {
+    init {
+        require(physicalName.isNotEmpty()) { "an observed FieldDef requires its exact physical name" }
+    }
+}
+
 /** Exact structured TypeDef rows consumed by the final successful class render. */
 internal data class DotNetIlRawTypeDefEmissionObservation(
     val physicalType: DotNetIlClassInfo,
@@ -229,6 +245,7 @@ internal data class DotNetIlRawTypeDefEmissionObservation(
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
     val genericParameters: List<DotNetIlRawTypeDefGenericParameterObservation>,
     val directSupertypes: List<DotNetIlRawTypeDefEdgeObservation>,
+    val fieldDefinitions: List<DotNetIlRawFieldDefObservation> = emptyList(),
 ) {
     init {
         require(physicalTypePath == physicalType.physicalPathComponents() &&
@@ -519,6 +536,17 @@ internal data class DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation
     val constraints: List<DotNetGenericOwnerObservedMethodCarrier>,
 )
 
+/** Final-fixpoint FieldDef evidence normalized in its exact TypeDef binder. */
+internal data class DotNetGenericOwnerPhysicalFieldDefObservation(
+    val physicalField: IrFieldSymbol,
+    val physicalFieldIdentity: DotNetGenericOwnerPhysicalFieldDefIdentity.Local?,
+    val physicalName: String,
+    val visibility: DotNetIlRawMethodDefVisibility,
+    val isStatic: Boolean,
+    val isInitOnly: Boolean,
+    val carrier: DotNetGenericOwnerObservedMethodCarrier,
+)
+
 /** Final-fixpoint TypeDef plus its complete emitted direct-edge set. */
 internal data class DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
     val physicalType: DotNetGenericOwnerObservedMethodDefOwner,
@@ -529,6 +557,7 @@ internal data class DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
     val flags: DotNetIlRawTypeDefFlags,
     val genericParameters: List<DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation>,
     val directSupertypes: List<DotNetGenericOwnerPhysicalTypeDefEdgeObservation>,
+    val fieldDefinitions: List<DotNetGenericOwnerPhysicalFieldDefObservation> = emptyList(),
 ) {
     init {
         require(physicalTypePath.isNotEmpty() && physicalTypePath.all(String::isNotEmpty)) {

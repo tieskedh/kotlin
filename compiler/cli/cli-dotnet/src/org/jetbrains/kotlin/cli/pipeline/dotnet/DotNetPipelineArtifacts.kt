@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRo
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSealedEmissionFamilySnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateEmissionSnapshot
 import org.jetbrains.kotlin.cli.pipeline.Fir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.FrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
@@ -73,6 +74,8 @@ data class DotNetBackendPipelineArtifact(
     val genericOwnerSealedEmissionFamilies:
         List<DotNetGenericOwnerSealedEmissionFamilySnapshot>,
     val genericOwnerRehearsal: Boolean,
+    val genericOwnerPhysicalStateEmissionSnapshots:
+        List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
 ) : PipelineArtifact() {
     init {
         require(genericOwnerRehearsal || genericInterfaceCompleteSurfaceVarianceShadows.isEmpty()) {
@@ -80,6 +83,9 @@ data class DotNetBackendPipelineArtifact(
         }
         require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
             "the production erased epoch cannot publish sealed generic-owner families"
+        }
+        require(genericOwnerRehearsal || genericOwnerPhysicalStateEmissionSnapshots.isEmpty()) {
+            "the production erased epoch cannot publish sealed generic-owner state FieldDefs"
         }
     }
 

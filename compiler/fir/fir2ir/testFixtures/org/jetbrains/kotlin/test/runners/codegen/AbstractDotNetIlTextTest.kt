@@ -107,6 +107,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalPropertySet
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalReflectionRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateEmissionCarrierKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateEmissionSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateInitializerKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateInitializerRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateVisibility
@@ -204,6 +206,9 @@ import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.load.dotnet.DotNetClrFieldVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
@@ -627,6 +632,17 @@ private class BackendCliDotNetFacade(
             declarations = completedOutput.declarations,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-split-nullable-result"),
+        )
+        validateGenericOwnerStateAuthorityCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            declarations = completedOutput.declarations,
+            prototypes = completedOutput.genericOwnerPrototypes,
+            stateEmissions = completedOutput.genericOwnerPhysicalStateEmissionSnapshots,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-state-authority"),
         )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
@@ -5851,6 +5867,8 @@ private const val GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE"
 private const val GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE"
+private const val GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_COLLECTION_SET_CSHARP_PROBE_MARKER =
@@ -13788,6 +13806,788 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
         "The C# authoring tool did not preserve the split-nullable call convention:\n$generated"
     }
     executeSnapshotConsumer(target, authoringConsumer, directory)
+}
+
+/**
+ * Proves that one producer-wide FieldDef decision remains authoritative through separate
+ * compilation: an exact owner-dependent state is emitted as `!T`, a widened-write state is
+ * emitted as `object`, memberless generic children inherit that one state without shadows, and
+ * an inherited semantic override promotes its separately compiled child's written state before
+ * the BOUND FieldDef epoch is selected.
+ */
+private fun validateGenericOwnerStateAuthorityCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    stateEmissions: List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
+    testDataFile: File,
+    directory: File,
+) {
+    if (GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE_MARKER !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+
+    val namespaceName = "generic.owner.state.authority"
+    val typedOwnerName = "TypedStateOwner"
+    val broadOwnerName = "BroadStateOwner"
+    val lateBaseName = "LateStateBase"
+    val typedChildName = "TypedStateChild"
+    val broadChildName = "BroadStateChild"
+    val lateChildName = "LateStateChild"
+    val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+    val ownerParameter = DotNetClrTypeSignature.GenericParameter(
+        DotNetClrGenericParameterKind.TYPE,
+        0,
+    )
+
+    fun DotNetPhysicalDeclaration.namesOwner(simpleName: String): Boolean =
+        ownerPath.lastOrNull()
+            ?.substringAfterLast('.')
+            ?.substringBefore('`') == simpleName
+
+    fun requirePhysicalClass(
+        simpleName: String,
+        arity: Int,
+    ): DotNetPhysicalDeclaration.Class = checkNotNull(
+        declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .singleOrNull { declaration -> declaration.namesOwner(simpleName) }
+    ) {
+        "The state-authority probe has no unique physical class '$simpleName': " +
+                declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                    .map { declaration -> declaration.ownerPath }
+    }.also { declaration ->
+        check(declaration.ownerPath == listOf(
+            "$namespaceName.$simpleName${if (arity == 0) "" else "`$arity"}",
+        ) && declaration.physicalTypeParameterCount == arity &&
+                declaration.physicalTypeParameterVariances == List(arity) {
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                } && (arity != 0 || declaration.genericOwnerAbi == null)
+        ) {
+            "The state-authority physical index contradicts '$simpleName/$arity': $declaration"
+        }
+    }
+
+    fun org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata.namesType(
+        handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle,
+        expectedName: String,
+    ): Boolean = typeDefinitions.any { type ->
+        type.handle == handle && type.namespaceName == namespaceName &&
+                type.metadataName == expectedName
+    } || typeReferences.any { type ->
+        type.handle == handle && type.namespaceName == namespaceName &&
+                type.metadataName == expectedName
+    }
+
+    fun requireType(
+        metadata: org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata,
+        simpleName: String,
+        arity: Int,
+    ) = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
+        type.namespaceName == namespaceName &&
+                type.metadataName == "$simpleName${if (arity == 0) "" else "`$arity"}"
+    }) {
+        "The state-authority PE has no unique $namespaceName.$simpleName/$arity TypeDef: " +
+                metadata.typeDefinitions
+                    .filter { type -> type.namespaceName == namespaceName }
+                    .map { type -> type.metadataName }
+    }
+
+    fun requireSingleGenericParameter(
+        metadata: org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata,
+        owner: org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition,
+    ) {
+        val parameters = metadata.genericParameterDefinitions.filter { parameter ->
+            parameter.owner == owner.handle
+        }
+        check(parameters.singleOrNull()?.let { parameter ->
+            parameter.number == 0 &&
+                    parameter.variance == DotNetClrGenericParameterVariance.INVARIANT &&
+                    !parameter.hasReferenceTypeConstraint &&
+                    !parameter.hasNotNullableValueTypeConstraint &&
+                    !parameter.hasDefaultConstructorConstraint
+        } == true) {
+            "The state-authority owner '${owner.metadataName}' does not have one unconstrained " +
+                    "invariant TypeDef parameter: $parameters"
+        }
+    }
+
+    fun requireStateMethods(
+        metadata: org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata,
+        owner: org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition,
+        carrier: DotNetClrTypeSignature,
+        members: List<Triple<String, DotNetClrTypeSignature, List<DotNetClrTypeSignature>>> = listOf(
+            Triple("read", carrier, emptyList()),
+            Triple("write", DotNetClrTypeSignature.Void, listOf(carrier)),
+        ),
+        virtualMembers: Set<String> = emptySet(),
+    ) {
+        fun requireMethod(
+            name: String,
+            returnType: DotNetClrTypeSignature,
+            parameterTypes: List<DotNetClrTypeSignature>,
+        ) {
+            val matches = metadata.methodDefinitions.filter { method ->
+                method.declaringType == owner.handle && method.name == name
+            }
+            check(matches.singleOrNull()?.let { method ->
+                method.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                        !method.isStatic && method.signature.hasThis &&
+                        method.signature.genericParameterCount == 0 &&
+                        method.signature.returnType == returnType &&
+                        method.signature.parameterTypes == parameterTypes &&
+                        (name !in virtualMembers || method.isVirtual && !method.isFinal)
+            } == true) {
+                "The state-authority owner '${owner.metadataName}' has a non-canonical " +
+                        "$name MethodDef: $matches"
+            }
+        }
+
+        val constructors = metadata.methodDefinitions.filter { method ->
+            method.declaringType == owner.handle && method.name == ".ctor"
+        }
+        check(constructors.singleOrNull()?.let { constructor ->
+            !constructor.isStatic && constructor.signature.hasThis &&
+                    constructor.signature.genericParameterCount == 0 &&
+                    constructor.signature.returnType == DotNetClrTypeSignature.Void &&
+                    constructor.signature.parameterTypes == listOf(carrier)
+        } == true) {
+            "The state-authority owner '${owner.metadataName}' has a non-canonical constructor: " +
+                    constructors
+        }
+        members.forEach { member ->
+            requireMethod(member.first, member.second, member.third)
+        }
+    }
+
+    fun requireDirectBase(
+        metadata: org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata,
+        child: org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition,
+        baseName: String,
+        generic: Boolean,
+    ) {
+        val baseHandle = checkNotNull(child.baseType) {
+            "The state-authority child '${child.metadataName}' has no physical base"
+        }
+        if (!generic) {
+            check(metadata.typeSpecifications.none { specification ->
+                specification.handle == baseHandle
+            } && metadata.namesType(baseHandle, baseName)) {
+                "The erased state-authority child '${child.metadataName}' did not retain one " +
+                        "direct non-generic '$baseName' base: $baseHandle"
+            }
+            return
+        }
+        val specification = checkNotNull(metadata.typeSpecifications.singleOrNull { candidate ->
+            candidate.handle == baseHandle
+        }) {
+            "The generic state-authority child '${child.metadataName}' has no exact TypeSpec base"
+        }
+        val instance = specification.signature as? DotNetClrTypeSignature.GenericInstance
+        check(instance?.let { type ->
+            !type.genericType.isValueType &&
+                    metadata.namesType(type.genericType.type, "$baseName`1") &&
+                    type.arguments == listOf(ownerParameter)
+        } == true) {
+            "The generic state-authority child '${child.metadataName}' fabricated or erased its " +
+                    "'$baseName<!0>' base: ${specification.signature}"
+        }
+    }
+
+    fun requirePrototype(
+        ownerName: String,
+        requirement: DotNetGenericOwnerStateCarrierRequirement,
+        fieldName: String = "state",
+        requireSemanticWriteProvenance: Boolean = requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+        requireSemanticReachableWriter: Boolean = false,
+    ) {
+        val prototype = checkNotNull(prototypes.singleOrNull { candidate ->
+            candidate.ownerName == ownerName || candidate.ownerName.endsWith(".$ownerName")
+        }) {
+            "The state-authority producer has no unique '$ownerName' prototype"
+        }
+        check(prototype.genericArity == 1 &&
+                prototype.physicalGenericParameters?.singleOrNull()?.let { parameter ->
+                    parameter.index == 0 && parameter.specialConstraints.isEmpty() &&
+                            parameter.typeConstraints.isEmpty()
+                } == true &&
+                prototype.states.singleOrNull()?.let { state ->
+                    state.fieldName == fieldName && !state.isFinal &&
+                            state.requirement == requirement &&
+                            state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN &&
+                            !state.externalAccessGraphRequired &&
+                            state.initializers.singleOrNull()?.let { initializer ->
+                                initializer.kind ==
+                                    DotNetGenericOwnerPrototypeStateInitializerKind
+                                        .POSITIONAL_CONSTRUCTOR_PARAMETER &&
+                                        initializer.constructorParameterIndex == 0
+                            } == true &&
+                            state.writes.isNotEmpty() &&
+                            (state.writes.none { write ->
+                                write.provenance == DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
+                            } || requireSemanticReachableWriter && state.writes
+                                .filter { write ->
+                                    write.provenance == DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
+                                }
+                                .all { write ->
+                                    write.producerName in state.semanticReachableWriterNames
+                                }) && when (requirement) {
+                                DotNetGenericOwnerStateCarrierRequirement
+                                    .TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
+                                    state.writes.all { write ->
+                                        write.provenance ==
+                                                DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                                    }
+                                DotNetGenericOwnerStateCarrierRequirement
+                                    .SEMANTIC_OBJECT_REQUIRED ->
+                                    (!requireSemanticWriteProvenance || state.writes.any { write ->
+                                        write.provenance ==
+                                                DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+                                    }) && (!requireSemanticReachableWriter ||
+                                            state.semanticReachableWriterNames.isNotEmpty())
+                                else -> false
+                            }
+                } == true
+        ) {
+            "The '$ownerName' prototype does not support its sealed FieldDef: $prototype"
+        }
+    }
+
+    if (!genericOwnerRehearsal) {
+        check(stateEmissions.isEmpty()) {
+            "The production-erased state-authority inverse sealed candidate FieldDefs: " +
+                    stateEmissions
+        }
+        val genericOwnerEpochRecords = declarations.filterValues { declaration ->
+            declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+        }
+        check(genericOwnerEpochRecords.isEmpty()) {
+            "The production-erased state-authority inverse published H/N/M/J records: " +
+                    genericOwnerEpochRecords.keys.sorted()
+        }
+        val metadata = DotNetClrMetadataReader.read(producer)
+        when {
+            producer.name.equals("lib.dll", ignoreCase = true) -> {
+                listOf(typedOwnerName, broadOwnerName, lateBaseName).forEach { ownerName ->
+                    requirePhysicalClass(ownerName, arity = 0)
+                    val owner = requireType(metadata, ownerName, arity = 0)
+                    check(metadata.genericParameterDefinitions.none { parameter ->
+                        parameter.owner == owner.handle
+                    }) {
+                        "The production-erased '$ownerName' TypeDef retained GenericParam rows"
+                    }
+                    val fields = metadata.fieldDefinitions.filter { field ->
+                        field.declaringType == owner.handle
+                    }
+                    check(fields.singleOrNull()?.let { field ->
+                        field.visibility == DotNetClrFieldVisibility.PRIVATE &&
+                                !field.isStatic && !field.isInitOnly &&
+                                field.signature.fieldType == objectType
+                    } == true) {
+                        "The production-erased '$ownerName' did not retain one mutable private " +
+                                "object state: $fields"
+                    }
+                    requireStateMethods(
+                        metadata,
+                        owner,
+                        objectType,
+                        members = if (ownerName == lateBaseName) {
+                            listOf(
+                                Triple("poison", DotNetClrTypeSignature.Void, listOf(objectType)),
+                                Triple("transfer", objectType, emptyList()),
+                            )
+                        } else {
+                            listOf(
+                                Triple("read", objectType, emptyList()),
+                                Triple("write", DotNetClrTypeSignature.Void, listOf(objectType)),
+                            )
+                        },
+                        virtualMembers = if (ownerName == lateBaseName) {
+                            setOf("transfer")
+                        } else {
+                            emptySet()
+                        },
+                    )
+                }
+            }
+            producer.name.equals("middle.dll", ignoreCase = true) -> {
+                listOf(
+                    typedChildName to typedOwnerName,
+                    broadChildName to broadOwnerName,
+                ).forEach { childAndBase ->
+                    val childName = childAndBase.first
+                    val baseName = childAndBase.second
+                    requirePhysicalClass(childName, arity = 0)
+                    val child = requireType(metadata, childName, arity = 0)
+                    check(metadata.genericParameterDefinitions.none { parameter ->
+                        parameter.owner == child.handle
+                    } && metadata.fieldDefinitions.none { field ->
+                        field.declaringType == child.handle
+                    }) {
+                        "The production-erased '$childName' introduced GenericParams or shadow state"
+                    }
+                    requireDirectBase(metadata, child, baseName, generic = false)
+                }
+                requirePhysicalClass(lateChildName, arity = 0)
+                val lateChild = requireType(metadata, lateChildName, arity = 0)
+                check(metadata.genericParameterDefinitions.none { parameter ->
+                    parameter.owner == lateChild.handle
+                }) {
+                    "The production-erased '$lateChildName' retained GenericParam rows"
+                }
+                val lateFields = metadata.fieldDefinitions.filter { field ->
+                    field.declaringType == lateChild.handle
+                }
+                check(lateFields.singleOrNull()?.let { field ->
+                    field.visibility == DotNetClrFieldVisibility.PRIVATE &&
+                            !field.isStatic && !field.isInitOnly &&
+                            field.signature.fieldType == objectType
+                } == true) {
+                    "The production-erased '$lateChildName' did not retain one mutable private " +
+                            "object state: $lateFields"
+                }
+                requireDirectBase(metadata, lateChild, lateBaseName, generic = false)
+                requireStateMethods(
+                    metadata,
+                    lateChild,
+                    objectType,
+                    members = listOf(
+                        Triple("transfer", objectType, emptyList()),
+                        Triple("peek", objectType, emptyList()),
+                    ),
+                    virtualMembers = setOf("transfer"),
+                )
+            }
+        }
+        return
+    }
+
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The state-authority C# probe requires an executable target"
+    }
+    val metadata = DotNetClrMetadataReader.read(producer)
+    when {
+        producer.name.equals("lib.dll", ignoreCase = true) -> {
+            val emissionsByOwner = stateEmissions.associateBy { emission ->
+                emission.ownerName.substringAfterLast('.')
+            }
+            check(emissionsByOwner.keys == setOf(typedOwnerName, broadOwnerName, lateBaseName) &&
+                    stateEmissions.size == 3
+            ) {
+                "The producer did not seal exactly its three state-authority FieldDefs: " +
+                        stateEmissions
+            }
+            val typedEmission = checkNotNull(emissionsByOwner[typedOwnerName])
+            val broadEmission = checkNotNull(emissionsByOwner[broadOwnerName])
+            val lateBaseEmission = checkNotNull(emissionsByOwner[lateBaseName])
+            check(typedEmission.scope == DotNetIlEmissionScope.USER &&
+                    typedEmission.logicalFieldName == "state" &&
+                    typedEmission.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                    typedEmission.carrierKind ==
+                    DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OWNER_TYPE_PARAMETER &&
+                    typedEmission.ownerParameterIndex == 0
+            ) {
+                "The exact state did not seal as the producer's !0 FieldDef: $typedEmission"
+            }
+            check(broadEmission.scope == DotNetIlEmissionScope.USER &&
+                    broadEmission.logicalFieldName == "state" &&
+                    broadEmission.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                    broadEmission.carrierKind ==
+                    DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OBJECT &&
+                    broadEmission.ownerParameterIndex == null
+            ) {
+                "The widened-write state did not seal as the producer's object FieldDef: " +
+                        broadEmission
+            }
+            check(lateBaseEmission.scope == DotNetIlEmissionScope.USER &&
+                    lateBaseEmission.logicalFieldName == "state" &&
+                    lateBaseEmission.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                    lateBaseEmission.carrierKind ==
+                    DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OBJECT &&
+                    lateBaseEmission.ownerParameterIndex == null
+            ) {
+                "The late semantic base did not seal its widened state as object: " +
+                        lateBaseEmission
+            }
+
+            requirePrototype(
+                typedOwnerName,
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+            )
+            requirePrototype(
+                broadOwnerName,
+                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+            )
+            requirePrototype(
+                lateBaseName,
+                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+            )
+
+            listOf(
+                Triple(typedOwnerName, typedEmission, ownerParameter),
+                Triple(broadOwnerName, broadEmission, objectType),
+                Triple(lateBaseName, lateBaseEmission, objectType),
+            ).forEach { ownerAndState ->
+                val ownerName = ownerAndState.first
+                val emission = ownerAndState.second
+                val fieldType = ownerAndState.third
+                requirePhysicalClass(ownerName, arity = 1)
+                val owner = requireType(metadata, ownerName, arity = 1)
+                requireSingleGenericParameter(metadata, owner)
+                val fields = metadata.fieldDefinitions.filter { field ->
+                    field.declaringType == owner.handle
+                }
+                check(fields.singleOrNull()?.let { field ->
+                    field.name == emission.physicalFieldName &&
+                            field.visibility == DotNetClrFieldVisibility.PRIVATE &&
+                            !field.isStatic && !field.isInitOnly &&
+                            field.signature.fieldType == fieldType
+                } == true) {
+                    "The sealed '$ownerName' FieldDef does not match objective PE metadata: $fields"
+                }
+                requireStateMethods(
+                    metadata,
+                    owner,
+                    ownerParameter,
+                    members = if (ownerName == lateBaseName) {
+                        listOf(
+                            Triple("poison", DotNetClrTypeSignature.Void, listOf(ownerParameter)),
+                            Triple("transfer", ownerParameter, emptyList()),
+                        )
+                    } else {
+                        listOf(
+                            Triple("read", ownerParameter, emptyList()),
+                            Triple(
+                                "write",
+                                DotNetClrTypeSignature.Void,
+                                listOf(ownerParameter),
+                            ),
+                        )
+                    },
+                    virtualMembers = if (ownerName == lateBaseName) {
+                        setOf("transfer")
+                    } else {
+                        emptySet()
+                    },
+                )
+            }
+        }
+        producer.name.equals("middle.dll", ignoreCase = true) -> {
+            val lateEmission = checkNotNull(stateEmissions.singleOrNull()) {
+                "The middle state-authority producer did not seal exactly the late child state: " +
+                        stateEmissions
+            }
+            check(lateEmission.scope == DotNetIlEmissionScope.USER &&
+                    lateEmission.ownerName.substringAfterLast('.') == lateChildName &&
+                    lateEmission.logicalFieldName == "copied" &&
+                    lateEmission.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                    lateEmission.carrierKind ==
+                    DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OBJECT &&
+                    lateEmission.ownerParameterIndex == null
+            ) {
+                "The late inherited semantic override did not promote copied state to object: " +
+                        lateEmission
+            }
+            listOf(
+                typedChildName to typedOwnerName,
+                broadChildName to broadOwnerName,
+            ).forEach { childAndBase ->
+                val childName = childAndBase.first
+                val baseName = childAndBase.second
+                requirePhysicalClass(childName, arity = 1)
+                val child = requireType(metadata, childName, arity = 1)
+                requireSingleGenericParameter(metadata, child)
+                check(metadata.fieldDefinitions.none { field ->
+                    field.declaringType == child.handle
+                }) {
+                    "The memberless generic child '$childName' introduced shadow state"
+                }
+                requireDirectBase(metadata, child, baseName, generic = true)
+            }
+            requirePrototype(
+                ownerName = lateChildName,
+                requirement = DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+                fieldName = "copied",
+                requireSemanticWriteProvenance = false,
+                requireSemanticReachableWriter = true,
+            )
+            val latePrototype = checkNotNull(prototypes.singleOrNull { candidate ->
+                candidate.ownerName == lateChildName ||
+                        candidate.ownerName.endsWith(".$lateChildName")
+            })
+            val lateTransfer = checkNotNull(latePrototype.members.singleOrNull { member ->
+                member.sourceName == "transfer"
+            })
+            check(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in lateTransfer.roles &&
+                    DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE in
+                    lateTransfer.semanticHookReasons &&
+                    "copied" in lateTransfer.transitiveStateWriteNames
+            ) {
+                "The late child state was not reached from its inherited semantic override: " +
+                        lateTransfer
+            }
+            requirePhysicalClass(lateChildName, arity = 1)
+            val lateChild = requireType(metadata, lateChildName, arity = 1)
+            requireSingleGenericParameter(metadata, lateChild)
+            val lateFields = metadata.fieldDefinitions.filter { field ->
+                field.declaringType == lateChild.handle
+            }
+            check(lateFields.singleOrNull()?.let { field ->
+                field.name == lateEmission.physicalFieldName &&
+                        field.visibility == DotNetClrFieldVisibility.PRIVATE &&
+                        !field.isStatic && !field.isInitOnly &&
+                        field.signature.fieldType == objectType
+            } == true) {
+                "The late child did not retain one authoritative object FieldDef: $lateFields"
+            }
+            requireDirectBase(metadata, lateChild, lateBaseName, generic = true)
+            requireStateMethods(
+                metadata,
+                lateChild,
+                ownerParameter,
+                members = listOf(
+                    Triple("transfer", ownerParameter, emptyList()),
+                    Triple("peek", ownerParameter, emptyList()),
+                ),
+                virtualMembers = setOf("transfer"),
+            )
+        }
+        else -> check(stateEmissions.isEmpty()) {
+            "The state-authority executable unexpectedly sealed local FieldDefs: $stateEmissions"
+        }
+    }
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The state-authority C# probe lacks its separately compiled libraries"
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The state-authority C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("GenericOwnerStateAuthorityConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.state.authority;
+
+            public sealed class CsTypedState<T> : TypedStateChild<T>
+            {
+                public CsTypedState(T initial) : base(initial) { }
+            }
+
+            public sealed class CsBroadState<T> : BroadStateChild<T>
+            {
+                public CsBroadState(T initial) : base(initial) { }
+            }
+
+            public sealed class CsLateState<T> : LateStateChild<T>
+            {
+                public CsLateState(T initial) : base(initial) { }
+            }
+
+            public static class StateAuthorityProgram
+            {
+                private static FieldInfo RequireState(Type owner, Type expectedType)
+                {
+                    var fields = owner.GetFields(
+                        BindingFlags.Instance | BindingFlags.NonPublic |
+                        BindingFlags.DeclaredOnly);
+                    if (fields.Length != 1 || !fields[0].IsPrivate || fields[0].IsStatic ||
+                        fields[0].IsInitOnly || fields[0].FieldType != expectedType)
+                        throw new InvalidOperationException(
+                            owner + " does not have one authoritative physical state");
+                    return fields[0];
+                }
+
+                private static void RequireNaturalMethods(Type owner)
+                {
+                    var parameter = owner.GetGenericArguments()[0];
+                    RequireNaturalMethod(owner, "read", parameter);
+                    RequireNaturalMethod(owner, "write", typeof(void), parameter);
+                }
+
+                private static void RequireNaturalMethod(
+                    Type owner,
+                    string name,
+                    Type result,
+                    params Type[] parameters)
+                {
+                    var method = owner.GetMethod(
+                        name, BindingFlags.Public | BindingFlags.Instance |
+                        BindingFlags.DeclaredOnly);
+                    if (method == null || method.ReturnType != result)
+                        throw new InvalidOperationException(
+                            owner + " lost its natural " + name + " MethodDef");
+                    var actual = method.GetParameters();
+                    if (actual.Length != parameters.Length)
+                        throw new InvalidOperationException(
+                            owner + " changed the natural " + name + " arity");
+                    for (var index = 0; index < actual.Length; index++)
+                        if (actual[index].ParameterType != parameters[index])
+                            throw new InvalidOperationException(
+                                owner + " changed the natural " + name + " carrier");
+                }
+
+                public static int Main()
+                {
+                    var typedOpen = typeof(TypedStateOwner<>);
+                    var typedParameter = typedOpen.GetGenericArguments()[0];
+                    RequireState(typedOpen, typedParameter);
+                    RequireState(typeof(BroadStateOwner<>), typeof(object));
+                    RequireState(typeof(LateStateBase<>), typeof(object));
+                    RequireState(typeof(LateStateChild<>), typeof(object));
+                    RequireNaturalMethods(typedOpen);
+                    RequireNaturalMethods(typeof(BroadStateOwner<>));
+                    var lateParameter = typeof(LateStateBase<>).GetGenericArguments()[0];
+                    RequireNaturalMethod(
+                        typeof(LateStateBase<>), "poison", typeof(void), lateParameter);
+                    RequireNaturalMethod(
+                        typeof(LateStateBase<>), "transfer", lateParameter);
+                    var lateChildParameter = typeof(LateStateChild<>).GetGenericArguments()[0];
+                    RequireNaturalMethod(
+                        typeof(LateStateChild<>), "transfer", lateChildParameter);
+                    RequireNaturalMethod(
+                        typeof(LateStateChild<>), "peek", lateChildParameter);
+
+                    if (typeof(TypedStateChild<>).GetFields(
+                            BindingFlags.Instance | BindingFlags.Public |
+                            BindingFlags.NonPublic | BindingFlags.DeclaredOnly).Length != 0 ||
+                        typeof(BroadStateChild<>).GetFields(
+                            BindingFlags.Instance | BindingFlags.Public |
+                            BindingFlags.NonPublic | BindingFlags.DeclaredOnly).Length != 0 ||
+                        typeof(CsLateState<>).GetFields(
+                            BindingFlags.Instance | BindingFlags.Public |
+                            BindingFlags.NonPublic | BindingFlags.DeclaredOnly).Length != 0)
+                        throw new InvalidOperationException(
+                            "memberless generic or C# children acquired shadow state");
+
+                    var typed = new CsTypedState<int>(21);
+                    typed.write(22);
+                    if (typed.read() != 22 ||
+                        !object.Equals(stateMiddleKt.readTypedStar(typed), 22))
+                        throw new InvalidOperationException(
+                            "typed inherited state or star dispatch failed");
+
+                    var broad = new CsBroadState<int>(31);
+                    if (!stateMiddleKt.sameBroad(broad, broad))
+                        throw new InvalidOperationException(
+                            "the broad natural and semantic views lost receiver identity");
+                    stateMiddleKt.writeBroad(broad, "foreign-poison");
+                    if (!object.Equals(stateMiddleKt.readBroad(broad), "foreign-poison"))
+                        throw new InvalidOperationException(
+                            "the broad semantic route did not observe authoritative object state");
+                    var rejected = false;
+                    try
+                    {
+                        broad.read();
+                    }
+                    catch (InvalidCastException)
+                    {
+                        rejected = true;
+                    }
+                    if (!rejected)
+                        throw new InvalidOperationException(
+                            "the exact value-type view accepted incompatible object state");
+                    broad.write(32);
+                    if (broad.read() != 32 ||
+                        !object.Equals(stateMiddleKt.readBroad(broad), 32))
+                        throw new InvalidOperationException(
+                            "the exact route did not recover the same authoritative state");
+
+                    var late = new CsLateState<int>(41);
+                    if (!stateMiddleKt.sameLate(late, late))
+                        throw new InvalidOperationException(
+                            "the late natural and semantic views lost receiver identity");
+                    stateMiddleKt.poisonLate(late, "late-foreign-poison");
+                    if (!object.Equals(
+                            stateMiddleKt.transferLate(late), "late-foreign-poison") ||
+                        !object.Equals(
+                            stateMiddleKt.peekLate(late), "late-foreign-poison"))
+                        throw new InvalidOperationException(
+                            "the inherited semantic override did not populate child object state");
+                    var lateRejected = false;
+                    try
+                    {
+                        late.peek();
+                    }
+                    catch (InvalidCastException)
+                    {
+                        lateRejected = true;
+                    }
+                    if (!lateRejected)
+                        throw new InvalidOperationException(
+                            "the exact late value view accepted incompatible object state");
+                    stateMiddleKt.poisonLate(late, 43);
+                    if (!object.Equals(stateMiddleKt.transferLate(late), 43) ||
+                        late.peek() != 43)
+                        throw new InvalidOperationException(
+                            "the late exact route did not recover the same child state");
+
+                    var broadString = new CsBroadState<string>("foreign");
+                    if ((string)stateMiddleKt.readBroad(broadString) != "foreign" ||
+                        !stateMiddleKt.sameBroad(broadString, broadString))
+                        throw new InvalidOperationException(
+                            "the reference construction lost broad dispatch or identity");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "GenericOwnerStateAuthorityConsumer.exe"
+        else "GenericOwnerStateAuthorityConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the state-authority probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the state-authority probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable state-authority probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
 }
 
 /**

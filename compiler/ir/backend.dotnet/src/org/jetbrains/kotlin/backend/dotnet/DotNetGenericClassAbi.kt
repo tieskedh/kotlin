@@ -5418,10 +5418,28 @@ internal data class DotNetGenericOwnerArchitecturePlan(
  * allocation route instead of silently multiplying the singleton.
  */
 internal val DotNetGenericOwnerArchitecturePlan.isReifiedByGenericOwnerRehearsal: Boolean
-    get() = disposition !in setOf(
-            DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI,
-            DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
-        ) && !owner.isCachedCallableSingletonCarrier()
+    get() = disposition.allowsGenericOwnerRehearsalAfterStateResolution() && stateCarriers.values
+        .map(DotNetGenericOwnerStateCarrierPlan::requirement)
+        .areResolvedForGenericOwnerRehearsal() &&
+            !owner.isCachedCallableSingletonCarrier()
+
+/**
+ * The priority-compressed disposition is diagnostic after state linking. Only intrinsic owner
+ * representation blockers remain authoritative here; final per-field requirements decide state
+ * admission and may have resolved a stale state-specific disposition monotonically.
+ */
+internal fun DotNetGenericOwnerCandidateDisposition.allowsGenericOwnerRehearsalAfterStateResolution(): Boolean =
+    this !in setOf(
+        DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
+    )
+
+/** A priority-compressed owner disposition must never conceal one unresolved physical state slot. */
+internal fun Iterable<DotNetGenericOwnerStateCarrierRequirement>.areResolvedForGenericOwnerRehearsal(): Boolean =
+    none { requirement ->
+        requirement == DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED ||
+                requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
+    }
 
 /**
  * A non-capturing callable implementation is the sole generic-owner shape whose late synthetic

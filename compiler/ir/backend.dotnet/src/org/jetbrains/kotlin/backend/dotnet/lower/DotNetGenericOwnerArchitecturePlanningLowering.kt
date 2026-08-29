@@ -966,29 +966,19 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
             })
         }
-        context.genericOwnerArchitecturePlans.entries.toList().forEach { planEntry ->
-            val owner = planEntry.key
-            val plan = planEntry.value
+        context.genericOwnerArchitecturePlans.values.forEach { plan ->
             val fields = plan.stateCarriers.keys.intersect(directlyWrittenSemanticFields)
             if (fields.isEmpty()) return@forEach
-            context.genericOwnerArchitecturePlans[owner] = plan.copy(
-                stateCarriers = plan.stateCarriers.mapValuesTo(linkedMapOf()) { stateEntry ->
-                    val state = stateEntry.value
-                    state.copy(
-                        requirement = if (state.field in fields &&
-                            state.requirement !=
-                                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
-                            state.requirement !=
-                                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
-                        ) {
-                            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
-                        } else {
-                            state.requirement
-                        },
-                    )
-                },
-                semanticReachableWriteFields = plan.semanticReachableWriteFields + fields,
-            )
+            check(fields.all { field ->
+                plan.stateCarriers.getValue(field).requirement in setOf(
+                    DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+                )
+            }) {
+                "Internal .NET backend error: materialized semantic hook exposed state after " +
+                        "generic-owner family/state closure"
+            }
         }
 
         val slotsBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
@@ -1677,6 +1667,49 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
     }
 
+    /**
+     * Produces the intentionally priority-compressed diagnostic summary for one owner.
+     * Admission is decided from the final per-state requirements instead; this summary is
+     * recomputed after detached-family closure so a late inherited semantic obligation cannot
+     * leave a stale typed-write diagnostic behind.
+     */
+    private fun candidateDisposition(
+        owner: IrClass,
+        conditionalSupertypes: Collection<IrType>,
+        stateCarriers: Collection<DotNetGenericOwnerStateCarrierPlan>,
+        openOutputs: Collection<IrSimpleFunction>,
+    ): DotNetGenericOwnerCandidateDisposition = when {
+        conditionalSupertypes.isNotEmpty() ->
+            DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE
+        context.inlineClassesUtils.isClassInlineLike(owner) ->
+            DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI
+        owner.isOriginallyLocalDeclaration || owner.origin != IrDeclarationOrigin.DEFINED ||
+                owner.name.isSpecial ->
+            DotNetGenericOwnerCandidateDisposition.RETAINED_NON_ABI_IMPLEMENTATION_OWNER
+        stateCarriers.any { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+        } && openOutputs.isNotEmpty() ->
+            DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE
+        stateCarriers.any { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+        } ->
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_SEMANTIC_STATE_PROOF
+        stateCarriers.any { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
+        } ->
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_STATE_MEMORY_MODEL_PROOF
+        stateCarriers.any { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED
+        } ->
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH
+        stateCarriers.any { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
+        } ->
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_TYPED_WRITE_VALUE_PROVENANCE
+        else ->
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF
+    }
+
     private fun plan(
         owner: IrClass,
         producerAccesses: Map<IrFunction, DirectMemberAccesses>,
@@ -1894,13 +1927,14 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 if (semanticStateWriteFields.isNotEmpty() && member in openOutputs) {
                     add(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE)
                 }
-                if (member.returnType.containsReifiedVariantOwnerApplicationOf(owner) &&
+                if (member.returnType.referencesGenericOwnerParameter(owner) &&
                     memberAccesses.getValue(member).transitiveReads.any(semanticStateWriteFields::contains)
                 ) {
-                    // A final output can need the same split as an open output. In particular,
-                    // Nested<T> state may admit a covariantly widened Nested<A> carrier which is
-                    // not the CLR construction Nested<!T>. Keep the body/state in the semantic
-                    // hook and let the natural typed entry perform the exact CLR view cast.
+                    // A final output can need the same split as an open output. Direct T state
+                    // may contain a value installed through a widened semantic entry, while
+                    // Nested<T> may carry a covariantly widened construction which is not
+                    // Nested<!T>. Keep either body/state read in the semantic hook and let only
+                    // the natural typed entry perform the exact CLR view cast.
                     add(DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT)
                 }
                 if (member in abstractBroadPropertyGetters) {
@@ -2063,33 +2097,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     externalAccessGraphRequired = externalAccessGraphRequired,
                 )
             }
-        val disposition = when {
-            conditionalSupertypes.isNotEmpty() ->
-                DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE
-            context.inlineClassesUtils.isClassInlineLike(owner) ->
-                DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI
-            owner.isOriginallyLocalDeclaration || owner.origin != IrDeclarationOrigin.DEFINED ||
-                    owner.name.isSpecial ->
-                DotNetGenericOwnerCandidateDisposition.RETAINED_NON_ABI_IMPLEMENTATION_OWNER
-            semanticStateWriteFields.isNotEmpty() && openOutputs.isNotEmpty() ->
-                DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE
-            semanticStateWriteFields.isNotEmpty() ->
-                DotNetGenericOwnerCandidateDisposition.REQUIRES_SEMANTIC_STATE_PROOF
-            stateCarriers.values.any { state ->
-                state.requirement == DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED
-            } ->
-                DotNetGenericOwnerCandidateDisposition.REQUIRES_STATE_MEMORY_MODEL_PROOF
-            stateCarriers.values.any { state ->
-                state.requirement == DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED
-            } ->
-                DotNetGenericOwnerCandidateDisposition.REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH
-            stateCarriers.values.any { state ->
-                state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
-            } ->
-                DotNetGenericOwnerCandidateDisposition.REQUIRES_TYPED_WRITE_VALUE_PROVENANCE
-            else ->
-                DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF
-        }
+        val disposition = candidateDisposition(
+            owner = owner,
+            conditionalSupertypes = conditionalSupertypes,
+            stateCarriers = stateCarriers.values,
+            openOutputs = openOutputs,
+        )
         check(memberFamilies.keys == memberPolicies.keys) {
             "Internal .NET backend error: generic-owner member-family planning is incomplete"
         }
@@ -2187,6 +2200,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         fun externalFamily(function: IrSimpleFunction) =
             externalDeclarations.genericOwnerMemberFamilyOrNull(declaringOverride(function))
 
+        // Detached-family inheritance, private semantic reachability, state selection, and
+        // semantic output pairing form one monotone closure. None of these phases may consume a
+        // stale snapshot produced by an earlier phase: an inherited hook can expose a private
+        // writer, that writer can move a field to object state, and that state can require a
+        // semantic output hook which in turn exposes another helper. Every transition only adds
+        // roles/reasons/reachability or moves unresolved state to semantic object storage.
         var changed: Boolean
         do {
             changed = false
@@ -2198,7 +2217,10 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     val source = familyEntry.key
                     if (source.isFakeOverride) return@forEach
                     val overriddenFamilies = source.overriddenSymbols.mapNotNull { overriddenSymbol ->
-                        val overridden = overriddenSymbol.owner
+                        // A memberless local intermediate owns only a fake override and emits no
+                        // physical MethodDef. Follow it to the declaration which owns the family,
+                        // exactly as the external lookup below already does.
+                        val overridden = declaringOverride(overriddenSymbol.owner)
                         val overriddenOwner = overridden.parent as? IrClass ?: return@mapNotNull null
                         plans[overriddenOwner]?.memberFamilies?.get(overridden)
                     }
@@ -2241,86 +2263,186 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     plans[owner] = plan.copy(memberFamilies = families)
                 }
             }
+            // A semantic obligation inherited after the per-owner pass must carry through the
+            // same private helper graph as an obligation known during that pass. These helpers
+            // are not new public capability entries; they receive only a private semantic body.
+            plans.entries.toList().forEach planLoop@{ planEntry ->
+                val owner = planEntry.key
+                val plan = plans.getValue(owner)
+                val semanticSources = plan.memberFamilies.filterValues { family ->
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles
+                }.keys
+                val semanticPrivateHelpers = semanticSources
+                    .flatMapTo(linkedSetOf()) { source ->
+                        plan.memberAccesses.getValue(source).transitiveCalls
+                    }
+                    .filterIsInstance<IrSimpleFunction>()
+                    .filterTo(linkedSetOf()) { helper ->
+                        helper.parent === owner && DescriptorVisibilities.isPrivate(helper.visibility)
+                    }
+                if (semanticPrivateHelpers.isEmpty()) return@planLoop
+                val families = plan.memberFamilies.toMutableMap()
+                semanticPrivateHelpers.forEach helperLoop@{ helper ->
+                    val family = families[helper] ?: return@helperLoop
+                    val updatedFamily = family.copy(
+                        roles = family.roles + DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        semanticHookReasons = family.semanticHookReasons +
+                                DotNetGenericOwnerSemanticHookReason.INTERNAL_SEMANTIC_REACHABILITY,
+                    )
+                    if (updatedFamily != family) {
+                        families[helper] = updatedFamily
+                        changed = true
+                    }
+                }
+                if (families != plan.memberFamilies) {
+                    plans[owner] = plan.copy(memberFamilies = families)
+                }
+            }
+
+            // Fold every current semantic source back into state selection. Producer-proven
+            // typed state is the deliberate exception: inheriting a carrier boundary adds no
+            // logical write, so its hook narrows at the already selected !T store. Every
+            // unresolved owner-dependent field written by a semantic source moves to object.
+            plans.entries.toList().forEach { planEntry ->
+                val owner = planEntry.key
+                val plan = plans.getValue(owner)
+                val semanticSources = plan.memberFamilies.filterValues { family ->
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles
+                }.keys
+                val semanticProducerFunctions = buildSet<IrFunction> {
+                    semanticSources.forEach { source ->
+                        add(source)
+                        addAll(plan.memberAccesses.getValue(source).transitiveCalls)
+                    }
+                }
+                val semanticWriteFields = semanticSources.flatMapTo(linkedSetOf()) { source ->
+                    plan.memberAccesses.getValue(source).transitiveWrites
+                }
+                val stateCarriers = plan.stateCarriers.mapValuesTo(linkedMapOf()) { stateEntry ->
+                    val state = stateEntry.value
+                    val semanticReaders = state.directReaders.filterTo(
+                        linkedSetOf(),
+                        semanticProducerFunctions::contains,
+                    )
+                    val semanticWriters = state.directWriters.filterTo(
+                        linkedSetOf(),
+                        semanticProducerFunctions::contains,
+                    )
+                    state.copy(
+                        requirement = if (state.field in semanticWriteFields &&
+                            state.requirement !=
+                                DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
+                            state.requirement !=
+                                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+                        ) {
+                            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+                        } else {
+                            state.requirement
+                        },
+                        semanticReachableReaders = state.semanticReachableReaders + semanticReaders,
+                        semanticReachableWriters = state.semanticReachableWriters + semanticWriters,
+                    )
+                }
+                val updatedPlan = plan.copy(
+                    stateCarriers = stateCarriers,
+                    semanticReachableWriteFields = plan.semanticReachableWriteFields + semanticWriteFields,
+                )
+                if (updatedPlan != plan) {
+                    plans[owner] = updatedPlan
+                    changed = true
+                }
+            }
+
+            // State which became semantic only through the preceding late closure must still
+            // pair every affected output. An open owner-dependent output retains the existing
+            // override-family coherence rule; any direct or nested T output which actually reads
+            // semantic state needs its body on the semantic hook even when the member is final.
+            plans.entries.toList().forEach { planEntry ->
+                val owner = planEntry.key
+                val plan = plans.getValue(owner)
+                val semanticStateFields = plan.stateCarriers.values
+                    .filterTo(linkedSetOf()) { state ->
+                        state.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+                    }
+                    .mapTo(linkedSetOf(), DotNetGenericOwnerStateCarrierPlan::field)
+                if (semanticStateFields.isEmpty()) return@forEach
+                val families = plan.memberFamilies.toMutableMap()
+                plan.memberFamilies.forEach familyLoop@{ familyEntry ->
+                    val source = familyEntry.key
+                    val family = familyEntry.value
+                    if (!source.returnType.referencesGenericOwnerParameter(owner)) return@familyLoop
+                    val pairsOpenOutput = source in plan.openOwnerOutputs
+                    val readsSemanticState = plan.memberAccesses.getValue(source).transitiveReads
+                        .any(semanticStateFields::contains)
+                    if (!pairsOpenOutput && !readsSemanticState) return@familyLoop
+                    val addedReasons = buildSet {
+                        if (pairsOpenOutput) {
+                            add(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE)
+                        }
+                        if (readsSemanticState) {
+                            add(DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT)
+                        }
+                    }
+                    val updatedRoles = buildSet {
+                        addAll(family.roles)
+                        add(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                        if (!DescriptorVisibilities.isPrivate(source.visibility)) {
+                            add(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+                        }
+                    }
+                    val updatedFamily = family.copy(
+                        roles = updatedRoles,
+                        semanticHookReasons = family.semanticHookReasons + addedReasons,
+                    )
+                    if (updatedFamily != family) {
+                        families[source] = updatedFamily
+                        changed = true
+                    }
+                }
+                if (families != plan.memberFamilies) {
+                    plans[owner] = plan.copy(memberFamilies = families)
+                }
+            }
         } while (changed)
 
-        // A semantic obligation inherited after the per-owner pass must carry through the same
-        // private helper graph as an obligation known during that pass. Otherwise moving only
-        // the overriding body to object-domain parameters makes its first private `Nested<T>`
-        // helper call reconstruct `Nested<!T>` and reject a legal widened carrier. These helpers
-        // are not new public capability entries; they receive only a private semantic body.
-        plans.entries.toList().forEach planLoop@{ planEntry ->
-            val owner = planEntry.key
-            val plan = plans.getValue(owner)
-            val semanticSources = plan.memberFamilies.filterValues { family ->
-                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles
-            }.keys
-            val semanticPrivateHelpers = semanticSources
-                .flatMapTo(linkedSetOf()) { source ->
-                    plan.memberAccesses.getValue(source).transitiveCalls
-                }
-                .filterIsInstance<IrSimpleFunction>()
-                .filterTo(linkedSetOf()) { helper ->
-                    helper.parent === owner && DescriptorVisibilities.isPrivate(helper.visibility)
-                }
-            if (semanticPrivateHelpers.isEmpty()) return@planLoop
-            val families = plan.memberFamilies.toMutableMap()
-            semanticPrivateHelpers.forEach helperLoop@{ helper ->
-                val family = families[helper] ?: return@helperLoop
-                families[helper] = family.copy(
-                    roles = family.roles + DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
-                    semanticHookReasons = family.semanticHookReasons +
-                            DotNetGenericOwnerSemanticHookReason.INTERNAL_SEMANTIC_REACHABILITY,
-                )
-            }
-            if (families != plan.memberFamilies) {
-                plans[owner] = plan.copy(memberFamilies = families)
-            }
-        }
-
-        // An override can inherit a semantic hook only after all owners have been planned. Fold
-        // that late obligation back into state selection before any physical rehearsal occurs.
-        // Producer-proven typed state is the deliberate exception: inheriting a carrier boundary
-        // does not add a new logical write, so the hook narrows its object input to the already
-        // selected physical !T at the store. Every field whose producer graph was not proven
-        // still moves to semantic object state.
         plans.entries.toList().forEach { planEntry ->
             val owner = planEntry.key
             val plan = plans.getValue(owner)
-            val semanticSources = plan.memberFamilies.filterValues { family ->
-                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles
-            }.keys
-            val semanticProducerFunctions = buildSet<IrFunction> {
-                semanticSources.forEach { source ->
-                    add(source)
-                    addAll(plan.memberAccesses.getValue(source).transitiveCalls)
+            val disposition = candidateDisposition(
+                owner = owner,
+                conditionalSupertypes = plan.metadataFixedConditionalSupertypes,
+                stateCarriers = plan.stateCarriers.values,
+                openOutputs = plan.openOwnerOutputs,
+            )
+            val semanticStateFields = plan.stateCarriers.values
+                .filter { state ->
+                    state.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+                }
+                .mapTo(linkedSetOf(), DotNetGenericOwnerStateCarrierPlan::field)
+            check(plan.memberFamilies.all { familyEntry ->
+                val source = familyEntry.key
+                val family = familyEntry.value
+                !source.returnType.referencesGenericOwnerParameter(owner) ||
+                        plan.memberAccesses.getValue(source).transitiveReads.none(semanticStateFields::contains) ||
+                        DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT in
+                        family.semanticHookReasons &&
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles
+            }) {
+                "Internal .NET backend error: late semantic state lacks a paired output family"
+            }
+            if (disposition == DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE) {
+                check(plan.openOwnerOutputs.all { output ->
+                    DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE in
+                            plan.memberFamilies.getValue(output).semanticHookReasons &&
+                            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in
+                            plan.memberFamilies.getValue(output).roles
+                }) {
+                    "Internal .NET backend error: late open output/state coherence lacks a paired family"
                 }
             }
-            val semanticWriteFields = semanticSources.flatMapTo(linkedSetOf()) { source ->
-                plan.memberAccesses.getValue(source).transitiveWrites
+            if (disposition != plan.disposition) {
+                plans[owner] = plan.copy(disposition = disposition)
             }
-            val stateCarriers = plan.stateCarriers.mapValuesTo(linkedMapOf()) { stateEntry ->
-                val state = stateEntry.value
-                val semanticReaders = state.directReaders.filterTo(linkedSetOf(), semanticProducerFunctions::contains)
-                val semanticWriters = state.directWriters.filterTo(linkedSetOf(), semanticProducerFunctions::contains)
-                state.copy(
-                    requirement = if (state.field in semanticWriteFields &&
-                        state.requirement !=
-                            DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE &&
-                        state.requirement !=
-                            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
-                    ) {
-                        DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
-                    } else {
-                        state.requirement
-                    },
-                    semanticReachableReaders = state.semanticReachableReaders + semanticReaders,
-                    semanticReachableWriters = state.semanticReachableWriters + semanticWriters,
-                )
-            }
-            plans[owner] = plan.copy(
-                stateCarriers = stateCarriers,
-                semanticReachableWriteFields = plan.semanticReachableWriteFields + semanticWriteFields,
-            )
         }
 
         plans.entries.toList().forEach { planEntry ->
@@ -2418,7 +2540,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 if (source.isFakeOverride) return@forEach
                 val family = familyEntry.value
                 source.overriddenSymbols.forEach { overriddenSymbol ->
-                    val overridden = overriddenSymbol.owner
+                    val overridden = declaringOverride(overriddenSymbol.owner)
                     val overriddenOwner = overridden.parent as? IrClass ?: return@forEach
                     if (!overriddenOwner.isDotNetGenericClassDeclaration) return@forEach
                     val overriddenPlan = plans[overriddenOwner]

@@ -63,38 +63,38 @@ this programme.
 
 ## Current work package
 
-The source-built Stdlib census is paused. Work proceeds in this order:
+The source-built Stdlib census is paused. The bounded declaration/MethodDef
+stages and Stage 6 producer-wide state proof are complete; their current
+limits are indexed by the [archive](../archive/README.md). Stage 6 closes only
+the one-field grammar after monotone family/helper/state/output closure, final
+per-field admission, a complete live-module writer reproof after bridge/body
+production, complete BOUND field/writer/initializer freezing, and pre-
+publication full-field validation with ILAsm-gated snapshots. The separately
+identified generic-child-capability to base-capability conversion remains
+outside this state proof. Work now proceeds in this order:
 
-1. **Replace structural foreign fallback.** Broad operations select recorded
-   constructed interface MethodDefs and MethodImpls. Public concrete method
-   name/arity discovery is removed, including for explicit-interface and
-   overload-hostile C# implementations.
-2. **Migrate the currently proven interface slice in rehearsal.** Re-prove the
-   custom slice and only the Runtime interface shapes supported by the new
-   route, then remove their exact-sibling TypeDefs, manifest roles, generator
-   obligations, and runtime conventions from the candidate epoch. This bounded
-   replacement is not the final selected-family freeze.
-3. **Prove natural class state selection.** Prove one natural generic class
-   whose complete writer set permits typed state and a separate hostile owner
-   whose semantic writes force broad state. Inheritance, escape, and
-   construction must not confuse the two producer-wide plans.
-4. **Complete declaration authority.** Add retained-foreign, static/file-facade,
+1. **Compose callable contracts.** Prove owner-dependent input plus
+   `SplitNullable(!V, out bool)` on a custom `Lookup<K,V>` before applying it to
+   `Map`. Parameter domains and result layout must compose without a new
+   combined member role.
+2. **Complete declaration authority.** Add retained-foreign, static/file-facade,
    overlapping-family, and global final-emission evidence without letting an
    earlier expected record fill a missing final fact.
-5. **Complete value provenance.** Make the shared operation query authoritative
+3. **Complete value provenance.** Make the shared operation query authoritative
    one bounded case at a time and delete a recognizer only after the general
    model derives both its positive and hostile-negative behavior.
-6. **Compose callable contracts.** Prove owner-dependent input plus
-   `SplitNullable(!V, out bool)` on a custom `Lookup<K,V>` before applying it to
-   `Map`.
-7. **Complete retained/foreign entry validation.** Derive inherited,
+4. **Generalize producer-wide state only from structural proofs.** Extend beyond
+   private mutable direct-owner-parameter/plain fields to nested, nullable,
+   value-class, multiple-field, volatile, mixed-capture, open-writer, and
+   externally authoritative state without weakening whole-owner admission.
+5. **Complete retained/foreign entry validation.** Derive inherited,
    implementation, open, projected, vararg, multiple-view, SZ-array, and
    bounded-element cases from the shared authority/provenance model.
-8. **Freeze the complete selected rehearsal family.** Migrate the selected
+6. **Freeze the complete selected rehearsal family.** Migrate the selected
    Runtime/Stdlib candidate family only after the preceding proofs derive every
    remaining bounded recognizer and hostile negative. This is the final
    rehearsal-family migration, not a production cutover.
-9. **Run the go/no-go rehearsal and exact inverse.** Only then resume the
+7. **Run the go/no-go rehearsal and exact inverse.** Only then resume the
    generic-owner-dependent Stdlib census.
 
 The current checkpoint and blockers live only in [`../../STATUS.md`](../../STATUS.md).
