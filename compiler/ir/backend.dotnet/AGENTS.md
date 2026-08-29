@@ -300,6 +300,26 @@ Generate FIR2IR runners with:
 .\gradlew.bat :compiler:fir:fir2ir:generateTests
 ```
 
+Run this after adding, renaming, or moving FIR2IR test data, and verify that
+both the PSI and LightTree generated runners contain the new test before using
+a focused filter or aggregate result as evidence. A stale generated runner can
+otherwise make a green invocation execute no copy of the intended fixture.
+
+Generic-owner candidate tests require the quoted Gradle project property:
+
+```text
+.\gradlew.bat "-Pkotlin.dotnet.genericOwnerRehearsal=true" <tasks>
+```
+
+Use that property only for focused or boundary candidate fixtures whose scope
+is explicitly rehearsal-compatible. Do not append it to the full target
+aggregate above: that aggregate deliberately consumes the reusable
+production-erased Runtime/Stdlib test platform, so globally compiling its FIR
+corpus in the candidate epoch creates an ABI-mismatched test run rather than a
+candidate gate. The unqualified full aggregate is the production-erased
+inverse. Do not substitute `-D`; the build reads a Gradle property and forwards
+it to the test worker.
+
 When updating a golden from PowerShell, quote the complete
 `-Pkotlin.test.update.test.data=true` native argument. Generated goldens still
 require assembly/execution review.

@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-local-recorded-methoddef-dispatch-2026-08-29.md`](generic-owner-local-recorded-methoddef-dispatch-2026-08-29.md)
+  records the bounded same-producer natural-interface `ldtoken` route, mandatory
+  two-handle MethodDef binding, ordinary and explicit C# MethodImpl dispatch,
+  pre-invocation physical input validation, unchanged physical-library ABI 62,
+  compiler-runtime surface 60, unchanged erased production inverse, and the
+  still-open ABI-63 external descriptor and interface-overload hostile proof.
 - [`upstream-sync-2026-08-27.md`](upstream-sync-2026-08-27.md)
   records the tested 253-commit upstream integration rehearsal from `f9a1706c` through
   `c72fbd7b`, preservation of all 640 target patches, shared-path and semantic

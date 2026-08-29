@@ -201,6 +201,9 @@ internal class DotNetIlEmitter(
     /** Explicitly admitted complete-natural owners and their selected CLR GenericParam rows. */
     private val completeNaturalInterfacePhysicalVariances:
             Map<IrClass, List<DotNetGenericOwnerPhysicalTypeParameterVariance>> = emptyMap(),
+    /** Producer-planned input domains for final local natural interface MethodDefs. */
+    private val genericInterfaceNaturalMethodParameterDomains:
+            Map<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> = emptyMap(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
     private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
@@ -720,6 +723,21 @@ internal class DotNetIlEmitter(
         } else {
             { _: IrType -> false }
         }
+        val genericOwnerNaturalMethodParameterDomains = buildMap {
+            genericOwnerArchitecturePlans.values.forEach { plan ->
+                plan.memberFamilies.forEach { entry ->
+                    check(put(entry.key, entry.value.parameterSlotDomains) == null) {
+                        "one natural generic-owner MethodDef has multiple class-family domain plans"
+                    }
+                }
+            }
+            genericInterfaceNaturalMethodParameterDomains.forEach { entry ->
+                val previous = put(entry.key, entry.value)
+                check(previous == null || previous == entry.value) {
+                    "one natural generic-owner MethodDef has contradictory class/interface domains"
+                }
+            }
+        }
         val typeMapper = DotNetIlTypeMapper(
             availableClasses = availableClasses,
             localClasses = moduleClasses,
@@ -735,6 +753,8 @@ internal class DotNetIlEmitter(
             }.toMap(),
             genericOwnerCapabilityCallTargets = genericOwnerCapabilityCallTargets,
             genericOwnerForeignDispatchCallTargets = genericOwnerForeignDispatchCallTargets,
+            genericOwnerNaturalMethodParameterDomains =
+                genericOwnerNaturalMethodParameterDomains,
             genericOwnerWrongShapePolicies = genericOwnerWrongShapePolicies,
             genericOwnerCapabilityDeclarations = genericOwnerCapabilityDeclarations,
             genericOwnerCapabilityBearingDeclarations = genericOwnerCapabilityBearingDeclarations,

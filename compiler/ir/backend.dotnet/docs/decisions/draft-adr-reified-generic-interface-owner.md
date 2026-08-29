@@ -187,17 +187,47 @@ For a broad candidate member such as `Collection.contains`, the route selects a
 real implemented `Collection<T>` slot. A compatible candidate is converted and
 sent through that interface MethodDef; an incompatible candidate receives the
 Kotlin-recorded wrong-shape outcome such as `false` or `-1`. A general
-`@UnsafeVariance` input uses an explicit checked entry conversion only when its
-producer-recorded domain is `STRICT_OWNER_INPUT`; an incompatible value then
-fails at that boundary. If the logical operation instead promises a broader
-semantic body, that behavior is not invented from the typed slot and falls
-under the explicit adapter/diagnostic rule below.
+`@UnsafeVariance` input with a `STRICT_OWNER_INPUT` domain uses an explicit
+checked entry conversion; an incompatible value fails at that boundary. A
+`BROAD_CANDIDATE_INPUT` on a foreign natural-only implementation may use the
+same checked physical entry only when the producer policy says that compatible
+values dispatch to the typed slot and incompatible values fail there. This does
+not replace a broader Kotlin-owned semantic body: if the logical operation
+promises such behavior, it is not invented from the typed slot and falls under
+the explicit adapter/diagnostic rule below.
 
 The runtime fallback must resolve real constructed interface slots and
 MethodImpls. Searching a concrete class for a public method by name and argument
 count is forbidden. Multiple matching constructions require preserved lineage
 or a unique, policy-valid selection; interface enumeration order is never
 authority.
+
+For a producer whose final natural MethodDef is available, the bounded
+reflection route carries that declaration directly. The caller emits an
+`ldtoken method` operand for the exact open interface MethodDef, selects the
+unique policy-valid closed interface construction actually implemented by the
+receiver, and binds the two with
+`MethodBase.GetMethodFromHandle(declarationHandle, construction.TypeHandle)`.
+The resulting interface `MethodInfo` is invoked so ordinary implementations and
+explicit `MethodImpl` rows remain CLR dispatch authority. A generic MethodDef is
+closed only afterwards with its producer-bound method arguments. The one-handle
+overload, a custom marker, a generated slot name, and runtime descriptor or
+name/arity search are not equivalent substitutes.
+
+This mechanism does not let a consumer reconstruct a declaration token from
+logical IR. A separately compiled consumer must receive the complete producer-
+recorded physical owner, name, method-generic binder and arity, physical return
+and parameter signature (including by-reference and generic-binder authority),
+parameter domains, and result layout, verified against the producer DLL. Until
+that record exists, the local
+producer proof does not close the general separate-consumer route. Static
+lineage may later emit a direct interface call; bounded reflective invocation,
+cache behavior, trimming, and NativeAOT remain deployment gates rather than a
+new semantic contract.
+
+Concrete public decoys prove that this local route does not search the
+implementation class. Hostile same-name/same-regular-arity interface MethodDefs
+remain part of the external callable-descriptor proof.
 
 If a semantic route cannot be derived from the complete natural contract and
 recorded Kotlin policy, the target must expose an explicit adapter requirement

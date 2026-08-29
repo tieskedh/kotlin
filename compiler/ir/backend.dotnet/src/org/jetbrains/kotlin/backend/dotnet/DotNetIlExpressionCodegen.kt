@@ -3647,8 +3647,9 @@ internal class DotNetIlExpressionCodegen(
      * are deliberately bounded to a value-result or Unit member with declaration-independent
      * inputs, one declaration-invariant owner-dependent input among independent inputs, the exact
      * sibling's one-natural-input Boolean member, one relative nested input, or an
-     * upstream-authorized one-T-input fixed barrier. Name plus complete arity keeps the admitted
-     * overloads unambiguous; broader signatures remain outside this path.
+     * upstream-authorized one-T-input fixed barrier. A final same-producer natural MethodDef is
+     * carried by exact declaration token; older external records and special fallback policies
+     * retain their bounded legacy selector until their own physical authority is complete.
      */
     private fun emitReifiedGenericInterfaceForeignDispatchCallOrNull(
         call: IrCall,
@@ -3782,8 +3783,8 @@ internal class DotNetIlExpressionCodegen(
         }
         val hasInvariantOwnerInput = invariantInputIndex != null &&
                 invariantOwnerInputType != null &&
-                sourceOwner.typeParameters.all { parameter ->
-                    parameter.variance == org.jetbrains.kotlin.types.Variance.INVARIANT
+                naturalInfo.owner.typeParameterVariances.all { variance ->
+                    variance == org.jetbrains.kotlin.types.Variance.INVARIANT
                 } &&
                 hasOnlyDeclarationIndependentOtherInputs(invariantInputIndex)
         val isProducer = hasDeclarationIndependentInputs && naturalResultType != null &&
@@ -4080,15 +4081,88 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitLabel(foreignLabel)
         methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
         emitSystemTypeOrNull(foreignSelectionOwner.ilTypeRef)
+        val localNaturalMethodIdentity = naturalInfo.genericOwnerPhysicalMethodIdentity
+        val hasFinalLocalNaturalMethod = localNaturalMethodIdentity?.let { identity ->
+            identity.function == source.symbol &&
+                    identity.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                    typeMapper.isCurrentModuleClass(sourceOwner)
+        } == true
+        val recordedParameterDomains = if (hasFinalLocalNaturalMethod) {
+            typeMapper.genericOwnerNaturalMethodParameterDomains(source)
+                ?.takeIf { domains -> domains.size == regularArgumentSlots.size }
+        } else {
+            null
+        }
+        val usesRecordedNaturalMethod =
+            recordedParameterDomains != null &&
+                    !usesRuntimeCollectionContainsAllFallback && !isExactInputBoolean && !isFixedBarrier
         if (usesRuntimeCollectionContainsAllFallback) {
             emitSystemTypeOrNull(checkNotNull(exactInputType).classInfo.ilTypeRef)
-        } else if (naturalCallBinding.methodSpecArguments.isNotEmpty()) {
+        } else if (!usesRecordedNaturalMethod && naturalCallBinding.methodSpecArguments.isNotEmpty()) {
             emitSystemTypeOrNull(naturalCallBinding.methodSpecArguments.single().nameInSignature)
         }
-        methodContext.emit(
-            "ldstr ${(naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()).toIlStringLiteral()}",
-            pushes = 1,
-        )
+        val naturalMethodName = naturalInfo.physicalMethodName ?: source.dotNetIlMethodName()
+        if (usesRecordedNaturalMethod) {
+            check(naturalInfo.owner.ilTypeRef == foreignSelectionOwner.ilTypeRef) {
+                "Internal .NET backend error: recorded foreign MethodDef owner " +
+                        "${naturalInfo.owner.ilTypeRef} disagrees with selected interface " +
+                        foreignSelectionOwner.ilTypeRef
+            }
+            methodContext.emit(
+                "ldtoken method ${naturalInfo.renderMethodDeclarationReference(naturalMethodName)}",
+                pushes = 1,
+            )
+            if (naturalCallBinding.methodSpecArguments.isEmpty()) {
+                methodContext.emit("ldnull", pushes = 1)
+            } else {
+                methodContext.emit(
+                    "ldc.i4.${naturalCallBinding.methodSpecArguments.size}",
+                    pushes = 1,
+                )
+                methodContext.emit(
+                    "newarr ${coreLibraryReference}System.Type",
+                    pops = 1,
+                    pushes = 1,
+                )
+                naturalCallBinding.methodSpecArguments.forEachIndexed { index, argument ->
+                    methodContext.emit("dup", pops = 1, pushes = 2)
+                    methodContext.emit("ldc.i4.$index", pushes = 1)
+                    emitSystemTypeOrNull(argument.nameInSignature)
+                    methodContext.emit("stelem.ref", pops = 3)
+                }
+            }
+        } else {
+            methodContext.emit(
+                "ldstr ${naturalMethodName.toIlStringLiteral()}",
+                pushes = 1,
+            )
+        }
+        if (usesRecordedNaturalMethod) {
+            val domains = checkNotNull(recordedParameterDomains)
+            methodContext.emit("ldc.i4.${domains.size}", pushes = 1)
+            methodContext.emit(
+                "newarr ${coreLibraryReference}System.Int32",
+                pops = 1,
+                pushes = 1,
+            )
+            domains.forEachIndexed { index, domain ->
+                val runtimeCode = when (domain) {
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT -> 0
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT -> 1
+                    DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT -> 2
+                    DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ->
+                        error(
+                            "Internal .NET backend error: natural MethodDef parameter $index " +
+                                    "has non-input domain '$domain'"
+                        )
+                }
+                methodContext.emit("dup", pops = 1, pushes = 2)
+                methodContext.emit("ldc.i4.$index", pushes = 1)
+                methodContext.emit("ldc.i4.$runtimeCode", pushes = 1)
+                methodContext.emit("stelem.i4", pops = 3)
+            }
+        }
         if (regularArgumentSlots.isEmpty()) {
             methodContext.emit("ldnull", pushes = 1)
         } else {
@@ -4121,8 +4195,18 @@ internal class DotNetIlExpressionCodegen(
             )
             emitReifiedGenericInterfaceFixedBarrier(checkNotNull(fixedBarrierPolicy))
         }
+        if (usesRecordedNaturalMethod) {
+            methodContext.emit(
+                if (naturalInfo.signature.hasSplitNullableResult) "ldc.i4.1" else "ldc.i4.0",
+                pushes = 1,
+            )
+        }
         methodContext.emit(
             when {
+                usesRecordedNaturalMethod ->
+                    DotNetGenericInterfaceRuntime.invokeRecordedMemberCallInstruction(
+                        coreLibraryReference
+                    )
                 usesRuntimeCollectionContainsAllFallback ->
                     DotNetGenericInterfaceRuntime.invokeUniqueCollectionContainsAllCallInstruction(
                         coreLibraryReference
@@ -4144,6 +4228,7 @@ internal class DotNetIlExpressionCodegen(
                 )
             },
             pops = when {
+                usesRecordedNaturalMethod -> 7
                 isFixedBarrier -> 6
                 usesRuntimeCollectionContainsAllFallback ||
                         naturalCallBinding.methodSpecArguments.isNotEmpty() -> 5

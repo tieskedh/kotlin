@@ -584,6 +584,8 @@ object DotNetBackend {
                     publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                     completeNaturalInterfacePhysicalVariances =
                         completeNaturalInterfacePhysicalVariances,
+                    genericInterfaceNaturalMethodParameterDomains =
+                        context.genericInterfaceNaturalMethodParameterDomains,
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                     externalReifiedGenericInterfaceCapabilityProviders =
                         context.externalReifiedGenericInterfaceCapabilityProviders,
@@ -742,6 +744,8 @@ object DotNetBackend {
                 publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                 completeNaturalInterfacePhysicalVariances =
                     completeNaturalInterfacePhysicalVariances,
+                genericInterfaceNaturalMethodParameterDomains =
+                    context.genericInterfaceNaturalMethodParameterDomains,
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                 externalReifiedGenericInterfaceCapabilityProviders =
                     context.externalReifiedGenericInterfaceCapabilityProviders,

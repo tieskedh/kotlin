@@ -473,6 +473,26 @@ value provenance. A consumer binds those facts by artifact identity, physical
 owner/member identity, binder scope, and complete recorded contract. It does
 not infer them from generated names or reinterpret them from substituted KLIB.
 
+When the current emitter owns the final natural generic-interface MethodDef,
+the bounded local route emits its exact open-declaration token, selects an
+already-proven closed construction implemented by the receiver, and uses the
+mandatory two-handle `MethodBase.GetMethodFromHandle` overload. A separate
+consumer may do the same only from a complete producer-recorded callable
+descriptor validated against the producer DLL; logical IR and incomplete older
+library records are not declaration-token authority. CLR interface dispatch
+then selects the ordinary or explicit `MethodImpl`. The selected construction
+supplies binding context; selected-view lineage may choose among already-
+guaranteed constructions but cannot establish one. No concrete method search,
+marker attribute, interface enumeration order, or logical signature
+reconstruction participates in slot identity.
+
+The callable record keeps parameter policies and result layout orthogonal. In
+particular, a split-nullable MethodDef token includes its physical trailing
+`bool&`, while the recorded result layout tells the invoker how to materialize
+the logical result. This must be serialized as complete physical declaration
+authority for external consumers; a local final `MethodDef` object is not a
+substitute for downstream ABI evidence.
+
 Retained foreign CLR metadata is independent physical authority. A foreign
 TypeDef or MethodDef is identified by its selected assembly metadata and
 metadata handle. Its generic arity, variance, constraints, signature,
