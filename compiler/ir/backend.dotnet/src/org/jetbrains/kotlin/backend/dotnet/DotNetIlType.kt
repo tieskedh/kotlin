@@ -356,6 +356,33 @@ internal fun DotNetIlValueType.dotNetViewAsGenericOwner(
 }
 
 /**
+ * A single unambiguous construction of [owner], or null for absence/ambiguity. Unlike the
+ * established first-view query above, physical MethodDef binding may not choose one of two
+ * distinct retained argument vectors by traversal order. Repeated paths to the same construction
+ * remain one view.
+ */
+internal fun DotNetIlValueType.dotNetUniqueViewAsGenericOwner(
+    owner: DotNetIlClassInfo,
+): DotNetIlValueType.GenericInstance? {
+    val self = if (this is DotNetIlValueType.GenericInstance && classInfo.ilTypeRef == owner.ilTypeRef) {
+        sequenceOf(this)
+    } else {
+        emptySequence()
+    }
+    val ownerViews = if (this is DotNetIlValueType.TypeParameter) {
+        upperBounds.asSequence().flatMap { bound -> sequenceOf(bound) + bound.dotNetAllSupertypes() }
+    } else {
+        dotNetAllSupertypes()
+    }
+    return (self + ownerViews)
+        .filterIsInstance<DotNetIlValueType.GenericInstance>()
+        .filter { view -> view.classInfo.ilTypeRef == owner.ilTypeRef }
+        .distinctBy { view -> view.arguments }
+        .take(2)
+        .singleOrNull()
+}
+
+/**
  * The corelib reference of the boxed form of a primitive value type, the operand of the
  * `T -> Any?` `box` instruction (the established spellings are probe-verified by
  * `boxprobe_s7`/`nullprobe_s8`; Byte/Short are frozen by the narrow-scalar product gate). Null for
