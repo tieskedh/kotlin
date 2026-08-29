@@ -6,17 +6,26 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
+import org.jetbrains.kotlin.load.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomModifier
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterConstraint
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrInterfaceImplementation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReference
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodImplementation
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrParameterDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSpecification
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.types.Variance
 import kotlin.test.Test
@@ -229,6 +238,510 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         }
     }
 
+    @Test
+    fun rejectsMethodImplDeclaredByAnotherMethodDefOnTheSelectedNaturalType() {
+        val fixture = implementationMetadataFixture()
+        val failure = assertFailsWith<IllegalArgumentException> {
+            validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+                declaration = fixture.implementationDeclaration,
+                naturalDeclaration = fixture.naturalDeclaration,
+                assembly = fixture.assembly.copy(methodImplementations = listOf(
+                    DotNetClrMethodImplementation(
+                        handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 1),
+                        implementingType = fixture.implementationType,
+                        bodyMethod = fixture.otherImplementationMethod,
+                        declarationMethod = fixture.otherNaturalMethod,
+                    ),
+                )),
+                coreLibraryAssemblyName = CORE_LIBRARY,
+            )
+        }
+
+        assertTrue(failure.message.orEmpty().contains("explicitly redirects"))
+    }
+
+    @Test
+    fun rejectsNaturalMemberRefDeclarationsThroughSelectedNaturalParents() {
+        val fixture = implementationMetadataFixture()
+        val naturalType = fixture.assembly.typeDefinitions.single { definition ->
+            definition.handle == fixture.assembly.methodDefinitions.single { method ->
+                method.handle == fixture.otherNaturalMethod
+            }.declaringType
+        }
+        val naturalMethod = fixture.assembly.methodDefinitions.single { method ->
+            method.declaringType == naturalType.handle &&
+                    method.name == fixture.naturalDeclaration.physicalMethod.physicalMethodName
+        }
+        val localNaturalReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 1),
+            namespaceName = naturalType.namespaceName,
+            metadataName = naturalType.metadataName,
+            resolutionScope = DotNetClrMetadataHandle(MODULE_TABLE, 1),
+        )
+        val aliasedNaturalSpecification = DotNetClrTypeSpecification(
+            handle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 2),
+            signature = DotNetClrTypeSignature.GenericInstance(
+                genericType = DotNetClrTypeSignature.Named(
+                    localNaturalReference.handle,
+                    isValueType = false,
+                ),
+                arguments = listOf(DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    0,
+                )),
+            ),
+            rawSignature = emptyList(),
+        )
+        listOf(
+            localNaturalReference.handle to emptyList<DotNetClrTypeSpecification>(),
+            fixture.assembly.typeSpecifications.single().handle to
+                    emptyList<DotNetClrTypeSpecification>(),
+            aliasedNaturalSpecification.handle to listOf(aliasedNaturalSpecification),
+        ).forEachIndexed { index, hostile ->
+            val declarationReference = DotNetClrMemberReference(
+                handle = DotNetClrMetadataHandle(MEMBER_REF_TABLE, 1),
+                parent = hostile.first,
+                name = naturalMethod.name,
+                signature = DotNetClrMemberReferenceSignature.Method(naturalMethod.signature),
+                rawSignature = emptyList(),
+            )
+            val failure = assertFailsWith<IllegalArgumentException>(
+                "natural MethodImpl declaration parent hostile $index was accepted",
+            ) {
+                validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+                    declaration = fixture.implementationDeclaration,
+                    naturalDeclaration = fixture.naturalDeclaration,
+                    assembly = fixture.assembly.copy(
+                        typeReferences = listOf(localNaturalReference),
+                        typeSpecifications = fixture.assembly.typeSpecifications + hostile.second,
+                        memberReferences = listOf(declarationReference),
+                        methodImplementations = listOf(DotNetClrMethodImplementation(
+                            handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 1),
+                            implementingType = fixture.implementationType,
+                            bodyMethod = fixture.otherImplementationMethod,
+                            declarationMethod = declarationReference.handle,
+                        )),
+                    ),
+                    coreLibraryAssemblyName = CORE_LIBRARY,
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("explicitly redirects"))
+        }
+    }
+
+    @Test
+    fun countsAnExtraNaturalInterfaceImplThroughAnExactLocalTypeRefAlias() {
+        val fixture = implementationMetadataFixture()
+        val naturalType = fixture.assembly.typeDefinitions.single { definition ->
+            definition.handle == fixture.assembly.methodDefinitions.single { method ->
+                method.handle == fixture.otherNaturalMethod
+            }.declaringType
+        }
+        val localNaturalReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 1),
+            namespaceName = naturalType.namespaceName,
+            metadataName = naturalType.metadataName,
+            resolutionScope = DotNetClrMetadataHandle(MODULE_TABLE, 1),
+        )
+        val aliasSpecification = DotNetClrTypeSpecification(
+            handle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 2),
+            signature = DotNetClrTypeSignature.GenericInstance(
+                genericType = DotNetClrTypeSignature.Named(
+                    localNaturalReference.handle,
+                    isValueType = false,
+                ),
+                arguments = listOf(DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    0,
+                )),
+            ),
+            rawSignature = emptyList(),
+        )
+        val failure = assertFailsWith<IllegalArgumentException> {
+            validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+                declaration = fixture.implementationDeclaration,
+                naturalDeclaration = fixture.naturalDeclaration,
+                assembly = fixture.assembly.copy(
+                    typeReferences = listOf(localNaturalReference),
+                    typeSpecifications = fixture.assembly.typeSpecifications + aliasSpecification,
+                    interfaceImplementations = fixture.assembly.interfaceImplementations +
+                            DotNetClrInterfaceImplementation(
+                                handle = DotNetClrMetadataHandle(INTERFACE_IMPL_TABLE, 2),
+                                implementingType = fixture.implementationType,
+                                interfaceType = aliasSpecification.handle,
+                            ),
+                ),
+                coreLibraryAssemblyName = CORE_LIBRARY,
+            )
+        }
+
+        assertTrue(failure.message.orEmpty().contains("exactly one construction"))
+    }
+
+    @Test
+    fun rejectsOverdeepExactLocalTypeRefScopeChainsBeforeMethodImplMatching() {
+        val fixture = implementationMetadataFixture()
+        val implementationMethod = fixture.assembly.methodDefinitions.single { method ->
+            method.handle == fixture.implementationMethod
+        }
+        val references = (1..65).map { row ->
+            DotNetClrTypeReference(
+                handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, row),
+                namespaceName = "demo",
+                metadataName = "Nested$row",
+                resolutionScope = if (row == 65) {
+                    DotNetClrMetadataHandle(MODULE_TABLE, 1)
+                } else {
+                    DotNetClrMetadataHandle(TYPE_REF_TABLE, row + 1)
+                },
+            )
+        }
+        val bodyReference = DotNetClrMemberReference(
+            handle = DotNetClrMetadataHandle(MEMBER_REF_TABLE, 1),
+            parent = references.first().handle,
+            name = implementationMethod.name,
+            signature = DotNetClrMemberReferenceSignature.Method(implementationMethod.signature),
+            rawSignature = emptyList(),
+        )
+        val failure = assertFailsWith<IllegalArgumentException> {
+            validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+                declaration = fixture.implementationDeclaration,
+                naturalDeclaration = fixture.naturalDeclaration,
+                assembly = fixture.assembly.copy(
+                    typeReferences = references,
+                    memberReferences = listOf(bodyReference),
+                    methodImplementations = listOf(DotNetClrMethodImplementation(
+                        handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 1),
+                        implementingType = fixture.implementationType,
+                        bodyMethod = bodyReference.handle,
+                        declarationMethod = fixture.otherImplementationMethod,
+                    )),
+                ),
+                coreLibraryAssemblyName = CORE_LIBRARY,
+            )
+        }
+
+        assertTrue(failure.message.orEmpty().contains("scope nesting is too deep"))
+    }
+
+    @Test
+    fun rejectsMemberRefBodiesWhichExactlyNameTheImplementationMethodDef() {
+        val fixture = implementationMetadataFixture()
+        val implementationMethod = fixture.assembly.methodDefinitions.single { method ->
+            method.handle == fixture.implementationMethod
+        }
+        val implementationType = fixture.assembly.typeDefinitions.single { definition ->
+            definition.handle == fixture.implementationType
+        }
+        val localImplementationReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 1),
+            namespaceName = implementationType.namespaceName,
+            metadataName = implementationType.metadataName,
+            resolutionScope = DotNetClrMetadataHandle(MODULE_TABLE, 1),
+        )
+        val exactSelfSpecification = DotNetClrTypeSpecification(
+            handle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 2),
+            signature = DotNetClrTypeSignature.GenericInstance(
+                genericType = DotNetClrTypeSignature.Named(
+                    fixture.implementationType,
+                    isValueType = false,
+                ),
+                arguments = listOf(DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    0,
+                )),
+            ),
+            rawSignature = emptyList(),
+        )
+        val aliasedSelfSpecification = exactSelfSpecification.copy(
+            handle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 3),
+            signature = (exactSelfSpecification.signature as DotNetClrTypeSignature.GenericInstance).copy(
+                genericType = DotNetClrTypeSignature.Named(
+                    localImplementationReference.handle,
+                    isValueType = false,
+                ),
+            ),
+        )
+        listOf(
+            Triple(
+                fixture.implementationType,
+                emptyList<DotNetClrTypeReference>(),
+                emptyList<DotNetClrTypeSpecification>(),
+            ),
+            Triple(
+                exactSelfSpecification.handle,
+                emptyList<DotNetClrTypeReference>(),
+                listOf(exactSelfSpecification),
+            ),
+            Triple(
+                localImplementationReference.handle,
+                listOf(localImplementationReference),
+                emptyList<DotNetClrTypeSpecification>(),
+            ),
+            Triple(
+                aliasedSelfSpecification.handle,
+                listOf(localImplementationReference),
+                listOf(aliasedSelfSpecification),
+            ),
+        ).forEachIndexed { index, hostile ->
+            val parent = hostile.first
+            val additionalTypeReferences = hostile.second
+            val additionalTypeSpecifications = hostile.third
+            val memberReference = DotNetClrMemberReference(
+                handle = DotNetClrMetadataHandle(MEMBER_REF_TABLE, 1),
+                parent = parent,
+                name = implementationMethod.name,
+                signature = DotNetClrMemberReferenceSignature.Method(implementationMethod.signature),
+                rawSignature = emptyList(),
+            )
+            val failure = assertFailsWith<IllegalArgumentException>(
+                "MethodImpl body MemberRef hostile $index was accepted",
+            ) {
+                validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+                    declaration = fixture.implementationDeclaration,
+                    naturalDeclaration = fixture.naturalDeclaration,
+                    assembly = fixture.assembly.copy(
+                        typeReferences = fixture.assembly.typeReferences + additionalTypeReferences,
+                        typeSpecifications = fixture.assembly.typeSpecifications + additionalTypeSpecifications,
+                        memberReferences = listOf(memberReference),
+                        methodImplementations = listOf(DotNetClrMethodImplementation(
+                            handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 1),
+                            implementingType = fixture.implementationType,
+                            bodyMethod = memberReference.handle,
+                            declarationMethod = fixture.otherImplementationMethod,
+                        )),
+                    ),
+                    coreLibraryAssemblyName = CORE_LIBRARY,
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("explicitly redirects"))
+        }
+    }
+
+    @Test
+    fun doesNotResolveForeignSameNameTypeRefsAsImplementationOrNaturalOwners() {
+        val fixture = implementationMetadataFixture()
+        val naturalType = fixture.assembly.typeDefinitions.single { definition ->
+            definition.handle == fixture.assembly.methodDefinitions.single { method ->
+                method.handle == fixture.otherNaturalMethod
+            }.declaringType
+        }
+        val implementationType = fixture.assembly.typeDefinitions.single { definition ->
+            definition.handle == fixture.implementationType
+        }
+        val implementationMethod = fixture.assembly.methodDefinitions.single { method ->
+            method.handle == fixture.implementationMethod
+        }
+        val naturalMethod = fixture.assembly.methodDefinitions.single { method ->
+            method.declaringType == naturalType.handle && method.name == implementationMethod.name
+        }
+        val foreignScope = DotNetClrMetadataHandle(ASSEMBLY_REF_TABLE, 1)
+        val foreignImplementationReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 1),
+            namespaceName = implementationType.namespaceName,
+            metadataName = implementationType.metadataName,
+            resolutionScope = foreignScope,
+        )
+        val foreignNaturalReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 2),
+            namespaceName = naturalType.namespaceName,
+            metadataName = naturalType.metadataName,
+            resolutionScope = foreignScope,
+        )
+        val foreignNaturalSpecification = DotNetClrTypeSpecification(
+            handle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 2),
+            signature = DotNetClrTypeSignature.GenericInstance(
+                genericType = DotNetClrTypeSignature.Named(
+                    foreignNaturalReference.handle,
+                    isValueType = false,
+                ),
+                arguments = listOf(DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    0,
+                )),
+            ),
+            rawSignature = emptyList(),
+        )
+        val foreignBody = DotNetClrMemberReference(
+            handle = DotNetClrMetadataHandle(MEMBER_REF_TABLE, 1),
+            parent = foreignImplementationReference.handle,
+            name = implementationMethod.name,
+            signature = DotNetClrMemberReferenceSignature.Method(implementationMethod.signature),
+            rawSignature = emptyList(),
+        )
+        val foreignDeclaration = DotNetClrMemberReference(
+            handle = DotNetClrMetadataHandle(MEMBER_REF_TABLE, 2),
+            parent = foreignNaturalSpecification.handle,
+            name = naturalMethod.name,
+            signature = DotNetClrMemberReferenceSignature.Method(naturalMethod.signature),
+            rawSignature = emptyList(),
+        )
+        val binding = validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+            declaration = fixture.implementationDeclaration,
+            naturalDeclaration = fixture.naturalDeclaration,
+            assembly = fixture.assembly.copy(
+                assemblyReferences = listOf(DotNetClrAssemblyReference(
+                    handle = foreignScope,
+                    name = "ForeignDemo",
+                    version = "1.0.0.0",
+                    culture = "neutral",
+                    flags = 0,
+                    publicKeyOrToken = emptyList(),
+                    hashValue = emptyList(),
+                )),
+                typeReferences = listOf(foreignImplementationReference, foreignNaturalReference),
+                typeSpecifications = fixture.assembly.typeSpecifications + foreignNaturalSpecification,
+                memberReferences = listOf(foreignBody, foreignDeclaration),
+                methodImplementations = listOf(
+                    DotNetClrMethodImplementation(
+                        handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 1),
+                        implementingType = fixture.implementationType,
+                        bodyMethod = foreignBody.handle,
+                        declarationMethod = fixture.otherImplementationMethod,
+                    ),
+                    DotNetClrMethodImplementation(
+                        handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 2),
+                        implementingType = fixture.implementationType,
+                        bodyMethod = fixture.otherImplementationMethod,
+                        declarationMethod = foreignDeclaration.handle,
+                    ),
+                ),
+            ),
+            coreLibraryAssemblyName = CORE_LIBRARY,
+        )
+
+        assertEquals(fixture.implementationMethod, binding.methodDefinition.handle)
+    }
+
+    @Test
+    fun comparesCompleteMethodSignaturesModuloNestedExactLocalTypeRefAliases() {
+        val fixture = implementationMetadataFixture()
+        val outerType = DotNetClrTypeDefinition(
+            handle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 3),
+            namespaceName = "demo",
+            metadataName = "Container`1",
+            attributes = IMPLEMENTATION_TYPE_ATTRIBUTES,
+            baseType = null,
+            declaringType = null,
+        )
+        val nestedType = DotNetClrTypeDefinition(
+            handle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 4),
+            namespaceName = "",
+            metadataName = "Nested",
+            attributes = IMPLEMENTATION_TYPE_ATTRIBUTES,
+            baseType = null,
+            declaringType = outerType.handle,
+        )
+        val outerReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 1),
+            namespaceName = outerType.namespaceName,
+            metadataName = outerType.metadataName,
+            resolutionScope = DotNetClrMetadataHandle(MODULE_TABLE, 1),
+        )
+        val nestedReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(TYPE_REF_TABLE, 2),
+            namespaceName = "",
+            metadataName = nestedType.metadataName,
+            resolutionScope = outerReference.handle,
+        )
+        val assembly = fixture.assembly.copy(
+            typeDefinitions = fixture.assembly.typeDefinitions + outerType + nestedType,
+            typeReferences = listOf(outerReference, nestedReference),
+        )
+        fun named(handle: DotNetClrMetadataHandle) = DotNetClrTypeSignature.Named(
+            type = handle,
+            isValueType = false,
+        )
+        fun signature(
+            outer: DotNetClrMetadataHandle,
+            nested: DotNetClrMetadataHandle,
+        ): DotNetClrMethodSignature {
+            val nestedNamed = named(nested)
+            return DotNetClrMethodSignature(
+                callingConvention = DotNetClrSignatureCallingConvention.VARARG,
+                hasThis = true,
+                hasExplicitThis = true,
+                genericParameterCount = 1,
+                returnType = DotNetClrTypeSignature.Modified(
+                    modifiers = listOf(DotNetClrCustomModifier(
+                        isRequired = true,
+                        modifierType = nested,
+                    )),
+                    unmodifiedType = DotNetClrTypeSignature.FunctionPointer(
+                        DotNetClrMethodSignature(
+                            callingConvention = DotNetClrSignatureCallingConvention.C,
+                            hasThis = false,
+                            hasExplicitThis = false,
+                            genericParameterCount = 1,
+                            returnType = DotNetClrTypeSignature.SzArray(
+                                DotNetClrTypeSignature.Pointer(nestedNamed),
+                            ),
+                            parameterTypes = listOf(DotNetClrTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.METHOD,
+                                0,
+                            )),
+                            varargParameterStart = null,
+                        ),
+                    ),
+                ),
+                parameterTypes = listOf(
+                    DotNetClrTypeSignature.ByReference(DotNetClrTypeSignature.Array(
+                        elementType = nestedNamed,
+                        shape = DotNetClrArrayShape(rank = 2, sizes = listOf(3), lowerBounds = listOf(1)),
+                    )),
+                    DotNetClrTypeSignature.GenericInstance(
+                        genericType = named(outer),
+                        arguments = listOf(nestedNamed),
+                    ),
+                    DotNetClrTypeSignature.TypedReference,
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                ),
+                varargParameterStart = 2,
+            )
+        }
+        val direct = signature(outerType.handle, nestedType.handle)
+        val aliased = signature(outerReference.handle, nestedReference.handle)
+
+        assertTrue(assembly.methodSignaturesMatchModuloExactLocalTypeReferences(direct, aliased))
+        assertTrue(!assembly.methodSignaturesMatchModuloExactLocalTypeReferences(
+            direct,
+            aliased.copy(varargParameterStart = 3),
+        ))
+    }
+
+    @Test
+    fun doesNotGuessAnImplementationBodyFromOwnerAndNameWithoutTheFullSignature() {
+        val fixture = implementationMetadataFixture()
+        val implementationMethod = fixture.assembly.methodDefinitions.single { method ->
+            method.handle == fixture.implementationMethod
+        }
+        val nearMiss = DotNetClrMemberReference(
+            handle = DotNetClrMetadataHandle(MEMBER_REF_TABLE, 1),
+            parent = fixture.implementationType,
+            name = implementationMethod.name,
+            signature = DotNetClrMemberReferenceSignature.Method(implementationMethod.signature.copy(
+                returnType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
+            )),
+            rawSignature = emptyList(),
+        )
+        val binding = validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+            declaration = fixture.implementationDeclaration,
+            naturalDeclaration = fixture.naturalDeclaration,
+            assembly = fixture.assembly.copy(
+                memberReferences = listOf(nearMiss),
+                methodImplementations = listOf(DotNetClrMethodImplementation(
+                    handle = DotNetClrMetadataHandle(METHOD_IMPL_TABLE, 1),
+                    implementingType = fixture.implementationType,
+                    bodyMethod = nearMiss.handle,
+                    declarationMethod = fixture.otherImplementationMethod,
+                )),
+            ),
+            coreLibraryAssemblyName = CORE_LIBRARY,
+        )
+
+        assertEquals(fixture.implementationMethod, binding.methodDefinition.handle)
+    }
+
     private fun directNaturalMethodDefDeclaration():
             DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef {
         val publication = producerSealedFamilyPublicationFixture()
@@ -267,6 +780,170 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         val targetMethod: DotNetClrMetadataHandle,
         val targetSplitParameter: DotNetClrMetadataHandle,
     )
+
+    private data class ImplementationMetadataFixture(
+        val assembly: DotNetClrAssemblyMetadata,
+        val naturalDeclaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
+        val implementationDeclaration: DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef,
+        val implementationType: DotNetClrMetadataHandle,
+        val implementationMethod: DotNetClrMetadataHandle,
+        val otherNaturalMethod: DotNetClrMetadataHandle,
+        val otherImplementationMethod: DotNetClrMetadataHandle,
+    )
+
+    private fun implementationMetadataFixture(): ImplementationMetadataFixture {
+        val publication = producerSealedFamilyPublicationFixture().let { original ->
+            original.copy(body = original.body.copy(methodDefs = original.body.methodDefs.map { method ->
+                method.copy(
+                    row = method.row.copy(
+                        structural = method.row.structural.copy(
+                            header = method.row.structural.header.copy(
+                                genericArity = 0,
+                                ordinaryParameterCarriers = emptyList(),
+                            ),
+                            genericParameters = emptyList(),
+                        ),
+                        physicalGenericParameterNames = emptyList(),
+                    ),
+                    logicalParameterDomains = emptyList(),
+                )
+            }))
+        }
+        val naturalDeclaration = publication.toNaturalMethodDefPhysicalDeclaration("demo/Source|class")
+        val implementationOwnerPath = listOf("demo.ExternalStore`1")
+        val implementationDeclaration = DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef(
+            logicalInterfaceMemberKey = naturalDeclaration.logicalMemberKey,
+            implementationOwnerKey = "demo/ExternalStore|class",
+            implementationMemberKey = "demo/ExternalStore.read|function",
+            ownerPath = implementationOwnerPath,
+            ownerTypeParameterVariances = listOf(
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+            ),
+            ownerVisibility = DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC,
+            ownerDispatch = DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE,
+            naturalInterfaceTypeArguments = listOf(
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+            ),
+            physicalMethod = naturalDeclaration.physicalMethod.copy(
+                physicalOwnerPath = implementationOwnerPath,
+            ),
+            methodVisibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            methodDispatch = DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE,
+            methodIntroducesSlot = true,
+            methodIsHideBySig = true,
+            methodIsSpecialName = false,
+            methodIsRuntimeSpecialName = false,
+        )
+
+        val naturalType = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
+        val implementationType = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 2)
+        val naturalMethod = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 1)
+        val otherNaturalMethod = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 2)
+        val implementationMethod = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 3)
+        val otherImplementationMethod = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 4)
+        val splitSignature = DotNetClrMethodSignature(
+            callingConvention = DotNetClrSignatureCallingConvention.DEFAULT,
+            hasThis = true,
+            hasExplicitThis = false,
+            genericParameterCount = 0,
+            returnType = DotNetClrTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.TYPE,
+                0,
+            ),
+            parameterTypes = listOf(DotNetClrTypeSignature.ByReference(
+                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN),
+            )),
+            varargParameterStart = null,
+        )
+        fun method(
+            handle: DotNetClrMetadataHandle,
+            declaringType: DotNetClrMetadataHandle,
+            name: String,
+            attributes: Int,
+        ) = DotNetClrMethodDefinition(
+            handle = handle,
+            declaringType = declaringType,
+            name = name,
+            relativeVirtualAddress = 0,
+            implementationAttributes = 0,
+            attributes = attributes,
+            signature = splitSignature,
+            rawSignature = emptyList(),
+        )
+        val interfaceSpecification = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 1)
+        val methods = listOf(
+            method(naturalMethod, naturalType, "Read", NATURAL_METHOD_ATTRIBUTES),
+            method(otherNaturalMethod, naturalType, "Other", NATURAL_METHOD_ATTRIBUTES),
+            method(implementationMethod, implementationType, "Read", IMPLEMENTATION_METHOD_ATTRIBUTES),
+            method(otherImplementationMethod, implementationType, "Other", IMPLEMENTATION_METHOD_ATTRIBUTES),
+        )
+        val splitParameters = listOf(naturalMethod, implementationMethod).mapIndexed { index, owner ->
+            DotNetClrParameterDefinition(
+                handle = DotNetClrMetadataHandle(PARAM_TABLE, index + 1),
+                declaringMethod = owner,
+                sequence = 1,
+                name = "isNull",
+                attributes = OUT_PARAMETER_ATTRIBUTE,
+            )
+        }
+        val baseAssembly = metadataFixture().assembly
+        val assembly = baseAssembly.copy(
+            typeDefinitions = listOf(
+                baseAssembly.typeDefinitions.single().copy(handle = naturalType),
+                DotNetClrTypeDefinition(
+                    handle = implementationType,
+                    namespaceName = "demo",
+                    metadataName = "ExternalStore`1",
+                    attributes = IMPLEMENTATION_TYPE_ATTRIBUTES,
+                    baseType = null,
+                    declaringType = null,
+                ),
+            ),
+            interfaceImplementations = listOf(DotNetClrInterfaceImplementation(
+                handle = DotNetClrMetadataHandle(INTERFACE_IMPL_TABLE, 1),
+                implementingType = implementationType,
+                interfaceType = interfaceSpecification,
+            )),
+            typeSpecifications = listOf(DotNetClrTypeSpecification(
+                handle = interfaceSpecification,
+                signature = DotNetClrTypeSignature.GenericInstance(
+                    genericType = DotNetClrTypeSignature.Named(naturalType, isValueType = false),
+                    arguments = listOf(DotNetClrTypeSignature.GenericParameter(
+                        DotNetClrGenericParameterKind.TYPE,
+                        0,
+                    )),
+                ),
+                rawSignature = emptyList(),
+            )),
+            methodDefinitions = methods,
+            parameterDefinitions = splitParameters,
+            genericParameterDefinitions = listOf(
+                DotNetClrGenericParameterDefinition(
+                    handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, 1),
+                    number = 0,
+                    attributes = COVARIANT_ATTRIBUTE,
+                    owner = naturalType,
+                    name = "T",
+                ),
+                DotNetClrGenericParameterDefinition(
+                    handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, 2),
+                    number = 0,
+                    attributes = 0,
+                    owner = implementationType,
+                    name = "T",
+                ),
+            ),
+        )
+        return ImplementationMetadataFixture(
+            assembly = assembly,
+            naturalDeclaration = naturalDeclaration,
+            implementationDeclaration = implementationDeclaration,
+            implementationType = implementationType,
+            implementationMethod = implementationMethod,
+            otherNaturalMethod = otherNaturalMethod,
+            otherImplementationMethod = otherImplementationMethod,
+        )
+    }
 
     private fun metadataFixture(
         includeDecoy: Boolean = false,
@@ -395,8 +1072,15 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
 
     private companion object {
         const val CORE_LIBRARY = "System.Private.CoreLib"
+        const val MODULE_TABLE = 0
+        const val TYPE_REF_TABLE = 1
         const val TYPE_DEF_TABLE = 2
         const val METHOD_DEF_TABLE = 6
+        const val INTERFACE_IMPL_TABLE = 9
+        const val MEMBER_REF_TABLE = 10
+        const val METHOD_IMPL_TABLE = 25
+        const val TYPE_SPEC_TABLE = 27
+        const val ASSEMBLY_REF_TABLE = 35
         const val PARAM_TABLE = 8
         const val GENERIC_PARAMETER_TABLE = 42
         const val GENERIC_PARAMETER_CONSTRAINT_TABLE = 44
@@ -410,6 +1094,8 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         const val VIRTUAL_ATTRIBUTE = 0x0040
         const val NEW_SLOT_ATTRIBUTE = 0x0100
         const val NATURAL_TYPE_ATTRIBUTES = 0x0000_00a1L
+        const val IMPLEMENTATION_TYPE_ATTRIBUTES = 0x0000_0001L
         const val NATURAL_METHOD_ATTRIBUTES = 0x05c6
+        const val IMPLEMENTATION_METHOD_ATTRIBUTES = 0x01c6
     }
 }

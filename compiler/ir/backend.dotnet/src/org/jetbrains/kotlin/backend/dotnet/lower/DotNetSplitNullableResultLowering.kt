@@ -8,6 +8,8 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -60,9 +62,10 @@ internal class DotNetSplitNullableResultLowering(
             .filter { function -> function.returnType.isMarkedNullable() }
             .forEach { function ->
                 val family = sequenceOf(function) + function.allOverridden()
-                val roots = family.filter { candidate ->
+                val familyMembers = family.toList()
+                val roots = familyMembers.filter { candidate ->
                     candidate.hasSplitNullableProducerRole()
-                }.toList()
+                }
                 if (roots.isNotEmpty()) {
                     val payloadTypes = roots.map { root ->
                         root.splitPayloadTypeAt(function)
@@ -80,6 +83,36 @@ internal class DotNetSplitNullableResultLowering(
                             root,
                             root.producerSplitPayloadType(),
                         )
+                    }
+                    // An external class MethodDef is a separately emitted physical slot, not an
+                    // alias of the interface declaration. Preserve its producer-sealed split
+                    // layout before covariant-bridge planning; otherwise the logical `T?` KLIB
+                    // view would be remapped to object and manufacture a mismatched MethodImpl.
+                    familyMembers.forEach { candidate ->
+                        val binding = externalDeclarations
+                            .genericOwnerImplementationMethodDefOrNull(candidate)
+                            ?: return@forEach
+                        val layout = binding.declaration.physicalMethod.signature.resultLayout as?
+                                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+                            ?: return@forEach
+                        val payload = layout.payloadSlot.type
+                        check(payload.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER) {
+                            "Internal .NET backend error: external split implementation " +
+                                    "'${binding.declaration.implementationMemberKey}' has no owner payload"
+                        }
+                        val owner = candidate.parent as? IrClass
+                            ?: error("external split implementation has no declaring class")
+                        val parameter = owner.typeParameters.getOrNull(checkNotNull(payload.parameterIndex))
+                            ?: error("external split implementation references a missing owner parameter")
+                        val logicalResult = candidate.returnType as? IrSimpleType
+                            ?: error("external split implementation has no direct logical result")
+                        check(logicalResult.isMarkedNullable() &&
+                                logicalResult.classifier == parameter.symbol
+                        ) {
+                            "Internal .NET backend error: external split implementation " +
+                                    "'${binding.declaration.implementationMemberKey}' disagrees with KLIB result"
+                        }
+                        context.splitNullableResultPayloadTypes[candidate] = parameter.typeParameterDefaultType
                     }
                 }
             }

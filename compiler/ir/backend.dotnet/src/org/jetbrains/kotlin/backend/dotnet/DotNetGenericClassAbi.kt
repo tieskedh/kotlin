@@ -3541,9 +3541,40 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
     const val SCHEMA_VERSION = 21
+    /** Matches the producer-sealed binary codec's bounded collection grammar. */
+    internal const val MAX_PHYSICAL_COLLECTION_SIZE = 1_024
+    /** Matches the producer-sealed binary codec's carrier-depth ceiling. */
+    internal const val MAX_PHYSICAL_TYPE_DEPTH = 64
+    /** One recursive expression still has an explicit aggregate budget below the wire-size cap. */
+    internal const val MAX_PHYSICAL_TYPE_NODES = 64 * MAX_PHYSICAL_COLLECTION_SIZE
+    /** Individual ABI-64 signature/type fields are never allowed to drive unbounded decoding. */
+    internal const val MAX_SERIALIZED_PHYSICAL_FIELD_CHARS = 1_048_576
+    internal const val MAX_BASE64_PHYSICAL_FIELD_CHARS =
+        ((MAX_SERIALIZED_PHYSICAL_FIELD_CHARS + 2) / 3) * 4
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
+
+    private class PhysicalTypeBudget(
+        private val maximumDepth: Int,
+        private val maximumNodes: Int = MAX_PHYSICAL_TYPE_NODES,
+    ) {
+        private var nodes = 0
+
+        init {
+            require(maximumDepth > 0) { "generic-owner physical type depth limit must be positive" }
+            require(maximumNodes > 0) { "generic-owner physical type node limit must be positive" }
+        }
+
+        fun enter(depth: Int) {
+            require(depth <= maximumDepth) {
+                "generic-owner physical type expression nesting is too deep"
+            }
+            require(++nodes <= maximumNodes) {
+                "generic-owner physical type expression contains too many nodes"
+            }
+        }
+    }
 
     fun producerFingerprint(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { byte ->
@@ -4490,6 +4521,152 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         )
     }
 
+    private fun checkedPhysicalFieldLength(
+        current: Long,
+        nextField: Long,
+        hasPreviousField: Boolean,
+    ): Long {
+        require(nextField >= 0) { "generic-owner physical field length overflowed" }
+        val separator = if (hasPreviousField) 1L else 0L
+        require(current <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS - separator - nextField) {
+            "generic-owner physical signature/type field is too large"
+        }
+        return current + separator + nextField
+    }
+
+    private fun base64Length(unencodedLength: Long): Long {
+        require(unencodedLength in 0..MAX_SERIALIZED_PHYSICAL_FIELD_CHARS.toLong()) {
+            "generic-owner physical signature/type field is too large"
+        }
+        return unencodedLength / 3 * 4 + when ((unencodedLength % 3).toInt()) {
+            0 -> 0
+            1 -> 2
+            else -> 3
+        }
+    }
+
+    private fun String.boundedUtf8Length(role: String): Long {
+        require(length <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical $role is too large"
+        }
+        val byteCount = toByteArray(Charsets.UTF_8).size.toLong()
+        require(byteCount <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical $role is too large"
+        }
+        return byteCount
+    }
+
+    private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.serializedLength(
+        depth: Int,
+        budget: PhysicalTypeBudget,
+    ): Long {
+        budget.enter(depth)
+        require(arguments.size <= MAX_PHYSICAL_COLLECTION_SIZE) {
+            "generic-owner physical type expression has too many arguments"
+        }
+        require(typePath.size <= MAX_PHYSICAL_COLLECTION_SIZE) {
+            "generic-owner physical type expression has too many path components"
+        }
+
+        var length = 0L
+        var fields = 0
+        fun field(fieldLength: Long) {
+            length = checkedPhysicalFieldLength(length, fieldLength, fields > 0)
+            fields++
+        }
+
+        field(kind.name.length.toLong())
+        field((parameterIndex?.toString() ?: "-").length.toLong())
+        field((scope?.name ?: "-").length.toLong())
+        field(assemblyName?.let { name -> base64Length(name.boundedUtf8Length("assembly name")) } ?: 1L)
+        val pathByteLength = if (typePath.isEmpty()) {
+            null
+        } else {
+            var bytes = 0L
+            typePath.forEachIndexed { index, component ->
+                if (index > 0) bytes++
+                bytes += component.boundedUtf8Length("type path")
+                require(bytes <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+                    "generic-owner physical type path is too large"
+                }
+            }
+            bytes
+        }
+        field(pathByteLength?.let(::base64Length) ?: 1L)
+        field(genericArity.toString().length.toLong())
+        field((namedTypeCategory?.name ?: "-").length.toLong())
+        field(arguments.size.toString().length.toLong())
+        arguments.forEach { argument ->
+            field(base64Length(argument.serializedLength(depth + 1, budget)))
+        }
+        return length
+    }
+
+    private fun DotNetGenericOwnerPhysicalValueSlotRecord.serializedLength(
+        budget: PhysicalTypeBudget,
+    ): Long {
+        require(nullableReferenceFlags.size <= MAX_PHYSICAL_TYPE_NODES) {
+            "generic-owner physical value slot has too many nullable-reference flags"
+        }
+        var length = domain.name.length.toLong()
+        length = checkedPhysicalFieldLength(
+            length,
+            base64Length(type.serializedLength(depth = 1, budget)),
+            hasPreviousField = true,
+        )
+        val flagsLength = if (nullableReferenceFlags.isEmpty()) {
+            1L
+        } else {
+            nullableReferenceFlags.foldIndexed(0L) { index, current, flag ->
+                current + flag.name.length + if (index == 0) 0 else 1
+            }
+        }
+        return checkedPhysicalFieldLength(length, flagsLength, hasPreviousField = true)
+    }
+
+    private fun DotNetGenericOwnerPhysicalCallableResultLayoutRecord.serializedLength(
+        budget: PhysicalTypeBudget,
+    ): Long = when (this) {
+        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> 1L
+        is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ->
+            checkedPhysicalFieldLength(1, base64Length(slot.serializedLength(budget)), true)
+        is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable ->
+            checkedPhysicalFieldLength(1, base64Length(payloadSlot.serializedLength(budget)), true)
+    }
+
+    internal fun requireBoundedPhysicalTypeExpression(
+        type: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+        maximumDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+    ) {
+        require(maximumDepth > 0) { "generic-owner physical type depth limit must be positive" }
+        type.serializedLength(depth = 1, PhysicalTypeBudget(maximumDepth))
+    }
+
+    internal fun requireBoundedPhysicalMethodSignature(
+        signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+    ) {
+        require(signature.genericArity in 0..MAX_PHYSICAL_COLLECTION_SIZE) {
+            "generic-owner physical signature has too many generic parameters"
+        }
+        require(signature.parameterSlots.size <= MAX_PHYSICAL_COLLECTION_SIZE) {
+            "generic-owner physical signature has too many parameters"
+        }
+        val budget = PhysicalTypeBudget(MAX_PHYSICAL_TYPE_DEPTH)
+        var length = 0L
+        var fields = 0
+        fun field(fieldLength: Long) {
+            length = checkedPhysicalFieldLength(length, fieldLength, fields > 0)
+            fields++
+        }
+        field(1)
+        field(signature.genericArity.toString().length.toLong())
+        field(base64Length(signature.resultLayout.serializedLength(budget)))
+        field(signature.parameterSlots.size.toString().length.toLong())
+        signature.parameterSlots.forEach { parameter ->
+            field(base64Length(parameter.serializedLength(budget)))
+        }
+    }
+
     private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.serialized(): String =
         buildList {
             add(kind.name)
@@ -4503,10 +4680,20 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             arguments.forEach { argument -> add(argument.serialized().encoded()) }
         }.joinToString(";")
 
-    private fun String.deserializedType(): DotNetGenericOwnerPhysicalTypeExpressionRecord {
-        val fields = split(';')
+    private fun String.deserializedType(
+        maximumDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+        depth: Int = 1,
+        budget: PhysicalTypeBudget = PhysicalTypeBudget(maximumDepth),
+    ): DotNetGenericOwnerPhysicalTypeExpressionRecord {
+        require(length <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical type expression is too large"
+        }
+        budget.enter(depth)
+        val fields = split(';', limit = MAX_PHYSICAL_COLLECTION_SIZE + 9)
         require(fields.size >= 8) { "generic-owner physical type expression is truncated" }
-        val argumentCount = fields[7].toIntOrNull()?.takeIf { count -> count >= 0 }
+        val argumentCount = fields[7].toIntOrNull()?.takeIf { count ->
+            count in 0..MAX_PHYSICAL_COLLECTION_SIZE
+        }
             ?: throw IllegalArgumentException("generic-owner physical type expression has invalid argument count")
         require(fields.size == 8 + argumentCount) {
             "generic-owner physical type expression has an inconsistent argument count"
@@ -4527,9 +4714,16 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             scope = fields[2].takeUnless { it == "-" }?.let { value ->
                 named(value, DotNetGenericOwnerPhysicalTypeScope.entries.toTypedArray(), "scope")
             },
-            assemblyName = fields[3].takeUnless { it == "-" }?.decoded(),
-            typePath = fields[4].takeUnless { it == "-" }?.decoded()?.split('\u0000').orEmpty(),
-            genericArity = fields[5].toIntOrNull()?.takeIf { arity -> arity >= 0 }
+            assemblyName = fields[3].takeUnless { it == "-" }?.decodedPhysicalField(),
+            typePath = fields[4].takeUnless { it == "-" }?.decodedPhysicalField()
+                ?.split('\u0000', limit = MAX_PHYSICAL_COLLECTION_SIZE + 1)?.also { path ->
+                    require(path.size <= MAX_PHYSICAL_COLLECTION_SIZE) {
+                        "generic-owner physical type expression has too many path components"
+                    }
+                }.orEmpty(),
+            genericArity = fields[5].toIntOrNull()?.takeIf { arity ->
+                arity in 0..MAX_PHYSICAL_COLLECTION_SIZE
+            }
                 ?: throw IllegalArgumentException("generic-owner physical type expression has invalid generic arity"),
             namedTypeCategory = fields[6].takeUnless { it == "-" }?.let { value ->
                 named(
@@ -4538,7 +4732,13 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     "named-type category",
                 )
             },
-            arguments = fields.drop(8).map { argument -> argument.decoded().deserializedType() },
+            arguments = fields.drop(8).map { argument ->
+                argument.decodedPhysicalField().deserializedType(
+                    maximumDepth = maximumDepth,
+                    depth = depth + 1,
+                    budget = budget,
+                )
+            },
         )
     }
 
@@ -4547,7 +4747,11 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
 
     private fun String.deserializedNullableReferenceFlags(): List<DotNetNullableReferenceFlag> {
         if (this == "-") return emptyList()
-        return split(',').map { name ->
+        val names = split(',', limit = MAX_PHYSICAL_TYPE_NODES + 1)
+        require(names.size <= MAX_PHYSICAL_TYPE_NODES) {
+            "generic-owner physical value slot has too many nullable-reference flags"
+        }
+        return names.map { name ->
             DotNetNullableReferenceFlag.entries.firstOrNull { candidate -> candidate.name == name }
                 ?: throw IllegalArgumentException("generic-owner nullable-reference flag '$name' is unknown")
         }
@@ -4556,15 +4760,24 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
     private fun DotNetGenericOwnerPhysicalValueSlotRecord.serialized(): String =
         "${domain.name};${type.serialized().encoded()};${nullableReferenceFlags.serializedNullableReferenceFlags()}"
 
-    private fun String.deserializedValueSlot(): DotNetGenericOwnerPhysicalValueSlotRecord {
-        val fields = split(';')
+    private fun String.deserializedValueSlot(
+        maximumTypeDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+        budget: PhysicalTypeBudget = PhysicalTypeBudget(maximumTypeDepth),
+    ): DotNetGenericOwnerPhysicalValueSlotRecord {
+        require(length <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical value slot is too large"
+        }
+        val fields = split(';', limit = 4)
         require(fields.size == 3) { "generic-owner physical value slot has an invalid field count" }
         val domain = DotNetGenericOwnerPhysicalSlotDomain.entries.firstOrNull { candidate ->
             candidate.name == fields[0]
         } ?: throw IllegalArgumentException("generic-owner physical value slot has unknown domain '${fields[0]}'")
         return DotNetGenericOwnerPhysicalValueSlotRecord(
             domain,
-            fields[1].decoded().deserializedType(),
+            fields[1].decodedPhysicalField().deserializedType(
+                maximumDepth = maximumTypeDepth,
+                budget = budget,
+            ),
             fields[2].deserializedNullableReferenceFlags(),
         )
     }
@@ -4577,9 +4790,15 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             "S;${payloadSlot.serialized().encoded()}"
     }
 
-    private fun String.deserializedResultLayout():
+    private fun String.deserializedResultLayout(
+        maximumTypeDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+        budget: PhysicalTypeBudget = PhysicalTypeBudget(maximumTypeDepth),
+    ):
             DotNetGenericOwnerPhysicalCallableResultLayoutRecord {
-        val fields = split(';')
+        require(length <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical result layout is too large"
+        }
+        val fields = split(';', limit = 3)
         return when (fields.firstOrNull()) {
             "V" -> {
                 require(fields.size == 1) {
@@ -4592,7 +4811,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     "direct generic-owner physical result layout requires one payload"
                 }
                 DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
-                    fields[1].decoded().deserializedValueSlot(),
+                    fields[1].decodedPhysicalField().deserializedValueSlot(maximumTypeDepth, budget),
                 )
             }
             "S" -> {
@@ -4600,7 +4819,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     "split-nullable generic-owner physical result layout requires one payload"
                 }
                 DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable(
-                    fields[1].decoded().deserializedValueSlot(),
+                    fields[1].decodedPhysicalField().deserializedValueSlot(maximumTypeDepth, budget),
                 )
             }
             else -> throw IllegalArgumentException(
@@ -4618,40 +4837,93 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             parameterSlots.forEach { parameter -> add(parameter.serialized().encoded()) }
         }.joinToString(";")
 
-    private fun String.deserializedSignature(): DotNetGenericOwnerPhysicalMethodSignatureRecord {
-        val fields = split(';')
+    private fun String.deserializedSignature(
+        maximumTypeDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+    ): DotNetGenericOwnerPhysicalMethodSignatureRecord {
+        require(length <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical signature is too large"
+        }
+        require(maximumTypeDepth > 0) { "generic-owner physical type depth limit must be positive" }
+        val fields = split(';', limit = MAX_PHYSICAL_COLLECTION_SIZE + 5)
         require(fields.size >= 4) { "generic-owner physical signature is truncated" }
         val isInstance = when (fields[0]) {
             "0" -> false
             "1" -> true
             else -> throw IllegalArgumentException("generic-owner physical signature has invalid instance marker")
         }
-        val genericArity = fields[1].toIntOrNull()?.takeIf { arity -> arity >= 0 }
+        val genericArity = fields[1].toIntOrNull()?.takeIf { arity ->
+            arity in 0..MAX_PHYSICAL_COLLECTION_SIZE
+        }
             ?: throw IllegalArgumentException("generic-owner physical signature has invalid generic arity")
-        val parameterCount = fields[3].toIntOrNull()?.takeIf { count -> count >= 0 }
+        val parameterCount = fields[3].toIntOrNull()?.takeIf { count ->
+            count in 0..MAX_PHYSICAL_COLLECTION_SIZE
+        }
             ?: throw IllegalArgumentException("generic-owner physical signature has invalid parameter count")
         require(fields.size == 4 + parameterCount) {
             "generic-owner physical signature has an inconsistent parameter count"
         }
+        val budget = PhysicalTypeBudget(maximumTypeDepth)
         return DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = isInstance,
             genericArity = genericArity,
-            resultLayout = fields[2].decoded().deserializedResultLayout(),
-            parameterSlots = fields.drop(4).map { parameter -> parameter.decoded().deserializedValueSlot() },
+            resultLayout = fields[2].decodedPhysicalField()
+                .deserializedResultLayout(maximumTypeDepth, budget),
+            parameterSlots = fields.drop(4).map { parameter ->
+                parameter.decodedPhysicalField().deserializedValueSlot(maximumTypeDepth, budget)
+            },
         )
     }
 
     /** Canonical ABI-21 signature codec shared with self-describing library MethodDef records. */
     internal fun encodePhysicalMethodSignature(
         signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
-    ): String = signature.serialized()
+    ): String {
+        requireBoundedPhysicalMethodSignature(signature)
+        return signature.serialized()
+    }
 
     /** Strict inverse of [encodePhysicalMethodSignature]; unknown or trailing fields fail closed. */
     internal fun decodePhysicalMethodSignature(
         encoded: String,
-    ): DotNetGenericOwnerPhysicalMethodSignatureRecord = encoded.deserializedSignature()
+        maximumTypeDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+    ): DotNetGenericOwnerPhysicalMethodSignatureRecord =
+        encoded.deserializedSignature(maximumTypeDepth)
+
+    /** Canonical type-expression codec shared by declaration-level physical MethodDef seals. */
+    internal fun encodePhysicalTypeExpression(
+        type: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    ): String {
+        requireBoundedPhysicalTypeExpression(type)
+        return type.serialized()
+    }
+
+    /** Strict inverse of [encodePhysicalTypeExpression]; unknown or trailing fields fail closed. */
+    internal fun decodePhysicalTypeExpression(
+        encoded: String,
+        maximumDepth: Int = MAX_PHYSICAL_TYPE_DEPTH,
+        maximumNodes: Int = MAX_PHYSICAL_TYPE_NODES,
+    ): DotNetGenericOwnerPhysicalTypeExpressionRecord =
+        encoded.deserializedType(
+            maximumDepth = maximumDepth,
+            budget = PhysicalTypeBudget(maximumDepth, maximumNodes),
+        )
 
     private fun String.encoded(): String = encoder.encodeToString(toByteArray(Charsets.UTF_8))
+
+    private fun String.decodedPhysicalField(): String {
+        require(length <= MAX_BASE64_PHYSICAL_FIELD_CHARS) {
+            "generic-owner encoded physical signature/type field is too large"
+        }
+        val decoded = try {
+            decoder.decode(this).toString(Charsets.UTF_8)
+        } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("generic-owner physical signature/type field contains invalid encoded text")
+        }
+        require(decoded.length <= MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+            "generic-owner physical signature/type field is too large"
+        }
+        return decoded
+    }
 
     private fun String.decoded(): String = try {
         decoder.decode(this).toString(Charsets.UTF_8)

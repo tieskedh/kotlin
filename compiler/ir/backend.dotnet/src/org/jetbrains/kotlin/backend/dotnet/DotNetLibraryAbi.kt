@@ -339,6 +339,8 @@ enum class DotNetInterfaceDefaultPromotionView {
  * KLIB remains authoritative for logical declarations; this data only binds those declarations
  * to the CLR type/member identities emitted into the companion assembly.
  */
+private const val MAX_GENERIC_OWNER_IMPLEMENTATION_INTERFACE_ARGUMENTS = 1_024
+
 sealed interface DotNetPhysicalDeclaration {
     val ownerPath: List<String>
 
@@ -784,6 +786,112 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /**
+     * Final producer-observed CLR MethodDef of one Kotlin implementation class.
+     *
+     * `N` owns the interface declaration slot. This record owns only the class MethodDef and the
+     * exact construction through which that class implements `N`; it neither claims a MethodImpl
+     * nor imports the semantic 4/6/2 family sealed by `J`.
+     */
+    data class GenericOwnerImplementationMethodDef(
+        val logicalInterfaceMemberKey: String,
+        val implementationOwnerKey: String,
+        val implementationMemberKey: String,
+        override val ownerPath: List<String>,
+        val ownerTypeParameterVariances: List<DotNetGenericOwnerPhysicalTypeParameterVariance>,
+        val ownerVisibility: DotNetGenericOwnerPhysicalTypeVisibility,
+        val ownerDispatch: DotNetGenericOwnerPhysicalTypeDispatch,
+        /** Ordered arguments of the exact producer TypeDef construction named by `N`. */
+        val naturalInterfaceTypeArguments: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
+        val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+        val methodVisibility: DotNetGenericOwnerPhysicalMemberVisibility,
+        val methodDispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+        /** Exact CLI `newslot` bit; independent from Kotlin's logical override relation. */
+        val methodIntroducesSlot: Boolean,
+        val methodIsHideBySig: Boolean,
+        val methodIsSpecialName: Boolean,
+        val methodIsRuntimeSpecialName: Boolean,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(logicalInterfaceMemberKey.isNotEmpty() && implementationOwnerKey.isNotEmpty() &&
+                    implementationMemberKey.isNotEmpty() &&
+                    listOf(logicalInterfaceMemberKey, implementationOwnerKey, implementationMemberKey)
+                        .all { key -> '\u0000' !in key }) {
+                "a generic-owner implementation MethodDef requires exact logical declaration keys"
+            }
+            require(ownerPath.isNotEmpty() && ownerPath.all { component ->
+                component.isNotEmpty() && '\u0000' !in component
+            } && ownerTypeParameterVariances.isNotEmpty() &&
+                    ownerTypeParameterVariances.all { variance ->
+                        variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                    }) {
+                "a generic-owner implementation MethodDef requires one reified CLR class owner"
+            }
+            require(naturalInterfaceTypeArguments.size in
+                    1..MAX_GENERIC_OWNER_IMPLEMENTATION_INTERFACE_ARGUMENTS
+            ) {
+                "a generic-owner implementation MethodDef requires an exact natural-interface construction"
+            }
+            require(physicalMethod.physicalOwnerPath == ownerPath &&
+                    physicalMethod.physicalMethodName.isNotEmpty() &&
+                    '\u0000' !in physicalMethod.physicalMethodName &&
+                    physicalMethod.signature.isInstance &&
+                    physicalMethod.signature.genericArity == 0) {
+                "a generic-owner implementation MethodDef requires an instance slot on its recorded owner"
+            }
+            require(methodDispatch != DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) {
+                "a generic-owner implementation MethodDef cannot bind an abstract class slot"
+            }
+            require(ownerVisibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC &&
+                    ownerDispatch == DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE &&
+                    methodVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+                    methodDispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
+                    methodIsHideBySig && !methodIsSpecialName && !methodIsRuntimeSpecialName
+            ) {
+                "a generic-owner implementation MethodDef requires the bounded public open vslot grammar"
+            }
+            require(!methodIsRuntimeSpecialName || methodIsSpecialName) {
+                "a runtime-special implementation MethodDef must also be specialname"
+            }
+
+            DotNetGenericOwnerPhysicalFamilyCodec.requireBoundedPhysicalMethodSignature(
+                physicalMethod.signature,
+            )
+            naturalInterfaceTypeArguments.forEach { argument ->
+                DotNetGenericOwnerPhysicalFamilyCodec.requireBoundedPhysicalTypeExpression(argument)
+            }
+
+            naturalInterfaceTypeArguments.forEach { argument ->
+                require(argument.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                        checkNotNull(argument.parameterIndex) in ownerTypeParameterVariances.indices
+                ) {
+                    "an ABI-64 implementation MethodDef interface construction requires exact owner parameters"
+                }
+            }
+
+            fun DotNetGenericOwnerPhysicalTypeExpressionRecord.requirePortableMethodCarrier() {
+                when (kind) {
+                    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER -> require(
+                        checkNotNull(parameterIndex) in ownerTypeParameterVariances.indices
+                    ) { "an implementation MethodDef references a missing owner parameter" }
+                    DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER -> require(
+                        checkNotNull(parameterIndex) < physicalMethod.signature.genericArity
+                    ) { "an implementation MethodDef references a missing method parameter" }
+                    DotNetGenericOwnerPhysicalTypeKind.NAMED -> require(
+                        scope != DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION
+                    ) { "an implementation MethodDef cannot retain a consumer-relative named carrier" }
+                    else -> Unit
+                }
+                arguments.forEach { argument -> argument.requirePortableMethodCarrier() }
+            }
+            physicalMethod.signature.resultLayout.valueSlotOrNull?.type
+                ?.requirePortableMethodCarrier()
+            physicalMethod.signature.parameterSlots.forEach { slot ->
+                slot.type.requirePortableMethodCarrier()
+            }
+        }
+    }
+
 }
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
@@ -833,6 +941,22 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): Stri
 internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.indexKey(): String =
     "N:$logicalMemberKey"
 
+internal fun DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef.indexKey(): String =
+    "M:" + DotNetLibraryAbiCodec.logicalIdentityDigest(
+        buildString {
+            append("producer-generic-owner-implementation-methoddef-v1:")
+            listOf(
+                logicalInterfaceMemberKey,
+                implementationOwnerKey,
+                implementationMemberKey,
+            ).forEach { component ->
+                append(component.length)
+                append(':')
+                append(component)
+            }
+        },
+    )
+
 /**
  * Physical-index records which belong exclusively to the all-owner CLR-generic rehearsal epoch.
  *
@@ -842,6 +966,7 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.indexKey(): 
 internal enum class DotNetGenericOwnerRehearsalEpochRecordKind(val wireTag: String) {
     PUBLISHED_GENERIC_INTERFACE_FAMILY("H"),
     GENERIC_OWNER_NATURAL_METHOD_DEF("N"),
+    GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF("M"),
     GENERIC_OWNER_SEALED_FAMILY("J"),
 }
 
@@ -856,6 +981,8 @@ internal fun DotNetPhysicalDeclaration.genericOwnerRehearsalEpochRecordKindOrNul
         DotNetGenericOwnerRehearsalEpochRecordKind.PUBLISHED_GENERIC_INTERFACE_FAMILY
     is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ->
         DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_NATURAL_METHOD_DEF
+    is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ->
+        DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF
     is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ->
         DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEALED_FAMILY
     else -> null
@@ -949,7 +1076,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "63"
+    const val ABI_VERSION = "64"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1013,6 +1140,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerSealedFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
@@ -1042,6 +1170,7 @@ object DotNetLibraryAbiCodec {
                     "H" -> decodePublishedGenericInterfaceFamily(fields, logicalKey)
                     "J" -> decodeGenericOwnerSealedFamily(fields, logicalKey)
                     "N" -> decodeGenericOwnerNaturalMethodDef(fields, logicalKey)
+                    "M" -> decodeGenericOwnerImplementationMethodDef(fields, logicalKey)
                     "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
                     "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
                     else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
@@ -2063,6 +2192,129 @@ object DotNetLibraryAbiCodec {
         }
     }
 
+    private fun DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef.encodeFields(): List<String> =
+        buildList {
+            add("M")
+            add(logicalInterfaceMemberKey)
+            add(implementationOwnerKey)
+            add(implementationMemberKey)
+            add(encodeText(ownerPath.joinToString("\u0000")))
+            add(ownerTypeParameterVariances.joinToString(",") { variance -> variance.name })
+            add(ownerVisibility.name)
+            add(ownerDispatch.name)
+            add(encodeText(physicalMethod.physicalMethodName))
+            add(DotNetGenericOwnerPhysicalFamilyCodec.encodePhysicalMethodSignature(physicalMethod.signature))
+            add(methodVisibility.name)
+            add(methodDispatch.name)
+            add(methodIntroducesSlot.toString())
+            add(methodIsHideBySig.toString())
+            add(methodIsSpecialName.toString())
+            add(methodIsRuntimeSpecialName.toString())
+            add(naturalInterfaceTypeArguments.size.toString())
+            naturalInterfaceTypeArguments.forEach { argument ->
+                add(encodeText(DotNetGenericOwnerPhysicalFamilyCodec.encodePhysicalTypeExpression(argument)))
+            }
+        }
+
+    private fun decodeGenericOwnerImplementationMethodDef(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef {
+        require(fields.size >= 17) {
+            "generic-owner implementation MethodDef '$logicalKey' has an incomplete physical descriptor"
+        }
+        fun boolean(field: Int, role: String): Boolean = when (fields[field]) {
+            "true" -> true
+            "false" -> false
+            else -> throw IllegalArgumentException(
+                "generic-owner implementation MethodDef '$logicalKey' has an invalid $role marker"
+            )
+        }
+        fun <E : Enum<E>> enumField(field: Int, values: Array<E>, role: String): E =
+            values.singleOrNull { value -> value.name == fields[field] }
+                ?: throw IllegalArgumentException(
+                    "generic-owner implementation MethodDef '$logicalKey' has an invalid $role"
+                )
+
+        val argumentCount = fields[16].toIntOrNull()?.takeIf { count ->
+            count in 0..MAX_GENERIC_OWNER_IMPLEMENTATION_INTERFACE_ARGUMENTS
+        }
+            ?: throw IllegalArgumentException(
+                "generic-owner implementation MethodDef '$logicalKey' has an invalid interface-argument count"
+            )
+        require(fields.size == 17 + argumentCount) {
+            "generic-owner implementation MethodDef '$logicalKey' has an inconsistent interface-argument count"
+        }
+        val ownerPath = decodeText(fields[4]).split('\u0000')
+        val variances = fields[5].split(',').filter(String::isNotEmpty).map { name ->
+            DotNetGenericOwnerPhysicalTypeParameterVariance.entries.singleOrNull { variance ->
+                variance.name == name
+            } ?: throw IllegalArgumentException(
+                "generic-owner implementation MethodDef '$logicalKey' has an invalid owner variance '$name'"
+            )
+        }
+        val method = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+            physicalOwnerPath = ownerPath,
+            physicalMethodName = decodeText(fields[8]),
+            signature = run {
+                val encoded = fields[9]
+                require(encoded.length <=
+                        DotNetGenericOwnerPhysicalFamilyCodec.MAX_SERIALIZED_PHYSICAL_FIELD_CHARS
+                ) {
+                    "generic-owner implementation MethodDef '$logicalKey' has an oversized physical signature"
+                }
+                DotNetGenericOwnerPhysicalFamilyCodec.decodePhysicalMethodSignature(encoded)
+            },
+        )
+        return DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef(
+            logicalInterfaceMemberKey = fields[1],
+            implementationOwnerKey = fields[2],
+            implementationMemberKey = fields[3],
+            ownerPath = ownerPath,
+            ownerTypeParameterVariances = variances,
+            ownerVisibility = enumField(
+                6,
+                DotNetGenericOwnerPhysicalTypeVisibility.entries.toTypedArray(),
+                "owner visibility",
+            ),
+            ownerDispatch = enumField(
+                7,
+                DotNetGenericOwnerPhysicalTypeDispatch.entries.toTypedArray(),
+                "owner dispatch",
+            ),
+            naturalInterfaceTypeArguments = fields.drop(17).map { encoded ->
+                require(encoded.length <=
+                        DotNetGenericOwnerPhysicalFamilyCodec.MAX_BASE64_PHYSICAL_FIELD_CHARS
+                ) {
+                    "generic-owner implementation MethodDef '$logicalKey' has an oversized interface argument"
+                }
+                DotNetGenericOwnerPhysicalFamilyCodec.decodePhysicalTypeExpression(decodeText(encoded))
+            },
+            physicalMethod = method,
+            methodVisibility = enumField(
+                10,
+                DotNetGenericOwnerPhysicalMemberVisibility.entries.toTypedArray(),
+                "MethodDef visibility",
+            ),
+            methodDispatch = enumField(
+                11,
+                DotNetGenericOwnerPhysicalMemberDispatch.entries.toTypedArray(),
+                "MethodDef dispatch",
+            ),
+            methodIntroducesSlot = boolean(12, "newslot"),
+            methodIsHideBySig = boolean(13, "hidebysig"),
+            methodIsSpecialName = boolean(14, "specialname"),
+            methodIsRuntimeSpecialName = boolean(15, "rtspecialname"),
+        ).also { declaration ->
+            require(declaration.indexKey() == logicalKey) {
+                "generic-owner implementation MethodDef '$logicalKey' is inconsistent with its structured identity"
+            }
+            require(declaration.encodeFields() == fields) {
+                "generic-owner implementation MethodDef '$logicalKey' is not canonically encoded"
+            }
+        }
+    }
+
     /**
      * CLR slot identity excludes Kotlin routing domains and nullable-reference attributes.
      * Those annotations remain independently validated facts, but changing either cannot turn
@@ -2108,7 +2360,7 @@ object DotNetLibraryAbiCodec {
     ) {
         fun requiredDeclaration(key: String, role: String): DotNetPhysicalDeclaration =
             declarations[key] ?: throw IllegalArgumentException(
-                "producer-sealed family requires its $role record '$key'",
+                "generic-owner physical authority requires its $role record '$key'",
             )
 
         val interfaceFamilies = declarations.values
@@ -2223,6 +2475,113 @@ object DotNetLibraryAbiCodec {
                 "generic-owner natural MethodDef '${natural.indexKey()}' is not backed by a directly declared H member"
             }
         }
+
+        fun DotNetGenericOwnerPhysicalTypeExpressionRecord.bindOwnerParameters(
+            substitutions: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
+        ): DotNetGenericOwnerPhysicalTypeExpressionRecord = when (kind) {
+            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ->
+                substitutions.getOrNull(checkNotNull(parameterIndex))
+                    ?: throw IllegalArgumentException(
+                        "a natural MethodDef signature references a missing implementation interface argument"
+                    )
+            else -> copy(arguments = this.arguments.map { argument ->
+                argument.bindOwnerParameters(substitutions)
+            })
+        }
+
+        fun DotNetGenericOwnerPhysicalMethodSignatureRecord.bindOwnerParameters(
+            arguments: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
+        ): DotNetGenericOwnerPhysicalMethodSignatureRecord {
+            fun DotNetGenericOwnerPhysicalValueSlotRecord.bound() = copy(
+                type = type.bindOwnerParameters(arguments),
+            )
+            val boundResult = when (val result = resultLayout) {
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> result
+                is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ->
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(result.slot.bound())
+                is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable ->
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable(
+                        result.payloadSlot.bound(),
+                    )
+            }
+            return copy(
+                resultLayout = boundResult,
+                parameterSlots = parameterSlots.map { slot -> slot.bound() },
+            )
+        }
+
+        val implementationMethodDefs = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+        implementationMethodDefs.groupBy { implementation ->
+            implementation.physicalMethod.withoutLogicalSlotAnnotations()
+        }.entries.forEach { entry ->
+            require(entry.value.size == 1) {
+                val method = entry.key
+                "generic-owner implementation MethodDef ${method.physicalOwnerPath.joinToString("/")}::" +
+                        "${method.physicalMethodName} is claimed by multiple logical members: " +
+                        entry.value.map { claim -> claim.implementationMemberKey }.sorted()
+            }
+        }
+        implementationMethodDefs.forEach { implementation ->
+            val indexKey = implementation.indexKey()
+            require(declarations[indexKey] == implementation) {
+                "generic-owner implementation MethodDef '$indexKey' is inconsistent with its structured identity"
+            }
+            val owner = requiredDeclaration(
+                implementation.implementationOwnerKey,
+                "implementation-owner class",
+            ) as? DotNetPhysicalDeclaration.Class ?: throw IllegalArgumentException(
+                "implementation MethodDef '$indexKey' has a non-class implementation owner",
+            )
+            require(owner.ownerPath == implementation.ownerPath &&
+                    owner.physicalTypeParameterCount == implementation.ownerTypeParameterVariances.size &&
+                    owner.physicalTypeParameterVariances == implementation.ownerTypeParameterVariances
+            ) {
+                "implementation MethodDef '$indexKey' disagrees with its C owner"
+            }
+            val function = requiredDeclaration(
+                implementation.implementationMemberKey,
+                "implementation function",
+            ) as? DotNetPhysicalDeclaration.Function ?: throw IllegalArgumentException(
+                "implementation MethodDef '$indexKey' has a non-function F endpoint",
+            )
+            require(function.ownerPath == implementation.ownerPath &&
+                    function.methodName == implementation.physicalMethod.physicalMethodName &&
+                    function.isInstance == implementation.physicalMethod.signature.isInstance &&
+                    function.methodGenericParameterCount == implementation.physicalMethod.signature.genericArity
+            ) {
+                "implementation MethodDef '$indexKey' disagrees with its F endpoint"
+            }
+            val natural = requiredDeclaration(
+                "N:${implementation.logicalInterfaceMemberKey}",
+                "natural MethodDef",
+            ) as? DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef
+                ?: throw IllegalArgumentException(
+                    "implementation MethodDef '$indexKey' has a non-MethodDef N endpoint",
+                )
+            require(natural.logicalMemberKey == implementation.logicalInterfaceMemberKey &&
+                    natural.physicalMethod.physicalMethodName ==
+                    implementation.physicalMethod.physicalMethodName &&
+                    implementation.naturalInterfaceTypeArguments.size ==
+                    natural.publication().naturalType.structural.genericArity &&
+                    natural.physicalMethod.signature.bindOwnerParameters(
+                        implementation.naturalInterfaceTypeArguments,
+                    ) == implementation.physicalMethod.signature
+            ) {
+                "implementation MethodDef '$indexKey' disagrees with its N slot construction"
+            }
+            require(implementation.ownerVisibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC &&
+                    implementation.ownerDispatch == DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE &&
+                    implementation.methodVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
+                    implementation.methodDispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
+                    implementation.methodIsHideBySig && !implementation.methodIsSpecialName &&
+                    !implementation.methodIsRuntimeSpecialName &&
+                    implementation.physicalMethod.signature.genericArity == 0
+            ) {
+                "implementation MethodDef '$indexKey' is outside the ABI-64 bounded open-class grammar"
+            }
+        }
+
         declarations.forEach { [indexKey, declaration] ->
             if (declaration !is DotNetPhysicalDeclaration.GenericOwnerSealedFamily) return@forEach
             require(declaration.indexKey() == indexKey) {
@@ -2230,6 +2589,13 @@ object DotNetLibraryAbiCodec {
             }
             val publication = declaration.publication()
             val key = publication.key
+            require(implementationMethodDefs.none { implementation ->
+                implementation.implementationOwnerKey == key.implementationOwnerKey &&
+                        implementation.implementationMemberKey == key.implementationMemberKey
+            }) {
+                "producer-sealed family '$indexKey' overlaps an ABI-64 implementation MethodDef; " +
+                        "the bounded J and M owner grammars are disjoint"
+            }
             val typeDefs = publication.body.typeDefs.associateBy { row -> row.role }
             val methodDefs = publication.body.methodDefs.associateBy { row -> row.role }
 
@@ -2237,6 +2603,19 @@ object DotNetLibraryAbiCodec {
                 typeDefs.getValue(role).row
             fun methodDef(role: DotNetProducerGenericOwnerSealedMethodDefRole) =
                 methodDefs.getValue(role).row
+            val sealedImplementationMethod = dotNetProducerSealedMethodDefPhysicalIdentity(
+                key.implementationMemberKey,
+                typeDef(DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS),
+                methodDefs.getValue(
+                    DotNetProducerGenericOwnerSealedMethodDefRole.IMPLEMENTATION_TYPED_ENTRY,
+                ),
+            ).withoutLogicalSlotAnnotations()
+            require(implementationMethodDefs.none { implementation ->
+                implementation.physicalMethod.withoutLogicalSlotAnnotations() == sealedImplementationMethod
+            }) {
+                "producer-sealed family '$indexKey' and an ABI-64 implementation MethodDef " +
+                        "claim the same physical implementation MethodDef"
+            }
             fun function(logicalKey: String, role: String): DotNetPhysicalDeclaration.Function =
                 requiredDeclaration(logicalKey, role) as? DotNetPhysicalDeclaration.Function
                     ?: throw IllegalArgumentException(
@@ -2974,6 +3353,11 @@ internal data class DotNetBoundGenericOwnerNaturalMethodDef(
     val declaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
 )
 
+internal data class DotNetBoundGenericOwnerImplementationMethodDef(
+    val library: DotNetExternalLibrary,
+    val declaration: DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef,
+)
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -3106,6 +3490,22 @@ internal class DotNetExternalDeclarationIndex(
                     }
             }
         }
+    internal val genericOwnerImplementationMethodDefsByLogicalKey:
+        Map<String, DotNetBoundGenericOwnerImplementationMethodDef> = buildMap {
+            libraries.forEach { library ->
+                library.declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+                    .forEach { declaration ->
+                        require(put(
+                            declaration.implementationMemberKey,
+                            DotNetBoundGenericOwnerImplementationMethodDef(library, declaration),
+                        ) == null) {
+                            "duplicate external Kotlin/.NET implementation MethodDef " +
+                                    "'${declaration.implementationMemberKey}'"
+                        }
+                    }
+            }
+        }
 
     init {
         publishedGenericInterfaceFamiliesByLogicalKey.forEach { entry ->
@@ -3204,6 +3604,8 @@ internal class DotNetExternalDeclarations(
         index.publishedGenericInterfaceFamiliesByLogicalKey
     private val genericOwnerNaturalMethodDefsByLogicalKey =
         index.genericOwnerNaturalMethodDefsByLogicalKey
+    private val genericOwnerImplementationMethodDefsByLogicalKey =
+        index.genericOwnerImplementationMethodDefsByLogicalKey
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerExactInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
@@ -3225,6 +3627,70 @@ internal class DotNetExternalDeclarations(
     ): DotNetBoundGenericOwnerNaturalMethodDef? {
         val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
         return genericOwnerNaturalMethodDefsByLogicalKey[logicalKey]
+    }
+
+    fun genericOwnerImplementationMethodDefOrNull(
+        function: IrSimpleFunction,
+    ): DotNetBoundGenericOwnerImplementationMethodDef? {
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
+        val binding = genericOwnerImplementationMethodDefsByLogicalKey[logicalKey] ?: return null
+        val declaration = binding.declaration
+        val owner = function.parent as? IrClass
+            ?: error("implementation MethodDef '$logicalKey' has no logical class owner")
+        val ownerKey = logicalKeys.keyOrNull(owner, "C")
+        require(ownerKey == declaration.implementationOwnerKey &&
+                owner.typeParameters.size == declaration.ownerTypeParameterVariances.size
+        ) {
+            "implementation MethodDef '$logicalKey' disagrees with its logical KLIB owner"
+        }
+        val natural = genericOwnerNaturalMethodDefsByLogicalKey[
+            declaration.logicalInterfaceMemberKey
+        ] ?: error(
+            "implementation MethodDef '$logicalKey' lost its natural MethodDef authority",
+        )
+        require(natural.library == binding.library) {
+            "implementation MethodDef '$logicalKey' crosses producer libraries"
+        }
+        val overriddenNaturalKeys = function.allOverridden().mapNotNull { overridden ->
+            externalGenericOwnerFunctionKeyOrNull(overridden)
+        }.filter { overriddenKey -> overriddenKey == declaration.logicalInterfaceMemberKey }
+        require(overriddenNaturalKeys.isNotEmpty()) {
+            "implementation MethodDef '$logicalKey' does not reach its recorded N member in KLIB"
+        }
+
+        val directNaturalViews = owner.superTypes.mapNotNull { superType ->
+            val simpleType = superType as? IrSimpleType ?: return@mapNotNull null
+            val classifier = (simpleType.classifier as? IrClassSymbol)?.owner
+                ?: return@mapNotNull null
+            if (logicalKeys.keyOrNull(classifier, "C") != natural.declaration.logicalOwnerKey) {
+                return@mapNotNull null
+            }
+            simpleType
+        }
+        require(directNaturalViews.size == 1) {
+            "implementation MethodDef '$logicalKey' does not have one direct logical N construction"
+        }
+        val logicalMapping = directNaturalViews.single().arguments.map { argument ->
+            val argumentType = (argument as? IrTypeProjection)?.type as? IrSimpleType
+                ?: throw IllegalArgumentException(
+                    "implementation MethodDef '$logicalKey' has a projected logical N construction",
+                )
+            val parameter = (argumentType.classifier as? IrTypeParameterSymbol)?.owner
+                ?: throw IllegalArgumentException(
+                    "implementation MethodDef '$logicalKey' has a fixed logical N construction",
+                )
+            owner.typeParameters.indexOf(parameter).takeIf { index -> index >= 0 }
+                ?: throw IllegalArgumentException(
+                    "implementation MethodDef '$logicalKey' uses a foreign logical owner parameter",
+                )
+        }
+        val physicalMapping = declaration.naturalInterfaceTypeArguments.map { argument ->
+            checkNotNull(argument.parameterIndex)
+        }
+        require(logicalMapping == physicalMapping) {
+            "implementation MethodDef '$logicalKey' logical and physical N constructions disagree"
+        }
+        return binding
     }
 
     /**
@@ -3926,12 +4392,43 @@ internal class DotNetExternalDeclarations(
         }
         val ownerVariances = publishedFamily.family.naturalTypeParameterVariances
             .map { variance -> variance.toDotNetIlVariance() }
+        return recordedGenericOwnerMethodDefFunctionInfo(
+            library = binding.library,
+            physicalMethod = declaration.physicalMethod,
+            ownerVariances = ownerVariances,
+            diagnosticKey = declaration.logicalMemberKey,
+        )
+    }
+
+    fun genericOwnerImplementationMethodDefFunctionInfo(
+        binding: DotNetBoundGenericOwnerImplementationMethodDef,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "implementation MethodDef binding belongs to an unbound external library"
+        }
+        val declaration = binding.declaration
+        return recordedGenericOwnerMethodDefFunctionInfo(
+            library = binding.library,
+            physicalMethod = declaration.physicalMethod,
+            ownerVariances = declaration.ownerTypeParameterVariances.map {
+                Variance.INVARIANT
+            },
+            diagnosticKey = declaration.implementationMemberKey,
+        )
+    }
+
+    private fun recordedGenericOwnerMethodDefFunctionInfo(
+        library: DotNetExternalLibrary,
+        physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+        ownerVariances: List<Variance>,
+        diagnosticKey: String,
+    ): DotNetIlFunctionInfo {
         val owner = buildClassInfo(
-            binding.library.artifact.assemblyName,
-            declaration.ownerPath,
+            library.artifact.assemblyName,
+            physicalMethod.physicalOwnerPath,
             ownerVariances,
         )
-        val signatureRecord = declaration.physicalMethod.signature
+        val signatureRecord = physicalMethod.signature
 
         fun physicalType(
             record: DotNetGenericOwnerPhysicalTypeExpressionRecord,
@@ -3948,15 +4445,15 @@ internal class DotNetExternalDeclarations(
                 DotNetIlValueType.GenericArray(physicalType(record.arguments.single()))
             DotNetGenericOwnerPhysicalTypeKind.NAMED -> {
                 require(record.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER) {
-                    "natural MethodDef '${declaration.logicalMemberKey}' uses an external named carrier " +
+                    "recorded MethodDef '$diagnosticKey' uses an external named carrier " +
                             "outside the final producer-sealed projection grammar"
                 }
                 require(record.namedTypeCategory != DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE) {
-                    "natural MethodDef '${declaration.logicalMemberKey}' uses a named value-type carrier " +
+                    "recorded MethodDef '$diagnosticKey' uses a named value-type carrier " +
                             "outside the current IL value-type grammar"
                 }
                 val classInfo = buildClassInfo(
-                    binding.library.artifact.assemblyName,
+                    library.artifact.assemblyName,
                     record.typePath,
                     List(record.genericArity) { Variance.INVARIANT },
                 )
@@ -3967,7 +4464,7 @@ internal class DotNetExternalDeclarations(
                 }
             }
             DotNetGenericOwnerPhysicalTypeKind.VOID -> error(
-                "natural MethodDef '${declaration.logicalMemberKey}' uses void as a value carrier"
+                "recorded MethodDef '$diagnosticKey' uses void as a value carrier"
             )
         }
 
@@ -3998,7 +4495,7 @@ internal class DotNetExternalDeclarations(
                         DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable,
                 methodGenericParameterCount = signatureRecord.genericArity,
             ),
-            physicalMethodName = declaration.physicalMethod.physicalMethodName,
+            physicalMethodName = physicalMethod.physicalMethodName,
         )
     }
 

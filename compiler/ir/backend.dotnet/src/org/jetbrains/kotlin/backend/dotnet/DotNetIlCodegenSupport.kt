@@ -1476,6 +1476,7 @@ internal class DotNetIlTypeMapper private constructor(
             ?: externalGenericOwnerFunctionInputEntries[function]?.let { binding ->
                 externalDeclarations.genericOwnerFunctionInputEntryInfo(function, binding, this)
             }
+            ?: externalGenericOwnerImplementationMethodDefInfoOrNull(function)
             ?: libraryFunction()
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
@@ -1613,6 +1614,42 @@ internal class DotNetIlTypeMapper private constructor(
             .toList()
         return candidates
     }
+
+    /** Exact producer-sealed class MethodDef; no overridden-name or arity search is permitted. */
+    fun externalGenericOwnerImplementationMethodDefInfoOrNull(
+        function: IrSimpleFunction,
+    ): DotNetIlFunctionInfo? =
+        externalDeclarations.genericOwnerImplementationMethodDefOrNull(function)?.let { binding ->
+            val info = externalDeclarations.genericOwnerImplementationMethodDefFunctionInfo(binding)
+            val owner = function.parent as? IrClass
+                ?: error("external implementation MethodDef '${function.render()}' has no class owner")
+            val result = function.returnType as? IrSimpleType
+                ?: error("external implementation MethodDef '${function.render()}' has no direct result type")
+            val resultParameter = (result.classifier as? IrTypeParameterSymbol)?.owner
+                ?: error(
+                    "external implementation MethodDef '${function.render()}' does not return an owner parameter",
+                )
+            val resultParameterIndex = owner.typeParameters.indexOf(resultParameter)
+            check(resultParameterIndex >= 0) {
+                "external implementation MethodDef '${function.render()}' returns a foreign owner parameter"
+            }
+            val logicalSignature = function.dotNetSignature(this)
+            val projection = inspectDotNetExternalNaturalMethodLogicalProjection(
+                logicalParameterTypes = logicalSignature.parameterTypes.drop(1),
+                logicalResultOwnerParameterIndex = resultParameterIndex,
+                logicalSplitNullableResult = result.isMarkedNullable(),
+                recordedInfo = info,
+            )
+            check(projection is DotNetGenericOwnerPhysicalBindingResult.Bound) {
+                val reason = (projection as? DotNetGenericOwnerPhysicalBindingResult.Conflict)?.reason
+                    ?: "the logical projection was unavailable"
+                "Internal .NET backend error: implementation MethodDef " +
+                        "'${binding.declaration.implementationMemberKey}' disagrees with KLIB: $reason"
+            }
+            info.also {
+                recordAssemblyReference(info.owner)
+            }
+        }
 
     fun genericOwnerWrongShapePolicy(function: IrSimpleFunction): DotNetCSharpWrongShapePolicy? =
         genericOwnerWrongShapePolicies[function]

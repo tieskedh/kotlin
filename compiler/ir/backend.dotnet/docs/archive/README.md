@@ -14,6 +14,14 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-external-class-methoddef-authority-2026-08-29.md`](generic-owner-external-class-methoddef-authority-2026-08-29.md)
+  records physical-library ABI 64's standalone `M` seal for one public open
+  generic Kotlin class MethodDef, its exact constructed `N` InterfaceImpl,
+  producer-final and consumer-PE validation, downstream split-nullable override
+  preservation, hostile same-name overload exclusion, implicit CLR dispatch,
+  unchanged runtime surface 60 and artifact schema 21, and the exact
+  production-erased `H/N/M/J` inverse. The record owns the focused and target-
+  wide verification totals.
 - [`generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md`](generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md)
   records physical-library ABI 63 and generic-owner artifact schema 21's
   declaration-level self-sealing `N` natural TypeDef/MethodDef publication,

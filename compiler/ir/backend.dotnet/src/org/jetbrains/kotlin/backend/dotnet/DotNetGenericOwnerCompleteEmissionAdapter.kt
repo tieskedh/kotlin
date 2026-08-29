@@ -540,6 +540,276 @@ internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
     }
 }
 
+/**
+ * Seals one concrete class MethodDef independently from the complete semantic `J` family.
+ *
+ * Selection is exclusively the pre-lowering implementation/root symbols. The physical path,
+ * MethodDef name, signature and flags are facts copied from the successful final-emission
+ * transaction; none of them participates in choosing the candidate.
+ */
+internal fun inspectDotNetProducerGenericOwnerImplementationMethodDefPublication(
+    logicalInterfaceMemberKey: String,
+    implementationOwnerKey: String,
+    implementationMemberKey: String,
+    naturalOwner: IrClass,
+    naturalSource: IrSimpleFunction,
+    implementationOwner: IrClass,
+    implementationSource: IrSimpleFunction,
+    naturalDeclaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
+    current: DotNetGenericOwnerCompleteEmissionScopeObservations,
+    otherScopes: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef> {
+    if (naturalDeclaration.logicalMemberKey != logicalInterfaceMemberKey ||
+        naturalSource.parent !== naturalOwner || implementationSource.parent !== implementationOwner
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "an implementation MethodDef publication crossed its exact pre-lowering declaration join",
+        )
+    }
+
+    val expectedImplementationOwner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+        implementationOwner.symbol,
+        view = null,
+    )
+    val expectedNaturalOwner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+        naturalOwner.symbol,
+        DotNetGenericInterfaceView.DECLARED,
+    )
+    val expectedMethod = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+        implementationSource.symbol,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    val expectedNaturalMethod = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+        naturalSource.symbol,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    fun DotNetGenericOwnerPhysicalTypeDefEmissionObservation.claimsImplementationOwner(): Boolean =
+        claimedAliases.any(expectedImplementationOwner::sameLocalTypeIdentityAs)
+    fun DotNetGenericOwnerPhysicalMethodDefHeaderObservation.claimsImplementationMethod(): Boolean =
+        physicalMethodIdentity?.sameLocalMethodIdentityAs(expectedMethod) == true
+
+    if (otherScopes.any { scope ->
+            scope.typeDefs.any { observation -> observation.claimsImplementationOwner() } ||
+                    scope.methodDefs.any { observation -> observation.claimsImplementationMethod() }
+        }
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "an implementation MethodDef declaration was observed in more than one emission scope",
+        )
+    }
+    val typeObservation = current.typeDefs.singleOrNull { observation ->
+        observation.claimsImplementationOwner()
+    } ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+        "an implementation MethodDef requires exactly one final implementation TypeDef observation",
+    )
+    val observedOwner = when (val physicalType = typeObservation.physicalType) {
+        is DotNetGenericOwnerObservedMethodDefOwner.Local -> physicalType.typeDef
+        is DotNetGenericOwnerObservedMethodDefOwner.Unbindable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(physicalType.reason)
+    }
+    if (observedOwner.aliases.none(expectedImplementationOwner::sameLocalTypeIdentityAs) ||
+        observedOwner.category != DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS ||
+        observedOwner.genericArity <= 0 || typeObservation.physicalTypePath.size != 1 ||
+        typeObservation.flags.visibility != DotNetIlRawTypeDefVisibility.PUBLIC ||
+        typeObservation.flags.isInterface || typeObservation.flags.isAbstract ||
+        typeObservation.flags.isSealed ||
+        typeObservation.genericParameters.size != observedOwner.genericArity ||
+        typeObservation.genericParameters.any { parameter ->
+            parameter.variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT ||
+                    parameter.constraints.isNotEmpty()
+        }
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+
+    val methodIdentityCandidates = current.methodDefs.filter { observation ->
+        observation.claimsImplementationMethod()
+    }
+    if (methodIdentityCandidates.isEmpty()) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val methodCandidates = methodIdentityCandidates.filter { observation ->
+        (observation.physicalMethodOwner as? DotNetGenericOwnerObservedMethodDefOwner.Local)
+            ?.typeDef?.physicalKey == observedOwner.physicalKey
+    }
+    if (methodCandidates.size != 1 || methodIdentityCandidates.size != 1) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "an implementation MethodDef requires exactly one final MethodDef on its exact class owner",
+        )
+    }
+    val methodObservation = methodCandidates.single()
+    if (methodObservation.visibility != DotNetIlRawMethodDefVisibility.PUBLIC ||
+        !methodObservation.dispatch.isInstance || !methodObservation.dispatch.isVirtual ||
+        methodObservation.dispatch.isAbstract || methodObservation.dispatch.isFinal ||
+        !methodObservation.isHideBySig || methodObservation.isSpecialName ||
+        methodObservation.isRuntimeSpecialName || methodObservation.genericArity != 0 ||
+        methodObservation.genericParameters.isNotEmpty()
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val naturalConstructionCandidates = typeObservation.directSupertypes.filter { edge ->
+        edge.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE &&
+                (edge.target as? DotNetGenericOwnerObservedMethodCarrier.LocalConstruction)
+                    ?.definition?.aliases?.any(expectedNaturalOwner::sameLocalTypeIdentityAs) == true
+    }
+    if (naturalConstructionCandidates.isEmpty()) {
+        // The bounded M grammar records only one direct construction of N. Transitive or
+        // otherwise unrepresented interface authority remains a later proof, not a conflict in
+        // an otherwise valid producer library.
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    if (naturalConstructionCandidates.size != 1) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "an implementation MethodDef requires one exact direct construction of its N owner",
+        )
+    }
+    val naturalConstruction = naturalConstructionCandidates.single().target as
+            DotNetGenericOwnerObservedMethodCarrier.LocalConstruction
+    if (current.methodImpls.any { observation ->
+            val implementingOwner = observation.implementingType as?
+                    DotNetGenericOwnerObservedMethodDefOwner.Local
+            implementingOwner?.typeDef?.aliases?.any(
+                expectedImplementationOwner::sameLocalTypeIdentityAs,
+            ) == true && (
+                    observation.bodyFunction === implementationSource.symbol ||
+                            observation.bodyIdentity?.sameLocalMethodIdentityAs(expectedMethod) == true ||
+                            observation.declarationOwner == naturalConstruction ||
+                            observation.declarationFunction === naturalSource.symbol ||
+                            observation.declarationIdentity
+                                ?.sameLocalMethodIdentityAs(expectedNaturalMethod) == true
+                    )
+        }
+    ) {
+        // ABI 64 M records only ordinary implicit dispatch. Neither redirecting the class body
+        // nor any member of the selected N construction may be silently omitted from this seal.
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val naturalArity = naturalDeclaration.publication().naturalType.structural.genericArity
+    if (naturalConstruction.arguments.size != naturalArity) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "an implementation MethodDef has an arity-mismatched natural-interface construction",
+        )
+    }
+    val naturalArguments = naturalConstruction.arguments.map { argument ->
+        val parameter = argument as? DotNetGenericOwnerObservedMethodCarrier.OwnerParameter
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (parameter.binder.physicalKey != observedOwner.physicalKey ||
+            parameter.index !in 0 until observedOwner.genericArity
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "an implementation MethodDef interface construction has an unbound owner parameter",
+            )
+        }
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(parameter.index)
+    }
+
+    val allocator = EmissionIdentityAllocator()
+    allocator.expectedTypeAliasGroup(
+        observedOwner.aliases,
+        DotNetGenericOwnerPhysicalTypeDefReference(
+            expectedImplementationOwner,
+            observedOwner.genericArity,
+            observedOwner.category,
+        ),
+    )
+    val methodKey = allocator.method(expectedMethod)
+    val ownerKey = when (val key = allocator.actualType(observedOwner)) {
+        is EmissionIdentityAllocator.ActualType.Bound -> key.key
+        is EmissionIdentityAllocator.ActualType.Conflict ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(key.reason)
+    }
+    val header = when (val evidence = buildDotNetGenericOwnerActualMethodDefEmissionHeaderShape(
+        allocator,
+        expectedMethod,
+        methodObservation,
+        observedOwner,
+    )) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> evidence.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return evidence
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "the final implementation MethodDef has no self-contained owner binding",
+            )
+    }
+    val naturalSignature = naturalDeclaration.physicalMethod.signature
+    if (header.ordinaryParameterCarriers.size != naturalSignature.parameterSlots.size ||
+        (header.result is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable) !=
+        (naturalSignature.resultLayout is
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the final implementation MethodDef disagrees with its N calling convention",
+        )
+    }
+    val implementationType = DotNetGenericOwnerSealedEmissionTypeDefRow(
+        structural = DotNetGenericOwnerCompleteEmissionTypeDefRow(
+            identityKey = ownerKey,
+            aliases = observedOwner.aliases.map(allocator::alias),
+            genericArity = observedOwner.genericArity,
+            category = observedOwner.category,
+            genericParameters = typeObservation.genericParameters.map { parameter ->
+                DotNetGenericOwnerCompleteEmissionGenericParameterRow(
+                    parameter.variance,
+                    constraints = emptyList(),
+                )
+            },
+            // M seals the class binder, not a partial copy of the complete TypeDef graph. The
+            // exact N construction is recorded independently below and PE-validated on import.
+            directEdges = emptyList(),
+        ),
+        physicalPath = typeObservation.physicalTypePath,
+        flags = typeObservation.flags,
+    )
+    val implementationMethod = DotNetProducerGenericOwnerSealedMethodDef(
+        role = DotNetProducerGenericOwnerSealedMethodDefRole.IMPLEMENTATION_TYPED_ENTRY,
+        row = DotNetGenericOwnerSealedEmissionMethodDefRow(
+            structural = DotNetGenericOwnerCompleteEmissionMethodDefRow(
+                identityKey = methodKey,
+                header = header,
+                genericParameters = emptyList(),
+            ),
+            physicalName = methodObservation.physicalMethodName,
+            physicalGenericParameterNames = emptyList(),
+            visibility = methodObservation.visibility,
+            dispatch = methodObservation.dispatch,
+            isHideBySig = methodObservation.isHideBySig,
+            isSpecialName = methodObservation.isSpecialName,
+            isRuntimeSpecialName = methodObservation.isRuntimeSpecialName,
+        ),
+        logicalParameterDomains = naturalSignature.parameterSlots.map { slot -> slot.domain },
+        logicalResultDomain = naturalSignature.resultLayout.valueSlotOrNull?.domain,
+    )
+    val physicalMethod = try {
+        dotNetProducerSealedMethodDefPhysicalIdentity(
+            implementationMemberKey,
+            implementationType,
+            implementationMethod,
+        )
+    } catch (failure: IllegalArgumentException) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            failure.message ?: "the implementation MethodDef cannot be projected",
+        )
+    }
+    val declaration = DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef(
+        logicalInterfaceMemberKey = logicalInterfaceMemberKey,
+        implementationOwnerKey = implementationOwnerKey,
+        implementationMemberKey = implementationMemberKey,
+        ownerPath = implementationType.physicalPath,
+        ownerTypeParameterVariances = implementationType.structural.genericParameters.map { parameter ->
+            parameter.variance
+        },
+        ownerVisibility = DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC,
+        ownerDispatch = DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE,
+        naturalInterfaceTypeArguments = naturalArguments,
+        physicalMethod = physicalMethod,
+        methodVisibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+        methodDispatch = DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE,
+        methodIntroducesSlot = methodObservation.dispatch.isNewSlot,
+        methodIsHideBySig = methodObservation.isHideBySig,
+        methodIsSpecialName = methodObservation.isSpecialName,
+        methodIsRuntimeSpecialName = methodObservation.isRuntimeSpecialName,
+    )
+    return DotNetGenericOwnerPhysicalBindingResult.Bound(declaration)
+}
+
 private data class CompleteExpectedMethod(
     val kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
     val emittedFunction: IrSimpleFunctionSymbol,
