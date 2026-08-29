@@ -329,6 +329,16 @@ object DotNetBackend {
                 successfulCompleteEmissionObservations.toList(),
             ).also { products -> cachedPhysicalCompleteEmissionProducts = products }
         }
+        fun physicalStateEmissionSnapshots(): List<DotNetGenericOwnerPhysicalStateEmissionSnapshot> {
+            if (!configuration.dotNetGenericOwnerRehearsal) return emptyList()
+            val authority = when (val binding = localPhysicalAuthorityForEmissionComparison) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> return emptyList()
+            }
+            return authority.sealFinalStateFields(successfulCompleteEmissionObservations.toList())
+        }
         fun Map<String, DotNetPhysicalDeclaration>.withProducerSealedGenericOwnerFamilies(
             scope: DotNetIlEmissionScope,
             declarationKeys: Map<IrDeclaration, String>,
@@ -519,7 +529,12 @@ object DotNetBackend {
                 }
             }
         }
-        fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()):
+        fun result(
+            file: File,
+            declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap(),
+            physicalStateEmissionSnapshots:
+                List<DotNetGenericOwnerPhysicalStateEmissionSnapshot> = emptyList(),
+        ):
                 DotNetBackendOutput {
             val completeEmissionProducts = physicalCompleteEmissionProducts()
             return DotNetBackendOutput(
@@ -535,6 +550,7 @@ object DotNetBackend {
                 completeEmissionProducts.map { product -> product.comparison },
                 completeEmissionProducts.map { product -> product.sealed },
                 configuration.dotNetGenericOwnerRehearsal,
+                physicalStateEmissionSnapshots,
             )
         }
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
@@ -615,6 +631,8 @@ object DotNetBackend {
             if (target == DotNetTarget.NET10_0) binaryOutput.runtimeConfigFile().delete()
         } else if (producedLibraryArtifact != null) {
             output.resolve(producedLibraryArtifact.assemblyFileName).delete()
+            ilTarget.delete()
+        } else {
             ilTarget.delete()
         }
 
@@ -751,6 +769,17 @@ object DotNetBackend {
             } else {
                 emptyMap()
             }
+        val localGenericOwnerPhysicalAuthority =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                when (val binding = context.localGenericOwnerPhysicalAuthority) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                }
+            } else {
+                null
+            }
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -780,6 +809,7 @@ object DotNetBackend {
                     hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
                     genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                     genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
+                    localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                     publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                     completeNaturalInterfacePhysicalVariances =
@@ -849,7 +879,11 @@ object DotNetBackend {
                 }
                 val stdlibOutput = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
                 val runtimeOutput = output.resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
+                stdlibOutput.delete()
                 runtimeOutput.delete()
+                // Seal structured state evidence before any current DLL/runtime artifact exists.
+                // Assembly success controls publication of the already validated snapshot only.
+                val sealedStateEmission = physicalStateEmissionSnapshots()
                 val assembledStdlib = DotNetStdlibLibrary.assembleIn(
                     output,
                     stdlibIlText,
@@ -872,7 +906,11 @@ object DotNetBackend {
                     assembledStdlib.delete()
                     return result(stdlibOutput)
                 }
-                return result(assembledStdlib, publishedStdlibDeclarations)
+                return result(
+                    assembledStdlib,
+                    publishedStdlibDeclarations,
+                    physicalStateEmissionSnapshots = sealedStateEmission,
+                )
             }
 
             // Treat a stdlib emitted from injected bootstrap sources exactly like a separately
@@ -942,6 +980,7 @@ object DotNetBackend {
                 },
                 genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                 genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
+                localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                 publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                 completeNaturalInterfacePhysicalVariances =
@@ -1000,6 +1039,9 @@ object DotNetBackend {
                 ilTarget.delete()
                 return result(ilTarget)
             }
+            // This must precede dependency packaging, IL publication, and ILAsm: a conflict in
+            // final structured FieldDef evidence cannot leave a seemingly current artifact.
+            val sealedStateEmission = physicalStateEmissionSnapshots()
             val ilText = emission.ilText
             fun referencesAssembly(name: String): Boolean =
                 emission.referencedAssemblies.any { referenced -> referenced.equals(name, ignoreCase = true) }
@@ -1099,7 +1141,7 @@ object DotNetBackend {
 
             if (producesLibrary) {
                 val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
-                DotNetIlAssembler.assembleLibrary(
+                val assembled = DotNetIlAssembler.assembleLibrary(
                     ilTarget,
                     assemblyOutput,
                     target,
@@ -1109,7 +1151,11 @@ object DotNetBackend {
                         kotlinMetadataResourceFactory,
                     ),
                 )
-                return result(assemblyOutput, userDeclarations)
+                return result(
+                    assemblyOutput,
+                    userDeclarations,
+                    physicalStateEmissionSnapshots = if (assembled) sealedStateEmission else emptyList(),
+                )
             }
 
             if (emitsExecutable) {
@@ -1150,16 +1196,21 @@ object DotNetBackend {
                 ) {
                     return result(binaryOutput)
                 }
-                DotNetIlAssembler.assembleExecutable(
+                val assembled = DotNetIlAssembler.assembleExecutable(
                     ilTarget,
                     binaryOutput,
                     target,
                     messageCollector,
                     emission.managedResources,
                 )
-                return result(binaryOutput)
+                return result(
+                    binaryOutput,
+                    physicalStateEmissionSnapshots = if (assembled) sealedStateEmission else emptyList(),
+                )
             }
 
+            // Raw IL is validated but has no assembled FieldDef table to publish as a sealed
+            // diagnostic snapshot. Only a successful ILAsm path publishes these observations.
             result(ilTarget)
         }
     }
@@ -1206,6 +1257,8 @@ data class DotNetBackendOutput(
     val genericOwnerSealedEmissionFamilies:
         List<DotNetGenericOwnerSealedEmissionFamilySnapshot>,
     val genericOwnerRehearsal: Boolean,
+    val genericOwnerPhysicalStateEmissionSnapshots:
+        List<DotNetGenericOwnerPhysicalStateEmissionSnapshot> = emptyList(),
 ) {
     init {
         require(genericOwnerRehearsal || genericInterfaceCompleteSurfaceVarianceShadows.isEmpty()) {
@@ -1213,6 +1266,9 @@ data class DotNetBackendOutput(
         }
         require(genericOwnerRehearsal || genericOwnerSealedEmissionFamilies.isEmpty()) {
             "the production erased epoch cannot publish sealed generic-owner families"
+        }
+        require(genericOwnerRehearsal || genericOwnerPhysicalStateEmissionSnapshots.isEmpty()) {
+            "the production erased epoch cannot publish sealed generic-owner state FieldDefs"
         }
         require(genericOwnerRehearsal || declarations.genericOwnerRehearsalEpochRecords().isEmpty()) {
             "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/M/J)"

@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.ir.util.isGetter
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrStarProjection
@@ -774,6 +775,8 @@ internal class DotNetIlTypeMapper private constructor(
     private val stdlibGenericClasses: MutableMap<IrClass, DotNetGenericClassInfo>,
     private val stdlibClassLinksInProgress: MutableSet<IrClass>,
     private val genericOwnerObjectStateFields: Set<IrField>,
+    private val genericOwnerAuthoritativeStateFieldCarriers:
+            Map<IrFieldSymbol, DotNetGenericOwnerSymbolicCarrierReference>,
     private val genericOwnerRehearsal: Boolean,
     private val genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo>,
     private val genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo>,
@@ -811,6 +814,8 @@ internal class DotNetIlTypeMapper private constructor(
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
         genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
         genericOwnerObjectStateFields: Set<IrField> = emptySet(),
+        genericOwnerAuthoritativeStateFieldCarriers:
+                Map<IrFieldSymbol, DotNetGenericOwnerSymbolicCarrierReference> = emptyMap(),
         genericOwnerRehearsal: Boolean = false,
         genericOwnerCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
         genericOwnerReflectionCapabilities: Map<IrClass, DotNetIlClassInfo> = emptyMap(),
@@ -853,6 +858,7 @@ internal class DotNetIlTypeMapper private constructor(
         mutableMapOf(),
         mutableSetOf(),
         genericOwnerObjectStateFields,
+        genericOwnerAuthoritativeStateFieldCarriers,
         genericOwnerRehearsal,
         genericOwnerCapabilities,
         genericOwnerReflectionCapabilities,
@@ -890,6 +896,7 @@ internal class DotNetIlTypeMapper private constructor(
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
             genericOwnerObjectStateFields,
+            genericOwnerAuthoritativeStateFieldCarriers,
             genericOwnerRehearsal,
             genericOwnerCapabilities,
             genericOwnerReflectionCapabilities,
@@ -950,6 +957,7 @@ internal class DotNetIlTypeMapper private constructor(
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
             genericOwnerObjectStateFields,
+            genericOwnerAuthoritativeStateFieldCarriers,
             genericOwnerRehearsal,
             genericOwnerCapabilities,
             genericOwnerReflectionCapabilities,
@@ -1563,13 +1571,52 @@ internal class DotNetIlTypeMapper private constructor(
         }
 
     /** Physical state may deliberately be wider than its logical Kotlin field type in the rehearsal epoch. */
-    fun toDotNetIlFieldType(field: IrField): DotNetIlValueType? =
-        if (field in genericOwnerObjectStateFields) DotNetIlValueType.Object
+    fun toDotNetIlFieldType(field: IrField): DotNetIlValueType? {
+        genericOwnerAuthoritativeStateFieldCarriers[field.symbol]?.let { carrier ->
+            return authoritativeGenericOwnerStateFieldType(field, carrier)
+        }
+        return if (field in genericOwnerObjectStateFields) DotNetIlValueType.Object
         else genericOwnerCapabilityTypeOrNull(field, field.type)
             ?: toDotNetIlValueType(field.type)
+    }
 
     fun isGenericOwnerObjectStateField(field: IrField): Boolean =
-        field in genericOwnerObjectStateFields
+        genericOwnerAuthoritativeStateFieldCarriers[field.symbol] ==
+                DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() ||
+                field in genericOwnerObjectStateFields
+
+    private fun authoritativeGenericOwnerStateFieldType(
+        field: IrField,
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+    ): DotNetIlValueType {
+        return when (carrier) {
+            DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() -> DotNetIlValueType.Object
+            is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+                val binder = carrier.binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type
+                    ?: error("Internal .NET backend error: authoritative state referenced a MethodDef parameter")
+                val localOwner = binder.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                    ?: error("Internal .NET backend error: local state referenced a non-local TypeDef parameter")
+                check(localOwner.view == null && field.parent == localOwner.owner.owner) {
+                    "Internal .NET backend error: authoritative state escaped its declaring TypeDef"
+                }
+                val mapped = genericOwnerCapabilityTypeOrNull(field, field.type)
+                    ?: toDotNetIlValueType(field.type)
+                    ?: error(
+                        "Internal .NET backend error: BOUND FieldDef authority has no live " +
+                                "verifier-visible field carrier",
+                    )
+                check(mapped is DotNetIlValueType.TypeParameter &&
+                        !mapped.isMethodParameter && mapped.index == carrier.index) {
+                    "Internal .NET backend error: logical field mapping contradicts BOUND FieldDef authority"
+                }
+                mapped
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
+            is DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+            is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
+            -> error("Internal .NET backend error: unsupported BOUND state carrier '$carrier'")
+        }
+    }
 
     fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
         declaration in genericOwnerCapabilityDeclarations

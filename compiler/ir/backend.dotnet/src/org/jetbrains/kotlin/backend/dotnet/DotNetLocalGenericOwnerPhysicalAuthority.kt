@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.defaultType
 
@@ -744,17 +745,66 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
     }
 }
 
+/** One producer-wide state slot selected before final FieldDef emission. */
+internal data class DotNetLocalGenericOwnerPhysicalStateInput(
+    val field: IrFieldSymbol,
+    val logicalFieldName: String,
+    val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
+    val hasImplicitFieldInitializer: Boolean,
+    val fieldDefinition: DotNetGenericOwnerPhysicalFieldDefReference,
+) {
+    init {
+        require(logicalFieldName.isNotEmpty() &&
+                fieldDefinition.identity == DotNetGenericOwnerPhysicalFieldDefIdentity.Local(field)) {
+            "a local state selection must describe its exact IR field identity"
+        }
+        require(requirement in setOf(
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+        )) {
+            "an unresolved generic-owner state requirement cannot enter BOUND FieldDef authority"
+        }
+    }
+}
+
+/** Complete selected owner-dependent state family for one admitted local generic class. */
+internal class DotNetLocalGenericOwnerPhysicalStateFamilyInput(
+    val owner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    boundInstanceFields: Iterable<IrFieldSymbol>,
+    states: Iterable<DotNetLocalGenericOwnerPhysicalStateInput>,
+) {
+    val boundInstanceFields: Set<IrFieldSymbol> = boundInstanceFields.toSet()
+    val states: List<DotNetLocalGenericOwnerPhysicalStateInput> = states.toList()
+
+    init {
+        require(owner.view == null && this.states.isNotEmpty() &&
+                this.boundInstanceFields.isNotEmpty() &&
+                this.states.all { state -> state.field in this.boundInstanceFields } &&
+                this.boundInstanceFields.all { field ->
+                    field.owner.parent === owner.owner.owner && !field.owner.isStatic
+                } &&
+                this.states.map { state -> state.field }.toSet().size == this.states.size &&
+                this.states.all { state -> state.fieldDefinition.declaringType == owner }) {
+            "a local state family requires the complete BOUND instance-field set and unique " +
+                    "selected state on one exact generic owner"
+        }
+    }
+}
+
 /** All declaration facts selected together for the one BOUND authority epoch. */
 internal class DotNetLocalGenericOwnerPhysicalBoundInput(
     methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
     callableFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>,
     directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
     completeEmissionFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput> = emptyList(),
+    stateFamilies: Iterable<DotNetLocalGenericOwnerPhysicalStateFamilyInput> = emptyList(),
 ) {
     val methodDefinitions = methodDefinitions.toList()
     val callableFamilies = callableFamilies.toList()
     val directSupertypeEdgeSets = directSupertypeEdgeSets.toList()
     val completeEmissionFamilies = completeEmissionFamilies.toList()
+    val stateFamilies = stateFamilies.toList()
 }
 
 /**
@@ -762,8 +812,9 @@ internal class DotNetLocalGenericOwnerPhysicalBoundInput(
  *
  * PRE analysis consumes [earlyDeclarations]. Later lowering advances that same immutable input to
  * [boundDeclarations]. Value flow may choose an epoch but can never advance or mutate one. The
- * emitter remains independent during this production-inert migration; a later checkpoint must
- * structurally cross-check or consume this index before it can become authoritative codegen data.
+ * emitter consumes only the bounded state-FieldDef carriers selected by the current Stage 6
+ * grammar and seals them against fresh successful-emission evidence; the remaining declaration
+ * families retain their existing comparison/publication boundaries.
  */
 internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     val earlyDeclarations: DotNetGenericOwnerPhysicalDeclarationIndex,
@@ -772,10 +823,16 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     callableFamiliesByLogicalMember:
             Map<IrSimpleFunctionSymbol, DotNetLocalGenericOwnerPhysicalCallableFamily>,
     completeEmissionFamilies: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily>,
+    stateFamilies: List<DotNetLocalGenericOwnerPhysicalStateFamilyInput>,
 ) {
     private val inputsByIdentity = inputsByIdentity.toMap()
     private val callableFamiliesByLogicalMember = callableFamiliesByLogicalMember.toMap()
     private val completeEmissionFamilies = completeEmissionFamilies.toList()
+    private val stateFamilies = stateFamilies.toList()
+    private val statesByField = stateFamilies
+        .flatMap { family -> family.states }
+        .associateBy { state -> state.field }
+    private val stateFamiliesByOwner = stateFamilies.associateBy { family -> family.owner.owner }
 
     fun inputOrNull(
         identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
@@ -797,6 +854,14 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
 
     internal fun completeEmissionFamilies(): List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily> =
         completeEmissionFamilies
+
+    internal fun stateFamilies(): List<DotNetLocalGenericOwnerPhysicalStateFamilyInput> = stateFamilies
+
+    internal fun stateFamilyOrNull(owner: IrClassSymbol): DotNetLocalGenericOwnerPhysicalStateFamilyInput? =
+        stateFamiliesByOwner[owner]
+
+    internal fun stateOrNull(field: IrFieldSymbol): DotNetLocalGenericOwnerPhysicalStateInput? =
+        statesByField[field]
 
     /**
      * Compares only the opaque families already admitted by BOUND authority with one successful
@@ -891,6 +956,9 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             nextEpoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
             typeDefinitions = additionalReferences,
             methodDefinitions = boundInput.methodDefinitions,
+            fieldDefinitions = boundInput.stateFamilies.flatMap { family ->
+                family.states.map { state -> state.fieldDefinition }
+            },
             directSupertypeEdgeSets = boundInput.directSupertypeEdgeSets,
         )) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
@@ -948,6 +1016,64 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
         }
+        val stateFamilies = mutableListOf<DotNetLocalGenericOwnerPhysicalStateFamilyInput>()
+        val seenStateOwners = linkedSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>()
+        val seenStateFields = linkedSetOf<IrFieldSymbol>()
+        for (family in boundInput.stateFamilies) {
+            if (!seenStateOwners.add(family.owner)) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "one generic owner received duplicate physical state-family authority",
+                )
+            }
+            if (mergedInputs[family.owner]?.role != DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a physical state family requires an admitted local generic class",
+                )
+            }
+            for (state in family.states) {
+                if (!seenStateFields.add(state.field)) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "one IR field received duplicate physical state authority",
+                    )
+                }
+                if (bound.fieldDescriptionOrNull(state.fieldDefinition.identity) != state.fieldDefinition ||
+                    state.fieldDefinition.visibility != DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE ||
+                    state.fieldDefinition.isStatic ||
+                    (state.field.owner.initializer != null) != state.hasImplicitFieldInitializer
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a bounded state field must retain one exact private instance FieldDef and " +
+                                "its producer-recorded initializer state",
+                    )
+                }
+                val carrier = state.fieldDefinition.carrier
+                val validCarrier = when (state.requirement) {
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
+                        (carrier as? DotNetGenericOwnerSymbolicCarrierReference.Parameter)?.let { parameter ->
+                            val expectedIndex = family.owner.owner.owner.typeParameters.indexOfFirst { typeParameter ->
+                                state.field.owner.type == typeParameter.defaultType
+                            }
+                            parameter.binder ==
+                                    DotNetGenericOwnerPhysicalGenericBinderReference.Type(family.owner) &&
+                                    parameter.index == expectedIndex && expectedIndex >= 0
+                        } == true && state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN
+                    DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
+                        carrier == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() &&
+                                state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN
+                    DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,
+                    DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED,
+                    DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+                    -> false
+                }
+                if (!validCarrier) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a bounded state requirement has an incompatible physical FieldDef carrier",
+                    )
+                }
+            }
+            stateFamilies += family
+        }
         return DotNetGenericOwnerPhysicalBindingResult.Bound(
             DotNetLocalGenericOwnerPhysicalAuthority(
                 earlyDeclarations = earlyDeclarations,
@@ -955,6 +1081,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                 inputsByIdentity = mergedInputs,
                 callableFamiliesByLogicalMember = mergedCallableFamilies,
                 completeEmissionFamilies = completeEmissionFamilies,
+                stateFamilies = stateFamilies,
             ),
         )
     }
@@ -1075,6 +1202,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                     inputsByIdentity = byIdentity,
                     callableFamiliesByLogicalMember = emptyMap(),
                     completeEmissionFamilies = emptyList(),
+                    stateFamilies = emptyList(),
                 ),
             )
         }

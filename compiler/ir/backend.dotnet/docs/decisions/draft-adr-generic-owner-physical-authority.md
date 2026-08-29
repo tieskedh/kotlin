@@ -230,6 +230,93 @@ around that one slot. It may not introduce a proxy, wrapper, duplicate field,
 shadow state, delayed synchronization, or representation-dependent object
 identity.
 
+#### Bounded Stage 6 FieldDef authority
+
+Detached-family inheritance, private-helper reachability, state selection, and
+owner-dependent output pairing form one monotone fixpoint. An inherited
+semantic hook can expose a private helper writer, move its field to semantic
+state, and require another output hook; no phase may consume the stale result of
+an earlier pass. The closure only adds roles, reasons, and reachability or moves
+unresolved state to required semantic-object storage.
+
+Admission is then decided from the final requirement of every field. The
+priority-compressed owner disposition is diagnostic after this closure; it may
+report the dominant reason but cannot admit, reject, or conceal a resolved or
+unresolved field requirement. Intrinsic owner blockers remain independent.
+
+The first executable state grammar admits exactly one owner-dependent state
+slot. It must be private, mutable, non-static, plain-memory, and logically one
+direct owner parameter. That slot must already be classified as either:
+
+- `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN`, bound to that owner's exact generic
+  parameter; or
+- `SEMANTIC_OBJECT_REQUIRED`, bound to `object`.
+
+For this first grammar, an admitted initializer may only be the exact
+`POSITIONAL_CONSTRUCTOR_PARAMETER` recipe: the selected constructor parameter
+is copied directly into the field with the recorded field-`T` value type. An
+explicit init-block store, another-field source, computed expression, or other
+nontrivial initializer makes the bounded family unavailable. For typed state,
+every direct store must likewise take its value from the exact non-dispatch
+parameter of its writer and that parameter must have the field's direct `T`
+type. These are conservative admission failures, not hard diagnostics against
+otherwise valid Kotlin; the rehearsal simply does not claim BOUND state
+authority for the owner.
+
+One unresolved owner-dependent slot makes the whole owner unavailable. An
+owner-level priority/disposition summary cannot conceal
+`COMPLETE_ACCESS_GRAPH_REQUIRED` or
+`TYPED_WRITE_VALUE_PROVENANCE_REQUIRED`. Nested, projected, logically nullable,
+volatile, and declaration-independent slots are outside this first grammar.
+
+At `BOUND_DECLARATION_INDEX`, the family records the complete identity set of
+all instance fields already declared on the owner. The admitted state slot also
+records its exact IR field identity, declaring owner, privacy/static/init-only
+flags, symbolic carrier, memory semantics, and whether the producer plan
+contained an implicit field initializer. Later lowerings may neither add a new
+`!T`/`object` shadow field nor remove any pre-existing instance field. Field
+emission consumes the symbolic authority before consulting the logical type
+mapper.
+
+Immediately before BOUND, after every admitted bridge- and body-producing pass,
+the backend re-scans the complete live module and re-proves the typed-writer
+grammar for every live store to the selected field. A newly materialized store
+which is not the exact non-dispatch field-`T` writer parameter makes the family
+`Unavailable`; this is still conservative pre-BOUND admission, not an internal
+error. Once the family is BOUND, any further field or writer-set change is a
+contradiction of frozen authority and therefore an internal conflict.
+
+Before any dependency artifact, IL result, or PE product is published, the
+actual final observations are validated. The full observed instance-field
+identity set on the owner must equal the complete BOUND set; the selected owner-
+dependent FieldDef is then sealed separately. That seal requires one matching
+FieldDef on the exact TypeDef, no duplicate owner/field in another emission
+scope, and the BOUND TypeDef category and generic arity. It revalidates field
+identity, owner-derived scope, flags, carrier, binder, and the exact owner
+parameter index. The physical field name is first observed and sealed by this
+final-emission epoch; it is not BOUND authority. The PE harness correlates that
+sealed name with the objective FieldDef. Diagnostic state snapshots are
+published only after ILAsm reports success; IL-only and failure paths expose no
+snapshot or false seal.
+
+The producer-visible write set is frozen at BOUND. Every existing `IrSetField`
+site receives a unique copy-preserving lineage containing its exact target,
+owning producer declaration, statement origin, and verifier-visible value type.
+Final routing requires each lineage exactly once and rejects removal,
+duplication, retargeting, producer/origin/type changes, or a newly introduced
+write. The sole post-BOUND materialization contract is one pre-recorded exact
+positional Common `INITIALIZE_FIELD` store. Its constructor, parameter index,
+receiver, value symbol, value type, and occurrence count must match the
+producer-recorded initializer, and the field initializer itself must have been
+lowered away. This expected lowering is not a newly admitted writer.
+
+This is a producer-local authority proof, not a serialized per-value witness or
+a general external state record. A memberless downstream generic child may
+inherit the exact base construction but owns no copied or shadow field. Broader
+state forms require another whole-owner structural proof. Converting a generic
+child's semantic-capability carrier to a separately owned base capability is an
+independent interface-carrier problem and remains outside Stage 6.
+
 ### 5. Per-value provenance is a product fact
 
 A physical value fact contains independent components:
@@ -466,6 +553,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
 | `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Temporary proof restriction, then removable.** Parameterlessness is conservative; the general condition is that no argument or semantic input selects an incompatible result construction. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
+| Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 
 None of the bounded positive proofs is presently classified as unsound within
 its asserted restrictions. Three tempting generalizations are unsound and are
@@ -642,12 +730,20 @@ the boundary unsupported. It may not guess by interface enumeration order.
    split-result slots are explicit.
 8. A broad semantic input does not contaminate unrelated exact state.
 9. Exact provenance never narrows a genuinely broad source value.
-10. A later lowering cannot degrade an already-proven typed route unless it has
+10. State admission consumes the monotone closure's final per-field
+    requirements; the compressed owner disposition remains diagnostic.
+11. The complete live module re-proves typed writers immediately before BOUND;
+    unsupported live stores make the family unavailable rather than becoming
+    internal errors.
+12. After a state family is bound, a later lowering cannot change its complete
+    instance-field identity set or add, remove, duplicate, or retarget a writer
+    except through an exactly recorded lowering contract.
+13. A later lowering cannot degrade an already-proven typed route unless it has
     new authority invalidating the proof.
-11. Missing authority fails closed; expected facts never fill missing final
+14. Missing authority fails closed; expected facts never fill missing final
     emission evidence.
-12. Production remains erased until one complete atomic generic-owner cutover.
-13. Rehearsal emission and its physical ABI retain an exact inverse/rollback.
+15. Production remains erased until one complete atomic generic-owner cutover.
+16. Rehearsal emission and its physical ABI retain an exact inverse/rollback.
 
 ## Hostile counterexamples required
 
@@ -668,6 +764,14 @@ covers at least:
 - semantic hooks with an exact receiver and unrelated broad parameters;
 - generated and anonymous classes with exact, broad, and mixed captures;
 - exact and object-carried fields, custom properties, and hostile setters;
+- an owner with both resolved and unresolved state requirements, which must not
+  be admitted through an owner-level summary;
+- a post-BOUND `!T` or `object` shadow field, duplicated/removed/retargeted
+  explicit writer, malformed or repeated constructor initializer, and a
+  duplicate final owner/field observation in another emission scope;
+- a bridge/body-producing pass which materializes an unsupported typed store
+  before BOUND, proving ordinary `Unavailable` admission rather than an internal
+  conflict, paired with the same mutation after BOUND proving a hard conflict;
 - deeper Kotlin/Kotlin, Kotlin/C#, and C#/Kotlin inheritance, defaults,
   reabstraction, diamonds, explicit MethodImpls, and `super`;
 - retained foreign generic TypeDefs and MethodDefs, including reference/value
@@ -711,6 +815,11 @@ revised.
 
 This is a **GO** for production-inert architectural consolidation. It is not a
 GO for a generic-interface, generic-class, or stdlib ABI cutover.
+
+The bounded Stage 6 state slice implements the declaration/state half of this
+model and is retained as executable evidence. The next ordered proof is the
+orthogonal callable-contract composition in step 7, not another state
+recognizer or a resumed stdlib census.
 
 ## Consequences
 

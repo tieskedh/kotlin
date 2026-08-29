@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
@@ -369,6 +370,38 @@ internal class DotNetGenericOwnerPhysicalMethodDefReference(
                 "dispatch=$dispatch, signature=$signature, genericParameters=$genericParameters)"
 }
 
+/** Stable compilation-local identity of one real or planned CLR FieldDef. */
+internal sealed interface DotNetGenericOwnerPhysicalFieldDefIdentity {
+    /** One Kotlin field owns at most one physical FieldDef in the one-state model. */
+    data class Local(
+        val field: IrFieldSymbol,
+    ) : DotNetGenericOwnerPhysicalFieldDefIdentity
+}
+
+/**
+ * Epoch-specific physical FieldDef description.
+ *
+ * This records the selected storage carrier, not a value-flow fact. A later local provenance proof
+ * cannot specialize [carrier], and a logically widened view cannot rewrite it.
+ */
+internal data class DotNetGenericOwnerPhysicalFieldDefReference(
+    val identity: DotNetGenericOwnerPhysicalFieldDefIdentity,
+    val declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    val visibility: DotNetGenericOwnerPhysicalMemberVisibility,
+    val isStatic: Boolean,
+    val isInitOnly: Boolean,
+    val carrier: DotNetGenericOwnerSymbolicCarrierReference,
+) {
+    init {
+        require(carrier != DotNetGenericOwnerSymbolicCarrierReference.voidCarrier()) {
+            "a physical FieldDef cannot use void as its carrier"
+        }
+    }
+
+    fun conflictsWith(other: DotNetGenericOwnerPhysicalFieldDefReference): Boolean =
+        identity == other.identity && this != other
+}
+
 /** Scope of a physical generic parameter; `!0` from different scopes is never the same fact. */
 internal sealed interface DotNetGenericOwnerPhysicalGenericBinderReference {
     data class Type(
@@ -422,6 +455,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalTypeDefReference>,
     private val methodDefinitions:
             Map<DotNetGenericOwnerPhysicalMethodDefIdentity, DotNetGenericOwnerPhysicalMethodDefReference>,
+    private val fieldDefinitions:
+            Map<DotNetGenericOwnerPhysicalFieldDefIdentity, DotNetGenericOwnerPhysicalFieldDefReference>,
     private val directSupertypeEdgeSets:
             Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
 ) {
@@ -430,6 +465,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         typeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
         methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
         directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet> = emptyList(),
+        fieldDefinitions: Iterable<DotNetGenericOwnerPhysicalFieldDefReference> = emptyList(),
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
         if (nextEpoch.ordinal <= epoch.ordinal) {
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -441,6 +477,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             this.typeDefinitions.values + typeDefinitions,
             this.methodDefinitions.values + methodDefinitions,
             this.directSupertypeEdgeSets.values + directSupertypeEdgeSets,
+            this.fieldDefinitions.values + fieldDefinitions,
         )
     }
 
@@ -495,6 +532,10 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     fun methodDescriptionOrNull(
         definition: DotNetGenericOwnerPhysicalMethodDefIdentity,
     ): DotNetGenericOwnerPhysicalMethodDefReference? = methodDefinitions[definition]
+
+    fun fieldDescriptionOrNull(
+        definition: DotNetGenericOwnerPhysicalFieldDefIdentity,
+    ): DotNetGenericOwnerPhysicalFieldDefReference? = fieldDefinitions[definition]
 
     fun directSupertypeEdgesOrUnavailable(
         definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -778,6 +819,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             typeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
             methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
             directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet> = emptyList(),
+            fieldDefinitions: Iterable<DotNetGenericOwnerPhysicalFieldDefReference> = emptyList(),
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val typesByIdentity = linkedMapOf<
                     DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -836,10 +878,25 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 methodsByIdentity.putIfAbsent(candidate.identity, candidate)
             }
 
+            val fieldsByIdentity = linkedMapOf<
+                    DotNetGenericOwnerPhysicalFieldDefIdentity,
+                    DotNetGenericOwnerPhysicalFieldDefReference,
+                    >()
+            for (candidate in fieldDefinitions) {
+                val existing = fieldsByIdentity[candidate.identity]
+                if (existing != null && existing.conflictsWith(candidate)) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "conflicting physical FieldDef descriptions for one local field",
+                    )
+                }
+                fieldsByIdentity.putIfAbsent(candidate.identity, candidate)
+            }
+
             val declarationsWithoutEdges = DotNetGenericOwnerPhysicalDeclarationIndex(
                 epoch,
                 typesByIdentity,
                 methodsByIdentity,
+                fieldsByIdentity,
                 emptyMap(),
             )
             for (candidate in methodsByIdentity.values) {
@@ -898,6 +955,40 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                         "owner-dependent physical MethodDef parameter requires an owner slot domain",
                     )
+                }
+            }
+            for (candidate in fieldsByIdentity.values) {
+                if (typesByIdentity[candidate.declaringType] == null) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                val localIdentity = candidate.identity as? DotNetGenericOwnerPhysicalFieldDefIdentity.Local
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                val localDeclaringType = candidate.declaringType as?
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a local physical FieldDef requires a local declaring TypeDef",
+                    )
+                if (localIdentity.field.owner.parent != localDeclaringType.owner.owner ||
+                    localDeclaringType.view != null
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a local physical FieldDef must belong to its exact declaring TypeDef",
+                    )
+                }
+                val foreignBinder = candidate.carrier.firstGenericBinderOutsideTypeOrNull(
+                    candidate.declaringType,
+                )
+                if (foreignBinder != null) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "physical FieldDef carrier references a generic binder outside its " +
+                                "declaring TypeDef",
+                    )
+                }
+                when (val validation = declarationsWithoutEdges.validateCarrierOrError(candidate.carrier)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
             }
             val edgesBySource = linkedMapOf<
@@ -964,6 +1055,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     epoch,
                     typesByIdentity,
                     methodsByIdentity,
+                    fieldsByIdentity,
                     edgesBySource,
                 ),
             )
@@ -1114,6 +1206,22 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.firstGenericBinderNotOwne
         }
     is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
         element.firstGenericBinderNotOwnedByOrNull(declaringType, method)
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.firstGenericBinderOutsideTypeOrNull(
+    declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+): DotNetGenericOwnerPhysicalGenericBinderReference? = when (this) {
+    is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> null
+    is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+        binder.takeUnless { candidate ->
+            candidate == DotNetGenericOwnerPhysicalGenericBinderReference.Type(declaringType)
+        }
+    is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+        arguments.firstNotNullOfOrNull { argument ->
+            argument.firstGenericBinderOutsideTypeOrNull(declaringType)
+        }
+    is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+        element.firstGenericBinderOutsideTypeOrNull(declaringType)
 }
 
 private fun DotNetGenericOwnerSymbolicCarrierReference.referencesTypeParameterOf(

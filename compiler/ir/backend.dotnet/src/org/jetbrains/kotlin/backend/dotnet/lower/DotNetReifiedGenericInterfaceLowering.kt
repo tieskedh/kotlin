@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteNaturalAuthorityPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePolarity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
@@ -54,6 +55,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.backend.dotnet.toDotNetGenericOwnerPhysicalTypeParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.validateFinalGenericOwnerStateWrites
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -2736,6 +2738,13 @@ internal class DotNetGenericOwnerFinalRoutingLowering(
         } while (stateSizes() != previousState)
 
         if (context.configuration.dotNetGenericOwnerRehearsal) {
+            when (val authority = context.localGenericOwnerPhysicalAuthority) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    authority.value.validateFinalGenericOwnerStateWrites(irModule)
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${authority.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+            }
             DotNetGenericOwnerPhysicalValueShadowAnalysis(context).analyze(irModule)
             DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(context).analyze(irModule)
         }

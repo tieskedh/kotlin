@@ -7,11 +7,22 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.ir.util.IrErrorModuleFragment
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,6 +34,42 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DotNetGenericOwnerPhysicalValueModelTest {
+    @Test
+    fun `generic-owner admission inspects every physical state requirement`() {
+        assertTrue(
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_TYPED_WRITE_VALUE_PROVENANCE
+                .allowsGenericOwnerRehearsalAfterStateResolution(),
+            "a stale priority-compressed state disposition must not override resolved final state",
+        )
+        assertTrue(
+            DotNetGenericOwnerCandidateDisposition.REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH
+                .allowsGenericOwnerRehearsalAfterStateResolution(),
+            "final per-field authority, not a stale state disposition, decides admission",
+        )
+        assertFalse(
+            DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI
+                .allowsGenericOwnerRehearsalAfterStateResolution(),
+        )
+        assertTrue(
+            listOf(
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+            ).areResolvedForGenericOwnerRehearsal(),
+        )
+        assertFalse(
+            listOf(
+                DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+            ).areResolvedForGenericOwnerRehearsal(),
+        )
+        assertFalse(
+            listOf(
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+            ).areResolvedForGenericOwnerRehearsal(),
+        )
+    }
+
     @Test
     fun `lineage can only select an independently guaranteed view`() {
         val sourceInt = view(source(int32Type()))
@@ -141,6 +188,338 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
 
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(result)
+    }
+
+    @Test
+    fun `FieldDef authority binds exact owner parameter and object carriers`() {
+        val ownerDeclaration = testOwner("StateOwner")
+        val owner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(ownerDeclaration.symbol, view = null)
+        val typedField = testField(ownerDeclaration, "typed")
+        val objectField = testField(ownerDeclaration, "semantic")
+        val types = listOf(typeDescription(owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS))
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val ownerParameter = boundTypeParameter(provisional, owner, 0)
+        val typedReference = fieldDescription(typedField.symbol, owner, ownerParameter)
+        val objectReference = fieldDescription(objectField.symbol, owner, objectType())
+
+        val declarations = boundDeclarationIndex(
+            types = types,
+            methods = emptyList(),
+            fields = listOf(typedReference, objectReference),
+        )
+
+        assertEquals(
+            typedReference,
+            declarations.fieldDescriptionOrNull(
+                DotNetGenericOwnerPhysicalFieldDefIdentity.Local(typedField.symbol),
+            ),
+        )
+        assertEquals(
+            objectReference,
+            declarations.fieldDescriptionOrNull(
+                DotNetGenericOwnerPhysicalFieldDefIdentity.Local(objectField.symbol),
+            ),
+        )
+    }
+
+    @Test
+    fun `FieldDef authority rejects conflicting carriers for one field identity`() {
+        val ownerDeclaration = testOwner("StateOwner")
+        val owner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(ownerDeclaration.symbol, view = null)
+        val field = testField(ownerDeclaration, "state")
+        val types = listOf(typeDescription(owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS))
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val ownerParameter = boundTypeParameter(provisional, owner, 0)
+
+        val result = DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+            epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+            typeDefinitions = types,
+            methodDefinitions = emptyList(),
+            fieldDefinitions = listOf(
+                fieldDescription(field.symbol, owner, ownerParameter),
+                fieldDescription(field.symbol, owner, objectType()),
+            ),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(result)
+    }
+
+    @Test
+    fun `FieldDef authority requires a declared exact physical owner`() {
+        val ownerDeclaration = testOwner("StateOwner")
+        val otherOwnerDeclaration = testOwner("OtherOwner")
+        val owner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(ownerDeclaration.symbol, view = null)
+        val otherOwner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(otherOwnerDeclaration.symbol, view = null)
+        val field = testField(ownerDeclaration, "state")
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Unavailable>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                typeDefinitions = emptyList(),
+                methodDefinitions = emptyList(),
+                fieldDefinitions = listOf(fieldDescription(field.symbol, owner, objectType())),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                typeDefinitions = listOf(
+                    typeDescription(owner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                    typeDescription(otherOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                ),
+                methodDefinitions = emptyList(),
+                fieldDefinitions = listOf(fieldDescription(field.symbol, otherOwner, objectType())),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                typeDefinitions = listOf(
+                    typeDescription(
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                            ownerDeclaration.symbol,
+                            DotNetGenericInterfaceView.DECLARED,
+                        ),
+                        0,
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    ),
+                ),
+                methodDefinitions = emptyList(),
+                fieldDefinitions = listOf(
+                    fieldDescription(
+                        field.symbol,
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                            ownerDeclaration.symbol,
+                            DotNetGenericInterfaceView.DECLARED,
+                        ),
+                        objectType(),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `FieldDef authority rejects carriers from another generic binder`() {
+        val ownerDeclaration = testOwner("StateOwner")
+        val otherOwnerDeclaration = testOwner("OtherOwner")
+        val owner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(ownerDeclaration.symbol, view = null)
+        val otherOwner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(otherOwnerDeclaration.symbol, view = null)
+        val field = testField(ownerDeclaration, "state")
+        val types = listOf(
+            typeDescription(owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(otherOwner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                typeDefinitions = types,
+                methodDefinitions = emptyList(),
+                fieldDefinitions = listOf(
+                    fieldDescription(field.symbol, owner, boundTypeParameter(provisional, otherOwner, 0)),
+                ),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                typeDefinitions = types,
+                methodDefinitions = emptyList(),
+                fieldDefinitions = listOf(
+                    fieldDescription(
+                        field.symbol,
+                        owner,
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                            localMethodIdentity(IrSimpleFunctionSymbolImpl()),
+                            0,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `final state seal accepts selected state beside ordinary complete fields`() {
+        val fixture = stateEmissionFixture()
+
+        val snapshot = fixture.authority.sealFinalStateFields(
+            listOf(fixture.scopeObservation()),
+        ).single()
+
+        assertEquals(DotNetIlEmissionScope.USER, snapshot.scope)
+        assertEquals("StateOwner", snapshot.ownerName)
+        assertEquals("state", snapshot.logicalFieldName)
+        assertEquals("state", snapshot.physicalFieldName)
+        assertEquals(
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+            snapshot.requirement,
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OWNER_TYPE_PARAMETER,
+            snapshot.carrierKind,
+        )
+        assertEquals(0, snapshot.ownerParameterIndex)
+    }
+
+    @Test
+    fun `final state seal rejects duplicate unbindable and cross-scope claimants`() {
+        val fixture = stateEmissionFixture()
+        val duplicateOwner = fixture.observedOwner.copy(
+            physicalKey = DotNetGenericOwnerObservedPhysicalTypeDefKey(1),
+        )
+        val duplicateClaim = fixture.ownerObservation.copy(
+            physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(duplicateOwner),
+            physicalKey = duplicateOwner.physicalKey,
+            fieldDefinitions = emptyList(),
+        )
+        val unbindableClaim = fixture.ownerObservation.copy(
+            physicalType = DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
+                "hostile unbindable owner",
+                isConflict = true,
+            ),
+            physicalKey = null,
+            fieldDefinitions = emptyList(),
+        )
+
+        listOf(
+            Triple("same-scope duplicate owner", listOf(
+                fixture.scopeObservation(typeDefs = listOf(fixture.ownerObservation, duplicateClaim)),
+            ), "no unique final TypeDef observation"),
+            Triple("same-scope unbindable alias claimant", listOf(
+                fixture.scopeObservation(typeDefs = listOf(fixture.ownerObservation, unbindableClaim)),
+            ), "no unique final TypeDef observation"),
+            Triple("cross-scope alias claimant", listOf(
+                fixture.scopeObservation(),
+                fixture.scopeObservation(
+                    scope = DotNetIlEmissionScope.STDLIB,
+                    typeDefs = listOf(unbindableClaim),
+                ),
+            ), "escaped its emission scope"),
+        ).forEach { [description, emissions, expectedMessage] ->
+            val failure = assertFailsWith<IllegalStateException>(
+                "final state seal accepted $description",
+            ) {
+                fixture.authority.sealFinalStateFields(emissions)
+            }
+            assertTrue(
+                expectedMessage in failure.message.orEmpty(),
+                "final state seal rejected $description for the wrong reason: ${failure.message}",
+            )
+        }
+    }
+
+    @Test
+    fun `final state seal requires the complete BOUND instance field set`() {
+        val fixture = stateEmissionFixture()
+        val extraField = testField(fixture.owner, "extra")
+        val extraObservation = fixture.ordinaryFieldObservation.copy(
+            physicalField = extraField.symbol,
+            physicalFieldIdentity = DotNetGenericOwnerPhysicalFieldDefIdentity.Local(extraField.symbol),
+            physicalName = "extra",
+        )
+
+        listOf(
+            Triple(
+                "missing ordinary field",
+                listOf(fixture.selectedFieldObservation),
+                "changed its complete BOUND instance-field set",
+            ),
+            Triple("extra post-BOUND field", listOf(
+                fixture.selectedFieldObservation,
+                fixture.ordinaryFieldObservation,
+                extraObservation,
+            ), "changed its complete BOUND instance-field set"),
+        ).forEach { [description, fields, expectedMessage] ->
+            val ownerObservation = fixture.ownerObservation.copy(fieldDefinitions = fields)
+            val failure = assertFailsWith<IllegalStateException>(
+                "final state seal accepted $description",
+            ) {
+                fixture.authority.sealFinalStateFields(
+                    listOf(fixture.scopeObservation(typeDefs = listOf(ownerObservation))),
+                )
+            }
+            assertTrue(
+                expectedMessage in failure.message.orEmpty(),
+                "final state seal rejected $description for the wrong reason: ${failure.message}",
+            )
+        }
+    }
+
+    @Test
+    fun `final state seal rejects contradictory owner and selected FieldDef facts`() {
+        val fixture = stateEmissionFixture()
+        val otherOwnerDeclaration = testOwner("OtherStateOwner")
+        val otherOwner = DotNetGenericOwnerObservedLocalTypeDef(
+            physicalKey = DotNetGenericOwnerObservedPhysicalTypeDefKey(2),
+            identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                otherOwnerDeclaration.symbol,
+                view = null,
+            ),
+            genericArity = 1,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val wrongArityOwner = fixture.observedOwner.copy(genericArity = 2)
+        val wrongCategoryOwner = fixture.observedOwner.copy(
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        )
+        val twoParameters = List(2) {
+            DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation(
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                constraints = emptyList(),
+            )
+        }
+        val interfaceFlags = fixture.ownerObservation.flags.copy(
+            isInterface = true,
+            isAbstract = true,
+            isSealed = false,
+            isBeforeFieldInit = false,
+        )
+
+        listOf(
+            Triple("owner arity", fixture.ownerObservation.copy(
+                physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(wrongArityOwner),
+                genericParameters = twoParameters,
+            ), "contradicts its BOUND TypeDef shape"),
+            Triple("owner category", fixture.ownerObservation.copy(
+                physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(wrongCategoryOwner),
+                flags = interfaceFlags,
+            ), "contradicts its BOUND TypeDef shape"),
+            Triple("selected visibility", fixture.ownerObservation.withSelectedField(
+                fixture.selectedFieldObservation.copy(
+                    visibility = DotNetIlRawMethodDefVisibility.PUBLIC,
+                ),
+            ), "flags contradict BOUND state authority"),
+            Triple("selected init-only flag", fixture.ownerObservation.withSelectedField(
+                fixture.selectedFieldObservation.copy(isInitOnly = true),
+            ), "flags contradict BOUND state authority"),
+            Triple("selected carrier", fixture.ownerObservation.withSelectedField(
+                fixture.selectedFieldObservation.copy(
+                    carrier = DotNetGenericOwnerObservedMethodCarrier.Leaf(
+                        DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+                    ),
+                ),
+            ), "lost its owner-parameter carrier"),
+            Triple("selected owner-parameter binder", fixture.ownerObservation.withSelectedField(
+                fixture.selectedFieldObservation.copy(
+                    carrier = DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(otherOwner, 0),
+                ),
+            ), "changed its exact binder"),
+        ).forEach { [description, ownerObservation, expectedMessage] ->
+            val failure = assertFailsWith<IllegalStateException>(
+                "final state seal accepted wrong $description",
+            ) {
+                fixture.authority.sealFinalStateFields(
+                    listOf(fixture.scopeObservation(typeDefs = listOf(ownerObservation))),
+                )
+            }
+            assertTrue(
+                expectedMessage in failure.message.orEmpty(),
+                "final state seal rejected wrong $description for the wrong reason: ${failure.message}",
+            )
+        }
     }
 
     @Test
@@ -2201,6 +2580,184 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         symbol: IrSimpleFunctionSymbolImpl,
     ) = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(symbol, role = null)
 
+    private data class StateEmissionFixture(
+        val authority: DotNetLocalGenericOwnerPhysicalAuthority,
+        val owner: IrClass,
+        val observedOwner: DotNetGenericOwnerObservedLocalTypeDef,
+        val selectedFieldObservation: DotNetGenericOwnerPhysicalFieldDefObservation,
+        val ordinaryFieldObservation: DotNetGenericOwnerPhysicalFieldDefObservation,
+        val ownerObservation: DotNetGenericOwnerPhysicalTypeDefEmissionObservation,
+    ) {
+        fun scopeObservation(
+            scope: DotNetIlEmissionScope = DotNetIlEmissionScope.USER,
+            typeDefs: List<DotNetGenericOwnerPhysicalTypeDefEmissionObservation> =
+                listOf(ownerObservation),
+        ) = DotNetGenericOwnerCompleteEmissionScopeObservations(
+            scope = scope,
+            typeDefs = typeDefs,
+            methodDefs = emptyList(),
+            methodImpls = emptyList(),
+        )
+    }
+
+    private fun stateEmissionFixture(): StateEmissionFixture {
+        val owner = testOwner("StateOwner")
+        val packageFragment = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        owner.parent = packageFragment
+        packageFragment.declarations += owner
+        val ordinaryValue = IrFactoryImpl.buildClass {
+            name = Name.identifier("OrdinaryValue")
+        }.also { declaration ->
+            declaration.parent = packageFragment
+            packageFragment.declarations += declaration
+        }
+        val selectedField = testField(owner, "state")
+        val ordinaryField = testField(
+            owner,
+            "ordinary",
+            IrSimpleTypeImpl(
+                ordinaryValue.symbol,
+                SimpleTypeNullability.NOT_SPECIFIED,
+                arguments = emptyList(),
+                annotations = emptyList(),
+            ),
+        )
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        val ownerInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            identity = ownerIdentity,
+            logicalOwnerName = "StateOwner",
+            genericArity = 1,
+            role = DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+        )
+        val earlyAuthority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetLocalGenericOwnerPhysicalAuthority>,
+                >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(listOf(ownerInput))).value
+        val authority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetLocalGenericOwnerPhysicalAuthority>,
+                >(earlyAuthority.advanceBound(emptyList()) { provisional ->
+            val ownerParameter = boundTypeParameter(provisional, ownerIdentity, 0)
+            val fieldDefinition = fieldDescription(
+                selectedField.symbol,
+                ownerIdentity,
+                ownerParameter,
+            )
+            DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalBoundInput(
+                    methodDefinitions = emptyList(),
+                    callableFamilies = emptyList(),
+                    directSupertypeEdgeSets = emptyList(),
+                    stateFamilies = listOf(
+                        DotNetLocalGenericOwnerPhysicalStateFamilyInput(
+                            owner = ownerIdentity,
+                            boundInstanceFields = listOf(selectedField.symbol, ordinaryField.symbol),
+                            states = listOf(
+                                DotNetLocalGenericOwnerPhysicalStateInput(
+                                    field = selectedField.symbol,
+                                    logicalFieldName = "state",
+                                    requirement = DotNetGenericOwnerStateCarrierRequirement
+                                        .TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                                    memorySemantics = DotNetGenericOwnerStateMemorySemantics.PLAIN,
+                                    hasImplicitFieldInitializer = false,
+                                    fieldDefinition = fieldDefinition,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }).value
+        val observedOwner = DotNetGenericOwnerObservedLocalTypeDef(
+            physicalKey = DotNetGenericOwnerObservedPhysicalTypeDefKey(0),
+            identity = ownerIdentity,
+            genericArity = 1,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val selectedFieldObservation = DotNetGenericOwnerPhysicalFieldDefObservation(
+            physicalField = selectedField.symbol,
+            physicalFieldIdentity = DotNetGenericOwnerPhysicalFieldDefIdentity.Local(selectedField.symbol),
+            physicalName = "state",
+            visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+            isStatic = false,
+            isInitOnly = false,
+            carrier = DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 0),
+        )
+        val ordinaryFieldObservation = DotNetGenericOwnerPhysicalFieldDefObservation(
+            physicalField = ordinaryField.symbol,
+            physicalFieldIdentity = DotNetGenericOwnerPhysicalFieldDefIdentity.Local(ordinaryField.symbol),
+            physicalName = "ordinary",
+            visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+            isStatic = false,
+            isInitOnly = false,
+            carrier = DotNetGenericOwnerObservedMethodCarrier.Leaf(
+                DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+            ),
+        )
+        val ownerObservation = DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
+            physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(observedOwner),
+            physicalKey = observedOwner.physicalKey,
+            claimedAliases = observedOwner.aliases,
+            physicalTypePath = listOf("sample.StateOwner`1"),
+            flags = DotNetIlRawTypeDefFlags(
+                visibility = DotNetIlRawTypeDefVisibility.PUBLIC,
+                layout = DotNetIlRawTypeDefLayout.AUTO,
+                stringFormat = DotNetIlRawTypeDefStringFormat.ANSI,
+                isInterface = false,
+                isAbstract = false,
+                isSealed = false,
+                isBeforeFieldInit = false,
+            ),
+            genericParameters = listOf(
+                DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+            directSupertypes = emptyList(),
+            fieldDefinitions = listOf(selectedFieldObservation, ordinaryFieldObservation),
+        )
+        return StateEmissionFixture(
+            authority = authority,
+            owner = owner,
+            observedOwner = observedOwner,
+            selectedFieldObservation = selectedFieldObservation,
+            ordinaryFieldObservation = ordinaryFieldObservation,
+            ownerObservation = ownerObservation,
+        )
+    }
+
+    private fun DotNetGenericOwnerPhysicalTypeDefEmissionObservation.withSelectedField(
+        selected: DotNetGenericOwnerPhysicalFieldDefObservation,
+    ): DotNetGenericOwnerPhysicalTypeDefEmissionObservation = copy(
+        fieldDefinitions = fieldDefinitions.map { field ->
+            if (field.physicalField === selected.physicalField) selected else field
+        },
+    )
+
+    private fun testOwner(name: String): IrClass = IrFactoryImpl.buildClass {
+        this.name = Name.identifier(name)
+    }.also { owner ->
+        owner.addTypeParameter { this.name = Name.identifier("T") }
+    }
+
+    private fun testField(
+        owner: IrClass,
+        name: String,
+        type: IrType = owner.typeParameters.single().defaultType,
+    ) = IrFactoryImpl.buildField {
+        this.name = Name.identifier(name)
+        this.type = type
+        origin = IrDeclarationOrigin.DEFINED
+        visibility = DescriptorVisibilities.PRIVATE
+        isFinal = false
+    }.also { field ->
+        field.parent = owner
+        owner.declarations += field
+    }
+
     private fun typeDescription(
         identity: DotNetGenericOwnerPhysicalTypeDefIdentity,
         arity: Int,
@@ -2234,6 +2791,19 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 constraints = emptyList(),
             )
         },
+    )
+
+    private fun fieldDescription(
+        field: org.jetbrains.kotlin.ir.symbols.IrFieldSymbol,
+        declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+    ) = DotNetGenericOwnerPhysicalFieldDefReference(
+        identity = DotNetGenericOwnerPhysicalFieldDefIdentity.Local(field),
+        declaringType = declaringType,
+        visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+        isStatic = false,
+        isInitOnly = false,
+        carrier = carrier,
     )
 
     private fun callableSlot(
@@ -2400,6 +2970,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         epoch: DotNetGenericOwnerPhysicalAuthorityEpoch =
             DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
         edgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet> = emptyList(),
+        fields: Iterable<DotNetGenericOwnerPhysicalFieldDefReference> = emptyList(),
     ): DotNetGenericOwnerPhysicalDeclarationIndex = assertIs<
             DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalDeclarationIndex>,
             >(
@@ -2408,6 +2979,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             types,
             methods,
             edgeSets,
+            fields,
         ),
     ).value
 
