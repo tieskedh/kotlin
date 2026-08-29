@@ -245,12 +245,37 @@ reason to rerun unrelated target layers. Use these lanes:
    and positive/negative semantic branch. Compile/generator consistency for
    every changed module remains mandatory. A profile-independent shadow need
    not repeat the same observation on an unaffected runtime profile.
-2. **Boundary lane.** For a bounded change inside one compiler layer, run that
+2. **Rehearsal-physical lane.** A bounded generic-owner change may use focused
+   candidate evidence as its commit gate even when it changes candidate CIL,
+   provided every new selected route is dominated by
+   `kotlin.dotnet.genericOwnerRehearsal` or consumes state which is empty and
+   producer records which are rejected when that property is false, and review
+   confirms that the production-erased branch is structurally unchanged.
+   Compile every changed module; run the focused fixture across PSI and
+   LightTree and every affected target profile; assemble and execute each
+   observable shape; inspect PE metadata, InterfaceMap/MethodImpl, reflection,
+   separate compilation, and foreign consumption in proportion to the
+   boundary; run directly affected model tests; then run the same focused
+   fixture without the rehearsal property as the production-erased inverse.
+   The inverse must prove absence of candidate H/N/J records or other rehearsal
+   identities where applicable. A fixture-local validator added inside the
+   monolithic .NET test harness does not by itself make the change shared test
+   infrastructure.
+
+   This lane does not apply when the delta changes any production-selected
+   lowering, mapping, fallback, validation, emitter, Runtime/Stdlib source or
+   surface, imported/serialized schema accepted in production,
+   artifact/profile/toolchain path, generated runner contract, or reusable
+   test-harness behavior exercised by unrelated tests. It also does not apply
+   merely because the intended path is rehearsal-only if shared code before
+   the property/state dominance changed. Any uncertainty escalates to the
+   boundary or full target lane.
+3. **Boundary lane.** For a bounded change inside one compiler layer, run that
    layer's complete relevant .NET suite plus any cross-layer integration test
    which consumes its output. Escalate to the full aggregate when the selected
    physical carrier, emitted metadata/CIL, executable behavior, or packaged
    artifact can change.
-3. **Full target lane.** Run the aggregate below after changes which can affect
+4. **Full target lane.** Run the aggregate below after changes which can affect
    production-selected type mapping, lowering output, codegen output, Runtime/
    Stdlib surfaces, generic or array representation, physical ABI, artifacts,
    profiles, toolchain integration, shared test infrastructure, or upstream
@@ -266,13 +291,17 @@ The full target aggregate is:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-One already-green full checkpoint may be inherited by later focused- or
-boundary-lane commits only when `STATUS.md` records both the checkpoint and the
-exact delta evidence. It may not be inherited across a physical-boundary
-change, and accumulated focused/boundary work must pass one fresh full aggregate
-before it is declared a new target-wide or ABI-readiness checkpoint. A test
-failure, missing required tool, or incomplete affected profile/parser matrix
-always blocks the selected lane.
+One already-green production-erased full checkpoint may be inherited by later
+focused-, rehearsal-physical-, or boundary-lane commits only when `STATUS.md`
+records the inherited checkpoint and the exact delta evidence. It may not be
+inherited across a production-selected physical-boundary change. A
+rehearsal-selected physical change is not such a boundary only when it satisfies
+every rehearsal-physical condition above. Accumulated focused,
+rehearsal-physical, and boundary work must pass one fresh full aggregate before
+it is declared a new target-wide or ABI-readiness checkpoint, before production
+cutover, and after any change invalidates the recorded dominance or inverse
+proof. A test failure, missing required tool, or incomplete affected
+profile/parser matrix always blocks the selected lane.
 
 Do not trust Gradle exit alone. Audit JUnit XML under all four roots:
 
