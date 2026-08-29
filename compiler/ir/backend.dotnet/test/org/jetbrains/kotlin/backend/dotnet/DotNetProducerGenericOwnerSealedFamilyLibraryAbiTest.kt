@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import java.io.File
 import java.util.Base64
 import java.util.Properties
 import kotlin.test.Test
@@ -14,6 +15,51 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
+    @Test
+    fun classifiesOnlyTheRehearsalEpochPhysicalRecords() {
+        val declarations = producerSealedFamilyAbiFixture()
+        val records = declarations.genericOwnerRehearsalEpochRecords()
+
+        assertEquals(
+            setOf(
+                DotNetGenericOwnerRehearsalEpochRecordKind.PUBLISHED_GENERIC_INTERFACE_FAMILY,
+                DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_NATURAL_METHOD_DEF,
+                DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEALED_FAMILY,
+            ),
+            records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::kind),
+        )
+        assertEquals(setOf("H", "N", "J"), records.mapTo(linkedSetOf()) { record -> record.kind.wireTag })
+        val productionDeclarations =
+            declarations - records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::indexKey)
+        assertTrue(productionDeclarations.genericOwnerRehearsalEpochRecords().isEmpty())
+        assertTrue(mapOf(
+            "H:not-actually-a-rehearsal-record" to productionDeclarations.values.first(),
+        ).genericOwnerRehearsalEpochRecords().isEmpty())
+        assertEquals(
+            productionDeclarations,
+            backendOutput(productionDeclarations, genericOwnerRehearsal = false).declarations,
+        )
+    }
+
+    @Test
+    fun backendOutputRejectsEveryRehearsalEpochRecordInProduction() {
+        val declarations = producerSealedFamilyAbiFixture()
+        val records = declarations.genericOwnerRehearsalEpochRecords()
+
+        records.forEach { record ->
+            val failure = assertFailsWith<IllegalArgumentException>(
+                "production output accepted ${record.kind.wireTag}",
+            ) {
+                backendOutput(
+                    mapOf("not-a-wire-tag:${record.kind}" to declarations.getValue(record.indexKey)),
+                    genericOwnerRehearsal = false,
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("H/N/J"))
+        }
+        assertEquals(declarations, backendOutput(declarations, genericOwnerRehearsal = true).declarations)
+    }
+
     @Test
     fun deterministicallyRoundTripsTheCompleteActualOnlyProducerIndex() {
         val publication = producerSealedFamilyPublicationFixture()
@@ -552,6 +598,24 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     private companion object {
         val encoder: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
         val decoder: Base64.Decoder = Base64.getUrlDecoder()
+
+        fun backendOutput(
+            declarations: Map<String, DotNetPhysicalDeclaration>,
+            genericOwnerRehearsal: Boolean,
+        ): DotNetBackendOutput = DotNetBackendOutput(
+            file = File("unused.dll"),
+            declarations = declarations,
+            genericOwnerPrototypes = emptyList(),
+            genericOwnerCallRoutes = emptyList(),
+            genericInterfaceCompleteSurfaceVarianceShadows = emptyList(),
+            genericOwnerPhysicalValueShadows = emptyList(),
+            genericOwnerPhysicalOperationRouteShadows = emptyList(),
+            genericOwnerPhysicalValuePlacementComparisons = emptyList(),
+            genericOwnerPhysicalMethodDefEmissionComparisons = emptyList(),
+            genericOwnerCompleteEmissionComparisons = emptyList(),
+            genericOwnerSealedEmissionFamilies = emptyList(),
+            genericOwnerRehearsal = genericOwnerRehearsal,
+        )
 
         fun interfaceOwnerKey(publication: DotNetProducerGenericOwnerSealedFamilyPublication): String =
             publication.key.logicalInterfaceMemberKey.substringBeforeLast('.')

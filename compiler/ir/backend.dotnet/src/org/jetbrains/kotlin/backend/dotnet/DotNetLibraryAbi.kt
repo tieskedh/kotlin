@@ -833,6 +833,41 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): Stri
 internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.indexKey(): String =
     "N:$logicalMemberKey"
 
+/**
+ * Physical-index records which belong exclusively to the all-owner CLR-generic rehearsal epoch.
+ *
+ * Classify by the decoded declaration kind, never by an untrusted map-key prefix. The wire tags
+ * are retained only for concise diagnostics and tests.
+ */
+internal enum class DotNetGenericOwnerRehearsalEpochRecordKind(val wireTag: String) {
+    PUBLISHED_GENERIC_INTERFACE_FAMILY("H"),
+    GENERIC_OWNER_NATURAL_METHOD_DEF("N"),
+    GENERIC_OWNER_SEALED_FAMILY("J"),
+}
+
+internal data class DotNetGenericOwnerRehearsalEpochRecord(
+    val indexKey: String,
+    val kind: DotNetGenericOwnerRehearsalEpochRecordKind,
+)
+
+internal fun DotNetPhysicalDeclaration.genericOwnerRehearsalEpochRecordKindOrNull():
+        DotNetGenericOwnerRehearsalEpochRecordKind? = when (this) {
+    is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ->
+        DotNetGenericOwnerRehearsalEpochRecordKind.PUBLISHED_GENERIC_INTERFACE_FAMILY
+    is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ->
+        DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_NATURAL_METHOD_DEF
+    is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ->
+        DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEALED_FAMILY
+    else -> null
+}
+
+internal fun Map<String, DotNetPhysicalDeclaration>.genericOwnerRehearsalEpochRecords():
+        List<DotNetGenericOwnerRehearsalEpochRecord> = entries.mapNotNull { entry ->
+    entry.value.genericOwnerRehearsalEpochRecordKindOrNull()?.let { kind ->
+        DotNetGenericOwnerRehearsalEpochRecord(entry.key, kind)
+    }
+}.sortedBy(DotNetGenericOwnerRehearsalEpochRecord::indexKey)
+
 internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.publication():
         DotNetProducerGenericOwnerNaturalMethodDefPublication =
     DotNetLibraryAbiCodec.requireProducerGenericOwnerNaturalMethodDefPublication(
