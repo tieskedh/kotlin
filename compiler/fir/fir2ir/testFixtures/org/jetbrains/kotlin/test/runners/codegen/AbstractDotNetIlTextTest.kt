@@ -82,6 +82,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructor
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDelegatingConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableReflectionRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutRecord
+import org.jetbrains.kotlin.backend.dotnet.valueSlotOrNull
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDefaultDispatcherRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectSuperTargetRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberDispatch
@@ -257,6 +259,19 @@ import org.opentest4j.TestAbortedException
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+
+private fun DotNetGenericOwnerPhysicalMethodSignatureRecord.requireDirectOrVoidResultSlot():
+        DotNetGenericOwnerPhysicalValueSlotRecord = when (val layout = resultLayout) {
+    is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct -> layout.slot
+    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void ->
+        DotNetGenericOwnerPhysicalValueSlotRecord(
+            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
+        )
+    is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable -> error(
+        "A split-nullable physical result must be inspected through its explicit result layout",
+    )
+}
 
 // Framework ILAsm and the Windows PowerShell CLR 4 host are external, process-wide resources.
 // Unbounded JUnit 5 fan-out produces nondeterministic empty host failures and occasionally no PE
@@ -2443,7 +2458,7 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         check(runCatching { boundNodesGetter.bindProducerTypes(emptyMap()) }.isFailure) {
             "OctoTree.Branch.nodes getter bound without a selected Node TypeDef path"
         }
-        check(boundNodesGetter.bindProducerTypes(physicalOwnerPaths).returnSlot.type ==
+        check(boundNodesGetter.bindProducerTypes(physicalOwnerPaths).requireDirectOrVoidResultSlot().type ==
                 nodesType.bindProducerTypes(physicalOwnerPaths)) {
             "OctoTree.Branch.nodes getter did not bind the same recursive vector as its state"
         }
@@ -2554,7 +2569,7 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         check(branchImplementationMethod?.let { helper ->
             helper.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
                     helper.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
-                    helper.physicalMethod.signature.returnSlot.type ==
+                    helper.physicalMethod.signature.requireDirectOrVoidResultSlot().type ==
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
                     helper.physicalMethod.signature.parameterSlots.singleOrNull()?.type ==
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
@@ -2634,7 +2649,7 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
         check(runCatching {
             leafOwner.copy(properties = listOf(DotNetGenericOwnerPhysicalPropertyRecord(
                 physicalPropertyName = leafValueProperty.physicalPropertyName,
-                physicalType = leafReadCapability.signature.returnSlot.type,
+                physicalType = leafReadCapability.signature.requireDirectOrVoidResultSlot().type,
                 getterLogicalMemberKey = leafValueProperty.getterLogicalMemberKey,
                 getterPhysicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
                     leafReadCapability.physicalOwnerPath,
@@ -3050,9 +3065,9 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                         access.physicalVisibility == DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE &&
                         access.physicalMethod.physicalOwnerPath == tree.physicalOwnerPath
             } && rootReadAccess.physicalMethod.signature.parameterSlots.isEmpty() &&
-            rootReadAccess.physicalMethod.signature.returnSlot.type == rootState.physicalType &&
+            rootReadAccess.physicalMethod.signature.requireDirectOrVoidResultSlot().type == rootState.physicalType &&
             rootWriteAccess.physicalMethod.signature.parameterSlots.singleOrNull()?.type == rootState.physicalType &&
-            rootWriteAccess.physicalMethod.signature.returnSlot.type ==
+            rootWriteAccess.physicalMethod.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()) {
         "The OctoTree root did not retain one private typed Node<T> state/access pair: $rootState"
     }
@@ -3068,7 +3083,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             treeDepthSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
             treeDepthSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
             treeDepthSlot.signature.parameterSlots.isEmpty() &&
-            treeDepthSlot.signature.returnSlot.type ==
+            treeDepthSlot.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type() &&
             treeDepthCapability.signature == treeDepthSlot.signature &&
             treeGetMember.roles == setOf(
@@ -3078,7 +3093,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             treeGetSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
             treeGetSlot.signature.parameterSlots.map { parameter -> parameter.type } ==
             treeIndependentIntParameters &&
-            treeGetSlot.signature.returnSlot.type ==
+            treeGetSlot.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
             treeGetCapability.signature == treeGetSlot.signature &&
             treeSetMember.roles == setOf(
@@ -3088,11 +3103,11 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             treeSetSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
             treeSetSlot.signature.parameterSlots.map { parameter -> parameter.type } ==
             treeIndependentIntParameters + DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) &&
-            treeSetSlot.signature.returnSlot.type ==
+            treeSetSlot.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
             treeSetCapability.signature.parameterSlots.map { parameter -> parameter.type } ==
             treeIndependentIntParameters + DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
-            treeSetCapability.signature.returnSlot.type ==
+            treeSetCapability.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
             treeToStringMember.roles == setOf(
                 DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
@@ -3101,7 +3116,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             treeToStringSlot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
             treeToStringSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
             treeToStringSlot.signature.parameterSlots.isEmpty() &&
-            treeToStringSlot.signature.returnSlot.type ==
+            treeToStringSlot.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType() &&
             treeToStringCapability.signature == treeToStringSlot.signature) {
         "The OctoTree root member families lost their exact recorded MethodDef slots"
@@ -3120,7 +3135,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 slot.visibility == DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC &&
                 slot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE &&
                 slot.signature.parameterSlots.isEmpty() &&
-                slot.signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
+                slot.signature.requireDirectOrVoidResultSlot().type ==
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
     }) {
         "The OctoTree Leaf/Branch rendering overrides lost their exact recorded MethodDef slots"
     }
@@ -3230,7 +3246,7 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
             nodeSetSlot.signature == leafSetSlot.signature &&
             nodeSetSlot.signature == branchSetSlot.signature &&
             nodeSetSlot.signature.parameterSlots.map { slot -> slot.type } == expectedSetParameterTypes &&
-            nodeSetSlot.signature.returnSlot.type ==
+            nodeSetSlot.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
             nodeSetMember.overrideRootLogicalMemberKeys == listOf(nodeSetMember.logicalMemberKey) &&
             leafSetMember.overrideRootLogicalMemberKeys == listOf(nodeSetMember.logicalMemberKey) &&
@@ -3257,7 +3273,8 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
                 slot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL &&
                 slot.signature.parameterSlots.map { parameter -> parameter.type } ==
                 expectedCapabilityParameterTypes &&
-                slot.signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
+                slot.signature.requireDirectOrVoidResultSlot().type ==
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType() &&
                 interfaceSlot != null &&
                 interfaceSlot.physicalOwnerPath == owner.physicalCapabilityOwnerPath &&
                 interfaceSlot.signature == slot.signature &&
@@ -3267,11 +3284,12 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         "The OctoTree Node.set strict capability family is not one exact non-generic object-carrier slot"
     }
     check(leafReadSlot.signature.parameterSlots.isEmpty() &&
-            leafReadSlot.signature.returnSlot.type == leafState.physicalType &&
+            leafReadSlot.signature.requireDirectOrVoidResultSlot().type == leafState.physicalType &&
             leafWriteSlot.signature.parameterSlots.singleOrNull()?.type == leafState.physicalType &&
-            leafWriteSlot.signature.returnSlot.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
+            leafWriteSlot.signature.requireDirectOrVoidResultSlot().type ==
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
             branchReadSlot.signature.parameterSlots.isEmpty() &&
-            branchReadSlot.signature.returnSlot.type == branchState.physicalType) {
+            branchReadSlot.signature.requireDirectOrVoidResultSlot().type == branchState.physicalType) {
         "The OctoTree candidate state accessors lost their exact recorded carriers"
     }
     val systemArrayType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
@@ -3288,14 +3306,14 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
         DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
     ) && leafReadCapability.signature.parameterSlots.isEmpty() &&
-            leafReadCapability.signature.returnSlot.type ==
+            leafReadCapability.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
             leafWriteCapability.signature.parameterSlots.singleOrNull()?.type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
-            leafWriteCapability.signature.returnSlot.type ==
+            leafWriteCapability.signature.requireDirectOrVoidResultSlot().type ==
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType() &&
             branchReadCapability.signature.parameterSlots.isEmpty() &&
-            branchReadCapability.signature.returnSlot.type == systemArrayType &&
+            branchReadCapability.signature.requireDirectOrVoidResultSlot().type == systemArrayType &&
             listOf(
                 leaf to leafReadCapability,
                 leaf to leafWriteCapability,
@@ -3466,46 +3484,47 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val branchLeafType = leafConstructor.constructedOwnerType.renderSnapshotCSharpType(branchTypeParameters)
     val branchElementCount = checkNotNull(branchInitializer.fixedElementCount)
     val treeDepthReturnType =
-        treeDepthSlot.signature.returnSlot.let { slot ->
+        treeDepthSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(treeTypeParameters, nullableFlags = slot.nullableReferenceFlags)
         }
-    val treeGetReturnType = treeGetSlot.signature.returnSlot.let { slot ->
+    val treeGetReturnType = treeGetSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
         slot.type.renderSnapshotCSharpType(treeTypeParameters, nullableFlags = slot.nullableReferenceFlags)
     }
     val treeToStringReturnType =
-        treeToStringSlot.signature.returnSlot.let { slot ->
+        treeToStringSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(treeTypeParameters, nullableFlags = slot.nullableReferenceFlags)
         }
     val leafToStringReturnType =
-        leafToStringSlot.signature.returnSlot.let { slot ->
+        leafToStringSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(leafTypeParameters, nullableFlags = slot.nullableReferenceFlags)
         }
     val branchToStringReturnType =
-        branchToStringSlot.signature.returnSlot.let { slot ->
+        branchToStringSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(branchTypeParameters, nullableFlags = slot.nullableReferenceFlags)
         }
     val rootReadReturnType =
-        rootReadAccess.physicalMethod.signature.returnSlot.let { slot ->
+        rootReadAccess.physicalMethod.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(treeTypeParameters, nullableFlags = slot.nullableReferenceFlags)
         }
-    val nodeSetReturnType = nodeSetSlot.signature.returnSlot.let { slot ->
+    val nodeSetReturnType = nodeSetSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
         slot.type.renderSnapshotCSharpType(nodeTypeParameters, nullableFlags = slot.nullableReferenceFlags)
     }
-    val leafSetReturnType = leafSetSlot.signature.returnSlot.let { slot ->
+    val leafSetReturnType = leafSetSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
         slot.type.renderSnapshotCSharpType(leafTypeParameters, nullableFlags = slot.nullableReferenceFlags)
     }
-    val branchSetReturnType = branchSetSlot.signature.returnSlot.let { slot ->
+    val branchSetReturnType = branchSetSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
         slot.type.renderSnapshotCSharpType(branchTypeParameters, nullableFlags = slot.nullableReferenceFlags)
     }
-    val branchCanClusterizeReturnType = branchCanClusterize.physicalMethod.signature.returnSlot.let { slot ->
-        slot.type.renderSnapshotCSharpType(branchTypeParameters, nullableFlags = slot.nullableReferenceFlags)
-    }
+    val branchCanClusterizeReturnType =
+        branchCanClusterize.physicalMethod.signature.requireDirectOrVoidResultSlot().let { slot ->
+            slot.type.renderSnapshotCSharpType(branchTypeParameters, nullableFlags = slot.nullableReferenceFlags)
+        }
     fun DotNetGenericOwnerPhysicalStateRecord.renderInitOnlyModifier(): String =
         if (isInitOnly) "readonly " else ""
-    val leafReadReturnType = leafReadSlot.signature.returnSlot.let { slot ->
+    val leafReadReturnType = leafReadSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
         slot.type.renderSnapshotCSharpType(leafTypeParameters, nullableFlags = slot.nullableReferenceFlags)
     }
-    val branchReadReturnType = branchReadSlot.signature.returnSlot.let { slot ->
+    val branchReadReturnType = branchReadSlot.signature.requireDirectOrVoidResultSlot().let { slot ->
         slot.type.renderSnapshotCSharpType(branchTypeParameters, nullableFlags = slot.nullableReferenceFlags)
     }
     val treeGetCapabilityIdentity = checkNotNull(treeGetCapability.capabilitySlot)
@@ -3529,43 +3548,43 @@ private fun physicalizeGenericOwnerRepresentativeOctoTreeCandidate(
     val leafCapabilitySimpleName = leafSetCapabilityIdentity.physicalOwnerPath.last()
     val branchCapabilitySimpleName = branchSetCapabilityIdentity.physicalOwnerPath.last()
     val treeGetCapabilityReturnType =
-        treeGetCapability.signature.returnSlot.let { slot ->
+        treeGetCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val treeDepthCapabilityReturnType =
-        treeDepthCapability.signature.returnSlot.let { slot ->
+        treeDepthCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val treeToStringCapabilityReturnType =
-        treeToStringCapability.signature.returnSlot.let { slot ->
+        treeToStringCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val nodeCapabilityReturnType =
-        nodeSetCapability.signature.returnSlot.let { slot ->
+        nodeSetCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val leafCapabilityReturnType =
-        leafSetCapability.signature.returnSlot.let { slot ->
+        leafSetCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val branchCapabilityReturnType =
-        branchSetCapability.signature.returnSlot.let { slot ->
+        branchSetCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val leafReadCapabilityReturnType =
-        leafReadCapability.signature.returnSlot.let { slot ->
+        leafReadCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val branchReadCapabilityReturnType =
-        branchReadCapability.signature.returnSlot.let { slot ->
+        branchReadCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val leafToStringCapabilityReturnType =
-        leafToStringCapability.signature.returnSlot.let { slot ->
+        leafToStringCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     val branchToStringCapabilityReturnType =
-        branchToStringCapability.signature.returnSlot.let { slot ->
+        branchToStringCapability.signature.requireDirectOrVoidResultSlot().let { slot ->
             slot.type.renderSnapshotCSharpType(emptyList(), nullableFlags = slot.nullableReferenceFlags)
         }
     fun erasedMemberName(sourceName: String): String = treePrototype.members.single { member ->
@@ -12054,6 +12073,18 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
         if (producer.name.equals("lib.dll", ignoreCase = true)) {
             requireInvariantVarianceShadow("CompleteNaturalContract")
             val family = requirePublishedFamily("CompleteNaturalContract")
+            val producerMember = family.contract.declaredMembers.single { member ->
+                member.role == DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+            }
+            val naturalMethodDef = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                .singleOrNull { declaration ->
+                    declaration.logicalMemberKey == producerMember.logicalMemberKey
+                }
+            check(naturalMethodDef != null) {
+                "The complete natural producer did not publish its ABI-63 natural MethodDef: " +
+                        declarations.keys.sorted()
+            }
             check(family.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
                     family.contract.directParents.isEmpty() &&
                     family.contract.capabilityBindingKind ==
@@ -12164,6 +12195,26 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
     val methodWindows = methodStarts.mapIndexed { index, start ->
         ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
     }
+    fun requireRecordedDownstreamFetch(methodName: String) {
+        val method = methodWindows.singleOrNull { window ->
+            "'$methodName'(" in window.substringBefore('{')
+        }
+        check(method != null) {
+            "Cannot isolate the complete-natural-interface consumer $methodName MethodDef: " +
+                    emittedIl.path
+        }
+        check("::'InvokeRecordedMember'(" in method &&
+                "ldtoken method instance !0 [lib]" +
+                "'generic.owner.complete.natural.CompleteNaturalContract`1'::'fetch'()" in method &&
+                "::'InvokeUniqueMember'(" !in method &&
+                "ldstr \"fetch\"" !in method
+        ) {
+            "The downstream '$methodName' call did not use the producer-recorded parent " +
+                    "MethodDef token:\n$method"
+        }
+    }
+    requireRecordedDownstreamFetch("downstreamWidenedFetch")
+    requireRecordedDownstreamFetch("downstreamInheritedWidenedFetch")
     val boxMethod = methodWindows.singleOrNull { window ->
         "'box'(" in window.substringBefore('{')
     }
@@ -12885,11 +12936,67 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
         return
     }
 
+    val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+    check(emittedIl.isFile) {
+        "The split-nullable consumer has no emitted IL sibling: ${emittedIl.path}"
+    }
+    val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+        .map { match -> match.range.first }
+        .toList()
+    val methodWindows = methodStarts.mapIndexed { index, start ->
+        ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+    }
+    val downstreamRead = methodWindows.singleOrNull { window ->
+        "'downstreamWidenedRead'(" in window.substringBefore('{')
+    }
+    check(downstreamRead != null) {
+        "Cannot isolate the split-nullable consumer downstreamWidenedRead MethodDef: " +
+                emittedIl.path
+    }
+    check("::'InvokeRecordedMember'(" in downstreamRead &&
+            "ldtoken method instance !0 [lib]" +
+            "'generic.owner.split.nullable.NullableSource`1'::'read'(bool, bool&)" in
+            downstreamRead &&
+            "::'InvokeUniqueMember'(" !in downstreamRead &&
+            "ldstr \"read\"" !in downstreamRead
+    ) {
+        "The downstream split-nullable call did not use the producer-recorded MethodDef token:\n" +
+                downstreamRead
+    }
+
+    fun requireRecordedOverload(methodName: String, parameterType: String) {
+        val method = methodWindows.singleOrNull { window ->
+            "'$methodName'(" in window.substringBefore('{')
+        }
+        check(method != null) {
+            "Cannot isolate the hostile split-nullable consumer $methodName MethodDef: " +
+                    emittedIl.path
+        }
+        check("::'InvokeRecordedMember'(" in method &&
+                "ldtoken method instance !0 [lib]" +
+                "'generic.owner.split.nullable.OverloadedNullableSource`1'::" +
+                "'read'($parameterType, bool&)" in method &&
+                "::'InvokeUniqueMember'(" !in method &&
+                "ldstr \"read\"" !in method
+        ) {
+            "The downstream '$methodName' call did not select its exact same-name/" +
+                    "same-regular-arity producer MethodDef token:\n$method"
+        }
+    }
+    requireRecordedOverload("downstreamOverloadedBooleanRead", "bool")
+    requireRecordedOverload("downstreamOverloadedIntRead", "int32")
+
     val lib = directory.resolve("lib.dll")
     val middle = directory.resolve("middle.dll")
     check(lib.isFile && middle.isFile) {
         "The split-nullable C# probe lacks its separately compiled libraries"
     }
+    // The box harness gives the final module a transport filename, while its Assembly row keeps
+    // the test-data name. A C# executable which references that assembly needs the identity-named
+    // file beside it for both CoreCLR and Framework probing.
+    val downstreamConsumerAssembly = directory.resolve("${testDataFile.nameWithoutExtension}.dll")
+    producer.copyTo(downstreamConsumerAssembly, overwrite = true)
     val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
     val platformDirectory = System.getProperty(platformProperty)?.let(::File)
         ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
@@ -12920,6 +13027,21 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                 {
                     isNull = missing;
                     return missing ? null : "foreign";
+                }
+            }
+
+            public sealed class NaturalOverloadedStringSource : OverloadedNullableSource<string>
+            {
+                public string read(bool missing, out bool isNull)
+                {
+                    isNull = missing;
+                    return missing ? null : "foreign-overloaded-bool";
+                }
+
+                public string read(int index, out bool isNull)
+                {
+                    isNull = index < 0;
+                    return isNull ? null : "foreign-overloaded-" + index;
                 }
             }
 
@@ -12956,6 +13078,21 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                     if (reader.readWide(strings, false) as string != "foreign" ||
                         reader.readWide(strings, true) != null)
                         throw new InvalidOperationException("widened Kotlin reference call to C# failed");
+
+                    OverloadedNullableSource<object> overloaded =
+                        new NaturalOverloadedStringSource();
+                    if (!object.Equals(
+                            mainKt.downstreamOverloadedBooleanRead(overloaded, false),
+                            "foreign-overloaded-bool") ||
+                        mainKt.downstreamOverloadedBooleanRead(overloaded, true) != null)
+                        throw new InvalidOperationException(
+                            "external recorded Boolean MethodDef dispatch to C# failed");
+                    if (!object.Equals(
+                            mainKt.downstreamOverloadedIntRead(overloaded, 5),
+                            "foreign-overloaded-5") ||
+                        mainKt.downstreamOverloadedIntRead(overloaded, -1) != null)
+                        throw new InvalidOperationException(
+                            "external recorded Int32 MethodDef dispatch to C# failed");
                     return 0;
                 }
             }
@@ -12966,7 +13103,7 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
         if (target == DotNetTarget.NET48) "SplitNullableResultConsumer.exe"
         else "SplitNullableResultConsumer.dll"
     )
-    val references = listOf(lib, middle, runtime, stdlib)
+    val references = listOf(lib, middle, downstreamConsumerAssembly, runtime, stdlib)
     val compilation = when (target) {
         DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
             checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
@@ -16434,14 +16571,14 @@ private fun genericOwnerPhysicalProperties(
             check(signature.parameterSlots.isEmpty()) {
                 "$scenario PropertyDef proof only admits ordinary non-indexed getters"
             }
-            signature.returnSlot.type
+            signature.requireDirectOrVoidResultSlot().type
         } ?: setterBinding?.second?.signature?.let { signature ->
             check(signature.parameterSlots.size == 1) {
                 "$scenario PropertyDef proof only admits ordinary non-indexed setters"
             }
             signature.parameterSlots.single().type
         } ?: error("$scenario physical property '$physicalPropertyName' has no accessor")
-        val propertyNullableReferenceFlags = getterBinding?.second?.signature?.returnSlot
+        val propertyNullableReferenceFlags = getterBinding?.second?.signature?.requireDirectOrVoidResultSlot()
             ?.nullableReferenceFlags
             ?: setterBinding?.second?.signature?.parameterSlots?.single()?.nullableReferenceFlags
             ?: error("$scenario physical property '$physicalPropertyName' has no nullable contract")
@@ -16667,10 +16804,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             } ?: DotNetGenericOwnerPhysicalMethodSignatureRecord(
                 isInstance = true,
                 genericArity = 0,
-                returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
-                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
-                    DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
-                ),
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
                 parameterSlots = emptyList(),
             )
             val delegatedOwnerType = if (constructor.delegatesToThis) {
@@ -17196,10 +17330,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 ?: DotNetGenericOwnerPhysicalMethodSignatureRecord(
                     isInstance = true,
                     genericArity = 0,
-                    returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
-                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
-                        DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
-                    ),
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
                     parameterSlots = emptyList(),
                 )
             DotNetGenericOwnerPhysicalConstructorRecord(
@@ -17447,13 +17578,16 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                         ?: return@mapNotNull null
                     val matchesCarrier = when (operation) {
                         DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
-                            signature.parameterSlots.isEmpty() && signature.returnSlot.type == physicalType &&
-                                    signature.returnSlot.nullableReferenceFlags == stateNullableReferenceFlags
+                            signature.parameterSlots.isEmpty() &&
+                                    signature.requireDirectOrVoidResultSlot().type == physicalType &&
+                                    signature.requireDirectOrVoidResultSlot().nullableReferenceFlags ==
+                                    stateNullableReferenceFlags
                         DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
                             signature.parameterSlots.singleOrNull()?.type == physicalType &&
                                     signature.parameterSlots.single().nullableReferenceFlags ==
                                     stateNullableReferenceFlags &&
-                                    signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID
+                                    signature.requireDirectOrVoidResultSlot().type.kind ==
+                                    DotNetGenericOwnerPhysicalTypeKind.VOID
                     }
                     if (!matchesCarrier) return@mapNotNull null
                     val slot = members.single { member -> member.logicalMemberKey == logicalMemberKey }
@@ -17498,14 +17632,14 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                                     when (operation) {
                                         DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
                                             signature.parameterSlots.isEmpty() &&
-                                                    signature.returnSlot.type == physicalType &&
-                                                    signature.returnSlot.nullableReferenceFlags ==
+                                                    signature.requireDirectOrVoidResultSlot().type == physicalType &&
+                                                    signature.requireDirectOrVoidResultSlot().nullableReferenceFlags ==
                                                     stateNullableReferenceFlags
                                         DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
                                             signature.parameterSlots.singleOrNull()?.type == physicalType &&
                                                     signature.parameterSlots.single().nullableReferenceFlags ==
                                                     stateNullableReferenceFlags &&
-                                                    signature.returnSlot.type.kind ==
+                                                    signature.requireDirectOrVoidResultSlot().type.kind ==
                                                     DotNetGenericOwnerPhysicalTypeKind.VOID
                                     }
                                 } == true
@@ -17517,23 +17651,17 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 val signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
                     isInstance = true,
                     genericArity = 0,
-                    returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
-                        if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
-                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
-                        } else {
-                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
-                        },
-                        if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
-                            physicalType
-                        } else {
-                            DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
-                        },
-                        if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
-                            stateNullableReferenceFlags
-                        } else {
-                            emptyList()
-                        },
-                    ),
+                    resultLayout = if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                            DotNetGenericOwnerPhysicalValueSlotRecord(
+                                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                                physicalType,
+                                stateNullableReferenceFlags,
+                            ),
+                        )
+                    } else {
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void
+                    },
                     parameterSlots = if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE) {
                         listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
                             DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
@@ -17578,23 +17706,17 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                         val signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
                             isInstance = true,
                             genericArity = 0,
-                            returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
-                                if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
-                                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
-                                } else {
-                                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
-                                },
-                                if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
-                                    physicalType
-                                } else {
-                                    DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
-                                },
-                                if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
-                                    stateNullableReferenceFlags
-                                } else {
-                                    emptyList()
-                                },
-                            ),
+                            resultLayout = if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
+                                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                                    DotNetGenericOwnerPhysicalValueSlotRecord(
+                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                                        physicalType,
+                                        stateNullableReferenceFlags,
+                                    ),
+                                )
+                            } else {
+                                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void
+                            },
                             parameterSlots = if (operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE) {
                                 listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
                                     DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
@@ -18283,8 +18405,11 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             physicalOwnerPath = overloadTypedSlot.physicalOwnerPath,
             physicalMethodName = overloadTypedSlot.physicalMethodName,
             signature = overloadTypedSlot.signature.copy(
-                returnSlot = overloadTypedSlot.signature.returnSlot.copy(
-                    type = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                    (overloadTypedSlot.signature.resultLayout as
+                            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct).slot.copy(
+                        type = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                    ),
                 ),
             ),
         ),
@@ -18860,11 +18985,14 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     )
     val typedVectorReadMethod = typedStateReadAccess.physicalMethod.copy(
         signature = typedStateReadAccess.physicalMethod.signature.copy(
-            returnSlot = typedStateReadAccess.physicalMethod.signature.returnSlot.copy(
-                type = typedVectorType,
-                nullableReferenceFlags = listOf(
-                    DotNetNullableReferenceFlag.NON_NULL,
-                    DotNetNullableReferenceFlag.NON_NULL,
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                (typedStateReadAccess.physicalMethod.signature.resultLayout as
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct).slot.copy(
+                    type = typedVectorType,
+                    nullableReferenceFlags = listOf(
+                        DotNetNullableReferenceFlag.NON_NULL,
+                        DotNetNullableReferenceFlag.NON_NULL,
+                    ),
                 ),
             ),
         ),
@@ -18957,14 +19085,16 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
             DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
             DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
         ) && candidate.slots.all { slot ->
-            slot.signature.returnSlot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            slot.signature.requireDirectOrVoidResultSlot().domain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
                     slot.signature.parameterSlots.singleOrNull()?.domain ==
                     DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
         }
     }
     check(echo.slots.all { slot ->
-        slot.signature.returnSlot.type.scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
-                slot.signature.returnSlot.type.typePath == listOf("System", "Array") &&
+        slot.signature.requireDirectOrVoidResultSlot().type.scope ==
+                DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+                slot.signature.requireDirectOrVoidResultSlot().type.typePath == listOf("System", "Array") &&
                 slot.signature.parameterSlots.single().type.scope ==
                 DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
                 slot.signature.parameterSlots.single().type.typePath == listOf("System", "Array")
@@ -18982,9 +19112,9 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     }
     check(relay.signature.genericArity == 1 &&
             relayCapability.signature == relay.signature &&
-            relay.signature.returnSlot.type.arguments.single().kind ==
+            relay.signature.requireDirectOrVoidResultSlot().type.arguments.single().kind ==
             DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER &&
-            relay.signature.returnSlot.type.arguments.single().parameterIndex == 0) {
+            relay.signature.requireDirectOrVoidResultSlot().type.arguments.single().parameterIndex == 0) {
         "The generic-owner artifact did not retain its nested method-generic array carrier"
     }
     check(artifact.owners.flatMap { owner -> owner.members }.mapNotNull { candidate ->
@@ -20635,10 +20765,20 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
         } else {
             copy(arguments = arguments.map { argument -> argument.eraseOwnerParameterForNegativeTest() })
-        }
+    }
     fun DotNetGenericOwnerPhysicalMethodSignatureRecord.eraseOwnerParametersForNegativeTest():
             DotNetGenericOwnerPhysicalMethodSignatureRecord = copy(
-        returnSlot = returnSlot.copy(type = returnSlot.type.eraseOwnerParameterForNegativeTest()),
+        resultLayout = when (val layout = resultLayout) {
+            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> layout
+            is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct -> layout.copy(
+                slot = layout.slot.copy(type = layout.slot.type.eraseOwnerParameterForNegativeTest()),
+            )
+            is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable -> layout.copy(
+                payloadSlot = layout.payloadSlot.copy(
+                    type = layout.payloadSlot.type.eraseOwnerParameterForNegativeTest(),
+                ),
+            )
+        },
         parameterSlots = parameterSlots.map { parameter ->
             parameter.copy(type = parameter.type.eraseOwnerParameterForNegativeTest())
         },
@@ -21248,15 +21388,15 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         .renderSnapshotCSharpType(declarationOwnerArguments)
     val writeSemanticParameterType = physicalizedWriteSemantic.physicalMethod.signature.parameterSlots.single().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
-    val readTypedReturnType = physicalizedReadTyped.physicalMethod.signature.returnSlot.type
+    val readTypedReturnType = physicalizedReadTyped.physicalMethod.signature.requireDirectOrVoidResultSlot().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
-    val readSemanticReturnType = physicalizedReadSemantic.physicalMethod.signature.returnSlot.type
+    val readSemanticReturnType = physicalizedReadSemantic.physicalMethod.signature.requireDirectOrVoidResultSlot().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
-    val echoTypedReturnType = physicalizedEchoTyped.physicalMethod.signature.returnSlot.type
+    val echoTypedReturnType = physicalizedEchoTyped.physicalMethod.signature.requireDirectOrVoidResultSlot().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
     val echoTypedParameterType = physicalizedEchoTyped.physicalMethod.signature.parameterSlots.single().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
-    val echoSemanticReturnType = physicalizedEchoSemantic.physicalMethod.signature.returnSlot.type
+    val echoSemanticReturnType = physicalizedEchoSemantic.physicalMethod.signature.requireDirectOrVoidResultSlot().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
     val echoSemanticParameterType = physicalizedEchoSemantic.physicalMethod.signature.parameterSlots.single().type
         .renderSnapshotCSharpType(declarationOwnerArguments)
@@ -23984,22 +24124,41 @@ private fun genericOwnerMetadataInspectorSource(
         isAbstract: Boolean,
         isVirtual: Boolean,
         isFinal: Boolean,
-    ): String = "new ExpectedMethod(" + listOf(
-        identity.physicalMethodName.csharpLiteral(),
-        identity.signature.returnSlot.type.renderMetadataSignatureType().csharpLiteral(),
-        nullableFlags(identity.signature.returnSlot.nullableReferenceFlags),
-        strings(identity.signature.parameterSlots.map { parameter ->
-            parameter.type.renderMetadataSignatureType()
-        }),
-        nullableFlagLists(identity.signature.parameterSlots.map { parameter ->
-            parameter.nullableReferenceFlags
-        }),
-        visibility,
-        (!identity.signature.isInstance).toString(),
-        isAbstract.toString(),
-        isVirtual.toString(),
-        isFinal.toString(),
-    ).joinToString(", ") + ")"
+    ): String {
+        val resultSlot = identity.signature.resultLayout.valueSlotOrNull
+        val parameterSlots = identity.signature.parameterSlots +
+                if (identity.signature.resultLayout is
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+                ) {
+                    listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType(),
+                    ))
+                } else {
+                    emptyList()
+                }
+        val parameterTypes = parameterSlots.mapIndexed { index, parameter ->
+            val type = parameter.type.renderMetadataSignatureType()
+            if (index == parameterSlots.lastIndex && identity.signature.resultLayout is
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+            ) "$type&" else type
+        }
+        return "new ExpectedMethod(" + listOf(
+            identity.physicalMethodName.csharpLiteral(),
+            (resultSlot?.type ?: DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType())
+                .renderMetadataSignatureType().csharpLiteral(),
+            nullableFlags(resultSlot?.nullableReferenceFlags.orEmpty()),
+            strings(parameterTypes),
+            nullableFlagLists(parameterSlots.map { parameter ->
+                parameter.nullableReferenceFlags
+            }),
+            visibility,
+            (!identity.signature.isInstance).toString(),
+            isAbstract.toString(),
+            isVirtual.toString(),
+            isFinal.toString(),
+        ).joinToString(", ") + ")"
+    }
     fun propertyExpectation(property: DotNetGenericOwnerPhysicalPropertyRecord): String =
         "new ExpectedProperty(" + listOf(
             property.physicalPropertyName.csharpLiteral(),

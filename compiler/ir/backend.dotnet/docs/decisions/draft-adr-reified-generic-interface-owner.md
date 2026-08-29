@@ -215,19 +215,35 @@ overload, a custom marker, a generated slot name, and runtime descriptor or
 name/arity search are not equivalent substitutes.
 
 This mechanism does not let a consumer reconstruct a declaration token from
-logical IR. A separately compiled consumer must receive the complete producer-
-recorded physical owner, name, method-generic binder and arity, physical return
-and parameter signature (including by-reference and generic-binder authority),
-parameter domains, and result layout, verified against the producer DLL. Until
-that record exists, the local
-producer proof does not close the general separate-consumer route. Static
+logical IR. For an admitted bounded natural slot, the producer publishes a
+self-sealing declaration record containing the final natural TypeDef and
+MethodDef, method-generic binders, complete physical signature, parameter
+domains, and result layout. A separately compiled consumer may use that record
+only after it is validated against the containing producer DLL.
+
+The declaration record exists independently of Kotlin implementation families.
+An optional implementation-family seal must project exactly the same complete
+natural slot, including TypeDef, MethodDef, logical domains, and result layout,
+but is neither required for an interface-only producer nor a source of
+declaration authority. The initial portable grammar covers directly
+declared, constraint-free, root/edge-free producer and split-nullable producer
+slots whose carriers remain declaration-local. Missing authority for inherited,
+constrained, edge-bearing, or wider forms does not permit logical
+reconstruction or name/arity fallback.
+
+After the producer-DLL validation, a downstream compiler independently checks
+the record against the logical KLIB declaration: instance shape, every
+declaration-independent ordinary parameter carrier, direct owner-result
+parameter index, and split-nullability must agree. KLIB can reject a bad
+physical record; it cannot reconstruct one or replace its MethodDef identity.
+Logical domains or nullability annotations likewise cannot distinguish two
+logical claims on the same physical MethodDef row.
+
+Concrete public decoys and same-name/same-regular-arity interface MethodDefs are
+resolved by the complete recorded signature and exact declaration token. Static
 lineage may later emit a direct interface call; bounded reflective invocation,
 cache behavior, trimming, and NativeAOT remain deployment gates rather than a
 new semantic contract.
-
-Concrete public decoys prove that this local route does not search the
-implementation class. Hostile same-name/same-regular-arity interface MethodDefs
-remain part of the external callable-descriptor proof.
 
 If a semantic route cannot be derived from the complete natural contract and
 recorded Kotlin policy, the target must expose an explicit adapter requirement
@@ -335,6 +351,8 @@ The producer records:
 
 - the natural TypeDef and selected physical variance;
 - every natural MethodDef/Property and generic binder;
+- a self-sealing declaration record for each externally consumable natural slot,
+  independent of optional implementation-family evidence;
 - semantic capability and hook identities where emitted;
 - parameter policies and result layouts;
 - default/helper and MethodImpl obligations; and

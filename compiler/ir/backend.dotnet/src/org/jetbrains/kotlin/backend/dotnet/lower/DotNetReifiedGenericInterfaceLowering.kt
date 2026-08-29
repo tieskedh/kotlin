@@ -258,6 +258,65 @@ internal class DotNetReifiedGenericInterfaceLowering(
         context.publishedGenericInterfaceFamilies[owner]
             ?: externalDeclarations.publishedGenericInterfaceFamilyOrNull(owner)
 
+    /**
+     * Records the logical slot domains of every producer-published natural MethodDef.
+     *
+     * These domains belong to the published callable contract, not to the narrower grammar which
+     * may also weaken one owner's physical GenericParam variance. Keeping the two decisions
+     * independent lets an ordinary declaration such as `(Boolean) -> T?` publish the same input
+     * and result policy as a complete producer/consumer family without inventing a shape-specific
+     * admission rule.
+     */
+    private fun recordPublishedNaturalMethodDomains(
+        owner: IrClass,
+        members: List<IrSimpleFunction>,
+    ) {
+        members.forEach { member ->
+            check(member.parent === owner) {
+                "Internal .NET backend error: published natural interface '${owner.name}' " +
+                        "recorded a callable from another owner"
+            }
+            val specialArgumentsToCheck = specialBridgeMethods
+                .findSpecialWithOverride(member, includeSelf = true)
+                ?.second
+                ?.argumentsToCheck
+                ?: 0
+            val parameterDomains = member.parameters
+                .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                .mapIndexed { index, parameter ->
+                    when {
+                        !parameter.type.referencesGenericOwnerParameter(owner) ->
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                        index < specialArgumentsToCheck ||
+                                !parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN) ->
+                            DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+                        else -> DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                    }
+                }
+            val previousParameterDomains =
+                context.genericInterfaceNaturalMethodParameterDomains.put(member, parameterDomains)
+            check(previousParameterDomains == null || previousParameterDomains == parameterDomains) {
+                "Internal .NET backend error: published natural interface member " +
+                        "'${member.name}' acquired contradictory input domains"
+            }
+
+            val resultDomain = when {
+                member.returnType.isUnit() -> null
+                member.returnType.referencesGenericOwnerParameter(owner) ->
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
+                else -> DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+            }
+            val hadPreviousResultDomain =
+                context.genericInterfaceNaturalMethodResultDomains.containsKey(member)
+            val previousResultDomain =
+                context.genericInterfaceNaturalMethodResultDomains.put(member, resultDomain)
+            check(!hadPreviousResultDomain || previousResultDomain == resultDomain) {
+                "Internal .NET backend error: published natural interface member " +
+                        "'${member.name}' acquired contradictory result domains"
+            }
+        }
+    }
+
     private fun publishedFamilyOrNull(
         owner: IrClass,
         visiting: Set<IrClass> = emptySet(),
@@ -376,6 +435,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         check(context.publishedGenericInterfaceFamilies.put(owner, contract) == null) {
             "Internal .NET backend error: '${owner.name}' published multiple generic-interface contracts"
         }
+        recordPublishedNaturalMethodDomains(owner, declaredMembers)
     }
 
     override fun lower(irModule: IrModuleFragment) {
@@ -420,38 +480,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ) {
                     "Internal .NET backend error: complete-natural interface '${owner.name}' " +
                             "was admitted more than once"
-                }
-                plan.inventory.directCallableMembers.forEach { memberSymbol ->
-                    val member = memberSymbol.owner
-                    check(member.parent === owner) {
-                        "Internal .NET backend error: complete-natural interface '${owner.name}' " +
-                                "inventoried a callable from another owner"
-                    }
-                    val specialArgumentsToCheck = specialBridgeMethods
-                        .findSpecialWithOverride(member, includeSelf = true)
-                        ?.second
-                        ?.argumentsToCheck
-                        ?: 0
-                    val domains = member.parameters
-                        .filter { parameter -> parameter.kind == IrParameterKind.Regular }
-                        .mapIndexed { index, parameter ->
-                            when {
-                                !parameter.type.referencesGenericOwnerParameter(owner) ->
-                                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
-                                index < specialArgumentsToCheck ||
-                                        !parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN) ->
-                                    DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
-                                else -> DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
-                            }
-                        }
-                    val previous = context.genericInterfaceNaturalMethodParameterDomains.put(
-                        member,
-                        domains,
-                    )
-                    check(previous == null || previous == domains) {
-                        "Internal .NET backend error: complete-natural interface member " +
-                                "'${member.name}' acquired contradictory input domains"
-                    }
                 }
             }
 
@@ -1961,18 +1989,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 Variance.IN_VARIANCE -> false
             }
         }
-        if (properties.isNotEmpty() ||
-            members.map { member -> member.name }.distinct().size != members.size
-        ) {
-            return false
-        }
         return when (parameter.variance) {
             Variance.OUT_VARIANCE -> members.singleOrNull()?.let { member ->
                 member.isDirectProducerMember(parameter) ||
-                        member.isDirectNullableProducerMember(parameter) ||
                         member.isDirectConstructedInterfaceProducerMember(parameter) ||
                         member.isDirectMethodGenericProducerMember(parameter)
             } == true ||
+                        members.isCovariantNullableProducerFamily(parameter) ||
                         members.isCovariantProducerQueryFamily(parameter)
             Variance.IN_VARIANCE -> members.singleOrNull()?.isDirectConsumerMember(parameter) == true
             Variance.INVARIANT ->
@@ -2481,6 +2504,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
             return false
         }
         return returnType.isDirectNullableProducerOf(parameter)
+    }
+
+    /**
+     * A declaration-independent input vector does not change the owner construction selected by a
+     * covariant nullable producer. Every member therefore remains an independent natural MethodDef,
+     * including overloads with the same source name and regular arity; ABI-63 dispatch identifies
+     * those slots by their producer-recorded MethodDef token rather than by either name or arity.
+     */
+    private fun List<IrSimpleFunction>.isCovariantNullableProducerFamily(
+        parameter: IrTypeParameter,
+    ): Boolean = isNotEmpty() && all { member ->
+        member.isDirectNullableProducerMember(parameter)
     }
 
     /**

@@ -1593,6 +1593,27 @@ internal class DotNetIlTypeMapper private constructor(
     ): List<DotNetGenericOwnerPhysicalSlotDomain>? =
         genericOwnerNaturalMethodParameterDomains[function]
 
+    fun externalGenericOwnerNaturalMethodDefCandidates(
+        functions: List<IrSimpleFunction>,
+    ): List<Pair<DotNetBoundGenericOwnerNaturalMethodDef, DotNetIlFunctionInfo>> {
+        val declarations = functions.asSequence()
+            .flatMap { function ->
+                sequenceOf(function) + function.allOverridden().asSequence()
+            }
+            .distinct()
+            .toList()
+        val candidates = declarations.asSequence()
+            .mapNotNull(externalDeclarations::genericOwnerNaturalMethodDefOrNull)
+            .distinctBy { binding -> binding.declaration.logicalMemberKey }
+            .map { binding ->
+                val info = externalDeclarations.genericOwnerNaturalMethodDefFunctionInfo(binding)
+                recordAssemblyReference(info.owner)
+                binding to info
+            }
+            .toList()
+        return candidates
+    }
+
     fun genericOwnerWrongShapePolicy(function: IrSimpleFunction): DotNetCSharpWrongShapePolicy? =
         genericOwnerWrongShapePolicies[function]
             ?: function.allOverridden().firstNotNullOfOrNull(genericOwnerWrongShapePolicies::get)

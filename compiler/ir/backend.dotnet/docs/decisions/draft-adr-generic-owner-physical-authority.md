@@ -139,6 +139,18 @@ MethodDef, a separately compiled producer-recorded MethodDef verified against
 its DLL, and a retained foreign MethodDef/MethodImpl. These endpoint kinds may
 share the same structural signature but never exchange authority by name.
 
+For a Kotlin-produced natural slot, declaration authority and implementation-
+family evidence are independent. A declaration-level natural-slot seal records
+the final natural TypeDef row, final MethodDef row, logical parameter domains,
+and result layout as one self-sealing fact. It does not require an implementation
+class, semantic hook, dispatcher, or MethodImpl. A wider implementation-family
+seal is optional. When present, its complete natural-slot projection, including
+TypeDef, MethodDef, logical domains, and result layout, must equal the
+declaration seal exactly; it never creates or strengthens that seal.
+The current physical index calls these records `N` and `J`, respectively. The
+dependency is one-way: the presence of `J` requires a matching `N`; the presence
+of `N` never requires `J`.
+
 Value-flow precision is the product lattice described below: carrier placement
 chooses a verifier-valid destination, guaranteed-view sets intersect at joins,
 lineage agrees or disappears, and value layouts join independently. Two normal
@@ -477,21 +489,47 @@ When the current emitter owns the final natural generic-interface MethodDef,
 the bounded local route emits its exact open-declaration token, selects an
 already-proven closed construction implemented by the receiver, and uses the
 mandatory two-handle `MethodBase.GetMethodFromHandle` overload. A separate
-consumer may do the same only from a complete producer-recorded callable
-descriptor validated against the producer DLL; logical IR and incomplete older
-library records are not declaration-token authority. CLR interface dispatch
-then selects the ordinary or explicit `MethodImpl`. The selected construction
-supplies binding context; selected-view lineage may choose among already-
-guaranteed constructions but cannot establish one. No concrete method search,
-marker attribute, interface enumeration order, or logical signature
-reconstruction participates in slot identity.
+consumer uses the same route only from the declaration-level natural-slot seal.
+Logical IR, an implementation-family seal, and incomplete older library records
+are not declaration-token authority.
 
-The callable record keeps parameter policies and result layout orthogonal. In
-particular, a split-nullable MethodDef token includes its physical trailing
-`bool&`, while the recorded result layout tells the invoker how to materialize
-the logical result. This must be serialized as complete physical declaration
-authority for external consumers; a local final `MethodDef` object is not a
-substitute for downstream ABI evidence.
+The declaration seal is admitted only when its logical and physical owner/member
+joins agree with the ordinary class, function, member-family, and published-
+interface records in the same producer. Orphan, cross-library, cross-owner,
+result-layout-mismatched, or implementation-disagreeing seals fail closed.
+Before exposing the record as `BoundProducer` authority, the dependency loader
+validates the sealed TypeDef path, flags, ancestry, generic parameters and
+constraints, plus the complete MethodDef name, flags, binders, signature,
+parameter rows, and result layout against the containing DLL. Split-nullable
+validation includes the final `[out] bool&`. Name or logical-signature matching
+alone is insufficient.
+
+A consumer also joins the validated physical record with its independent KLIB
+projection before routing. Instance/static shape, declaration-independent
+ordinary parameter carriers, the direct owner-result parameter index, and the
+logical split-nullability bit must agree exactly. This logical join may
+invalidate a stale or cross-wired record but never establishes physical
+identity, supplies a missing carrier, or rewrites the recorded MethodDef.
+Physical duplicate detection therefore precedes logical slot annotations:
+different Kotlin domains or nullability cannot turn two claims on one CLR row
+into distinct MethodDefs.
+
+The initial external declaration-seal grammar is deliberately bounded to
+directly declared producer and split-nullable producer slots on root natural
+interfaces with no direct edges or generic constraints and only declaration-
+local carriers. Unsupported forms are `Unavailable`; they are never
+reconstructed, widened to `object`, or inferred from an implementation seal.
+This is an admission boundary for the first portable record, not a permanent
+claim that inherited or edge-bearing slots need a different authority model.
+
+CLR interface dispatch selects the ordinary or explicit `MethodImpl`. The
+selected construction supplies binding context; selected-view lineage may
+choose among already-guaranteed constructions but cannot establish one. No
+concrete method search, marker attribute, interface enumeration order, or
+logical signature reconstruction participates in slot identity. The callable
+record keeps parameter policies and result layout orthogonal. In particular, a
+split-nullable MethodDef token includes its physical trailing `bool&`, while the
+recorded result layout tells the invoker how to materialize the logical result.
 
 Retained foreign CLR metadata is independent physical authority. A foreign
 TypeDef or MethodDef is identified by its selected assembly metadata and
