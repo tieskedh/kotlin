@@ -54,24 +54,41 @@ variance is retained only where the complete interface surface is CLR-legal;
 otherwise the affected parameter is physically invariant while Kotlin's
 logical variance remains in KLIB. Ordinary CLR-language implementations must
 not require a hidden generated ABI for behavior derivable from real interface
-slots. ABI 63 closes the bounded root/edge-free external MethodDef-authority
-proof; its dated evidence is
-[archived](../archive/generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md).
-ABI 64 closes the first standalone implementation-side seal: one separately
-compiled public open generic Kotlin class publishes its exact class MethodDef
-and direct constructed natural-interface edge, allowing a downstream Kotlin
-override to preserve the already-emitted split-nullable slot without logical
-signature reconstruction or a fabricated MethodImpl. This is Kotlin producer
-authority external to the consumer, not retained foreign CLR authority. Its
-dated evidence is
-[archived](../archive/generic-owner-external-class-methoddef-authority-2026-08-29.md).
+slots.
 
-Deeper base chains, multiple or distinct constructed views, constraints,
-method-generics, explicit MethodImpls, general non-split callables, and retained
-foreign CLR declarations next extend the same authority model. Only after
-downstream owner closure is an epoch invariant may a bounded slice stop
-emitting its comparison surface inside the rehearsal. Complete removal still
-waits for the selected-family freeze and full hostile inverse.
+The bounded declaration/MethodDef stages and the first producer-wide state
+stage are closed. Stage 6 reaches one monotone fixpoint across detached-family
+inheritance, private-helper reachability, state, and output pairing, then admits
+from final per-field requirements rather than the diagnostic owner disposition.
+BOUND freezes the complete existing instance-field set, exact explicit-writer
+lineages and multiplicities, and the positional initializer contract.
+Immediately beforehand, after bridge/body production, the complete live module
+re-proves every typed store; an unsupported live store makes the family
+unavailable, while any post-BOUND change is an internal conflict. Final
+observations are validated before dependency/IL/PE publication: the full field
+set matches BOUND, the owner-dependent FieldDef seals separately, and snapshots
+publish only after ILAsm success. The seal checks TypeDef category/arity,
+carrier and exact parameter index, cross-scope uniqueness, and the newly
+observed physical field name. This
+distinguishes a producer-proven private mutable `!T` slot from a hostile owner
+whose widened writes require one private mutable `object` slot, without shadow
+state or changed identity. Details and remaining grammar are
+[archived](../archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
+
+The first grammar accepts only an exact positional constructor-parameter
+initializer. Typed direct stores consume the exact non-dispatch writer
+parameter with the field's direct `T` type. Init-block, other-field, computed,
+and other nontrivial initializers remain unavailable and fall back out of this
+proof; they are not hard user errors.
+
+The next ordered proof composes owner-dependent callable inputs with direct and
+split-nullable results on a custom declaration. Deeper authority, broader state
+shapes, retained foreign declarations, and value-provenance generalization
+remain later extensions of the same model. A bounded slice may stop emitting a
+comparison surface only after downstream owner closure is an epoch invariant;
+complete removal still waits for the selected-family freeze and hostile
+inverse. Generic-child-capability to separately owned base-capability conversion
+remains an independent interface-routing proof, not part of Stage 6.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to

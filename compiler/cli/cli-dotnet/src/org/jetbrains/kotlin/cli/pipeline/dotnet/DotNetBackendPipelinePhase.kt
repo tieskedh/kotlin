@@ -50,6 +50,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             output.genericOwnerCompleteEmissionComparisons,
             output.genericOwnerSealedEmissionFamilies,
             output.genericOwnerRehearsal,
+            output.genericOwnerPhysicalStateEmissionSnapshots,
         )
     }
 }

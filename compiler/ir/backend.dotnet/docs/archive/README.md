@@ -14,6 +14,15 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md`](generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md)
+  records the bounded Stage 6 producer-wide FieldDef authority on unchanged
+  physical-library ABI 64: monotone family/helper/state/output closure, final
+  per-field admission, live-module writer reproof, complete BOUND instance-field
+  and exact writer/initializer lineage, pre-publication full-field validation,
+  ILAsm-gated snapshots and cross-scope selected-FieldDef sealing, inherited no-
+  shadow-state proof, the direct-`T` semantic-state output composition repair,
+  unchanged schema 21/runtime surface 60, ordinary C# use, and the exact erased
+  inverse.
 - [`generic-owner-external-class-methoddef-authority-2026-08-29.md`](generic-owner-external-class-methoddef-authority-2026-08-29.md)
   records physical-library ABI 64's standalone `M` seal for one public open
   generic Kotlin class MethodDef, its exact constructed `N` InterfaceImpl,

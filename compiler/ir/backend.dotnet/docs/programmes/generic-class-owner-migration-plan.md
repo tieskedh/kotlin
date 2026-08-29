@@ -77,9 +77,26 @@ Before any cutover proposal, complete these stages in order:
    consumption and the hostile same-name/same-regular-arity interface-MethodDef
    proof, with missing, contradictory, ambiguous, or stale producer authority
    failing closed.
-6. Prove one natural generic class whose complete writer set permits typed
-   state, and a separate hostile owner whose semantic writes force broad state;
-   inheritance, escape, and construction must not confuse the two plans.
+6. **Bounded proof complete.** Prove one natural generic class whose complete
+   writer set permits typed state, and a separate hostile owner whose semantic
+   writes force broad state. The Stage 6 grammar admits exactly one private
+   mutable direct-owner-parameter field with plain memory semantics after one
+   monotone detached-family/private-helper/state/output fixpoint. Final per-
+   field requirements decide admission; owner disposition remains diagnostic.
+   BOUND freezes every existing instance-field identity, each explicit writer's
+   site/producer/origin/value-type lineage and exact multiplicity, and one exact
+   `POSITIONAL_CONSTRUCTOR_PARAMETER` initializer. Typed direct stores require
+   the exact non-dispatch writer parameter with the field's direct `T` type;
+   init-block, other-field, computed, and other nontrivial initializers remain
+   unavailable without becoming hard user errors. The complete live module
+   re-proves that writer grammar after bridge/body production and before BOUND;
+   unsupported live stores remain unavailable, whereas post-BOUND changes are
+   internal conflicts. Final observations validate the complete field set
+   before dependency/IL/PE publication, seal the selected FieldDef separately,
+   and publish its snapshot only after ILAsm success. The seal checks TypeDef
+   shape, carrier/index, scope uniqueness, and emitted field name, and
+   memberless inherited constructions add no shadow state. Broader state
+   remains a later generalization, not an implicit admission.
 7. Compose independent callable parameter policies with direct and
    split-nullable result layouts on custom declarations.
 8. Close the remaining retained/foreign entry validation, including inherited,
@@ -104,6 +121,12 @@ freeze and does not authorize a production cutover.
 The source-built Stdlib census must not drive one-off representation rules.
 When it exposes a blocker, reduce that blocker to a structurally custom proof
 before changing the general model.
+
+The Stage 6 evidence is recorded in the
+[producer-wide state FieldDef archive](../archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
+It does not serialize per-value lineage or authorize production migration.
+It also does not close generic-child-capability to separately owned base-
+capability conversion; that remains an interface-routing prerequisite.
 
 ## Rules during ordinary feature work
 

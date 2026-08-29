@@ -13,9 +13,11 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
 - Current checkpoint: physical library ABI 64, generic-owner artifact schema
   21, compiler/runtime surface 60.
-- ABI 64 closes the first standalone implementation-class MethodDef seal for
-  one separately compiled Kotlin generic class. This is Kotlin producer
-  authority external to its consumer, not retained foreign CLR authority.
+- The Stage 6 checkpoint closes the bounded producer-wide state proof without
+  changing a published library-index record: one admitted generic class seals
+  a private mutable `!T` FieldDef when its complete writer graph is typed, while
+  a hostile covariant owner seals one `object` FieldDef when a legal semantic
+  write requires it. Both retain one object and one authoritative state.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
@@ -25,8 +27,8 @@ physical identities may still be corrected atomically.
 
 ## Latest verification
 
-The fresh unqualified production-erased target aggregate passed on 2026-08-29
-at the ABI-64 checkpoint:
+The latest fresh unqualified production-erased target aggregate passed on
+2026-08-29 at the ABI-64 checkpoint:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -42,17 +44,10 @@ errors, or skips:
 | FIR2IR | 187 | 2,251 |
 | integration | 2 | 128 |
 
-Feature-local evidence also passed:
-
-- focused ABI/codec/metadata validation: 2 suites, 36 tests;
-- candidate PSI/LightTree x Framework 4.8/.NET 10 matrix: 4 suites, 4 tests;
-- production-erased inverse over the same matrix: 4 suites, 4 tests.
-
-All reported lanes have zero failures, errors, or skips. The inverse proves
-arity-zero production owners and absence of rehearsal `H`, `N`, `M`, and `J`
-records. Commands, hostile source, PE assertions, and exact evidence are
-recorded in the
-[ABI-64 archive](docs/archive/generic-owner-external-class-methoddef-authority-2026-08-29.md).
+The Stage 6 state-authority slice is rehearsal-only and keeps ABI 64. Its
+focused model, candidate, production-inverse, metadata, reflection, separate-
+compilation, and ordinary C# evidence is owned by the
+[Stage 6 archive](docs/archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
 
 ## Production binding state
 
@@ -78,27 +73,49 @@ recorded in the
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
-The declaration-level `N` record seals one admitted natural-interface
-MethodDef. ABI 64 adds an independent implementation-level `M` record that
-seals one already-emitted Kotlin class MethodDef and its exact direct
-construction of that natural interface. A separate consumer can therefore
-preserve the physical base slot without remapping the logical KLIB signature
-or fabricating a MethodImpl. Producer-final and consumer-PE validation reject
-missing, contradictory, or redirecting evidence; foreign and merely same-name
-aliases never become physical authority.
+Stage 6 now computes detached-family inheritance, private-helper reachability,
+state selection, and owner-dependent output pairing as one monotone fixpoint.
+Admission consumes the final per-field requirements; the priority-compressed
+owner disposition is diagnostic and cannot hide an unresolved field.
 
-The admitted `M` grammar is intentionally narrow: one top-level public open
-invariant unconstrained generic Kotlin class, one ordinary public open
-non-generic method, one exact direct natural-interface construction, and no
-explicit MethodImpl. The complete bounded proof and remaining boundary are in
-the [ABI-64 archive](docs/archive/generic-owner-external-class-methoddef-authority-2026-08-29.md).
+BOUND freezes the complete pre-existing instance-field identity set plus the
+selected field's exact owner, flags, and symbolic carrier. It also freezes each
+explicit writer's unique site/producer/origin/value-type lineage and the one
+exact positional constructor initializer. Final routing checks identities and
+exact multiplicities, preventing a later `!T` or `object` shadow field or a
+removed, duplicated, retargeted, or altered writer.
 
-The active consolidation now extends this same authority/provenance model
-rather than advancing the stdlib census through local recognizers. Its design
-is owned by the
-[physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md);
-the precise next ordering is owned by the
-[way forward](docs/programmes/way-forward.md).
+Immediately before BOUND, after bridge/body-producing passes, the complete live
+module is re-scanned and every typed store must again satisfy the exact non-
+dispatch field-`T` writer grammar. A new unsupported live store makes the family
+unavailable; only changes after BOUND are internal authority conflicts.
+
+Final observations are validated before dependency, IL, or PE publication. The
+full observed instance-field set must match BOUND, while the selected owner-
+dependent FieldDef is sealed separately with its physical name, TypeDef
+category/arity, exact owner-parameter index, cross-scope uniqueness, and other
+BOUND facts. Snapshots are published only after ILAsm success, and the PE
+harness correlates the sealed name with objective metadata.
+
+The bounded grammar is deliberately small: exactly one private mutable instance
+field whose logical type is one direct owner parameter, with plain memory
+semantics and either producer-graph-proven typed storage or required
+semantic-object storage. The only admitted initializer is an exact positional
+constructor-parameter copy; typed direct stores must consume the writer's exact
+non-dispatch field-`T` parameter. Explicit init-block, other-field, computed, or
+otherwise nontrivial initializers remain unavailable rather than producing a
+hard user error. Nested, projected, nullable, volatile, incomplete-writer, and
+typed-write-provenance shapes remain
+unavailable. Exact scope, owner, flags, carrier, binder, final emitted name and
+PE correlation, inherited construction, absence of shadow state, Kotlin
+behavior, identity, and ordinary C# use are covered in the
+[Stage 6 archive](docs/archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
+
+The next migration stage composes owner-dependent callable inputs with direct
+and split-nullable results on a custom declaration. The shared model and
+remaining boundary are owned by the
+[physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
+and [way forward](docs/programmes/way-forward.md).
 
 ## Current blockers
 
@@ -106,9 +123,16 @@ the precise next ordering is owned by the
   chains, multiple or distinct constructed views, constraints, method
   generics, explicit MethodImpls, or general callable forms.
 - Retained foreign CLR declaration authority remains a separate incomplete
-  boundary; ABI 64 does not close it.
-- Natural generic-class typed-versus-broad state selection and shared
-  per-value provenance remain incomplete.
+  boundary.
+- Producer-wide state remains incomplete beyond the bounded direct-owner-
+  parameter/plain-field grammar, including nested carriers, multiple owner-
+  dependent fields,
+  nullable/value-class storage, volatile state, mixed captures, open writer
+  graphs, and external state authority. Shared per-value provenance also
+  remains incomplete.
+- Conversion from a generic child semantic-capability carrier to a differently
+  owned base capability remains a separate interface-routing gap; Stage 6 does
+  not claim to solve it.
 - Remaining retained-foreign projected conversions and SZ-array entry guards
   are not yet proven.
 - Complete Runtime/Stdlib coverage, Framework/CoreCLR deployment breadth,

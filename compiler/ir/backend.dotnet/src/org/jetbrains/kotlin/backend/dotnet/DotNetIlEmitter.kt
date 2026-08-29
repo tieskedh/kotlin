@@ -195,6 +195,7 @@ internal class DotNetIlEmitter(
     private val genericOwnerCallRouteTraceSiteCount: Int? = null,
     private val genericOwnerRehearsal: Boolean = false,
     private val genericOwnerArchitecturePlans: Map<IrClass, DotNetGenericOwnerArchitecturePlan> = emptyMap(),
+    private val localGenericOwnerPhysicalAuthority: DotNetLocalGenericOwnerPhysicalAuthority? = null,
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val publishedGenericInterfaceFamilies:
             Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
@@ -459,6 +460,21 @@ internal class DotNetIlEmitter(
             moduleTopLevelClasses.forEach(::collect)
         }
         val moduleInterfaces = moduleClasses.filterTo(hashSetOf()) { it.isInterface }
+        val genericOwnerAuthoritativeStateFieldCarriers = if (genericOwnerRehearsal) {
+            buildMap {
+                localGenericOwnerPhysicalAuthority?.stateFamilies().orEmpty().forEach { family ->
+                    family.states.forEach { state ->
+                        val field = state.field.owner
+                        if (field.parent !in moduleClasses) return@forEach
+                        check(put(field.symbol, state.fieldDefinition.carrier) == null) {
+                            "Internal .NET backend error: one field received duplicate BOUND state carriers"
+                        }
+                    }
+                }
+            }
+        } else {
+            emptyMap()
+        }
         val genericOwnerObjectStateFields = if (genericOwnerRehearsal) {
             genericOwnerArchitecturePlans.values
                 .filter(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
@@ -746,6 +762,7 @@ internal class DotNetIlEmitter(
             genericInterfaces = genericInterfaces,
             genericClasses = genericClasses,
             genericOwnerObjectStateFields = genericOwnerObjectStateFields,
+            genericOwnerAuthoritativeStateFieldCarriers = genericOwnerAuthoritativeStateFieldCarriers,
             genericOwnerRehearsal = genericOwnerRehearsal,
             genericOwnerCapabilities = genericOwnerCapabilities,
             genericOwnerReflectionCapabilities = genericOwnerReflectionCapabilityInterfaces.mapNotNull { entry ->
@@ -1508,7 +1525,7 @@ internal class DotNetIlEmitter(
                 if (staticInitializer == null && fieldProperties.isEmpty()) continue
                 try {
                     val fieldLines = fieldProperties.associateWith { property ->
-                        renderField(property.backingField!!, typeMapper, isStatic = true)
+                        renderField(property.backingField!!, typeMapper, isStatic = true).ilText
                     }
                     val renderedInitializer = staticInitializer?.let { initializer ->
                         val facadeClassInfo = facadeClassInfoByFile.getValue(file)
@@ -1538,7 +1555,7 @@ internal class DotNetIlEmitter(
                 val failure = staticInitializationFailures[file] ?: continue
                 if (failure.entry !in availableFunctions) continue
                 staticInitializationFailureFieldLines[file] =
-                    renderField(failure.failureState, typeMapper, isStatic = true)
+                    renderField(failure.failureState, typeMapper, isStatic = true).ilText
             }
             if (anyDeclarationRemoved) {
                 val progressStateAtRoundEnd = listOf(
@@ -2599,6 +2616,17 @@ internal class DotNetIlEmitter(
                                     target.physicalDescription,
                                 )
                         },
+                    )
+                },
+                fieldDefinitions = raw.fieldDefinitions.map { field ->
+                    DotNetGenericOwnerPhysicalFieldDefObservation(
+                        physicalField = field.field,
+                        physicalFieldIdentity = field.physicalFieldIdentity,
+                        physicalName = field.physicalName,
+                        visibility = field.visibility,
+                        isStatic = field.isStatic,
+                        isInitOnly = field.isInitOnly,
+                        carrier = normalizeObservedTypeCarrier(field.carrier, physicalBinder),
                     )
                 },
             )
@@ -3950,6 +3978,40 @@ internal class DotNetIlEmitter(
         } else {
             null
         }
+        val fieldDefObservations = if (genericOwnerRehearsal) {
+            mutableListOf<DotNetIlRawFieldDefObservation>()
+        } else {
+            null
+        }
+        val boundStateFamily = localGenericOwnerPhysicalAuthority?.stateFamilyOrNull(irClass.symbol)
+        fun renderOrdinaryField(field: IrField, isStatic: Boolean = field.isStatic): String {
+            val rendered = renderField(field, physicalTypeMapper, isStatic)
+            val selectedState = localGenericOwnerPhysicalAuthority?.stateOrNull(field.symbol)
+            selectedState?.let { state ->
+                check(state.fieldDefinition.declaringType ==
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.Local(irClass.symbol, view = null)) {
+                    "Internal .NET backend error: BOUND state rendered under the wrong physical owner"
+                }
+            }
+            if (boundStateFamily != null && !rendered.isStatic) {
+                check(field.symbol in boundStateFamily.boundInstanceFields) {
+                    "Internal .NET backend error: final state owner rendered an unbounded instance field"
+                }
+                fieldDefObservations?.add(
+                    DotNetIlRawFieldDefObservation(
+                        field = field.symbol,
+                        physicalFieldIdentity = selectedState?.fieldDefinition?.identity as?
+                                DotNetGenericOwnerPhysicalFieldDefIdentity.Local,
+                        physicalName = rendered.physicalName,
+                        visibility = rendered.visibility,
+                        isStatic = rendered.isStatic,
+                        isInitOnly = rendered.isInitOnly,
+                        carrier = rendered.carrier,
+                    ),
+                )
+            }
+            return rendered.ilText
+        }
         val observedTypeDefGenericParameters = emittedGenericParameterDecisions.map { decision ->
             DotNetIlRawTypeDefGenericParameterObservation(
                 decision.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
@@ -4104,9 +4166,9 @@ internal class DotNetIlEmitter(
                         IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY ->
                             renderedFields += renderEnumEntryField(declaration, physicalTypeMapper)
                         IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRIES ->
-                            renderedFields += renderField(declaration, physicalTypeMapper)
+                            renderedFields += renderOrdinaryField(declaration)
                         DOTNET_STATIC_INITIALIZATION_FAILURE_STATE ->
-                            renderedFields += renderField(declaration, physicalTypeMapper)
+                            renderedFields += renderOrdinaryField(declaration)
                         IrDeclarationOrigin.DELEGATE,
                         IrDeclarationOrigin.SYNTHETIC_GENERATED_SAM_IMPLEMENTATION,
                         IrDeclarationOrigin.FIELD_FOR_OUTER_THIS,
@@ -4128,7 +4190,7 @@ internal class DotNetIlEmitter(
                                             "in class '$name' is unexpectedly static"
                                 )
                             }
-                            renderedFields += renderField(declaration, physicalTypeMapper)
+                            renderedFields += renderOrdinaryField(declaration)
                         }
                         else -> dotNetUnsupported(
                             "internal: unexpected propertyless field '${declaration.name.asString()}' in class '$name'"
@@ -4175,7 +4237,7 @@ internal class DotNetIlEmitter(
                         renderedFields += renderConstField(declaration, physicalTypeMapper)
                     } else {
                         declaration.backingField?.let { field ->
-                            renderedFields += renderField(field, physicalTypeMapper)
+                            renderedFields += renderOrdinaryField(field)
                         }
                         val getter = declaration.getter?.takeUnless { it.isFakeOverride }
                         val setter = declaration.setter?.takeUnless { it.isFakeOverride }
@@ -4270,6 +4332,7 @@ internal class DotNetIlEmitter(
                         ))
                     }
                 },
+                fieldDefinitions = fieldDefObservations.orEmpty(),
             ),
         )
         val physicalIlText = buildString {
@@ -4569,21 +4632,38 @@ internal class DotNetIlEmitter(
      * shape by `localprobe_s1`–`_s2`, and both backing-field spellings by `statprobe_s1`/`_s2`
      * (including a user-class-typed static field).
      */
+    private data class RenderedField(
+        val ilText: String,
+        val carrier: DotNetIlValueType,
+        val physicalName: String,
+        val visibility: DotNetIlRawMethodDefVisibility,
+        val isStatic: Boolean,
+        val isInitOnly: Boolean,
+    )
+
     private fun renderField(
         field: IrField,
         typeMapper: DotNetIlTypeMapper,
         isStatic: Boolean = field.isStatic,
-    ): String {
+    ): RenderedField {
         val fieldType = typeMapper.toDotNetIlFieldType(field)
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
         val static = if (isStatic) "static " else ""
-        val declaration = ".field private $static${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+        val physicalName = field.name.asString()
+        val declaration = ".field private $static${fieldType.nameInSignature} ${physicalName.toIlIdentifier()}"
         val attributes = field.dotNetRuntimeAttributes(typeMapper)
-        if (attributes.isEmpty()) return declaration
-        return buildString {
+        val ilText = if (attributes.isEmpty()) declaration else buildString {
             appendLine(declaration)
             append(attributes.joinToString("\n"))
         }
+        return RenderedField(
+            ilText = ilText,
+            carrier = fieldType,
+            physicalName = physicalName,
+            visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+            isStatic = isStatic,
+            isInitOnly = false,
+        )
     }
 
     /**
