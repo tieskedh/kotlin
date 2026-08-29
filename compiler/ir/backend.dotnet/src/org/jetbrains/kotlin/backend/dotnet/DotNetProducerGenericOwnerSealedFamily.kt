@@ -835,7 +835,7 @@ internal object DotNetProducerGenericOwnerSealedFamilyCodec {
         }
     }
 
-    private fun DataOutputStream.writeTypeDef(row: DotNetGenericOwnerSealedEmissionTypeDefRow) {
+    internal fun DataOutputStream.writeTypeDef(row: DotNetGenericOwnerSealedEmissionTypeDefRow) {
         writeInt(row.structural.identityKey.value)
         writeList(row.structural.aliases.sortedBy { alias -> alias.value }) { alias ->
             writeInt(alias.value)
@@ -860,7 +860,7 @@ internal object DotNetProducerGenericOwnerSealedFamilyCodec {
         writeBoolean(row.flags.isBeforeFieldInit)
     }
 
-    private fun DataInputStream.readTypeDef(): DotNetGenericOwnerSealedEmissionTypeDefRow {
+    internal fun DataInputStream.readTypeDef(): DotNetGenericOwnerSealedEmissionTypeDefRow {
         val key = DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(readNonNegativeInt("TypeDef key"))
         val aliases = readList { input ->
             DotNetGenericOwnerCompleteEmissionTypeDefAliasKey(input.readNonNegativeInt("alias key"))
@@ -898,7 +898,7 @@ internal object DotNetProducerGenericOwnerSealedFamilyCodec {
         )
     }
 
-    private fun DataOutputStream.writeMethodDef(row: DotNetGenericOwnerSealedEmissionMethodDefRow) {
+    internal fun DataOutputStream.writeMethodDef(row: DotNetGenericOwnerSealedEmissionMethodDefRow) {
         val structural = row.structural
         writeInt(structural.identityKey.value)
         writeHeader(structural.header)
@@ -912,7 +912,7 @@ internal object DotNetProducerGenericOwnerSealedFamilyCodec {
         writeBoolean(row.isRuntimeSpecialName)
     }
 
-    private fun DataInputStream.readMethodDef(): DotNetGenericOwnerSealedEmissionMethodDefRow {
+    internal fun DataInputStream.readMethodDef(): DotNetGenericOwnerSealedEmissionMethodDefRow {
         val key = DotNetGenericOwnerPhysicalMethodDefEmissionMethodKey(readNonNegativeInt("MethodDef key"))
         val structural = DotNetGenericOwnerCompleteEmissionMethodDefRow(
             key,

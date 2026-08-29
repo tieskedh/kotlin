@@ -138,6 +138,9 @@ friend path. A bounded, JVM-hosted PE/ECMA-335 reader:
   component serves the retained KLIB module header and package fragments directly from memory;
 - reads the physical `Assembly` row and requires the embedded manifest's name, version, culture,
   and unsigned status to match the containing DLL;
+- requires every producer-recorded physical declaration seal used for downstream emission to be
+  validated against the exact TypeDef and MethodDef metadata of the containing DLL before it is
+  exposed to compiler consumers; an embedded record alone is not physical authority;
 - requires the embedded carrier and `self` binding, and rejects a recursive implementation hash.
 
 FIR consumes the same `KotlinLibrary` and `KlibMetadataComponent` contracts as other KLIB targets.

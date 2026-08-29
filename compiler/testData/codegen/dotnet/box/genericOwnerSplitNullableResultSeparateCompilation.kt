@@ -9,6 +9,13 @@ public interface NullableSource<out T> {
     public fun read(missing: Boolean): T?
 }
 
+/** Two same-name/same-regular-arity slots must remain distinct physical MethodDefs. */
+public interface OverloadedNullableSource<out T> {
+    public fun read(missing: Boolean): T?
+
+    public fun read(index: Int): T?
+}
+
 public class NullableSourceReader {
     public fun readInt(source: NullableSource<Int>, missing: Boolean): Int? = source.read(missing)
 
@@ -44,10 +51,36 @@ public fun stringSource(value: String): NullableSource<String> = StringNullableS
 
 public fun nullableIntSource(value: Int?): NullableSource<Int?> = NullableIntNullableSource(value)
 
+private class OverloadedIntNullableSource(
+    private val value: Int,
+) : OverloadedNullableSource<Int> {
+    override fun read(missing: Boolean): Int? = if (missing) null else value
+
+    override fun read(index: Int): Int? = if (index < 0) null else value + index
+}
+
+public fun overloadedIntSource(value: Int): OverloadedNullableSource<Int> =
+    OverloadedIntNullableSource(value)
+
 // MODULE: main(middle)
 // FILE: main.kt
 
 package generic.owner.split.nullable
+
+public fun downstreamWidenedRead(
+    source: NullableSource<Any?>,
+    missing: Boolean,
+): Any? = source.read(missing)
+
+public fun downstreamOverloadedBooleanRead(
+    source: OverloadedNullableSource<Any?>,
+    missing: Boolean,
+): Any? = source.read(missing)
+
+public fun downstreamOverloadedIntRead(
+    source: OverloadedNullableSource<Any?>,
+    index: Int,
+): Any? = source.read(index)
 
 fun box(): String {
     val reader = NullableSourceReader()
@@ -58,16 +91,33 @@ fun box(): String {
     val wideInts = widenIntSource(ints)
     if (reader.readWide(wideInts, false) != 37) return "wide int hit"
     if (reader.readWide(wideInts, true) != null) return "wide int null"
+    if (downstreamWidenedRead(wideInts, false) != 37) return "downstream wide int hit"
+    if (downstreamWidenedRead(wideInts, true) != null) return "downstream wide int null"
 
     val strings = stringSource("typed")
     val wideStrings = widenStringSource(strings)
     if (reader.readWide(wideStrings, false) != "typed") return "wide string hit"
     if (reader.readWide(wideStrings, true) != null) return "wide string null"
+    if (downstreamWidenedRead(wideStrings, false) != "typed") {
+        return "downstream wide string hit"
+    }
+    if (downstreamWidenedRead(wideStrings, true) != null) return "downstream wide string null"
 
     val nullableInt = nullableIntSource(41)
     if (reader.readNullableInt(nullableInt, false) != 41) return "nullable int hit"
     if (reader.readNullableInt(nullableInt, true) != null) return "nullable int missing"
     if (reader.readNullableInt(nullableIntSource(null), false) != null) return "nullable int value null"
+
+    val overloadedExact = overloadedIntSource(43)
+    val overloadedWide: OverloadedNullableSource<Any?> = overloadedExact
+    if (downstreamOverloadedBooleanRead(overloadedWide, false) != 43) {
+        return "overloaded boolean hit"
+    }
+    if (downstreamOverloadedBooleanRead(overloadedWide, true) != null) {
+        return "overloaded boolean null"
+    }
+    if (downstreamOverloadedIntRead(overloadedWide, 2) != 45) return "overloaded int hit"
+    if (downstreamOverloadedIntRead(overloadedWide, -1) != null) return "overloaded int null"
 
     return "OK"
 }

@@ -11,9 +11,9 @@ and follow the owning ADR or active programme for design detail.
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- The current integration checkpoint closes the bounded same-producer
+- The current integration checkpoint closes the bounded ABI-63 external
   recorded-MethodDef dispatch proof described below. Git owns its exact
-  identity.
+  promoted identity.
 - Reviewed upstream synchronization evidence:
   [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
 
@@ -23,27 +23,25 @@ physical identities may still be corrected atomically.
 ## Latest full gate
 
 The production-erased strict target aggregate passed on 2026-08-29 at the
-bounded local recorded-MethodDef checkpoint:
+bounded ABI-63 external recorded-MethodDef checkpoint:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-Direct JUnit XML audit found 202 suites and 2,548 tests, with zero failures,
+Direct JUnit XML audit found 204 suites and 2,568 tests, with zero failures,
 errors, or skips:
 
 | Root | Suites | Tests |
 | --- | ---: | ---: |
-| backend | 12 | 163 |
+| backend | 14 | 183 |
 | `dotnet.ir` | 1 | 6 |
 | FIR2IR | 187 | 2,251 |
 | integration | 2 | 128 |
 
-The focused candidate and production-erased inverse both passed under PSI and
-LightTree on Framework 4.8 and .NET 10. The candidate reader carries exact
-`fetch` and `accept` MethodDef tokens; separately compiled generator-free C#
-ordinary and explicit implementations preserve one identity and state, reject
-incompatible widened input before mutation, and never select public decoys.
+The ABI-63 complete candidate matrix and focused production-erased inverse
+have each passed 4 suites and 8 tests across PSI/LightTree and Framework 4.8
+and .NET 10, with zero failures, errors, or skips.
 
 ## Binding production state
 
@@ -81,31 +79,42 @@ compiled `CompleteNaturalChild<T>` inheritance edge and
 `CompleteNaturalOuter<T>` nested result reach the same physical-variance
 fixpoint, and a downstream module consumes both middle-assembly families.
 
-ABI 62 records final TypeDef GenericParam variance in the ordinary `C` class
-record and repeats it in the `H` family record. External binding requires exact
-`C/H` agreement and never reconstructs physical variance from logical KLIB.
-Plain non-partial C# reference- and value-type implementations compile and run;
-omitting either natural member fails in the C# compiler. Kotlin exact and
-widened calls retain one object identity and behavior on both runtimes, and a
-producer-recorded natural factory result retains its exact carrier.
+Physical library ABI 63 records final TypeDef GenericParam variance in the
+ordinary `C` class and `H` family records and adds a declaration-level `N` seal
+for each admitted directly declared natural producer or split-nullable producer
+slot. `N` contains the final natural TypeDef and MethodDef rows plus orthogonal
+parameter domains and result layout. It is derived from final emission,
+validated against the containing producer PE before exposure, and can exist
+without a Kotlin implementation class. The implementation-level `J` family
+seal remains optional; when present, its complete projected `N`, including
+logical domains and result layout, must equal the declaration `N`. `J` is never
+the source of declaration authority.
 
-The first half of the MethodDef/MethodImpl stage is now complete. A
-same-producer reader emits the exact open `ldtoken method`, binds it to the
-unique implemented closed construction with the mandatory two-handle CLR API,
-and leaves ordinary or explicit `MethodImpl` selection to the CLR. Input-domain
-policy is frozen at producer admission; unsupported or missing authority fails
-closed instead of being reconstructed from a late signature. Physical library
-ABI remains 62 and compiler-runtime surface level is 60.
+A separately compiled consumer now emits the producer-recorded open
+`ldtoken method` for direct and split-nullable results without logical
+reconstruction of physical identity, public-name lookup, or regular-arity
+selection. Before routing, it independently authenticates the PE-validated `N`
+against KLIB's logical instance shape, ordinary parameter carriers, owner-result
+parameter index, and split-nullability bit; KLIB can reject but cannot construct
+physical authority. The hostile same-name/same-regular-arity split-nullable
+family records distinct `bool` and `int32` MethodDefs, and downstream IL asserts
+the corresponding distinct tokens.
 
-The next active slice is ABI 63: publish one exact natural MethodDef descriptor
-per logical member, with parameter domains and direct/void/split-nullable result
-layout kept orthogonal, validate it against the producer DLL, and consume it in
-a downstream assembly. Stage 5 remains open until that cross-assembly route and
-the hostile same-name/same-regular-arity interface-MethodDef proof pass. Only
-then may this bounded family retire its split comparison surface inside the
-rehearsal. Natural generic-class typed-versus-broad state follows. The remaining
-order and final selected-family freeze are owned by the generic-owner programme
-and migration plan linked below.
+A generator-free C# class implements only the natural
+`OverloadedNullableSource<string>` interface. Through its covariantly widened
+`OverloadedNullableSource<object>` view, it calls public functions in the final
+separately compiled Kotlin consumer; Boolean/Int32 overloads and hit/null paths
+all dispatch correctly without compiler capability ABI. This closes the
+bounded stage-5 descriptor and overload gate. Compiler-runtime surface level
+remains 60.
+
+The initial `N` grammar is deliberately limited to declaration-local,
+constraint-free, root/edge-free natural TypeDefs. The next active slice may
+retire the old comparison surface only for this bounded rehearsal family, then
+proceeds to natural generic-class typed-versus-broad state. Inherited,
+edge-bearing, constrained, and wider callable forms remain later authority
+work; the remaining order and final selected-family freeze are owned by the
+generic-owner programme and migration plan linked below.
 
 Shared authority and provenance:
 [`docs/decisions/draft-adr-generic-owner-physical-authority.md`](docs/decisions/draft-adr-generic-owner-physical-authority.md).
@@ -118,11 +127,12 @@ Ordered generic-owner migration stages:
 
 ## Current blockers
 
-- ABI 62 does not publish exact natural MethodDef authority. A downstream
-  consumer therefore cannot yet emit the proven token route; outside the
-  bounded same-producer slice Runtime still uses split/fallback machinery.
-- The hostile overloaded-interface MethodDef, cross-assembly descriptor,
-  trimming, and NativeAOT gates remain open for stage 5.
+- The external natural-MethodDef seal remains bounded to directly declared
+  root/edge-free, constraint-free, declaration-local carrier shapes. Inherited,
+  edge-bearing, constrained, and wider callable forms remain open.
+- Trimming and NativeAOT remain deployment/freeze gates for the eventual
+  selected family; they are not part of the now-closed bounded stage-5
+  descriptor/overload proof.
 - Natural generic-class typed versus broad state selection is not yet proven.
 - Retained/static/global declaration authority and shared value provenance
   remain incomplete.

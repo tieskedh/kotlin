@@ -22,7 +22,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("62", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("63", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -31,6 +31,15 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             .single()
         assertEquals(publication, decodedFamily.publication())
         assertEquals(listOf("demo.Store`1"), decodedFamily.ownerPath)
+        val naturalMethod = decoded.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+            .single()
+        assertEquals(
+            publication.toNaturalMethodDefPhysicalDeclaration(interfaceOwnerKey(publication)),
+            naturalMethod,
+        )
+        assertTrue(naturalMethod.physicalMethod.signature.resultLayout is
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
         assertEquals(
             listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT),
             decoded.values
@@ -38,6 +47,57 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 .single()
                 .naturalTypeParameterVariances,
         )
+    }
+
+    @Test
+    fun deterministicallyRoundTripsAnInterfaceOnlyNaturalMethodDefIndex() {
+        val publication = producerSealedFamilyPublicationFixture()
+        val declarations = interfaceOnlyNaturalMethodDefAbiFixture(publication)
+
+        assertEquals(5, declarations.size)
+        assertEquals(1, declarations.values.count { declaration ->
+            declaration is DotNetPhysicalDeclaration.Class
+        })
+        assertEquals(1, declarations.values.count { declaration ->
+            declaration is DotNetPhysicalDeclaration.Function
+        })
+        assertEquals(1, declarations.values.count { declaration ->
+            declaration is DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+        })
+        assertEquals(1, declarations.values.count { declaration ->
+            declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
+        })
+        assertEquals(1, declarations.values.count { declaration ->
+            declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef
+        })
+        assertTrue(declarations.values.none { declaration ->
+            declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+        })
+
+        val first = DotNetLibraryAbiCodec.encode(declarations)
+        val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
+        assertEquals(first, second)
+        assertEquals(declarations, DotNetLibraryAbiCodec.decode(first.toProperties()))
+    }
+
+    @Test
+    fun rejectsInterfaceOnlyNaturalMethodDefLogicalDomainDivergence() {
+        val declarations = interfaceOnlyNaturalMethodDefAbiFixture()
+        val natural = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+            .single()
+        val publication = natural.publication()
+        val changedInput = publication.copy(naturalMethod = publication.naturalMethod.copy(
+            logicalParameterDomains = listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            ),
+        )).toPhysicalDeclaration()
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(
+                declarations + (changedInput.indexKey() to changedInput),
+            )
+        }
+        assertTrue(failure.message.orEmpty().contains("logical input domains"))
     }
 
     @Test
@@ -79,6 +139,120 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 DotNetLibraryAbiCodec.decode((encoded - encodedPropertyKey(missingKey)).toProperties())
             }
         }
+    }
+
+    @Test
+    fun rejectsOrphanOrCrossWiredNaturalMethodDefRecords() {
+        val publication = producerSealedFamilyPublicationFixture()
+        val declarations = producerSealedFamilyAbiFixture(publication)
+        val natural = publication.toNaturalMethodDefPhysicalDeclaration(interfaceOwnerKey(publication))
+
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(mapOf(natural.indexKey() to natural))
+        }
+        val naturalPublication = natural.publication()
+        val changedName = naturalPublication.copy(
+            naturalMethod = naturalPublication.naturalMethod.copy(
+                row = naturalPublication.naturalMethod.row.copy(physicalName = "OtherRead"),
+            ),
+        ).toPhysicalDeclaration()
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(declarations + (natural.indexKey() to changedName))
+        }
+        val splitResult = naturalPublication.naturalMethod.row.structural.header.result as
+                DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable
+        val changedLayout = naturalPublication.copy(
+            naturalMethod = naturalPublication.naturalMethod.copy(
+                row = naturalPublication.naturalMethod.row.copy(
+                    structural = naturalPublication.naturalMethod.row.structural.copy(
+                        header = naturalPublication.naturalMethod.row.structural.header.copy(
+                            result = DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct(
+                                splitResult.payload,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ).toPhysicalDeclaration()
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(declarations + (natural.indexKey() to changedLayout))
+        }
+
+        val hostileWireIndex = DotNetLibraryAbiCodec.encode(declarations)
+            .mutateNaturalMethodDefDeclarationValue { encodedValue ->
+                encodedValue.mutateEnvelopeFields { fields -> fields[1] = "other-owner" }
+            }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(hostileWireIndex.toProperties())
+        }
+    }
+
+    @Test
+    fun rejectsTwoLogicalNaturalMethodDefsClaimingOnePhysicalMethodDef() {
+        val publication = producerSealedFamilyPublicationFixture()
+        val declarations = interfaceOnlyNaturalMethodDefAbiFixture(publication)
+        val originalKey = publication.key.logicalInterfaceMemberKey
+        val duplicateKey = "$originalKey#duplicate"
+        val natural = declarations.getValue("N:$originalKey") as
+                DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef
+        val naturalPublication = natural.publication()
+        val duplicateNatural = naturalPublication.copy(
+            logicalMemberKey = duplicateKey,
+            naturalMethod = naturalPublication.naturalMethod.copy(
+                logicalParameterDomains = listOf(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                ),
+            ),
+        ).toPhysicalDeclaration()
+        val function = declarations.getValue(originalKey) as DotNetPhysicalDeclaration.Function
+        val memberFamily = declarations.getValue("G:$originalKey") as
+                DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+        val published = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+            .single()
+        val duplicateMember = DotNetPublishedGenericInterfaceMemberContract(
+            duplicateKey,
+            published.contract.declaredMembers.single().role,
+        )
+        val hostile = declarations + mapOf(
+            duplicateKey to function,
+            "G:$duplicateKey" to memberFamily.copy(logicalMemberKey = duplicateKey),
+            duplicateNatural.indexKey() to duplicateNatural,
+            published.indexKey() to published.copy(
+                contract = published.contract.copy(
+                    declaredMembers = (published.contract.declaredMembers + duplicateMember)
+                        .sortedBy { member -> member.logicalMemberKey },
+                ),
+            ),
+        )
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(hostile)
+        }
+        assertTrue(failure.message.orEmpty().contains("claimed by multiple logical members"))
+    }
+
+    @Test
+    fun rejectsSealedFamilyAndNaturalMethodDefGenericParameterNameDivergence() {
+        val publication = producerSealedFamilyPublicationFixture()
+        val declarations = producerSealedFamilyAbiFixture(publication)
+        val natural = publication.toNaturalMethodDefPublication(interfaceOwnerKey(publication))
+        val changedNatural = natural.copy(
+            naturalMethod = natural.naturalMethod.copy(
+                row = natural.naturalMethod.row.copy(
+                    physicalGenericParameterNames = listOf("Changed"),
+                ),
+            ),
+        ).toPhysicalDeclaration()
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(
+                declarations + (changedNatural.indexKey() to changedNatural),
+            )
+        }
+        assertTrue(failure.message.orEmpty().contains(
+            "disagrees with its declaration-level natural MethodDef seal",
+        ))
     }
 
     @Test
@@ -264,6 +438,33 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     }
 
     @Test
+    fun rejectsTruncatedAndTrailingNaturalMethodDefPublicationBytes() {
+        val valid = DotNetLibraryAbiCodec.encode(interfaceOnlyNaturalMethodDefAbiFixture())
+
+        val truncated = valid.mutateNaturalMethodDefDeclarationValue { encodedValue ->
+            encodedValue.mutateEnvelopeFields { fields ->
+                val publicationBytes = decoder.decode(fields[3])
+                fields[3] = encoder.encodeToString(publicationBytes.copyOf(publicationBytes.size - 1))
+            }
+        }
+        val truncatedFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(truncated.toProperties())
+        }
+        assertTrue(truncatedFailure.message.orEmpty().contains("truncated natural MethodDef publication"))
+
+        val trailing = valid.mutateNaturalMethodDefDeclarationValue { encodedValue ->
+            encodedValue.mutateEnvelopeFields { fields ->
+                val publicationBytes = decoder.decode(fields[3])
+                fields[3] = encoder.encodeToString(publicationBytes + 0.toByte())
+            }
+        }
+        val trailingFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(trailing.toProperties())
+        }
+        assertTrue(trailingFailure.message.orEmpty().contains("trailing natural MethodDef publication bytes"))
+    }
+
+    @Test
     fun rejectsAnOversizedEncodedPublicationBeforeBase64Decoding() {
         val key = producerSealedFamilyPublicationFixture().key
         val failure = assertFailsWith<IllegalArgumentException> {
@@ -338,8 +539,14 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             declarations,
             changedDeclarations,
         )
-        assertEquals(1, differences.size)
-        assertEquals(publication.toPhysicalDeclaration().indexKey(), differences.single().logicalKey)
+        assertEquals(2, differences.size)
+        assertEquals(
+            setOf(
+                publication.toPhysicalDeclaration().indexKey(),
+                publication.toNaturalMethodDefPhysicalDeclaration(interfaceOwnerKey(publication)).indexKey(),
+            ),
+            differences.mapTo(linkedSetOf()) { difference -> difference.logicalKey },
+        )
     }
 
     private companion object {
@@ -464,6 +671,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 ),
             )
             val sealed = publication.toPhysicalDeclaration()
+            val naturalMethod = publication.toNaturalMethodDefPhysicalDeclaration(logicalInterfaceOwnerKey)
             return linkedMapOf(
                 logicalInterfaceOwnerKey to interfaceClass,
                 key.logicalInterfaceMemberKey to function(
@@ -478,7 +686,22 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 interfaceMemberFamily.indexKey() to interfaceMemberFamily,
                 implementationMemberFamily.indexKey() to implementationMemberFamily,
                 publishedInterface.indexKey() to publishedInterface,
+                naturalMethod.indexKey() to naturalMethod,
                 sealed.indexKey() to sealed,
+            )
+        }
+
+        fun interfaceOnlyNaturalMethodDefAbiFixture(
+            publication: DotNetProducerGenericOwnerSealedFamilyPublication =
+                producerSealedFamilyPublicationFixture(),
+        ): Map<String, DotNetPhysicalDeclaration> {
+            val complete = producerSealedFamilyAbiFixture(publication)
+            val key = publication.key
+            return complete - setOf(
+                key.implementationOwnerKey,
+                key.implementationMemberKey,
+                "G:${key.implementationMemberKey}",
+                publication.toPhysicalDeclaration().indexKey(),
             )
         }
 
@@ -523,6 +746,13 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             transform: (String) -> String,
         ): Map<String, String> {
             val entry = entries.single { candidate -> decodePropertyKey(candidate.key).startsWith("H:") }
+            return this + (entry.key to transform(entry.value))
+        }
+
+        fun Map<String, String>.mutateNaturalMethodDefDeclarationValue(
+            transform: (String) -> String,
+        ): Map<String, String> {
+            val entry = entries.single { candidate -> decodePropertyKey(candidate.key).startsWith("N:") }
             return this + (entry.key to transform(entry.value))
         }
 

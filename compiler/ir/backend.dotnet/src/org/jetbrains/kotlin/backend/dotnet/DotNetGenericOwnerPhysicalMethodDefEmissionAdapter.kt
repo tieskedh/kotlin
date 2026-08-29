@@ -766,6 +766,209 @@ internal fun buildDotNetGenericOwnerActualMethodDefEmissionHeaderEvidence(
     )
 }
 
+/**
+ * Normalizes one final observed MethodDef header without requiring a wider local-authority epoch.
+ *
+ * A declaration-level producer seal can exist in an interface-only module, where no generic class
+ * exists from which to bootstrap [DotNetLocalGenericOwnerPhysicalAuthority]. The final TypeDef and
+ * MethodDef observations nevertheless carry every binder needed for their own closed header. This
+ * conversion therefore uses only those observations plus the invocation-local identity allocator;
+ * it does not synthesize a declaration, edge, or callable family which was not emitted.
+ */
+internal fun buildDotNetGenericOwnerActualMethodDefEmissionHeaderShape(
+    allocator: EmissionIdentityAllocator,
+    identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    observation: DotNetGenericOwnerPhysicalMethodDefHeaderObservation,
+    owner: DotNetGenericOwnerObservedLocalTypeDef,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalMethodDefEmissionHeaderShape> {
+    val physicalMethodIdentity = observation.physicalMethodIdentity
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    if (!physicalMethodIdentity.sameLocalMethodIdentityAs(identity)) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the emitted MethodDef role does not match the selected declaration identity",
+        )
+    }
+    val receiver = observation.signature.receiverCarrier?.toActualCarrierShapeForDeclarationSeal(
+        allocator,
+        identity,
+    )
+    val parameters = observation.signature.parameterCarriers.map { carrier ->
+        carrier.toActualCarrierShapeForDeclarationSeal(allocator, identity)
+    }
+    val result = observation.signature.returnCarrier.toActualCarrierShapeForDeclarationSeal(
+        allocator,
+        identity,
+    )
+    val conversions = listOfNotNull(receiver) + parameters + result
+    conversions.filterIsInstance<DotNetGenericOwnerPhysicalBindingResult.Conflict>()
+        .firstOrNull()?.let { conflict -> return conflict }
+    if (conversions.any { conversion ->
+            conversion == DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val receiverShape = (receiver as? DotNetGenericOwnerPhysicalBindingResult.Bound)?.value
+    if (observation.dispatch.isInstance && receiverShape == null) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the emitted instance MethodDef has no independently observed receiver carrier",
+        )
+    }
+    if (!observation.dispatch.isInstance && receiver != null) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the emitted static MethodDef unexpectedly has a receiver carrier",
+        )
+    }
+    val parameterShapes = parameters.map { conversion ->
+        (conversion as DotNetGenericOwnerPhysicalBindingResult.Bound).value
+    }
+    val resultCarrier = (result as DotNetGenericOwnerPhysicalBindingResult.Bound).value
+    val ordinaryParameters: List<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape>
+    val resultShape: DotNetGenericOwnerPhysicalMethodDefEmissionResultShape
+    if (observation.signature.hasSplitNullableResult) {
+        if (resultCarrier == DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf(
+                DotNetGenericOwnerPhysicalTypeKind.VOID,
+            )
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "an emitted split-nullable MethodDef cannot return void payload",
+            )
+        }
+        val expectedNullFlag = DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.ByReference(
+            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf(
+                DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+            ),
+        )
+        if (parameterShapes.lastOrNull() != expectedNullFlag) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "an emitted split-nullable MethodDef requires one trailing out bool carrier",
+            )
+        }
+        ordinaryParameters = parameterShapes.dropLast(1)
+        resultShape = DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable(
+            resultCarrier,
+        )
+    } else {
+        ordinaryParameters = parameterShapes
+        resultShape = if (resultCarrier == DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf(
+                DotNetGenericOwnerPhysicalTypeKind.VOID,
+            )
+        ) {
+            DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void
+        } else {
+            DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct(resultCarrier)
+        }
+    }
+    val ownerKey = when (val binding = allocator.actualType(owner)) {
+        is EmissionIdentityAllocator.ActualType.Bound -> binding.key
+        is EmissionIdentityAllocator.ActualType.Conflict ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+    }
+    return DotNetGenericOwnerPhysicalBindingResult.Bound(
+        DotNetGenericOwnerPhysicalMethodDefEmissionHeaderShape(
+            owner = ownerKey,
+            ownerGenericArity = owner.genericArity,
+            ownerCategory = owner.category,
+            visibility = observation.visibility.toEmissionVisibility(),
+            dispatch = observation.dispatch.toPhysicalDispatch(),
+            isInstance = observation.dispatch.isInstance,
+            genericArity = observation.genericArity,
+            receiverCarrier = receiverShape,
+            ordinaryParameterCarriers = ordinaryParameters,
+            result = resultShape,
+        ),
+    )
+}
+
+internal fun DotNetGenericOwnerObservedMethodCarrier.toActualCarrierShapeForDeclarationSeal(
+    allocator: EmissionIdentityAllocator,
+    currentMethod: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape> =
+    when (this) {
+        is DotNetGenericOwnerObservedMethodCarrier.Leaf -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf(kind),
+        )
+        is DotNetGenericOwnerObservedMethodCarrier.OwnerParameter ->
+            when (val binding = allocator.actualType(binder)) {
+                is EmissionIdentityAllocator.ActualType.Bound -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter(
+                        binding.key,
+                        index,
+                    ),
+                )
+                is EmissionIdentityAllocator.ActualType.Conflict ->
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+            }
+        is DotNetGenericOwnerObservedMethodCarrier.MethodParameter -> {
+            val currentOwner = (currentMethod.function.owner.parent as? IrClass)?.symbol
+            when {
+                physicalMethodIdentity == null -> DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                !physicalMethodIdentity.sameLocalMethodIdentityAs(currentMethod) ||
+                        currentOwner == null || physicalOwner.aliases.none { alias ->
+                            alias.owner === currentOwner
+                        } -> DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "an emitted method parameter is bound to a different physical MethodDef",
+                )
+                else -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.MethodParameter(
+                        allocator.method(currentMethod),
+                        index,
+                    ),
+                )
+            }
+        }
+        is DotNetGenericOwnerObservedMethodCarrier.LocalConstruction -> {
+            val convertedArguments = arguments.map { argument ->
+                argument.toActualCarrierShapeForDeclarationSeal(allocator, currentMethod)
+            }
+            convertedArguments.filterIsInstance<DotNetGenericOwnerPhysicalBindingResult.Conflict>()
+                .firstOrNull() ?: if (convertedArguments.any { conversion ->
+                    conversion == DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            ) {
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            } else {
+                val argumentShapes = convertedArguments.map { conversion ->
+                    (conversion as DotNetGenericOwnerPhysicalBindingResult.Bound).value
+                }
+                when (val binding = allocator.actualType(definition)) {
+                    is EmissionIdentityAllocator.ActualType.Bound -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction(
+                            binding.key,
+                            argumentShapes,
+                        ),
+                    )
+                    is EmissionIdentityAllocator.ActualType.Conflict ->
+                        DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                }
+            }
+        }
+        is DotNetGenericOwnerObservedMethodCarrier.SzArray ->
+            when (val converted = element.toActualCarrierShapeForDeclarationSeal(allocator, currentMethod)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.SzArray(converted.value),
+                )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> converted
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> converted
+            }
+        is DotNetGenericOwnerObservedMethodCarrier.ByReference ->
+            when (val converted = element.toActualCarrierShapeForDeclarationSeal(allocator, currentMethod)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.ByReference(converted.value),
+                )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> converted
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> converted
+            }
+        is DotNetGenericOwnerObservedMethodCarrier.Other -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+            DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Other,
+        )
+        is DotNetGenericOwnerObservedMethodCarrier.Unbindable -> if (isConflict) {
+            DotNetGenericOwnerPhysicalBindingResult.Conflict(reason)
+        } else {
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    }
+
 internal data class ActualCarrier(
     val shape: DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape,
     val snapshot: DotNetGenericOwnerPhysicalMethodDefEmissionCarrierSnapshot,

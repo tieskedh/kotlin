@@ -240,6 +240,10 @@ internal class DotNetBackendContext(
     val genericInterfaceNaturalMethodParameterDomains:
         MutableMap<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> =
         java.util.IdentityHashMap()
+    /** Producer-planned result domains for final local natural interface MethodDefs. */
+    val genericInterfaceNaturalMethodResultDomains:
+        MutableMap<IrSimpleFunction, DotNetGenericOwnerPhysicalSlotDomain?> =
+        java.util.IdentityHashMap()
     /** Distinguishes a completed rehearsal shadow from an unavailable run or production epoch. */
     var genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted: Boolean = false
     /** Read-only physical-value shadow evidence; no lowering or emitter may consume it. */

@@ -14,6 +14,15 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md`](generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md)
+  records physical-library ABI 63 and generic-owner artifact schema 21's
+  declaration-level self-sealing `N` natural TypeDef/MethodDef publication,
+  producer-PE validation, external direct and split-nullable token dispatch,
+  optional implementation-level `J` agreement, the closed hostile same-name/
+  same-regular-arity overload gate, the root/edge-free first grammar, unchanged
+  runtime surface 60 and erased production boundary. The focused candidate and
+  production-erased inverse each cover eight parser/profile fixtures; the
+  record owns their exact commands and the final target-wide gate evidence.
 - [`generic-owner-local-recorded-methoddef-dispatch-2026-08-29.md`](generic-owner-local-recorded-methoddef-dispatch-2026-08-29.md)
   records the bounded same-producer natural-interface `ldtoken` route, mandatory
   two-handle MethodDef binding, ordinary and explicit C# MethodImpl dispatch,
