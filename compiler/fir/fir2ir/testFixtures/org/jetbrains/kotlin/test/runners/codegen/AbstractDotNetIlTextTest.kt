@@ -203,6 +203,7 @@ import org.jetbrains.kotlin.fir.moduleData
 import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import org.jetbrains.kotlin.platform.dotnet.isDotNet
@@ -619,6 +620,7 @@ private class BackendCliDotNetFacade(
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
             target = loweredInput.configuration.dotNetTarget,
             producer = completedOutput.output,
+            declarations = completedOutput.declarations,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-split-nullable-result"),
         )
@@ -12908,12 +12910,63 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     producesLibrary: Boolean,
     target: DotNetTarget,
     producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
     testDataFile: File,
     directory: File,
 ) {
-    if (!genericOwnerRehearsal ||
-        GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER !in testDataFile.readText()
-    ) {
+    if (GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        val genericOwnerEpochRecords = declarations.filterValues { declaration ->
+            declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+        }
+        check(genericOwnerEpochRecords.isEmpty()) {
+            "The production-erased split-nullable inverse published H/N/J records: " +
+                    genericOwnerEpochRecords.keys.sorted()
+        }
+
+        val ownerName = when {
+            producer.name.equals("lib.dll", ignoreCase = true) -> "NullableSource"
+            producer.name.equals("middle.dll", ignoreCase = true) -> "OpenChild"
+            else -> null
+        }
+        if (ownerName != null) {
+            val namespaceName = "generic.owner.split.nullable"
+            val expectedOwnerPath = listOf("$namespaceName.$ownerName")
+            val classRecords = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()
+                        ?.substringAfterLast('.')
+                        ?.substringBefore('`') == ownerName
+                }
+            check(classRecords.singleOrNull()?.let { declaration ->
+                declaration.ownerPath == expectedOwnerPath &&
+                        declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true) {
+                "The production-erased $ownerName physical index is not one arity-zero owner: " +
+                        classRecords
+            }
+
+            val metadata = DotNetClrMetadataReader.read(producer)
+            val physicalTypes = metadata.typeDefinitions.filter { type ->
+                type.namespaceName == namespaceName &&
+                        type.metadataName.substringBefore('`') == ownerName
+            }
+            check(physicalTypes.singleOrNull()?.let { type ->
+                type.isInterface &&
+                        type.metadataName == ownerName &&
+                        metadata.genericParameterDefinitions.none { parameter ->
+                            parameter.owner == type.handle
+                        }
+            } == true) {
+                "The production-erased $ownerName PE TypeDef is not uniquely arity zero: " +
+                        physicalTypes.map { type -> type.metadataName }
+            }
+        }
         return
     }
     check(target != DotNetTarget.NETSTANDARD_2_0) {
@@ -12921,8 +12974,55 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     }
     directory.mkdirs()
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
+
+    fun requirePublishedFamily(
+        ownerName: String,
+    ): DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily = checkNotNull(
+        declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+            .singleOrNull { family ->
+                family.ownerPath.lastOrNull()?.substringAfterLast('.') == "$ownerName`1"
+            }
+    ) {
+        "The split-nullable probe has no unique producer ABI family for '$ownerName': " +
+                declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                    .map { family -> family.ownerPath }
+    }
+
     if (producesLibrary) {
         if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            val rootFamily = requirePublishedFamily("NullableSource")
+            val readMember = checkNotNull(rootFamily.contract.declaredMembers.singleOrNull()) {
+                "The split-nullable root does not have one declaration-local member: $rootFamily"
+            }
+            check(rootFamily.naturalTypeParameterVariances ==
+                    listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT) &&
+                    rootFamily.exactOwnerPath == null &&
+                    rootFamily.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                    rootFamily.contract.directParents.isEmpty() &&
+                    rootFamily.contract.capabilityBindingKind ==
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+                    readMember.role ==
+                    DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
+            ) {
+                "The split-nullable root lost its covariant natural/capability topology: " +
+                        rootFamily
+            }
+            check(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+                .singleOrNull { family -> family.logicalMemberKey == readMember.logicalMemberKey }
+                ?.ownerLogicalKey == rootFamily.contract.logicalOwnerKey
+            ) {
+                "The ABI-63 split-nullable root did not retain its semantic capability slot"
+            }
+            check(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                .singleOrNull { method -> method.logicalMemberKey == readMember.logicalMemberKey }
+                ?.logicalOwnerKey == rootFamily.contract.logicalOwnerKey
+            ) {
+                "The ABI-63 split-nullable root did not publish its recorded natural MethodDef"
+            }
             validateReifiedGenericInterfaceCSharpManifest(
                 producer,
                 expectedDeclaredOwner = "NullableSource`1",
@@ -12932,6 +13032,52 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                 expectedNaturalReturnType = "!0",
                 expectedNaturalParameterTypes = listOf("bool", "bool&"),
             )
+        } else if (producer.name.equals("middle.dll", ignoreCase = true)) {
+            val childFamily = requirePublishedFamily("OpenChild")
+            check(childFamily.naturalTypeParameterVariances ==
+                    listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT) &&
+                    childFamily.exactOwnerPath == null &&
+                    childFamily.capabilityAssemblyName == "lib" &&
+                    childFamily.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.DERIVED &&
+                    childFamily.contract.declaredMembers.isEmpty() &&
+                    childFamily.contract.capabilityBindingKind ==
+                    DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT &&
+                    childFamily.contract.directParents.singleOrNull()?.let { parent ->
+                        parent.parameterMapping == listOf(0) &&
+                                parent.logicalOwnerKey in childFamily.contract.rootLogicalOwnerKeys &&
+                                childFamily.contract.reusedParentLogicalOwnerKey ==
+                                parent.logicalOwnerKey
+                    } == true
+            ) {
+                "The open split-nullable child did not reuse its parent's exact capability edge: " +
+                        childFamily
+            }
+            check(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+                .none { family -> family.ownerLogicalKey == childFamily.contract.logicalOwnerKey }
+            ) {
+                "The memberless open child republished a semantic member family"
+            }
+            check(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                .none { method -> method.logicalOwnerKey == childFamily.contract.logicalOwnerKey }
+            ) {
+                "The memberless open child republished its inherited natural MethodDef"
+            }
+            val childOwnedDeclarations = declarations.values.filter { declaration ->
+                declaration.ownerPath == childFamily.ownerPath
+            }
+            check(childOwnedDeclarations.count { declaration ->
+                declaration is DotNetPhysicalDeclaration.Class
+            } == 1 && childOwnedDeclarations.count { declaration ->
+                declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
+            } == 1 && childOwnedDeclarations.all { declaration ->
+                declaration is DotNetPhysicalDeclaration.Class ||
+                        declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily
+            }) {
+                "The memberless open child published declarations beyond its TypeDef and H edge: " +
+                        childOwnedDeclarations
+            }
         }
         return
     }
@@ -12963,6 +13109,26 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     ) {
         "The downstream split-nullable call did not use the producer-recorded MethodDef token:\n" +
                 downstreamRead
+    }
+
+    val downstreamOpenChildRead = methodWindows.singleOrNull { window ->
+        "'downstreamOpenChildWidenedRead'(" in window.substringBefore('{')
+    }
+    check(downstreamOpenChildRead != null) {
+        "Cannot isolate the inherited split-nullable consumer " +
+                "downstreamOpenChildWidenedRead MethodDef: ${emittedIl.path}"
+    }
+    check("::'InvokeRecordedMember'(" in downstreamOpenChildRead &&
+            "ldtoken method instance !0 [lib]" +
+            "'generic.owner.split.nullable.NullableSource`1'::'read'(bool, bool&)" in
+            downstreamOpenChildRead &&
+            "[middle]'generic.owner.split.nullable.OpenChild`1'::'read'" !in
+            downstreamOpenChildRead &&
+            "::'InvokeUniqueMember'(" !in downstreamOpenChildRead &&
+            "ldstr \"read\"" !in downstreamOpenChildRead
+    ) {
+        "The open child's widened call did not reuse the producer-recorded parent MethodDef " +
+                "without fabricating a child slot:\n$downstreamOpenChildRead"
     }
 
     fun requireRecordedOverload(methodName: String, parameterType: String) {
@@ -13030,6 +13196,22 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                 }
             }
 
+            public sealed class NaturalGenericSource<T> : NullableSource<T>
+            {
+                private readonly T value;
+
+                public NaturalGenericSource(T value)
+                {
+                    this.value = value;
+                }
+
+                public T read(bool missing, out bool isNull)
+                {
+                    isNull = missing;
+                    return missing ? default(T) : value;
+                }
+            }
+
             public sealed class NaturalOverloadedStringSource : OverloadedNullableSource<string>
             {
                 public string read(bool missing, out bool isNull)
@@ -13058,6 +13240,24 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                         throw new InvalidOperationException(
                             "NullableSource<T>.read did not expose T + out bool");
 
+                    var openChild = typeof(OpenChild<>);
+                    var openChildParameter = openChild.GetGenericArguments()[0];
+                    var openChildParents = openChild.GetInterfaces();
+                    var expectedOpenChildParent =
+                        typeof(NullableSource<>).MakeGenericType(openChildParameter);
+                    var declaredOpenChildMethods = openChild.GetMethods(
+                        BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.Instance | BindingFlags.Static |
+                        BindingFlags.DeclaredOnly);
+                    if (!openChild.IsInterface ||
+                        (openChildParameter.GenericParameterAttributes &
+                            GenericParameterAttributes.Covariant) == 0 ||
+                        openChildParents.Length != 1 ||
+                        openChildParents[0] != expectedOpenChildParent ||
+                        declaredOpenChildMethods.Length != 0)
+                        throw new InvalidOperationException(
+                            "OpenChild<T> did not retain one covariant NullableSource<T> edge");
+
                     var ints = new NaturalIntSource();
                     bool isNull;
                     if (ints.read(false, out isNull) != 73 || isNull)
@@ -13078,6 +13278,32 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                     if (reader.readWide(strings, false) as string != "foreign" ||
                         reader.readWide(strings, true) != null)
                         throw new InvalidOperationException("widened Kotlin reference call to C# failed");
+
+                    var genericInts = new NaturalGenericSource<int>(83);
+                    if (genericInts.read(false, out isNull) != 83 || isNull ||
+                        genericInts.read(true, out isNull) != 0 || !isNull)
+                        throw new InvalidOperationException(
+                            "direct native generic C# value call failed");
+                    var widenedGenericInts = contractsKt.widenIntSource(genericInts);
+                    if (!object.ReferenceEquals(genericInts, widenedGenericInts) ||
+                        !object.Equals(
+                            mainKt.downstreamWidenedRead(widenedGenericInts, false), 83) ||
+                        mainKt.downstreamWidenedRead(widenedGenericInts, true) != null)
+                        throw new InvalidOperationException(
+                            "recorded Kotlin dispatch to native generic C# value source failed");
+
+                    var genericStrings = new NaturalGenericSource<string>("generic-foreign");
+                    if (genericStrings.read(false, out isNull) != "generic-foreign" || isNull ||
+                        genericStrings.read(true, out isNull) != null || !isNull)
+                        throw new InvalidOperationException(
+                            "direct native generic C# reference call failed");
+                    var widenedGenericStrings = contractsKt.widenStringSource(genericStrings);
+                    if (!object.ReferenceEquals(genericStrings, widenedGenericStrings) ||
+                        mainKt.downstreamWidenedRead(
+                            widenedGenericStrings, false) as string != "generic-foreign" ||
+                        mainKt.downstreamWidenedRead(widenedGenericStrings, true) != null)
+                        throw new InvalidOperationException(
+                            "recorded Kotlin dispatch to native generic C# reference source failed");
 
                     OverloadedNullableSource<object> overloaded =
                         new NaturalOverloadedStringSource();

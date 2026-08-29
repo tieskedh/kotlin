@@ -93,11 +93,13 @@ Before any cutover proposal, complete these stages in order:
 11. Run the exact erased inverse from the same source and compare the recorded
     semantic corpus before deciding GO, CONSTRAIN, or NO-GO.
 
-After stage 5, any bounded interface slice which has independently passed
-stages 1–5 may replace its own split comparison surface inside the rehearsal so
-the recorded MethodDef/MethodImpl route can be exercised end to end. That
-bounded replacement is not stage 9's complete selected-family freeze and does
-not authorize a production cutover.
+After stage 5, a bounded interface slice may replace its split comparison
+surface inside the rehearsal only after every downstream owner form admitted
+for that slice preserves the selected root authority. That closure includes
+the relevant interface and class fake overrides, declared overrides, and
+MethodImpl obligations; it may not be inferred from a root-only descriptor
+proof. Such a bounded replacement is not stage 9's complete selected-family
+freeze and does not authorize a production cutover.
 
 The source-built Stdlib census must not drive one-off representation rules.
 When it exposes a blocker, reduce that blocker to a structurally custom proof
