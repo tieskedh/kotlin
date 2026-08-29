@@ -317,6 +317,16 @@ App Control refusal is failure in the strict lane. PSI and LightTree must cover
 the same target corpus; observable behavior must execute on Framework 4.8 and
 .NET 10, and portable libraries must be consumed through compatible profiles.
 
+A filtered `--tests` invocation and the unfiltered aggregate share the same
+Test-task outputs. A later aggregate may therefore report that dependency up to
+date while its XML still contains only the focused subset. Before claiming a
+full gate after any filtered run, invoke the actual full Test task with
+`--rerun` (for FIR2IR:
+`.\gradlew.bat :compiler:fir:fir2ir:dotNetTest --rerun -q`) or use a dedicated
+focused Test task with separate outputs, then audit the expected XML totals.
+The root aggregate's zero exit is never evidence that an up-to-date dependency
+contains the full corpus.
+
 `--rerun` on the empty aggregate task does not rerun its dependencies. Use the
 global `--rerun-tasks` only when a deliberately fresh dependency-wide gate is
 required. Before retrying a timed-out build, check whether its Gradle daemon or
