@@ -1,5 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.DotNetTarget
@@ -17,7 +19,11 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.util.SymbolTable
+import org.jetbrains.kotlin.ir.util.allOverridden
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.load.dotnet.DotNetExactContractProjection
 import org.jetbrains.kotlin.util.PhaseType
@@ -417,8 +423,81 @@ object DotNetBackend {
                     }
                     distinct.single()
                 }
-            if (familyDeclarations.isEmpty() && naturalMethodDeclarations.isEmpty()) return this
-            return buildMap(size + familyDeclarations.size + naturalMethodDeclarations.size) {
+            val naturalMethodsByLogicalKey = naturalMethodDeclarations.associateBy { declaration ->
+                declaration.logicalMemberKey
+            }
+            val implementationMethodDeclarations = declarationKeys.entries.asSequence()
+                .mapNotNull { entry ->
+                    val source = entry.key as? IrSimpleFunction ?: return@mapNotNull null
+                    val owner = source.parent as? IrClass ?: return@mapNotNull null
+                    if (owner.isInterface || owner.typeParameters.isEmpty()) return@mapNotNull null
+                    if (owner.modality != Modality.OPEN ||
+                        owner.visibility != DescriptorVisibilities.PUBLIC ||
+                        source.modality != Modality.OPEN ||
+                        source.visibility != DescriptorVisibilities.PUBLIC ||
+                        source.typeParameters.isNotEmpty()
+                    ) return@mapNotNull null
+                    val resultClassifier = (source.returnType as? IrSimpleType)?.classifier
+                    val resultParameter = (resultClassifier as? IrTypeParameterSymbol)?.owner
+                        ?: return@mapNotNull null
+                    if (resultParameter !in owner.typeParameters) return@mapNotNull null
+                    val naturalCandidates = source.allOverridden().mapNotNull { overridden ->
+                        val logicalKey = declarationKeys[overridden] ?: return@mapNotNull null
+                        naturalMethodsByLogicalKey[logicalKey]
+                    }.distinctBy { declaration -> declaration.logicalMemberKey }
+                    // ABI 64 deliberately admits one N root per implementation MethodDef. A
+                    // wider override family remains unsealed rather than selecting one root by
+                    // traversal order or preventing the rest of the rehearsal module from
+                    // compiling.
+                    if (naturalCandidates.size != 1) return@mapNotNull null
+                    val natural = naturalCandidates.single()
+                    val naturalOwnerCandidates = declarationsByLogicalKey[natural.logicalOwnerKey].orEmpty()
+                    val naturalOwner = naturalOwnerCandidates.singleOrNull() as? IrClass
+                        ?: error(
+                            "natural MethodDef '${natural.logicalMemberKey}' lost its exact pre-lowering owner",
+                        )
+                    val naturalSourceCandidates = declarationsByLogicalKey[natural.logicalMemberKey].orEmpty()
+                    val naturalSource = naturalSourceCandidates.singleOrNull() as? IrSimpleFunction
+                        ?: error(
+                            "natural MethodDef '${natural.logicalMemberKey}' lost its exact pre-lowering member",
+                        )
+                    val ownerKey = declarationKeys[owner]
+                        ?: error("implementation '${entry.value}' lost its pre-lowering owner key")
+                    when (val publication =
+                        inspectDotNetProducerGenericOwnerImplementationMethodDefPublication(
+                            logicalInterfaceMemberKey = natural.logicalMemberKey,
+                            implementationOwnerKey = ownerKey,
+                            implementationMemberKey = entry.value,
+                            naturalOwner = naturalOwner,
+                            naturalSource = naturalSource,
+                            implementationOwner = owner,
+                            implementationSource = source,
+                            naturalDeclaration = natural,
+                            current = currentObservations,
+                            otherScopes = otherObservations,
+                        )
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> publication.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> error(publication.reason)
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                    }
+                }
+                .groupBy { declaration -> declaration.indexKey() }
+                .map { entry ->
+                    val distinct = entry.value.distinct()
+                    check(distinct.size == 1) {
+                        "multiple final implementation MethodDef observations disagree on '${entry.key}'"
+                    }
+                    distinct.single()
+                }
+                .toList()
+            if (familyDeclarations.isEmpty() && naturalMethodDeclarations.isEmpty() &&
+                implementationMethodDeclarations.isEmpty()
+            ) return this
+            return buildMap(
+                size + familyDeclarations.size + naturalMethodDeclarations.size +
+                        implementationMethodDeclarations.size,
+            ) {
                 putAll(this@withProducerSealedGenericOwnerFamilies)
                 familyDeclarations.forEach { declaration ->
                     val key = declaration.indexKey()
@@ -427,6 +506,12 @@ object DotNetBackend {
                     }
                 }
                 naturalMethodDeclarations.forEach { declaration ->
+                    val key = declaration.indexKey()
+                    check(put(key, declaration) == null) {
+                        "multiple final generic-owner physical declarations claim '$key'"
+                    }
+                }
+                implementationMethodDeclarations.forEach { declaration ->
                     val key = declaration.indexKey()
                     check(put(key, declaration) == null) {
                         "multiple final generic-owner physical declarations claim '$key'"
@@ -1130,7 +1215,7 @@ data class DotNetBackendOutput(
             "the production erased epoch cannot publish sealed generic-owner families"
         }
         require(genericOwnerRehearsal || declarations.genericOwnerRehearsalEpochRecords().isEmpty()) {
-            "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/J)"
+            "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/M/J)"
         }
     }
 }

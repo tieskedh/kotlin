@@ -57,14 +57,21 @@ not require a hidden generated ABI for behavior derivable from real interface
 slots. ABI 63 closes the bounded root/edge-free external MethodDef-authority
 proof; its dated evidence is
 [archived](../archive/generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md).
-The bounded memberless-child and same-module split-nullable class-slot
-composition is now closed; current evidence belongs in
-[status](../../STATUS.md). Retained/external class slots, deeper and
-distinct-construction inheritance, constraints, and general non-split callable
-forms next extend the same authority model. Only after downstream owner closure
-is an epoch invariant may a bounded slice stop emitting its comparison surface
-inside the rehearsal. Complete removal still waits for the selected-family
-freeze and full hostile inverse.
+ABI 64 closes the first standalone implementation-side seal: one separately
+compiled public open generic Kotlin class publishes its exact class MethodDef
+and direct constructed natural-interface edge, allowing a downstream Kotlin
+override to preserve the already-emitted split-nullable slot without logical
+signature reconstruction or a fabricated MethodImpl. This is Kotlin producer
+authority external to the consumer, not retained foreign CLR authority. Its
+dated evidence is
+[archived](../archive/generic-owner-external-class-methoddef-authority-2026-08-29.md).
+
+Deeper base chains, multiple or distinct constructed views, constraints,
+method-generics, explicit MethodImpls, general non-split callables, and retained
+foreign CLR declarations next extend the same authority model. Only after
+downstream owner closure is an epoch invariant may a bounded slice stop
+emitting its comparison surface inside the rehearsal. Complete removal still
+waits for the selected-family freeze and full hostile inverse.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to

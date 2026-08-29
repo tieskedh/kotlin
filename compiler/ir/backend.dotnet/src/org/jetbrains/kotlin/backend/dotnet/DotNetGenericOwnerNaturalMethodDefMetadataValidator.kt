@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrParameterDefinition
@@ -22,6 +23,14 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 /** Exact PE row selected by one producer-recorded ABI-63 natural MethodDef declaration. */
 data class DotNetGenericOwnerNaturalMethodDefMetadataBinding(
     val logicalMemberKey: String,
+    val declaringType: DotNetClrTypeDefinition,
+    val methodDefinition: DotNetClrMethodDefinition,
+    val splitNullableOutParameter: DotNetClrParameterDefinition?,
+)
+
+/** Exact PE rows authenticated for one producer-recorded implementation MethodDef `M`. */
+data class DotNetGenericOwnerImplementationMethodDefMetadataBinding(
+    val implementationMemberKey: String,
     val declaringType: DotNetClrTypeDefinition,
     val methodDefinition: DotNetClrMethodDefinition,
     val splitNullableOutParameter: DotNetClrParameterDefinition?,
@@ -60,6 +69,325 @@ fun validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
         binding = binding,
     )
     return binding
+}
+
+/**
+ * Authenticates one implementation endpoint and its exact constructed natural InterfaceImpl.
+ * The InterfaceImpl proves only implicit slot eligibility; `M` never claims a MethodImpl row.
+ */
+fun validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+    declaration: DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef,
+    naturalDeclaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
+    assembly: DotNetClrAssemblyMetadata,
+    coreLibraryAssemblyName: String,
+): DotNetGenericOwnerImplementationMethodDefMetadataBinding {
+    require(declaration.logicalInterfaceMemberKey == naturalDeclaration.logicalMemberKey) {
+        "an implementation MethodDef descriptor is joined to the wrong natural MethodDef"
+    }
+    val token = validateDotNetGenericOwnerNaturalMethodDefTokenAgainstClrMetadata(
+        logicalMemberKey = declaration.implementationMemberKey,
+        physicalMethod = declaration.physicalMethod,
+        assembly = assembly,
+        coreLibraryAssemblyName = coreLibraryAssemblyName,
+    )
+    val type = token.declaringType
+    require(type.visibility == DotNetClrTypeVisibility.PUBLIC && !type.isInterface &&
+            !type.isAbstract && !type.isSealed
+    ) {
+        "producer DLL '${assembly.identity.name}' has TypeDef flags which disagree with " +
+                "implementation MethodDef '${declaration.implementationMemberKey}'"
+    }
+    val ownerParameters = assembly.requireContiguousGenericParameters(type.handle, "TypeDef")
+    require(ownerParameters.size == declaration.ownerTypeParameterVariances.size &&
+            declaration.ownerTypeParameterVariances.all { variance ->
+                variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+            }
+    ) {
+        "producer DLL '${assembly.identity.name}' has a TypeDef arity or variance which disagrees with " +
+                "implementation MethodDef '${declaration.implementationMemberKey}'"
+    }
+    ownerParameters.forEach { parameter ->
+        require(parameter.variance == DotNetClrGenericParameterVariance.INVARIANT &&
+                !parameter.hasReferenceTypeConstraint &&
+                !parameter.hasNotNullableValueTypeConstraint &&
+                !parameter.hasDefaultConstructorConstraint && !parameter.allowsByRefLike &&
+                assembly.genericParameterConstraints.none { constraint ->
+                    constraint.owner == parameter.handle
+                }
+        ) {
+            "producer DLL '${assembly.identity.name}' has unsupported implementation-owner GenericParam constraints"
+        }
+    }
+
+    val method = token.methodDefinition
+    require(method.visibility == DotNetClrMethodVisibility.PUBLIC && !method.isStatic &&
+            method.isVirtual &&
+            (method.attributes and NEW_SLOT_ATTRIBUTE != 0) == declaration.methodIntroducesSlot &&
+            !method.isAbstract && !method.isFinal &&
+            (method.attributes and HIDE_BY_SIG_ATTRIBUTE != 0) == declaration.methodIsHideBySig &&
+            method.isSpecialName == declaration.methodIsSpecialName &&
+            method.isRuntimeSpecialName == declaration.methodIsRuntimeSpecialName &&
+            assembly.requireContiguousGenericParameters(method.handle, "MethodDef").isEmpty()
+    ) {
+        "producer DLL '${assembly.identity.name}' has MethodDef flags which disagree with " +
+                "implementation MethodDef '${declaration.implementationMemberKey}'"
+    }
+
+    val expectedInterface = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+        typePath = naturalDeclaration.ownerPath,
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        arguments = declaration.naturalInterfaceTypeArguments,
+    )
+    val expectedImplementationType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+        typePath = declaration.ownerPath,
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        arguments = ownerParameters.indices.map { index ->
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(index)
+        },
+    )
+    val naturalType = assembly.requireTypeDefinition(naturalDeclaration.ownerPath)
+    val naturalInterfaces = assembly.interfaceImplementations
+        .filter { implementation -> implementation.implementingType == type.handle }
+        .mapNotNull { implementation ->
+            val encodedSignature = assembly.typeSpecifications.singleOrNull { specification ->
+                specification.handle == implementation.interfaceType
+            }?.signature ?: DotNetClrTypeSignature.Named(
+                type = implementation.interfaceType,
+                isValueType = false,
+            )
+            val signature = assembly.canonicalizeExactLocalTypeReferences(encodedSignature)
+            val named = when (signature) {
+                is DotNetClrTypeSignature.GenericInstance -> signature.genericType
+                is DotNetClrTypeSignature.Named -> signature
+                else -> return@mapNotNull null
+            }
+            if (named.type != naturalType.handle) null else implementation to signature
+        }
+    require(naturalInterfaces.size == 1) {
+        "producer DLL '${assembly.identity.name}' does not contain exactly one construction of " +
+                "${naturalDeclaration.ownerPath.renderPhysicalPath()} on " +
+                declaration.ownerPath.renderPhysicalPath()
+    }
+    require(assembly.matchesPhysicalType(
+        expected = expectedInterface,
+        actual = naturalInterfaces.single().second,
+        ownerGenericArity = ownerParameters.size,
+        methodGenericArity = 0,
+        coreLibraryAssemblyName = coreLibraryAssemblyName,
+    )) {
+        "producer DLL '${assembly.identity.name}' has the wrong InterfaceImpl arguments for " +
+                "${naturalDeclaration.ownerPath.renderPhysicalPath()} on " +
+                declaration.ownerPath.renderPhysicalPath()
+    }
+    validateDotNetGenericOwnerNaturalMethodDefTokenAgainstClrMetadata(
+        logicalMemberKey = naturalDeclaration.logicalMemberKey,
+        physicalMethod = naturalDeclaration.physicalMethod,
+        assembly = assembly,
+        coreLibraryAssemblyName = coreLibraryAssemblyName,
+    )
+    fun memberReferenceParentNamesConstruction(
+        parent: DotNetClrMetadataHandle,
+        selectedType: DotNetClrMetadataHandle,
+        expectedConstruction: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    ): Boolean {
+        if (assembly.resolveExactLocalTypeDefinition(parent) == selectedType) return true
+        val parentSignature = assembly.typeSpecifications.singleOrNull { specification ->
+            specification.handle == parent
+        }?.signature ?: return false
+        return assembly.matchesPhysicalType(
+            expected = expectedConstruction,
+            actual = assembly.canonicalizeExactLocalTypeReferences(parentSignature),
+            ownerGenericArity = ownerParameters.size,
+            methodGenericArity = 0,
+            coreLibraryAssemblyName = coreLibraryAssemblyName,
+        )
+    }
+    fun declarationNamesNaturalConstruction(handle: DotNetClrMetadataHandle): Boolean = when (handle.table) {
+        METHOD_DEF_TABLE -> assembly.methodDefinitions.singleOrNull { candidate ->
+            candidate.handle == handle
+        }?.declaringType == naturalType.handle
+        MEMBER_REF_TABLE -> {
+            val reference = assembly.memberReferences.singleOrNull { candidate ->
+                candidate.handle == handle
+            } ?: return false
+            memberReferenceParentNamesConstruction(
+                parent = reference.parent,
+                selectedType = naturalType.handle,
+                expectedConstruction = expectedInterface,
+            )
+        }
+        else -> false
+    }
+    fun bodyNamesImplementationMethod(handle: DotNetClrMetadataHandle): Boolean = when (handle.table) {
+        METHOD_DEF_TABLE -> handle == method.handle
+        MEMBER_REF_TABLE -> {
+            val reference = assembly.memberReferences.singleOrNull { candidate ->
+                candidate.handle == handle
+            } ?: return false
+            val signature = (reference.signature as? DotNetClrMemberReferenceSignature.Method)
+                ?.signature ?: return false
+            if (reference.name != method.name ||
+                !assembly.methodSignaturesMatchModuloExactLocalTypeReferences(signature, method.signature)
+            ) {
+                return false
+            }
+            memberReferenceParentNamesConstruction(
+                parent = reference.parent,
+                selectedType = type.handle,
+                expectedConstruction = expectedImplementationType,
+            )
+        }
+        else -> false
+    }
+    require(assembly.methodImplementations.none { implementation ->
+        implementation.implementingType == type.handle &&
+                (bodyNamesImplementationMethod(implementation.bodyMethod) ||
+                        declarationNamesNaturalConstruction(implementation.declarationMethod))
+    }) {
+        "producer DLL '${assembly.identity.name}' explicitly redirects implementation MethodDef " +
+                "'${declaration.implementationMemberKey}' or its natural interface slot"
+    }
+    return DotNetGenericOwnerImplementationMethodDefMetadataBinding(
+        implementationMemberKey = declaration.implementationMemberKey,
+        declaringType = type,
+        methodDefinition = method,
+        splitNullableOutParameter = token.splitNullableOutParameter,
+    )
+}
+
+/**
+ * Compares complete ECMA-335 method signatures after resolving only exact same-module TypeRef
+ * aliases. No logical type, assembly binding, or name-only fallback participates in this proof.
+ */
+internal fun DotNetClrAssemblyMetadata.methodSignaturesMatchModuloExactLocalTypeReferences(
+    first: org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature,
+    second: org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature,
+): Boolean = canonicalizeExactLocalTypeReferences(first) == canonicalizeExactLocalTypeReferences(second)
+
+private fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
+    signature: org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature,
+): org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature = signature.copy(
+    returnType = canonicalizeExactLocalTypeReferences(signature.returnType),
+    parameterTypes = signature.parameterTypes.map(::canonicalizeExactLocalTypeReferences),
+)
+
+private fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
+    signature: DotNetClrTypeSignature,
+): DotNetClrTypeSignature = when (signature) {
+    DotNetClrTypeSignature.Void,
+    DotNetClrTypeSignature.TypedReference,
+    is DotNetClrTypeSignature.Primitive,
+    is DotNetClrTypeSignature.GenericParameter,
+    -> signature
+
+    is DotNetClrTypeSignature.Named -> signature.copy(
+        type = resolveExactLocalTypeDefinition(signature.type) ?: signature.type,
+    )
+
+    is DotNetClrTypeSignature.Pointer -> signature.copy(
+        elementType = canonicalizeExactLocalTypeReferences(signature.elementType),
+    )
+
+    is DotNetClrTypeSignature.ByReference -> signature.copy(
+        elementType = canonicalizeExactLocalTypeReferences(signature.elementType),
+    )
+
+    is DotNetClrTypeSignature.SzArray -> signature.copy(
+        elementType = canonicalizeExactLocalTypeReferences(signature.elementType),
+    )
+
+    is DotNetClrTypeSignature.Array -> signature.copy(
+        elementType = canonicalizeExactLocalTypeReferences(signature.elementType),
+    )
+
+    is DotNetClrTypeSignature.GenericInstance -> signature.copy(
+        genericType = canonicalizeExactLocalTypeReferences(signature.genericType) as DotNetClrTypeSignature.Named,
+        arguments = signature.arguments.map(::canonicalizeExactLocalTypeReferences),
+    )
+
+    is DotNetClrTypeSignature.FunctionPointer -> signature.copy(
+        signature = canonicalizeExactLocalTypeReferences(signature.signature),
+    )
+
+    is DotNetClrTypeSignature.Modified -> signature.copy(
+        modifiers = signature.modifiers.map { modifier ->
+            modifier.copy(
+                modifierType = resolveExactLocalTypeDefinition(modifier.modifierType)
+                    ?: modifier.modifierType,
+            )
+        },
+        unmodifiedType = canonicalizeExactLocalTypeReferences(signature.unmodifiedType),
+    )
+}
+
+/**
+ * Resolves only a TypeRef whose complete ResolutionScope chain proves it aliases a TypeDef in this
+ * module. AssemblyRef, ModuleRef, nil-scope, ambiguous, malformed, and cyclic references remain
+ * unresolved, even when their namespace and metadata name happen to match a local definition.
+ */
+private fun DotNetClrAssemblyMetadata.resolveExactLocalTypeDefinition(
+    handle: DotNetClrMetadataHandle,
+): DotNetClrMetadataHandle? = resolveExactLocalTypeDefinition(
+    handle = handle,
+    activeTypeReferences = mutableSetOf(),
+    depth = 1,
+)
+
+private fun DotNetClrAssemblyMetadata.resolveExactLocalTypeDefinition(
+    handle: DotNetClrMetadataHandle,
+    activeTypeReferences: MutableSet<DotNetClrMetadataHandle>,
+    depth: Int,
+): DotNetClrMetadataHandle? = when (handle.table) {
+    TYPE_DEF_TABLE -> typeDefinitions.singleOrNull { definition ->
+        definition.handle == handle
+    }?.handle
+
+    TYPE_REF_TABLE -> {
+        require(depth <= MAX_EXACT_LOCAL_TYPE_REFERENCE_DEPTH) {
+            "exact local CLR TypeRef scope nesting is too deep"
+        }
+        require(activeTypeReferences.add(handle)) {
+            "exact local CLR TypeRef scope chain is cyclic"
+        }
+        try {
+            val reference = typeReferences.singleOrNull { candidate ->
+                candidate.handle == handle
+            } ?: return null
+            when (val scope = reference.resolutionScope) {
+                null -> null
+                else -> when (scope.table) {
+                    MODULE_TABLE -> if (scope.row == 1) {
+                        typeDefinitions.singleOrNull { definition ->
+                            definition.declaringType == null &&
+                                    definition.namespaceName == reference.namespaceName &&
+                                    definition.metadataName == reference.metadataName
+                        }?.handle
+                    } else {
+                        null
+                    }
+
+                    TYPE_REF_TABLE -> {
+                        val enclosing = resolveExactLocalTypeDefinition(
+                            handle = scope,
+                            activeTypeReferences = activeTypeReferences,
+                            depth = depth + 1,
+                        )
+                            ?: return null
+                        typeDefinitions.singleOrNull { definition ->
+                            definition.declaringType == enclosing &&
+                                    definition.metadataName == reference.metadataName
+                        }?.handle
+                    }
+
+                    else -> null
+                }
+            }
+        } finally {
+            activeTypeReferences.remove(handle)
+        }
+    }
+
+    else -> null
 }
 
 /** Signature-level token binding used by focused metadata tests before the producer-seal join. */
@@ -551,8 +879,12 @@ private fun DotNetClrAssemblyMetadata.requireContiguousGenericParameters(
 
 private fun List<String>.renderPhysicalPath(): String = joinToString("/")
 
+private const val MODULE_TABLE = 0
 private const val TYPE_REF_TABLE = 1
 private const val TYPE_DEF_TABLE = 2
+private const val METHOD_DEF_TABLE = 6
+private const val MAX_EXACT_LOCAL_TYPE_REFERENCE_DEPTH = 64
+private const val MEMBER_REF_TABLE = 10
 private const val ASSEMBLY_REF_TABLE = 35
 private const val OUT_PARAMETER_ATTRIBUTE = 0x0002
 private const val NEW_SLOT_ATTRIBUTE = 0x0100

@@ -516,13 +516,13 @@ consumer uses the same route only from the declaration-level natural-slot seal.
 Logical IR, an implementation-family seal, and incomplete older library records
 are not declaration-token authority.
 
-The declaration seal is admitted only when its logical and physical owner/member
-joins agree with the ordinary class, function, member-family, and published-
-interface records in the same producer. Orphan, cross-library, cross-owner,
-result-layout-mismatched, or implementation-disagreeing seals fail closed.
-Before exposing the record as `BoundProducer` authority, the dependency loader
-validates the sealed TypeDef path, flags, ancestry, generic parameters and
-constraints, plus the complete MethodDef name, flags, binders, signature,
+The natural `N` declaration seal is admitted only when its logical and physical
+owner/member joins agree with the ordinary class, function, member-family, and
+published-interface records in the same producer. Orphan, cross-library,
+cross-owner, result-layout-mismatched, or implementation-disagreeing seals fail
+closed. Before exposing the record as `BoundProducer` authority, the dependency
+loader validates the sealed TypeDef path, flags, ancestry, generic parameters
+and constraints, plus the complete MethodDef name, flags, binders, signature,
 parameter rows, and result layout against the containing DLL. Split-nullable
 validation includes the final `[out] bool&`. Name or logical-signature matching
 alone is insufficient.
@@ -537,7 +537,67 @@ Physical duplicate detection therefore precedes logical slot annotations:
 different Kotlin domains or nullability cannot turn two claims on one CLR row
 into distinct MethodDefs.
 
-The initial external declaration-seal grammar is deliberately bounded to
+#### Standalone implementation MethodDef seal
+
+The natural `N` seal owns the interface declaration MethodDef. A separate `M`
+seal may own one Kotlin implementation-class MethodDef which a downstream
+consumer must treat as an already-existing physical base slot.
+
+`M` records:
+
+- the logical natural-interface member, implementation owner, and
+  implementation member identities;
+- the final implementation TypeDef path, generic arity, invariant parameters,
+  visibility, dispatch, and constraint-free binder;
+- the exact direct construction of the `N` owner implemented by that TypeDef;
+  and
+- the final implementation MethodDef name, flags, binder, complete parameter
+  carriers, and direct or split-nullable result layout.
+
+`M` is selected only through the exact pre-lowering implementation and natural
+declaration identities and is projected only from final-emission observations.
+The complete library index joins it conjunctively with its `C`, `F`, and `N`
+records. The bounded `J` and `M` owner grammars are disjoint: an implementation
+owner/member or physical MethodDef claimed by both is conflicting. A later
+grammar which admits coexisting partial and complete evidence must require exact
+agreement before replacing that restriction. Neither `J`, KLIB substitution, a
+matching method name, nor a current consumer type can create `M`.
+
+The bounded `M` grammar admits only a top-level public, non-abstract, non-sealed
+generic class with invariant unconstrained owner parameters; one ordinary
+public virtual non-final non-abstract instance hidebysig MethodDef with no
+specialname/runtime-specialname flags or method-generic parameters; and exactly
+one direct natural-interface construction whose
+arguments are parameters of that class binder. Binding those arguments into
+`N` must produce the complete `M` signature. Consumer-relative named carriers,
+multiple candidate `N` roots or constructions, and inferred constructions are
+unavailable.
+
+`M` describes implicit CLR slot eligibility only. It does not claim a
+MethodImpl row, semantic hook, capability, or complete implementation family.
+The producer rejects publication when final emission associates the MethodDef
+body with an explicit MethodImpl. The consumer validates the exact TypeDef,
+GenericParams, MethodDef, parameters, result layout, and constructed
+InterfaceImpl against the producer DLL. It also consumes objective MethodImpl
+rows and rejects any explicit redirection of the recorded class body or the
+selected natural-interface construction. Representing an explicit MethodImpl
+as positive authority would require another sealed record and remains outside
+this grammar.
+
+The ABI-64 `M` wire is allocation-bounded before recursive decoding: physical
+fields, arities, parameter/argument/path collections, recursive depth, and
+aggregate type nodes have explicit ceilings. MethodImpl equivalence resolves
+only exact same-module `TypeRef` aliases, including within complete signatures
+and `TypeSpec` constructions. Local scope chains are depth-bounded and cyclic
+or over-deep chains reject the authority record; foreign or merely same-named
+references never become local physical evidence.
+
+A downstream override planner consults `M` before mapping the logical KLIB
+return type. An equal complete physical shape reuses the ordinary CLR virtual
+slot. A mismatch requires separately proven bridge/MethodImpl authority or
+fails closed; it never rewrites the base MethodDef.
+
+The initial natural `N` declaration-seal grammar is deliberately bounded to
 directly declared producer and split-nullable producer slots on root natural
 interfaces with no direct edges or generic constraints and only declaration-
 local carriers. Unsupported forms are `Unavailable`; they are never
