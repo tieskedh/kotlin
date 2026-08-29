@@ -204,6 +204,10 @@ import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import org.jetbrains.kotlin.platform.dotnet.isDotNet
@@ -12919,10 +12923,11 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
         val genericOwnerEpochRecords = declarations.filterValues { declaration ->
             declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
                     declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
                     declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
         }
         check(genericOwnerEpochRecords.isEmpty()) {
-            "The production-erased split-nullable inverse published H/N/J records: " +
+            "The production-erased split-nullable inverse published H/N/M/J records: " +
                     genericOwnerEpochRecords.keys.sorted()
         }
 
@@ -12965,6 +12970,51 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
             } == true) {
                 "The production-erased $ownerName PE TypeDef is not uniquely arity zero: " +
                         physicalTypes.map { type -> type.metadataName }
+            }
+        }
+        if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            val namespaceName = "generic.owner.split.nullable"
+            val externalOwnerName = "ExternalSplitBase"
+            val externalRecords = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()
+                        ?.substringAfterLast('.')
+                        ?.substringBefore('`') == externalOwnerName
+                }
+            check(externalRecords.singleOrNull()?.let { declaration ->
+                declaration.ownerPath == listOf("$namespaceName.$externalOwnerName") &&
+                        declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true) {
+                "The production-erased $externalOwnerName physical index is not arity zero: " +
+                        externalRecords
+            }
+            val metadata = DotNetClrMetadataReader.read(producer)
+            val externalType = metadata.typeDefinitions.singleOrNull { type ->
+                type.namespaceName == namespaceName && type.metadataName == externalOwnerName
+            }
+            check(externalType != null && !externalType.isInterface &&
+                    metadata.genericParameterDefinitions.none { parameter ->
+                        parameter.owner == externalType.handle
+                    }
+            ) {
+                "The production-erased $externalOwnerName PE TypeDef is not one non-generic class"
+            }
+            val reads = metadata.methodDefinitions.filter { method ->
+                method.declaringType == externalType.handle && method.name == "read"
+            }
+            check(reads.size == 2 && reads.all { method ->
+                method.signature.hasThis &&
+                        method.signature.returnType ==
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT) &&
+                        method.signature.parameterTypes.size == 1
+            } && reads.map { method -> method.signature.parameterTypes.single() }.toSet() == setOf(
+                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN),
+                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+            )) {
+                "The production-erased $externalOwnerName overloads did not retain ordinary object results: $reads"
             }
         }
         return
@@ -13014,14 +13064,53 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                 .singleOrNull { family -> family.logicalMemberKey == readMember.logicalMemberKey }
                 ?.ownerLogicalKey == rootFamily.contract.logicalOwnerKey
             ) {
-                "The ABI-63 split-nullable root did not retain its semantic capability slot"
+                "The split-nullable root did not retain its semantic capability slot"
             }
             check(declarations.values
                 .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
                 .singleOrNull { method -> method.logicalMemberKey == readMember.logicalMemberKey }
                 ?.logicalOwnerKey == rootFamily.contract.logicalOwnerKey
             ) {
-                "The ABI-63 split-nullable root did not publish its recorded natural MethodDef"
+                "The split-nullable root did not publish its recorded natural MethodDef"
+            }
+            val implementation = checkNotNull(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+                .singleOrNull { method ->
+                    method.ownerPath.lastOrNull() == "generic.owner.split.nullable.ExternalSplitBase`1"
+                }) {
+                "The open external split base did not publish one implementation MethodDef"
+            }
+            val implementationResult = implementation.physicalMethod.signature.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+            check(implementation.logicalInterfaceMemberKey == readMember.logicalMemberKey &&
+                    implementation.ownerTypeParameterVariances == listOf(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    ) &&
+                    implementation.naturalInterfaceTypeArguments == listOf(
+                        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+                    ) &&
+                    implementation.physicalMethod.physicalMethodName == "read" &&
+                    implementation.physicalMethod.signature.isInstance &&
+                    implementation.physicalMethod.signature.genericArity == 0 &&
+                    implementation.physicalMethod.signature.parameterSlots.singleOrNull()?.type?.kind ==
+                    DotNetGenericOwnerPhysicalTypeKind.BOOLEAN &&
+                    implementationResult?.payloadSlot?.type?.kind ==
+                    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                    implementationResult.payloadSlot.type.parameterIndex == 0 &&
+                    implementation.methodIntroducesSlot && implementation.methodIsHideBySig &&
+                    !implementation.methodIsSpecialName && !implementation.methodIsRuntimeSpecialName
+            ) {
+                "The open external split base published a non-canonical implementation MethodDef: " +
+                        implementation
+            }
+            check(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerSealedFamily>()
+                .none { family ->
+                    family.implementationOwnerKey == implementation.implementationOwnerKey ||
+                            family.implementationMemberKey == implementation.implementationMemberKey
+                }
+            ) {
+                "The standalone implementation MethodDef fabricated a complete semantic J family"
             }
             validateReifiedGenericInterfaceCSharpManifest(
                 producer,
@@ -13080,6 +13169,103 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
             }
         }
         return
+    }
+
+    // This executable already contains a deliberately required MethodImpl for the adapted
+    // PlainIntBase slot. Use it as a positive control for the objective PE reader before relying
+    // on that same reader to prove that the external class slot was overridden directly.
+    val consumerMetadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.split.nullable"
+    fun requireConsumerType(metadataName: String) = checkNotNull(
+        consumerMetadata.typeDefinitions.singleOrNull { type ->
+            type.namespaceName == namespaceName && type.metadataName == metadataName
+        }
+    ) {
+        "The split-nullable consumer has no unique $namespaceName.$metadataName TypeDef"
+    }
+
+    fun namesConsumerType(
+        handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle,
+        expectedNamespace: String,
+        expectedName: String,
+    ): Boolean = consumerMetadata.typeDefinitions.any { type ->
+        type.handle == handle && type.namespaceName == expectedNamespace &&
+                type.metadataName == expectedName
+    } || consumerMetadata.typeReferences.any { type ->
+        type.handle == handle && type.namespaceName == expectedNamespace &&
+                type.metadataName == expectedName
+    }
+
+    val intType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+    val boolType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+    fun isNullableInt(type: DotNetClrTypeSignature): Boolean {
+        val generic = type as? DotNetClrTypeSignature.GenericInstance ?: return false
+        return generic.genericType.isValueType &&
+                namesConsumerType(generic.genericType.type, "System", "Nullable`1") &&
+                generic.arguments == listOf(intType)
+    }
+
+    val adaptedDeclaredType = requireConsumerType("AdaptedDeclaredIntOpenChild")
+    val adaptedBridge = checkNotNull(consumerMetadata.methodDefinitions.singleOrNull { method ->
+        method.declaringType == adaptedDeclaredType.handle &&
+                method.visibility == DotNetClrMethodVisibility.PRIVATE &&
+                method.isVirtual && method.isFinal && !method.isStatic &&
+                method.signature.hasThis && method.signature.genericParameterCount == 0 &&
+                isNullableInt(method.signature.returnType) &&
+                method.signature.parameterTypes == listOf(boolType)
+    }) {
+        "The objective PE reader did not expose the adapted class's unique private MethodImpl adapter"
+    }
+    val adaptedMethodImpl = checkNotNull(consumerMetadata.methodImplementations.singleOrNull { implementation ->
+        implementation.implementingType == adaptedDeclaredType.handle &&
+                implementation.bodyMethod == adaptedBridge.handle
+    }) {
+        "The objective PE reader did not bind the adapted MethodImpl body to its private adapter"
+    }
+    val plainIntBaseType = requireConsumerType("PlainIntBase")
+    val plainIntRead = checkNotNull(consumerMetadata.methodDefinitions.singleOrNull { method ->
+        method.declaringType == plainIntBaseType.handle && method.name == "read" &&
+                method.isVirtual && method.signature.hasThis &&
+                isNullableInt(method.signature.returnType) &&
+                method.signature.parameterTypes == listOf(boolType)
+    }) {
+        "The objective PE reader did not expose PlainIntBase.read"
+    }
+    val declarationNamesPlainIntRead = when (adaptedMethodImpl.declarationMethod) {
+        plainIntRead.handle -> true
+        else -> consumerMetadata.memberReferences.singleOrNull { reference ->
+            reference.handle == adaptedMethodImpl.declarationMethod
+        }?.let { reference ->
+            reference.name == plainIntRead.name &&
+                    namesConsumerType(reference.parent, namespaceName, "PlainIntBase") &&
+                    (reference.signature as? DotNetClrMemberReferenceSignature.Method)
+                        ?.signature == plainIntRead.signature
+        } == true
+    }
+    check(declarationNamesPlainIntRead) {
+        "The objective PE reader did not bind the adapted MethodImpl declaration to PlainIntBase.read"
+    }
+
+    val externalDeclaredType = requireConsumerType("ExternalDeclaredIntOpenChild")
+    val externalLeafRead = checkNotNull(consumerMetadata.methodDefinitions.singleOrNull { method ->
+        method.declaringType == externalDeclaredType.handle &&
+                method.name == "read" &&
+                method.isVirtual &&
+                method.signature.hasThis &&
+                method.signature.returnType ==
+                intType &&
+                method.signature.parameterTypes == listOf(
+                    boolType,
+                    DotNetClrTypeSignature.ByReference(boolType),
+                )
+    }) {
+        "The objective PE reader did not expose the external leaf's unique split read MethodDef"
+    }
+    check(consumerMetadata.methodImplementations.none { implementation ->
+        implementation.implementingType == externalDeclaredType.handle &&
+                implementation.bodyMethod == externalLeafRead.handle
+    }) {
+        "The external leaf's public split read unexpectedly redirects through MethodImpl"
     }
 
     val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
@@ -13390,6 +13576,33 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                         !IsSplit(declaredRootTarget, typeof(int)))
                         throw new InvalidOperationException(
                             "the declared split override conflated its root and class slots");
+
+                    var externalBaseRead = typeof(ExternalSplitBase<int>).GetMethod(
+                        "read",
+                        BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly,
+                        null,
+                        new Type[] { typeof(bool), typeof(bool).MakeByRefType() },
+                        null);
+                    var externalLeafMethods =
+                        DeclaredInstanceMethods(typeof(ExternalDeclaredIntOpenChild));
+                    var externalLeafRead = Array.Find(
+                        externalLeafMethods,
+                        candidate => candidate.IsPublic && candidate.IsVirtual &&
+                            IsSplit(candidate, typeof(int)));
+                    var externalRootTarget = NaturalTarget(
+                        typeof(ExternalDeclaredIntOpenChild), typeof(NullableSource<int>));
+                    if (externalBaseRead == null ||
+                        externalBaseRead.GetBaseDefinition() != externalBaseRead ||
+                        externalLeafRead == null || externalLeafRead.IsPrivate ||
+                        externalLeafRead.GetBaseDefinition() != externalBaseRead ||
+                        externalRootTarget != externalLeafRead ||
+                        Array.Exists(
+                            externalLeafMethods,
+                            candidate => candidate.IsPrivate && candidate.IsVirtual &&
+                                (IsSplit(candidate, typeof(int)) ||
+                                    IsUnsplit(candidate, typeof(int?)))))
+                        throw new InvalidOperationException(
+                            "the external split class slot was not overridden directly");
 
                     var ints = new NaturalIntSource();
                     bool isNull;

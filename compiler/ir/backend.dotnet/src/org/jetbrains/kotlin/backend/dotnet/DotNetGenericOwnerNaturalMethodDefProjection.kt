@@ -37,6 +37,18 @@ internal fun DotNetProducerGenericOwnerNaturalMethodDefPublication.naturalMethod
     listOf(naturalType),
 )
 
+/** Projects any one-owner final MethodDef endpoint without importing the complete `J` family. */
+internal fun dotNetProducerSealedMethodDefPhysicalIdentity(
+    logicalMemberKey: String,
+    ownerType: DotNetGenericOwnerSealedEmissionTypeDefRow,
+    method: DotNetProducerGenericOwnerSealedMethodDef,
+): DotNetGenericOwnerPhysicalMethodIdentityRecord = naturalMethodDefPhysicalIdentity(
+    logicalMemberKey,
+    ownerType,
+    method,
+    listOf(ownerType),
+)
+
 private fun naturalMethodDefPhysicalIdentity(
     logicalMemberKey: String,
     naturalType: DotNetGenericOwnerSealedEmissionTypeDefRow,

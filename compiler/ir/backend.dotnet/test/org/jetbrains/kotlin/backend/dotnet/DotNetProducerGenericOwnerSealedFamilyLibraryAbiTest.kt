@@ -17,18 +17,19 @@ import kotlin.test.assertTrue
 class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     @Test
     fun classifiesOnlyTheRehearsalEpochPhysicalRecords() {
-        val declarations = producerSealedFamilyAbiFixture()
+        val declarations = producerSealedFamilyAbiFixture() + implementationMethodDefAbiFixture()
         val records = declarations.genericOwnerRehearsalEpochRecords()
 
         assertEquals(
             setOf(
                 DotNetGenericOwnerRehearsalEpochRecordKind.PUBLISHED_GENERIC_INTERFACE_FAMILY,
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_NATURAL_METHOD_DEF,
+                DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF,
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEALED_FAMILY,
             ),
             records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::kind),
         )
-        assertEquals(setOf("H", "N", "J"), records.mapTo(linkedSetOf()) { record -> record.kind.wireTag })
+        assertEquals(setOf("H", "N", "M", "J"), records.mapTo(linkedSetOf()) { record -> record.kind.wireTag })
         val productionDeclarations =
             declarations - records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::indexKey)
         assertTrue(productionDeclarations.genericOwnerRehearsalEpochRecords().isEmpty())
@@ -43,7 +44,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
 
     @Test
     fun backendOutputRejectsEveryRehearsalEpochRecordInProduction() {
-        val declarations = producerSealedFamilyAbiFixture()
+        val declarations = producerSealedFamilyAbiFixture() + implementationMethodDefAbiFixture()
         val records = declarations.genericOwnerRehearsalEpochRecords()
 
         records.forEach { record ->
@@ -55,7 +56,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                     genericOwnerRehearsal = false,
                 )
             }
-            assertTrue(failure.message.orEmpty().contains("H/N/J"))
+            assertTrue(failure.message.orEmpty().contains("H/N/M/J"))
         }
         assertEquals(declarations, backendOutput(declarations, genericOwnerRehearsal = true).declarations)
     }
@@ -68,7 +69,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("63", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("64", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -124,6 +125,310 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(first.toProperties()))
+    }
+
+    @Test
+    fun deterministicallyRoundTripsAnOpenClassImplementationMethodDefIndex() {
+        val declarations = implementationMethodDefAbiFixture()
+        val implementation = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+            .single()
+
+        val first = DotNetLibraryAbiCodec.encode(declarations)
+        val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
+        assertEquals(first, second)
+        assertEquals(declarations, DotNetLibraryAbiCodec.decode(first.toProperties()))
+        assertEquals(listOf("demo.ExternalStore`1"), implementation.ownerPath)
+        assertEquals(
+            listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+            implementation.naturalInterfaceTypeArguments,
+        )
+        assertTrue(implementation.physicalMethod.signature.resultLayout is
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
+        assertTrue(implementation.methodIntroducesSlot)
+    }
+
+    @Test
+    fun rejectsMalformedImplementationMethodDefWirePayloads() {
+        val valid = DotNetLibraryAbiCodec.encode(implementationMethodDefAbiFixture())
+        val mutations = listOf<(MutableList<String>) -> Unit>(
+            { fields -> fields += "trailing" },
+            { fields -> fields[5] = "COVARIANT" },
+            { fields -> fields[7] = "NOT_A_DISPATCH" },
+            { fields -> fields[8] = "*" },
+            { fields -> fields[9] = "malformed-signature" },
+            { fields -> fields[12] = "not-a-boolean" },
+            { fields ->
+                fields[16] = "0"
+                fields.removeAt(17)
+            },
+            { fields -> fields[16] = "1025" },
+            { fields -> fields[16] = "+1" },
+            { fields -> fields[17] = encodeText("malformed-type-expression") },
+        )
+        mutations.forEachIndexed { index, mutation ->
+            val hostile = valid.mutateImplementationMethodDefDeclarationValue { encodedValue ->
+                encodedValue.mutateEnvelopeFields(mutation)
+            }
+            assertFailsWith<IllegalArgumentException>("malformed M wire payload $index was accepted") {
+                DotNetLibraryAbiCodec.decode(hostile.toProperties())
+            }
+        }
+
+        val entry = valid.entries.single { candidate ->
+            decodePropertyKey(candidate.key).startsWith("M:")
+        }
+        val wrongIndex = valid - entry.key + (
+                encodedPropertyKey("M:${"0".repeat(32)}") to entry.value
+                )
+        assertFailsWith<IllegalArgumentException>("M accepted the wrong structural index key") {
+            DotNetLibraryAbiCodec.decode(wrongIndex.toProperties())
+        }
+    }
+
+    @Test
+    fun boundsImplementationMethodDefPhysicalSignatureAndTypeDecoding() {
+        val declarations = implementationMethodDefAbiFixture()
+        val implementation = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+            .single()
+
+        var depth65 = DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)
+        repeat(DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_TYPE_DEPTH) {
+            depth65 = DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(depth65)
+        }
+        val split = implementation.physicalMethod.signature.resultLayout as
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+        val depthFailure = assertFailsWith<IllegalArgumentException> {
+            implementation.copy(physicalMethod = implementation.physicalMethod.copy(
+                signature = implementation.physicalMethod.signature.copy(
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable(
+                        DotNetGenericOwnerPhysicalValueSlotRecord(
+                            domain = split.payloadSlot.domain,
+                            type = depth65,
+                        ),
+                    ),
+                ),
+            ))
+        }
+        assertTrue(depthFailure.message.orEmpty().contains("nesting is too deep"))
+
+        var depth4 = DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)
+        repeat(3) {
+            depth4 = DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(depth4)
+        }
+        val encodedDepth4 = DotNetGenericOwnerPhysicalFamilyCodec.encodePhysicalTypeExpression(depth4)
+        val decoderDepthFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetGenericOwnerPhysicalFamilyCodec.decodePhysicalTypeExpression(
+                encodedDepth4,
+                maximumDepth = 3,
+            )
+        }
+        assertTrue(decoderDepthFailure.message.orEmpty().contains("nesting is too deep"))
+
+        val fiveNodeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+            typePath = listOf("demo.FourArguments`4"),
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            arguments = List(4) { DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0) },
+        )
+        val nodeFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetGenericOwnerPhysicalFamilyCodec.decodePhysicalTypeExpression(
+                DotNetGenericOwnerPhysicalFamilyCodec.encodePhysicalTypeExpression(fiveNodeType),
+                maximumNodes = 4,
+            )
+        }
+        assertTrue(nodeFailure.message.orEmpty().contains("too many nodes"))
+
+        val valid = DotNetLibraryAbiCodec.encode(declarations)
+        val ownerParameter = encodeText(
+            DotNetGenericOwnerPhysicalFamilyCodec.encodePhysicalTypeExpression(
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+            ),
+        )
+        val oversizedArgumentExpression = buildList {
+            add(DotNetGenericOwnerPhysicalTypeKind.NAMED.name)
+            add("-")
+            add(DotNetGenericOwnerPhysicalTypeScope.PRODUCER.name)
+            add("-")
+            add(encodeText("demo.Hostile`1025"))
+            add("1025")
+            add(DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS.name)
+            add("1025")
+            repeat(1_025) { add(ownerParameter) }
+        }.joinToString(";")
+        val oversizedGenericArityExpression = listOf(
+            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER.name,
+            "0",
+            "-",
+            "-",
+            "-",
+            Int.MAX_VALUE.toString(),
+            "-",
+            "0",
+        ).joinToString(";")
+
+        val hostileMutations = listOf<Pair<String, (MutableList<String>) -> Unit>>(
+            "oversized nested argument list" to { fields ->
+                fields[17] = encodeText(oversizedArgumentExpression)
+            },
+            "huge nested generic arity" to { fields ->
+                fields[17] = encodeText(oversizedGenericArityExpression)
+            },
+            "huge method generic arity" to { fields ->
+                val signature = fields[9].split(';').toMutableList()
+                signature[1] = Int.MAX_VALUE.toString()
+                fields[9] = signature.joinToString(";")
+            },
+            "huge method parameter count" to { fields ->
+                val signature = fields[9].split(';').toMutableList()
+                signature[3] = Int.MAX_VALUE.toString()
+                fields[9] = signature.joinToString(";")
+            },
+            "oversized signature field" to { fields ->
+                fields[9] = "x".repeat(
+                    DotNetGenericOwnerPhysicalFamilyCodec.MAX_SERIALIZED_PHYSICAL_FIELD_CHARS + 1,
+                )
+            },
+            "oversized encoded type field" to { fields ->
+                fields[17] = "A".repeat(
+                    DotNetGenericOwnerPhysicalFamilyCodec.MAX_BASE64_PHYSICAL_FIELD_CHARS + 1,
+                )
+            },
+        )
+        hostileMutations.forEach { hostileMutation ->
+            val description = hostileMutation.first
+            val mutation = hostileMutation.second
+            val hostile = valid.mutateImplementationMethodDefDeclarationValue { encodedValue ->
+                encodedValue.mutateEnvelopeFields(mutation)
+            }
+            assertFailsWith<IllegalArgumentException>("M accepted $description") {
+                DotNetLibraryAbiCodec.decode(hostile.toProperties())
+            }
+        }
+    }
+
+    @Test
+    fun rejectsMissingAndCrossWiredImplementationMethodDefAuthority() {
+        val declarations = implementationMethodDefAbiFixture()
+        val implementation = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+            .single()
+        listOf(
+            implementation.implementationOwnerKey,
+            implementation.implementationMemberKey,
+            "N:${implementation.logicalInterfaceMemberKey}",
+        ).forEach { missing ->
+            assertFailsWith<IllegalArgumentException>("M accepted a missing '$missing' join") {
+                DotNetLibraryAbiCodec.encode(declarations - missing)
+            }
+        }
+
+        val hostileOwner = declarations.replacing(implementation.implementationOwnerKey) { declaration ->
+            (declaration as DotNetPhysicalDeclaration.Class).copy(
+                ownerPath = listOf("demo.OtherExternalStore`1"),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(hostileOwner)
+        }
+        val hostileFunction = declarations.replacing(implementation.implementationMemberKey) { declaration ->
+            (declaration as DotNetPhysicalDeclaration.Function).copy(methodName = "OtherRead")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(hostileFunction)
+        }
+        val twoParameterOwner = (declarations.getValue(implementation.implementationOwnerKey) as
+                DotNetPhysicalDeclaration.Class).copy(
+            physicalTypeParameterCount = 2,
+            physicalTypeParameterVariances = List(2) {
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+            },
+        )
+        val crossWiredConstruction = implementation.copy(
+            ownerTypeParameterVariances = twoParameterOwner.physicalTypeParameterVariances,
+            naturalInterfaceTypeArguments = listOf(
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(1),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(declarations + mapOf(
+                implementation.implementationOwnerKey to twoParameterOwner,
+                crossWiredConstruction.indexKey() to crossWiredConstruction,
+            ))
+        }
+        val duplicateMemberKey = "demo/ExternalStore.otherRead|function"
+        val duplicate = implementation.copy(implementationMemberKey = duplicateMemberKey)
+        val originalFunction = declarations.getValue(implementation.implementationMemberKey) as
+                DotNetPhysicalDeclaration.Function
+        val duplicateClaim = declarations + mapOf(
+            duplicateMemberKey to originalFunction,
+            duplicate.indexKey() to duplicate,
+        )
+        val duplicateFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(duplicateClaim)
+        }
+        assertTrue(duplicateFailure.message.orEmpty().contains("claimed by multiple logical members"))
+    }
+
+    @Test
+    fun rejectsOverlappingOpenImplementationAndCompleteSealedFamilyAuthority() {
+        val publication = openImplementationPublicationFixture()
+        val declarations = producerSealedFamilyAbiFixture(publication)
+        val external = implementationMethodDefAbiFixture(publication).values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+            .single()
+        val implementationType = publication.body.typeDefs.single { type ->
+            type.role == DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS
+        }.row
+        val implementationMethod = publication.body.methodDefs.single { method ->
+            method.role == DotNetProducerGenericOwnerSealedMethodDefRole.IMPLEMENTATION_TYPED_ENTRY
+        }
+        val overlapping = external.copy(
+            implementationOwnerKey = publication.key.implementationOwnerKey,
+            implementationMemberKey = publication.key.implementationMemberKey,
+            ownerPath = implementationType.physicalPath,
+            ownerTypeParameterVariances = implementationType.structural.genericParameters.map { parameter ->
+                parameter.variance
+            },
+            physicalMethod = dotNetProducerSealedMethodDefPhysicalIdentity(
+                publication.key.implementationMemberKey,
+                implementationType,
+                implementationMethod,
+            ),
+            methodIntroducesSlot = implementationMethod.row.dispatch.isNewSlot,
+        )
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(declarations + (overlapping.indexKey() to overlapping))
+        }
+        assertTrue(failure.message.orEmpty().contains("bounded J and M owner grammars are disjoint"))
+
+        val externalDeclarations = implementationMethodDefAbiFixture(publication)
+        val aliasedOwner = (externalDeclarations.getValue(external.implementationOwnerKey) as
+                DotNetPhysicalDeclaration.Class).copy(
+            ownerPath = implementationType.physicalPath,
+        )
+        val aliasedFunction = (externalDeclarations.getValue(external.implementationMemberKey) as
+                DotNetPhysicalDeclaration.Function).copy(
+            ownerPath = implementationType.physicalPath,
+            methodName = implementationMethod.row.physicalName,
+        )
+        val aliasedMethod = external.copy(
+            ownerPath = implementationType.physicalPath,
+            physicalMethod = dotNetProducerSealedMethodDefPhysicalIdentity(
+                publication.key.implementationMemberKey,
+                implementationType,
+                implementationMethod,
+            ),
+            methodIntroducesSlot = implementationMethod.row.dispatch.isNewSlot,
+        )
+        val aliasFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(declarations + mapOf(
+                external.implementationOwnerKey to aliasedOwner,
+                external.implementationMemberKey to aliasedFunction,
+                aliasedMethod.indexKey() to aliasedMethod,
+            ))
+        }
+        assertTrue(aliasFailure.message.orEmpty().contains("same physical implementation MethodDef"))
     }
 
     @Test
@@ -769,6 +1074,98 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             )
         }
 
+        fun implementationMethodDefAbiFixture(
+            publication: DotNetProducerGenericOwnerSealedFamilyPublication =
+                openImplementationPublicationFixture(),
+        ): Map<String, DotNetPhysicalDeclaration> {
+            val declarations = interfaceOnlyNaturalMethodDefAbiFixture(publication)
+            val ownerKey = "demo/ExternalStore|class"
+            val memberKey = "demo/ExternalStore.read|function"
+            val ownerPath = listOf("demo.ExternalStore`1")
+            val owner = DotNetPhysicalDeclaration.Class(
+                ownerPath = ownerPath,
+                physicalTypeParameterCount = 1,
+                physicalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ),
+            )
+            val natural = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                .single()
+            val method = DotNetPhysicalDeclaration.Function(
+                ownerPath = ownerPath,
+                methodName = natural.physicalMethod.physicalMethodName,
+                isInstance = true,
+                methodGenericParameterCount = 0,
+            )
+            val implementation = DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef(
+                logicalInterfaceMemberKey = natural.logicalMemberKey,
+                implementationOwnerKey = ownerKey,
+                implementationMemberKey = memberKey,
+                ownerPath = ownerPath,
+                ownerTypeParameterVariances = owner.physicalTypeParameterVariances,
+                ownerVisibility = DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC,
+                ownerDispatch = DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE,
+                naturalInterfaceTypeArguments = listOf(
+                    DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0),
+                ),
+                physicalMethod = natural.physicalMethod.copy(physicalOwnerPath = ownerPath),
+                methodVisibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+                methodDispatch = DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE,
+                methodIntroducesSlot = true,
+                methodIsHideBySig = true,
+                methodIsSpecialName = false,
+                methodIsRuntimeSpecialName = false,
+            )
+            return declarations + mapOf(
+                ownerKey to owner,
+                memberKey to method,
+                implementation.indexKey() to implementation,
+            )
+        }
+
+        fun openImplementationPublicationFixture():
+                DotNetProducerGenericOwnerSealedFamilyPublication {
+            val publication = producerSealedFamilyPublicationFixture()
+            val physicalPaths = mapOf(
+                DotNetProducerGenericOwnerSealedTypeDefRole.NATURAL_INTERFACE to
+                        listOf("demo.OpenSource`1"),
+                DotNetProducerGenericOwnerSealedTypeDefRole.INTERFACE_SEMANTIC_CAPABILITY to
+                        listOf("demo.OpenSourceSemantic"),
+                DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS to
+                        listOf("demo.OpenStore`1"),
+                DotNetProducerGenericOwnerSealedTypeDefRole.CLASS_SEMANTIC_CAPABILITY to
+                        listOf("demo.OpenStoreSemantic"),
+            )
+            return publication.copy(
+                key = DotNetProducerGenericOwnerSealedFamilyKey(
+                    "demo/OpenSource.read|function",
+                    "demo/OpenStore|class",
+                    "demo/OpenStore.read|function",
+                ),
+                body = publication.body.copy(
+                    typeDefs = publication.body.typeDefs.map { type ->
+                        type.copy(row = type.row.copy(physicalPath = physicalPaths.getValue(type.role)))
+                    },
+                    methodDefs = publication.body.methodDefs.map { method ->
+                        method.copy(
+                            row = method.row.copy(
+                                structural = method.row.structural.copy(
+                                    header = method.row.structural.header.copy(
+                                        genericArity = 0,
+                                        ordinaryParameterCarriers = emptyList(),
+                                    ),
+                                    genericParameters = emptyList(),
+                                ),
+                                physicalGenericParameterNames = emptyList(),
+                            ),
+                            logicalParameterDomains = emptyList(),
+                        )
+                    },
+                ),
+            )
+        }
+
         fun DotNetProducerGenericOwnerSealedFamilyPublication.withDirectResults():
                 DotNetProducerGenericOwnerSealedFamilyPublication = copy(body = body.copy(
             methodDefs = body.methodDefs.map { method ->
@@ -817,6 +1214,13 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             transform: (String) -> String,
         ): Map<String, String> {
             val entry = entries.single { candidate -> decodePropertyKey(candidate.key).startsWith("N:") }
+            return this + (entry.key to transform(entry.value))
+        }
+
+        fun Map<String, String>.mutateImplementationMethodDefDeclarationValue(
+            transform: (String) -> String,
+        ): Map<String, String> {
+            val entry = entries.single { candidate -> decodePropertyKey(candidate.key).startsWith("M:") }
             return this + (entry.key to transform(entry.value))
         }
 

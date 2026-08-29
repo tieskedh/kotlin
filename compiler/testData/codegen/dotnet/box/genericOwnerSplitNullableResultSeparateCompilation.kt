@@ -28,6 +28,17 @@ public fun widenIntSource(source: NullableSource<Int>): NullableSource<Any?> = s
 
 public fun widenStringSource(source: NullableSource<String>): NullableSource<Any?> = source
 
+/**
+ * A downstream override must retain this producer-emitted split MethodDef. Its logical KLIB
+ * signature remains `T?`; the consumer may neither remap that type nor select the overload by
+ * name and ordinary arity.
+ */
+public open class ExternalSplitBase<T>(private val base: T) : NullableSource<T> {
+    override fun read(missing: Boolean): T? = if (missing) null else base
+
+    public open fun read(index: Int): T? = if (index < 0) null else base
+}
+
 // MODULE: middle(lib)
 // FILE: implementations.kt
 
@@ -149,6 +160,12 @@ public open class PlainIntBase(private val value: Int?) {
 
 public class AdaptedDeclaredIntOpenChild(private val leaf: Int?) :
     PlainIntBase(-901), OpenChild<Int> {
+    override fun read(missing: Boolean): Int? = if (missing) null else leaf
+}
+
+/** The consumer must override the external class's recorded split slot without an adapter. */
+public class ExternalDeclaredIntOpenChild(private val leaf: Int?) :
+    ExternalSplitBase<Int>(-907), OpenChild<Int> {
     override fun read(missing: Boolean): Int? = if (missing) null else leaf
 }
 
@@ -303,6 +320,36 @@ fun box(): String {
         downstreamOpenChildWidenedRead(adaptedDeclaredNullWide, false) != null
     ) {
         return "adapted declared widened stored null"
+    }
+
+    val externalDeclared = ExternalDeclaredIntOpenChild(61)
+    val externalDeclaredBase: ExternalSplitBase<Int> = externalDeclared
+    if (externalDeclaredBase.read(false) != 61) {
+        return "external declared base hit"
+    }
+    if (externalDeclared.read(0) != -907 || externalDeclared.read(-1) != null) {
+        return "external declared overload"
+    }
+    val externalDeclaredExact: OpenChild<Int> = externalDeclared
+    if (downstreamOpenChildExactIntRead(externalDeclaredExact, false) != 61) {
+        return "external declared child hit"
+    }
+    val externalDeclaredWide: OpenChild<Any?> = externalDeclared
+    if (!downstreamOpenChildSame(externalDeclaredWide, externalDeclared) ||
+        downstreamOpenChildWidenedRead(externalDeclaredWide, true) != null
+    ) {
+        return "external declared widened"
+    }
+    val externalDeclaredNull = ExternalDeclaredIntOpenChild(null)
+    val externalDeclaredNullBase: ExternalSplitBase<Int> = externalDeclaredNull
+    if (externalDeclaredNullBase.read(false) != null) {
+        return "external declared base stored null"
+    }
+    val externalDeclaredNullWide: OpenChild<Any?> = externalDeclaredNull
+    if (!downstreamOpenChildSame(externalDeclaredNullWide, externalDeclaredNull) ||
+        downstreamOpenChildWidenedRead(externalDeclaredNullWide, false) != null
+    ) {
+        return "external declared widened stored null"
     }
 
     return "OK"

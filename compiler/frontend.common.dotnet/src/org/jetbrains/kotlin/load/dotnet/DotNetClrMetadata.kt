@@ -86,6 +86,17 @@ data class DotNetClrInterfaceImplementation(
 )
 
 /**
+ * One physical MethodImpl row. Both endpoints retain their MethodDefOrRef token identity; no
+ * Kotlin override or dispatch meaning is inferred in the objective metadata layer.
+ */
+data class DotNetClrMethodImplementation(
+    val handle: DotNetClrMetadataHandle,
+    val implementingType: DotNetClrMetadataHandle,
+    val bodyMethod: DotNetClrMetadataHandle,
+    val declarationMethod: DotNetClrMetadataHandle,
+)
+
+/**
  * Physical ExportedType row. [typeDefinitionId] is only the ECMA-335 hint into another module's
  * TypeDef table; it is not a metadata token in this PE image.
  */
@@ -631,4 +642,5 @@ data class DotNetClrAssemblyMetadata(
     val methodSemantics: List<DotNetClrMethodSemantics>,
     val genericParameterDefinitions: List<DotNetClrGenericParameterDefinition>,
     val genericParameterConstraints: List<DotNetClrGenericParameterConstraint>,
+    val methodImplementations: List<DotNetClrMethodImplementation> = emptyList(),
 )

@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata
+import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.load.dotnet.decodeDotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalClrAssemblies
@@ -705,7 +706,9 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         }
         val naturalMethodDefs = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
-        if (naturalMethodDefs.isNotEmpty()) {
+        val implementationMethodDefs = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+        if (naturalMethodDefs.isNotEmpty() || implementationMethodDefs.isNotEmpty()) {
             val producerTarget = checkNotNull(DotNetTarget.fromString(targetFramework))
             val assemblyMetadata = try {
                 DotNetClrMetadataReader.read(embeddedSource.assemblyFile)
@@ -725,10 +728,25 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                         coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
                     )
                 }
+                val naturalByMemberKey = naturalMethodDefs.associateBy { declaration ->
+                    declaration.logicalMemberKey
+                }
+                implementationMethodDefs.forEach { declaration ->
+                    val natural = naturalByMemberKey[declaration.logicalInterfaceMemberKey]
+                        ?: throw IllegalArgumentException(
+                            "implementation MethodDef '${declaration.implementationMemberKey}' lacks its N record",
+                        )
+                    validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
+                        declaration = declaration,
+                        naturalDeclaration = natural,
+                        assembly = assemblyMetadata,
+                        coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
+                    )
+                }
             } catch (exception: IllegalArgumentException) {
                 report(
                     COMPILER_ARGUMENTS_ERROR,
-                    "Kotlin/.NET library '$displayPath' has a natural MethodDef descriptor which " +
+                    "Kotlin/.NET library '$displayPath' has a recorded MethodDef descriptor which " +
                             "disagrees with its producer DLL: ${exception.message}",
                 )
                 return

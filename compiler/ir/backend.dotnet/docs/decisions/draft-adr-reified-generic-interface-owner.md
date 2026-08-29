@@ -225,11 +225,19 @@ The declaration record exists independently of Kotlin implementation families.
 An optional implementation-family seal must project exactly the same complete
 natural slot, including TypeDef, MethodDef, logical domains, and result layout,
 but is neither required for an interface-only producer nor a source of
-declaration authority. The initial portable grammar covers directly
-declared, constraint-free, root/edge-free producer and split-nullable producer
-slots whose carriers remain declaration-local. Missing authority for inherited,
-constrained, edge-bearing, or wider forms does not permit logical
+declaration authority. The initial portable grammar covers directly declared,
+constraint-free, root/edge-free producer and split-nullable producer slots whose
+carriers remain declaration-local. Missing natural `N` authority for inherited,
+constrained, edge-bearing, or wider interface forms does not permit logical
 reconstruction or name/arity fallback.
+
+A separately inheritable Kotlin implementation class may additionally publish
+the bounded standalone `M` seal defined by the physical-authority ADR. `M`
+records the class MethodDef and its exact constructed natural-interface edge so
+a later Kotlin subclass preserves that physical base slot. It neither replaces
+the natural `N` declaration record nor creates a hidden interface, semantic
+family, or MethodImpl. This is producer-recorded Kotlin authority which is
+external to the consumer, not retained foreign CLR authority.
 
 After the producer-DLL validation, a downstream compiler independently checks
 the record against the logical KLIB declaration: instance shape, every
@@ -285,6 +293,10 @@ implicit completion of the natural implementation.
 - Base and inherited physical signatures remain authoritative after emission.
   A derived body receives a bridge where needed; substitution does not rewrite
   the base MethodDef.
+- A downstream Kotlin override of a separately compiled Kotlin class binds an
+  admitted producer-recorded `M` base MethodDef before applying logical
+  substitution. Equal physical layouts use ordinary CLR override dispatch; an
+  explicit MethodImpl requires independent authority.
 - Diamonds, reabstraction, competing defaults, and multiple constructions are
   admitted only after their complete natural and semantic families are
   deterministic across separate assemblies.
@@ -353,6 +365,8 @@ The producer records:
 - every natural MethodDef/Property and generic binder;
 - a self-sealing declaration record for each externally consumable natural slot,
   independent of optional implementation-family evidence;
+- admitted standalone implementation-class MethodDef seals and their exact
+  constructed natural-interface edges;
 - semantic capability and hook identities where emitted;
 - parameter policies and result layouts;
 - default/helper and MethodImpl obligations; and

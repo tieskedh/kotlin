@@ -255,6 +255,7 @@ private object DotNetPeMetadataReader {
                     metadata.tables,
                     genericParameterDefinitions,
                 ),
+                methodImplementations = readMethodImplementations(metadata.tables),
             )
         }
 
@@ -665,6 +666,59 @@ private object DotNetPeMetadataReader {
                     ),
                     implementingType = implementingType,
                     interfaceType = interfaceType,
+                )
+            }
+        }
+
+        private fun readMethodImplementations(
+            tables: MetadataStream,
+        ): List<DotNetClrMethodImplementation> {
+            val table = locateMetadataTable(tables, METHOD_IMPLEMENTATION_TABLE)
+                ?: return emptyList()
+            val seen = mutableSetOf<Triple<DotNetClrMetadataHandle, DotNetClrMetadataHandle, DotNetClrMetadataHandle>>()
+            return List(table.rowCount.toIntChecked("MethodImpl row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val implementingTypeIndex = readIndex(
+                    position,
+                    table.indexSizes.tableIndexSize(TYPE_DEF_TABLE),
+                )
+                position += table.indexSizes.tableIndexSize(TYPE_DEF_TABLE)
+                val bodyIndex = readIndex(position, table.indexSizes.methodDefOrRefIndexSize)
+                position += table.indexSizes.methodDefOrRefIndexSize
+                val declarationIndex = readIndex(position, table.indexSizes.methodDefOrRefIndexSize)
+                val implementingType = metadataHandle(
+                    TYPE_DEF_TABLE,
+                    implementingTypeIndex,
+                    tables,
+                    "MethodImpl implementing type",
+                )
+                val body = decodeCodedHandle(
+                    bodyIndex,
+                    tagBits = 1,
+                    tablesByTag = intArrayOf(METHOD_DEF_TABLE, MEMBER_REF_TABLE),
+                    metadataTables = tables,
+                    description = "MethodImpl body",
+                ) ?: malformed("MethodImpl row ${rowIndex + 1} has a nil body")
+                val declaration = decodeCodedHandle(
+                    declarationIndex,
+                    tagBits = 1,
+                    tablesByTag = intArrayOf(METHOD_DEF_TABLE, MEMBER_REF_TABLE),
+                    metadataTables = tables,
+                    description = "MethodImpl declaration",
+                ) ?: malformed("MethodImpl row ${rowIndex + 1} has a nil declaration")
+                if (!seen.add(Triple(implementingType, body, declaration))) {
+                    malformed("MethodImpl row ${rowIndex + 1} duplicates an implementation")
+                }
+                DotNetClrMethodImplementation(
+                    handle = metadataHandle(
+                        METHOD_IMPLEMENTATION_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "MethodImpl",
+                    ),
+                    implementingType = implementingType,
+                    bodyMethod = body,
+                    declarationMethod = declaration,
                 )
             }
         }
@@ -2659,7 +2713,7 @@ private object DotNetPeMetadataReader {
             get() = codedIndexSize(1, 20, 23)
         val typeOrMethodDefIndexSize
             get() = codedIndexSize(1, TYPE_DEF_TABLE, METHOD_DEF_TABLE)
-        private val methodDefOrRefIndexSize
+        val methodDefOrRefIndexSize
             get() = codedIndexSize(1, 6, 10)
         private val memberForwardedIndexSize
             get() = codedIndexSize(1, 4, 6)
@@ -2772,6 +2826,7 @@ private object DotNetPeMetadataReader {
     private const val PROPERTY_MAP_TABLE = 21
     private const val PROPERTY_TABLE = 23
     private const val METHOD_SEMANTICS_TABLE = 24
+    private const val METHOD_IMPLEMENTATION_TABLE = 25
     private const val MODULE_REF_TABLE = 26
     private const val TYPE_SPEC_TABLE = 27
     private const val MANIFEST_RESOURCE_TABLE = 40
