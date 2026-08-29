@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
+import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
@@ -37,6 +38,79 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class DotNetExternalDeclarationsTest {
+    @Test
+    fun resolvesNaturalMethodDefByLogicalIdentityRatherThanNameAndArity() {
+        val moduleDescriptor = ModuleDescriptorImpl(
+            Name.special("<naturalMethodDefTestModule>"),
+            LockBasedStorageManager("DotNetExternalNaturalMethodDefTest"),
+            DefaultBuiltIns.Instance,
+        )
+        val module = IrModuleFragmentImpl(moduleDescriptor)
+        val externalPackage = createEmptyExternalPackageFragment(module, FqName("sample"))
+        val owner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Source")
+            kind = ClassKind.INTERFACE
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply { parent = externalPackage }
+        owner.addTypeParameter {
+            name = Name.identifier("T")
+            variance = Variance.OUT_VARIANCE
+        }
+        fun payload(name: String) = IrFactoryImpl.buildClass {
+            this.name = Name.identifier(name)
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply { parent = externalPackage }
+        val firstPayload = payload("FirstPayload")
+        val secondPayload = payload("SecondPayload")
+        fun payloadType(irClass: org.jetbrains.kotlin.ir.declarations.IrClass) = IrSimpleTypeImpl(
+            irClass.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            emptyList(),
+            emptyList(),
+        )
+        val first = IrFactoryImpl.buildFun {
+            name = Name.identifier("read")
+            returnType = payloadType(firstPayload)
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply {
+            parent = owner
+            addValueParameter("candidate", payloadType(firstPayload))
+        }
+        val second = IrFactoryImpl.buildFun {
+            name = Name.identifier("read")
+            returnType = payloadType(secondPayload)
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply {
+            parent = owner
+            addValueParameter("candidate", payloadType(secondPayload))
+        }
+        owner.declarations += listOf(first, second)
+        externalPackage.declarations += listOf(owner, firstPayload, secondPayload)
+
+        val firstKey = checkNotNull(first.dotNetLibraryAbiKeyOrNull("F"))
+        val secondKey = checkNotNull(second.dotNetLibraryAbiKeyOrNull("F"))
+        assertTrue(firstKey != secondKey)
+        val naturalMethodDef = producerSealedFamilyPublicationFixture()
+            .toNaturalMethodDefPublication("sample/Source|class")
+            .copy(logicalMemberKey = firstKey)
+            .toPhysicalDeclaration()
+        val resolver = DotNetExternalDeclarations(listOf(DotNetExternalLibrary(
+            artifact = DotNetLibraryArtifact("sample.Library", "netstandard2.0"),
+            assemblyFile = File("sample.Library.dll"),
+            declarations = mapOf(naturalMethodDef.indexKey() to naturalMethodDef),
+            friendAssemblies = emptySet(),
+        )))
+
+        assertSame(
+            naturalMethodDef,
+            checkNotNull(resolver.genericOwnerNaturalMethodDefOrNull(first)).declaration,
+        )
+        assertNull(resolver.genericOwnerNaturalMethodDefOrNull(second))
+    }
+
     @Test
     fun physicalOwnerArityControlsOwnerDependentInterfaceEdges() {
         val logicalOwner = IrFactoryImpl.buildClass {

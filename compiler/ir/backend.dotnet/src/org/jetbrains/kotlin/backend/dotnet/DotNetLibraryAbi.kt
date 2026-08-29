@@ -756,6 +756,34 @@ sealed interface DotNetPhysicalDeclaration {
             }.row.physicalPath
     }
 
+    /** Exact producer-sealed natural MethodDef token descriptor for one logical Kotlin member. */
+    data class GenericOwnerNaturalMethodDef(
+        val logicalOwnerKey: String,
+        val logicalMemberKey: String,
+        /** Canonical URL-safe Base64 encoding of the declaration-level final TypeDef/MethodDef seal. */
+        val encodedPublication: String,
+    ) : DotNetPhysicalDeclaration {
+        override val ownerPath: List<String>
+            get() = publication().naturalType.physicalPath
+
+        val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord
+            get() = publication().naturalMethodDefPhysicalIdentity()
+
+        init {
+            require(logicalOwnerKey.isNotEmpty() && logicalMemberKey.isNotEmpty()) {
+                "a generic-owner natural MethodDef requires exact logical owner and member keys"
+            }
+            DotNetLibraryAbiCodec.requireProducerGenericOwnerNaturalMethodDefPublication(
+                logicalOwnerKey,
+                logicalMemberKey,
+                encodedPublication,
+            )
+            require(physicalMethod.signature.isInstance) {
+                "a generic-owner natural interface MethodDef must be an instance slot"
+            }
+        }
+    }
+
 }
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
@@ -800,6 +828,17 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): Stri
                 append(component)
             }
         },
+    )
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.indexKey(): String =
+    "N:$logicalMemberKey"
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.publication():
+        DotNetProducerGenericOwnerNaturalMethodDefPublication =
+    DotNetLibraryAbiCodec.requireProducerGenericOwnerNaturalMethodDefPublication(
+        logicalOwnerKey,
+        logicalMemberKey,
+        encodedPublication,
     )
 
 internal fun DotNetProducerGenericOwnerSealedFamilyPublication.toPhysicalDeclaration():
@@ -875,7 +914,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "62"
+    const val ABI_VERSION = "63"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -889,6 +928,7 @@ object DotNetLibraryAbiCodec {
     const val DECLARATION_PROPERTY_PREFIX = "dotnet_decl_"
     /** Far above the bounded 4/6/2 family's canonical payload, but below hostile decoder allocations. */
     internal const val MAX_PRODUCER_GENERIC_OWNER_SEALED_FAMILY_BASE64_CHARS = 16 * 1_048_576
+    internal const val MAX_PRODUCER_GENERIC_OWNER_NATURAL_METHOD_BASE64_CHARS = 16 * 1_048_576
 
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -937,6 +977,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.GenericOwnerMemberFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerSealedFamily -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
@@ -965,6 +1006,7 @@ object DotNetLibraryAbiCodec {
                     "G" -> decodeGenericOwnerMemberFamily(fields, logicalKey)
                     "H" -> decodePublishedGenericInterfaceFamily(fields, logicalKey)
                     "J" -> decodeGenericOwnerSealedFamily(fields, logicalKey)
+                    "N" -> decodeGenericOwnerNaturalMethodDef(fields, logicalKey)
                     "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
                     "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
                     else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
@@ -1876,6 +1918,55 @@ object DotNetLibraryAbiCodec {
         return publication
     }
 
+    internal fun producerGenericOwnerNaturalMethodDefDeclaration(
+        publication: DotNetProducerGenericOwnerNaturalMethodDefPublication,
+    ): DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef =
+        DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef(
+            logicalOwnerKey = publication.logicalOwnerKey,
+            logicalMemberKey = publication.logicalMemberKey,
+            encodedPublication = encoder.encodeToString(
+                DotNetProducerGenericOwnerNaturalMethodDefCodec.encode(publication),
+            ),
+        )
+
+    internal fun requireProducerGenericOwnerNaturalMethodDefPublication(
+        logicalOwnerKey: String,
+        logicalMemberKey: String,
+        encodedPublication: String,
+    ): DotNetProducerGenericOwnerNaturalMethodDefPublication {
+        require(logicalOwnerKey.isNotEmpty() && logicalMemberKey.isNotEmpty()) {
+            "a natural MethodDef envelope requires exact logical owner and member keys"
+        }
+        require(encodedPublication.isNotEmpty()) {
+            "a natural MethodDef envelope requires an encoded publication"
+        }
+        require(encodedPublication.length <= MAX_PRODUCER_GENERIC_OWNER_NATURAL_METHOD_BASE64_CHARS) {
+            "a natural MethodDef envelope exceeds the bounded encoded-publication size"
+        }
+        val bytes = try {
+            decoder.decode(encodedPublication)
+        } catch (failure: IllegalArgumentException) {
+            throw IllegalArgumentException("a natural MethodDef envelope has invalid Base64", failure)
+        }
+        val publication = when (val decoded = DotNetProducerGenericOwnerNaturalMethodDefCodec.decode(bytes)) {
+            is DotNetProducerGenericOwnerNaturalMethodDefDecodeResult.Success -> decoded.publication
+            is DotNetProducerGenericOwnerNaturalMethodDefDecodeResult.Malformed ->
+                throw IllegalArgumentException(
+                    "a natural MethodDef envelope has a malformed publication: ${decoded.reason}",
+                )
+        }
+        require(publication.logicalOwnerKey == logicalOwnerKey &&
+                publication.logicalMemberKey == logicalMemberKey) {
+            "a natural MethodDef envelope disagrees with its encoded logical declaration keys"
+        }
+        require(encodedPublication == encoder.encodeToString(
+            DotNetProducerGenericOwnerNaturalMethodDefCodec.encode(publication),
+        )) {
+            "a natural MethodDef envelope is not canonically encoded"
+        }
+        return publication
+    }
+
     private fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.encodeFields(): List<String> {
         requireProducerGenericOwnerSealedFamilyPublication(
             logicalInterfaceMemberKey,
@@ -1911,6 +2002,67 @@ object DotNetLibraryAbiCodec {
         }
     }
 
+    private fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.encodeFields(): List<String> =
+        listOf(
+            "N",
+            logicalOwnerKey,
+            logicalMemberKey,
+            encodedPublication,
+        )
+
+    private fun decodeGenericOwnerNaturalMethodDef(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef {
+        require(fields.size == 4) {
+            "generic-owner natural MethodDef '$logicalKey' has an incomplete physical descriptor"
+        }
+        return DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef(
+            logicalOwnerKey = fields[1],
+            logicalMemberKey = fields[2],
+            encodedPublication = fields[3],
+        ).also { declaration ->
+            require(declaration.indexKey() == logicalKey) {
+                "generic-owner natural MethodDef '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
+    /**
+     * CLR slot identity excludes Kotlin routing domains and nullable-reference attributes.
+     * Those annotations remain independently validated facts, but changing either cannot turn
+     * one physical MethodDef row into a second declaration which another logical member may claim.
+     */
+    private fun DotNetGenericOwnerPhysicalMethodIdentityRecord.withoutLogicalSlotAnnotations():
+            DotNetGenericOwnerPhysicalMethodIdentityRecord {
+        fun DotNetGenericOwnerPhysicalValueSlotRecord.canonical(
+            domain: DotNetGenericOwnerPhysicalSlotDomain,
+        ) = copy(
+            domain = domain,
+            nullableReferenceFlags = List(nullableReferenceFlags.size) {
+                DotNetNullableReferenceFlag.OBLIVIOUS
+            },
+        )
+
+        val canonicalResult = when (val layout = signature.resultLayout) {
+            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> layout
+            is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ->
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                    layout.slot.canonical(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT),
+                )
+            is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable ->
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable(
+                    layout.payloadSlot.canonical(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT),
+                )
+        }
+        return copy(signature = signature.copy(
+            resultLayout = canonicalResult,
+            parameterSlots = signature.parameterSlots.map { slot ->
+                slot.canonical(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT)
+            },
+        ))
+    }
+
     /**
      * A `J` row seals actual emitter evidence; it is not an independent parallel declaration
      * graph.  Its logical joins and every externally indexed physical endpoint must therefore
@@ -1924,6 +2076,118 @@ object DotNetLibraryAbiCodec {
                 "producer-sealed family requires its $role record '$key'",
             )
 
+        val interfaceFamilies = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+        val naturalMethodDefs = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+        naturalMethodDefs.groupBy { natural ->
+            natural.physicalMethod.withoutLogicalSlotAnnotations()
+        }.entries.forEach { entry ->
+            val method = entry.key
+            val claims = entry.value
+            require(claims.size == 1) {
+                "generic-owner natural MethodDef ${method.physicalOwnerPath.joinToString("/")}::" +
+                        "${method.physicalMethodName} is claimed by multiple logical members: " +
+                        claims.map { claim -> claim.logicalMemberKey }.sorted()
+            }
+        }
+        val requiredNaturalKeys = linkedSetOf<String>()
+        interfaceFamilies.forEach { interfaceFamily ->
+            val interfaceClass = requiredDeclaration(
+                interfaceFamily.contract.logicalOwnerKey,
+                "natural-interface class",
+            ) as? DotNetPhysicalDeclaration.Class ?: throw IllegalArgumentException(
+                "published interface family '${interfaceFamily.contract.logicalOwnerKey}' has no class record",
+            )
+            require(interfaceClass.ownerPath == interfaceFamily.ownerPath &&
+                    interfaceClass.physicalTypeParameterCount == interfaceFamily.contract.genericArity &&
+                    interfaceClass.physicalTypeParameterVariances ==
+                    interfaceFamily.naturalTypeParameterVariances
+            ) {
+                "published interface family '${interfaceFamily.contract.logicalOwnerKey}' disagrees with its class record"
+            }
+            interfaceFamily.contract.declaredMembers.forEach { member ->
+                if (member.role !in setOf(
+                        DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+                        DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
+                    )
+                ) return@forEach
+                val naturalKey = "N:${member.logicalMemberKey}"
+                val naturalDeclaration = declarations[naturalKey] ?: return@forEach
+                val natural = naturalDeclaration as? DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef
+                    ?: throw IllegalArgumentException(
+                        "published interface member '${member.logicalMemberKey}' has a non-MethodDef N record",
+                    )
+                val publication = natural.publication()
+                val naturalType = publication.naturalType
+                val naturalMethod = publication.naturalMethod.row
+                val physicalMethod = natural.physicalMethod
+                require(natural.logicalOwnerKey == interfaceFamily.contract.logicalOwnerKey &&
+                        natural.logicalMemberKey == member.logicalMemberKey &&
+                        natural.ownerPath == interfaceFamily.ownerPath &&
+                        naturalType.structural.genericArity == interfaceFamily.contract.genericArity &&
+                        naturalType.structural.genericParameters.map { parameter -> parameter.variance } ==
+                        interfaceFamily.naturalTypeParameterVariances &&
+                        naturalMethod.structural.header.owner == naturalType.structural.identityKey
+                ) {
+                    "natural MethodDef '$naturalKey' disagrees with its H-selected declaration owner"
+                }
+                val split = physicalMethod.signature.resultLayout is
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+                require(split ==
+                        (member.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER)) {
+                    "natural MethodDef '$naturalKey' disagrees with its H-selected result layout"
+                }
+                require(physicalMethod.signature.parameterSlots.all { slot ->
+                    slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                }) {
+                    "natural MethodDef '$naturalKey' disagrees with its H-selected logical input domains"
+                }
+                require(physicalMethod.signature.resultLayout.valueSlotOrNull?.domain ==
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT) {
+                    "natural MethodDef '$naturalKey' disagrees with its H-selected logical result domain"
+                }
+                val resultType = checkNotNull(
+                    physicalMethod.signature.resultLayout.valueSlotOrNull,
+                ).type
+                require(resultType.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                        resultType.parameterIndex?.let { index ->
+                            index in 0 until interfaceFamily.contract.genericArity
+                        } == true) {
+                    "natural MethodDef '$naturalKey' disagrees with its H-selected direct producer result"
+                }
+                val function = requiredDeclaration(member.logicalMemberKey, "natural-interface function") as?
+                        DotNetPhysicalDeclaration.Function ?: throw IllegalArgumentException(
+                    "natural MethodDef '$naturalKey' has no function record",
+                )
+                require(function.ownerPath == physicalMethod.physicalOwnerPath &&
+                        function.methodName == physicalMethod.physicalMethodName &&
+                        function.isInstance == physicalMethod.signature.isInstance &&
+                        function.methodGenericParameterCount == physicalMethod.signature.genericArity
+                ) {
+                    "natural MethodDef '$naturalKey' disagrees with its F endpoint"
+                }
+                val memberFamily = requiredDeclaration(
+                    "G:${member.logicalMemberKey}",
+                    "natural-interface member family",
+                ) as? DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+                    ?: throw IllegalArgumentException(
+                        "natural MethodDef '$naturalKey' has no member-family record",
+                    )
+                require(memberFamily.logicalMemberKey == member.logicalMemberKey &&
+                        memberFamily.ownerLogicalKey == interfaceFamily.contract.logicalOwnerKey &&
+                        memberFamily.ownerPath == interfaceFamily.capabilityOwnerPath
+                ) {
+                    "natural MethodDef '$naturalKey' disagrees with its G/H owner join"
+                }
+                requiredNaturalKeys += naturalKey
+            }
+        }
+        naturalMethodDefs.forEach { natural ->
+            require(natural.indexKey() in requiredNaturalKeys) {
+                "generic-owner natural MethodDef '${natural.indexKey()}' is not backed by a directly declared H member"
+            }
+        }
         declarations.forEach { [indexKey, declaration] ->
             if (declaration !is DotNetPhysicalDeclaration.GenericOwnerSealedFamily) return@forEach
             require(declaration.indexKey() == indexKey) {
@@ -1987,6 +2251,20 @@ object DotNetLibraryAbiCodec {
                 ?: throw IllegalArgumentException(
                     "producer-sealed family '$indexKey' has a non-interface-family record '$interfaceFamilyKey'",
                 )
+            val expectedNaturalMethodDef = publication.toNaturalMethodDefPhysicalDeclaration(
+                interfaceFamily.contract.logicalOwnerKey,
+            )
+            val naturalMethodDefKey = expectedNaturalMethodDef.indexKey()
+            val naturalMethodDef = requiredDeclaration(
+                naturalMethodDefKey,
+                "natural MethodDef",
+            ) as? DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef
+                ?: throw IllegalArgumentException(
+                    "producer-sealed family '$indexKey' has a non-MethodDef N record '$naturalMethodDefKey'",
+                )
+            require(naturalMethodDef == expectedNaturalMethodDef) {
+                "producer-sealed family '$indexKey' disagrees with its declaration-level natural MethodDef seal"
+            }
             val interfaceClass = requiredDeclaration(
                 interfaceFamily.contract.logicalOwnerKey,
                 "logical-interface class",
@@ -2135,6 +2413,16 @@ object DotNetLibraryAbiCodec {
                     publishedMember?.role == expectedMemberRole
             ) {
                 "producer-sealed family '$indexKey' disagrees with its logical-interface H record"
+            }
+            require(naturalMethodDef.ownerPath == when {
+                publishedMember.role.requiresExactInputView -> checkNotNull(interfaceFamily.exactOwnerPath)
+                else -> interfaceFamily.ownerPath
+            } &&
+                    (publishedMember.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER) ==
+                    (naturalMethodDef.physicalMethod.signature.resultLayout is
+                            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
+            ) {
+                "producer-sealed family '$indexKey' disagrees with its H-selected natural MethodDef owner or result layout"
             }
         }
     }
@@ -2646,6 +2934,11 @@ internal data class DotNetBoundPublishedGenericInterfaceFamily(
     val family: DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily,
 )
 
+internal data class DotNetBoundGenericOwnerNaturalMethodDef(
+    val library: DotNetExternalLibrary,
+    val declaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
+)
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -2762,6 +3055,22 @@ internal class DotNetExternalDeclarationIndex(
                     }
             }
         }
+    internal val genericOwnerNaturalMethodDefsByLogicalKey:
+        Map<String, DotNetBoundGenericOwnerNaturalMethodDef> = buildMap {
+            libraries.forEach { library ->
+                library.declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                    .forEach { declaration ->
+                        require(put(
+                            declaration.logicalMemberKey,
+                            DotNetBoundGenericOwnerNaturalMethodDef(library, declaration),
+                        ) == null) {
+                            "duplicate external Kotlin/.NET natural MethodDef " +
+                                    "'${declaration.logicalMemberKey}'"
+                        }
+                    }
+            }
+        }
 
     init {
         publishedGenericInterfaceFamiliesByLogicalKey.forEach { entry ->
@@ -2858,6 +3167,8 @@ internal class DotNetExternalDeclarations(
         index.genericOwnerFunctionInputEntriesByLogicalKey
     private val publishedGenericInterfaceFamiliesByLogicalKey =
         index.publishedGenericInterfaceFamiliesByLogicalKey
+    private val genericOwnerNaturalMethodDefsByLogicalKey =
+        index.genericOwnerNaturalMethodDefsByLogicalKey
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerExactInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
@@ -2872,6 +3183,13 @@ internal class DotNetExternalDeclarations(
         // needs producer authority must resolve and query the external overridden declaration.
         if (function.fileOrNull != null) return null
         return logicalKeys.keyOrNull(function, "F")
+    }
+
+    fun genericOwnerNaturalMethodDefOrNull(
+        function: IrSimpleFunction,
+    ): DotNetBoundGenericOwnerNaturalMethodDef? {
+        val logicalKey = externalGenericOwnerFunctionKeyOrNull(function) ?: return null
+        return genericOwnerNaturalMethodDefsByLogicalKey[logicalKey]
     }
 
     /**
@@ -3554,6 +3872,99 @@ internal class DotNetExternalDeclarations(
             "a static-initialization entry must be a non-generic static method"
         }
         return DotNetIlFunctionInfo(owner, signature, binding.initialization.methodName)
+    }
+
+    fun genericOwnerNaturalMethodDefFunctionInfo(
+        binding: DotNetBoundGenericOwnerNaturalMethodDef,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "natural MethodDef binding belongs to an unbound external library"
+        }
+        val declaration = binding.declaration
+        val memberFamily = genericOwnerMemberFamiliesByLogicalKey[declaration.logicalMemberKey]
+            ?: error("natural MethodDef '${declaration.logicalMemberKey}' lacks its member-family record")
+        val publishedFamily = publishedGenericInterfaceFamiliesByLogicalKey[
+            memberFamily.family.ownerLogicalKey
+        ] ?: error("natural MethodDef '${declaration.logicalMemberKey}' lacks its interface-family record")
+        require(memberFamily.library === binding.library && publishedFamily.library === binding.library) {
+            "natural MethodDef '${declaration.logicalMemberKey}' crosses producer-library authority"
+        }
+        val ownerVariances = publishedFamily.family.naturalTypeParameterVariances
+            .map { variance -> variance.toDotNetIlVariance() }
+        val owner = buildClassInfo(
+            binding.library.artifact.assemblyName,
+            declaration.ownerPath,
+            ownerVariances,
+        )
+        val signatureRecord = declaration.physicalMethod.signature
+
+        fun physicalType(
+            record: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+        ): DotNetIlValueType = when (record.kind) {
+            DotNetGenericOwnerPhysicalTypeKind.BOOLEAN -> DotNetIlValueType.Boolean
+            DotNetGenericOwnerPhysicalTypeKind.INT32 -> DotNetIlValueType.Int32
+            DotNetGenericOwnerPhysicalTypeKind.STRING -> DotNetIlValueType.String
+            DotNetGenericOwnerPhysicalTypeKind.OBJECT -> DotNetIlValueType.Object
+            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ->
+                DotNetIlValueType.TypeParameter(checkNotNull(record.parameterIndex), false)
+            DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER ->
+                DotNetIlValueType.TypeParameter(checkNotNull(record.parameterIndex), true)
+            DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY ->
+                DotNetIlValueType.GenericArray(physicalType(record.arguments.single()))
+            DotNetGenericOwnerPhysicalTypeKind.NAMED -> {
+                require(record.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER) {
+                    "natural MethodDef '${declaration.logicalMemberKey}' uses an external named carrier " +
+                            "outside the final producer-sealed projection grammar"
+                }
+                require(record.namedTypeCategory != DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE) {
+                    "natural MethodDef '${declaration.logicalMemberKey}' uses a named value-type carrier " +
+                            "outside the current IL value-type grammar"
+                }
+                val classInfo = buildClassInfo(
+                    binding.library.artifact.assemblyName,
+                    record.typePath,
+                    List(record.genericArity) { Variance.INVARIANT },
+                )
+                if (record.genericArity == 0) {
+                    DotNetIlValueType.UserClass(classInfo)
+                } else {
+                    DotNetIlValueType.GenericInstance(classInfo, record.arguments.map(::physicalType))
+                }
+            }
+            DotNetGenericOwnerPhysicalTypeKind.VOID -> error(
+                "natural MethodDef '${declaration.logicalMemberKey}' uses void as a value carrier"
+            )
+        }
+
+        val receiverType = if (ownerVariances.isEmpty()) {
+            DotNetIlValueType.UserClass(owner)
+        } else {
+            DotNetIlValueType.GenericInstance(
+                owner,
+                ownerVariances.indices.map { index -> DotNetIlValueType.TypeParameter(index, false) },
+            )
+        }
+        val resultLayout = signatureRecord.resultLayout
+        val returnType = when (resultLayout) {
+            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> DotNetIlReturnType.Void
+            is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ->
+                DotNetIlReturnType.Value(physicalType(resultLayout.slot.type))
+            is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable ->
+                DotNetIlReturnType.Value(physicalType(resultLayout.payloadSlot.type))
+        }
+        return DotNetIlFunctionInfo(
+            owner = owner,
+            signature = DotNetIlMethodSignature(
+                returnType = returnType,
+                parameterTypes = listOf(receiverType) +
+                        signatureRecord.parameterSlots.map { slot -> physicalType(slot.type) },
+                hasThis = signatureRecord.isInstance,
+                hasSplitNullableResult = resultLayout is
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable,
+                methodGenericParameterCount = signatureRecord.genericArity,
+            ),
+            physicalMethodName = declaration.physicalMethod.physicalMethodName,
+        )
     }
 
     private fun buildClassInfo(

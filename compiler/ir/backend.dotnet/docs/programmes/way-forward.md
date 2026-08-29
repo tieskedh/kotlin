@@ -54,14 +54,13 @@ variance is retained only where the complete interface surface is CLR-legal;
 otherwise the affected parameter is physically invariant while Kotlin's
 logical variance remains in KLIB. Ordinary CLR-language implementations must
 not require a hidden generated ABI for behavior derivable from real interface
-slots. The bounded same-producer route has proven exact MethodDef-token
-rebinding, but this migration stage remains open: a downstream consumer still
-requires complete producer-recorded MethodDef and result-layout authority
-rather than logical reconstruction. The existing split implementation remains
-comparison evidence until that external route and its hostile overloaded-
-interface proof pass. One bounded slice may then stop emitting that split
-surface inside the rehearsal, but complete removal waits for the selected-
-family freeze and full hostile inverse.
+slots. ABI 63 closes the bounded root/edge-free external MethodDef-authority
+proof; current evidence belongs in [status](../../STATUS.md) and its
+[dated archive record](../archive/generic-owner-external-recorded-methoddef-dispatch-2026-08-29.md).
+Next, that bounded slice may stop emitting its split comparison surface inside
+the rehearsal. Complete removal still waits for the selected-family freeze and
+full hostile inverse; edge-bearing, inherited, constrained, and wider callable
+forms remain later authority gates.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to

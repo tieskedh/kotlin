@@ -472,23 +472,81 @@ data class DotNetGenericOwnerPhysicalValueSlotRecord(
     }
 }
 
+/**
+ * Physical result calling convention, independent from every ordinary parameter-domain policy.
+ *
+ * [SplitNullable] implies one final hidden `[out] bool&` parameter in the CLR MethodDef. That
+ * parameter is not a Kotlin value parameter and therefore never appears in
+ * [DotNetGenericOwnerPhysicalMethodSignatureRecord.parameterSlots].
+ */
+sealed interface DotNetGenericOwnerPhysicalCallableResultLayoutRecord {
+    data object Void : DotNetGenericOwnerPhysicalCallableResultLayoutRecord
+
+    data class Direct(
+        val slot: DotNetGenericOwnerPhysicalValueSlotRecord,
+    ) : DotNetGenericOwnerPhysicalCallableResultLayoutRecord {
+        init {
+            require(slot.type.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                "a direct generic-owner physical result cannot use void as a value carrier"
+            }
+        }
+    }
+
+    data class SplitNullable(
+        val payloadSlot: DotNetGenericOwnerPhysicalValueSlotRecord,
+    ) : DotNetGenericOwnerPhysicalCallableResultLayoutRecord {
+        init {
+            require(payloadSlot.type.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                "a split-nullable generic-owner physical result requires a value payload"
+            }
+        }
+    }
+}
+
+val DotNetGenericOwnerPhysicalCallableResultLayoutRecord.valueSlotOrNull:
+        DotNetGenericOwnerPhysicalValueSlotRecord?
+    get() = when (this) {
+        is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct -> slot
+        is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable -> payloadSlot
+        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> null
+    }
+
+/** Value payload, or the canonical declaration-independent void slot for layout-neutral checks. */
+val DotNetGenericOwnerPhysicalCallableResultLayoutRecord.valueOrVoidSlot:
+        DotNetGenericOwnerPhysicalValueSlotRecord
+    get() = valueSlotOrNull ?: DotNetGenericOwnerPhysicalValueSlotRecord(
+        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
+    )
+
+private fun DotNetGenericOwnerPhysicalValueSlotRecord.asDirectOrVoidResultLayout():
+        DotNetGenericOwnerPhysicalCallableResultLayoutRecord =
+    if (type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+        require(domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) {
+            "a void generic-owner physical result must be declaration-independent"
+        }
+        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void
+    } else {
+        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(this)
+    }
+
 /** Complete physical MethodDef signature plus the logical domain of every value position. */
 data class DotNetGenericOwnerPhysicalMethodSignatureRecord(
     val isInstance: Boolean,
     val genericArity: Int,
-    val returnSlot: DotNetGenericOwnerPhysicalValueSlotRecord,
+    val resultLayout: DotNetGenericOwnerPhysicalCallableResultLayoutRecord,
     val parameterSlots: List<DotNetGenericOwnerPhysicalValueSlotRecord>,
 ) {
     init {
         require(genericArity >= 0) { "a generic-owner physical method requires non-negative generic arity" }
-        require(returnSlot.domain !in setOf(
+        val resultSlot = resultLayout.valueSlotOrNull
+        require(resultSlot == null || resultSlot.domain !in setOf(
             DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
             DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
             DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
-        )) { "a generic-owner physical return has an input-only slot domain" }
-        require(returnSlot.type.kind != DotNetGenericOwnerPhysicalTypeKind.VOID ||
-                returnSlot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) {
-            "a void generic-owner physical return must be declaration-independent"
+        )) { "a generic-owner physical result has an input-only slot domain" }
+        require(resultSlot != null || resultLayout == DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void) {
+            "a void generic-owner physical result must not carry a value slot"
         }
         require(parameterSlots.none { slot ->
             slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
@@ -499,10 +557,10 @@ data class DotNetGenericOwnerPhysicalMethodSignatureRecord(
         }) {
             "an instance generic-owner physical method cannot expose a separate exact receiver"
         }
-        require(returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
-                returnSlot.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
-                !returnSlot.type.referencesOwnerParameter()) {
-            "an owner-dependent physical return requires an owner slot domain"
+        require(resultSlot == null ||
+                resultSlot.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                !resultSlot.type.referencesOwnerParameter()) {
+            "an owner-dependent physical result requires an owner slot domain"
         }
         require(parameterSlots.none { slot ->
             slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
@@ -514,7 +572,7 @@ data class DotNetGenericOwnerPhysicalMethodSignatureRecord(
     }
 
     internal fun allTypes(): List<DotNetGenericOwnerPhysicalTypeExpressionRecord> =
-        listOf(returnSlot.type) + parameterSlots.map { slot -> slot.type }
+        listOfNotNull(resultLayout.valueSlotOrNull?.type) + parameterSlots.map { slot -> slot.type }
 }
 
 data class DotNetGenericOwnerPhysicalMethodIdentityRecord(
@@ -601,7 +659,7 @@ data class DotNetGenericOwnerPhysicalDelegatingConstructorRecord(
             "a generic-owner delegated constructor requires a named physical owner type"
         }
         require(physicalMethodName == ".ctor" && signature.isInstance &&
-                signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                signature.resultLayout == DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void) {
             "a generic-owner delegated constructor requires an instance .ctor signature"
         }
     }
@@ -622,7 +680,8 @@ data class DotNetGenericOwnerPhysicalConstructorRecord(
         }
         require(physicalConstructor.physicalMethodName == ".ctor" &&
                 physicalConstructor.signature.isInstance &&
-                physicalConstructor.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                physicalConstructor.signature.resultLayout ==
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void) {
             "a generic-owner physical constructor requires an instance .ctor MethodDef"
         }
         require(constructedOwnerType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
@@ -834,11 +893,13 @@ data class DotNetGenericOwnerPhysicalStateAccessRecord(
         when (operation) {
             DotNetGenericOwnerPhysicalStateAccessOperation.READ -> require(
                 physicalMethod.signature.parameterSlots.isEmpty() &&
-                        physicalMethod.signature.returnSlot.type.kind != DotNetGenericOwnerPhysicalTypeKind.VOID
+                        physicalMethod.signature.resultLayout is
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct
             ) { "a generic-owner state read requires a parameterless value-returning MethodDef" }
             DotNetGenericOwnerPhysicalStateAccessOperation.WRITE -> require(
                 physicalMethod.signature.parameterSlots.size == 1 &&
-                        physicalMethod.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID
+                        physicalMethod.signature.resultLayout ==
+                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void
             ) { "a generic-owner state write requires one parameter and a void MethodDef" }
         }
         require(conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY ||
@@ -1128,7 +1189,8 @@ data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
         return DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = false,
             genericArity = genericArity,
-            returnSlot = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+            resultLayout = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                .asDirectOrVoidResultLayout(),
             parameterSlots = listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
                 domain = DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
                 type = receiverType,
@@ -1452,7 +1514,8 @@ data class DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
     ): DotNetGenericOwnerPhysicalMethodSignatureRecord = DotNetGenericOwnerPhysicalMethodSignatureRecord(
         isInstance = isInstance,
         genericArity = genericArity,
-        returnSlot = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+        resultLayout = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+            .asDirectOrVoidResultLayout(),
         parameterSlots = parameterSlots.map { slot -> slot.bindProducerTypes(physicalOwnerPathsByLogicalKey) },
     )
 }
@@ -1996,7 +2059,8 @@ data class DotNetGenericOwnerPhysicalConstructionRouteRecord(
         require(physicalConstructor.physicalMethodName == ".ctor" &&
                 physicalConstructor.signature.isInstance &&
                 physicalConstructor.signature.genericArity == 0 &&
-                physicalConstructor.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID &&
+                physicalConstructor.signature.resultLayout ==
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void &&
                 physicalConstructor.signature.parameterSlots.singleOrNull()?.let { parameter ->
                     parameter.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
                             parameter.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)
@@ -2198,7 +2262,7 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
             "generic-owner physical member family '$logicalMemberKey' has incomplete role slots"
         }
         require(slots.map { slot ->
-            slot.signature.returnSlot.domain to
+            slot.signature.resultLayout.valueOrVoidSlot.domain to
                     slot.signature.parameterSlots.map { parameter -> parameter.domain }
         }.distinct().size == 1) {
             "generic-owner physical member family '$logicalMemberKey' has inconsistent role slot-domain vectors"
@@ -2343,10 +2407,12 @@ data class DotNetGenericOwnerPhysicalPropertyRecord(
             "generic-owner property '$physicalPropertyName' has an inconsistent semantic setter route"
         }
         getterPhysicalMethod.let { getter ->
+            val resultSlot = (getter.signature.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct)?.slot
             require(getter.signature.isInstance && getter.signature.genericArity == 0 &&
                     getter.signature.parameterSlots.isEmpty() &&
-                    getter.signature.returnSlot.type == physicalType &&
-                    getter.signature.returnSlot.nullableReferenceFlags == nullableReferenceFlags &&
+                    resultSlot?.type == physicalType &&
+                    resultSlot.nullableReferenceFlags == nullableReferenceFlags &&
                     physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
                 "generic-owner property '$physicalPropertyName' has an invalid getter MethodDef"
             }
@@ -2355,7 +2421,8 @@ data class DotNetGenericOwnerPhysicalPropertyRecord(
             require(setter.signature.isInstance && setter.signature.genericArity == 0 &&
                     setter.signature.parameterSlots.singleOrNull()?.type == physicalType &&
                     setter.signature.parameterSlots.single().nullableReferenceFlags == nullableReferenceFlags &&
-                    setter.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+                    setter.signature.resultLayout ==
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void) {
                 "generic-owner property '$physicalPropertyName' has an invalid setter MethodDef"
             }
         }
@@ -2494,14 +2561,15 @@ data class DotNetGenericOwnerPhysicalStateRecord(
         }
         accessPaths.forEach { access ->
             val valueType = when (access.operation) {
-                DotNetGenericOwnerPhysicalStateAccessOperation.READ -> access.physicalMethod.signature.returnSlot.type
+                DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
+                    checkNotNull(access.physicalMethod.signature.resultLayout.valueSlotOrNull).type
                 DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
                     access.physicalMethod.signature.parameterSlots.single().type
             }
             require(if (access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
                 val valueSlot = when (access.operation) {
                     DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
-                        access.physicalMethod.signature.returnSlot
+                        checkNotNull(access.physicalMethod.signature.resultLayout.valueSlotOrNull)
                     DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
                         access.physicalMethod.signature.parameterSlots.single()
                 }
@@ -3472,7 +3540,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 20
+    const val SCHEMA_VERSION = 21
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -4501,11 +4569,51 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         )
     }
 
+    private fun DotNetGenericOwnerPhysicalCallableResultLayoutRecord.serialized(): String = when (this) {
+        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void -> "V"
+        is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ->
+            "D;${slot.serialized().encoded()}"
+        is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable ->
+            "S;${payloadSlot.serialized().encoded()}"
+    }
+
+    private fun String.deserializedResultLayout():
+            DotNetGenericOwnerPhysicalCallableResultLayoutRecord {
+        val fields = split(';')
+        return when (fields.firstOrNull()) {
+            "V" -> {
+                require(fields.size == 1) {
+                    "void generic-owner physical result layout has a trailing payload"
+                }
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void
+            }
+            "D" -> {
+                require(fields.size == 2) {
+                    "direct generic-owner physical result layout requires one payload"
+                }
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                    fields[1].decoded().deserializedValueSlot(),
+                )
+            }
+            "S" -> {
+                require(fields.size == 2) {
+                    "split-nullable generic-owner physical result layout requires one payload"
+                }
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable(
+                    fields[1].decoded().deserializedValueSlot(),
+                )
+            }
+            else -> throw IllegalArgumentException(
+                "generic-owner physical result layout has unknown kind '${fields.firstOrNull().orEmpty()}'"
+            )
+        }
+    }
+
     private fun DotNetGenericOwnerPhysicalMethodSignatureRecord.serialized(): String =
         buildList {
             add(if (isInstance) "1" else "0")
             add(genericArity.toString())
-            add(returnSlot.serialized().encoded())
+            add(resultLayout.serialized().encoded())
             add(parameterSlots.size.toString())
             parameterSlots.forEach { parameter -> add(parameter.serialized().encoded()) }
         }.joinToString(";")
@@ -4528,10 +4636,20 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         return DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = isInstance,
             genericArity = genericArity,
-            returnSlot = fields[2].decoded().deserializedValueSlot(),
+            resultLayout = fields[2].decoded().deserializedResultLayout(),
             parameterSlots = fields.drop(4).map { parameter -> parameter.decoded().deserializedValueSlot() },
         )
     }
+
+    /** Canonical ABI-21 signature codec shared with self-describing library MethodDef records. */
+    internal fun encodePhysicalMethodSignature(
+        signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+    ): String = signature.serialized()
+
+    /** Strict inverse of [encodePhysicalMethodSignature]; unknown or trailing fields fail closed. */
+    internal fun decodePhysicalMethodSignature(
+        encoded: String,
+    ): DotNetGenericOwnerPhysicalMethodSignatureRecord = encoded.deserializedSignature()
 
     private fun String.encoded(): String = encoder.encodeToString(toByteArray(Charsets.UTF_8))
 
@@ -4615,7 +4733,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                 slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
             }
             require(producerMember.slots.all { slot ->
-                slot.signature.returnSlot.domain == member.returnSlotDomain
+                slot.signature.resultLayout.valueOrVoidSlot.domain == member.returnSlotDomain
             }) {
                 "consumer override '${member.sourceName}' disagrees with the producer return-slot domain"
             }

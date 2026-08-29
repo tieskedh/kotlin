@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
+import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.load.dotnet.decodeDotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalClrAssemblies
@@ -701,6 +702,37 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                         "PublicKeyToken=${if (physicalIdentity.hasPublicKey) "<signed>" else "null"}'.",
             )
             return
+        }
+        val naturalMethodDefs = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+        if (naturalMethodDefs.isNotEmpty()) {
+            val producerTarget = checkNotNull(DotNetTarget.fromString(targetFramework))
+            val assemblyMetadata = try {
+                DotNetClrMetadataReader.read(embeddedSource.assemblyFile)
+            } catch (exception: DotNetBadImageFormatException) {
+                report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Kotlin/.NET library '${embeddedSource.assemblyFile.path}' has invalid CLR metadata: " +
+                            exception.message,
+                )
+                return
+            }
+            try {
+                naturalMethodDefs.forEach { declaration ->
+                    validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
+                        declaration = declaration,
+                        assembly = assemblyMetadata,
+                        coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
+                    )
+                }
+            } catch (exception: IllegalArgumentException) {
+                report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Kotlin/.NET library '$displayPath' has a natural MethodDef descriptor which " +
+                            "disagrees with its producer DLL: ${exception.message}",
+                )
+                return
+            }
         }
         libraries += DotNetExternalLibrary(
             DotNetLibraryArtifact(assemblyName, targetFramework, assemblyVersion, assemblyCulture, publicKeyToken),

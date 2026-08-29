@@ -460,10 +460,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = true,
             genericArity = 1,
-            returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
-                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
-                DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
-            ),
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
             parameterSlots = emptyList(),
         )
         val identity = DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer(
@@ -507,10 +504,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = true,
             genericArity = 1,
-            returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
-                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
-                DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
-            ),
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
             parameterSlots = emptyList(),
         )
         val identity = DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer(

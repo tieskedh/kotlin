@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 
 enum class DotNetGenericOwnerCompleteEmissionTypeKindSnapshot {
@@ -237,6 +238,307 @@ internal data class DotNetGenericOwnerCompleteEmissionScopeObservations(
     val methodDefs: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
     val methodImpls: List<DotNetGenericOwnerPhysicalMethodImplObservation>,
 )
+
+/**
+ * Seals one declaration-owned natural slot without requiring the wider implementation-family J.
+ * The join uses logical symbols and emitter identities; paths and names are validated facts, never
+ * the selectors which create the binding.
+ */
+internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
+    logicalOwnerKey: String,
+    logicalMemberKey: String,
+    owner: IrClass,
+    source: IrSimpleFunction,
+    family: DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily,
+    member: DotNetPublishedGenericInterfaceMemberContract,
+    logicalParameterDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    logicalResultDomain: DotNetGenericOwnerPhysicalSlotDomain?,
+    current: DotNetGenericOwnerCompleteEmissionScopeObservations,
+    otherScopes: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetProducerGenericOwnerNaturalMethodDefPublication> {
+    if (member.role !in setOf(
+            DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+            DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
+        )
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    if (member.logicalMemberKey != logicalMemberKey || family.contract.logicalOwnerKey != logicalOwnerKey ||
+        source.parent !== owner
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "a natural MethodDef publication crossed its exact pre-lowering owner/member join",
+        )
+    }
+
+    val expectedOwner = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+        owner.symbol,
+        DotNetGenericInterfaceView.DECLARED,
+    )
+    val expectedMethod = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+        source.symbol,
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+    )
+    fun DotNetGenericOwnerPhysicalTypeDefEmissionObservation.claimsExpectedOwner(): Boolean =
+        claimedAliases.any(expectedOwner::sameLocalTypeIdentityAs)
+    fun DotNetGenericOwnerPhysicalMethodDefHeaderObservation.claimsExpectedMethod(): Boolean =
+        physicalMethodIdentity?.sameLocalMethodIdentityAs(expectedMethod) == true
+
+    if (otherScopes.any { scope ->
+            scope.typeDefs.any { observation -> observation.claimsExpectedOwner() } ||
+                    scope.methodDefs.any { observation -> observation.claimsExpectedMethod() }
+        }
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "a natural MethodDef declaration was observed in more than one physical emission scope",
+        )
+    }
+    val typeCandidates = current.typeDefs.filter { observation -> observation.claimsExpectedOwner() }
+    if (typeCandidates.size != 1) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "a natural MethodDef declaration requires exactly one final natural TypeDef observation",
+        )
+    }
+    val typeObservation = typeCandidates.single()
+    val observedOwner = when (val physicalType = typeObservation.physicalType) {
+        is DotNetGenericOwnerObservedMethodDefOwner.Local -> physicalType.typeDef
+        is DotNetGenericOwnerObservedMethodDefOwner.Unbindable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(physicalType.reason)
+    }
+    if (observedOwner.aliases.none(expectedOwner::sameLocalTypeIdentityAs) ||
+        observedOwner.category != DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE ||
+        observedOwner.genericArity != family.contract.genericArity ||
+        typeObservation.physicalTypePath != family.ownerPath ||
+        typeObservation.genericParameters.map { parameter -> parameter.variance } !=
+                family.naturalTypeParameterVariances
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the final natural TypeDef disagrees with its producer-published H authority",
+        )
+    }
+
+    val methodIdentityCandidates = current.methodDefs.filter { observation ->
+        observation.claimsExpectedMethod()
+    }
+    if (methodIdentityCandidates.isEmpty()) {
+        // This bounded declaration has no observed natural slot. Other logical members are not proof
+        // that a natural MethodDef exists, so leave N unavailable instead of inferring an owner or row.
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val methodCandidates = methodIdentityCandidates.filter { observation ->
+        (observation.physicalMethodOwner as? DotNetGenericOwnerObservedMethodDefOwner.Local)
+            ?.typeDef?.physicalKey == observedOwner.physicalKey
+    }
+    if (methodCandidates.isEmpty()) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the bounded natural MethodDef identity was emitted only on another physical owner",
+        )
+    }
+    if (methodCandidates.size != 1) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "a natural MethodDef declaration requires exactly one final MethodDef on its natural TypeDef",
+        )
+    }
+    if (methodIdentityCandidates.any { candidate -> candidate !in methodCandidates }) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the bounded natural MethodDef identity was also emitted on another physical owner",
+        )
+    }
+    val methodObservation = methodCandidates.single()
+    val allocator = EmissionIdentityAllocator()
+    allocator.expectedTypeAliasGroup(
+        observedOwner.aliases,
+        DotNetGenericOwnerPhysicalTypeDefReference(
+            expectedOwner,
+            observedOwner.genericArity,
+            observedOwner.category,
+        ),
+    )
+    val methodKey = allocator.method(expectedMethod)
+
+    fun carrier(
+        value: DotNetGenericOwnerObservedMethodCarrier,
+        position: String,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape> {
+        return when (val conversion = value.toActualCarrierShapeForDeclarationSeal(
+            allocator,
+            expectedMethod,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> conversion
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict("$position: ${conversion.reason}")
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "$position: the final carrier has no self-contained declaration binding",
+                )
+        }
+    }
+
+    val typeGenericParameters = mutableListOf<DotNetGenericOwnerCompleteEmissionGenericParameterRow>()
+    typeObservation.genericParameters.forEach { parameter ->
+        val constraints = mutableListOf<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape>()
+        parameter.constraints.forEach { constraint ->
+            when (val converted = carrier(constraint, "natural TypeDef GenericParam constraint")) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> constraints += converted.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return converted
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error("carrier conversion is total")
+            }
+        }
+        typeGenericParameters += DotNetGenericOwnerCompleteEmissionGenericParameterRow(
+            parameter.variance,
+            constraints,
+        )
+    }
+    val directEdges = mutableListOf<DotNetGenericOwnerCompleteEmissionTypeDefEdgeRow>()
+    typeObservation.directSupertypes.forEach { edge ->
+        when (val converted = carrier(edge.target, "natural TypeDef direct edge")) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                directEdges += DotNetGenericOwnerCompleteEmissionTypeDefEdgeRow(edge.kind, converted.value)
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return converted
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error("carrier conversion is total")
+        }
+    }
+    val naturalType = DotNetGenericOwnerSealedEmissionTypeDefRow(
+        DotNetGenericOwnerCompleteEmissionTypeDefRow(
+            identityKey = when (val key = allocator.actualType(observedOwner)) {
+                is EmissionIdentityAllocator.ActualType.Bound -> key.key
+                is EmissionIdentityAllocator.ActualType.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(key.reason)
+            },
+            aliases = observedOwner.aliases.map(allocator::alias),
+            genericArity = observedOwner.genericArity,
+            category = observedOwner.category,
+            genericParameters = typeGenericParameters,
+            directEdges = directEdges,
+        ),
+        typeObservation.physicalTypePath,
+        typeObservation.flags,
+    )
+
+    val methodGenericParameters = mutableListOf<DotNetGenericOwnerCompleteEmissionGenericParameterRow>()
+    methodObservation.genericParameters.forEach { parameter ->
+        if (parameter.variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "a natural MethodDef GenericParam has illegal declaration-site variance",
+            )
+        }
+        val constraints = mutableListOf<DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape>()
+        parameter.constraints.forEach { constraint ->
+            when (val converted = carrier(constraint, "natural MethodDef GenericParam constraint")) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> constraints += converted.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return converted
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error("carrier conversion is total")
+            }
+        }
+        methodGenericParameters += DotNetGenericOwnerCompleteEmissionGenericParameterRow(
+            parameter.variance,
+            constraints,
+        )
+    }
+    val header = when (val evidence = buildDotNetGenericOwnerActualMethodDefEmissionHeaderShape(
+        allocator,
+        expectedMethod,
+        methodObservation,
+        observedOwner,
+    )) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> evidence.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(evidence.reason)
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "the final natural MethodDef header has no self-contained declaration binding",
+            )
+    }
+    if (logicalParameterDomains.size != header.ordinaryParameterCarriers.size) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the natural MethodDef's logical parameter domains disagree with its final physical header",
+        )
+    }
+    val splitNullable = header.result is
+            DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable
+    if (splitNullable !=
+        (member.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER)
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the H member role disagrees with the final natural MethodDef result layout",
+        )
+    }
+    if ((header.result != DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void) !=
+        (logicalResultDomain != null)
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the natural MethodDef's logical result domain disagrees with its final physical header",
+        )
+    }
+    val naturalMethod = DotNetProducerGenericOwnerSealedMethodDef(
+        DotNetProducerGenericOwnerSealedMethodDefRole.NATURAL_INTERFACE_SLOT,
+        DotNetGenericOwnerSealedEmissionMethodDefRow(
+            DotNetGenericOwnerCompleteEmissionMethodDefRow(
+                methodKey,
+                header,
+                methodGenericParameters,
+            ),
+            methodObservation.physicalMethodName,
+            methodObservation.genericParameters.map { parameter -> parameter.physicalName },
+            methodObservation.visibility,
+            methodObservation.dispatch,
+            methodObservation.isHideBySig,
+            methodObservation.isSpecialName,
+            methodObservation.isRuntimeSpecialName,
+        ),
+        logicalParameterDomains,
+        logicalResultDomain,
+    )
+    if (!hasBoundedDotNetProducerGenericOwnerNaturalMethodDefGrammar(naturalType, naturalMethod)) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    fun DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.isDeclarationLocal(): Boolean = when (this) {
+        is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf -> true
+        is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter ->
+            binder == naturalType.structural.identityKey
+        is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.MethodParameter -> binder == methodKey
+        is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Construction ->
+            definition == naturalType.structural.identityKey && arguments.all { argument ->
+                argument.isDeclarationLocal()
+            }
+        is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.SzArray -> element.isDeclarationLocal()
+        is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.ByReference -> element.isDeclarationLocal()
+        DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Other -> false
+    }
+    val headerCarriers = buildList {
+        header.receiverCarrier?.let(::add)
+        addAll(header.ordinaryParameterCarriers)
+        when (val result = header.result) {
+            is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct -> add(result.carrier)
+            is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable -> add(result.payload)
+            DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void -> Unit
+        }
+    }
+    // ABI 63 seals the bounded root declaration grammar. A carrier which names another local
+    // TypeDef needs a portable path/category projection rather than a fabricated transitive seal;
+    // leave that later family unrecorded instead of weakening or guessing this declaration fact.
+    if (naturalType.structural.directEdges.isNotEmpty() ||
+        naturalType.structural.genericParameters.any { parameter -> parameter.constraints.isNotEmpty() } ||
+        naturalMethod.row.structural.genericParameters.any { parameter -> parameter.constraints.isNotEmpty() } ||
+        headerCarriers.any { carrier -> !carrier.isDeclarationLocal() }
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val publication = DotNetProducerGenericOwnerNaturalMethodDefPublication(
+        logicalOwnerKey,
+        logicalMemberKey,
+        naturalType,
+        naturalMethod,
+    )
+    return when (val inspection = inspectDotNetProducerGenericOwnerNaturalMethodDef(publication)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> inspection
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> inspection
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "a final natural MethodDef publication unexpectedly lacked declaration authority",
+            )
+    }
+}
 
 private data class CompleteExpectedMethod(
     val kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,

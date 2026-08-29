@@ -76,6 +76,12 @@ private class DownstreamOuter(
     override fun nested(): CompleteNaturalContract<String> = value
 }
 
+private fun downstreamWidenedFetch(value: CompleteNaturalContract<Any?>): Any? =
+    value.fetch()
+
+private fun downstreamInheritedWidenedFetch(value: CompleteNaturalChild<Any?>): Any? =
+    value.fetch()
+
 fun box(): String {
     val intImplementation = CompleteNaturalValue(41)
     val intExact: CompleteNaturalContract<Int> = intImplementation
@@ -86,6 +92,7 @@ fun box(): String {
     val reader = CompleteNaturalReader()
     if (!reader.same(intWidened, intImplementation)) return "int widened identity"
     if (reader.fetch(intWidened) != 41) return "int widened fetch"
+    if (downstreamWidenedFetch(intWidened) != 41) return "int downstream widened fetch"
     reader.accept(intWidened, 41)
     if (intImplementation.acceptedCount() != 2) return "int widened accept"
 
@@ -97,6 +104,9 @@ fun box(): String {
     val stringWidened: CompleteNaturalContract<Any?> = stringExact
     if (!reader.same(stringWidened, stringImplementation)) return "string widened identity"
     if (reader.fetch(stringWidened) != "forty-one") return "string widened fetch"
+    if (downstreamWidenedFetch(stringWidened) != "forty-one") {
+        return "string downstream widened fetch"
+    }
     reader.accept(stringWidened, "forty-one")
     if (stringImplementation.acceptedCount() != 2) return "string widened accept"
 
@@ -109,5 +119,9 @@ fun box(): String {
     downstreamChild.accept("changed-downstream")
     if (downstreamOuter.nested() !== downstreamChild) return "downstream identity"
     if (downstreamOuter.nested().fetch() != "changed-downstream") return "downstream fetch"
+    val downstreamWidenedChild: CompleteNaturalChild<Any?> = downstreamChild
+    if (downstreamInheritedWidenedFetch(downstreamWidenedChild) != "changed-downstream") {
+        return "downstream inherited widened fetch"
+    }
     return "OK"
 }

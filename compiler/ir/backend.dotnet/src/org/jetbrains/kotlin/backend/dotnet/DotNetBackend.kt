@@ -326,11 +326,16 @@ object DotNetBackend {
         fun Map<String, DotNetPhysicalDeclaration>.withProducerSealedGenericOwnerFamilies(
             scope: DotNetIlEmissionScope,
             declarationKeys: Map<IrDeclaration, String>,
+            naturalMethodParameterDomains:
+                    Map<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>>,
+            naturalMethodResultDomains:
+                    Map<IrSimpleFunction, DotNetGenericOwnerPhysicalSlotDomain?>,
         ): Map<String, DotNetPhysicalDeclaration> {
             if (!configuration.dotNetGenericOwnerRehearsal) return this
-            val publications = physicalCompleteEmissionProducts()
-                .asSequence()
+            val scopeProducts = physicalCompleteEmissionProducts()
                 .filter { product -> product.comparison.scope == scope }
+            val sealedPublications = scopeProducts
+                .asSequence()
                 .mapNotNull { product ->
                     when (val publication = product.producerSealedFamilyPublication(declarationKeys)) {
                         is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Published ->
@@ -340,15 +345,91 @@ object DotNetBackend {
                         DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Unavailable -> null
                     }
                 }
-                .map { publication -> publication.toPhysicalDeclaration() }
                 .toList()
-            if (publications.isEmpty()) return this
-            return buildMap(size + publications.size) {
+            val familyDeclarations = sealedPublications.map { publication ->
+                publication.toPhysicalDeclaration()
+            }
+            val currentObservations = successfulCompleteEmissionObservations
+                .filter { observations -> observations.scope == scope }
+                .singleOrNull()
+                ?: error("one successful physical emission scope requires exactly one observation transaction")
+            val otherObservations = successfulCompleteEmissionObservations
+                .filter { observations -> observations.scope != scope }
+            val declarationsByLogicalKey = declarationKeys.entries.groupBy(
+                { entry -> entry.value },
+                { entry -> entry.key },
+            )
+            val naturalMethodPublications = values
+                .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                .flatMap { family ->
+                    val ownerCandidates = declarationsByLogicalKey[family.contract.logicalOwnerKey].orEmpty()
+                    val owner = ownerCandidates.singleOrNull() as? IrClass
+                        ?: error(
+                            "published generic-interface family '${family.contract.logicalOwnerKey}' lost its " +
+                                    "exact pre-lowering owner declaration",
+                        )
+                    family.contract.declaredMembers.mapNotNull { member ->
+                        if (member.role !in setOf(
+                                DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+                                DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
+                            )
+                        ) return@mapNotNull null
+                        val sourceCandidates = declarationsByLogicalKey[member.logicalMemberKey].orEmpty()
+                        val source = sourceCandidates.singleOrNull() as? IrSimpleFunction
+                            ?: error(
+                                "published generic-interface member '${member.logicalMemberKey}' lost its " +
+                                        "exact pre-lowering callable declaration",
+                            )
+                        val parameterDomains = naturalMethodParameterDomains[source]
+                            ?: error(
+                                "published generic-interface member '${member.logicalMemberKey}' lost its " +
+                                        "producer-planned parameter domains",
+                            )
+                        check(naturalMethodResultDomains.containsKey(source)) {
+                            "published generic-interface member '${member.logicalMemberKey}' lost its " +
+                                    "producer-planned result domain"
+                        }
+                        when (val publication = inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
+                            logicalOwnerKey = family.contract.logicalOwnerKey,
+                            logicalMemberKey = member.logicalMemberKey,
+                            owner = owner,
+                            source = source,
+                            family = family,
+                            member = member,
+                            logicalParameterDomains = parameterDomains,
+                            logicalResultDomain = naturalMethodResultDomains[source],
+                            current = currentObservations,
+                            otherScopes = otherObservations,
+                        )) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound -> publication.value
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> error(publication.reason)
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                        }
+                    }
+                }
+            val naturalMethodDeclarations = naturalMethodPublications
+                .map { publication -> publication.toPhysicalDeclaration() }
+                .groupBy { declaration -> declaration.indexKey() }
+                .map { entry ->
+                    val distinct = entry.value.distinct()
+                    check(distinct.size == 1) {
+                        "multiple final generic-owner producer families disagree on '${entry.key}'"
+                    }
+                    distinct.single()
+                }
+            if (familyDeclarations.isEmpty() && naturalMethodDeclarations.isEmpty()) return this
+            return buildMap(size + familyDeclarations.size + naturalMethodDeclarations.size) {
                 putAll(this@withProducerSealedGenericOwnerFamilies)
-                publications.forEach { declaration ->
+                familyDeclarations.forEach { declaration ->
                     val key = declaration.indexKey()
                     check(put(key, declaration) == null) {
-                        "multiple final generic-owner producer families claim '$key'"
+                        "multiple final generic-owner physical declarations claim '$key'"
+                    }
+                }
+                naturalMethodDeclarations.forEach { declaration ->
+                    val key = declaration.indexKey()
+                    check(put(key, declaration) == null) {
+                        "multiple final generic-owner physical declarations claim '$key'"
                     }
                 }
             }
@@ -631,6 +712,8 @@ object DotNetBackend {
                 ?.withProducerSealedGenericOwnerFamilies(
                     DotNetIlEmissionScope.STDLIB,
                     preLoweringStdlibDeclarationKeys,
+                    context.genericInterfaceNaturalMethodParameterDomains,
+                    context.genericInterfaceNaturalMethodResultDomains,
                 )
 
             if (producesStdlib) {
@@ -791,6 +874,8 @@ object DotNetBackend {
             val userDeclarations = emission.declarations.withProducerSealedGenericOwnerFamilies(
                 DotNetIlEmissionScope.USER,
                 preLoweringDeclarationKeys,
+                context.genericInterfaceNaturalMethodParameterDomains,
+                context.genericInterfaceNaturalMethodResultDomains,
             )
             if (producesLibrary && !validateMetadataLinkage(userDeclarations)) {
                 ilTarget.delete()
