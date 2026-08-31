@@ -19,6 +19,16 @@ interface MetadataSource {
     interface File : MetadataSource
 
     interface Class : MetadataSource {
+        /**
+         * Optional compilation-local declaration authority supplied by a platform frontend.
+         *
+         * This value is neither serialized nor inferred by common IR. A target may use it to
+         * preserve already-selected physical declaration metadata across lazy frontend-to-IR
+         * conversion without making that platform metadata part of the common IR model.
+         */
+        val platformDeclarationSource: Any?
+            get() = null
+
         fun recordLocalClassType(type: FqName)
         fun asFirSymbol(): Any?
     }

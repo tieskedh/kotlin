@@ -248,8 +248,12 @@ class Fir2IrLazyClass(
         return fir.isJava && !fieldSymbol.fir.isFakeOverride(fir)
     }
 
+    private val externalMetadataSource: MetadataSource.Class? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        extensions.externalClassMetadataSource(fir)
+    }
+
     override var metadata: MetadataSource?
-        get() = null
+        get() = externalMetadataSource
         set(_) = error("We should never need to store metadata of external declarations.")
 
     override val moduleName: String?

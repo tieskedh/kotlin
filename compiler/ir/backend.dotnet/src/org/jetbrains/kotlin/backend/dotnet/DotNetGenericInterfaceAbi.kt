@@ -103,7 +103,7 @@ internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfa
 internal val IrClass.isDotNetGenericInterfaceDeclaration: Boolean
     get() = isInterface &&
             typeParameters.isNotEmpty() &&
-            dotNetImportedClrSourceOrNull() == null
+            dotNetImportedClrTypeAuthorityOrNull() == null
 
 
 /**

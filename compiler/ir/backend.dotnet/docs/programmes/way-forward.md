@@ -100,12 +100,14 @@ and one same-assembly `InterfaceImpl`. The carrier is independent of declared
 members; the hostile child has no marker MethodDef. The edge may close the root
 MethodDef owner or forward the child binder through the admitted carrier grammar.
 Recorded physical substitution, rather than a logical Kotlin type, derives each
-concrete parent view. The next ordered retained boundary is transporting that
-class-level carrier through lazy external FIR2IR and admitting a genuinely
-memberless imported interface without a global registry, fake member, or
-name-based lookup. MethodImpls, multiple binders/edges/members, variance
-conversions, constraints, classes, cross-assembly inheritance, and Runtime/
-Stdlib application remain later.
+concrete parent view. A narrow target hook now transports that class-level
+carrier through lazy external FIR2IR as compilation-local class metadata;
+Common neither interprets nor serializes it, and callable authority remains
+separate. The next ordered retained boundary is admitting and exercising a
+genuinely memberless imported interface through the actual compiler pipeline,
+without a global registry, fake member, or name-based lookup. MethodImpls,
+multiple binders/edges/members, variance conversions, constraints, classes,
+cross-assembly inheritance, and Runtime/Stdlib application remain later.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;

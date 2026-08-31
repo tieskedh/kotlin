@@ -72,6 +72,11 @@ The later open-forwarding delta passed the retained-metadata model suite (33
 tests, zero failures/errors/skips). Its final combined focused gate is recorded
 below. It remains production-inert and inherits the same aggregate checkpoint.
 
+The subsequent lazy-TypeDef transport delta compiled common FIR2IR, DotNet
+FIR2IR, the backend, and backend tests, then passed the retained-metadata model
+suite (35 tests, zero failures/errors/skips). It is production-inert and does
+not yet widen importer admission.
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -145,12 +150,19 @@ promotes a derived base view into new provenance. Ambiguous or genuinely broad
 receivers remain unavailable. The shared route independently admits arguments
 and produces the instantiated direct, void, or split-nullable result fact.
 
-Next work transports this already-recorded TypeDef carrier through lazy external
-FIR2IR and admits a genuinely memberless imported interface in the compiler
-pipeline. It must use a narrow target hook rather than a global registry, fake
-member, or name-based lookup. MethodImpl, multiple edges/members/binders,
-variance conversions, constraints, classes, cross-assembly inheritance, and
-Runtime/Stdlib application remain later.
+Lazy external FIR2IR now transports this already-recorded TypeDef carrier
+through a narrow target hook and compilation-local class metadata. Common IR
+does not interpret or serialize the platform source. Backend class mapping can
+therefore recover an exact memberless TypeDef without forcing declarations or
+searching for a callable; callable MethodDefs retain separate authority and
+must agree with the class carrier by assembly, TypeDef, hierarchy, and graph
+identity. Other targets retain the previous null metadata behavior.
+
+Next work admits a genuinely memberless imported interface in the compiler
+pipeline and proves the actual FIR-to-IR-to-CIL route. It must not add a global
+registry, fake member, or name-based lookup. MethodImpl, multiple edges/
+members/binders, variance conversions, constraints, classes, cross-assembly
+inheritance, and Runtime/Stdlib application remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
@@ -172,10 +184,11 @@ metadata model suites (110 tests, zero failures/errors/skips).
   and one exact `InterfaceImpl`. Multiple binders/edges/members, variance
   conversions, constraints, classes, MethodImpls, cross-assembly inheritance,
   wider nominal carriers, and broader operation routing remain incomplete.
-- The importer records exact class-level TypeDef authority, and the shared
-  adapter no longer needs a member carrier. Lazy external FIR2IR does not yet
-  transport that class-level source to backend IR, so the production importer
-  still excludes a type with no public declared callable.
+- The importer records exact class-level TypeDef authority, lazy external
+  FIR2IR preserves it, and backend class mapping no longer needs a member
+  carrier. The production importer still excludes a type with no public
+  declared callable until the actual memberless pipeline route is admitted and
+  tested.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

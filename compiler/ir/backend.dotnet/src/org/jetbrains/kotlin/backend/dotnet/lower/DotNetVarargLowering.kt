@@ -10,7 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.IrBuildingTransformer
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.irBlock as irBlockFromExpression
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrSourceOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrTypeAuthorityOrNull
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.isSupportedDotNetPrimitiveArray
 import org.jetbrains.kotlin.builtins.StandardNames
@@ -412,7 +412,7 @@ internal class DotNetVarargLowering(
         }
         val function = parent as? IrFunction ?: return false
         val ownerClass = function.parent as? IrClass
-        return ownerClass?.dotNetImportedClrSourceOrNull() == null
+        return ownerClass?.dotNetImportedClrTypeAuthorityOrNull() == null
     }
 
     private data class EvaluatedElement(

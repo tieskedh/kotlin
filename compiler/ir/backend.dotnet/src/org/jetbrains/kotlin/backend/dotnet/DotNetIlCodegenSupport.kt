@@ -2510,7 +2510,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
             val erasedGenericClassifierBound = erasedGenericClassBound || erasedGenericInterfaceBound
             val constructedForeignInterfaceBound =
                 boundClass?.isInterface == true &&
-                        boundClass.dotNetImportedClrSourceOrNull() != null &&
+                        boundClass.dotNetImportedClrTypeAuthorityOrNull() != null &&
                         simpleBound.arguments.isNotEmpty()
             val reifiedKotlinInterfaceSelfBound =
                 boundClass?.let(typeMapper::isReifiedGenericInterface) == true &&
