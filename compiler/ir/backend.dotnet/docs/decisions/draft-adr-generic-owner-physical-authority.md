@@ -753,7 +753,12 @@ or an already-retained/emitted construction; until then it remains
 Retaining an assembly, TypeDef, or MethodDef identity is necessary but does not
 authorize a caller-supplied normalized description of that row. Foreign
 declaration descriptions enter the shared index only through an adapter over
-the exact FIR-retained declaration carrier and its selected assembly graph.
+the exact FIR-retained TypeDef or callable carrier and its selected assembly
+graph. A TypeDef carrier is sealed and validates its selected assembly,
+definition, resolved hierarchy, and graph by retained identity. It is authority
+in its own right and never requires a declared marker member. Callable carriers
+add exact MethodDef or Property rows; they do not authenticate unrelated
+TypeDefs.
 The adapter re-resolves the raw MethodDef signature in that same graph, checks
 it against the retained resolved signature, checks that the retained hierarchy
 contains every raw base/interface row, and imports the complete ordered
@@ -775,13 +780,13 @@ between retained and raw signatures is `Conflict`. Recorded constraints still
 do not prove an arbitrary constrained construction.
 
 The first inherited-receiver grammar admits one public top-level abstract
-interface with an exact retained declaration carrier in the same selected
-assembly graph. It has zero or one unconstrained type parameter whose exact CLR
-variance is retained, no base class, no MethodImpl, and exactly one retained and
-raw `InterfaceImpl`. The edge may close the selected MethodDef owner with
-supported declaration-independent carriers or reference the child `!0`,
-recursively through the admitted SZ-array carrier. The adapter resolves the
-receiver's exact open GenericParam context,
+interface with an exact retained TypeDef carrier in the same selected assembly
+graph. It may declare no callable. It has zero or one unconstrained type
+parameter whose exact CLR variance is retained, no base class, no MethodImpl,
+and exactly one retained and raw `InterfaceImpl`. The edge may close the
+selected MethodDef owner with supported declaration-independent carriers or
+reference the child `!0`, recursively through the admitted SZ-array carrier.
+The adapter resolves the receiver's exact open GenericParam context,
 re-resolves the raw edge, and requires exact retained/raw agreement. It records
 the child binder on its own TypeDef and the edge target against that binder;
 ordinary physical-closure substitution derives `Base<int>` from `Child<int>`.

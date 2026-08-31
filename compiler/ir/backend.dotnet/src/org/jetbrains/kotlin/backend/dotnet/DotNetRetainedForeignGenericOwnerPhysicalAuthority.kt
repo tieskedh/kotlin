@@ -10,8 +10,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
-import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
@@ -45,12 +45,11 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * These restrictions are proof boundaries, not declaration- or member-name policy.
  *
  * The first inherited-receiver extension admits one retained interface with zero or one
- * unconstrained type parameter in the same selected graph and assembly. An exact member
- * declaration carrier authenticates that TypeDef; an imported type without such a carrier remains
- * outside this slice. Its sole raw InterfaceImpl may close the selected MethodDef owner or forward
- * the receiver parameter through supported carriers. Its exact CLR variance is retained. Multiple
- * binders/edges, constraints, MethodImpls, classes, and cross-assembly inheritance remain
- * unavailable.
+ * unconstrained type parameter in the same selected graph and assembly. Its exact TypeDef carrier
+ * is independent of declared members, so a genuinely memberless child can participate. Its sole
+ * raw InterfaceImpl may close the selected MethodDef owner or forward the receiver parameter
+ * through supported carriers. Its exact CLR variance is retained. Multiple binders/edges,
+ * constraints, MethodImpls, classes, and cross-assembly inheritance remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -67,7 +66,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         fun buildInheritedReceiver(
             source: DotNetClrImportedMethodSource,
             method: DotNetClrMethodDefinition,
-            receiverSource: DotNetClrImportedDeclarationSource,
+            receiverSource: DotNetClrImportedTypeSource,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetRetainedForeignGenericOwnerPhysicalDeclarations> =
             InheritedReceiverBuilder(source, method, receiverSource).build()
     }
@@ -76,7 +75,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
     private class InheritedReceiverBuilder(
         private val source: DotNetClrImportedMethodSource,
         private val method: DotNetClrMethodDefinition,
-        private val receiverSource: DotNetClrImportedDeclarationSource,
+        private val receiverSource: DotNetClrImportedTypeSource,
     ) {
         private val selectedMetadata = source.graph.assemblies.map { assembly -> assembly.metadata }
         private val typeResolver =
