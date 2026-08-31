@@ -17,15 +17,22 @@ private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.isCanonicalCoreObject
 internal class DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
     physicalOwnerPath: List<String>,
     physicalCapabilityOwnerPath: List<String>?,
-    val genericArity: Int,
+    physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
     directSupertypes: List<DotNetGenericOwnerPhysicalDirectSupertypeRecord>,
 ) {
     val physicalOwnerPath: List<String> = physicalOwnerPath.toList()
     val physicalCapabilityOwnerPath: List<String>? = physicalCapabilityOwnerPath?.toList()
+    val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord> =
+        physicalGenericParameters.toList()
+    val genericArity: Int
+        get() = physicalGenericParameters.size
     val directSupertypes: List<DotNetGenericOwnerPhysicalDirectSupertypeRecord> = directSupertypes.toList()
 
     init {
-        require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty) && genericArity > 0) {
+        require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty) &&
+                physicalGenericParameters.isNotEmpty() &&
+                physicalGenericParameters.map { parameter -> parameter.index } ==
+                physicalGenericParameters.indices.toList()) {
             "a generic-owner artifact authority input requires a physical owner and positive arity"
         }
         require(physicalCapabilityOwnerPath == null ||
@@ -67,7 +74,7 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                 DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
                     physicalOwnerPath = owner.physicalOwnerPath,
                     physicalCapabilityOwnerPath = owner.physicalCapabilityOwnerPath,
-                    genericArity = owner.genericArity,
+                    physicalGenericParameters = owner.physicalGenericParameters,
                     directSupertypes = owner.directSupertypes,
                 )
             },
@@ -83,11 +90,16 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                     List<String>,
                     DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
                     >()
-            val typeDefinitions = mutableListOf<DotNetGenericOwnerPhysicalTypeDefReference>()
+            data class ProducerTypeCandidate(
+                val identity: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
+                val genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
+                val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+            )
+            val producerTypeCandidates = mutableListOf<ProducerTypeCandidate>()
 
             fun registerProducerType(
                 physicalPath: List<String>,
-                genericArity: Int,
+                genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
                 category: DotNetGenericOwnerPhysicalNamedTypeCategory,
             ): DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer {
                 val stablePath = physicalPath.toList()
@@ -97,10 +109,10 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                         stablePath,
                     )
                 }
-                typeDefinitions += DotNetGenericOwnerPhysicalTypeDefReference(
-                    identity = identity,
-                    genericArity = genericArity,
-                    category = category,
+                producerTypeCandidates += ProducerTypeCandidate(
+                    identity,
+                    genericParameters.toList(),
+                    category,
                 )
                 return identity
             }
@@ -108,13 +120,13 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
             val ownerDefinitions = owners.map { owner ->
                 val definition = registerProducerType(
                     owner.physicalOwnerPath,
-                    owner.genericArity,
+                    owner.physicalGenericParameters,
                     DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
                 )
                 owner.physicalCapabilityOwnerPath?.let { capabilityPath ->
                     registerProducerType(
                         capabilityPath,
-                        genericArity = 0,
+                        genericParameters = emptyList(),
                         category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
                     )
                 }
@@ -123,14 +135,30 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
             interfaceTypes.forEach { interfaceType ->
                 registerProducerType(
                     interfaceType.physicalTypePath,
-                    interfaceType.genericArity,
+                    interfaceType.physicalGenericParameters,
                     DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
                 )
+            }
+            val producerTypesByIdentity = linkedMapOf<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
+                    ProducerTypeCandidate,
+                    >()
+            for (candidate in producerTypeCandidates) {
+                val existing = producerTypesByIdentity.putIfAbsent(candidate.identity, candidate)
+                if (existing != null && existing != candidate) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "producer artifact gives one physical TypeDef conflicting GenericParam authority",
+                    )
+                }
             }
 
             val coreDefinitionsByPath = linkedMapOf<
                     List<String>,
                     DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary,
+                    >()
+            val coreCategoriesByPath = linkedMapOf<
+                    List<String>,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory,
                     >()
             fun collectNamedDefinitions(
                 type: DotNetGenericOwnerPhysicalTypeExpressionRecord,
@@ -152,22 +180,33 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                             DotNetGenericOwnerPhysicalTypeScope.PRODUCER -> {
                                 val identity = producerDefinitionsByPath[type.typePath]
                                     ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                                typeDefinitions += DotNetGenericOwnerPhysicalTypeDefReference(
-                                    identity = identity,
-                                    genericArity = type.genericArity,
-                                    category = checkNotNull(type.namedTypeCategory),
-                                )
+                                val candidate = producerTypesByIdentity.getValue(identity)
+                                if (candidate.genericParameters.size != type.genericArity ||
+                                    candidate.category != type.namedTypeCategory
+                                ) {
+                                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                                        "producer artifact type use contradicts its recorded TypeDef authority",
+                                    )
+                                }
                             }
                             DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY -> {
+                                // A detached artifact does not carry the GenericParam rows of a
+                                // referenced core-library TypeDef. Only a non-generic reference is
+                                // complete without joining retained core metadata.
+                                if (type.genericArity != 0) {
+                                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                                }
                                 val stablePath = type.typePath.toList()
-                                val identity = coreDefinitionsByPath.getOrPut(stablePath) {
+                                val category = checkNotNull(type.namedTypeCategory)
+                                val previousCategory = coreCategoriesByPath.putIfAbsent(stablePath, category)
+                                if (previousCategory != null && previousCategory != category) {
+                                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                                        "producer artifact gives one core TypeDef conflicting categories",
+                                    )
+                                }
+                                coreDefinitionsByPath.getOrPut(stablePath) {
                                     DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary(stablePath)
                                 }
-                                typeDefinitions += DotNetGenericOwnerPhysicalTypeDefReference(
-                                    identity = identity,
-                                    genericArity = type.genericArity,
-                                    category = checkNotNull(type.namedTypeCategory),
-                                )
                             }
                             DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION,
                             DotNetGenericOwnerPhysicalTypeScope.ASSEMBLY,
@@ -195,6 +234,27 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                 }
                 return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
             }
+            val genericParameterConstraints = buildList {
+                owners.forEach { owner ->
+                    owner.physicalGenericParameters.forEach { parameter ->
+                        addAll(parameter.typeConstraints)
+                    }
+                }
+                interfaceTypes.forEach { interfaceType ->
+                    interfaceType.physicalGenericParameters.forEach { parameter ->
+                        addAll(parameter.typeConstraints)
+                    }
+                }
+            }
+            for (constraint in genericParameterConstraints) {
+                when (val collection = collectNamedDefinitions(constraint)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Conflict(collection.reason)
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            }
             for (supertype in owners.flatMap { owner -> owner.directSupertypes }) {
                 when (val collection = collectNamedDefinitions(supertype.physicalType)) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
@@ -203,18 +263,6 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
-            }
-
-            val earlyDeclarations = when (val binding = DotNetGenericOwnerPhysicalDeclarationIndex.bind(
-                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.EARLY_REPRESENTATION_PLAN,
-                typeDefinitions = typeDefinitions,
-                methodDefinitions = emptyList(),
-            )) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
 
             fun translateType(
@@ -243,7 +291,12 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                     DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
                 )
                 DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ->
-                    earlyDeclarations.typeParameterOrError(sourceDefinition, checkNotNull(type.parameterIndex))
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter.unboundTypeParameterReference(
+                            sourceDefinition,
+                            checkNotNull(type.parameterIndex),
+                        ),
+                    )
                 DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER ->
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 DotNetGenericOwnerPhysicalTypeKind.NAMED -> {
@@ -270,7 +323,12 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                         }
                     }
-                    earlyDeclarations.constructTypeOrError(definition, arguments)
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
+                            definition,
+                            arguments,
+                        ),
+                    )
                 }
                 DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY -> when (val element = translateType(
                     type.arguments.single(),
@@ -286,6 +344,64 @@ internal class DotNetGenericOwnerArtifactPhysicalAuthority private constructor(
                         DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
             }
+            }
+
+            val typeDefinitions = mutableListOf<DotNetGenericOwnerPhysicalTypeDefReference>()
+            for (candidate in producerTypesByIdentity.values) {
+                val genericParameters = mutableListOf<DotNetGenericOwnerPhysicalGenericParameterReference>()
+                for (parameter in candidate.genericParameters) {
+                    val constraints = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+                    for (constraint in parameter.typeConstraints) {
+                        when (val translation = translateType(constraint, candidate.identity)) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                                constraints += translation.value
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                                return DotNetGenericOwnerPhysicalBindingResult.Conflict(translation.reason)
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    }
+                    genericParameters += DotNetGenericOwnerPhysicalGenericParameterReference(
+                        variance = DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                        constraints = constraints,
+                        hasReferenceTypeConstraint =
+                            DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.REFERENCE_TYPE in
+                                    parameter.specialConstraints,
+                        hasNotNullableValueTypeConstraint =
+                            DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.NON_NULLABLE_VALUE_TYPE in
+                                    parameter.specialConstraints,
+                        hasDefaultConstructorConstraint =
+                            DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.DEFAULT_CONSTRUCTOR in
+                                    parameter.specialConstraints,
+                        // The Kotlin-producer artifact grammar fixes this to false; see the
+                        // physical GenericParam record contract. Retained CLR metadata supplies
+                        // its own exact flag instead of passing through this adapter.
+                        allowsByRefLike = false,
+                    )
+                }
+                typeDefinitions += DotNetGenericOwnerPhysicalTypeDefReference(
+                    identity = candidate.identity,
+                    genericParameters = genericParameters,
+                    category = candidate.category,
+                )
+            }
+            coreDefinitionsByPath.forEach { entry ->
+                typeDefinitions += DotNetGenericOwnerPhysicalTypeDefReference(
+                    identity = entry.value,
+                    genericParameters = emptyList(),
+                    category = coreCategoriesByPath.getValue(entry.key),
+                )
+            }
+            val earlyDeclarations = when (val binding = DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                epoch = DotNetGenericOwnerPhysicalAuthorityEpoch.EARLY_REPRESENTATION_PLAN,
+                typeDefinitions = typeDefinitions,
+                methodDefinitions = emptyList(),
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
 
             val edgeSets = mutableListOf<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>()

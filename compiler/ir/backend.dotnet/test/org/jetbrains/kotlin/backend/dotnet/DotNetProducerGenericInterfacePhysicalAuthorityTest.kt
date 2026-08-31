@@ -39,6 +39,10 @@ class DotNetProducerGenericInterfacePhysicalAuthorityTest {
 
         val rootDefinition = authority.naturalTypeDefinitionsByLogicalOwnerKey.getValue(root.logicalOwnerKey)
         val derivedDefinition = authority.naturalTypeDefinitionsByLogicalOwnerKey.getValue(derived.logicalOwnerKey)
+        val rootParameter = checkNotNull(declarations.typeDescriptionOrNull(rootDefinition))
+            .genericParameters.single()
+        assertEquals(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT, rootParameter.variance)
+        assertTrue(rootParameter.isUnconstrained)
         assertSame(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable,
             declarations.directSupertypeEdgesOrUnavailable(rootDefinition),
@@ -77,6 +81,11 @@ class DotNetProducerGenericInterfacePhysicalAuthorityTest {
         val authority = bindAuthority(root, derived)
         val declarations = authority.declarations
         val exactDerived = authority.exactTypeDefinitionsByLogicalOwnerKey.getValue(derived.logicalOwnerKey)
+        val exactParameter = checkNotNull(declarations.typeDescriptionOrNull(exactDerived))
+            .genericParameters.single()
+
+        assertEquals(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT, exactParameter.variance)
+        assertTrue(exactParameter.isUnconstrained)
 
         assertSame(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable,

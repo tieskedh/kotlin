@@ -30,7 +30,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideBindingPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
@@ -54,6 +56,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalForeignOverrideProbeName
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
@@ -260,14 +263,27 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     context.genericOwnerArchitecturePlans.values
                         .filter(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
                         .filter { plan -> plan.owner.kind == ClassKind.CLASS }
-                        .map { plan ->
+                        .mapNotNull { plan ->
+                            val physicalParameters = plan.owner
+                                .genericOwnerPrototypePhysicalGenericParameters()
+                                ?: return@mapNotNull null
+                            if (physicalParameters.any { parameter ->
+                                    parameter.specialConstraints.isNotEmpty() ||
+                                            parameter.typeConstraints.isNotEmpty()
+                                }
+                            ) return@mapNotNull null
                             DotNetLocalGenericOwnerPhysicalTypeInput(
                                 identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
                                     plan.owner.symbol,
                                     view = null,
                                 ),
                                 logicalOwnerName = plan.owner.dotNetPhysicalValueStableName(),
-                                genericArity = plan.owner.typeParameters.size,
+                                genericParameters = physicalParameters.map {
+                                    DotNetGenericOwnerPhysicalGenericParameterReference(
+                                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                                        constraints = emptyList(),
+                                    )
+                                },
                                 role = DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
                             )
                         },

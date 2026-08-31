@@ -27,20 +27,28 @@ internal enum class DotNetLocalGenericOwnerPhysicalTypeRole {
  * One physical TypeDef selected by lowering, plus only the diagnostic name needed by the shadow.
  * The name does not participate in identity, ancestry, construction, or placement decisions.
  */
-internal data class DotNetLocalGenericOwnerPhysicalTypeInput(
+internal class DotNetLocalGenericOwnerPhysicalTypeInput(
     val identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
     val logicalOwnerName: String,
-    val genericArity: Int,
+    genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference>,
     val role: DotNetLocalGenericOwnerPhysicalTypeRole,
 ) {
+    val genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference> =
+        genericParameters.toList()
+    val genericArity: Int
+        get() = genericParameters.size
+
     init {
         require(logicalOwnerName.isNotEmpty() && when (role) {
             DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS ->
-                identity.view == null && genericArity > 0
+                identity.view == null && genericParameters.isNotEmpty() &&
+                        genericParameters.all { parameter ->
+                            parameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                        }
             DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ->
-                identity.view == DotNetGenericInterfaceView.DECLARED && genericArity > 0
+                identity.view == DotNetGenericInterfaceView.DECLARED && genericParameters.isNotEmpty()
             DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY ->
-                identity.view == null && genericArity == 0
+                identity.view == null && genericParameters.isEmpty()
         }) { "a local physical TypeDef input has an incoherent role, identity, or arity" }
     }
 
@@ -55,9 +63,28 @@ internal data class DotNetLocalGenericOwnerPhysicalTypeInput(
 
     fun asReference() = DotNetGenericOwnerPhysicalTypeDefReference(
         identity = identity,
-        genericArity = genericArity,
+        genericParameters = genericParameters,
         category = category,
     )
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetLocalGenericOwnerPhysicalTypeInput &&
+                identity == other.identity &&
+                logicalOwnerName == other.logicalOwnerName &&
+                genericParameters == other.genericParameters &&
+                role == other.role
+
+    override fun hashCode(): Int {
+        var result = identity.hashCode()
+        result = 31 * result + logicalOwnerName.hashCode()
+        result = 31 * result + genericParameters.hashCode()
+        result = 31 * result + role.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "TypeInput(identity=$identity, logicalOwnerName=$logicalOwnerName, " +
+                "genericParameters=$genericParameters, role=$role)"
 }
 
 /** One admitted InterfaceImpl target expressed only in the source TypeDef's physical parameters. */
@@ -154,7 +181,7 @@ private fun DotNetGenericOwnerPhysicalMethodDefReference.hasBoundedDirectProduce
             val localIdentity = identity as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local
                 ?: return false
             genericParameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT &&
-                    genericParameter.constraints.isEmpty() &&
+                    genericParameter.isUnconstrained &&
                     slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
                     parameter.index == 0 &&
                     binder.sameLocalMethodIdentityAs(localIdentity)

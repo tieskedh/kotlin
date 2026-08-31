@@ -346,11 +346,8 @@ internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
     val allocator = EmissionIdentityAllocator()
     allocator.expectedTypeAliasGroup(
         observedOwner.aliases,
-        DotNetGenericOwnerPhysicalTypeDefReference(
-            expectedOwner,
-            observedOwner.genericArity,
-            observedOwner.category,
-        ),
+        observedOwner.genericArity,
+        observedOwner.category,
     )
     val methodKey = allocator.method(expectedMethod)
 
@@ -702,11 +699,8 @@ internal fun inspectDotNetProducerGenericOwnerImplementationMethodDefPublication
     val allocator = EmissionIdentityAllocator()
     allocator.expectedTypeAliasGroup(
         observedOwner.aliases,
-        DotNetGenericOwnerPhysicalTypeDefReference(
-            expectedImplementationOwner,
-            observedOwner.genericArity,
-            observedOwner.category,
-        ),
+        observedOwner.genericArity,
+        observedOwner.category,
     )
     val methodKey = allocator.method(expectedMethod)
     val ownerKey = when (val key = allocator.actualType(observedOwner)) {

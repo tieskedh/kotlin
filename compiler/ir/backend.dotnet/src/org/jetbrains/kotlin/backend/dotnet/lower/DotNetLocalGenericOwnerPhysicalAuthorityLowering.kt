@@ -56,6 +56,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetBaseSuperTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.markBoundGenericOwnerStateWrites
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
@@ -229,23 +230,50 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             .filter { plan ->
                 plan.isReifiedByGenericOwnerRehearsal && plan.owner.kind == ClassKind.CLASS
             }
-            .map { plan ->
+            .mapNotNull { plan ->
+                val physicalParameters = plan.owner
+                    .genericOwnerPrototypePhysicalGenericParameters()
+                    ?: return@mapNotNull null
+                if (physicalParameters.any { parameter ->
+                        parameter.specialConstraints.isNotEmpty() || parameter.typeConstraints.isNotEmpty()
+                    }
+                ) return@mapNotNull null
                 DotNetLocalGenericOwnerPhysicalTypeInput(
                     identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(plan.owner.symbol, view = null),
                     logicalOwnerName = plan.owner.dotNetPhysicalValueStableName(),
-                    genericArity = plan.owner.typeParameters.size,
+                    genericParameters = physicalParameters.map {
+                        DotNetGenericOwnerPhysicalGenericParameterReference(
+                            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                            constraints = emptyList(),
+                        )
+                    },
                     role = DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
                 )
             }
             .toList()
-        val naturalInputs = context.reifiedGenericInterfaces.map { owner ->
+        val naturalInputs = context.reifiedGenericInterfaces.mapNotNull { owner ->
+            val physicalParameters = owner.genericOwnerPrototypePhysicalGenericParameters()
+                ?: return@mapNotNull null
+            if (physicalParameters.any { parameter ->
+                    parameter.specialConstraints.isNotEmpty() || parameter.typeConstraints.isNotEmpty()
+                }
+            ) return@mapNotNull null
+            val physicalVariances = context.admittedGenericInterfaceCompleteNaturalAuthorityPlans[owner.symbol]
+                ?.selectedPhysicalVariances
+                ?: return@mapNotNull null
+            if (physicalParameters.size != physicalVariances.size) return@mapNotNull null
             DotNetLocalGenericOwnerPhysicalTypeInput(
                 identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
                     owner.symbol,
                     DotNetGenericInterfaceView.DECLARED,
                 ),
                 logicalOwnerName = owner.dotNetPhysicalValueStableName(),
-                genericArity = owner.typeParameters.size,
+                genericParameters = physicalVariances.map { variance ->
+                    DotNetGenericOwnerPhysicalGenericParameterReference(
+                        variance,
+                        constraints = emptyList(),
+                    )
+                },
                 role = DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
             )
         }
@@ -264,7 +292,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                         view = null,
                     ),
                     logicalOwnerName = logicalOwner.owner.dotNetPhysicalValueStableName(),
-                    genericArity = 0,
+                    genericParameters = emptyList(),
                     role = DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
                 )
             }
