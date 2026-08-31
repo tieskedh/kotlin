@@ -256,10 +256,8 @@ internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
     current: DotNetGenericOwnerCompleteEmissionScopeObservations,
     otherScopes: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetProducerGenericOwnerNaturalMethodDefPublication> {
-    if (member.role !in setOf(
-            DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
-            DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
-        )
+    if (member.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
+        member.resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
     ) {
         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     }
@@ -457,10 +455,10 @@ internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
     val splitNullable = header.result is
             DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable
     if (splitNullable !=
-        (member.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER)
+        (member.resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE)
     ) {
         return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-            "the H member role disagrees with the final natural MethodDef result layout",
+            "the H member contract disagrees with the final natural MethodDef result layout",
         )
     }
     if ((header.result != DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void) !=

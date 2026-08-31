@@ -192,6 +192,7 @@ class DotNetExternalDeclarationsTest {
                         DotNetPublishedGenericInterfaceMemberContract(
                             logicalMemberKey = logicalMemberKey,
                             role = DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT,
+                            resultLayout = DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
                         )
                     ),
                     capabilityBindingKind =

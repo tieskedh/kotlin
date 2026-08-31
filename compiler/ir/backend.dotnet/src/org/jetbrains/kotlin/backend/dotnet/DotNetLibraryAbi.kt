@@ -203,8 +203,6 @@ private fun DotNetGenericOwnerPhysicalTypeParameterVariance.isNoStrongerThan(
 /** Logical role of one member declared directly by a published interface family. */
 enum class DotNetPublishedGenericInterfaceMemberRole {
     PRODUCER,
-    /** An open `T?` result whose natural CLR slot is physically `T + out bool isNull`. */
-    SPLIT_NULLABLE_PRODUCER,
     CONSTRUCTED_INTERFACE_PRODUCER,
     CONSUMER,
     INPUT_OUTPUT,
@@ -214,6 +212,14 @@ enum class DotNetPublishedGenericInterfaceMemberRole {
     OWNER_INDEPENDENT_PROPERTY_GETTER,
     PROPERTY_GETTER,
     PROPERTY_SETTER,
+}
+
+/** Producer-selected physical result convention, independent from the member's semantic role. */
+enum class DotNetPublishedGenericInterfaceMemberResultLayout {
+    VOID,
+    DIRECT,
+    /** An open `T?` result whose natural CLR slot is physically `T + out bool isNull`. */
+    SPLIT_NULLABLE,
 }
 
 internal val DotNetPublishedGenericInterfaceMemberRole.requiresExactInputView: Boolean
@@ -254,6 +260,7 @@ data class DotNetPublishedGenericInterfaceParentContract(
 data class DotNetPublishedGenericInterfaceMemberContract(
     val logicalMemberKey: String,
     val role: DotNetPublishedGenericInterfaceMemberRole,
+    val resultLayout: DotNetPublishedGenericInterfaceMemberResultLayout,
 ) {
     init {
         require(logicalMemberKey.isNotEmpty()) {
@@ -1076,7 +1083,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "64"
+    const val ABI_VERSION = "65"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1879,7 +1886,7 @@ object DotNetLibraryAbiCodec {
                 parents.flatMap { parent ->
                     listOf(parent.logicalOwnerKey, parent.parameterMapping.joinToString(","))
                 } + members.flatMap { member ->
-                    listOf(member.logicalMemberKey, member.role.name)
+                    listOf(member.logicalMemberKey, member.role.name, member.resultLayout.name)
                 }
     }
 
@@ -1924,7 +1931,7 @@ object DotNetLibraryAbiCodec {
         val parentCount = nonNegativeCount(13, "parent")
         val memberCount = nonNegativeCount(14, "member")
         val expectedSize = 15 + ownerSize + capabilitySize + exactOwnerSize +
-                physicalVarianceCount + rootCount + parentCount * 2 + memberCount * 2
+                physicalVarianceCount + rootCount + parentCount * 2 + memberCount * 3
         require(fields.size == expectedSize) {
             "published generic-interface family '$logicalKey' has an inconsistent physical payload"
         }
@@ -1961,7 +1968,14 @@ object DotNetLibraryAbiCodec {
             } ?: throw IllegalArgumentException(
                 "published generic-interface family '$logicalKey' has invalid member role '$roleName'"
             )
-            DotNetPublishedGenericInterfaceMemberContract(memberKey, role)
+            val resultLayoutName = fields[offset++]
+            val resultLayout = DotNetPublishedGenericInterfaceMemberResultLayout.entries.singleOrNull { layout ->
+                layout.name == resultLayoutName
+            } ?: throw IllegalArgumentException(
+                "published generic-interface family '$logicalKey' has invalid member result layout " +
+                        "'$resultLayoutName'"
+            )
+            DotNetPublishedGenericInterfaceMemberContract(memberKey, role, resultLayout)
         }
         return DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
             ownerPath = ownerPath,
@@ -2394,10 +2408,8 @@ object DotNetLibraryAbiCodec {
                 "published interface family '${interfaceFamily.contract.logicalOwnerKey}' disagrees with its class record"
             }
             interfaceFamily.contract.declaredMembers.forEach { member ->
-                if (member.role !in setOf(
-                        DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
-                        DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
-                    )
+                if (member.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
+                    member.resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
                 ) return@forEach
                 val naturalKey = "N:${member.logicalMemberKey}"
                 val naturalDeclaration = declarations[naturalKey] ?: return@forEach
@@ -2422,12 +2434,22 @@ object DotNetLibraryAbiCodec {
                 val split = physicalMethod.signature.resultLayout is
                         DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
                 require(split ==
-                        (member.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER)) {
+                        (member.resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE)) {
                     "natural MethodDef '$naturalKey' disagrees with its H-selected result layout"
                 }
-                require(physicalMethod.signature.parameterSlots.all { slot ->
-                    slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
-                }) {
+                require(physicalMethod.signature.parameterSlots.all { slot -> when (slot.domain) {
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ->
+                        slot.type.kind != DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                    DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+                    -> slot.type.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                            slot.type.parameterIndex?.let { index ->
+                                index in 0 until interfaceFamily.contract.genericArity
+                            } == true
+                    DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    -> false
+                } }) {
                     "natural MethodDef '$naturalKey' disagrees with its H-selected logical input domains"
                 }
                 require(physicalMethod.signature.resultLayout.valueSlotOrNull?.domain ==
@@ -2809,11 +2831,11 @@ object DotNetLibraryAbiCodec {
             val naturalResult = methodDef(
                 DotNetProducerGenericOwnerSealedMethodDefRole.NATURAL_INTERFACE_SLOT,
             ).structural.header.result
-            val expectedMemberRole = when (naturalResult) {
+            val expectedResultLayout = when (naturalResult) {
                 is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct ->
-                    DotNetPublishedGenericInterfaceMemberRole.PRODUCER
+                    DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT
                 is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable ->
-                    DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
+                    DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
                 DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void -> throw IllegalArgumentException(
                     "producer-sealed family '$indexKey' has no natural producer result",
                 )
@@ -2824,7 +2846,8 @@ object DotNetLibraryAbiCodec {
             require(interfaceFamily.ownerPath == naturalType.physicalPath &&
                     interfaceFamily.capabilityOwnerPath == interfaceCapabilityType.physicalPath &&
                     interfaceFamily.contract.genericArity == naturalType.structural.genericArity &&
-                    publishedMember?.role == expectedMemberRole
+                    publishedMember?.role == DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
+                    publishedMember.resultLayout == expectedResultLayout
             ) {
                 "producer-sealed family '$indexKey' disagrees with its logical-interface H record"
             }
@@ -2832,7 +2855,8 @@ object DotNetLibraryAbiCodec {
                 publishedMember.role.requiresExactInputView -> checkNotNull(interfaceFamily.exactOwnerPath)
                 else -> interfaceFamily.ownerPath
             } &&
-                    (publishedMember.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER) ==
+                    (publishedMember.resultLayout ==
+                            DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE) ==
                     (naturalMethodDef.physicalMethod.signature.resultLayout is
                             DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
             ) {

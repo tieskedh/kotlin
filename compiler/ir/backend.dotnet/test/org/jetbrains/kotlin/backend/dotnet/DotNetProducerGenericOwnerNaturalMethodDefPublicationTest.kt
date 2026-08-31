@@ -213,6 +213,7 @@ class DotNetProducerGenericOwnerNaturalMethodDefPublicationTest {
         private val member = DotNetPublishedGenericInterfaceMemberContract(
             LOGICAL_MEMBER_KEY,
             DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
         )
         private val family = DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
             ownerPath = NATURAL_OWNER_PATH,

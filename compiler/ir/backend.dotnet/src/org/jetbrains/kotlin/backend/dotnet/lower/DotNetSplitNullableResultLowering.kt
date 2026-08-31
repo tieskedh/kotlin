@@ -7,7 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
@@ -64,7 +64,7 @@ internal class DotNetSplitNullableResultLowering(
                 val family = sequenceOf(function) + function.allOverridden()
                 val familyMembers = family.toList()
                 val roots = familyMembers.filter { candidate ->
-                    candidate.hasSplitNullableProducerRole()
+                    candidate.hasSplitNullableResultLayout()
                 }
                 if (roots.isNotEmpty()) {
                     val payloadTypes = roots.map { root ->
@@ -141,7 +141,7 @@ internal class DotNetSplitNullableResultLowering(
         return parameter.typeParameterDefaultType
     }
 
-    private fun IrSimpleFunction.hasSplitNullableProducerRole(): Boolean {
+    private fun IrSimpleFunction.hasSplitNullableResultLayout(): Boolean {
         val owner = parent as? IrClass ?: return false
         val contract = context.publishedGenericInterfaceFamilies[owner]
             ?: externalDeclarations.publishedGenericInterfaceFamilyOrNull(owner)
@@ -151,6 +151,6 @@ internal class DotNetSplitNullableResultLowering(
             ?: return false
         return contract.declaredMembers.singleOrNull { member ->
             member.logicalMemberKey == logicalMemberKey
-        }?.role == DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
+        }?.resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
     }
 }

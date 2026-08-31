@@ -131,6 +131,16 @@ Before acceptance, a declaration- and package-independent matrix must prove:
 9. Framework 4.8, .NET 10, ReadyToRun, trimming, and NativeAOT; and
 10. the exact erased-production inverse and rollback.
 
-This is a **GO** for continuing the production-inert custom proof. It is not a
-GO for public ABI or for applying the layout to `Map` before the structural
-lookup family passes.
+The bounded Stage 7 rehearsal closes item 5 and the exact value/reference,
+ordinary C#, separate-compilation, Framework 4.8, .NET 10, and erased-inverse
+lanes needed for that custom structural family. It also proves that semantic
+role, input domains, and result layout can be recorded and consumed
+independently. The remaining items above still block acceptance, especially
+value classes, richer virtual/inheritance shapes, deployment lanes, stale and
+contradictory layout records, and broader input-policy composition. Evidence is
+recorded in the
+[Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
+
+This remains a **GO** for production-inert consolidation. It is not a GO for
+public ABI or for applying the layout to `Map`; the custom proof passing removes
+only that prerequisite, not the broader Runtime-family and release gates.
