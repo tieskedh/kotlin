@@ -723,6 +723,30 @@ constrained TypeDef requires a separate physical constraint-satisfaction proof
 or an already-retained/emitted construction; until then it remains
 `Unavailable`.
 
+Retaining an assembly, TypeDef, or MethodDef identity is necessary but does not
+authorize a caller-supplied normalized description of that row. Foreign
+declaration descriptions enter the shared index only through an adapter over
+the exact FIR-retained declaration carrier and its selected assembly graph.
+The adapter re-resolves the raw MethodDef signature in that same graph, checks
+it against the retained resolved signature, checks that the retained hierarchy
+contains every raw base/interface row, and imports the complete ordered
+`GenericParam` rows. The index remembers exactly which foreign rows that
+adapter authenticated; advancing an authority epoch preserves that set but
+cannot expand it. A direct `bind` of an otherwise identical foreign description
+is therefore `Unavailable`.
+
+The initial adapter grammar binds one selected ordinary public abstract virtual
+instance MethodDef on a public top-level abstract root interface. The owner
+view must be the open declaration view; direct base/interface edges and owner
+MethodImpls are outside this first grammar. Direct results and parameters may use the
+shared boolean, `int32`, string, and object leaves, exact owner or method
+parameters, SZ arrays, and recursive constructions of the same retained
+interface. This is a structural admission boundary, not a declaration-name or
+package rule. A valid shape outside it is `Unavailable`; a detached MethodDef,
+an incomplete retained hierarchy, invalid generic binder/flags, or disagreement
+between retained and raw signatures is `Conflict`. Recorded constraints still
+do not prove an arbitrary constrained construction.
+
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
 assignability rules. Kotlin variance alone cannot do so, and value arguments

@@ -60,6 +60,12 @@ and emission-comparison authority. It inherits the fresh production-erased
 Stage 7 aggregate above because it changes no selected IR, emitted CIL, Runtime,
 Stdlib, or production ABI.
 
+The next production-inert retained-foreign adapter delta compiled the backend
+and test source, then passed the physical-value model and retained-metadata
+suites (90 tests, zero failures/errors/skips). The adapter is not consumed by a
+selected route, so this delta inherits the same fresh production-erased Stage 7
+aggregate.
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -107,10 +113,17 @@ can prove; detached producer artifacts retain their recorded constraints, while
 generic core/assembly references and arbitrary constrained constructions fail
 closed until exact metadata or constraint-satisfaction authority is joined.
 
-Next work binds exact retained foreign TypeDef/MethodDef metadata into that
-shared declaration model, then routes a bounded imported operation through
-shared operation/value provenance before any multi-member or Runtime/Stdlib
-application. The shared model and remaining boundary are owned by the
+One bounded retained-foreign adapter now binds an open, parentless CLR generic
+interface and one selected abstract MethodDef from exact raw metadata. It
+cross-checks the retained signature and complete empty hierarchy, preserves
+ordered GenericParam facts, authenticates only the exact selected rows, and
+distinguishes unsupported valid shapes from contradictory carriers. Direct
+caller descriptions, inherited/MethodImpl owners, unsupported carrier leaves,
+and arbitrary constrained constructions remain unavailable.
+
+Next work routes one bounded imported operation through shared operation/value
+provenance before any multi-member or Runtime/Stdlib application. The shared
+model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
@@ -122,8 +135,10 @@ and [way forward](docs/programmes/way-forward.md).
   application are not yet closed.
 - Declaration and implementation authority is not yet closed for deeper base
   chains or multiple/distinct constructed views.
-- Retained foreign CLR declaration authority remains a separate incomplete
-  boundary.
+- Retained foreign CLR declaration authority remains bounded to an open root
+  interface and one selected MethodDef; inherited views, MethodImpls, wider
+  nominal carriers, constrained constructions, and selected operation routing
+  remain incomplete.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,
