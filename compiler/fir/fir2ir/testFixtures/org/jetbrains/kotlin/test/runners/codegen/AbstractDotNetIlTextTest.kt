@@ -26865,6 +26865,9 @@ private class DotNetEnvironmentConfigurator(
             check(dependencyOutput.isFile) { "Missing compiled test dependency: ${dependencyOutput.path}" }
             configuration.addDotNetClasspathRoot(dependencyOutput)
         }
+        if (DotNetCodegenDirectives.DOTNET_FOREIGN_MEMBERLESS_INTERFACE in module.directives) {
+            configuration.addDotNetClasspathRoot(getOrCreateForeignMemberlessInterface())
+        }
         configuration.dotNetFriendPaths = module.friendDependencies
             .filter { dependency -> dependency.kind == DependencyKind.Binary }
             .map { dependency ->
@@ -26923,6 +26926,30 @@ private class DotNetEnvironmentConfigurator(
             }
         }
 
+    private fun getOrCreateForeignMemberlessInterface(): File {
+        check(target == DotNetTarget.NET48) {
+            "The memberless foreign-interface fixture is defined only for the net48 IL-text lane"
+        }
+        val directory = testServices.getOrCreateTempDirectory("dotnet-foreign-memberless-interface")
+        val source = directory.resolve("Foreign.Memberless.il")
+        val assembly = directory.resolve("Foreign.Memberless.dll")
+        if (!source.isFile || source.readText() != FOREIGN_MEMBERLESS_INTERFACE_IL || !assembly.isFile) {
+            source.writeText(FOREIGN_MEMBERLESS_INTERFACE_IL)
+            val messages = DotNetIlasmMessageCollector()
+            check(
+                DotNetIlAssembler.assembleLibrary(
+                    source,
+                    assembly,
+                    target,
+                    messages,
+                )
+            ) {
+                "Could not assemble the resource-free memberless CLR-interface fixture:\n${messages.render()}"
+            }
+        }
+        return assembly
+    }
+
     private fun getPrebuiltStdlib(): File {
         val propertyName = "kotlin.dotnet.test.platform.${target.description}.path"
         val directory = System.getProperty(propertyName)?.let(::File)
@@ -26975,6 +27002,9 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     val DOTNET_STDLIB_FROM_SOURCE by directive(
         "Compile the compiler-owned Kotlin/.NET stdlib source product in this test instead of consuming the reusable fixture"
     )
+    val DOTNET_FOREIGN_MEMBERLESS_INTERFACE by directive(
+        "Add a resource-free CLR assembly whose memberless interface inherits a closed generic interface"
+    )
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
     )
@@ -26982,6 +27012,29 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
         "Provisional CLR property export in <kotlin-fq-name>=<clr-property-name> form"
     )
 }
+
+private val FOREIGN_MEMBERLESS_INTERFACE_IL = """
+    .assembly extern mscorlib {}
+    .assembly 'Foreign.Memberless' {}
+    .module 'Foreign.Memberless.dll'
+
+    .namespace Foreign
+    {
+      .class interface public abstract auto ansi 'Source`1'<+ T>
+      {
+        .method public hidebysig newslot abstract virtual instance !T 'Read'() cil managed
+        {
+        }
+      }
+
+      // IntSource intentionally owns no MethodDef or Property row. Its TypeDef and
+      // InterfaceImpl rows are nevertheless authoritative CLR metadata.
+      .class interface public abstract auto ansi 'IntSource'
+             implements class 'Foreign.Source`1'<int32>
+      {
+      }
+    }
+""".trimIndent()
 
 private class DotNetIlTextHandler(testServices: TestServices) :
     AbstractDotNetIlTextHandler(testServices, validatesCrossAssemblerCompatibility = false)

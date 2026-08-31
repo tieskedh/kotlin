@@ -57,25 +57,12 @@ The aggregate includes Stage 7, the production-inert TypeDef-authority work,
 and the retained-foreign adapter. Their focused design evidence remains in the
 owning archives and ADR; this current snapshot does not duplicate it.
 
-The later production-inert imported-operation delta compiled the backend and
-test source, then passed the shared physical-value and retained-metadata model
-suites (96 tests, zero failures/errors/skips). It changes no selected IR,
-emitted CIL, Runtime/Stdlib surface, artifact, or production ABI, so it inherits
-the fresh production-erased aggregate above.
-
-The subsequent retained-interface-inheritance delta passed the retained-
-metadata model suite (26 tests, zero failures/errors/skips). Its final combined
-focused gate is recorded below after the implementation summary. It is likewise
-production-inert and inherits the same aggregate checkpoint.
-
-The later open-forwarding delta passed the retained-metadata model suite (33
-tests, zero failures/errors/skips). Its final combined focused gate is recorded
-below. It remains production-inert and inherits the same aggregate checkpoint.
-
-The subsequent lazy-TypeDef transport delta compiled common FIR2IR, DotNet
-FIR2IR, the backend, and backend tests, then passed the retained-metadata model
-suite (35 tests, zero failures/errors/skips). It is production-inert and does
-not yet widen importer admission.
+Since that aggregate, the retained-foreign rehearsal has added exact operation,
+inherited-interface, binder-forwarding, and lazy TypeDef transport authority.
+The current focused evidence compiles the importer and test fixture, retains
+the 35-test metadata model gate, and runs the actual memberless external-DLL
+pipeline with both FIR parsers. The resulting focused totals are recorded
+below; Git owns the intermediate chronology.
 
 ## Production binding state
 
@@ -158,17 +145,25 @@ searching for a callable; callable MethodDefs retain separate authority and
 must agree with the class carrier by assembly, TypeDef, hierarchy, and graph
 identity. Other targets retain the previous null metadata behavior.
 
-Next work admits a genuinely memberless imported interface in the compiler
-pipeline and proves the actual FIR-to-IR-to-CIL route. It must not add a global
-registry, fake member, or name-based lookup. MethodImpl, multiple edges/
-members/binders, variance conversions, constraints, classes, cross-assembly
-inheritance, and Runtime/Stdlib application remain later.
+The production importer now accepts a complete interface contract with no
+declared public callable. A resource-free external CLR DLL proves the actual
+FIR-to-lazy-FIR2IR-to-CIL path: the memberless `IntSource` TypeDef remains the
+parameter carrier, its exact `Source<int>` edge supplies the inherited view,
+and invocation targets the parent's retained `Read` MethodDef. No registry,
+fake member, copied MethodDef, name lookup, or fabricated construction is used.
+
+The next retained-foreign boundary is the same memberless inheritance shape
+across two selected CLR assemblies. This must preserve each assembly and
+metadata-handle authority while binding the child `InterfaceImpl` to the
+parent MethodDef. Multiple edges/members/binders, variance conversions,
+constraints, classes, MethodImpls, and Runtime/Stdlib application remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The final combined focused gate passed the shared physical-value and retained-
-metadata model suites (110 tests, zero failures/errors/skips).
+The current focused gate passed the retained-metadata model suite (35 tests)
+and both generated memberless pipeline cases (2 tests), with zero failures,
+errors, or skips.
 
 ## Current blockers
 
@@ -180,15 +175,11 @@ metadata model suites (110 tests, zero failures/errors/skips).
   chains or multiple/distinct constructed views.
 - Retained foreign CLR declaration authority remains bounded to an open root
   interface, one selected MethodDef, and either its root receiver or one
-  same-assembly child interface with at most one unconstrained binder
-  and one exact `InterfaceImpl`. Multiple binders/edges/members, variance
-  conversions, constraints, classes, MethodImpls, cross-assembly inheritance,
-  wider nominal carriers, and broader operation routing remain incomplete.
-- The importer records exact class-level TypeDef authority, lazy external
-  FIR2IR preserves it, and backend class mapping no longer needs a member
-  carrier. The production importer still excludes a type with no public
-  declared callable until the actual memberless pipeline route is admitted and
-  tested.
+  same-assembly memberless child interface with at most one unconstrained
+  binder and one exact `InterfaceImpl`. Multiple binders/edges/members,
+  variance conversions, constraints, classes, MethodImpls, cross-assembly
+  inheritance, wider nominal carriers, and broader operation routing remain
+  incomplete.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

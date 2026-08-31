@@ -1,0 +1,36 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern 'Foreign.Memberless'
+{
+  .ver 0:0:0:0
+}
+.assembly 'foreignClrMemberlessDerivedInterface' {}
+.module 'main-foreignClrMemberlessDerivedInterface.il'
+
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'foreignClrMemberlessDerivedInterfaceKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'readMemberlessSource'(class [Foreign.Memberless]'Foreign.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class [Foreign.Memberless]'Foreign.Source`1'<int32>::'Read'()
+    ret
+  }
+  .method public hidebysig static class [Foreign.Memberless]'Foreign.Source`1'<int32> 'retainMemberlessSource'(class [Foreign.Memberless]'Foreign.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+}
