@@ -44,11 +44,12 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * leaves, exact owner/method parameters, SZ arrays, and recursive uses of the same interface.
  * These restrictions are proof boundaries, not declaration- or member-name policy.
  *
- * The first inherited-receiver extension admits one retained non-generic interface in the same
- * selected graph and assembly. An exact member declaration carrier authenticates that TypeDef;
- * an imported type without such a carrier remains outside this slice. Its sole raw InterfaceImpl
- * must close the selected MethodDef owner with supported declaration-independent carriers. Open
- * receiver binders, multiple edges, MethodImpls, classes, and cross-assembly inheritance remain
+ * The first inherited-receiver extension admits one retained interface with zero or one
+ * unconstrained type parameter in the same selected graph and assembly. An exact member
+ * declaration carrier authenticates that TypeDef; an imported type without such a carrier remains
+ * outside this slice. Its sole raw InterfaceImpl may close the selected MethodDef owner or forward
+ * the receiver parameter through supported carriers. Its exact CLR variance is retained. Multiple
+ * binders/edges, constraints, MethodImpls, classes, and cross-assembly inheritance remain
  * unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
@@ -71,7 +72,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             InheritedReceiverBuilder(source, method, receiverSource).build()
     }
 
-    /** First hierarchy slice: one closed InterfaceImpl from a retained non-generic interface. */
+    /** First hierarchy slice: one exact InterfaceImpl from a retained zero/one-binder interface. */
     private class InheritedReceiverBuilder(
         private val source: DotNetClrImportedMethodSource,
         private val method: DotNetClrMethodDefinition,
@@ -80,6 +81,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         private val selectedMetadata = source.graph.assemblies.map { assembly -> assembly.metadata }
         private val typeResolver =
             DotNetClrTypeResolver(DotNetClrSelectedAssemblyBinder(selectedMetadata))
+        private val genericContextResolver =
+            DotNetClrGenericParameterContextResolver(typeResolver)
 
         fun build(): DotNetGenericOwnerPhysicalBindingResult<
                 DotNetRetainedForeignGenericOwnerPhysicalDeclarations,
@@ -111,8 +114,28 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             if (rawHierarchy != retainedHierarchy) {
                 return conflict("retained foreign receiver hierarchy contradicts raw metadata")
             }
-            if (!hasSupportedReceiverShape(rawHierarchy)) {
+            val receiverContext = when (
+                val resolution = genericContextResolver.resolve(retainedHierarchy.type)
+            ) {
+                is DotNetClrGenericParameterContextResolution.Resolved -> resolution.context
+                is DotNetClrGenericParameterContextResolution.Invalid ->
+                    return conflict("retained foreign receiver has an invalid generic-parameter context")
+            }
+            if (receiverContext.method != null ||
+                receiverContext.declaringType != retainedHierarchy.type
+            ) {
+                return conflict("retained foreign receiver generic context changed its declaring TypeDef")
+            }
+            if (!hasSupportedReceiverShape(rawHierarchy, receiverContext.typeParameters.size)) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val receiverParameters = when (
+                val translation = translateReceiverParameters(receiverContext)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
 
             val implementation = rawHierarchy.interfaces.single()
@@ -120,9 +143,15 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             if (!implementation.interfaceType.type.hasSameIdentityAs(methodOwner)) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
+            val receiverIdentity =
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource)
             val parentArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
             for (argument in implementation.interfaceType.arguments) {
-                when (val translation = translateClosedCarrier(argument)) {
+                when (val translation = translateInheritedCarrier(
+                    argument,
+                    receiverIdentity,
+                    receiverContext,
+                )) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound ->
                         parentArguments += translation.value
                     is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
@@ -138,8 +167,6 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             if (parentArguments.size != parentDescription.genericArity) {
                 return conflict("retained InterfaceImpl contradicts its target TypeDef arity")
             }
-            val receiverIdentity =
-                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource)
             if (receiverIdentity == parentIdentity) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
@@ -153,7 +180,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     typeDefinitions = methodDeclarations.typeDefinitions +
                             DotNetGenericOwnerPhysicalTypeDefReference(
                                 identity = receiverIdentity,
-                                genericParameters = emptyList(),
+                                genericParameters = receiverParameters,
                                 category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
                             ),
                     methodDefinitions = methodDeclarations.methodDefinitions,
@@ -173,12 +200,17 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
 
         private fun hasSupportedReceiverShape(
             hierarchy: DotNetClrResolvedTypeHierarchy,
+            genericArity: Int,
         ): Boolean {
             val definition = receiverSource.declaringType
-            val ownerParameters = receiverSource.assembly.metadata.genericParameterDefinitions
-                .filter { parameter -> parameter.owner == definition.handle }
-            return hierarchy.type.arguments.isEmpty() &&
-                    ownerParameters.isEmpty() &&
+            val openArguments = List(genericArity) { index ->
+                DotNetClrResolvedTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    index,
+                )
+            }
+            return genericArity <= 1 &&
+                    hierarchy.type.arguments == openArguments &&
                     definition.isInterface &&
                     definition.isAbstract &&
                     !definition.isSealed &&
@@ -192,10 +224,62 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     }
         }
 
-        private fun translateClosedCarrier(
+        private fun translateReceiverParameters(
+            context: DotNetClrResolvedGenericParameterContext,
+        ): DotNetGenericOwnerPhysicalBindingResult<
+                List<DotNetGenericOwnerPhysicalGenericParameterReference>,
+                > {
+            val translated = ArrayList<DotNetGenericOwnerPhysicalGenericParameterReference>(
+                context.typeParameters.size,
+            )
+            for (index in context.typeParameters.indices) {
+                val binding = context.typeParameters[index]
+                if (binding.kind != DotNetClrGenericParameterKind.TYPE ||
+                    binding.parameter.owner != receiverSource.declaringType.handle ||
+                    binding.parameter.number != index
+                ) {
+                    return conflict("retained foreign receiver GenericParam changed binder or numbering")
+                }
+                val attributes = binding.parameter.attributes
+                if (attributes and GENERIC_PARAMETER_VARIANCE_MASK ==
+                    GENERIC_PARAMETER_VARIANCE_MASK
+                ) {
+                    return conflict("retained foreign receiver GenericParam declares incompatible variance")
+                }
+                if (binding.parameter.hasReferenceTypeConstraint &&
+                    binding.parameter.hasNotNullableValueTypeConstraint
+                ) {
+                    return conflict(
+                        "retained foreign receiver GenericParam requires reference and value arguments",
+                    )
+                }
+                if (attributes and GENERIC_PARAMETER_VARIANCE_MASK.inv() != 0 ||
+                    binding.constraints.isNotEmpty()
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                val variance = when (binding.parameter.variance) {
+                    DotNetClrGenericParameterVariance.INVARIANT ->
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                    DotNetClrGenericParameterVariance.COVARIANT ->
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT
+                    DotNetClrGenericParameterVariance.CONTRAVARIANT ->
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
+                }
+                translated += DotNetGenericOwnerPhysicalGenericParameterReference(
+                    variance,
+                    constraints = emptyList(),
+                )
+            }
+            return bound(translated.toList())
+        }
+
+        private fun translateInheritedCarrier(
             type: DotNetClrResolvedTypeSignature,
-        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> =
-            when (type) {
+            receiverIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+            context: DotNetClrResolvedGenericParameterContext,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
+            return when (type) {
                 DotNetClrResolvedTypeSignature.Void ->
                     conflict("void appeared in a retained InterfaceImpl argument")
                 is DotNetClrResolvedTypeSignature.Primitive -> when (type.type) {
@@ -213,8 +297,26 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     )
                     else -> DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
+                is DotNetClrResolvedTypeSignature.GenericParameter -> {
+                    val binding = context.binding(type)
+                        ?: return conflict("retained InterfaceImpl escaped its receiver binder")
+                    if (type.kind != DotNetClrGenericParameterKind.TYPE ||
+                        binding.parameter.owner != receiverSource.declaringType.handle ||
+                        binding.parameter.number != type.index
+                    ) {
+                        return conflict("retained InterfaceImpl changed its receiver binder")
+                    }
+                    bound(
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                            .unboundTypeParameterReference(receiverIdentity, type.index),
+                    )
+                }
                 is DotNetClrResolvedTypeSignature.SzArray -> when (
-                    val element = translateClosedCarrier(type.elementType)
+                    val element = translateInheritedCarrier(
+                        type.elementType,
+                        receiverIdentity,
+                        context,
+                    )
                 ) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> bound(
                         DotNetGenericOwnerSymbolicCarrierReference.SzArray(element.value),
@@ -222,7 +324,6 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable -> element
                 }
-                is DotNetClrResolvedTypeSignature.GenericParameter,
                 is DotNetClrResolvedTypeSignature.Named,
                 is DotNetClrResolvedTypeSignature.GenericInstance,
                 DotNetClrResolvedTypeSignature.TypedReference,
@@ -233,6 +334,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 is DotNetClrResolvedTypeSignature.Modified,
                 -> DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
+        }
 
         private fun <T> bound(value: T): DotNetGenericOwnerPhysicalBindingResult.Bound<T> =
             DotNetGenericOwnerPhysicalBindingResult.Bound(value)
@@ -241,6 +343,10 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             reason: String,
         ): DotNetGenericOwnerPhysicalBindingResult.Conflict =
             DotNetGenericOwnerPhysicalBindingResult.Conflict(reason)
+
+        private companion object {
+            const val GENERIC_PARAMETER_VARIANCE_MASK = 0x0003
+        }
     }
 
     private class Builder(
