@@ -26868,6 +26868,11 @@ private class DotNetEnvironmentConfigurator(
         if (DotNetCodegenDirectives.DOTNET_FOREIGN_MEMBERLESS_INTERFACE in module.directives) {
             configuration.addDotNetClasspathRoot(getOrCreateForeignMemberlessInterface())
         }
+        if (DotNetCodegenDirectives.DOTNET_FOREIGN_CROSS_ASSEMBLY_MEMBERLESS_INTERFACE in module.directives) {
+            getOrCreateForeignCrossAssemblyMemberlessInterfaces().forEach(
+                configuration::addDotNetClasspathRoot,
+            )
+        }
         configuration.dotNetFriendPaths = module.friendDependencies
             .filter { dependency -> dependency.kind == DependencyKind.Binary }
             .map { dependency ->
@@ -26926,15 +26931,40 @@ private class DotNetEnvironmentConfigurator(
             }
         }
 
-    private fun getOrCreateForeignMemberlessInterface(): File {
+    private fun getOrCreateForeignMemberlessInterface(): File =
+        getOrCreateResourceFreeForeignAssembly(
+            directoryName = "dotnet-foreign-memberless-interface",
+            assemblyName = "Foreign.Memberless",
+            sourceText = FOREIGN_MEMBERLESS_INTERFACE_IL,
+        )
+
+    private fun getOrCreateForeignCrossAssemblyMemberlessInterfaces(): List<File> =
+        listOf(
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-cross-assembly-memberless-interface",
+                assemblyName = "Foreign.Parent",
+                sourceText = FOREIGN_CROSS_ASSEMBLY_PARENT_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-cross-assembly-memberless-interface",
+                assemblyName = "Foreign.Child",
+                sourceText = FOREIGN_CROSS_ASSEMBLY_CHILD_IL,
+            ),
+        )
+
+    private fun getOrCreateResourceFreeForeignAssembly(
+        directoryName: String,
+        assemblyName: String,
+        sourceText: String,
+    ): File {
         check(target == DotNetTarget.NET48) {
-            "The memberless foreign-interface fixture is defined only for the net48 IL-text lane"
+            "Resource-free foreign-interface fixtures are defined only for the net48 IL-text lane"
         }
-        val directory = testServices.getOrCreateTempDirectory("dotnet-foreign-memberless-interface")
-        val source = directory.resolve("Foreign.Memberless.il")
-        val assembly = directory.resolve("Foreign.Memberless.dll")
-        if (!source.isFile || source.readText() != FOREIGN_MEMBERLESS_INTERFACE_IL || !assembly.isFile) {
-            source.writeText(FOREIGN_MEMBERLESS_INTERFACE_IL)
+        val directory = testServices.getOrCreateTempDirectory(directoryName)
+        val source = directory.resolve("$assemblyName.il")
+        val assembly = directory.resolve("$assemblyName.dll")
+        if (!source.isFile || source.readText() != sourceText || !assembly.isFile) {
+            source.writeText(sourceText)
             val messages = DotNetIlasmMessageCollector()
             check(
                 DotNetIlAssembler.assembleLibrary(
@@ -26944,7 +26974,7 @@ private class DotNetEnvironmentConfigurator(
                     messages,
                 )
             ) {
-                "Could not assemble the resource-free memberless CLR-interface fixture:\n${messages.render()}"
+                "Could not assemble resource-free CLR fixture '$assemblyName':\n${messages.render()}"
             }
         }
         return assembly
@@ -27005,6 +27035,9 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     val DOTNET_FOREIGN_MEMBERLESS_INTERFACE by directive(
         "Add a resource-free CLR assembly whose memberless interface inherits a closed generic interface"
     )
+    val DOTNET_FOREIGN_CROSS_ASSEMBLY_MEMBERLESS_INTERFACE by directive(
+        "Add resource-free CLR parent and child assemblies with a memberless inherited interface"
+    )
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
     )
@@ -27031,6 +27064,42 @@ private val FOREIGN_MEMBERLESS_INTERFACE_IL = """
       // InterfaceImpl rows are nevertheless authoritative CLR metadata.
       .class interface public abstract auto ansi 'IntSource'
              implements class 'Foreign.Source`1'<int32>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_CROSS_ASSEMBLY_PARENT_IL = """
+    .assembly extern mscorlib {}
+    .assembly 'Foreign.Parent' {}
+    .module 'Foreign.Parent.dll'
+
+    .namespace Foreign
+    {
+      .class interface public abstract auto ansi 'Source`1'<+ T>
+      {
+        .method public hidebysig newslot abstract virtual instance !T 'Read'() cil managed
+        {
+        }
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_CROSS_ASSEMBLY_CHILD_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Parent'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Child' {}
+    .module 'Foreign.Child.dll'
+
+    .namespace Foreign
+    {
+      // IntSource intentionally owns no MethodDef or Property row. Its exact
+      // AssemblyRef, TypeSpec, TypeDef, and InterfaceImpl rows cross the DLL edge.
+      .class interface public abstract auto ansi 'IntSource'
+             implements class [Foreign.Parent]'Foreign.Source`1'<int32>
       {
       }
     }

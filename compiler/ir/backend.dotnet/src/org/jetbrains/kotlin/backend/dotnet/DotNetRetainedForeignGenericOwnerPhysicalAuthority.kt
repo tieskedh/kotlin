@@ -45,11 +45,12 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * These restrictions are proof boundaries, not declaration- or member-name policy.
  *
  * The first inherited-receiver extension admits one retained interface with zero or one
- * unconstrained type parameter in the same selected graph and assembly. Its exact TypeDef carrier
- * is independent of declared members, so a genuinely memberless child can participate. Its sole
- * raw InterfaceImpl may close the selected MethodDef owner or forward the receiver parameter
- * through supported carriers. Its exact CLR variance is retained. Multiple binders/edges,
- * constraints, MethodImpls, classes, and cross-assembly inheritance remain unavailable.
+ * unconstrained type parameter in the same selected graph. Its exact TypeDef carrier is
+ * independent of declared members, so a genuinely memberless child can participate, including
+ * when its sole raw InterfaceImpl reaches the selected MethodDef owner through an exact
+ * AssemblyRef. The edge may close that owner or forward the receiver parameter through supported
+ * carriers. Its exact CLR variance is retained. Multiple binders/edges, constraints, MethodImpls,
+ * and classes remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -94,9 +95,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             when (receiverSource.carrierVersion) {
                 DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
             }
-            if (receiverSource.graph !== source.graph ||
-                receiverSource.assembly !== source.assembly
-            ) {
+            if (receiverSource.graph !== source.graph) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
 

@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.declarations.MetadataSource
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterDefinition
@@ -31,6 +32,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeView
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSpecification
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
@@ -481,6 +483,65 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
+    fun `cross assembly memberless TypeDef proves inherited foreign MethodDef route`() {
+        val fixture = crossAssemblyFixture()
+        val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+        assertEquals(false, fixture.source.assembly === receiverSource.assembly)
+        assertEquals(
+            fixture.source.declaringType.handle,
+            receiverSource.declaringType.handle,
+        )
+
+        val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalDeclarationIndex,
+                >>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                receiverSource,
+            )
+        ).value
+        val receiverIdentity =
+            DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource)
+        val receiverConstruction = boundConstruction(
+            declarations,
+            receiverIdentity,
+            emptyList(),
+        )
+        val parentConstruction = boundConstruction(
+            declarations,
+            retainedOwnerIdentity(fixture),
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        )
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, receiverConstruction),
+                exactTransferArguments(declarations),
+                receiverSource,
+            )
+        ).value
+        assertEquals(parentConstruction, route.requiredReceiverView.construction)
+        assertEquals(retainedMethodIdentity(fixture), route.method.identity)
+    }
+
+    @Test
+    fun `cross assembly inherited route rejects an unbound AssemblyRef`() {
+        val fixture = crossAssemblyFixture(parentReferenceVersion = "2.0.0.0")
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            )
+        )
+    }
+
+    @Test
     fun `TypeDef carrier rejects a mismatched retained hierarchy`() {
         val fixture = fixture(includeInheritedReceiver = true)
         val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
@@ -529,6 +590,43 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         assertEquals("Foreign.Source`1", inherited.classInfo.ilClassName)
         assertEquals(listOf(DotNetIlValueType.Int32), inherited.arguments)
         assertEquals(listOf(receiverSource.assembly), referencedAssemblies.distinct())
+    }
+
+    @Test
+    fun `cross assembly memberless IR class retains both exact assembly references`() {
+        val fixture = crossAssemblyFixture()
+        val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+        val importedClass = IrFactoryImpl.buildClass {
+            name = Name.identifier("IntSource")
+            kind = ClassKind.INTERFACE
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply {
+            metadata = object : MetadataSource.Class {
+                override val name: Name = this@apply.name
+                override val platformDeclarationSource: Any = receiverSource
+
+                override fun recordLocalClassType(type: FqName) = Unit
+
+                override fun asFirSymbol(): Any? = null
+            }
+        }
+        val referencedAssemblies = mutableListOf<DotNetClrClasspathAssembly.WithoutCarrier>()
+        val declarations = DotNetClrImportedDeclarations(
+            assemblyReferenceSink = referencedAssemblies::add,
+            coreLibraryReference = "System.Private.CoreLib",
+        )
+
+        val classInfo = assertNotNull(declarations.classInfoOrNull(importedClass))
+
+        assertEquals("Foreign.Child", classInfo.assemblyName)
+        val inherited = assertIs<DotNetIlValueType.GenericInstance>(classInfo.interfaces.single())
+        assertEquals("Foreign.Authority", inherited.classInfo.assemblyName)
+        assertEquals(listOf(DotNetIlValueType.Int32), inherited.arguments)
+        assertEquals(
+            listOf(receiverSource.assembly, fixture.source.assembly),
+            referencedAssemblies.distinct(),
+        )
     }
 
     @Test
@@ -1639,6 +1737,134 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         )
     }
 
+    private fun crossAssemblyFixture(
+        parentReferenceVersion: String? = null,
+    ): Fixture {
+        val parentFixture = fixture()
+        val parentSource = parentFixture.source
+        val parentAssembly = parentSource.assembly
+        val parentMetadata = parentAssembly.metadata
+        val assemblyReferenceHandle = DotNetClrMetadataHandle(ASSEMBLY_REFERENCE_TABLE, 1)
+        val parentTypeReferenceHandle = DotNetClrMetadataHandle(TYPE_REFERENCE_TABLE, 1)
+        val childTypeHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
+        val childTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 1)
+        val childType = DotNetClrTypeDefinition(
+            handle = childTypeHandle,
+            namespaceName = "Foreign",
+            metadataName = "IntSource",
+            attributes = PUBLIC_ABSTRACT_INTERFACE_ATTRIBUTES,
+            baseType = null,
+            declaringType = null,
+        )
+        val assemblyReference = DotNetClrAssemblyReference(
+            handle = assemblyReferenceHandle,
+            name = parentMetadata.identity.name,
+            version = parentReferenceVersion ?: parentMetadata.identity.version,
+            culture = parentMetadata.identity.culture,
+            flags = 0,
+            publicKeyOrToken = emptyList(),
+            hashValue = emptyList(),
+        )
+        val parentTypeReference = DotNetClrTypeReference(
+            handle = parentTypeReferenceHandle,
+            namespaceName = parentSource.declaringType.namespaceName,
+            metadataName = parentSource.declaringType.metadataName,
+            resolutionScope = assemblyReferenceHandle,
+        )
+        val childTypeSpecification = DotNetClrTypeSpecification(
+            handle = childTypeSpecHandle,
+            signature = DotNetClrTypeSignature.GenericInstance(
+                DotNetClrTypeSignature.Named(
+                    parentTypeReferenceHandle,
+                    isValueType = false,
+                ),
+                listOf(
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                ),
+            ),
+            rawSignature = emptyList(),
+        )
+        val childInterfaceImplementation = DotNetClrInterfaceImplementation(
+            handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 1),
+            implementingType = childTypeHandle,
+            interfaceType = childTypeSpecHandle,
+        )
+        val childMetadata = DotNetClrAssemblyMetadata(
+            identity = DotNetManagedAssemblyIdentity(
+                name = "Foreign.Child",
+                version = "1.0.0.0",
+                culture = "neutral",
+                publicKey = emptyList(),
+                publicKeyToken = emptyList(),
+            ),
+            assemblyReferences = listOf(assemblyReference),
+            typeReferences = listOf(parentTypeReference),
+            typeDefinitions = listOf(childType),
+            interfaceImplementations = listOf(childInterfaceImplementation),
+            exportedTypes = emptyList(),
+            typeSpecifications = listOf(childTypeSpecification),
+            fieldDefinitions = emptyList(),
+            methodDefinitions = emptyList(),
+            parameterDefinitions = emptyList(),
+            constantDefinitions = emptyList(),
+            fieldMarshalDefinitions = emptyList(),
+            memberReferences = emptyList(),
+            customAttributes = emptyList(),
+            propertyDefinitions = emptyList(),
+            methodSemantics = emptyList(),
+            genericParameterDefinitions = emptyList(),
+            genericParameterConstraints = emptyList(),
+        )
+        val childAssembly = DotNetClrClasspathAssembly.WithoutCarrier(
+            File("Foreign.Child.dll"),
+            childMetadata,
+        )
+        val childHierarchy = DotNetClrResolvedTypeHierarchy(
+            type = DotNetClrResolvedTypeView(
+                DotNetClrResolvedTypeDefinition(childMetadata, childType),
+                emptyList(),
+            ),
+            baseType = null,
+            interfaces = listOf(
+                DotNetClrResolvedInterfaceImplementation(
+                    childInterfaceImplementation,
+                    DotNetClrResolvedTypeView(
+                        parentSource.declaringHierarchy.type.type,
+                        listOf(
+                            DotNetClrResolvedTypeSignature.Primitive(
+                                DotNetClrPrimitiveType.INT32,
+                            )
+                        ),
+                    ),
+                )
+            ),
+        )
+        val graph = DotNetClrImportedDeclarationGraph(
+            assemblies = listOf(parentAssembly, childAssembly),
+            hierarchies = listOf(parentSource.declaringHierarchy, childHierarchy),
+        )
+        val source = DotNetClrImportedMethodSource(
+            parentAssembly,
+            parentSource.declaringType,
+            parentSource.declaringHierarchy,
+            graph,
+            parentFixture.method,
+            parentSource.resolvedSignature,
+        )
+        val receiverSource = DotNetClrImportedTypeSource(
+            childAssembly,
+            childType,
+            childHierarchy,
+            graph,
+        )
+        return Fixture(
+            source,
+            parentFixture.method,
+            relatedType = null,
+            inheritedReceiverSource = receiverSource,
+        )
+    }
+
     private data class Fixture(
         val source: DotNetClrImportedMethodSource,
         val method: DotNetClrMethodDefinition,
@@ -1647,10 +1873,12 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     )
 
     private companion object {
+        const val TYPE_REFERENCE_TABLE = 1
         const val TYPE_DEF_TABLE = 2
         const val METHOD_DEF_TABLE = 6
         const val INTERFACE_IMPLEMENTATION_TABLE = 9
         const val TYPE_SPEC_TABLE = 27
+        const val ASSEMBLY_REFERENCE_TABLE = 35
         const val GENERIC_PARAMETER_TABLE = 42
 
         const val COVARIANT_ATTRIBUTE = 0x0001

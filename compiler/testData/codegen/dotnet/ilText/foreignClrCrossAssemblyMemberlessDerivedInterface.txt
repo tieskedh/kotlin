@@ -1,0 +1,40 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern 'Foreign.Child'
+{
+  .ver 0:0:0:0
+}
+.assembly extern 'Foreign.Parent'
+{
+  .ver 0:0:0:0
+}
+.assembly 'foreignClrCrossAssemblyMemberlessDerivedInterface' {}
+.module 'main-foreignClrCrossAssemblyMemberlessDerivedInterface.il'
+
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'foreignClrCrossAssemblyMemberlessDerivedInterfaceKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'readCrossAssemblySource'(class [Foreign.Child]'Foreign.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class [Foreign.Parent]'Foreign.Source`1'<int32>::'Read'()
+    ret
+  }
+  .method public hidebysig static class [Foreign.Parent]'Foreign.Source`1'<int32> 'retainCrossAssemblySource'(class [Foreign.Child]'Foreign.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+}
