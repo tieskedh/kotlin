@@ -174,6 +174,158 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `TypeDef authority snapshots every ordered GenericParam fact`() {
+        val identity = localOwnerIdentity(IrClassSymbolImpl())
+        val constraints = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>(objectType())
+        val parameters = mutableListOf(
+            DotNetGenericOwnerPhysicalGenericParameterReference(
+                variance = DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                constraints = constraints,
+                hasReferenceTypeConstraint = true,
+                hasDefaultConstructorConstraint = true,
+                allowsByRefLike = true,
+            ),
+        )
+        val description = DotNetGenericOwnerPhysicalTypeDefReference(
+            identity,
+            parameters,
+            DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        )
+        constraints.clear()
+        parameters.clear()
+
+        val binding = DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+            DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+            listOf(description),
+            emptyList(),
+        )
+        val declarations = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalDeclarationIndex>,
+                >(binding).value
+        val retained = checkNotNull(declarations.typeDescriptionOrNull(identity))
+        val parameter = retained.genericParameters.single()
+
+        assertEquals(1, retained.genericArity)
+        assertEquals(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT, parameter.variance)
+        assertEquals(listOf(objectType()), parameter.constraints)
+        assertTrue(parameter.hasReferenceTypeConstraint)
+        assertTrue(parameter.hasDefaultConstructorConstraint)
+        assertTrue(parameter.allowsByRefLike)
+    }
+
+    @Test
+    fun `TypeDef authority rejects conflicting GenericParam variance and constraints`() {
+        val identity = localOwnerIdentity(IrClassSymbolImpl())
+        fun description(
+            variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+            referenceType: Boolean,
+        ) = DotNetGenericOwnerPhysicalTypeDefReference(
+            identity,
+            listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                variance,
+                constraints = emptyList(),
+                hasReferenceTypeConstraint = referenceType,
+            )),
+            DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(
+                    description(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT, false),
+                    description(DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT, false),
+                ),
+                emptyList(),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(
+                    description(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT, false),
+                    description(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT, true),
+                ),
+                emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun `TypeDef GenericParam constraints may reference only their own binder`() {
+        val owner = localOwnerIdentity(IrClassSymbolImpl())
+        val other = localOwnerIdentity(IrClassSymbolImpl())
+        val otherParameter = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .unboundTypeParameterReference(other, 0)
+        val ownSecondParameter = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .unboundTypeParameterReference(owner, 1)
+        fun parameter(
+            constraints: List<DotNetGenericOwnerSymbolicCarrierReference> = emptyList(),
+        ) = DotNetGenericOwnerPhysicalGenericParameterReference(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+            constraints,
+        )
+        val otherDescription = DotNetGenericOwnerPhysicalTypeDefReference(
+            other,
+            listOf(parameter()),
+            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(
+                    DotNetGenericOwnerPhysicalTypeDefReference(
+                        owner,
+                        listOf(parameter(listOf(otherParameter))),
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    ),
+                    otherDescription,
+                ),
+                emptyList(),
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(
+                    DotNetGenericOwnerPhysicalTypeDefReference(
+                        owner,
+                        listOf(parameter(listOf(ownSecondParameter)), parameter()),
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    ),
+                ),
+                emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun `arbitrary construction remains unavailable until GenericParam constraints are proven`() {
+        val identity = localOwnerIdentity(IrClassSymbolImpl())
+        val binding = DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+            DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+            listOf(DotNetGenericOwnerPhysicalTypeDefReference(
+                identity,
+                listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                    hasReferenceTypeConstraint = true,
+                )),
+                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            )),
+            emptyList(),
+        )
+        val declarations = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalDeclarationIndex>,
+                >(binding).value
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Unavailable>(
+            declarations.constructTypeOrError(identity, listOf(stringType())),
+        )
+    }
+
+    @Test
     fun `declaration authority rejects conflicting MethodDef descriptions`() {
         val owner = localOwnerIdentity(IrClassSymbolImpl())
         val identity = localMethodIdentity(IrSimpleFunctionSymbolImpl())
@@ -1286,13 +1438,13 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val naturalInput = DotNetLocalGenericOwnerPhysicalTypeInput(
             naturalOwnerIdentity,
             "Producer",
-            genericArity = 1,
+            genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
             role = DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
         )
         val semanticInput = DotNetLocalGenericOwnerPhysicalTypeInput(
             semanticOwnerIdentity,
             "ProducerSemantic",
-            genericArity = 0,
+            genericParameters = emptyList(),
             role = DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
         )
         val typeOnlyIndex = boundDeclarationIndex(
@@ -2630,7 +2782,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val ownerInput = DotNetLocalGenericOwnerPhysicalTypeInput(
             identity = ownerIdentity,
             logicalOwnerName = "StateOwner",
-            genericArity = 1,
+            genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
             role = DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
         )
         val earlyAuthority = assertIs<
@@ -2765,7 +2917,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         supportsInlineNull: Boolean = false,
     ) = DotNetGenericOwnerPhysicalTypeDefReference(
         identity,
-        arity,
+        dotNetInvariantUnconstrainedPhysicalGenericParameters(arity),
         category,
         supportsInlineNull,
     )

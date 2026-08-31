@@ -483,7 +483,7 @@ class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonTest {
         fun description(identity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local, arity: Int = 1) =
             DotNetGenericOwnerPhysicalTypeDefReference(
                 identity,
-                genericArity = arity,
+                genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(arity),
                 category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
             )
         fun observed(

@@ -147,7 +147,7 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
                 corrupted,
                 extraTypes = listOf(DotNetGenericOwnerPhysicalTypeDefReference(
                     otherImplementation,
-                    genericArity = 0,
+                    genericParameters = emptyList(),
                     category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
                 )),
                 extraMethods = listOf(fixture.methodDescription(otherBody, otherImplementation)),
@@ -484,7 +484,7 @@ class DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyTest {
         ) = DotNetLocalGenericOwnerPhysicalTypeInput(
             type(kind),
             kind.name,
-            genericArity,
+            dotNetInvariantUnconstrainedPhysicalGenericParameters(genericArity),
             role,
         )
 

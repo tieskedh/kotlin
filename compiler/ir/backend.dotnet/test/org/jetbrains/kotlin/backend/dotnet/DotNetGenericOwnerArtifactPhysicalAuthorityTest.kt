@@ -32,7 +32,9 @@ class DotNetGenericOwnerArtifactPhysicalAuthorityTest {
         val owner = DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
             physicalOwnerPath = ownerPath,
             physicalCapabilityOwnerPath = capabilityPath,
-            genericArity = 1,
+            physicalGenericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(0, emptySet(), emptyList()),
+            ),
             directSupertypes = listOf(
                 directSupertype(
                     kind = DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
@@ -114,6 +116,106 @@ class DotNetGenericOwnerArtifactPhysicalAuthorityTest {
     }
 
     @Test
+    fun bindsCompleteProducerGenericParamRowsWithoutFabricatingConstructions() {
+        val ownerPath = listOf("sample.ConstrainedOwner`2")
+        val constraints = mutableListOf(
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(1),
+        )
+        val owner = DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
+            physicalOwnerPath = ownerPath,
+            physicalCapabilityOwnerPath = null,
+            physicalGenericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(
+                    index = 0,
+                    specialConstraints = setOf(
+                        DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.REFERENCE_TYPE,
+                        DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.DEFAULT_CONSTRUCTOR,
+                    ),
+                    typeConstraints = constraints,
+                ),
+                DotNetGenericOwnerPhysicalGenericParameterRecord(1, emptySet(), emptyList()),
+            ),
+            directSupertypes = listOf(
+                directSupertype(
+                    kind = DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
+                    logicalClassifierKey = null,
+                    physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                        listOf("System", "Object"),
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    ),
+                ),
+            ),
+        )
+
+        val authority = DotNetGenericOwnerArtifactPhysicalAuthority.bindRecords(
+            artifactIdentity,
+            listOf(owner),
+            emptyList(),
+        ).boundValue()
+        constraints.clear()
+        val ownerDefinition = checkNotNull(authority.producerTypeDefinitionOrNull(ownerPath))
+        val description = checkNotNull(authority.declarations.typeDescriptionOrNull(ownerDefinition))
+        val firstParameter = description.genericParameters.first()
+
+        assertEquals(2, description.genericArity)
+        assertEquals(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT, firstParameter.variance)
+        assertEquals(
+            listOf(authority.declarations.typeParameterOrError(ownerDefinition, 1).boundValue()),
+            firstParameter.constraints,
+        )
+        assertTrue(firstParameter.hasReferenceTypeConstraint)
+        assertTrue(firstParameter.hasDefaultConstructorConstraint)
+        assertFalse(firstParameter.hasNotNullableValueTypeConstraint)
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Unavailable>(
+            authority.declarations.constructTypeOrError(
+                ownerDefinition,
+                listOf(
+                    DotNetGenericOwnerSymbolicCarrierReference.stringCarrier(),
+                    DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun doesNotInventGenericParamAuthorityForDetachedCoreType() {
+        val owner = DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
+            physicalOwnerPath = listOf("sample.Owner`1"),
+            physicalCapabilityOwnerPath = null,
+            physicalGenericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(0, emptySet(), emptyList()),
+            ),
+            directSupertypes = listOf(
+                directSupertype(
+                    kind = DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS,
+                    logicalClassifierKey = null,
+                    physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                        listOf("System", "Object"),
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    ),
+                ),
+                directSupertype(
+                    kind = DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                    logicalClassifierKey = "C:kotlin/collections/Iterable",
+                    physicalType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                        listOf("System.Collections.Generic", "IEnumerable`1"),
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                        listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)),
+                    ),
+                ),
+            ),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Unavailable>(
+            DotNetGenericOwnerArtifactPhysicalAuthority.bindRecords(
+                artifactIdentity,
+                listOf(owner),
+                emptyList(),
+            ),
+        )
+    }
+
+    @Test
     fun doesNotInventInlineNullAuthorityForNamedValueTypeArguments() {
         val interfacePath = listOf("sample.Source`1")
         val interfaceType = DotNetGenericOwnerPhysicalInterfaceTypeRecord(
@@ -133,7 +235,9 @@ class DotNetGenericOwnerArtifactPhysicalAuthorityTest {
         val owner = DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
             physicalOwnerPath = listOf("sample.Owner`1"),
             physicalCapabilityOwnerPath = null,
-            genericArity = 1,
+            physicalGenericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(0, emptySet(), emptyList()),
+            ),
             directSupertypes = listOf(
                 directSupertype(
                     kind = DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
@@ -170,7 +274,9 @@ class DotNetGenericOwnerArtifactPhysicalAuthorityTest {
         val owner = DotNetGenericOwnerArtifactPhysicalAuthorityOwnerInput(
             physicalOwnerPath = listOf("sample.Owner`1"),
             physicalCapabilityOwnerPath = null,
-            genericArity = 1,
+            physicalGenericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterRecord(0, emptySet(), emptyList()),
+            ),
             directSupertypes = listOf(
                 directSupertype(
                     kind = DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
