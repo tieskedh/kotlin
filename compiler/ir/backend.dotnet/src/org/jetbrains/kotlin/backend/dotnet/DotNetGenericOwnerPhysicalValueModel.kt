@@ -962,7 +962,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             return bindRetainedForeignDeclarations(declarations)
         }
 
-        /** Adds one exact retained receiver TypeDef and its single authenticated InterfaceImpl. */
+        /** Adds one exact retained receiver TypeDef and its complete authenticated edge set. */
         fun bindRetainedForeignInheritedReceiver(
             source: DotNetClrImportedMethodSource,
             method: DotNetClrMethodDefinition,

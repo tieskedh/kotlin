@@ -96,24 +96,27 @@ views, their recorded physical-interface closure, and selected lineage, then
 produces its exact instantiated MethodDef result through the same value model.
 The first inherited grammar authenticates one child interface with an exact
 TypeDef carrier, zero or one unconstrained parameter with exact CLR variance,
-and one `InterfaceImpl` in the same selected graph. Parent and child may reside
-in different assemblies; the raw edge must bind through its exact AssemblyRef.
-The carrier is independent of declared members; the hostile child has no marker
-MethodDef. The edge may close the root MethodDef owner or forward the child
-binder through the admitted carrier grammar.
+and a complete set of one or two `InterfaceImpl` rows in the same selected
+graph. Parent and child may reside in different assemblies; every raw edge must
+bind through its exact AssemblyRef. Exactly one edge reaches the selected
+MethodDef owner. An optional second edge is independently authenticated as a
+non-generic root interface and remains in the closure. The carrier is
+independent of declared members; the hostile child has no marker MethodDef. The
+owner edge may close the root owner or forward the child binder through the
+admitted carrier grammar.
 Recorded physical substitution, rather than a logical Kotlin type, derives each
 concrete parent view. A narrow target hook now transports that class-level
 carrier through lazy external FIR2IR as compilation-local class metadata;
 Common neither interprets nor serializes it, and callable authority remains
-separate. Resource-free external DLLs now prove same- and cross-assembly
-memberless children through the actual compiler pipeline: each child TypeDef
-remains the receiver carrier, its exact `InterfaceImpl` supplies the inherited
-construction, and the call targets the parent's retained MethodDef without a
-registry, fake member, copied slot, or name-based lookup. The next ordered
-retained boundary admits two exact child `InterfaceImpl` rows and selects the
-one reaching the MethodDef owner by identity rather than row order. MethodImpls,
-multiple binders/members, variance conversions, constraints, classes, and
-Runtime/Stdlib application remain later.
+separate. Resource-free external DLLs now prove same-assembly, cross-assembly,
+and multiple-edge memberless children through the actual compiler pipeline.
+The hostile two-edge child records `Marker` before `Source<int>`; the call still
+targets the parent's retained MethodDef by identity and both exact views require
+no cast or adapter. The next ordered boundary retains two distinct constructions
+of the selected MethodDef owner, requires an already-proven selected lineage to
+disambiguate them, and proves that lineage cannot create a missing view.
+MethodImpls, multiple binders/members, variance conversions, constraints,
+classes, and Runtime/Stdlib application remain later.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;
