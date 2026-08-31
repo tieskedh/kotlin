@@ -81,14 +81,20 @@ parameter with the field's direct `T` type. Init-block, other-field, computed,
 and other nontrivial initializers remain unavailable and fall back out of this
 proof; they are not hard user errors.
 
-The next ordered proof composes owner-dependent callable inputs with direct and
-split-nullable results on a custom declaration. Deeper authority, broader state
-shapes, retained foreign declarations, and value-provenance generalization
+Stage 7 now composes one strict owner-dependent callable input with a distinct
+split-nullable owner result on a custom structural declaration. Semantic role,
+parameter domains, and result layout remain independent; the existing Runtime
+`Map` family is deliberately unchanged. The bounded proof and its exact erased
+inverse are recorded in the
+[Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
+The next ordered work closes retained/foreign declaration authority and makes
+the shared value/operation query authoritative one bounded route at a time.
+Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;
 complete removal still waits for the selected-family freeze and hostile
 inverse. Generic-child-capability to separately owned base-capability conversion
-remains an independent interface-routing proof, not part of Stage 6.
+remains an independent interface-routing proof, not part of Stages 6 or 7.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to

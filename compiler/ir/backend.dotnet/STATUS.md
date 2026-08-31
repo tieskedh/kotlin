@@ -11,13 +11,12 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
-- Current checkpoint: physical library ABI 64, generic-owner artifact schema
+- Current checkpoint: physical library ABI 65, generic-owner artifact schema
   21, compiler/runtime surface 60.
-- The Stage 6 checkpoint closes the bounded producer-wide state proof without
-  changing a published library-index record: one admitted generic class seals
-  a private mutable `!T` FieldDef when its complete writer graph is typed, while
-  a hostile covariant owner seals one `object` FieldDef when a legal semantic
-  write requires it. Both retain one object and one authoritative state.
+- Stage 7 separates semantic member role from physical result layout and proves
+  the structural `Lookup<K, out V>.lookup(K): V?` contract as
+  `!V lookup(!K, out bool)` without migrating Runtime `Map`. Exact value calls
+  remain unboxed; semantic and ordinary C# routes preserve the same object.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
@@ -27,27 +26,32 @@ physical identities may still be corrected atomically.
 
 ## Latest verification
 
-The latest fresh unqualified production-erased target aggregate passed on
-2026-08-29 at the ABI-64 checkpoint:
+The latest fresh production-erased target gate completed on 2026-08-31 at the
+ABI-65 checkpoint. Its dependency-wide refresh exposed and corrected a stale
+Stage 6 test oracle; the unchanged prior checkpoint reproduced the mismatch and
+the [Stage 7 archive](docs/archive/generic-owner-callable-contract-composition-2026-08-31.md)
+owns the detailed evidence. The complete FIR2IR root and supported aggregate
+then passed:
 
 ```text
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun-tasks -q
+.\gradlew.bat :compiler:fir:fir2ir:dotNetTest --rerun -q
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-Direct JUnit XML audit found 204 suites and 2,583 tests, with zero failures,
+Direct JUnit XML audit found 204 suites and 2,600 tests, with zero failures,
 errors, or skips:
 
 | Root | Suites | Tests |
 | --- | ---: | ---: |
-| backend | 14 | 198 |
+| backend | 14 | 207 |
 | `dotnet.ir` | 1 | 6 |
-| FIR2IR | 187 | 2,251 |
+| FIR2IR | 187 | 2,259 |
 | integration | 2 | 128 |
 
-The Stage 6 state-authority slice is rehearsal-only and keeps ABI 64. Its
-focused model, candidate, production-inverse, metadata, reflection, separate-
-compilation, and ordinary C# evidence is owned by the
-[Stage 6 archive](docs/archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
+Stage 7's focused candidate and erased-inverse matrix, objective metadata,
+ordinary C#, separate-compilation, and boundary evidence is owned by the
+[Stage 7 archive](docs/archive/generic-owner-callable-contract-composition-2026-08-31.md).
 
 ## Production binding state
 
@@ -73,55 +77,37 @@ compilation, and ordinary C# evidence is owned by the
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
-Stage 6 now computes detached-family inheritance, private-helper reachability,
-state selection, and owner-dependent output pairing as one monotone fixpoint.
-Admission consumes the final per-field requirements; the priority-compressed
-owner disposition is diagnostic and cannot hide an unresolved field.
+Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
+`SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 65 records
+semantic role and result layout separately in `H`; local BOUND, producer-final
+`N`, direct consumers, semantic capability dispatch, and ordinary natural-only
+C# implementations consume the same MethodDef authority. The admitted grammar
+is deliberately limited to a single-member root interface with one invariant
+input and one distinct covariant nullable output. Existing result-only
+split-nullable families remain green and Runtime `Map` retains its previous
+contract.
 
-BOUND freezes the complete pre-existing instance-field identity set plus the
-selected field's exact owner, flags, and symbolic carrier. It also freezes each
-explicit writer's unique site/producer/origin/value-type lineage and the one
-exact positional constructor initializer. Final routing checks identities and
-exact multiplicities, preventing a later `!T` or `object` shadow field or a
-removed, duplicated, retargeted, or altered writer.
+The exact scope, PE/reflection/C# evidence, erased inverse, and discovered
+downstream object-remapping repair are owned by the
+[Stage 7 archive](docs/archive/generic-owner-callable-contract-composition-2026-08-31.md).
+Stage 6 state details remain in its
+[archive](docs/archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md),
+not in this current snapshot.
 
-Immediately before BOUND, after bridge/body-producing passes, the complete live
-module is re-scanned and every typed store must again satisfy the exact non-
-dispatch field-`T` writer grammar. A new unsupported live store makes the family
-unavailable; only changes after BOUND are internal authority conflicts.
-
-Final observations are validated before dependency, IL, or PE publication. The
-full observed instance-field set must match BOUND, while the selected owner-
-dependent FieldDef is sealed separately with its physical name, TypeDef
-category/arity, exact owner-parameter index, cross-scope uniqueness, and other
-BOUND facts. Snapshots are published only after ILAsm success, and the PE
-harness correlates the sealed name with objective metadata.
-
-The bounded grammar is deliberately small: exactly one private mutable instance
-field whose logical type is one direct owner parameter, with plain memory
-semantics and either producer-graph-proven typed storage or required
-semantic-object storage. The only admitted initializer is an exact positional
-constructor-parameter copy; typed direct stores must consume the writer's exact
-non-dispatch field-`T` parameter. Explicit init-block, other-field, computed, or
-otherwise nontrivial initializers remain unavailable rather than producing a
-hard user error. Nested, projected, nullable, volatile, incomplete-writer, and
-typed-write-provenance shapes remain
-unavailable. Exact scope, owner, flags, carrier, binder, final emitted name and
-PE correlation, inherited construction, absence of shadow state, Kotlin
-behavior, identity, and ordinary C# use are covered in the
-[Stage 6 archive](docs/archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
-
-The next migration stage composes owner-dependent callable inputs with direct
-and split-nullable results on a custom declaration. The shared model and
-remaining boundary are owned by the
+Next work returns to retained/foreign declaration authority and shared
+operation/value provenance before any multi-member or Runtime/Stdlib
+application. The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
 ## Current blockers
 
+- Callable composition remains bounded to one structural root member. Multiple
+  members/inputs, properties/defaults, constraints, method generics, deeper
+  inheritance, explicit MethodImpls, value-class payloads, and Runtime/Stdlib
+  application are not yet closed.
 - Declaration and implementation authority is not yet closed for deeper base
-  chains, multiple or distinct constructed views, constraints, method
-  generics, explicit MethodImpls, or general callable forms.
+  chains or multiple/distinct constructed views.
 - Retained foreign CLR declaration authority remains a separate incomplete
   boundary.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-

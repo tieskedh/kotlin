@@ -45,6 +45,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeIn
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
@@ -289,11 +290,17 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             }
             val methodDefinitions = mutableListOf<DotNetGenericOwnerPhysicalMethodDefReference>()
             val callableFamilies = mutableListOf<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>()
-            val directProducerSelections = IdentityHashMap<IrSimpleFunction, DirectProducerCallableSelection>()
+            val directProducerSelections = IdentityHashMap<IrSimpleFunction, CallableSelection>()
             for (entry in context.genericOwnerCapabilitySlots.entries) {
                 val source = entry.key
                 val semanticSlot = entry.value
-                val selection = bindDirectProducerCallableOrNull(
+                val directProducerSelection = bindDirectProducerCallableOrNull(
+                    source,
+                    semanticSlot,
+                    inputsByIdentity,
+                    declarations,
+                )
+                val selection = directProducerSelection ?: bindOwnerInputSplitNullableCallableOrNull(
                     source,
                     semanticSlot,
                     inputsByIdentity,
@@ -301,7 +308,9 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 ) ?: continue
                 methodDefinitions += selection.methodDefinitions
                 callableFamilies += selection.callableFamily
-                directProducerSelections[source] = selection
+                if (directProducerSelection != null) {
+                    directProducerSelections[source] = directProducerSelection
+                }
             }
             val completeEmissionFamilies =
                 mutableListOf<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput>()
@@ -488,7 +497,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             }
         }.filterTo(linkedSetOf()) { field -> !field.isStatic }
 
-    private data class DirectProducerCallableSelection(
+    private data class CallableSelection(
         val methodDefinitions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
         val callableFamily: DotNetLocalGenericOwnerPhysicalCallableFamilyInput,
     )
@@ -532,7 +541,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 DotNetLocalGenericOwnerPhysicalTypeInput,
                 >,
         declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
-    ): DirectProducerCallableSelection? {
+    ): CallableSelection? {
         val owner = source.parent as? IrClass ?: return null
         if (owner.kind != ClassKind.INTERFACE || owner !in context.reifiedGenericInterfaces) return null
         val contract = context.publishedGenericInterfaceFamilies[owner]
@@ -642,13 +651,164 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 },
             )
         }
-        return DirectProducerCallableSelection(
+        return CallableSelection(
             methodDefinitions = listOf(
                 method(naturalMethodIdentity, naturalOwnerIdentity, naturalResultCarrier),
                 method(
                     semanticMethodIdentity,
                     semanticOwnerIdentity,
                     DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                ),
+            ),
+            callableFamily = DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
+                source.symbol,
+                semanticSlot.symbol,
+            ),
+        )
+    }
+
+    /**
+     * First orthogonal callable composition: one strict owner input and a different direct owner
+     * output using the split-nullable result convention. The member role selects the semantic
+     * operation; the result layout and parameter domain are validated independently.
+     */
+    private fun bindOwnerInputSplitNullableCallableOrNull(
+        source: IrSimpleFunction,
+        semanticSlot: IrSimpleFunction,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+    ): CallableSelection? {
+        val owner = source.parent as? IrClass ?: return null
+        if (owner.kind != ClassKind.INTERFACE || owner !in context.reifiedGenericInterfaces ||
+            owner.typeParameters.size != 2
+        ) return null
+        val contract = context.publishedGenericInterfaceFamilies[owner]
+            ?.takeIf { family ->
+                family.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                        family.capabilityBindingKind ==
+                        DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED
+            } ?: return null
+        contract.declaredMembers.singleOrNull()
+            ?.takeIf { candidate ->
+                candidate.role == DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT &&
+                        candidate.resultLayout ==
+                        DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+            } ?: return null
+        if (source.isSuspend || source.typeParameters.isNotEmpty() ||
+            source.visibility != DescriptorVisibilities.PUBLIC ||
+            source.modality != Modality.ABSTRACT || source.body != null
+        ) return null
+        val sourceInput = source.parameters.singleOrNull { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        } ?: return null
+        val sourceInputType = sourceInput.type as? IrSimpleType ?: return null
+        val sourceResultType = source.returnType as? IrSimpleType ?: return null
+        val inputParameter = (sourceInputType.classifier as? IrTypeParameterSymbol)?.owner
+            ?: return null
+        val resultParameter = (sourceResultType.classifier as? IrTypeParameterSymbol)?.owner
+            ?: return null
+        val inputParameterIndex = owner.typeParameters.indexOf(inputParameter)
+        val resultParameterIndex = owner.typeParameters.indexOf(resultParameter)
+        if (source.parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
+            source.parameters.size != 2 || sourceInput.defaultValue != null ||
+            sourceInputType.isMarkedNullable() || !sourceResultType.isMarkedNullable() ||
+            inputParameterIndex < 0 || resultParameterIndex < 0 ||
+            inputParameterIndex == resultParameterIndex ||
+            inputParameter.variance != Variance.INVARIANT ||
+            resultParameter.variance != Variance.OUT_VARIANCE
+        ) return null
+
+        val capabilityOwner = context.genericOwnerCapabilityInterfaces[owner] ?: return null
+        val semanticInput = semanticSlot.parameters.singleOrNull { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        } ?: return null
+        if (semanticSlot.parent !== capabilityOwner || semanticSlot.isSuspend ||
+            semanticSlot.typeParameters.isNotEmpty() ||
+            semanticSlot.parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
+            semanticSlot.parameters.size != 2 || !semanticInput.type.isNullableAny() ||
+            !semanticSlot.returnType.isNullableAny() ||
+            semanticSlot.visibility != DescriptorVisibilities.PUBLIC ||
+            semanticSlot.modality != Modality.ABSTRACT || semanticSlot.body != null
+        ) return null
+
+        val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            owner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            capabilityOwner.symbol,
+            view = null,
+        )
+        if (inputsByIdentity[naturalOwnerIdentity]?.role !=
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ||
+            inputsByIdentity[semanticOwnerIdentity]?.role !=
+            DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY
+        ) return null
+        fun ownerParameterOrNull(index: Int): DotNetGenericOwnerSymbolicCarrierReference? =
+            when (val binding = declarations.typeParameterOrError(naturalOwnerIdentity, index)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> null
+            }
+        val naturalInputCarrier = ownerParameterOrNull(inputParameterIndex) ?: return null
+        val naturalResultCarrier = ownerParameterOrNull(resultParameterIndex) ?: return null
+
+        val naturalMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            source.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val semanticMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            semanticSlot.symbol,
+            role = null,
+        )
+        val objectCarrier = DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+        fun method(
+            identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
+            declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
+            inputCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+            resultLayout: DotNetGenericOwnerPhysicalCallableResultLayoutReference,
+        ) = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = identity,
+            declaringType = declaringType,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 0,
+                resultLayout = resultLayout,
+                parameterSlots = listOf(DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                    inputCarrier,
+                )),
+            ),
+            genericParameters = emptyList(),
+        )
+        fun outputSlot(carrier: DotNetGenericOwnerSymbolicCarrierReference) =
+            DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                carrier,
+            )
+        return CallableSelection(
+            methodDefinitions = listOf(
+                method(
+                    naturalMethodIdentity,
+                    naturalOwnerIdentity,
+                    naturalInputCarrier,
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
+                        outputSlot(naturalResultCarrier),
+                    ),
+                ),
+                method(
+                    semanticMethodIdentity,
+                    semanticOwnerIdentity,
+                    objectCarrier,
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                        outputSlot(objectCarrier),
+                    ),
                 ),
             ),
             callableFamily = DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
@@ -667,7 +827,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
      */
     private fun bindCompleteDirectProducerImplementationOrNull(
         selection: DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection,
-        directProducerSelections: IdentityHashMap<IrSimpleFunction, DirectProducerCallableSelection>,
+        directProducerSelections: IdentityHashMap<IrSimpleFunction, CallableSelection>,
         inputsByIdentity: Map<
                 DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
                 DotNetLocalGenericOwnerPhysicalTypeInput,

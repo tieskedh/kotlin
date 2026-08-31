@@ -64,19 +64,23 @@ this programme.
 ## Current work package
 
 The source-built Stdlib census is paused. The bounded declaration/MethodDef
-stages and Stage 6 producer-wide state proof are complete; their current
-limits are indexed by the [archive](../archive/README.md). Stage 6 closes only
+stages, Stage 6 producer-wide state proof, and Stage 7 callable-composition
+proof are complete; their current limits are indexed by the
+[archive](../archive/README.md). Stage 6 closes only
 the one-field grammar after monotone family/helper/state/output closure, final
 per-field admission, a complete live-module writer reproof after bridge/body
 production, complete BOUND field/writer/initializer freezing, and pre-
-publication full-field validation with ILAsm-gated snapshots. The separately
-identified generic-child-capability to base-capability conversion remains
-outside this state proof. Work now proceeds in this order:
+publication full-field validation with ILAsm-gated snapshots. Stage 7 composes
+one strict owner input with one distinct split-nullable owner output without
+changing Runtime `Map`; it does not admit broader callable families. The
+separately identified generic-child-capability to base-capability conversion
+remains outside these proofs. Work now proceeds in this order:
 
-1. **Compose callable contracts.** Prove owner-dependent input plus
-   `SplitNullable(!V, out bool)` on a custom `Lookup<K,V>` before applying it to
-   `Map`. Parameter domains and result layout must compose without a new
-   combined member role.
+1. **Bounded proof complete — callable composition.** The custom structural
+   `Lookup<K,V>` proves owner-dependent input plus
+   `SplitNullable(!V, out bool)`, independently recorded parameter domains and
+   result layout, ordinary C# implementation, and the exact erased inverse.
+   Multi-member/Runtime application remains outside this proof.
 2. **Complete declaration authority.** Add retained-foreign, static/file-facade,
    overlapping-family, and global final-emission evidence without letting an
    earlier expected record fill a missing final fact.

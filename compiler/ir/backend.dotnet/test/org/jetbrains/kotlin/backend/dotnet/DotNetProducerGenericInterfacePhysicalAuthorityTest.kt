@@ -172,6 +172,7 @@ class DotNetProducerGenericInterfacePhysicalAuthorityTest {
                     DotNetPublishedGenericInterfaceMemberContract(
                         memberKey,
                         DotNetPublishedGenericInterfaceMemberRole.BROAD_FIXED_BARRIER_INPUT,
+                        DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
                     ),
                 )
             } else {

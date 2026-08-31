@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabi
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceParentContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
@@ -202,6 +203,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val parameters = typeParameters
         val singleParameter = parameters.singleOrNull()
         val owner = this
+        val ownerInputSplitNullableMember = directOwnerInputSplitNullableOutputMemberOrNull()
         return buildList {
             for (member in members) {
                 val property = member.correspondingPropertySymbol?.owner
@@ -210,6 +212,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
                 val directInputOutputParameter = parameters.singleOrNull { parameter ->
                     member.isDirectInputOutputMember(parameter)
+                }
+                val splitNullableResultParameter = parameters.singleOrNull { parameter ->
+                    member.isDirectNullableProducerMember(parameter) ||
+                            member === ownerInputSplitNullableMember &&
+                            member.hasDirectSplitNullableResult(parameter)
                 }
                 val fixedBarrierParameter = parameters.singleOrNull { parameter ->
                     member.isBroadFixedBarrierInputMember(parameter)
@@ -225,7 +232,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             member.isDirectMethodGenericProducerMember(singleParameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER
                     singleParameter != null && member.isDirectNullableProducerMember(singleParameter) ->
-                        DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
+                        DotNetPublishedGenericInterfaceMemberRole.PRODUCER
                     member.isConstructedInterfaceProducerMember(owner) ->
                         DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER
                     fixedBarrierParameter != null ->
@@ -235,7 +242,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
                     singleParameter != null && member.isDirectConsumerMember(singleParameter) ->
                         DotNetPublishedGenericInterfaceMemberRole.CONSUMER
-                    directInputOutputParameter != null ->
+                    directInputOutputParameter != null ||
+                            member.isDirectOwnerInputSplitNullableOutputMember(owner) ->
                         DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT
                     member.isOwnerIndependentPrimitivePropertyGetter() ->
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_PROPERTY_GETTER
@@ -251,6 +259,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 add(DotNetPublishedGenericInterfaceMemberContract(
                     logicalMemberKey,
                     role,
+                    when {
+                        member.returnType.isUnit() ->
+                            DotNetPublishedGenericInterfaceMemberResultLayout.VOID
+                        splitNullableResultParameter != null ->
+                            DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+                        else -> DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT
+                    },
                 ))
             }
         }.sortedBy { member -> member.logicalMemberKey }
@@ -327,6 +342,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (owner.typeParameters.size > 1) {
             val hasSupportedShape = if (owner.dotNetDirectInterfaceTypes().isEmpty()) {
                 owner.directCovariantParameterPropertyVectorOrNull() != null ||
+                        owner.directOwnerInputSplitNullableOutputMemberOrNull() != null ||
                         owner.directMixedParameterLookupFamilyMembersOrNull() != null
             } else {
                 owner.directInvariantParameterInputOutputChildShapeOrNull() != null
@@ -1972,6 +1988,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(this)
             return hasSupportedPhysicalPlacement && dotNetDirectInterfaceTypes().isEmpty() &&
                     (directCovariantParameterPropertyVectorOrNull() != null ||
+                            directOwnerInputSplitNullableOutputMemberOrNull() != null ||
                             directMixedParameterLookupFamilyMembersOrNull() != null)
         }
         if (!hasFirstReifiedInterfaceOwnerShape()) return false
@@ -2197,6 +2214,36 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return members.takeIf {
             members.size == getters.size && members.toSet() == getters.toSet() &&
                     producedParameters.toSet().size == parameters.size
+        }
+    }
+
+    /**
+     * First declaration-independent callable composition proof: one invariant owner parameter is
+     * consumed directly and a different covariant owner parameter is returned through the
+     * split-nullable convention. Names, declaration order, packages, and stdlib ownership carry
+     * no authority.
+     */
+    private fun IrClass.directOwnerInputSplitNullableOutputMemberOrNull(): IrSimpleFunction? {
+        if (!hasLogicalReifiedInterfaceOwnerShape() || typeParameters.size != 2 ||
+            dotNetDirectInterfaceTypes().isNotEmpty() || declaredInterfaceProperties().isNotEmpty()
+        ) {
+            return null
+        }
+        val invariantParameter = typeParameters.singleOrNull { parameter ->
+            parameter.variance == Variance.INVARIANT
+        } ?: return null
+        val covariantParameter = typeParameters.singleOrNull { parameter ->
+            parameter.variance == Variance.OUT_VARIANCE
+        } ?: return null
+        val member = declaredInterfaceMembers().singleOrNull() ?: return null
+        if (!member.isDirectOwnerInputSplitNullableOutputMember(this)) return null
+        val input = member.parameters.singleOrNull { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        } ?: return null
+        val inputParameter = ((input.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
+        val resultParameter = ((member.returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
+        return member.takeIf {
+            inputParameter === invariantParameter && resultParameter === covariantParameter
         }
     }
 
@@ -2489,23 +2536,43 @@ internal class DotNetReifiedGenericInterfaceLowering(
         return resultParameter?.owner === parameter
     }
 
-    /**
-     * The first open-nullable result family. Regular inputs may be declaration-independent, but
-     * no owner parameter may occur in them: broad inputs remain a separate semantic concern.
-     */
-    private fun IrSimpleFunction.isDirectNullableProducerMember(parameter: IrTypeParameter): Boolean {
+    /** Whether this callable owns the direct open-nullable result convention for [parameter]. */
+    private fun IrSimpleFunction.hasDirectSplitNullableResult(parameter: IrTypeParameter): Boolean {
         if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
             body != null || this in context.interfaceDefaultImplementations ||
             correspondingPropertySymbol != null || isSuspend || typeParameters.isNotEmpty() ||
             parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
             parameters.drop(1).any { input ->
-                input.kind != IrParameterKind.Regular || input.defaultValue != null ||
-                        input.type.referencesTypeParameterOf(parameter.parent as IrClass)
+                input.kind != IrParameterKind.Regular || input.defaultValue != null
             }
         ) {
             return false
         }
         return returnType.isDirectNullableProducerOf(parameter)
+    }
+
+    /**
+     * The original result-only slice. Its inputs are declaration-independent; owner-dependent
+     * input policies are classified independently from the split result layout.
+     */
+    private fun IrSimpleFunction.isDirectNullableProducerMember(parameter: IrTypeParameter): Boolean =
+        hasDirectSplitNullableResult(parameter) && parameters.drop(1).none { input ->
+            input.type.referencesTypeParameterOf(parameter.parent as IrClass)
+        }
+
+    /** One direct owner-parameter input composed with a direct open-nullable owner output. */
+    private fun IrSimpleFunction.isDirectOwnerInputSplitNullableOutputMember(owner: IrClass): Boolean {
+        val resultParameter = owner.typeParameters.singleOrNull { parameter ->
+            hasDirectSplitNullableResult(parameter)
+        } ?: return false
+        val input = parameters.singleOrNull { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        } ?: return false
+        if (parameters.size != 2) return false
+        val inputType = input.type as? IrSimpleType ?: return false
+        if (inputType.isMarkedNullable()) return false
+        val inputParameter = (inputType.classifier as? IrTypeParameterSymbol)?.owner ?: return false
+        return inputParameter in owner.typeParameters && resultParameter in owner.typeParameters
     }
 
     /**

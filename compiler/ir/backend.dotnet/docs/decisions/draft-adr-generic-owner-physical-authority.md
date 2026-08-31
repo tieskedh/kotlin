@@ -686,12 +686,16 @@ slot. A mismatch requires separately proven bridge/MethodImpl authority or
 fails closed; it never rewrites the base MethodDef.
 
 The initial natural `N` declaration-seal grammar is deliberately bounded to
-directly declared producer and split-nullable producer slots on root natural
-interfaces with no direct edges or generic constraints and only declaration-
-local carriers. Unsupported forms are `Unavailable`; they are never
-reconstructed, widened to `object`, or inferred from an implementation seal.
-This is an admission boundary for the first portable record, not a permanent
-claim that inherited or edge-bearing slots need a different authority model.
+directly declared slots on root natural interfaces with no direct edges or
+generic constraints and only declaration-local carriers. Semantic member role,
+parameter domains, and result layout are independent facts. The admitted
+grammars currently include direct producer results, direct split-nullable
+producer results, and one structural callable with one strict invariant owner
+input plus a distinct covariant split-nullable owner output. Unsupported forms
+are `Unavailable`; they are never reconstructed, widened to `object`, or
+inferred from an implementation seal. This is an admission boundary for the
+first portable record, not a permanent claim that inherited, edge-bearing, or
+multi-member slots need a different authority model.
 
 CLR interface dispatch selects the ordinary or explicit `MethodImpl`. The
 selected construction supplies binding context; selected-view lineage may
@@ -802,8 +806,9 @@ Proceed with this model now in shadow mode.
    time.
 6. Remove an old recognizer only after the shared model derives both its
    positive and negative behavior.
-7. Compose owner-dependent inputs with SplitNullable on a custom structural
-   family before applying it to stdlib declarations.
+7. Preserve the completed custom owner-input plus SplitNullable proof while
+   generalizing callable composition; do not apply it to stdlib declarations
+   until the shared model derives the broader family.
 8. Run the complete generic-owner, Runtime/Stdlib, C# interop, deployment, and
    erased-inverse matrix before proposing production cutover.
 
@@ -817,9 +822,12 @@ This is a **GO** for production-inert architectural consolidation. It is not a
 GO for a generic-interface, generic-class, or stdlib ABI cutover.
 
 The bounded Stage 6 state slice implements the declaration/state half of this
-model and is retained as executable evidence. The next ordered proof is the
-orthogonal callable-contract composition in step 7, not another state
-recognizer or a resumed stdlib census.
+model and is retained as executable evidence. Stage 7 independently composes a
+strict owner input with a split-nullable owner result on a custom structural
+family, including producer-recorded MethodDef consumption, ordinary C#
+implementation, and the exact erased inverse. The next ordered work closes
+retained/foreign declaration authority and shared value/operation provenance;
+it is not another shape-specific state recognizer or a resumed stdlib census.
 
 ## Consequences
 
