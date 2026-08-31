@@ -87,8 +87,12 @@ parameter domains, and result layout remain independent; the existing Runtime
 `Map` family is deliberately unchanged. The bounded proof and its exact erased
 inverse are recorded in the
 [Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
-The next ordered work closes retained/foreign declaration authority and makes
-the shared value/operation query authoritative one bounded route at a time.
+The first retained-foreign declaration adapter now authenticates one bounded
+open root-interface MethodDef directly from its selected raw metadata; wider
+hierarchies, MethodImpls, nominal carriers, and constrained constructions remain
+outside that grammar. The next ordered work makes the shared value/operation
+query authoritative for one such imported route, then widens retained authority
+and routing one structural boundary at a time.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;
