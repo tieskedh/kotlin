@@ -774,17 +774,21 @@ an incomplete retained hierarchy, invalid generic binder/flags, or disagreement
 between retained and raw signatures is `Conflict`. Recorded constraints still
 do not prove an arbitrary constrained construction.
 
-The first inherited-receiver extension admits one public top-level abstract
-non-generic interface with an exact retained declaration carrier in the same
-selected assembly graph. It must have no base class, no MethodImpl, and exactly
-one retained and raw `InterfaceImpl`, which
-closes the selected MethodDef owner with supported declaration-independent
-carriers. The adapter re-resolves that raw edge and requires exact retained/raw
-agreement. It authenticates the child TypeDef and its complete direct physical
-edge set; operation routing may then follow that recorded closure to the root
-MethodDef. Open receiver binders, multiple edges, classes, MethodImpls,
-cross-assembly receivers, unsupported carrier leaves, and hierarchy disagreement
-remain unavailable or conflicting according to the ordinary validity boundary.
+The first inherited-receiver grammar admits one public top-level abstract
+interface with an exact retained declaration carrier in the same selected
+assembly graph. It has zero or one unconstrained type parameter whose exact CLR
+variance is retained, no base class, no MethodImpl, and exactly one retained and
+raw `InterfaceImpl`. The edge may close the selected MethodDef owner with
+supported declaration-independent carriers or reference the child `!0`,
+recursively through the admitted SZ-array carrier. The adapter resolves the
+receiver's exact open GenericParam context,
+re-resolves the raw edge, and requires exact retained/raw agreement. It records
+the child binder on its own TypeDef and the edge target against that binder;
+ordinary physical-closure substitution derives `Base<int>` from `Child<int>`.
+No logical type participates. Additional binders, constraints, variance
+conversions, multiple edges, classes, MethodImpls, cross-assembly receivers,
+unsupported carrier leaves, and hierarchy disagreement remain unavailable or
+conflicting according to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical

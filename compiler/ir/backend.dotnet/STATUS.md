@@ -68,6 +68,10 @@ metadata model suite (26 tests, zero failures/errors/skips). Its final combined
 focused gate is recorded below after the implementation summary. It is likewise
 production-inert and inherits the same aggregate checkpoint.
 
+The later open-forwarding delta passed the retained-metadata model suite (33
+tests, zero failures/errors/skips). Its final combined focused gate is recorded
+below. It remains production-inert and inherits the same aggregate checkpoint.
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -127,24 +131,29 @@ One imported operation now uses that retained MethodDef as its endpoint and
 selects a receiver construction only from the existing value fact and recorded
 physical edges. Selected lineage wins; otherwise the direct carrier or one
 unique recorded physical-view closure must identify the construction. The first
-inherited slice authenticates one non-generic child interface with an exact
-retained declaration carrier whose sole closed `InterfaceImpl` targets the
-selected MethodDef owner. It re-resolves the raw edge in the same assembly graph,
-rejects retained/raw disagreement, and never promotes the derived base view into
-new provenance. Ambiguous or genuinely broad receivers remain unavailable. The
-shared route independently admits arguments and produces the instantiated
-direct, void, or split-nullable result fact, preserving exact constructed result
-provenance without fabricating a logical destination view.
+inherited grammar authenticates one child interface with an exact retained
+declaration carrier and zero or one unconstrained CLR parameter, preserving its
+exact variance. Its sole exact `InterfaceImpl` may close the selected MethodDef
+owner or forward that receiver binder, including through the admitted SZ-array
+carrier. The recorded edge substitutes `Child<int>` and `Child<string>` to
+distinct exact parent views;
+the value-type route remains `int32`, not `object`. The adapter re-resolves raw
+metadata in the same assembly graph, rejects retained disagreement, and never
+promotes a derived base view into new provenance. Ambiguous or genuinely broad
+receivers remain unavailable. The shared route independently admits arguments
+and produces the instantiated direct, void, or split-nullable result fact.
 
-Next work admits one open generic forwarding edge, such as `Child<T> : Base<T>`,
-with binder-safe substitution before MethodImpl, multiple edges/members, classes,
-cross-assembly inheritance, or Runtime/Stdlib application.
+Next work removes the member-carrier admission artifact by retaining exact
+TypeDef-level authority for imported classes/interfaces with no declared
+callable. MethodImpl, multiple edges/members/binders, variance conversions,
+constraints, classes, cross-assembly inheritance, and Runtime/Stdlib application
+remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
 The final combined focused gate passed the shared physical-value and retained-
-metadata model suites (102 tests, zero failures/errors/skips).
+metadata model suites (109 tests, zero failures/errors/skips).
 
 ## Current blockers
 
@@ -156,10 +165,10 @@ metadata model suites (102 tests, zero failures/errors/skips).
   chains or multiple/distinct constructed views.
 - Retained foreign CLR declaration authority remains bounded to an open root
   interface, one selected MethodDef, and either its root receiver or one
-  non-generic child interface with one closed same-assembly `InterfaceImpl`.
-  Open generic forwarding, multiple edges/members, classes, MethodImpls,
-  cross-assembly inheritance, wider nominal carriers, constrained constructions,
-  and broader operation routing remain incomplete.
+  same-assembly child interface with at most one unconstrained binder
+  and one exact `InterfaceImpl`. Multiple binders/edges/members, variance
+  conversions, constraints, classes, MethodImpls, cross-assembly inheritance,
+  wider nominal carriers, and broader operation routing remain incomplete.
 - Retained TypeDef authentication still arrives through a member declaration
   carrier. An imported type with no declared callable has no class-level carrier
   yet and therefore remains unavailable to this adapter.
