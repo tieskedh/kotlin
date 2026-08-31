@@ -12,6 +12,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeAuthority
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
 
@@ -79,11 +81,11 @@ internal sealed interface DotNetGenericOwnerPhysicalTypeDefIdentity {
                     "TypeDef 0x${type.definition.handle.token.toUInt().toString(16)})"
 
         companion object {
-            fun retained(source: DotNetClrImportedDeclarationSource): ForeignClr =
+            fun retained(source: DotNetClrImportedTypeAuthority): ForeignClr =
                 retained(source, source.declaringHierarchy.type.type)
 
             fun retained(
-                source: DotNetClrImportedDeclarationSource,
+                source: DotNetClrImportedTypeAuthority,
                 type: DotNetClrResolvedTypeDefinition,
             ): ForeignClr {
                 val assembly = source.graph.assemblyOrNull(type.assembly)
@@ -964,7 +966,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         fun bindRetainedForeignInheritedReceiver(
             source: DotNetClrImportedMethodSource,
             method: DotNetClrMethodDefinition,
-            receiverSource: DotNetClrImportedDeclarationSource,
+            receiverSource: DotNetClrImportedTypeSource,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val declarations = when (
                 val candidate = DotNetRetainedForeignGenericOwnerPhysicalDeclarations

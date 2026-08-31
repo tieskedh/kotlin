@@ -132,28 +132,31 @@ selects a receiver construction only from the existing value fact and recorded
 physical edges. Selected lineage wins; otherwise the direct carrier or one
 unique recorded physical-view closure must identify the construction. The first
 inherited grammar authenticates one child interface with an exact retained
-declaration carrier and zero or one unconstrained CLR parameter, preserving its
-exact variance. Its sole exact `InterfaceImpl` may close the selected MethodDef
-owner or forward that receiver binder, including through the admitted SZ-array
-carrier. The recorded edge substitutes `Child<int>` and `Child<string>` to
-distinct exact parent views;
+TypeDef carrier and zero or one unconstrained CLR parameter, preserving its
+exact variance. The carrier is sealed, validates selected assembly, TypeDef,
+hierarchy, and graph identity, and does not depend on a callable declared by
+the child. Its sole exact `InterfaceImpl` may close the selected MethodDef owner
+or forward that receiver binder, including through the admitted SZ-array
+carrier. The memberless hostile child now has no marker MethodDef. The recorded
+edge substitutes `Child<int>` and `Child<string>` to distinct exact parent views;
 the value-type route remains `int32`, not `object`. The adapter re-resolves raw
 metadata in the same assembly graph, rejects retained disagreement, and never
 promotes a derived base view into new provenance. Ambiguous or genuinely broad
 receivers remain unavailable. The shared route independently admits arguments
 and produces the instantiated direct, void, or split-nullable result fact.
 
-Next work removes the member-carrier admission artifact by retaining exact
-TypeDef-level authority for imported classes/interfaces with no declared
-callable. MethodImpl, multiple edges/members/binders, variance conversions,
-constraints, classes, cross-assembly inheritance, and Runtime/Stdlib application
-remain later.
+Next work transports this already-recorded TypeDef carrier through lazy external
+FIR2IR and admits a genuinely memberless imported interface in the compiler
+pipeline. It must use a narrow target hook rather than a global registry, fake
+member, or name-based lookup. MethodImpl, multiple edges/members/binders,
+variance conversions, constraints, classes, cross-assembly inheritance, and
+Runtime/Stdlib application remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
 The final combined focused gate passed the shared physical-value and retained-
-metadata model suites (109 tests, zero failures/errors/skips).
+metadata model suites (110 tests, zero failures/errors/skips).
 
 ## Current blockers
 
@@ -169,9 +172,10 @@ metadata model suites (109 tests, zero failures/errors/skips).
   and one exact `InterfaceImpl`. Multiple binders/edges/members, variance
   conversions, constraints, classes, MethodImpls, cross-assembly inheritance,
   wider nominal carriers, and broader operation routing remain incomplete.
-- Retained TypeDef authentication still arrives through a member declaration
-  carrier. An imported type with no declared callable has no class-level carrier
-  yet and therefore remains unavailable to this adapter.
+- The importer records exact class-level TypeDef authority, and the shared
+  adapter no longer needs a member carrier. Lazy external FIR2IR does not yet
+  transport that class-level source to backend IR, so the production importer
+  still excludes a type with no public declared callable.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

@@ -26,8 +26,8 @@ import org.jetbrains.kotlin.fir.types.type
 import org.jetbrains.kotlin.fir.types.typeContext
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContext
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.types.AbstractTypeChecker
 
 /**
@@ -44,19 +44,18 @@ enum class DotNetClrForeignVarianceConversionResult {
 }
 
 private data class DotNetClrImportedTypeAuthority(
-    val graph: DotNetClrImportedDeclarationGraph,
-    val type: DotNetClrResolvedTypeDefinition,
+    val source: DotNetClrImportedTypeSource,
     val genericContext: DotNetClrResolvedGenericParameterContext,
 ) {
     init {
         require(genericContext.method == null) {
             "Imported CLR TypeDef authority cannot use a method generic context"
         }
-        require(genericContext.declaringType.type.hasSameIdentityAs(type)) {
+        require(genericContext.declaringType.type.hasSameIdentityAs(source.declaringHierarchy.type.type)) {
             "Imported CLR TypeDef authority has a mismatched generic context"
         }
-        require(graph.hierarchyOrNull(type) != null) {
-            "Imported CLR TypeDef authority is detached from its selected declaration graph"
+        require(genericContext.declaringType == source.declaringHierarchy.type) {
+            "Imported CLR TypeDef authority has a mismatched open declaration view"
         }
     }
 }
@@ -78,11 +77,21 @@ internal fun FirRegularClass.recordDotNetClrImportedTypeAuthority(
         "Imported CLR TypeDef authority was recorded more than once"
     }
     dotNetClrImportedTypeAuthority = DotNetClrImportedTypeAuthority(
-        graph,
-        genericContext.declaringType.type,
+        DotNetClrImportedTypeSource(
+            graph.assemblyOrNull(genericContext.declaringType.type.assembly)
+                ?: error("Imported CLR TypeDef authority lost its selected assembly"),
+            genericContext.declaringType.type.definition,
+            graph.hierarchyOrNull(genericContext.declaringType.type)
+                ?: error("Imported CLR TypeDef authority lost its selected hierarchy"),
+            graph,
+        ),
         genericContext,
     )
 }
+
+/** Exact TypeDef carrier selected by the CLR importer, independent of declared members. */
+fun FirRegularClass.dotNetClrImportedTypeSourceOrNull(): DotNetClrImportedTypeSource? =
+    dotNetClrImportedTypeAuthority?.source
 
 /**
  * Checks the CLR reference-only restriction on a conversion already accepted by Kotlin typing.
@@ -152,10 +161,13 @@ private class DotNetClrForeignVarianceRelation(
             ?: return Relation.NOT_APPLICABLE
         val expectedAuthority = expectedSymbol.dotNetClrImportedTypeAuthority
             ?: return Relation.NOT_APPLICABLE
-        if (!actualAuthority.type.hasSameIdentityAs(expectedAuthority.type)) {
+        if (!actualAuthority.source.declaringHierarchy.type.type.hasSameIdentityAs(
+                expectedAuthority.source.declaringHierarchy.type.type,
+            )
+        ) {
             return Relation.NOT_APPLICABLE
         }
-        if (actualAuthority.graph !== expectedAuthority.graph) {
+        if (actualAuthority.source.graph !== expectedAuthority.source.graph) {
             return Relation.UNKNOWN
         }
         val parameters = actualAuthority.genericContext.typeParameters

@@ -95,16 +95,17 @@ receiver construction solely from its direct verifier carrier, shared guaranteed
 views, their recorded physical-interface closure, and selected lineage, then
 produces its exact instantiated MethodDef result through the same value model.
 The first inherited grammar authenticates one child interface with an exact
-declaration carrier, zero or one unconstrained parameter with exact CLR
-variance, and one same-assembly `InterfaceImpl`. The edge may close the root
+TypeDef carrier, zero or one unconstrained parameter with exact CLR variance,
+and one same-assembly `InterfaceImpl`. The carrier is independent of declared
+members; the hostile child has no marker MethodDef. The edge may close the root
 MethodDef owner or forward the child binder through the admitted carrier grammar.
 Recorded physical substitution, rather than a logical Kotlin type, derives each
-concrete parent
-view. The next ordered retained boundary is TypeDef-level import authority for a
-type with no declared callable, removing the current member-carrier admission
-artifact. MethodImpls, multiple binders/edges/members, variance conversions,
-constraints, classes, cross-assembly inheritance, and Runtime/Stdlib application
-remain later.
+concrete parent view. The next ordered retained boundary is transporting that
+class-level carrier through lazy external FIR2IR and admitting a genuinely
+memberless imported interface without a global registry, fake member, or
+name-based lookup. MethodImpls, multiple binders/edges/members, variance
+conversions, constraints, classes, cross-assembly inheritance, and Runtime/
+Stdlib application remain later.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;

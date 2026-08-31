@@ -24,6 +24,21 @@ enum class DotNetClrImportedDeclarationCarrierVersion {
     V3,
 }
 
+/**
+ * Exact TypeDef-level authority retained from one already-selected CLR import graph.
+ *
+ * This is the common physical root of class-level and callable-level carriers. It is
+ * compilation-local and is never serialized into Kotlin metadata. In particular, consumers must
+ * not recreate it from a ClassId, namespace, display name, or a member declared by the type.
+ */
+sealed interface DotNetClrImportedTypeAuthority {
+    val assembly: DotNetClrClasspathAssembly.WithoutCarrier
+    val declaringType: DotNetClrTypeDefinition
+    val declaringHierarchy: DotNetClrResolvedTypeHierarchy
+    val graph: DotNetClrImportedDeclarationGraph
+    val carrierVersion: DotNetClrImportedDeclarationCarrierVersion
+}
+
 /** One selected CLR import graph, shared by every declaration carrier produced from it. */
 class DotNetClrImportedDeclarationGraph(
     val assemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
@@ -97,31 +112,34 @@ class DotNetClrImportedDeclarationGraph(
         hierarchiesByAssembly[type.assembly]?.get(type.definition.handle)
 }
 
-sealed class DotNetClrImportedDeclarationSource(
-    val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
-    val declaringType: DotNetClrTypeDefinition,
-    val declaringHierarchy: DotNetClrResolvedTypeHierarchy,
-    val graph: DotNetClrImportedDeclarationGraph,
-) : DeserializedContainerSource {
-    val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
+class DotNetClrImportedTypeSource(
+    override val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
+    override val declaringType: DotNetClrTypeDefinition,
+    override val declaringHierarchy: DotNetClrResolvedTypeHierarchy,
+    override val graph: DotNetClrImportedDeclarationGraph,
+) : DotNetClrImportedTypeAuthority {
+    override val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
         DotNetClrImportedDeclarationCarrierVersion.V3
 
     init {
-        require(assembly.metadata.typeDefinitions.any { it === declaringType }) {
-            "Imported CLR TypeDef ${declaringType.handle} does not belong to '${assembly.assemblyFile}'"
-        }
-        require(
-            declaringHierarchy.type.type.assembly === assembly.metadata &&
-                    declaringHierarchy.type.type.definition === declaringType
-        ) {
-            "Imported CLR hierarchy does not describe TypeDef ${declaringType.handle} from '${assembly.assemblyFile}'"
-        }
-        require(graph.assemblyOrNull(assembly.metadata) === assembly) {
-            "Imported CLR carrier does not retain its declaring assembly '${assembly.assemblyFile}'"
-        }
-        require(graph.hierarchyOrNull(declaringHierarchy.type.type) === declaringHierarchy) {
-            "Imported CLR carrier does not retain its declaring TypeDef hierarchy"
-        }
+        validateImportedTypeAuthority()
+    }
+
+    val presentableString: String =
+        "${assembly.identityDisplayName()} TypeDef 0x${declaringType.handle.token.toUInt().toString(16)}"
+}
+
+sealed class DotNetClrImportedDeclarationSource(
+    override val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
+    override val declaringType: DotNetClrTypeDefinition,
+    override val declaringHierarchy: DotNetClrResolvedTypeHierarchy,
+    override val graph: DotNetClrImportedDeclarationGraph,
+) : DeserializedContainerSource, DotNetClrImportedTypeAuthority {
+    override val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
+        DotNetClrImportedDeclarationCarrierVersion.V3
+
+    init {
+        validateImportedTypeAuthority()
     }
 
     override val incompatibility: IncompatibleVersionErrorData<*>?
@@ -132,6 +150,24 @@ sealed class DotNetClrImportedDeclarationSource(
         get() = DeserializedContainerAbiStability.STABLE
 
     override fun getContainingFile(): SourceFile = SourceFile.NO_SOURCE_FILE
+}
+
+private fun DotNetClrImportedTypeAuthority.validateImportedTypeAuthority() {
+    require(assembly.metadata.typeDefinitions.any { it === declaringType }) {
+        "Imported CLR TypeDef ${declaringType.handle} does not belong to '${assembly.assemblyFile}'"
+    }
+    require(
+        declaringHierarchy.type.type.assembly === assembly.metadata &&
+                declaringHierarchy.type.type.definition === declaringType
+    ) {
+        "Imported CLR hierarchy does not describe TypeDef ${declaringType.handle} from '${assembly.assemblyFile}'"
+    }
+    require(graph.assemblyOrNull(assembly.metadata) === assembly) {
+        "Imported CLR carrier does not retain its declaring assembly '${assembly.assemblyFile}'"
+    }
+    require(graph.hierarchyOrNull(declaringHierarchy.type.type) === declaringHierarchy) {
+        "Imported CLR carrier does not retain its declaring TypeDef hierarchy"
+    }
 }
 
 /**
