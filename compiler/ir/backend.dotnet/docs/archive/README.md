@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`upstream-sync-2026-08-31.md`](upstream-sync-2026-08-31.md)
+  records the tested 174-commit upstream integration through `2868cfb88a`,
+  preservation of all 672 target patches, the 18-path and reverse-dependency
+  audit, mandatory Common test-convention adaptation, the KGP API check, and
+  the exact 2,621-test target gate and rollback boundary.
 - [`generic-owner-callable-contract-composition-2026-08-31.md`](generic-owner-callable-contract-composition-2026-08-31.md)
   records bounded Stage 7 and physical-library ABI 65: independent semantic
   member role and `VOID`/`DIRECT`/`SPLIT_NULLABLE` result layout, the structural
