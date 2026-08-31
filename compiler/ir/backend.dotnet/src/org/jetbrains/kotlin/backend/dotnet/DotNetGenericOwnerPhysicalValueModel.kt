@@ -8,8 +8,12 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
 
 /** Monotone physical-declaration authority epochs. Value flow never advances this epoch. */
 internal enum class DotNetGenericOwnerPhysicalAuthorityEpoch {
@@ -48,21 +52,46 @@ internal sealed interface DotNetGenericOwnerPhysicalTypeDefIdentity {
 
     /** Exact imported identity retained from metadata; equality is deliberately by retained handles. */
     class ForeignClr private constructor(
-        val source: DotNetClrImportedDeclarationSource,
+        val graph: DotNetClrImportedDeclarationGraph,
+        val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
+        val type: DotNetClrResolvedTypeDefinition,
     ) : DotNetGenericOwnerPhysicalTypeDefIdentity {
+        init {
+            require(graph.assemblyOrNull(type.assembly) === assembly &&
+                    assembly.metadata.typeDefinitions.any { candidate ->
+                        candidate === type.definition
+                    }
+            ) {
+                "a retained foreign TypeDef must belong to its selected assembly graph"
+            }
+        }
+
         override fun equals(other: Any?): Boolean =
             other is ForeignClr &&
-                    source.assembly === other.source.assembly &&
-                    source.declaringType === other.source.declaringType
+                    assembly === other.assembly &&
+                    type.definition === other.type.definition
 
         override fun hashCode(): Int =
-            31 * System.identityHashCode(source.assembly) + System.identityHashCode(source.declaringType)
+            31 * System.identityHashCode(assembly) + System.identityHashCode(type.definition)
 
         override fun toString(): String =
-            "ForeignClr(${source.presentableString.substringBefore(" MethodDef ")})"
+            "ForeignClr(${assembly.metadata.identity.name}, " +
+                    "TypeDef 0x${type.definition.handle.token.toUInt().toString(16)})"
 
         companion object {
-            fun retained(source: DotNetClrImportedDeclarationSource) = ForeignClr(source)
+            fun retained(source: DotNetClrImportedDeclarationSource): ForeignClr =
+                retained(source, source.declaringHierarchy.type.type)
+
+            fun retained(
+                source: DotNetClrImportedDeclarationSource,
+                type: DotNetClrResolvedTypeDefinition,
+            ): ForeignClr {
+                val assembly = source.graph.assemblyOrNull(type.assembly)
+                    ?: throw IllegalArgumentException(
+                        "a retained foreign TypeDef must belong to the source's selected assembly graph",
+                    )
+                return ForeignClr(source.graph, assembly, type)
+            }
         }
     }
 
@@ -524,6 +553,10 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Map<DotNetGenericOwnerPhysicalFieldDefIdentity, DotNetGenericOwnerPhysicalFieldDefReference>,
     private val directSupertypeEdgeSets:
             Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+    private val retainedForeignTypeDefinitions:
+            Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
+    private val retainedForeignMethodDefinitions:
+            Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
 ) {
     fun advance(
         nextEpoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
@@ -537,12 +570,14 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 "physical declaration authority cannot regress or repeat epoch $epoch as $nextEpoch",
             )
         }
-        return bind(
+        return bindInternal(
             nextEpoch,
             this.typeDefinitions.values + typeDefinitions,
             this.methodDefinitions.values + methodDefinitions,
             this.directSupertypeEdgeSets.values + directSupertypeEdgeSets,
             this.fieldDefinitions.values + fieldDefinitions,
+            retainedForeignTypeDefinitions,
+            retainedForeignMethodDefinitions,
         )
     }
 
@@ -892,12 +927,73 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
             directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet> = emptyList(),
             fieldDefinitions: Iterable<DotNetGenericOwnerPhysicalFieldDefReference> = emptyList(),
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> =
+            bindInternal(
+                epoch,
+                typeDefinitions,
+                methodDefinitions,
+                directSupertypeEdgeSets,
+                fieldDefinitions,
+                retainedForeignTypeDefinitions = emptySet(),
+                retainedForeignMethodDefinitions = emptySet(),
+            )
+
+        /**
+         * Binds one retained CLR MethodDef only after its raw metadata has been normalized and
+         * cross-checked by the exact foreign adapter. Caller-authored foreign descriptions remain
+         * unavailable through [bind].
+         */
+        fun bindRetainedForeign(
+            source: DotNetClrImportedMethodSource,
+            method: DotNetClrMethodDefinition,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
+            val declarations = when (
+                val candidate =
+                    DotNetRetainedForeignGenericOwnerPhysicalDeclarations.build(source, method)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> candidate.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(candidate.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            return bindInternal(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                declarations.typeDefinitions,
+                declarations.methodDefinitions,
+                declarations.directSupertypeEdgeSets,
+                fieldDefinitions = emptyList(),
+                retainedForeignTypeDefinitions = declarations.typeDefinitions
+                    .mapTo(linkedSetOf()) { definition ->
+                        definition.identity as DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                    },
+                retainedForeignMethodDefinitions = declarations.methodDefinitions
+                    .mapTo(linkedSetOf()) { definition ->
+                        definition.identity as DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr
+                    },
+            )
+        }
+
+        private fun bindInternal(
+            epoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
+            typeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
+            methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
+            directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+            fieldDefinitions: Iterable<DotNetGenericOwnerPhysicalFieldDefReference>,
+            retainedForeignTypeDefinitions: Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
+            retainedForeignMethodDefinitions: Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val typesByIdentity = linkedMapOf<
                     DotNetGenericOwnerPhysicalTypeDefIdentity,
                     DotNetGenericOwnerPhysicalTypeDefReference,
                     >()
             for (candidate in typeDefinitions) {
+                val foreignIdentity = candidate.identity as?
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                if (foreignIdentity != null && foreignIdentity !in retainedForeignTypeDefinitions) {
+                    // The identity retains the row, but only the metadata adapter may describe it.
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
                 if ((candidate.identity as? DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary)
                         ?.ownerPath == listOf("System", "Object")
                 ) {
@@ -935,11 +1031,18 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                                 "for ${candidate.identity}",
                     )
                 }
-                if (candidate.identity !is DotNetGenericOwnerPhysicalMethodDefIdentity.Local) {
-                    // A retained MethodDef already owns its complete physical signature. Until a
-                    // producer/foreign adapter normalizes and cross-checks every signature and
-                    // flag, accepting a caller-supplied partial description would invert authority.
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                when (val identity = candidate.identity) {
+                    is DotNetGenericOwnerPhysicalMethodDefIdentity.Local -> Unit
+                    is DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr ->
+                        if (identity !in retainedForeignMethodDefinitions) {
+                            // A retained MethodDef already owns its complete physical signature.
+                            // Caller-supplied descriptions may not invert that authority.
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    is DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer -> {
+                        // Producer MethodDefs require their distinct artifact-plus-DLL adapter.
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
                 }
                 val existing = methodsByIdentity[candidate.identity]
                 if (existing != null && existing.conflictsWith(candidate)) {
@@ -970,6 +1073,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 methodsByIdentity,
                 fieldsByIdentity,
                 emptyMap(),
+                retainedForeignTypeDefinitions,
+                retainedForeignMethodDefinitions,
             )
             for (candidate in typesByIdentity.values) {
                 for (parameter in candidate.genericParameters) {
@@ -1150,6 +1255,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     methodsByIdentity,
                     fieldsByIdentity,
                     edgesBySource,
+                    retainedForeignTypeDefinitions,
+                    retainedForeignMethodDefinitions,
                 ),
             )
         }
