@@ -559,7 +559,6 @@ class DotNetClrFirSymbolProvider(
                     method.visibility == DotNetClrMethodVisibility.PUBLIC
         }
         val ordinaryMethods = publicMethods.filterNot { method -> method.handle in accessorHandles }
-        if (publicMethods.isEmpty()) return null
         val methodCandidates = ordinaryMethods.map { method ->
             method.supportedMethodOrNull(assembly, declaringView) ?: return null
         }

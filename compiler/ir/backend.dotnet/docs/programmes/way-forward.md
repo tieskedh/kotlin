@@ -103,11 +103,14 @@ Recorded physical substitution, rather than a logical Kotlin type, derives each
 concrete parent view. A narrow target hook now transports that class-level
 carrier through lazy external FIR2IR as compilation-local class metadata;
 Common neither interprets nor serializes it, and callable authority remains
-separate. The next ordered retained boundary is admitting and exercising a
-genuinely memberless imported interface through the actual compiler pipeline,
-without a global registry, fake member, or name-based lookup. MethodImpls,
-multiple binders/edges/members, variance conversions, constraints, classes,
-cross-assembly inheritance, and Runtime/Stdlib application remain later.
+separate. A resource-free external DLL now proves a genuinely memberless child
+through the actual compiler pipeline: its TypeDef remains the receiver carrier,
+its exact `InterfaceImpl` supplies the inherited construction, and the call
+targets the parent's retained MethodDef without a registry, fake member, copied
+slot, or name-based lookup. The next ordered retained boundary carries this
+same shape across two selected CLR assemblies. MethodImpls, multiple binders/
+edges/members, variance conversions, constraints, classes, and Runtime/Stdlib
+application remain later.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;

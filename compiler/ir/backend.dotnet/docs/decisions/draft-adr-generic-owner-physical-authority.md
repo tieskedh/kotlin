@@ -770,6 +770,16 @@ carrier, which must match the class carrier's selected assembly, TypeDef,
 hierarchy, and graph by identity. Class metadata therefore cannot fabricate or
 replace callable authority.
 
+Importer admission is based on the complete physical type contract, not on the
+presence of a declared callable. A public abstract interface with no supported
+declared MethodDef or Property may therefore enter when its complete TypeDef,
+GenericParam, hierarchy, and `InterfaceImpl` facts are supported. Lazy FIR2IR
+must preserve that class authority even though there is no declaration from
+which to recover it. A fake override inherited in Kotlin's logical view does
+not become a child MethodDef: invocation binds the retained parent MethodDef
+through the exact recorded edge. A resource-free foreign-DLL pipeline test is
+the executable admission proof; constructing only a synthetic IR class is not.
+
 The adapter re-resolves the raw MethodDef signature in that same graph, checks
 it against the retained resolved signature, checks that the retained hierarchy
 contains every raw base/interface row, and imports the complete ordered
