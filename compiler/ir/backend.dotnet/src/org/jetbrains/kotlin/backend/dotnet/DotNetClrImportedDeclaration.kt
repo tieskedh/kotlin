@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.MetadataSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
@@ -15,6 +16,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersi
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeAuthority
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignature
@@ -27,10 +29,10 @@ import java.util.IdentityHashMap
 /**
  * Backend view of exact foreign declaration carriers.
  *
- * The closed provider admits only complete non-empty interfaces. Therefore any imported class
- * has at least one declared function whose carrier identifies its physical TypeDef. This helper
- * validates that every retained carrier agrees and caches by IR declaration identity; it never
- * resolves a ClassId, namespace, method name, or signature against the classpath.
+ * Class-level authority identifies the physical TypeDef independently of its declared members.
+ * Callable carriers remain authoritative for MethodDefs and are checked against that TypeDef.
+ * This helper never resolves a ClassId, namespace, member name, or signature against the
+ * classpath.
  */
 internal class DotNetClrImportedDeclarations(
     private val assemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit,
@@ -44,10 +46,14 @@ internal class DotNetClrImportedDeclarations(
 
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
         classInfos[irClass]?.let {
-            assemblyReferenceSink(irClass.importedClrSourceOrNull()!!.assembly)
+            val source = irClass.importedClrTypeAuthorityOrNull()
+                ?: dotNetUnsupported(
+                    "foreign CLR class '${irClass.name.asString()}' lost its exact TypeDef authority"
+                )
+            assemblyReferenceSink(source.assembly)
             return it
         }
-        val source = irClass.importedClrSourceOrNull() ?: return null
+        val source = irClass.importedClrTypeAuthorityOrNull() ?: return null
         source.requireSupportedCarrierVersion()
         validateAssemblyIdentity(source.assembly)
         val owner = source.declaringHierarchy.type.type
@@ -99,6 +105,11 @@ internal class DotNetClrImportedDeclarations(
             ?: dotNetUnsupported(
                 "foreign CLR MethodDef '${method.name}' lost its imported interface owner"
             )
+        val ownerSource = ownerClass.importedClrTypeAuthorityOrNull()
+            ?: dotNetUnsupported(
+                "foreign CLR MethodDef '${method.name}' lost its exact TypeDef authority"
+            )
+        source.requireSameTypeAuthorityAs(ownerSource, "MethodDef '${method.name}'")
         val ownerInfo = classInfoOrNull(ownerClass)
             ?: dotNetUnsupported(
                 "foreign CLR MethodDef '${method.name}' lost its exact TypeDef linkage"
@@ -167,12 +178,12 @@ internal class DotNetClrImportedDeclarations(
     fun isRetainedClassInfo(classInfo: DotNetIlClassInfo): Boolean =
         retainedClassInfos.containsKey(classInfo)
 
-    private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedDeclarationSource? =
-        dotNetImportedClrSourceOrNull()
+    private fun IrClass.importedClrTypeAuthorityOrNull(): DotNetClrImportedTypeAuthority? =
+        dotNetImportedClrTypeAuthorityOrNull()
 
     private fun classInfo(
         type: DotNetClrResolvedTypeDefinition,
-        source: DotNetClrImportedDeclarationSource,
+        source: DotNetClrImportedTypeAuthority,
     ): DotNetIlClassInfo = resolvedClassInfos.getOrPut(type) {
         val selectedAssembly = source.linkedAssembly(type)
         validateAssemblyIdentity(selectedAssembly)
@@ -206,7 +217,7 @@ internal class DotNetClrImportedDeclarations(
 
     private fun initializeHierarchy(
         type: DotNetClrResolvedTypeDefinition,
-        source: DotNetClrImportedDeclarationSource,
+        source: DotNetClrImportedTypeAuthority,
     ) {
         if (type in initializedHierarchies || !hierarchiesInProgress.add(type)) return
         try {
@@ -237,7 +248,7 @@ internal class DotNetClrImportedDeclarations(
         }
     }
 
-    private fun DotNetClrImportedDeclarationSource.linkedAssembly(
+    private fun DotNetClrImportedTypeAuthority.linkedAssembly(
         type: DotNetClrResolvedTypeDefinition,
     ): DotNetClrClasspathAssembly.WithoutCarrier =
         graph.assemblyOrNull(type.assembly)
@@ -246,7 +257,7 @@ internal class DotNetClrImportedDeclarations(
             )
 
     private fun DotNetClrResolvedTypeView.toSupportedImportedIlTypeOrNull(
-        source: DotNetClrImportedDeclarationSource,
+        source: DotNetClrImportedTypeAuthority,
         ownerGenericParameterCount: Int,
     ): DotNetIlValueType? =
         if (arguments.isEmpty()) {
@@ -262,7 +273,7 @@ internal class DotNetClrImportedDeclarations(
         }
 
     private fun DotNetClrResolvedTypeSignature.toSupportedImportedIlTypeOrNull(
-        source: DotNetClrImportedDeclarationSource,
+        source: DotNetClrImportedTypeAuthority,
         ownerGenericParameterCount: Int,
         methodGenericParameterCount: Int,
     ): DotNetIlValueType? =
@@ -340,6 +351,17 @@ internal class DotNetClrImportedDeclarations(
         }
 }
 
+/** Exact imported CLR TypeDef authority, available even when the type declares no members. */
+internal fun IrClass.dotNetImportedClrTypeAuthorityOrNull(): DotNetClrImportedTypeAuthority? {
+    val classSource = (metadata as? MetadataSource.Class)
+        ?.platformDeclarationSource as? DotNetClrImportedTypeAuthority
+    if (classSource != null) {
+        classSource.requireSupportedCarrierVersion()
+        return classSource
+    }
+    return dotNetImportedClrSourceOrNull()
+}
+
 internal fun IrClass.dotNetImportedClrSourceOrNull(): DotNetClrImportedDeclarationSource? {
     val sources = declarations.asSequence()
         .mapNotNull { declaration ->
@@ -356,7 +378,9 @@ internal fun IrClass.dotNetImportedClrSourceOrNull(): DotNetClrImportedDeclarati
     val first = sources.first()
     if (sources.any { source ->
             source.assembly !== first.assembly ||
-                    source.declaringType.handle != first.declaringType.handle
+                    source.declaringType !== first.declaringType ||
+                    source.declaringHierarchy !== first.declaringHierarchy ||
+                    source.graph !== first.graph
         }
     ) {
         dotNetUnsupported(
@@ -381,10 +405,26 @@ private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.Withou
         }
 }
 
-private fun DotNetClrImportedDeclarationSource.requireSupportedCarrierVersion() {
-        when (carrierVersion) {
-            DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
-        }
+private fun DotNetClrImportedTypeAuthority.requireSupportedCarrierVersion() {
+    when (carrierVersion) {
+        DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
+    }
+}
+
+private fun DotNetClrImportedTypeAuthority.requireSameTypeAuthorityAs(
+    other: DotNetClrImportedTypeAuthority,
+    declaration: String,
+) {
+    if (
+        assembly !== other.assembly ||
+        declaringType !== other.declaringType ||
+        declaringHierarchy !== other.declaringHierarchy ||
+        graph !== other.graph
+    ) {
+        dotNetUnsupported(
+            "foreign CLR $declaration disagrees with its retained TypeDef authority"
+        )
+    }
 }
 
 private fun DotNetIlValueType.isSupportedImportedNullableElement(): Boolean =

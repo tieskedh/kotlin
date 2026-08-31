@@ -13,6 +13,7 @@ dependencies {
 
     api(project(":compiler:dotnet.imports"))
     implementation(project(":compiler:fir:cones"))
+    implementation(project(":compiler:fir:fir-dotnet"))
     implementation(project(":compiler:fir:providers"))
     api(project(":compiler:fir:tree"))
     implementation(project(":compiler:frontend.common.dotnet"))

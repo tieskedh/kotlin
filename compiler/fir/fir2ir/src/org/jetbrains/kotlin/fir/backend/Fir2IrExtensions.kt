@@ -11,12 +11,14 @@ import org.jetbrains.kotlin.fir.backend.utils.CodeFragmentConversionData
 import org.jetbrains.kotlin.fir.backend.utils.InjectedValue
 import org.jetbrains.kotlin.fir.declarations.FirCodeFragment
 import org.jetbrains.kotlin.fir.declarations.FirProperty
+import org.jetbrains.kotlin.fir.declarations.FirRegularClass
 import org.jetbrains.kotlin.fir.declarations.utils.hasBackingField
 import org.jetbrains.kotlin.fir.expressions.FirExpression
 import org.jetbrains.kotlin.fir.references.FirReference
 import org.jetbrains.kotlin.fir.symbols.impl.FirValueParameterSymbol
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.MetadataSource
 import org.jetbrains.kotlin.ir.declarations.IrOverridableDeclaration
 import org.jetbrains.kotlin.ir.overrides.IrExternalOverridabilityCondition
 import org.jetbrains.kotlin.ir.symbols.IrSymbol
@@ -51,6 +53,14 @@ interface Fir2IrExtensions {
     fun codeFragmentConversionData(fragment: FirCodeFragment): CodeFragmentConversionData = throw UnsupportedOperationException()
 
     fun preserveLocalScope(symbol: IrSymbol, cache: Fir2IrScopeCache) {}
+
+    /**
+     * Supplies optional metadata for a lazy external class.
+     *
+     * Common FIR2IR deliberately does not interpret this metadata. A platform implementation may
+     * use it to carry an already-selected physical declaration identity into its backend.
+     */
+    fun externalClassMetadataSource(firClass: FirRegularClass): MetadataSource.Class? = null
 
     object Default : Fir2IrExtensions {
         override val parametersAreAssignable: Boolean

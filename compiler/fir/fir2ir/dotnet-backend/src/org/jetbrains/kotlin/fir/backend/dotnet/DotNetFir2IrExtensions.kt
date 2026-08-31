@@ -6,6 +6,9 @@
 package org.jetbrains.kotlin.fir.backend.dotnet
 
 import org.jetbrains.kotlin.fir.backend.Fir2IrExtensions
+import org.jetbrains.kotlin.fir.backend.FirMetadataSource
+import org.jetbrains.kotlin.fir.declarations.FirRegularClass
+import org.jetbrains.kotlin.fir.dotnet.dotNetClrImportedTypeSourceOrNull
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
@@ -35,6 +38,11 @@ import org.jetbrains.kotlin.types.Variance
 object DotNetFir2IrExtensions : Fir2IrExtensions by Fir2IrExtensions.Default {
     override val externalOverridabilityConditions: List<IrExternalOverridabilityCondition> =
         listOf(DotNetClrImportedSignatureOverridabilityCondition)
+
+    override fun externalClassMetadataSource(firClass: FirRegularClass): FirMetadataSource.Class? =
+        firClass.dotNetClrImportedTypeSourceOrNull()?.let { source ->
+            FirMetadataSource.Class(firClass, platformDeclarationSource = source)
+        }
 }
 
 /**

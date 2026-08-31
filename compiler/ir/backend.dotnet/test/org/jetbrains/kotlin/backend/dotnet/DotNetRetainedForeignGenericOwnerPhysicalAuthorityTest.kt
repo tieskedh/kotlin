@@ -5,6 +5,12 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.declarations.MetadataSource
+import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterDefinition
@@ -28,6 +34,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSpecification
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
+import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.name.Name
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -485,6 +493,42 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 receiverSource.graph,
             )
         }
+    }
+
+    @Test
+    fun `memberless IR class resolves its retained TypeDef and inherited construction`() {
+        val fixture = fixture(includeInheritedReceiver = true)
+        val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+        val importedClass = IrFactoryImpl.buildClass {
+            name = Name.identifier("IntSource")
+            kind = ClassKind.INTERFACE
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply {
+            metadata = object : MetadataSource.Class {
+                override val name: Name = this@apply.name
+                override val platformDeclarationSource: Any = receiverSource
+
+                override fun recordLocalClassType(type: FqName) = Unit
+
+                override fun asFirSymbol(): Any? = null
+            }
+        }
+        val referencedAssemblies = mutableListOf<DotNetClrClasspathAssembly.WithoutCarrier>()
+        val declarations = DotNetClrImportedDeclarations(
+            assemblyReferenceSink = referencedAssemblies::add,
+            coreLibraryReference = "System.Private.CoreLib",
+        )
+
+        val classInfo = assertNotNull(declarations.classInfoOrNull(importedClass))
+
+        assertEquals(emptyList(), importedClass.declarations)
+        assertEquals("Foreign.IntSource", classInfo.ilClassName)
+        assertEquals(0, classInfo.typeParameterCount)
+        val inherited = assertIs<DotNetIlValueType.GenericInstance>(classInfo.interfaces.single())
+        assertEquals("Foreign.Source`1", inherited.classInfo.ilClassName)
+        assertEquals(listOf(DotNetIlValueType.Int32), inherited.arguments)
+        assertEquals(listOf(receiverSource.assembly), referencedAssemblies.distinct())
     }
 
     @Test

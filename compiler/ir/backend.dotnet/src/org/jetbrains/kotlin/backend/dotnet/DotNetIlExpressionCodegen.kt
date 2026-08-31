@@ -925,7 +925,7 @@ internal class DotNetIlExpressionCodegen(
                 kind = DotNetKClassClassifierKind.OPEN_GENERIC,
             )
         }
-        if (irClass.dotNetImportedClrSourceOrNull() != null) {
+        if (irClass.dotNetImportedClrTypeAuthorityOrNull() != null) {
             val importedClass = typeMapper.classInfoOrNull(irClass)
                 ?: dotNetUnsupported(
                     "imported class literal lost its retained CLR TypeDef: ${classType.render()}"

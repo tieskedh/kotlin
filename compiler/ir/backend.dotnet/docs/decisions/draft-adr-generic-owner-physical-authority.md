@@ -759,6 +759,17 @@ definition, resolved hierarchy, and graph by retained identity. It is authority
 in its own right and never requires a declared marker member. Callable carriers
 add exact MethodDef or Property rows; they do not authenticate unrelated
 TypeDefs.
+
+Lazy external FIR2IR transports an already-selected class carrier through one
+target hook and optional compilation-local class metadata. Common FIR2IR and IR
+do not inspect or serialize its platform payload, and targets which do not
+supply one retain the ordinary null metadata behavior. The DotNet backend may
+consume that class payload as TypeDef authority without materializing a class's
+declarations. A callable still requires its own retained MethodDef or Property
+carrier, which must match the class carrier's selected assembly, TypeDef,
+hierarchy, and graph by identity. Class metadata therefore cannot fabricate or
+replace callable authority.
+
 The adapter re-resolves the raw MethodDef signature in that same graph, checks
 it against the retained resolved signature, checks that the retained hierarchy
 contains every raw base/interface row, and imports the complete ordered

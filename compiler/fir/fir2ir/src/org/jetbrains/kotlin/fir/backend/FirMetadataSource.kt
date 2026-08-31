@@ -39,7 +39,10 @@ sealed class FirMetadataSource : MetadataSource, DeclarationSymbolOwner {
 
     class File(override val fir: FirFile) : FirMetadataSource(), MetadataSource.File
 
-    class Class(override val fir: FirClass) : FirMetadataSource(), MetadataSource.Class {
+    class Class(
+        override val fir: FirClass,
+        override val platformDeclarationSource: Any? = null,
+    ) : FirMetadataSource(), MetadataSource.Class {
         override fun recordLocalClassType(type: FqName) {
             require(fir.isLocal) {
                 "Local class type should be recorded only for local classes, but got ${fir.render()}"
