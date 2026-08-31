@@ -53,6 +53,13 @@ Stage 7's focused candidate and erased-inverse matrix, objective metadata,
 ordinary C#, separate-compilation, and boundary evidence is owned by the
 [Stage 7 archive](docs/archive/generic-owner-callable-contract-composition-2026-08-31.md).
 
+The subsequent production-inert TypeDef-authority delta compiled the backend
+and its test source, then passed five focused JVM suites (104 tests, zero
+failures/errors/skips) covering local, producer, detached-artifact, declaration,
+and emission-comparison authority. It inherits the fresh production-erased
+Stage 7 aggregate above because it changes no selected IR, emitted CIL, Runtime,
+Stdlib, or production ABI.
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -94,8 +101,15 @@ Stage 6 state details remain in its
 [archive](docs/archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md),
 not in this current snapshot.
 
-Next work returns to retained/foreign declaration authority and shared
-operation/value provenance before any multi-member or Runtime/Stdlib
+Shared TypeDef authority now carries complete ordered physical `GenericParam`
+rows rather than arity alone. Local and producer paths preserve only rows they
+can prove; detached producer artifacts retain their recorded constraints, while
+generic core/assembly references and arbitrary constrained constructions fail
+closed until exact metadata or constraint-satisfaction authority is joined.
+
+Next work binds exact retained foreign TypeDef/MethodDef metadata into that
+shared declaration model, then routes a bounded imported operation through
+shared operation/value provenance before any multi-member or Runtime/Stdlib
 application. The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).

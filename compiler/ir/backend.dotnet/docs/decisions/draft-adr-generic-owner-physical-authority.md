@@ -712,6 +712,17 @@ metadata handle. Its generic arity, variance, constraints, signature,
 InterfaceImpls, and MethodImpls are consumed exactly or rejected. Enhanced FIR
 types do not rewrite retained metadata.
 
+A physical TypeDef fact is complete only when it includes every ordered
+`GenericParam` row: variance, nominal constraint carriers, reference-type,
+non-nullable-value-type and default-constructor flags, and by-ref-like
+permission. Arity alone is not TypeDef authority. A source which cannot supply
+those rows returns `Unavailable`; it may not fill the missing rows with
+invariant unconstrained parameters. Likewise, knowing the rows does not by
+itself prove that arbitrary type arguments satisfy them. Construction of a
+constrained TypeDef requires a separate physical constraint-satisfaction proof
+or an already-retained/emitted construction; until then it remains
+`Unavailable`.
+
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
 assignability rules. Kotlin variance alone cannot do so, and value arguments

@@ -90,22 +90,44 @@ internal fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.sameLocalTypeIdenti
 ): Boolean = owner === other.owner && view == other.view
 
 /** Epoch-specific description candidate for one TypeDef identity. It never enters value flow. */
-internal data class DotNetGenericOwnerPhysicalTypeDefReference(
+internal class DotNetGenericOwnerPhysicalTypeDefReference(
     val identity: DotNetGenericOwnerPhysicalTypeDefIdentity,
-    val genericArity: Int,
+    genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference>,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
     val supportsInlineNull: Boolean = false,
 ) {
+    val genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference> =
+        genericParameters.toList()
+    val genericArity: Int
+        get() = genericParameters.size
+
     init {
-        require(genericArity >= 0 &&
-                (!supportsInlineNull || category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE)) {
-            "a physical TypeDef description requires non-negative arity and coherent inline-null support"
+        require(!supportsInlineNull || category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE) {
+            "a physical TypeDef description requires coherent inline-null support"
         }
     }
 
     fun conflictsWith(other: DotNetGenericOwnerPhysicalTypeDefReference): Boolean =
-        identity == other.identity && (genericArity != other.genericArity || category != other.category ||
-                supportsInlineNull != other.supportsInlineNull)
+        identity == other.identity && this != other
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetGenericOwnerPhysicalTypeDefReference &&
+                identity == other.identity &&
+                genericParameters == other.genericParameters &&
+                category == other.category &&
+                supportsInlineNull == other.supportsInlineNull
+
+    override fun hashCode(): Int {
+        var result = identity.hashCode()
+        result = 31 * result + genericParameters.hashCode()
+        result = 31 * result + category.hashCode()
+        result = 31 * result + supportsInlineNull.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "TypeDef(identity=$identity, genericParameters=$genericParameters, " +
+                "category=$category, supportsInlineNull=$supportsInlineNull)"
 }
 
 /** Stable compilation-local identity of one real or planned CLR MethodDef. */
@@ -298,6 +320,10 @@ enum class DotNetGenericOwnerPhysicalTypeParameterVariance {
 internal class DotNetGenericOwnerPhysicalGenericParameterReference(
     val variance: DotNetGenericOwnerPhysicalTypeParameterVariance,
     constraints: List<DotNetGenericOwnerSymbolicCarrierReference>,
+    val hasReferenceTypeConstraint: Boolean = false,
+    val hasNotNullableValueTypeConstraint: Boolean = false,
+    val hasDefaultConstructorConstraint: Boolean = false,
+    val allowsByRefLike: Boolean = false,
 ) {
     val constraints: List<DotNetGenericOwnerSymbolicCarrierReference> = constraints.toList()
 
@@ -308,16 +334,55 @@ internal class DotNetGenericOwnerPhysicalGenericParameterReference(
         require(DotNetGenericOwnerSymbolicCarrierReference.voidCarrier() !in this.constraints) {
             "a physical GenericParam cannot have a void constraint"
         }
+        require(!hasReferenceTypeConstraint || !hasNotNullableValueTypeConstraint) {
+            "a physical GenericParam cannot require both reference- and value-type arguments"
+        }
     }
+
+    val isUnconstrained: Boolean
+        get() = constraints.isEmpty() &&
+                !hasReferenceTypeConstraint &&
+                !hasNotNullableValueTypeConstraint &&
+                !hasDefaultConstructorConstraint &&
+                !allowsByRefLike
 
     override fun equals(other: Any?): Boolean =
         other is DotNetGenericOwnerPhysicalGenericParameterReference &&
-                variance == other.variance && constraints.toSet() == other.constraints.toSet()
+                variance == other.variance &&
+                constraints.toSet() == other.constraints.toSet() &&
+                hasReferenceTypeConstraint == other.hasReferenceTypeConstraint &&
+                hasNotNullableValueTypeConstraint == other.hasNotNullableValueTypeConstraint &&
+                hasDefaultConstructorConstraint == other.hasDefaultConstructorConstraint &&
+                allowsByRefLike == other.allowsByRefLike
 
-    override fun hashCode(): Int = 31 * variance.hashCode() + constraints.toSet().hashCode()
+    override fun hashCode(): Int {
+        var result = variance.hashCode()
+        result = 31 * result + constraints.toSet().hashCode()
+        result = 31 * result + hasReferenceTypeConstraint.hashCode()
+        result = 31 * result + hasNotNullableValueTypeConstraint.hashCode()
+        result = 31 * result + hasDefaultConstructorConstraint.hashCode()
+        result = 31 * result + allowsByRefLike.hashCode()
+        return result
+    }
 
     override fun toString(): String =
-        "GenericParameter(variance=$variance, constraints=$constraints)"
+        "GenericParameter(variance=$variance, constraints=$constraints, " +
+                "referenceType=$hasReferenceTypeConstraint, " +
+                "nonNullableValueType=$hasNotNullableValueTypeConstraint, " +
+                "defaultConstructor=$hasDefaultConstructorConstraint, " +
+                "allowsByRefLike=$allowsByRefLike)"
+}
+
+internal fun dotNetInvariantUnconstrainedPhysicalGenericParameters(
+    arity: Int,
+): List<DotNetGenericOwnerPhysicalGenericParameterReference> {
+    require(arity >= 0) { "a physical generic parameter list requires non-negative arity" }
+    return List(arity) {
+        DotNetGenericOwnerPhysicalGenericParameterReference(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+            constraints = emptyList(),
+        )
+    }
 }
 
 /** Epoch-specific description candidate for one MethodDef identity. It never enters value flow. */
@@ -497,6 +562,13 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                 "physical TypeDef expects ${description.genericArity} arguments but received ${arguments.size}",
             )
+        }
+        if (description.genericParameters.any { parameter -> !parameter.isUnconstrained }) {
+            // The declaration index records exact GenericParam authority, but this generic
+            // construction helper does not yet prove nominal or special-constraint satisfaction.
+            // A retained metadata construction may eventually carry separate proof; arbitrary
+            // symbolic arguments must not become verifier truth merely because their arity fits.
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         }
         if (arguments.any { argument -> argument == voidCarrier() }) {
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -899,6 +971,27 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 fieldsByIdentity,
                 emptyMap(),
             )
+            for (candidate in typesByIdentity.values) {
+                for (parameter in candidate.genericParameters) {
+                    for (constraint in parameter.constraints) {
+                        val foreignBinder = constraint.firstGenericBinderOutsideTypeOrNull(
+                            candidate.identity,
+                        )
+                        if (foreignBinder != null) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                                "physical TypeDef GenericParam constraint references generic binder " +
+                                        "$foreignBinder outside ${candidate.identity}",
+                            )
+                        }
+                        when (val validation = declarationsWithoutEdges.validateCarrierOrError(constraint)) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    }
+                }
+            }
             for (candidate in methodsByIdentity.values) {
                 if (typesByIdentity[candidate.declaringType] == null) {
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
@@ -1124,6 +1217,18 @@ internal sealed interface DotNetGenericOwnerSymbolicCarrierReference {
                 index,
             )
 
+            /**
+             * Creates an unbound self-reference while a TypeDef candidate is being assembled.
+             * The declaration index remains the authority which validates arity and ownership.
+             */
+            fun unboundTypeParameterReference(
+                definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+                index: Int,
+            ): Parameter = Parameter(
+                DotNetGenericOwnerPhysicalGenericBinderReference.Type(definition),
+                index,
+            )
+
             private fun bind(
                 declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
                 binder: DotNetGenericOwnerPhysicalGenericBinderReference,
@@ -1153,6 +1258,16 @@ internal sealed interface DotNetGenericOwnerSymbolicCarrierReference {
         }
 
         companion object {
+            /**
+             * Creates an unbound construction while a complete declaration graph is assembled.
+             * [DotNetGenericOwnerPhysicalDeclarationIndex.bind] validates every referenced
+             * TypeDef, argument, constraint, and binder before the graph becomes authority.
+             */
+            fun unboundTypeReference(
+                definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+                arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
+            ): Constructed = Constructed(definition, arguments.toList())
+
             fun bind(
                 declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
                 definition: DotNetGenericOwnerPhysicalTypeDefIdentity,

@@ -183,6 +183,16 @@ internal class EmissionIdentityAllocator {
     fun expectedTypeAliasGroup(
         identities: List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
         description: DotNetGenericOwnerPhysicalTypeDefReference,
+    ): DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey = expectedTypeAliasGroup(
+        identities,
+        description.genericArity,
+        description.category,
+    )
+
+    fun expectedTypeAliasGroup(
+        identities: List<DotNetGenericOwnerPhysicalTypeDefIdentity.Local>,
+        genericArity: Int,
+        category: DotNetGenericOwnerPhysicalNamedTypeCategory,
     ): DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey {
         require(identities.isNotEmpty()) { "an expected TypeDef alias group cannot be empty" }
         val identityKeys = identities.map(::LocalTypeIdentityKey)
@@ -198,15 +208,14 @@ internal class EmissionIdentityAllocator {
                 "BOUND authority assigned one expected TypeDef alias group to distinct physical keys"
             }
             existing.forEach { expected ->
-                check(expected.genericArity == description.genericArity &&
-                        expected.category == description.category) {
+                check(expected.genericArity == genericArity && expected.category == category) {
                     "BOUND authority assigned contradictory facts to one expected TypeDef alias group"
                 }
             }
             return existing.first().key
         }
         val key = DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey(nextTypeKey++)
-        val expected = ExpectedType(key, description.genericArity, description.category)
+        val expected = ExpectedType(key, genericArity, category)
         identityKeys.forEach { identityKey -> expectedTypes[identityKey] = expected }
         return key
     }

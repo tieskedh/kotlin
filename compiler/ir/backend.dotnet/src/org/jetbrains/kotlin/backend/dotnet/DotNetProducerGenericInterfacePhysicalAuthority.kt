@@ -66,7 +66,12 @@ internal class DotNetProducerGenericInterfacePhysicalAuthority private construct
                     add(
                         DotNetGenericOwnerPhysicalTypeDefReference(
                             identity = naturalDefinitions.getValue(entry.key),
-                            genericArity = genericArity,
+                            genericParameters = entry.value.family.naturalTypeParameterVariances.map { variance ->
+                                DotNetGenericOwnerPhysicalGenericParameterReference(
+                                    variance,
+                                    constraints = emptyList(),
+                                )
+                            },
                             category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
                         ),
                     )
@@ -74,7 +79,8 @@ internal class DotNetProducerGenericInterfacePhysicalAuthority private construct
                         add(
                             DotNetGenericOwnerPhysicalTypeDefReference(
                                 identity = exactDefinition,
-                                genericArity = genericArity,
+                                genericParameters =
+                                    dotNetInvariantUnconstrainedPhysicalGenericParameters(genericArity),
                                 category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
                             ),
                         )

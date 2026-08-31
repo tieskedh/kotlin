@@ -292,7 +292,13 @@ enum class DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint {
     DEFAULT_CONSTRUCTOR,
 }
 
-/** Exact CLR GenericParam constraint row for one physical owner parameter. */
+/**
+ * Exact CLR GenericParam constraint row for one Kotlin-produced physical owner parameter.
+ *
+ * The current Kotlin producer grammar never emits `AllowByRefLike` on an owner parameter, so its
+ * absence from this schema is authoritative `false`, not missing metadata. Supporting that flag
+ * in Kotlin-produced owners requires an artifact-schema revision.
+ */
 data class DotNetGenericOwnerPhysicalGenericParameterRecord(
     val index: Int,
     val specialConstraints: Set<DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint>,
@@ -5845,7 +5851,7 @@ private fun IrConstructor.hasOnlyPrototypePhysicalizableBody(): Boolean =
                 statement is IrContainerExpression && statement.statements.isEmpty()
     } == true
 
-private fun IrClass.genericOwnerPrototypePhysicalGenericParameters():
+internal fun IrClass.genericOwnerPrototypePhysicalGenericParameters():
         List<DotNetGenericOwnerPhysicalGenericParameterRecord>? = typeParameters.mapIndexed { index, parameter ->
     val nonTrivialBounds = parameter.superTypes.filterNot { bound -> bound.isAny() || bound.isNullableAny() }
     if (nonTrivialBounds.isNotEmpty()) return null
