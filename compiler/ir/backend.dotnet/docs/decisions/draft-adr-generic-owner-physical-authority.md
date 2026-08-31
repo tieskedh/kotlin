@@ -526,6 +526,29 @@ producer under a logical `Source<Any?>` or star view when the exact lineage is
 still proven. The result is widened after the call. This does not create
 `Source<object>` and does not require semantic dispatch.
 
+For an imported CLR MethodDef, retained metadata selects the MethodDef and its
+physical owner family but does not by itself select a receiver construction.
+The bounded foreign route chooses that construction only from the receiver's
+existing value fact, in this order:
+
+1. selected lineage for the retained owner family;
+2. the receiver's verifier-visible direct carrier when it constructs that
+   family; or
+3. one unique guaranteed view of that family.
+
+Zero candidates, or multiple candidates without an existing selector, are
+`Unavailable`. The operation query does not accept a desired foreign
+construction from its caller, so a logical Kotlin type cannot manufacture one.
+Lineage remains only a selector over guaranteed views.
+
+After parameter admission, the route produces its result from the instantiated
+MethodDef layout. `Void` produces no value, `Direct` produces that exact
+carrier, and `SplitNullable` produces its exact payload-plus-flag layout.
+A constructed result guarantees its own physical view with frozen-result
+evidence. Reference-shaped and substitution-dependent results remain
+conservatively maybe-null until logical authority or a checked transfer proves
+more; a later logical return type never remaps their carrier.
+
 The same rule must never narrow a genuinely broad source. A public parameter,
 mutable join, object field, or foreign value which carries no preserved unique
 view cannot acquire one from its logical type. It uses the selected semantic or

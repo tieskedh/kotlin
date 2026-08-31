@@ -171,6 +171,228 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
+    fun `retained foreign MethodDef routes through exact receiver and argument provenance`() {
+        val fixture = fixture()
+        val declarations = boundDeclarations(fixture)
+        val ownerIdentity = retainedOwnerIdentity(fixture)
+        val ownerConstruction = boundConstruction(
+            declarations,
+            ownerIdentity,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        )
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, ownerConstruction),
+                exactTransferArguments(declarations),
+            )
+        ).value
+
+        assertEquals(retainedMethodIdentity(fixture), route.method.identity)
+        assertEquals(ownerConstruction, route.requiredReceiverView.construction)
+        assertEquals(
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+            route.methodArguments,
+        )
+        assertEquals(
+            listOf(
+                DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+                DotNetGenericOwnerSymbolicCarrierReference.SzArray(
+                    DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+                ),
+            ),
+            route.instantiatedSignature.parameterSlots.map { slot -> slot.carrier },
+        )
+        assertEquals(
+            DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                route.instantiatedSignature.resultLayout,
+            ).slot.carrier,
+        )
+        val producedResult = assertNotNull(route.producedResult)
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.Direct(
+                boundCarrier(
+                    declarations,
+                    DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+                )
+            ),
+            producedResult.layout,
+        )
+        assertEquals(DotNetGenericOwnerPhysicalNullState.NON_NULL, producedResult.nullState)
+    }
+
+    @Test
+    fun `logical widening preserves a selected retained foreign construction`() {
+        val fixture = fixture()
+        val declarations = boundDeclarations(fixture)
+        val ownerConstruction = boundConstruction(
+            declarations,
+            retainedOwnerIdentity(fixture),
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        )
+        val selectedView = DotNetGenericOwnerPhysicalView(ownerConstruction)
+        val widenedReceiver = objectValueWithRetainedViews(
+            declarations,
+            listOf(selectedView),
+            selectedView,
+        )
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                widenedReceiver,
+                exactTransferArguments(declarations),
+            )
+        ).value
+
+        assertEquals(ownerConstruction, route.requiredReceiverView.construction)
+        assertEquals(
+            DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                route.instantiatedSignature.resultLayout,
+            ).slot.carrier,
+        )
+    }
+
+    @Test
+    fun `multiple retained constructions require selected view lineage`() {
+        val fixture = fixture()
+        val declarations = boundDeclarations(fixture)
+        val ownerIdentity = retainedOwnerIdentity(fixture)
+        val intView = DotNetGenericOwnerPhysicalView(boundConstruction(
+            declarations,
+            ownerIdentity,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        ))
+        val stringView = DotNetGenericOwnerPhysicalView(boundConstruction(
+            declarations,
+            ownerIdentity,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.stringCarrier()),
+        ))
+        val ambiguousReceiver = objectValueWithRetainedViews(
+            declarations,
+            listOf(intView, stringView),
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            selectRetainedRoute(
+                fixture,
+                ambiguousReceiver,
+                exactTransferArguments(declarations),
+            ),
+        )
+
+        val selectedReceiver = objectValueWithRetainedViews(
+            declarations,
+            listOf(intView, stringView),
+            intView,
+        )
+        val selectedRoute = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                selectedReceiver,
+                exactTransferArguments(declarations),
+            )
+        ).value
+        assertEquals(intView, selectedRoute.requiredReceiverView)
+    }
+
+    @Test
+    fun `broad foreign receiver and incompatible owner input remain unavailable`() {
+        val fixture = fixture()
+        val declarations = boundDeclarations(fixture)
+        val ownerConstruction = boundConstruction(
+            declarations,
+            retainedOwnerIdentity(fixture),
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        )
+        val broadReceiver = DotNetGenericOwnerProducedValueFact(
+            DotNetGenericOwnerProducedValueLayout.Direct(
+                boundCarrier(
+                    declarations,
+                    DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                )
+            ),
+            DotNetGenericOwnerPhysicalValueProvenance(DotNetGenericOwnerGuaranteedViews.Unknown),
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            selectRetainedRoute(
+                fixture,
+                broadReceiver,
+                exactTransferArguments(declarations),
+            ),
+        )
+
+        val incompatibleArguments = listOf(
+            directValue(
+                declarations,
+                DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+            ),
+            directValue(
+                declarations,
+                DotNetGenericOwnerSymbolicCarrierReference.SzArray(
+                    DotNetGenericOwnerSymbolicCarrierReference.stringCarrier(),
+                ),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, ownerConstruction),
+                incompatibleArguments,
+            ),
+        )
+    }
+
+    @Test
+    fun `retained recursive result produces its exact foreign view`() {
+        val fixture = fixture(recursiveResult = true)
+        val declarations = boundDeclarations(fixture)
+        val ownerConstruction = boundConstruction(
+            declarations,
+            retainedOwnerIdentity(fixture),
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        )
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, ownerConstruction),
+                exactTransferArguments(declarations),
+            )
+        ).value
+        val result = assertNotNull(route.producedResult)
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.Direct(
+                boundCarrier(declarations, ownerConstruction),
+            ),
+            result.layout,
+        )
+        assertEquals(DotNetGenericOwnerPhysicalNullState.MAYBE_NULL, result.nullState)
+        val evidence = assertIs<DotNetGenericOwnerGuaranteedViews.Known>(
+            result.provenance.guaranteedViews,
+        ).evidenceByView
+        assertEquals(
+            setOf(DotNetGenericOwnerPhysicalViewEvidence.FROZEN_PARAMETER_OR_RESULT),
+            evidence[DotNetGenericOwnerPhysicalView(ownerConstruction)],
+        )
+    }
+
+    @Test
     fun `caller-authored foreign descriptions cannot bypass retained metadata adapter`() {
         val fixture = fixture()
         val retained = assertIs<
@@ -432,6 +654,131 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             ),
         )
     }
+
+    private fun boundDeclarations(
+        fixture: Fixture,
+    ): DotNetGenericOwnerPhysicalDeclarationIndex = assertIs<
+            DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalDeclarationIndex,
+                    >,
+            >(
+        DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeign(
+            fixture.source,
+            fixture.method,
+        )
+    ).value
+
+    private fun retainedOwnerIdentity(
+        fixture: Fixture,
+    ): DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr =
+        DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(fixture.source)
+
+    private fun retainedMethodIdentity(
+        fixture: Fixture,
+    ): DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr =
+        DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr.retained(
+            fixture.source,
+            fixture.method,
+        )
+
+    private fun boundConstruction(
+        declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+        definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
+    ): DotNetGenericOwnerSymbolicCarrierReference.Constructed = assertIs<
+            DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+                    >,
+            >(
+        declarations.constructTypeOrError(definition, arguments)
+    ).value
+
+    private fun boundCarrier(
+        declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+        type: DotNetGenericOwnerSymbolicCarrierReference,
+    ): DotNetGenericOwnerPhysicalCarrier = assertIs<
+            DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerPhysicalCarrier>,
+            >(
+        declarations.carrierOrError(type)
+    ).value
+
+    private fun directValue(
+        declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+        type: DotNetGenericOwnerSymbolicCarrierReference,
+    ): DotNetGenericOwnerProducedValueFact {
+        val construction = type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        val provenance = construction?.let { exactConstruction ->
+            DotNetGenericOwnerPhysicalValueProvenance(
+                DotNetGenericOwnerGuaranteedViews.Known(
+                    mapOf(
+                        DotNetGenericOwnerPhysicalView(exactConstruction) to setOf(
+                            DotNetGenericOwnerPhysicalViewEvidence.RETAINED_FOREIGN_METADATA,
+                        )
+                    ),
+                ),
+            )
+        } ?: DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews()
+        return DotNetGenericOwnerProducedValueFact(
+            DotNetGenericOwnerProducedValueLayout.Direct(boundCarrier(declarations, type)),
+            provenance,
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+    }
+
+    private fun objectValueWithRetainedViews(
+        declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+        views: List<DotNetGenericOwnerPhysicalView>,
+        selectedView: DotNetGenericOwnerPhysicalView? = null,
+    ): DotNetGenericOwnerProducedValueFact {
+        var provenance = DotNetGenericOwnerPhysicalValueProvenance(
+            DotNetGenericOwnerGuaranteedViews.Known(
+                views.associateWith {
+                    setOf(DotNetGenericOwnerPhysicalViewEvidence.RETAINED_FOREIGN_METADATA)
+                },
+            ),
+        )
+        if (selectedView != null) {
+            provenance = assertNotNull(provenance.selectViewOrNull(selectedView))
+        }
+        return DotNetGenericOwnerProducedValueFact(
+            DotNetGenericOwnerProducedValueLayout.Direct(
+                boundCarrier(
+                    declarations,
+                    DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                )
+            ),
+            provenance,
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+    }
+
+    private fun exactTransferArguments(
+        declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    ): List<DotNetGenericOwnerProducedValueFact> = listOf(
+        directValue(
+            declarations,
+            DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+        ),
+        directValue(
+            declarations,
+            DotNetGenericOwnerSymbolicCarrierReference.SzArray(
+                DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+            ),
+        ),
+    )
+
+    private fun selectRetainedRoute(
+        fixture: Fixture,
+        receiver: DotNetGenericOwnerProducedValueFact,
+        arguments: List<DotNetGenericOwnerProducedValueFact>,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalOperationRoute> =
+        selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
+            source = fixture.source,
+            method = fixture.method,
+            receiver = receiver,
+            arguments = arguments,
+            methodArguments = listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+        )
 
     private fun fixture(
         ownerParameterAttributes: Int = 0,

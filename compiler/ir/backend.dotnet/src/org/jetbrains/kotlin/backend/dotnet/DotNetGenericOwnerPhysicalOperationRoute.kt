@@ -18,6 +18,8 @@ internal data class DotNetGenericOwnerPhysicalOperationRoute(
     val requiredReceiverView: DotNetGenericOwnerPhysicalView,
     val methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
     val instantiatedSignature: DotNetGenericOwnerPhysicalMethodSignatureReference,
+    /** Result supplied by the instantiated MethodDef, before logical materialization or storage. */
+    val producedResult: DotNetGenericOwnerProducedValueFact?,
 )
 
 /**
@@ -107,13 +109,81 @@ internal fun selectDotNetGenericOwnerPhysicalOperationRoute(
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         }
     }
+    val producedResult = when (val production = instantiatedSignature.resultLayout
+        .produceCallResultOrError(declarations)
+    ) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> production.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(production.reason)
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
     return DotNetGenericOwnerPhysicalBindingResult.Bound(
         DotNetGenericOwnerPhysicalOperationRoute(
             method,
             request.requiredReceiverView,
             request.methodArguments.toList(),
             instantiatedSignature,
+            producedResult,
         ),
+    )
+}
+
+/** Produces exactly the layout fixed by the selected MethodDef, never its later logical view. */
+private fun DotNetGenericOwnerPhysicalCallableResultLayoutReference.produceCallResultOrError(
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerProducedValueFact?> {
+    if (this == DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void) {
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(null)
+    }
+    val carrierReference = when (this) {
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct -> slot.carrier
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+            payloadSlot.carrier
+        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> error("handled above")
+    }
+    val carrier = when (val binding = declarations.carrierOrError(carrierReference)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val resultView = (carrier.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+        ?.let(::DotNetGenericOwnerPhysicalView)
+    val provenance = if (resultView == null) {
+        DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews()
+    } else {
+        DotNetGenericOwnerPhysicalValueProvenance(
+            DotNetGenericOwnerGuaranteedViews.Known(
+                mapOf(
+                    resultView to setOf(
+                        DotNetGenericOwnerPhysicalViewEvidence.FROZEN_PARAMETER_OR_RESULT,
+                    )
+                ),
+            ),
+        )
+    }
+    val nullState = when (this) {
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
+            if (carrier.canRepresentNull) {
+                DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+            } else {
+                DotNetGenericOwnerPhysicalNullState.NON_NULL
+            }
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> error("handled above")
+    }
+    val layout = when (this) {
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
+            DotNetGenericOwnerProducedValueLayout.Direct(carrier)
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+            DotNetGenericOwnerProducedValueLayout.SplitNullable(carrier)
+        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void -> error("handled above")
+    }
+    return DotNetGenericOwnerPhysicalBindingResult.Bound(
+        DotNetGenericOwnerProducedValueFact(layout, provenance, nullState),
     )
 }
 

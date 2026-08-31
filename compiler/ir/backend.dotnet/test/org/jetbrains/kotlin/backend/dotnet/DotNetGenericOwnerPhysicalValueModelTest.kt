@@ -30,6 +30,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -1621,6 +1622,26 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `void physical MethodDef route produces no value`() {
+        val fixture = operationFixture(
+            OperationFixtureSchema(),
+            naturalReturnsVoid = true,
+        )
+
+        val route = boundOperationRoute(
+            fixture,
+            fixture.naturalMethod,
+            fixture.naturalView,
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void,
+            route.instantiatedSignature.resultLayout,
+        )
+        assertNull(route.producedResult)
+    }
+
+    @Test
     fun `operation routing never falls back across a missing selected edge or MethodDef`() {
         val schema = OperationFixtureSchema()
 
@@ -1979,6 +2000,17 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 DotNetGenericOwnerPhysicalHiddenParameterPassing.OUT,
             ),
             concreteResult.nullFlag,
+        )
+        val concreteProducedResult = assertNotNull(concrete.producedResult)
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.SplitNullable(
+                boundCarrier(declarations, int32Type()),
+            ),
+            concreteProducedResult.layout,
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+            concreteProducedResult.nullState,
         )
         val concreteOwner = boundConstruction(
             declarations,
@@ -3016,6 +3048,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         includeSemanticEdge: Boolean = true,
         includeNaturalMethod: Boolean = true,
         includeSemanticMethod: Boolean = true,
+        naturalReturnsVoid: Boolean = false,
     ): OperationFixture {
         val types = listOf(
             typeDescription(schema.owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
@@ -3032,10 +3065,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             schema.naturalMethod,
             schema.natural,
             emptyList(),
-            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(callableSlot(
-                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
-                naturalParameter,
-            )),
+            if (naturalReturnsVoid) {
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void
+            } else {
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    naturalParameter,
+                ))
+            },
         )
         val semanticMethod = callableMethodDescription(
             schema.semanticMethod,

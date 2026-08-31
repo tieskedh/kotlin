@@ -90,9 +90,12 @@ inverse are recorded in the
 The first retained-foreign declaration adapter now authenticates one bounded
 open root-interface MethodDef directly from its selected raw metadata; wider
 hierarchies, MethodImpls, nominal carriers, and constrained constructions remain
-outside that grammar. The next ordered work makes the shared value/operation
-query authoritative for one such imported route, then widens retained authority
-and routing one structural boundary at a time.
+outside that grammar. One production-inert imported route now derives its
+receiver construction solely from shared guaranteed views and selected lineage,
+then produces its exact instantiated MethodDef result through the same value
+model. The next ordered retained boundary is one exact `InterfaceImpl` edge and
+an inherited receiver route; MethodImpls, multi-member owners, and Runtime/
+Stdlib application remain later work.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;
