@@ -957,6 +957,31 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
+            return bindRetainedForeignDeclarations(declarations)
+        }
+
+        /** Adds one exact retained receiver TypeDef and its single authenticated InterfaceImpl. */
+        fun bindRetainedForeignInheritedReceiver(
+            source: DotNetClrImportedMethodSource,
+            method: DotNetClrMethodDefinition,
+            receiverSource: DotNetClrImportedDeclarationSource,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
+            val declarations = when (
+                val candidate = DotNetRetainedForeignGenericOwnerPhysicalDeclarations
+                    .buildInheritedReceiver(source, method, receiverSource)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> candidate.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(candidate.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            return bindRetainedForeignDeclarations(declarations)
+        }
+
+        private fun bindRetainedForeignDeclarations(
+            declarations: DotNetRetainedForeignGenericOwnerPhysicalDeclarations,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             return bindInternal(
                 DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
                 declarations.typeDefinitions,

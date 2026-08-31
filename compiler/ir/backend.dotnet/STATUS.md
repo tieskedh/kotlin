@@ -63,6 +63,11 @@ suites (96 tests, zero failures/errors/skips). It changes no selected IR,
 emitted CIL, Runtime/Stdlib surface, artifact, or production ABI, so it inherits
 the fresh production-erased aggregate above.
 
+The subsequent retained-interface-inheritance delta passed the retained-
+metadata model suite (26 tests, zero failures/errors/skips). Its final combined
+focused gate is recorded below after the implementation summary. It is likewise
+production-inert and inherits the same aggregate checkpoint.
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -115,22 +120,31 @@ interface and one selected abstract MethodDef from exact raw metadata. It
 cross-checks the retained signature and complete empty hierarchy, preserves
 ordered GenericParam facts, authenticates only the exact selected rows, and
 distinguishes unsupported valid shapes from contradictory carriers. Direct
-caller descriptions, inherited/MethodImpl owners, unsupported carrier leaves,
+caller descriptions, MethodImpl owners, unsupported carrier leaves,
 and arbitrary constrained constructions remain unavailable.
 
 One imported operation now uses that retained MethodDef as its endpoint and
-selects a receiver construction only from existing guaranteed views. Selected
-lineage wins; otherwise the direct carrier or one unique view must identify the
-construction. Ambiguous or genuinely broad receivers remain unavailable. The
+selects a receiver construction only from the existing value fact and recorded
+physical edges. Selected lineage wins; otherwise the direct carrier or one
+unique recorded physical-view closure must identify the construction. The first
+inherited slice authenticates one non-generic child interface with an exact
+retained declaration carrier whose sole closed `InterfaceImpl` targets the
+selected MethodDef owner. It re-resolves the raw edge in the same assembly graph,
+rejects retained/raw disagreement, and never promotes the derived base view into
+new provenance. Ambiguous or genuinely broad receivers remain unavailable. The
 shared route independently admits arguments and produces the instantiated
 direct, void, or split-nullable result fact, preserving exact constructed result
 provenance without fabricating a logical destination view.
 
-Next work admits one exact retained `InterfaceImpl` edge and proves an inherited
-receiver route before MethodImpl, multi-member, or Runtime/Stdlib application.
+Next work admits one open generic forwarding edge, such as `Child<T> : Base<T>`,
+with binder-safe substitution before MethodImpl, multiple edges/members, classes,
+cross-assembly inheritance, or Runtime/Stdlib application.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
+
+The final combined focused gate passed the shared physical-value and retained-
+metadata model suites (102 tests, zero failures/errors/skips).
 
 ## Current blockers
 
@@ -141,9 +155,14 @@ and [way forward](docs/programmes/way-forward.md).
 - Declaration and implementation authority is not yet closed for deeper base
   chains or multiple/distinct constructed views.
 - Retained foreign CLR declaration authority remains bounded to an open root
-  interface, one selected MethodDef, and one selected-operation route;
-  inherited views, MethodImpls, wider nominal carriers, constrained
-  constructions, and broader operation routing remain incomplete.
+  interface, one selected MethodDef, and either its root receiver or one
+  non-generic child interface with one closed same-assembly `InterfaceImpl`.
+  Open generic forwarding, multiple edges/members, classes, MethodImpls,
+  cross-assembly inheritance, wider nominal carriers, constrained constructions,
+  and broader operation routing remain incomplete.
+- Retained TypeDef authentication still arrives through a member declaration
+  carrier. An imported type with no declared callable has no class-level carrier
+  yet and therefore remains unavailable to this adapter.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

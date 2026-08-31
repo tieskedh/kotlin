@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 
@@ -22,9 +23,18 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
     receiver: DotNetGenericOwnerProducedValueFact,
     arguments: List<DotNetGenericOwnerProducedValueFact>,
     methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference> = emptyList(),
+    inheritedReceiverSource: DotNetClrImportedDeclarationSource? = null,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalOperationRoute> {
     val declarations = when (
-        val binding = DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeign(source, method)
+        val binding = if (inheritedReceiverSource == null) {
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeign(source, method)
+        } else {
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                source,
+                method,
+                inheritedReceiverSource,
+            )
+        }
     ) {
         is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
         is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
@@ -40,9 +50,15 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
         ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
             "retained foreign declaration authority omitted its selected MethodDef",
         )
-    val requiredView = receiver.selectRetainedForeignMethodOwnerViewOrNull(
+    val requiredView = when (val selection = receiver.selectRetainedForeignMethodOwnerViewOrError(
+        declarations,
         methodDescription.declaringType,
-    ) ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    )) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> selection.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return selection
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
     return selectDotNetGenericOwnerPhysicalOperationRoute(
         declarations = declarations,
         selectedMethod = selectedMethod,
@@ -55,19 +71,38 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
     )
 }
 
-private fun DotNetGenericOwnerProducedValueFact.selectRetainedForeignMethodOwnerViewOrNull(
+private fun DotNetGenericOwnerProducedValueFact.selectRetainedForeignMethodOwnerViewOrError(
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
     owner: DotNetGenericOwnerPhysicalTypeDefIdentity,
-): DotNetGenericOwnerPhysicalView? {
-    if (!nullState.canBeNonNull) return null
-    provenance.selectedViewLineage[owner]?.let { return it }
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalView> {
+    if (!nullState.canBeNonNull) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    provenance.selectedViewLineage[owner]?.let { selected ->
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(selected)
+    }
 
     val currentConstruction = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)
         ?.carrier?.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed
     if (currentConstruction?.definition == owner) {
-        return DotNetGenericOwnerPhysicalView(currentConstruction)
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(
+            DotNetGenericOwnerPhysicalView(currentConstruction),
+        )
     }
 
     val knownViews = (provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known)
-        ?.views ?: return null
-    return knownViews.singleOrNull { view -> view.family == owner }
+        ?.views ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val candidates = knownViews.filterTo(linkedSetOf()) { view -> view.family == owner }
+    val sourceConstructions = linkedSetOf<DotNetGenericOwnerSymbolicCarrierReference.Constructed>()
+    currentConstruction?.let(sourceConstructions::add)
+    knownViews.mapTo(sourceConstructions) { view -> view.construction }
+    for (sourceConstruction in sourceConstructions) {
+        when (val closure = declarations.physicalInterfaceViewClosureOrError(sourceConstruction)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                closure.value.interfaceViews.filterTo(candidates) { view -> view.family == owner }
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return closure
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+        }
+    }
+    return candidates.singleOrNull()?.let {
+        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
+    } ?: DotNetGenericOwnerPhysicalBindingResult.Unavailable
 }
