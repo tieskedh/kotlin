@@ -69,7 +69,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("64", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("65", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -564,6 +564,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val duplicateMember = DotNetPublishedGenericInterfaceMemberContract(
             duplicateKey,
             published.contract.declaredMembers.single().role,
+            published.contract.declaredMembers.single().resultLayout,
         )
         val hostile = declarations + mapOf(
             duplicateKey to function,
@@ -696,6 +697,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                     declaredMembers = listOf(DotNetPublishedGenericInterfaceMemberContract(
                         key.logicalInterfaceMemberKey,
                         DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+                        DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
                     )),
                 ))
             },
@@ -718,11 +720,11 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     }
 
     @Test
-    fun derivesThePublishedMemberRoleFromTheActualNaturalResultLayout() {
+    fun validatesThePublishedResultLayoutAgainstTheActualNaturalResultLayout() {
         val directPublication = producerSealedFamilyPublicationFixture().withDirectResults()
         val directDeclarations = producerSealedFamilyAbiFixture(
             directPublication,
-            DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
         )
         assertEquals(
             directDeclarations,
@@ -732,7 +734,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         assertFailsWith<IllegalArgumentException> {
             DotNetLibraryAbiCodec.encode(producerSealedFamilyAbiFixture(
                 directPublication,
-                DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
+                DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE,
             ))
         }
     }
@@ -928,8 +930,8 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         fun producerSealedFamilyAbiFixture(
             publication: DotNetProducerGenericOwnerSealedFamilyPublication =
                 producerSealedFamilyPublicationFixture(),
-            publishedMemberRole: DotNetPublishedGenericInterfaceMemberRole =
-                DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER,
+            publishedResultLayout: DotNetPublishedGenericInterfaceMemberResultLayout =
+                DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE,
         ): Map<String, DotNetPhysicalDeclaration> {
             val key = publication.key
             val logicalInterfaceOwnerKey = interfaceOwnerKey(publication)
@@ -1021,7 +1023,8 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                     0,
                     listOf(DotNetPublishedGenericInterfaceMemberContract(
                         key.logicalInterfaceMemberKey,
-                        publishedMemberRole,
+                        DotNetPublishedGenericInterfaceMemberRole.PRODUCER,
+                        publishedResultLayout,
                     )),
                     DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                     null,

@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetNullableReferenceFlag
@@ -632,6 +633,17 @@ private class BackendCliDotNetFacade(
             declarations = completedOutput.declarations,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-split-nullable-result"),
+        )
+        validateGenericOwnerCallableCompositionCSharp(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
+            producer = completedOutput.output,
+            declarations = completedOutput.declarations,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory(
+                "generic-owner-callable-composition"
+            ),
         )
         validateGenericOwnerStateAuthorityCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
@@ -5872,6 +5884,8 @@ private const val GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE"
 private const val GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE"
+private const val GENERIC_OWNER_CALLABLE_COMPOSITION_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_CALLABLE_COMPOSITION_CSHARP_PROBE"
 private const val GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
@@ -5917,6 +5931,8 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     expectedNaturalPropertyName: String? = null,
     expectedContractMemberCount: Int = 1,
     expectedVariance: DotNetCSharpTypeParameterVariance = DotNetCSharpTypeParameterVariance.OUT,
+    expectedTypeParameterVariances: List<DotNetCSharpTypeParameterVariance> =
+        listOf(expectedVariance),
     expectedSemanticReturnType: String = "object",
     expectedSemanticParameterTypes: List<String> = emptyList(),
     expectedNaturalReturnType: String = "!0",
@@ -5947,7 +5963,9 @@ private fun validateReifiedGenericInterfaceCSharpManifest(
     check(contract.sourceAuthoringSupported && contract.unsupportedReasons.isEmpty()) {
         "The admitted reified generic interface is not supported for C# source authoring"
     }
-    check(contract.typeParameters.single().variance == expectedVariance) {
+    check(contract.typeParameters.map { parameter -> parameter.variance } ==
+            expectedTypeParameterVariances
+    ) {
         "The reified generic-interface manifest recorded the wrong natural CLR variance"
     }
     check(contract.exactOwnerPath == null &&
@@ -12929,6 +12947,377 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
 }
 
 /**
+ * Proves that callable policies compose instead of becoming a new member role: `Lookup<K, out V>`
+ * exposes `!V lookup(!K, out bool isNull)`, while its semantic sibling remains object-domain.
+ */
+private fun validateGenericOwnerCallableCompositionCSharp(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if (GENERIC_OWNER_CALLABLE_COMPOSITION_CSHARP_PROBE_MARKER !in
+        testDataFile.readText()
+    ) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+
+    val namespaceName = "generic.owner.callable.composition"
+    val ownerName = "Lookup"
+    val genericOwnerRecords = declarations.filterValues { declaration ->
+        declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
+                declaration is DotNetPhysicalDeclaration.GenericOwnerMemberFamily ||
+                declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
+                declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
+                declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+    }
+    if (!genericOwnerRehearsal) {
+        check(genericOwnerRecords.isEmpty()) {
+            "The production-erased callable-composition inverse published candidate records: " +
+                    genericOwnerRecords.keys.sorted()
+        }
+        if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            val classRecord = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .singleOrNull { declaration ->
+                    declaration.ownerPath.lastOrNull()
+                        ?.substringAfterLast('.')
+                        ?.substringBefore('`') == ownerName
+                }
+            check(classRecord?.let { declaration ->
+                declaration.ownerPath == listOf("$namespaceName.$ownerName") &&
+                        declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true) {
+                "The production-erased Lookup physical index is not one arity-zero owner: " +
+                        classRecord
+            }
+            val metadata = DotNetClrMetadataReader.read(producer)
+            val lookup = metadata.typeDefinitions.singleOrNull { type ->
+                type.namespaceName == namespaceName && type.metadataName == ownerName
+            }
+            val methods = lookup?.let { type ->
+                metadata.methodDefinitions.filter { method ->
+                    method.declaringType == type.handle
+                }
+            }.orEmpty()
+            val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+            check(lookup?.isInterface == true && methods.singleOrNull()?.let { method ->
+                method.isAbstract && method.isVirtual && method.signature.hasThis &&
+                        method.signature.returnType == objectType &&
+                        method.signature.parameterTypes == listOf(objectType)
+            } == true) {
+                "The production-erased Lookup PE surface is not object lookup(object): $methods"
+            }
+        }
+        return
+    }
+
+    check(target != DotNetTarget.NETSTANDARD_2_0) {
+        "The callable-composition probe requires an executable target"
+    }
+    if (producesLibrary) {
+        if (!producer.name.equals("lib.dll", ignoreCase = true)) return
+        val family = checkNotNull(
+            declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                .singleOrNull { candidate ->
+                    candidate.ownerPath.lastOrNull() == "$namespaceName.$ownerName`2"
+                }
+        ) {
+            "The callable-composition producer has no unique Lookup`2 H record"
+        }
+        val member = checkNotNull(family.contract.declaredMembers.singleOrNull()) {
+            "Lookup`2 did not publish exactly one declaration-local member: $family"
+        }
+        check(family.naturalTypeParameterVariances == listOf(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+        ) && family.exactOwnerPath == null &&
+                family.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                family.contract.capabilityBindingKind ==
+                DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+                member.role == DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT &&
+                member.resultLayout ==
+                DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+        ) {
+            "Lookup`2 did not preserve independent input and result policies: $family"
+        }
+        val naturalMethod = checkNotNull(
+            declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                .singleOrNull { method ->
+                    method.logicalOwnerKey == family.contract.logicalOwnerKey &&
+                            method.logicalMemberKey == member.logicalMemberKey
+                }
+        ) {
+            "Lookup`2 did not publish one producer-recorded natural MethodDef"
+        }.physicalMethod
+        val input = naturalMethod.signature.parameterSlots.singleOrNull()
+        val result = naturalMethod.signature.resultLayout as?
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+        check(naturalMethod.physicalOwnerPath == family.ownerPath &&
+                naturalMethod.physicalMethodName == "lookup" &&
+                naturalMethod.signature.isInstance &&
+                naturalMethod.signature.genericArity == 0 &&
+                input?.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                input.type.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                input.type.parameterIndex == 0 &&
+                result?.payloadSlot?.domain ==
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                result.payloadSlot.type.kind ==
+                DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                result.payloadSlot.type.parameterIndex == 1
+        ) {
+            "Lookup`2 N record is not !V lookup(!K, out bool): $naturalMethod"
+        }
+        validateReifiedGenericInterfaceCSharpManifest(
+            producer,
+            expectedDeclaredOwner = "Lookup`2",
+            expectedMemberName = "lookup",
+            expectedTypeParameterVariances = listOf(
+                DotNetCSharpTypeParameterVariance.INVARIANT,
+                DotNetCSharpTypeParameterVariance.OUT,
+            ),
+            expectedSemanticReturnType = "object",
+            expectedSemanticParameterTypes = listOf("object"),
+            expectedNaturalReturnType = "!1",
+            expectedNaturalParameterTypes = listOf("!0", "bool&"),
+        )
+
+        val metadata = DotNetClrMetadataReader.read(producer)
+        val lookup = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
+            type.namespaceName == namespaceName && type.metadataName == "$ownerName`2"
+        }) {
+            "The callable-composition PE has no unique Lookup`2 TypeDef"
+        }
+        val parameters = metadata.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == lookup.handle }
+            .sortedBy { parameter -> parameter.number }
+        check(lookup.isInterface && parameters.map { parameter -> parameter.variance } == listOf(
+            DotNetClrGenericParameterVariance.INVARIANT,
+            DotNetClrGenericParameterVariance.COVARIANT,
+        )) {
+            "Lookup`2 PE GenericParams lost their invariant/covariant vector: $parameters"
+        }
+        val typeParameter = { index: Int ->
+            DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, index)
+        }
+        val boolType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+        val lookupMethod = checkNotNull(metadata.methodDefinitions.singleOrNull { method ->
+            method.declaringType == lookup.handle && method.name == "lookup"
+        }) {
+            "Lookup`2 PE has no unique lookup MethodDef"
+        }
+        val methodParameters = metadata.parameterDefinitions.filter { parameter ->
+            parameter.declaringMethod == lookupMethod.handle
+        }
+        check(lookupMethod.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                lookupMethod.isAbstract && lookupMethod.isVirtual &&
+                lookupMethod.signature.hasThis &&
+                lookupMethod.signature.genericParameterCount == 0 &&
+                lookupMethod.signature.returnType == typeParameter(1) &&
+                lookupMethod.signature.parameterTypes == listOf(
+                    typeParameter(0),
+                    DotNetClrTypeSignature.ByReference(boolType),
+                ) && methodParameters.singleOrNull { parameter ->
+                    parameter.parameterIndex == 1
+                }?.isOut == true
+        ) {
+            "Lookup`2 PE MethodDef is not !1 lookup(!0, [out] bool&): $lookupMethod / " +
+                    methodParameters
+        }
+        return
+    }
+
+    val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+    check(emittedIl.isFile) {
+        "The callable-composition consumer has no emitted IL sibling: ${emittedIl.path}"
+    }
+    val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+        .map { match -> match.range.first }
+        .toList()
+    val methodWindows = methodStarts.mapIndexed { index, start ->
+        ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+    }
+    fun requireMethodWindow(name: String) = checkNotNull(methodWindows.singleOrNull { window ->
+        "'$name'(" in window.substringBefore('{')
+    }) {
+        "Cannot isolate the callable-composition consumer MethodDef '$name'"
+    }
+    val exactRead = requireMethodWindow("downstreamExactIntRead")
+    check("Lookup`2" in exactRead && "::'lookup'(" in exactRead && "bool&" in exactRead &&
+            "box int32" !in exactRead && "::'InvokeRecordedMember'(" !in exactRead
+    ) {
+        "The exact value-type Lookup call did not stay direct and unboxed:\n$exactRead"
+    }
+    val widenedRead = requireMethodWindow("downstreamWidenedRead")
+    check("::'InvokeRecordedMember'(" in widenedRead &&
+            "Lookup`2" in widenedRead && "::'lookup'(" in widenedRead &&
+            "bool&" in widenedRead && "::'InvokeUniqueMember'(" !in widenedRead
+    ) {
+        "The widened Lookup call did not use its producer-recorded MethodDef:\n$widenedRead"
+    }
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) {
+        "The callable-composition C# probe lacks its separately compiled libraries"
+    }
+    val consumerAssembly = directory.resolve("${testDataFile.nameWithoutExtension}.dll")
+    producer.copyTo(consumerAssembly, overwrite = true)
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) {
+        "The callable-composition C# probe lacks reusable Runtime/Stdlib artifacts"
+    }
+    val source = directory.resolve("CallableCompositionConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.callable.composition;
+
+            public sealed class NaturalIntLookup : Lookup<int, int>
+            {
+                public int lookup(int key, out bool isNull)
+                {
+                    isNull = key != 11;
+                    return isNull ? default(int) : 73;
+                }
+            }
+
+            public sealed class NaturalStringLookup : Lookup<int, string>
+            {
+                public string lookup(int key, out bool isNull)
+                {
+                    isNull = key != 13;
+                    return isNull ? null : "foreign";
+                }
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    var definition = typeof(Lookup<,>);
+                    var genericParameters = definition.GetGenericArguments();
+                    if (!definition.IsInterface || definition.GetInterfaces().Length != 0 ||
+                        genericParameters.Length != 2 ||
+                        (genericParameters[0].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.None ||
+                        (genericParameters[1].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.Covariant)
+                        throw new InvalidOperationException("Lookup variance/topology is wrong");
+
+                    var method = definition.GetMethod("lookup");
+                    var methodParameters = method == null ? null : method.GetParameters();
+                    if (method == null || !method.IsAbstract || !method.IsVirtual ||
+                        method.ReturnType != genericParameters[1] ||
+                        methodParameters.Length != 2 ||
+                        methodParameters[0].ParameterType != genericParameters[0] ||
+                        methodParameters[1].ParameterType != typeof(bool).MakeByRefType() ||
+                        !methodParameters[1].IsOut)
+                        throw new InvalidOperationException("Lookup MethodDef is wrong");
+
+                    var ints = new NaturalIntLookup();
+                    bool isNull;
+                    if (ints.lookup(11, out isNull) != 73 || isNull ||
+                        ints.lookup(12, out isNull) != 0 || !isNull)
+                        throw new InvalidOperationException("direct C# value lookup failed");
+                    if (ints.GetType().GetInterfaces().Length != 1 ||
+                        ints.GetType().GetInterfaces()[0] != typeof(Lookup<int, int>))
+                        throw new InvalidOperationException(
+                            "ordinary C# authoring unexpectedly requires compiler ABI");
+
+                    var reader = new LookupReader();
+                    if (reader.readExactInt(ints, 11) != 73 ||
+                        reader.readExactInt(ints, 12).HasValue)
+                        throw new InvalidOperationException("Kotlin exact C# lookup failed");
+                    var widenedInts = contractsKt.widenIntLookup(ints);
+                    if (!object.ReferenceEquals(ints, widenedInts) ||
+                        !object.Equals(reader.readWideInt(widenedInts, 11), 73) ||
+                        reader.readWideInt(widenedInts, 12) != null ||
+                        !object.Equals(mainKt.downstreamWidenedRead(widenedInts, 11), 73) ||
+                        mainKt.downstreamWidenedRead(widenedInts, 12) != null ||
+                        !mainKt.downstreamSame(widenedInts, ints))
+                        throw new InvalidOperationException("Kotlin widened C# value lookup failed");
+
+                    var strings = new NaturalStringLookup();
+                    if (reader.readExactString(strings, 13) != "foreign" ||
+                        reader.readExactString(strings, 14) != null)
+                        throw new InvalidOperationException("Kotlin exact C# string lookup failed");
+                    var widenedStrings = contractsKt.widenStringLookup(strings);
+                    if (!object.ReferenceEquals(strings, widenedStrings) ||
+                        mainKt.downstreamWidenedRead(widenedStrings, 13) as string != "foreign" ||
+                        mainKt.downstreamWidenedRead(widenedStrings, 14) != null ||
+                        !mainKt.downstreamSame(widenedStrings, strings))
+                        throw new InvalidOperationException(
+                            "Kotlin widened C# reference lookup failed");
+
+                    var kotlinInts = implementationsKt.intLookup(3, 37);
+                    var kotlinInterfaces = kotlinInts.GetType().GetInterfaces();
+                    if (Array.IndexOf(kotlinInterfaces, typeof(Lookup<int, int>)) < 0 ||
+                        Array.Exists(kotlinInterfaces, candidate =>
+                            candidate.IsGenericType &&
+                            candidate.GetGenericTypeDefinition() == typeof(Lookup<,>) &&
+                            candidate != typeof(Lookup<int, int>)) ||
+                        kotlinInts.lookup(3, out isNull) != 37 || isNull)
+                        throw new InvalidOperationException(
+                            "Kotlin implementation fabricated or lost its natural construction");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "CallableCompositionConsumer.exe"
+        else "CallableCompositionConsumer.dll"
+    )
+    val references = listOf(lib, middle, consumerAssembly, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the callable-composition probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the callable-composition probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable callable-composition probe")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/**
  * Proves that `T?` remains directly authorable as `T (..., out bool isNull)` in ordinary C#,
  * while exact and widened Kotlin calls both preserve null on the same foreign object.
  */
@@ -13076,8 +13465,9 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                     rootFamily.contract.directParents.isEmpty() &&
                     rootFamily.contract.capabilityBindingKind ==
                     DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
-                    readMember.role ==
-                    DotNetPublishedGenericInterfaceMemberRole.SPLIT_NULLABLE_PRODUCER
+                    readMember.role == DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
+                    readMember.resultLayout ==
+                    DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
             ) {
                 "The split-nullable root lost its covariant natural/capability topology: " +
                         rootFamily

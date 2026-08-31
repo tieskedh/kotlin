@@ -217,6 +217,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabi
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetValueClassAbi
@@ -10520,6 +10521,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DotNetPublishedGenericInterfaceMemberContract(
                     logicalMemberKey = "F:sample/GenericOwner/member",
                     role = role,
+                    resultLayout = DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
                 )
             ),
             capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,

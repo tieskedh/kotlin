@@ -3725,6 +3725,9 @@ internal class DotNetIlExpressionCodegen(
         ) {
             return false
         }
+        val recordedNaturalCallable = recordedNaturalCallableOrNull(call, source, naturalInfo)
+        val recordedNaturalInfo = recordedNaturalCallable?.info
+        val recordedParameterDomains = recordedNaturalCallable?.parameterDomains
         fun DotNetIlValueType.isNaturalOwnerParameter(): Boolean =
             this is DotNetIlValueType.TypeParameter && !isMethodParameter &&
                     index in 0 until naturalOwnerParameterCount
@@ -3732,6 +3735,18 @@ internal class DotNetIlExpressionCodegen(
             (naturalInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
         val semanticResultType =
             (semanticInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        val recordedResultType =
+            (recordedNaturalInfo?.signature?.returnType as? DotNetIlReturnType.Value)?.type
+        val isRecordedNaturalValue = recordedNaturalInfo?.signature?.hasThis == true &&
+                recordedResultType != null && semanticResultType != null &&
+                recordedParameterDomains?.size == regularArguments.size &&
+                recordedParameterDomains.all { domain ->
+                    domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                            domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT ||
+                            domain == DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+                } && (semanticResultType == DotNetIlValueType.Object ||
+                semanticResultType == recordedResultType ||
+                semanticResultType.isDotNetAssignableTo(DotNetIlValueType.Object))
         val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(sourceOwner)
         val naturalInterfaceOwner = interfaceInfo?.declaredClassInfo
             ?: interfaceInfo?.canonicalClassInfo
@@ -3895,7 +3910,8 @@ internal class DotNetIlExpressionCodegen(
                             DotNetIlReturnType.Value(fixedBarrierResultType) &&
                                 naturalInfo.signature.returnType ==
                             DotNetIlReturnType.Value(fixedBarrierResultType))
-        if (!isProducer && !isDeclarationIndependentUnit && !isInvariantInputUnit &&
+        if (!isProducer && !isRecordedNaturalValue &&
+            !isDeclarationIndependentUnit && !isInvariantInputUnit &&
             !isInvariantInputValue &&
             !isExactInputBoolean && !isRelativeGenericInputBoolean && !isFixedBarrier
         ) {
@@ -3943,7 +3959,7 @@ internal class DotNetIlExpressionCodegen(
             logicalCallee = source,
             explicitMethodSpecArguments = semanticMethodSpecArguments,
         ) ?: return false
-        val hasValueResult = isProducer || isExactInputBoolean ||
+        val hasValueResult = isProducer || isRecordedNaturalValue || isExactInputBoolean ||
                 isInvariantInputValue || isRelativeGenericInputBoolean || isFixedBarrier
         val resultNarrowing = if (hasValueResult) {
             val resultType = expectedType ?: return false
@@ -3960,92 +3976,15 @@ internal class DotNetIlExpressionCodegen(
             }
             null
         }
-        val localNaturalMethodIdentity = naturalInfo.genericOwnerPhysicalMethodIdentity
-        val hasFinalLocalNaturalMethod = localNaturalMethodIdentity?.let { identity ->
-            identity.function == source.symbol &&
-                    identity.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
-                    typeMapper.isCurrentModuleClass(sourceOwner)
-        } == true
-        val externalNaturalMethodCandidates = if (hasFinalLocalNaturalMethod) {
-            emptyList()
-        } else {
-            // A lowered call symbol can be a local fake override whose override list no longer
-            // contains the external declaration selected by resolveFakeOverride. Query both
-            // identities, then fail closed below if their complete lineages reach different
-            // producer-sealed MethodDefs.
-            typeMapper.externalGenericOwnerNaturalMethodDefCandidates(
-                listOf(logicalCallMember, source),
-            )
-        }
-        check(externalNaturalMethodCandidates.size <= 1) {
-            "Internal .NET backend error: logical generic-interface member " +
-                    "'${logicalCallMember.render()}' reaches multiple producer-recorded natural MethodDefs: " +
-                    externalNaturalMethodCandidates.joinToString { candidate ->
-                        candidate.first.declaration.logicalMemberKey
-                    }
-        }
-        val externalNaturalMethod = externalNaturalMethodCandidates.singleOrNull()
-        if (externalNaturalMethod != null) {
-            val logicalResult = source.returnType as? IrSimpleType
-                ?: error(
-                    "Internal .NET backend error: external natural producer '${source.render()}' " +
-                            "has no direct logical result type",
-                )
-            val logicalResultParameter = logicalResult.classifier as? IrTypeParameterSymbol
-                ?: error(
-                    "Internal .NET backend error: external natural producer '${source.render()}' " +
-                            "does not return an owner parameter",
-                )
-            val logicalResultIndex = sourceOwner.typeParameters.indexOf(logicalResultParameter.owner)
-            check(logicalResultIndex >= 0) {
-                "Internal .NET backend error: external natural producer '${source.render()}' " +
-                        "returns a parameter from another owner"
-            }
-            val projection = inspectDotNetExternalNaturalMethodLogicalProjection(
-                logicalParameterTypes = naturalInfo.signature.parameterTypes.drop(1),
-                logicalResultOwnerParameterIndex = logicalResultIndex,
-                logicalSplitNullableResult = logicalResult.isMarkedNullable(),
-                recordedInfo = externalNaturalMethod.second,
-            )
-            check(projection is DotNetGenericOwnerPhysicalBindingResult.Bound) {
-                val reason = (projection as? DotNetGenericOwnerPhysicalBindingResult.Conflict)?.reason
-                    ?: "the logical projection was unavailable"
-                "Internal .NET backend error: producer-recorded natural MethodDef " +
-                        "'${externalNaturalMethod.first.declaration.logicalMemberKey}' disagrees with KLIB: " +
-                        reason
-            }
-        }
-        val recordedNaturalInfo = when {
-            hasFinalLocalNaturalMethod -> naturalInfo
-            externalNaturalMethod != null -> externalNaturalMethod.second
-            else -> null
-        }
-        val recordedParameterDomainsOrNull = when {
-            hasFinalLocalNaturalMethod -> typeMapper.genericOwnerNaturalMethodParameterDomains(source)
-            externalNaturalMethod != null ->
-                externalNaturalMethod.first.declaration.physicalMethod.signature.parameterSlots
-                    .map { slot -> slot.domain }
-            else -> null
-        }
-        if (externalNaturalMethod != null) {
-            check(recordedParameterDomainsOrNull?.size == regularArguments.size) {
-                "Internal .NET backend error: producer-recorded natural MethodDef " +
-                        "'${externalNaturalMethod.first.declaration.logicalMemberKey}' has " +
-                        "${recordedParameterDomainsOrNull?.size} ordinary parameters, but the " +
-                        "producer-bound logical call has ${regularArguments.size}"
-            }
-        }
-        val recordedParameterDomains = recordedParameterDomainsOrNull
-            ?.takeIf { domains -> domains.size == regularArguments.size }
         val usesRecordedNaturalMethod = recordedParameterDomains != null &&
                 !usesRuntimeCollectionContainsAllFallback && !isExactInputBoolean && !isFixedBarrier
-        // The external N record is final physical MethodDef authority after its declaration-
-        // independent inputs and direct owner-result projection have joined the logical KLIB
-        // declaration above. In particular, an
+        // The external N record is final physical MethodDef authority after its recorded input
+        // domains and direct owner-result projection have joined the logical KLIB declaration
+        // above. In particular, an
         // external KLIB still describes logical `T?`, while the producer DLL can seal that result
         // as physical `!T + out bool`; remapping the logical declaration therefore need not and
         // must not reproduce the emitted signature.  The library-index joins establish the
-        // logical owner/member and result role, the PE validator establishes the complete physical
+        // logical owner/member and result layout, the PE validator establishes the complete physical
         // signature, and the call-site gates independently check the logical carrier projection,
         // ordinary arity, and method-generic arity before passing the recorded domains/layout to
         // the token-based runtime route.
@@ -4345,13 +4284,89 @@ internal class DotNetIlExpressionCodegen(
                     ?: typeMapper.runtimeReifiedGenericInterfaceSemanticSlotOrNull(overridden)
             }
 
+    private data class RecordedNaturalCallable(
+        val info: DotNetIlFunctionInfo,
+        val parameterDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    )
+
+    /**
+     * Joins a logical call declaration with the final local or producer-recorded MethodDef. The
+     * recorded signature is physical authority; KLIB remains authority for the logical member,
+     * ordinary parameter projection, and nullable owner-result meaning.
+     */
+    private fun recordedNaturalCallableOrNull(
+        call: IrCall,
+        source: IrSimpleFunction,
+        logicalInfo: DotNetIlFunctionInfo,
+    ): RecordedNaturalCallable? {
+        val sourceOwner = source.parent as? IrClass ?: return null
+        val localIdentity = logicalInfo.genericOwnerPhysicalMethodIdentity
+        val hasFinalLocalNaturalMethod = localIdentity?.let { identity ->
+            identity.function == source.symbol &&
+                    identity.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                    typeMapper.isCurrentModuleClass(sourceOwner)
+        } == true
+        if (hasFinalLocalNaturalMethod) {
+            val domains = typeMapper.genericOwnerNaturalMethodParameterDomains(source)
+                ?: return null
+            check(domains.size == call.arguments.size - 1) {
+                "Internal .NET backend error: final local natural MethodDef '${source.render()}' " +
+                        "has ${domains.size} ordinary parameter domains, but the logical call " +
+                        "has ${call.arguments.size - 1}"
+            }
+            return RecordedNaturalCallable(logicalInfo, domains)
+        }
+
+        val candidates = typeMapper.externalGenericOwnerNaturalMethodDefCandidates(
+            listOf(call.symbol.owner, source),
+        )
+        check(candidates.size <= 1) {
+            "Internal .NET backend error: logical generic-interface member " +
+                    "'${call.symbol.owner.render()}' reaches multiple producer-recorded " +
+                    "natural MethodDefs: " + candidates.joinToString { candidate ->
+                        candidate.first.declaration.logicalMemberKey
+                    }
+        }
+        val candidate = candidates.singleOrNull() ?: return null
+        val logicalResult = source.returnType as? IrSimpleType ?: return null
+        val logicalResultParameter = logicalResult.classifier as? IrTypeParameterSymbol
+            ?: return null
+        val logicalResultIndex = sourceOwner.typeParameters.indexOf(logicalResultParameter.owner)
+        if (logicalResultIndex < 0) return null
+        val projection = inspectDotNetExternalNaturalMethodLogicalProjection(
+            logicalParameterTypes = logicalInfo.signature.parameterTypes.drop(1),
+            logicalResultOwnerParameterIndex = logicalResultIndex,
+            logicalSplitNullableResult = logicalResult.isMarkedNullable(),
+            recordedInfo = candidate.second,
+        )
+        check(projection is DotNetGenericOwnerPhysicalBindingResult.Bound) {
+            val reason = (projection as? DotNetGenericOwnerPhysicalBindingResult.Conflict)?.reason
+                ?: "the logical projection was unavailable"
+            "Internal .NET backend error: producer-recorded natural MethodDef " +
+                    "'${candidate.first.declaration.logicalMemberKey}' disagrees with KLIB: $reason"
+        }
+        val domains = candidate.first.declaration.physicalMethod.signature.parameterSlots
+            .map { slot -> slot.domain }
+        check(domains.size == call.arguments.size - 1) {
+            "Internal .NET backend error: producer-recorded natural MethodDef " +
+                    "'${candidate.first.declaration.logicalMemberKey}' has ${domains.size} " +
+                    "ordinary parameters, but the logical call has ${call.arguments.size - 1}"
+        }
+        return RecordedNaturalCallable(candidate.second, domains)
+    }
+
     private fun splitNullableNaturalCallOrNull(
         call: IrCall,
         source: IrSimpleFunction,
     ): Pair<DotNetIlFunctionInfo, DotNetIlValueType>? {
-        val info = availableFunctions[source]
+        val logicalInfo = availableFunctions[source]
             ?: typeMapper.referencedFunctionInfoOrNull(source)
             ?: return null
+        val info = if (logicalInfo.signature.hasSplitNullableResult) {
+            logicalInfo
+        } else {
+            recordedNaturalCallableOrNull(call, source, logicalInfo)?.info ?: logicalInfo
+        }
         if (!info.signature.hasSplitNullableResult || !info.isInstance) return null
         val receiver = call.arguments.firstOrNull() ?: return null
         val receiverType = mappedNaturalType(receiver) ?: return null

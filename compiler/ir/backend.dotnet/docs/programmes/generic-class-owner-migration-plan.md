@@ -97,8 +97,14 @@ Before any cutover proposal, complete these stages in order:
    shape, carrier/index, scope uniqueness, and emitted field name, and
    memberless inherited constructions add no shadow state. Broader state
    remains a later generalization, not an implicit admission.
-7. Compose independent callable parameter policies with direct and
-   split-nullable result layouts on custom declarations.
+7. **Bounded proof complete.** Compose one strict invariant owner input with a
+   distinct covariant split-nullable owner result on a custom structural
+   declaration. Semantic role, parameter domains, and result layout are
+   independently producer-recorded and consumed; exact value calls stay
+   unboxed, ordinary C# implementations need no generated ABI, the erased
+   inverse remains exact, and existing Runtime `Map` stays unchanged. Multiple
+   members/inputs, value classes, richer inheritance, and Runtime/Stdlib
+   application remain later generalization rather than implicit admission.
 8. Close the remaining retained/foreign entry validation, including inherited,
    open, projected, vararg, and multiple-view generic cases plus SZ-array and
    bounded-element entry guards.
@@ -127,6 +133,11 @@ The Stage 6 evidence is recorded in the
 It does not serialize per-value lineage or authorize production migration.
 It also does not close generic-child-capability to separately owned base-
 capability conversion; that remains an interface-routing prerequisite.
+
+The Stage 7 evidence is recorded in the
+[callable-contract composition archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
+It does not admit multi-member Runtime/Stdlib families or authorize production
+migration.
 
 ## Rules during ordinary feature work
 

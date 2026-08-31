@@ -210,8 +210,8 @@ internal fun DotNetProducerGenericOwnerNaturalMethodDefPublication.toPhysicalDec
  * Joins a producer-recorded physical declaration with the logical KLIB projection available to a
  * separately compiled consumer. The direct owner result is intentionally supplied separately:
  * logical `T?` maps to the semantic object domain, while its admitted physical layout is `!T` plus
- * the recorded split-nullable bit. Declaration-independent ordinary inputs must still agree
- * exactly; otherwise same-name/same-arity overload records could be cross-wired.
+ * the recorded split-nullable bit. Ordinary inputs, including direct owner-parameter inputs,
+ * must still agree exactly; otherwise same-name/same-arity overload records could be cross-wired.
  */
 internal fun inspectDotNetExternalNaturalMethodLogicalProjection(
     logicalParameterTypes: List<DotNetIlValueType>,

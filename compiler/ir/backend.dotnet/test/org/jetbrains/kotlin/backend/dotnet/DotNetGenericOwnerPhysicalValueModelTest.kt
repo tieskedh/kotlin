@@ -1239,7 +1239,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         }
 
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
-            DotNetLocalGenericOwnerPhysicalCallableFamily.bindDirectProducerOrError(
+            DotNetLocalGenericOwnerPhysicalCallableFamily.bindCallableOrError(
                 DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
                     logicalMember.symbol,
                     semanticMember.symbol,
@@ -1363,7 +1363,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
 
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
-            DotNetLocalGenericOwnerPhysicalCallableFamily.bindDirectProducerOrError(
+            DotNetLocalGenericOwnerPhysicalCallableFamily.bindCallableOrError(
                 DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
                     logicalMember.symbol,
                     semanticMember.symbol,

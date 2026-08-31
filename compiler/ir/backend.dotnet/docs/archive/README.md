@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-callable-contract-composition-2026-08-31.md`](generic-owner-callable-contract-composition-2026-08-31.md)
+  records bounded Stage 7 and physical-library ABI 65: independent semantic
+  member role and `VOID`/`DIRECT`/`SPLIT_NULLABLE` result layout, the structural
+  `Lookup<K, out V>` contract `!V lookup(!K, out bool)`, producer-recorded direct
+  and foreign call routing, exact unboxed value calls, ordinary non-partial C#
+  implementation, unchanged Runtime `Map`, and the exact erased inverse.
 - [`generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md`](generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md)
   records the bounded Stage 6 producer-wide FieldDef authority on unchanged
   physical-library ABI 64: monotone family/helper/state/output closure, final
