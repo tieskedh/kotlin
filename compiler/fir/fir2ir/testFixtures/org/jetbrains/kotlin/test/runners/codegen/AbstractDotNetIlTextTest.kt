@@ -5635,8 +5635,12 @@ private fun validateGenericOwnerHardestModelPrototype(
         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
     ))
-    check(read.semanticHookReasons ==
-            setOf(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE))
+    check(read.semanticHookReasons == setOf(
+        DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE,
+        DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT,
+    )) {
+        "HostileUnsafeStore.read must retain its open-output and semantic-state pairing: ${read.semanticHookReasons}"
+    }
     check(read.typedRetainsOwnerDependentOutput && read.semanticErasesOwnerDependentOutput)
     check(read.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
             read.parameterSlotDomains.isEmpty()) {
@@ -5660,8 +5664,9 @@ private fun validateGenericOwnerHardestModelPrototype(
                 DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
             ) && exposedGetter.semanticHookReasons == setOf(
                 DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE,
+                DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT,
             )) {
-        "HostileUnsafeStore.exposed getter must retain a paired raw semantic output: $exposedGetter"
+        "HostileUnsafeStore.exposed getter must retain open-output and semantic-state pairing: $exposedGetter"
     }
     check(exposedSetter.policy == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY &&
             exposedSetter.parameterSlotDomains == listOf(
@@ -21943,8 +21948,9 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 18,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 13,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 13,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY to 5,
     )) {
         "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
     }
@@ -21956,6 +21962,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     check(resolvedCallRoutes.map { route -> route.routeRequirement }.toSet().containsAll(setOf(
         DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY,
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER,
     ))) {
         "The separate hostile corpus did not exercise every external call route: $resolvedCallRoutes"
@@ -21964,7 +21971,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         route.calleeOwnerName.endsWith("HostileUnsafeStore") && route.calleeName.contains("exposed")
     }
         .groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 1,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY to 1,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
     )) {
         "The broad property calls did not split exact and widened routes correctly: $resolvedCallRoutes"
@@ -21974,7 +21981,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                 route.calleeOwnerName.endsWith("HostileAbstractPropertyStorage")) &&
                 route.calleeName.contains("exposed")
     }.groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 2,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY to 2,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
     )) {
         "The abstract broad-property calls did not split exact and widened routes correctly: " +
