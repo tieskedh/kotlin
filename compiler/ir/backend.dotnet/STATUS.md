@@ -60,9 +60,9 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 inherited-interface, binder-forwarding, and lazy TypeDef transport authority.
 The current focused evidence compiles the importer and test fixture, retains
-the 35-test metadata model gate, and runs the actual memberless external-DLL
-pipeline with both FIR parsers. The resulting focused totals are recorded
-below; Git owns the intermediate chronology.
+the 38-test metadata model gate, and runs the same- and cross-assembly
+memberless external-DLL pipelines with both FIR parsers. The resulting focused
+totals are recorded below; Git owns the intermediate chronology.
 
 ## Production binding state
 
@@ -146,24 +146,27 @@ must agree with the class carrier by assembly, TypeDef, hierarchy, and graph
 identity. Other targets retain the previous null metadata behavior.
 
 The production importer now accepts a complete interface contract with no
-declared public callable. A resource-free external CLR DLL proves the actual
-FIR-to-lazy-FIR2IR-to-CIL path: the memberless `IntSource` TypeDef remains the
-parameter carrier, its exact `Source<int>` edge supplies the inherited view,
-and invocation targets the parent's retained `Read` MethodDef. No registry,
-fake member, copied MethodDef, name lookup, or fabricated construction is used.
+declared public callable. Resource-free external CLR DLLs prove both the
+same-assembly and cross-assembly FIR-to-lazy-FIR2IR-to-CIL paths. In the latter,
+the memberless `[Foreign.Child]IntSource` TypeDef remains the parameter carrier,
+its exact AssemblyRef/TypeSpec/InterfaceImpl supplies
+`[Foreign.Parent]Source<int>`, and invocation targets the parent's retained
+`Read` MethodDef. No registry, fake member, copied MethodDef, name lookup, or
+fabricated construction is used.
 
-The next retained-foreign boundary is the same memberless inheritance shape
-across two selected CLR assemblies. This must preserve each assembly and
-metadata-handle authority while binding the child `InterfaceImpl` to the
-parent MethodDef. Multiple edges/members/binders, variance conversions,
-constraints, classes, MethodImpls, and Runtime/Stdlib application remain later.
+The next retained-foreign boundary is one memberless child with two exact
+`InterfaceImpl` rows, only one of which reaches the selected MethodDef owner.
+The complete edge set must remain authoritative while route selection uses
+TypeDef identity rather than row order. Multiple members/binders, variance
+conversions, constraints, classes, MethodImpls, and Runtime/Stdlib application
+remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The current focused gate passed the retained-metadata model suite (35 tests)
-and both generated memberless pipeline cases (2 tests), with zero failures,
-errors, or skips.
+The current focused gate passed the retained-metadata model suite (38 tests)
+and both memberless pipelines under both FIR parsers (4 tests), with zero
+failures, errors, or skips.
 
 ## Current blockers
 
@@ -175,11 +178,11 @@ errors, or skips.
   chains or multiple/distinct constructed views.
 - Retained foreign CLR declaration authority remains bounded to an open root
   interface, one selected MethodDef, and either its root receiver or one
-  same-assembly memberless child interface with at most one unconstrained
-  binder and one exact `InterfaceImpl`. Multiple binders/edges/members,
-  variance conversions, constraints, classes, MethodImpls, cross-assembly
-  inheritance, wider nominal carriers, and broader operation routing remain
-  incomplete.
+  memberless child interface with at most one unconstrained binder and one
+  exact `InterfaceImpl`, in the same selected graph but not necessarily the
+  same assembly. Multiple binders/edges/members, variance conversions,
+  constraints, classes, MethodImpls, wider nominal carriers, and broader
+  operation routing remain incomplete.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,
