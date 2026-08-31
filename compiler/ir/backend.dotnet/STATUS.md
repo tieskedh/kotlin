@@ -10,7 +10,7 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
 - Integration branch: `dotnet`. Completed feature checkpoints are promoted to
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
-  `c72fbd7b4e4ee01698c08204796ddfc43383d642`.
+  `2868cfb88a7ea111ea6f6bf02f24430dc0e039e5`.
 - Current checkpoint: physical library ABI 65, generic-owner artifact schema
   21, compiler/runtime surface 60.
 - Stage 7 separates semantic member role from physical result layout and proves
@@ -19,52 +19,43 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   remain unboxed; semantic and ordinary C# routes preserve the same object.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
-  [`docs/archive/upstream-sync-2026-08-27.md`](docs/archive/upstream-sync-2026-08-27.md).
+  [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
 
 Nothing has shipped and no Kotlin/.NET ABI is frozen. Prototype schemas and
 physical identities may still be corrected atomically.
 
 ## Latest verification
 
-The latest fresh production-erased target gate completed on 2026-08-31 at the
-ABI-65 checkpoint. Its dependency-wide refresh exposed and corrected a stale
-Stage 6 test oracle; the unchanged prior checkpoint reproduced the mismatch and
-the [Stage 7 archive](docs/archive/generic-owner-callable-contract-composition-2026-08-31.md)
-owns the detailed evidence. The complete FIR2IR root and supported aggregate
-then passed:
+The latest fresh production-erased target gate completed on 2026-08-31 after
+all 672 target patches were rehearsed over pinned upstream
+`2868cfb88a7ea111ea6f6bf02f24430dc0e039e5`. The pure replay matched the
+precomputed virtual-merge tree; one patch was context-adjusted for upstream's
+test-runtime rename and no patch was dropped or added. The required target-
+owned build-convention adaptation, focused KGP API check, and exact evidence
+are owned by the
+[2026-08-31 upstream archive](docs/archive/upstream-sync-2026-08-31.md).
+
+The verified commands are:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun-tasks -q
-.\gradlew.bat :compiler:fir:fir2ir:dotNetTest --rerun -q
+.\gradlew.bat :compiler:backend.dotnet:compileTestKotlin -q
+.\gradlew.bat :kotlin-gradle-plugin:apiCheck -q
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-Direct JUnit XML audit found 204 suites and 2,600 tests, with zero failures,
+Direct JUnit XML audit found 205 suites and 2,621 tests, with zero failures,
 errors, or skips:
 
 | Root | Suites | Tests |
 | --- | ---: | ---: |
-| backend | 14 | 207 |
+| backend | 15 | 228 |
 | `dotnet.ir` | 1 | 6 |
 | FIR2IR | 187 | 2,259 |
 | integration | 2 | 128 |
 
-Stage 7's focused candidate and erased-inverse matrix, objective metadata,
-ordinary C#, separate-compilation, and boundary evidence is owned by the
-[Stage 7 archive](docs/archive/generic-owner-callable-contract-composition-2026-08-31.md).
-
-The subsequent production-inert TypeDef-authority delta compiled the backend
-and its test source, then passed five focused JVM suites (104 tests, zero
-failures/errors/skips) covering local, producer, detached-artifact, declaration,
-and emission-comparison authority. It inherits the fresh production-erased
-Stage 7 aggregate above because it changes no selected IR, emitted CIL, Runtime,
-Stdlib, or production ABI.
-
-The next production-inert retained-foreign adapter delta compiled the backend
-and test source, then passed the physical-value model and retained-metadata
-suites (90 tests, zero failures/errors/skips). The adapter is not consumed by a
-selected route, so this delta inherits the same fresh production-erased Stage 7
-aggregate.
+The aggregate includes Stage 7, the production-inert TypeDef-authority work,
+and the retained-foreign adapter. Their focused design evidence remains in the
+owning archives and ADR; this current snapshot does not duplicate it.
 
 ## Production binding state
 
