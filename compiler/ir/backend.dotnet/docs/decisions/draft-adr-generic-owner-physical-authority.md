@@ -534,12 +534,16 @@ existing value fact, in this order:
 1. selected lineage for the retained owner family;
 2. the receiver's verifier-visible direct carrier when it constructs that
    family; or
-3. one unique guaranteed view of that family.
+3. one unique construction of that family in the recorded physical-
+   interface closure of its direct carrier and guaranteed views. A guaranteed
+   view of the family is the zero-edge case.
 
 Zero candidates, or multiple candidates without an existing selector, are
 `Unavailable`. The operation query does not accept a desired foreign
 construction from its caller, so a logical Kotlin type cannot manufacture one.
-Lineage remains only a selector over guaranteed views.
+Lineage remains only a selector over guaranteed views. Following an authenticated
+physical edge selects an operation receiver; it does not add that derived view to
+the value's provenance.
 
 After parameter admission, the route produces its result from the instantiated
 MethodDef layout. `Void` produces no value, `Direct` produces that exact
@@ -769,6 +773,18 @@ package rule. A valid shape outside it is `Unavailable`; a detached MethodDef,
 an incomplete retained hierarchy, invalid generic binder/flags, or disagreement
 between retained and raw signatures is `Conflict`. Recorded constraints still
 do not prove an arbitrary constrained construction.
+
+The first inherited-receiver extension admits one public top-level abstract
+non-generic interface with an exact retained declaration carrier in the same
+selected assembly graph. It must have no base class, no MethodImpl, and exactly
+one retained and raw `InterfaceImpl`, which
+closes the selected MethodDef owner with supported declaration-independent
+carriers. The adapter re-resolves that raw edge and requires exact retained/raw
+agreement. It authenticates the child TypeDef and its complete direct physical
+edge set; operation routing may then follow that recorded closure to the root
+MethodDef. Open receiver binders, multiple edges, classes, MethodImpls,
+cross-assembly receivers, unsupported carrier leaves, and hierarchy disagreement
+remain unavailable or conflicting according to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
