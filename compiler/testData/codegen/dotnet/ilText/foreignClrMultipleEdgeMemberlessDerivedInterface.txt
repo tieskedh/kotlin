@@ -1,0 +1,46 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern 'Foreign.Multiple.Child'
+{
+  .ver 0:0:0:0
+}
+.assembly extern 'Foreign.Multiple.Parent'
+{
+  .ver 0:0:0:0
+}
+.assembly 'foreignClrMultipleEdgeMemberlessDerivedInterface' {}
+.module 'main-foreignClrMultipleEdgeMemberlessDerivedInterface.il'
+
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'foreignClrMultipleEdgeMemberlessDerivedInterfaceKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'readMultipleEdgeSource'(class [Foreign.Multiple.Child]'Foreign.Multiple.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class [Foreign.Multiple.Parent]'Foreign.Multiple.Source`1'<int32>::'Read'()
+    ret
+  }
+  .method public hidebysig static class [Foreign.Multiple.Parent]'Foreign.Multiple.Source`1'<int32> 'retainMultipleEdgeSource'(class [Foreign.Multiple.Child]'Foreign.Multiple.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class [Foreign.Multiple.Parent]'Foreign.Multiple.Marker' 'retainMultipleEdgeMarker'(class [Foreign.Multiple.Child]'Foreign.Multiple.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+}

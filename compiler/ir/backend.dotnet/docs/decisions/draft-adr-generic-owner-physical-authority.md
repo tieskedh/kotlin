@@ -804,20 +804,25 @@ The first inherited-receiver grammar admits one public top-level abstract
 interface with an exact retained TypeDef carrier in the same selected assembly
 graph. It may declare no callable. It has zero or one unconstrained type
 parameter whose exact CLR variance is retained, no base class, no MethodImpl,
-and exactly one retained and raw `InterfaceImpl`. Receiver and MethodDef owner
-may reside in different selected assemblies. The raw TypeSpec must bind through
-its exact AssemblyRef identity; an unbound or mismatched reference is a
-declaration conflict rather than permission to search by name. The edge may
-close the selected MethodDef owner with supported declaration-independent
-carriers or reference the child `!0`, recursively through the admitted SZ-array
-carrier. The adapter resolves the receiver's exact open GenericParam context,
-re-resolves the raw edge, and requires exact retained/raw agreement. It records
-the child binder on its own TypeDef and the edge target against that binder;
+and a complete set of one or two retained and raw `InterfaceImpl` rows. Exactly
+one row reaches the selected MethodDef owner by retained TypeDef identity. An
+optional second row may target an independently authenticated public,
+non-generic root interface; that target receives its own TypeDef authority and
+complete empty edge set. Receiver and targets may reside in different selected
+assemblies. Each raw TypeSpec must bind through its exact AssemblyRef identity;
+an unbound or mismatched reference is a declaration conflict rather than
+permission to search by name. The owner edge may close the selected MethodDef
+owner with supported declaration-independent carriers or reference the child
+`!0`, recursively through the admitted SZ-array carrier. The adapter resolves
+the receiver's exact open GenericParam context, re-resolves every raw edge, and
+requires exact retained/raw agreement. It records the child binder on its own
+TypeDef and retains the entire direct edge set as an unordered physical set;
 ordinary physical-closure substitution derives `Base<int>` from `Child<int>`.
-No logical type participates. Additional binders, constraints, variance
-conversions, multiple edges, classes, MethodImpls, unsupported carrier leaves,
-and hierarchy disagreement remain unavailable or conflicting according to the
-ordinary validity boundary.
+No logical type or InterfaceImpl row order participates. Additional binders,
+multiple selected-owner views, generic or deeper auxiliary interfaces,
+constraints, variance conversions, classes, MethodImpls, unsupported carrier
+leaves, and hierarchy disagreement remain unavailable or conflicting according
+to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical

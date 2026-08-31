@@ -954,7 +954,97 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
-    fun `multiple retained InterfaceImpl rows remain outside the first edge grammar`() {
+    fun `multiple exact InterfaceImpl rows preserve every view and select owner by identity`() {
+        for (relatedFirst in listOf(true, false)) {
+            val fixture = fixture(
+                includeInheritedReceiver = true,
+                includeInheritedRelatedEdge = true,
+                inheritedRelatedEdgeFirst = relatedFirst,
+            )
+            val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+            val relatedType = assertNotNull(fixture.relatedType)
+            assertEquals(
+                relatedFirst,
+                receiverSource.declaringHierarchy.interfaces.first().interfaceType.type
+                    .hasSameIdentityAs(relatedType),
+            )
+            val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalDeclarationIndex,
+                    >>(
+                DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                    fixture.source,
+                    fixture.method,
+                    receiverSource,
+                )
+            ).value
+            val receiverIdentity =
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource)
+            val parentIdentity = retainedOwnerIdentity(fixture)
+            val relatedIdentity =
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(
+                    receiverSource,
+                    relatedType,
+                )
+            val receiverConstruction = boundConstruction(
+                declarations,
+                receiverIdentity,
+                emptyList(),
+            )
+            val parentConstruction = boundConstruction(
+                declarations,
+                parentIdentity,
+                listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+            )
+            val relatedConstruction = boundConstruction(
+                declarations,
+                relatedIdentity,
+                emptyList(),
+            )
+
+            val directEdges = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    Set<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference>,
+                    >>(
+                declarations.directSupertypeEdgesOrUnavailable(receiverIdentity)
+            ).value
+            assertEquals(
+                setOf<DotNetGenericOwnerSymbolicCarrierReference>(
+                    parentConstruction,
+                    relatedConstruction,
+                ),
+                directEdges.mapTo(linkedSetOf()) { edge -> edge.target },
+            )
+            val closure = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalInterfaceViewClosure,
+                    >>(
+                declarations.physicalInterfaceViewClosureOrError(receiverConstruction)
+            ).value
+            assertEquals(true, closure.isComplete)
+            assertEquals(
+                setOf(
+                    DotNetGenericOwnerPhysicalView(receiverConstruction),
+                    DotNetGenericOwnerPhysicalView(parentConstruction),
+                    DotNetGenericOwnerPhysicalView(relatedConstruction),
+                ),
+                closure.interfaceViews,
+            )
+
+            val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalOperationRoute,
+                    >>(
+                selectRetainedRoute(
+                    fixture,
+                    directValue(declarations, receiverConstruction),
+                    exactTransferArguments(declarations),
+                    receiverSource,
+                )
+            ).value
+            assertEquals(parentConstruction, route.requiredReceiverView.construction)
+            assertEquals(retainedMethodIdentity(fixture), route.method.identity)
+        }
+    }
+
+    @Test
+    fun `multiple InterfaceImpl rows reaching the selected owner remain unavailable`() {
         val fixture = fixture(
             includeInheritedReceiver = true,
             inheritedInterfaceCount = 2,
@@ -1424,10 +1514,13 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         rawInheritedArgument: DotNetClrTypeSignature? = null,
         retainedInheritedArgument: DotNetClrResolvedTypeSignature? = null,
         inheritedInterfaceCount: Int = 1,
+        includeInheritedRelatedEdge: Boolean = false,
+        inheritedRelatedEdgeFirst: Boolean = true,
     ): Fixture {
         require(!retainedInterfaceEdge || rawInterfaceEdge)
         require(!closedInheritedReceiverView || openInheritedReceiver)
         require(inheritedInterfaceCount >= 0)
+        require(!includeInheritedRelatedEdge || includeInheritedReceiver)
         val ownerHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
         val relatedHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 2)
         val inheritedReceiverHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 3)
@@ -1537,7 +1630,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         } else {
             DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
         }
-        val hasRelatedType = includeRelatedType || rawInterfaceEdge
+        val hasRelatedType = includeRelatedType || rawInterfaceEdge || includeInheritedRelatedEdge
         val interfaceImplementation = DotNetClrInterfaceImplementation(
             handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 1),
             implementingType = ownerHandle,
@@ -1551,14 +1644,16 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             ),
             rawSignature = emptyList(),
         )
-        val inheritedInterfaceImplementations = List(inheritedInterfaceCount) { index ->
+        val inheritedInterfaceTargets = buildList {
+            if (includeInheritedRelatedEdge && inheritedRelatedEdgeFirst) add(relatedHandle)
+            repeat(inheritedInterfaceCount) { add(inheritedTypeSpecHandle) }
+            if (includeInheritedRelatedEdge && !inheritedRelatedEdgeFirst) add(relatedHandle)
+        }
+        val inheritedInterfaceImplementations = inheritedInterfaceTargets.mapIndexed { index, target ->
             DotNetClrInterfaceImplementation(
-                handle = DotNetClrMetadataHandle(
-                    INTERFACE_IMPLEMENTATION_TABLE,
-                    index + 2,
-                ),
+                handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, index + 2),
                 implementingType = inheritedReceiverHandle,
-                interfaceType = inheritedTypeSpecHandle,
+                interfaceType = target,
             )
         }
         val metadata = DotNetClrAssemblyMetadata(
@@ -1656,21 +1751,38 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 },
             ),
             baseType = null,
-            interfaces = inheritedInterfaceImplementations.map { implementation ->
+            interfaces = inheritedInterfaceImplementations.mapIndexed { index, implementation ->
+                val target = inheritedInterfaceTargets[index]
                 DotNetClrResolvedInterfaceImplementation(
                     implementation,
-                    DotNetClrResolvedTypeView(
-                        resolvedOwner,
-                        listOf(effectiveRetainedInheritedArgument),
-                    ),
+                    if (target == relatedHandle) {
+                        DotNetClrResolvedTypeView(
+                            DotNetClrResolvedTypeDefinition(metadata, related),
+                            emptyList(),
+                        )
+                    } else {
+                        DotNetClrResolvedTypeView(
+                            resolvedOwner,
+                            listOf(effectiveRetainedInheritedArgument),
+                        )
+                    },
                 )
             },
+        )
+        val relatedHierarchy = DotNetClrResolvedTypeHierarchy(
+            type = DotNetClrResolvedTypeView(
+                DotNetClrResolvedTypeDefinition(metadata, related),
+                emptyList(),
+            ),
+            baseType = null,
+            interfaces = emptyList(),
         )
         val graph = DotNetClrImportedDeclarationGraph(
             assemblies = listOf(assembly),
             hierarchies = buildList {
                 add(hierarchy)
                 if (includeInheritedReceiver) add(inheritedReceiverHierarchy)
+                if (includeInheritedRelatedEdge) add(relatedHierarchy)
             },
         )
         val effectiveRetainedReturnType = if (recursiveResult) {
@@ -1731,7 +1843,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         return Fixture(
             source,
             method,
-            related.takeIf { includeRelatedType }
+            related.takeIf { includeRelatedType || includeInheritedRelatedEdge }
                 ?.let { DotNetClrResolvedTypeDefinition(metadata, it) },
             inheritedReceiverSource,
         )
