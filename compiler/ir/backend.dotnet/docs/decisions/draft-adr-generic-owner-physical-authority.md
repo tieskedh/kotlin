@@ -442,6 +442,18 @@ actual branch conversions the independent verifier check. Diagnostic snapshots
 and IR origins cannot mint a token. Unsupported records grant no authority;
 contradictory duplicate final records are `Conflict`.
 
+The first entry-environment consumer additionally admits one bare, non-nullable
+parameter of the current physical owner. The role-specific detached
+`RepresentationPlan` prototype supplies the early physical signature fact:
+typed entry `!n` and semantic-hook `object` are analyzed independently even
+when they originate from one Kotlin declaration. A local may retain the `!n`
+only when produced and storage carriers agree, their binder is the live
+physical MethodDef owner, and the emitter independently observes a direct
+`ldarg`/`ldloc` read with exactly that `!n`. The logical source parameter type,
+parameter name, and IR origin are not evidence. Nullable, converted, joined,
+foreign, method-parameter, and nested parameter carriers remain unavailable in
+this slice.
+
 #### Joins
 
 - Logical Kotlin type joining and verifier-valid carrier placement are separate.
@@ -522,6 +534,11 @@ receiver may retain an authority-proven natural construction while a broad
 parameter begins on its semantic or object carrier. Broadness propagates from
 actual definitions and uses; it does not contaminate unrelated receiver-derived
 state, helper results, locals, or captures.
+
+The current bounded implementation derives regular-parameter entries from the
+role-specific physical prototype. Consequently the natural typed entry can seed
+an owner `!T`, while its paired semantic hook independently seeds `object`.
+Neither entry environment is inferred from the other's Kotlin source shape.
 
 The owning declaration ADR decides which typed entry, hook, capability, bridge,
 or fallback exists. Provenance only determines which of those already-selected
@@ -1174,11 +1191,13 @@ binders retain their exact construction while ordinary variant classes,
 unmarked producer records, value arguments, and caller-authored delegate facts
 fail closed. This declaration proof does not claim producer-side delegate
 synthesis, constrained producer delegate rows, delegate members, or operation
-routing. Direct equal-carrier local placement and one exhaustive unique-common-
-interface join now consume final value facts through an explicit authority
-adapter. Both cover only local owner-bound reference `C<!n>` constructions and
-independently check the live emitter or every fixed-boundary branch. The next
-boundary is exact typed entry-environment transfer, then null/bottom/unknown
+routing. Direct equal-carrier local placement, one exhaustive unique-common-
+interface join, and one bare exact owner-parameter entry now consume final value
+facts through an explicit authority adapter. Constructed locals remain local
+owner-bound reference `C<!n>` forms; the entry slice adds direct `!n` with
+substitution-dependent null encoding. Each path independently checks the live
+emitter or every fixed-boundary branch. The next boundary is exact typed result
+production and remaining parameter-entry composition, then null/bottom/unknown
 joins and explicit conversions—not another state or stdlib recognizer.
 
 ## Consequences

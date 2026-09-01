@@ -25,6 +25,11 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
         return sourceNaturalAlias.produce() == element
     }
 
+    fun parameterAliasMatches(candidate: T, expected: T): Boolean {
+        val exactParameterAlias: T = candidate
+        return exactParameterAlias == expected
+    }
+
     fun wideAliasMatches(element: T): Boolean {
         val sourceWideAlias: InlineProducer<Any?> = this
         return sourceWideAlias.produce() == element
@@ -75,6 +80,9 @@ fun box(): String {
     val ints = InlineSelfView(42)
     if (ints.indexOf(42) != 0 || ints.indexOf(43) != -1) return "value self-view"
     if (!ints.sourceAliasMatches(42) || ints.sourceAliasMatches(43)) return "value source alias"
+    if (!ints.parameterAliasMatches(42, 42) || ints.parameterAliasMatches(42, 43)) {
+        return "value parameter alias"
+    }
     if (!ints.wideAliasMatches(42) || ints.wideAliasMatches(43)) return "value wide alias"
     if (!ints.nullableAliasMatches(42) || ints.nullableAliasMatches(43)) return "value nullable alias"
     if (!ints.nestedAliasMatches(42) || ints.nestedAliasMatches(43)) return "value nested alias"
@@ -85,6 +93,11 @@ fun box(): String {
     }
     if (!strings.sourceAliasMatches("inline") || strings.sourceAliasMatches("other")) {
         return "reference source alias"
+    }
+    if (!strings.parameterAliasMatches("inline", "inline") ||
+        strings.parameterAliasMatches("inline", "other")
+    ) {
+        return "reference parameter alias"
     }
     if (!strings.wideAliasMatches("inline") || strings.wideAliasMatches("other")) {
         return "reference wide alias"

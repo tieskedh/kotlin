@@ -3067,7 +3067,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
-    fun `local placement authority admits only an equal local owner-bound carrier`() {
+    fun `local placement authority admits only equal local owner-bound carriers`() {
         val owner = testOwner("PlacementOwner")
         val function = IrFactoryImpl.buildFun {
             name = Name.identifier("place")
@@ -3107,6 +3107,20 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             DotNetGenericOwnerStorageCarrier.Fixed(localCarrier),
             localProduced.provenance,
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+        val ownerParameterCarrier = boundCarrier(
+            localDeclarations,
+            boundTypeParameter(localDeclarations, ownerIdentity, 0),
+        )
+        val parameterProduced = DotNetGenericOwnerProducedValueFact(
+            DotNetGenericOwnerProducedValueLayout.Direct(ownerParameterCarrier),
+            unknownProvenance(),
+            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+        )
+        val parameterStorage = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerStorageCarrier.Fixed(ownerParameterCarrier),
+            parameterProduced.provenance,
+            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
         )
 
         fun record(
@@ -3157,6 +3171,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             Name.identifier("foreign"),
             owner.typeParameters.single().defaultType,
         ).symbol as IrVariableSymbolImpl
+        val parameterVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("parameter"),
+            owner.typeParameters.single().defaultType,
+        ).symbol as IrVariableSymbolImpl
         val foreignCarrier = referenceCarrier(source(int32Type()))
         val foreignProduced = directValue(foreignCarrier)
         val foreignStorage = DotNetGenericOwnerPhysicalStorageFact(
@@ -3172,12 +3194,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
                 listOf(
                     record(localVariable, localProduced, localStorage),
+                    record(parameterVariable, parameterProduced, parameterStorage),
                     record(foreignVariable, foreignProduced, foreignStorage),
                 ),
             ),
         ).value
 
         assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, localVariable))
+        assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, parameterVariable))
         assertNull(authority.retainedProducedCarrierOrNull(function.symbol, foreignVariable))
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(

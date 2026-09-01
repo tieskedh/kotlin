@@ -27,6 +27,7 @@ enum class DotNetGenericOwnerPhysicalValueShadowStatus {
 /** IR-free carrier vocabulary exposed only as in-memory architecture evidence. */
 enum class DotNetGenericOwnerPhysicalValueShadowCarrierKind {
     OBJECT,
+    OWNER_TYPE_PARAMETER,
     LOCAL_OWNER_CONSTRUCTION,
     SEMANTIC_CAPABILITY,
     UNKNOWN,
@@ -82,6 +83,9 @@ data class DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
         }
         require(
             when (kind) {
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER ->
+                    localOwnerName == null && ownerParameterIndices.size == 1 &&
+                            localTypeDefView == null && !parameterBinderOwnerName.isNullOrEmpty()
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION ->
                     !localOwnerName.isNullOrEmpty() && ownerParameterIndices.isNotEmpty() &&
                             !parameterBinderOwnerName.isNullOrEmpty()
@@ -112,6 +116,7 @@ data class DotNetGenericOwnerPhysicalValueShadowFamilySnapshot(
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION -> true
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY ->
                 localTypeDefView == null
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER,
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN,
             -> false

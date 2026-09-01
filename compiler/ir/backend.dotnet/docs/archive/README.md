@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-typed-parameter-entry-2026-09-01.md`](generic-owner-physical-typed-parameter-entry-2026-09-01.md)
+  records the first role-specific physical entry environment: exact natural
+  owner `!T`, independent object-domain semantic-hook entry, direct live-slot
+  validation, value/reference substitutions, hostile broad-route isolation,
+  and the exact Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-control-flow-join-placement-2026-09-01.md`](generic-owner-physical-control-flow-join-placement-2026-09-01.md)
   records the bounded final-value control-flow consumer: identical-carrier
   retention or one unique common recorded natural-interface construction,
