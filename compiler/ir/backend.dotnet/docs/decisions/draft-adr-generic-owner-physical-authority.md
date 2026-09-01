@@ -97,6 +97,17 @@ previously selected declaration family. Missing evidence is `Unavailable`.
 Contradictory descriptions of the same physical declaration are `Conflict`.
 Ordinary loss of precision between two values is not a declaration conflict.
 
+Local natural-interface admission fixes one complete ordered physical variance
+vector for every TypeDef it actually admits. A complete-surface plan supplies
+that vector when it changes or reaffirms the CLR representation. An older
+bounded natural-interface grammar without such a plan records the declaration
+variance which that grammar already selected for emission. This fallback is an
+admission-time representation choice, not permission for a later consumer to
+reconstruct physical variance from logical Kotlin types. The BOUND declaration
+index and emitter consume the same recorded vector; either a missing entry or a
+different admitted-TypeDef key set is an internal conflict. Sealed emission
+still has to observe the resulting `GenericParam` rows independently.
+
 The declaration-authority domain is explicit:
 
 ```text

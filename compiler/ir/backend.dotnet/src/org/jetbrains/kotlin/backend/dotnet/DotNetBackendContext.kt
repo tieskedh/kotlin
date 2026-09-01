@@ -236,6 +236,9 @@ internal class DotNetBackendContext(
     /** Explicitly admitted subset populated later by bounded reified-interface admission only. */
     val admittedGenericInterfaceCompleteNaturalAuthorityPlans:
         MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    /** Producer-selected CLR GenericParam variance vector fixed when each natural TypeDef is admitted. */
+    val reifiedGenericInterfacePhysicalVariances:
+        MutableMap<IrClassSymbol, List<DotNetGenericOwnerPhysicalTypeParameterVariance>> = linkedMapOf()
     /** Producer-planned input domains for final local natural interface MethodDefs. */
     val genericInterfaceNaturalMethodParameterDomains:
         MutableMap<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> =

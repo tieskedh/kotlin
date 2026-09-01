@@ -485,10 +485,23 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
         if (!finalRoutingOnly) {
-            fun admitCompleteNaturalPlan(
+            fun recordNaturalPhysicalVariances(
                 owner: IrClass,
                 plan: DotNetGenericInterfaceCompleteNaturalAuthorityPlan?,
             ) {
+                val variances = plan?.selectedPhysicalVariances
+                    ?: owner.typeParameters.map { parameter ->
+                        parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
+                    }
+                check(variances.size == owner.typeParameters.size &&
+                        context.reifiedGenericInterfacePhysicalVariances.put(
+                            owner.symbol,
+                            variances,
+                        ) == null
+                ) {
+                    "Internal .NET backend error: natural interface '${owner.name}' received " +
+                            "duplicate or arity-incoherent physical GenericParam variance authority"
+                }
                 if (plan == null) return
                 check(
                     context.admittedGenericInterfaceCompleteNaturalAuthorityPlans.put(
@@ -530,7 +543,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     declaredMembers = owner.declaredInterfaceMembers(),
                     capabilityBindingKind = DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                 )
-                admitCompleteNaturalPlan(owner, completeNaturalPlan)
+                recordNaturalPhysicalVariances(owner, completeNaturalPlan)
             }
 
             // Preserve the old root-admission snapshot. Re-evaluating every historical grammar
@@ -604,7 +617,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
                             reusedParent,
                         )
-                        admitCompleteNaturalPlan(owner, completeNaturalPlan)
+                        recordNaturalPhysicalVariances(owner, completeNaturalPlan)
                         changed = true
                         continue
                     }
@@ -625,7 +638,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             DotNetPublishedGenericInterfaceCapabilityBindingKind.REUSED_PARENT,
                             reusedParent,
                         )
-                        admitCompleteNaturalPlan(owner, completeNaturalPlan)
+                        recordNaturalPhysicalVariances(owner, completeNaturalPlan)
                         changed = true
                         continue
                     }
@@ -655,7 +668,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         shape.declaredMembers,
                         DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED,
                     )
-                    admitCompleteNaturalPlan(owner, completeNaturalPlan)
+                    recordNaturalPhysicalVariances(owner, completeNaturalPlan)
                     changed = true
                 }
             } while (changed)

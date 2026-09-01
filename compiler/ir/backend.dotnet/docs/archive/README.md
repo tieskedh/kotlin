@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-local-natural-variance-authority-2026-09-01.md`](generic-owner-local-natural-variance-authority-2026-09-01.md)
+  records the rehearsal-only repair which fixes one producer-selected CLR
+  `GenericParam` variance vector for every admitted local natural TypeDef,
+  makes BOUND declaration authority and emission consume the same record,
+  restores the existing value/operation route proof, and preserves the exact
+  production-erased inverse on Framework 4.8 and .NET 10.
 - [`upstream-sync-2026-08-31.md`](upstream-sync-2026-08-31.md)
   records the tested 174-commit upstream integration through `2868cfb88a`,
   preservation of all 672 target patches, the 18-path and reverse-dependency
