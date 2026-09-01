@@ -413,6 +413,22 @@ internal class DotNetReifiedGenericInterfaceLowering(
         reusedParent: IrClass? = null,
     ) {
         val logicalOwnerKey = owner.requiredPublishedLogicalKey("owner")
+        val memberContracts = checkNotNull(owner.publishedMemberContractsOrNull(declaredMembers)) {
+            "Internal .NET backend error: published generic-interface member roles changed"
+        }
+        val memberContractsByKey = memberContracts.associateBy { member -> member.logicalMemberKey }
+        val localMemberBindings = declaredMembers.associateWith { member ->
+            val logicalMemberKey = member.requiredPublishedLogicalKey("member")
+            checkNotNull(memberContractsByKey[logicalMemberKey]) {
+                "Internal .NET backend error: published generic-interface member " +
+                        "'${member.name}' has no creation-site physical contract"
+            }
+        }
+        check(localMemberBindings.size == memberContracts.size &&
+                localMemberBindings.values.toSet().size == memberContracts.size
+        ) {
+            "Internal .NET backend error: published generic-interface member identities are ambiguous"
+        }
         val parentContracts = parents.map { parent ->
             publishedFamilyOrNull(parent)
                 ?: error(
@@ -441,9 +457,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 )
             }.sortedBy { parent -> parent.logicalOwnerKey },
             lineageDepth = parentContracts.maxOfOrNull { contract -> contract.lineageDepth + 1 } ?: 0,
-            declaredMembers = checkNotNull(owner.publishedMemberContractsOrNull(declaredMembers)) {
-                "Internal .NET backend error: published generic-interface member roles changed"
-            },
+            declaredMembers = memberContracts,
             capabilityBindingKind = capabilityBindingKind,
             reusedParentLogicalOwnerKey = reusedParent?.let { parent ->
                 checkNotNull(publishedFamilyOrNull(parent)) {
@@ -453,6 +467,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
         )
         check(context.publishedGenericInterfaceFamilies.put(owner, contract) == null) {
             "Internal .NET backend error: '${owner.name}' published multiple generic-interface contracts"
+        }
+        localMemberBindings.entries.forEach { entry ->
+            val member = entry.key
+            val memberContract = entry.value
+            check(context.publishedGenericInterfaceMemberContracts.put(member, memberContract) == null) {
+                "Internal .NET backend error: '${owner.name}.${member.name}' received multiple " +
+                        "published physical member contracts"
+            }
         }
         recordPublishedNaturalMethodDomains(owner, declaredMembers)
     }

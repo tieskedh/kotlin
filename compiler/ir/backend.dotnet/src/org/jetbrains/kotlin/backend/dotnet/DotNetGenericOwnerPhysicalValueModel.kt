@@ -2920,14 +2920,49 @@ internal sealed interface DotNetGenericOwnerStorageCarrier {
     }
 }
 
+/** Physical layout selected for one destination independently from any reaching definition. */
+internal sealed interface DotNetGenericOwnerPhysicalStorageLayout {
+    val primaryCarrier: DotNetGenericOwnerStorageCarrier.Fixed
+
+    data class Direct(
+        override val primaryCarrier: DotNetGenericOwnerStorageCarrier.Fixed,
+    ) : DotNetGenericOwnerPhysicalStorageLayout
+
+    /** The primary carrier stores the typed payload; a distinct Boolean slot stores logical null. */
+    data class SplitNullable(
+        override val primaryCarrier: DotNetGenericOwnerStorageCarrier.Fixed,
+    ) : DotNetGenericOwnerPhysicalStorageLayout
+}
+
+/**
+ * Selects the bounded owner-parameter pair layout only when the local, produced payload, and
+ * enclosing split MethodDef all name the same physical owner parameter.
+ */
+internal fun splitNullableOwnerParameterStorageLayoutOrNull(
+    produced: DotNetGenericOwnerProducedValueFact,
+    localOwnerParameterIndex: Int,
+    enclosingOwnerParameterIndex: Int,
+    ownerParameterCarriers: List<DotNetGenericOwnerPhysicalCarrier>,
+): DotNetGenericOwnerPhysicalStorageLayout.SplitNullable? {
+    if (localOwnerParameterIndex != enclosingOwnerParameterIndex) return null
+    val selectedCarrier = ownerParameterCarriers.getOrNull(localOwnerParameterIndex) ?: return null
+    val payload = (produced.layout as? DotNetGenericOwnerProducedValueLayout.SplitNullable)
+        ?.payloadCarrier ?: return null
+    if (payload != selectedCarrier) return null
+    return DotNetGenericOwnerPhysicalStorageLayout.SplitNullable(
+        DotNetGenericOwnerStorageCarrier.Fixed(selectedCarrier),
+    )
+}
+
 internal data class DotNetGenericOwnerPhysicalStorageFact(
-    val storageCarrier: DotNetGenericOwnerStorageCarrier.Fixed,
+    val storageLayout: DotNetGenericOwnerPhysicalStorageLayout,
     val contentsProvenance: DotNetGenericOwnerPhysicalValueProvenance,
     val contentsNullState: DotNetGenericOwnerPhysicalNullState,
 ) {
     init {
-        require(contentsNullState == DotNetGenericOwnerPhysicalNullState.NON_NULL ||
-                storageCarrier.carrier.canRepresentNull) {
+        require(storageLayout is DotNetGenericOwnerPhysicalStorageLayout.SplitNullable ||
+                contentsNullState == DotNetGenericOwnerPhysicalNullState.NON_NULL ||
+                storageLayout.primaryCarrier.carrier.canRepresentNull) {
             "nullable storage contents require a carrier which represents null"
         }
         require(contentsNullState.canBeNonNull ||
@@ -2937,28 +2972,53 @@ internal data class DotNetGenericOwnerPhysicalStorageFact(
     }
 
     fun read(): DotNetGenericOwnerPhysicalFlowFact.Reachable {
-        val value = if (contentsNullState == DotNetGenericOwnerPhysicalNullState.NULL &&
-            storageCarrier.carrier.acceptsCarrierlessNull
-        ) {
-            DotNetGenericOwnerProducedValueFact(
-                DotNetGenericOwnerProducedValueLayout.Null,
-                DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
-                DotNetGenericOwnerPhysicalNullState.NULL,
-            )
-        } else {
-            val readProvenance = (storageCarrier.carrier.type as?
-                    DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.let { construction ->
-                contentsProvenance.guarantee(
-                    DotNetGenericOwnerPhysicalView(construction),
-                    DotNetGenericOwnerPhysicalViewEvidence.STORAGE_READ,
+        val value = when (val layout = storageLayout) {
+            is DotNetGenericOwnerPhysicalStorageLayout.Direct -> {
+                val carrier = layout.primaryCarrier.carrier
+                if (contentsNullState == DotNetGenericOwnerPhysicalNullState.NULL &&
+                    carrier.acceptsCarrierlessNull
+                ) {
+                    DotNetGenericOwnerProducedValueFact(
+                        DotNetGenericOwnerProducedValueLayout.Null,
+                        DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
+                        DotNetGenericOwnerPhysicalNullState.NULL,
+                    )
+                } else {
+                    val readProvenance = (carrier.type as?
+                            DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+                        ?.let { construction ->
+                            contentsProvenance.guarantee(
+                                DotNetGenericOwnerPhysicalView(construction),
+                                DotNetGenericOwnerPhysicalViewEvidence.STORAGE_READ,
+                            )
+                        } ?: contentsProvenance
+                    DotNetGenericOwnerProducedValueFact(
+                        DotNetGenericOwnerProducedValueLayout.Direct(carrier),
+                        if (contentsNullState.canBeNonNull) readProvenance
+                        else DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
+                        contentsNullState,
+                    )
+                }
+            }
+            is DotNetGenericOwnerPhysicalStorageLayout.SplitNullable -> {
+                val carrier = layout.primaryCarrier.carrier
+                val readProvenance = (carrier.type as?
+                        DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+                    ?.let { construction ->
+                        contentsProvenance.guarantee(
+                            DotNetGenericOwnerPhysicalView(construction),
+                            DotNetGenericOwnerPhysicalViewEvidence.STORAGE_READ,
+                        )
+                    } ?: contentsProvenance
+                DotNetGenericOwnerProducedValueFact(
+                    DotNetGenericOwnerProducedValueLayout.SplitNullable(
+                        carrier,
+                    ),
+                    if (contentsNullState.canBeNonNull) readProvenance
+                    else DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
+                    contentsNullState,
                 )
-            } ?: contentsProvenance
-            DotNetGenericOwnerProducedValueFact(
-                DotNetGenericOwnerProducedValueLayout.Direct(storageCarrier.carrier),
-                if (contentsNullState.canBeNonNull) readProvenance
-                else DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
-                contentsNullState,
-            )
+            }
         }
         return DotNetGenericOwnerPhysicalFlowFact.Reachable(value)
     }
@@ -2971,6 +3031,9 @@ internal data class DotNetGenericOwnerPhysicalStorageFact(
             DotNetGenericOwnerPhysicalCarrier,
         ) -> Boolean,
     ): DotNetGenericOwnerPhysicalStorageFact? {
+        val directStorage = storageLayout as? DotNetGenericOwnerPhysicalStorageLayout.Direct
+            ?: return null
+        val storageCarrier = directStorage.primaryCarrier
         if (!value.nullState.canBeNonNull) {
             val canPlaceNull = when (val layout = value.layout) {
                 DotNetGenericOwnerProducedValueLayout.Null ->
@@ -3009,10 +3072,10 @@ internal data class DotNetGenericOwnerPhysicalStorageFact(
             DotNetGenericOwnerPhysicalCarrier,
             DotNetGenericOwnerPhysicalCarrier,
         ) -> Boolean,
-    ): DotNetGenericOwnerPhysicalStorageFact? = value.placeInStorageOrNull(
-        storageCarrier,
-        canStoreIdentityPreserving,
-    )
+    ): DotNetGenericOwnerPhysicalStorageFact? {
+        if (storageLayout !is DotNetGenericOwnerPhysicalStorageLayout.Direct) return null
+        return value.placeInStorageOrNull(storageLayout, canStoreIdentityPreserving)
+    }
 }
 
 /**
@@ -3025,22 +3088,46 @@ internal fun DotNetGenericOwnerProducedValueFact.placeInStorageOrNull(
         DotNetGenericOwnerPhysicalCarrier,
         DotNetGenericOwnerPhysicalCarrier,
     ) -> Boolean,
-): DotNetGenericOwnerPhysicalStorageFact? {
-    if (layout == DotNetGenericOwnerProducedValueLayout.Null) {
-        if (!storageCarrier.carrier.acceptsCarrierlessNull) return null
-        return DotNetGenericOwnerPhysicalStorageFact(
-            storageCarrier,
-            DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
-            DotNetGenericOwnerPhysicalNullState.NULL,
-        )
+): DotNetGenericOwnerPhysicalStorageFact? = placeInStorageOrNull(
+    DotNetGenericOwnerPhysicalStorageLayout.Direct(storageCarrier),
+    canStoreIdentityPreserving,
+)
+
+/** Validates one produced layout against an independently selected destination layout. */
+internal fun DotNetGenericOwnerProducedValueFact.placeInStorageOrNull(
+    storageLayout: DotNetGenericOwnerPhysicalStorageLayout,
+    canStoreIdentityPreserving: (
+        DotNetGenericOwnerPhysicalCarrier,
+        DotNetGenericOwnerPhysicalCarrier,
+    ) -> Boolean,
+): DotNetGenericOwnerPhysicalStorageFact? = when (storageLayout) {
+    is DotNetGenericOwnerPhysicalStorageLayout.Direct -> {
+        val storageCarrier = storageLayout.primaryCarrier
+        if (layout == DotNetGenericOwnerProducedValueLayout.Null) {
+            if (!storageCarrier.carrier.acceptsCarrierlessNull) return null
+            DotNetGenericOwnerPhysicalStorageFact(
+                storageLayout,
+                DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
+                DotNetGenericOwnerPhysicalNullState.NULL,
+            )
+        } else {
+            val producedCarrier = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier
+                ?: return null
+            if (!canStoreIdentityPreserving(producedCarrier, storageCarrier.carrier) ||
+                nullState != DotNetGenericOwnerPhysicalNullState.NON_NULL &&
+                !storageCarrier.carrier.canRepresentNull
+            ) return null
+            DotNetGenericOwnerPhysicalStorageFact(storageLayout, provenance, nullState)
+        }
     }
-    val producedCarrier = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier
-        ?: return null
-    if (!canStoreIdentityPreserving(producedCarrier, storageCarrier.carrier) ||
-        nullState != DotNetGenericOwnerPhysicalNullState.NON_NULL &&
-        !storageCarrier.carrier.canRepresentNull
-    ) return null
-    return DotNetGenericOwnerPhysicalStorageFact(storageCarrier, provenance, nullState)
+    is DotNetGenericOwnerPhysicalStorageLayout.SplitNullable -> {
+        val payload = (layout as? DotNetGenericOwnerProducedValueLayout.SplitNullable)
+            ?.payloadCarrier ?: return null
+        if (payload != storageLayout.primaryCarrier.carrier ||
+            !canStoreIdentityPreserving(payload, storageLayout.primaryCarrier.carrier)
+        ) return null
+        DotNetGenericOwnerPhysicalStorageFact(storageLayout, provenance, nullState)
+    }
 }
 
 /** Pure one-way binding result; unavailable facts never authorize a semantic reinterpretation. */

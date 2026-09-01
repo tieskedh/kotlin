@@ -77,11 +77,24 @@ internal data class DotNetGenericOwnerPhysicalValueLocalPlacementObservation(
     val physicalMethodOwner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local?,
     val variable: IrValueSymbol,
     val slotIndex: Int,
+    val layout: DotNetGenericOwnerPhysicalValueLayoutKind,
     val carrier: DotNetGenericOwnerObservedLocalCarrier,
+    val auxiliarySlotIndex: Int?,
     val selectionKind: DotNetGenericOwnerPhysicalValueLocalSelectionKind,
 ) {
     init {
         require(slotIndex >= 0) { "an emitted local placement requires a non-negative slot index" }
+        require(
+            when (layout) {
+                DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT -> auxiliarySlotIndex == null
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE ->
+                    auxiliarySlotIndex != null && auxiliarySlotIndex >= 0 &&
+                            auxiliarySlotIndex != slotIndex
+                DotNetGenericOwnerPhysicalValueLayoutKind.NULL,
+                DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN,
+                -> false
+            }
+        ) { "an emitted local placement requires one coherent direct or split layout" }
     }
 }
 
@@ -148,8 +161,11 @@ internal fun compareDotNetGenericOwnerPhysicalValueLocalPlacements(
                     ?.owner?.owner?.dotNetPhysicalValueStableName(),
                 actualPhysicalMethodOwnerTypeDefView = comparison.actual?.physicalMethodOwner
                     ?.view?.toShadowView(),
+                actualStorageLayout = comparison.actual?.layout
+                    ?: DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN,
                 actualStorageCarrier = comparison.actual?.carrier?.toSnapshot()
                     ?: unknownPhysicalValueCarrierSnapshot,
+                actualAuxiliarySlotIndex = comparison.actual?.auxiliarySlotIndex,
                 actualSelectionKind = comparison.actual?.selectionKind,
                 continuity = continuity,
                 relation = comparison.relation,
@@ -192,7 +208,8 @@ private fun comparePlacement(
     predicted: DotNetGenericOwnerPhysicalStorageFact,
     actual: DotNetGenericOwnerPhysicalValueLocalPlacementObservation,
 ): PlacementComparison {
-    val predictedCarrier = predicted.storageCarrier.carrier.toObservedCarrierOrNull()
+    val predictedLayout = predicted.storageLayout.toSnapshotLayout()
+    val predictedCarrier = predicted.storageLayout.primaryCarrier.carrier.toObservedCarrierOrNull()
         ?: return PlacementComparison(
             DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED,
             actual,
@@ -206,7 +223,7 @@ private fun comparePlacement(
             actualCarrier.reason,
         )
     }
-    if (predictedCarrier == actualCarrier) {
+    if (predictedLayout == actual.layout && predictedCarrier == actualCarrier) {
         return PlacementComparison(DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH, actual)
     }
     return PlacementComparison(
@@ -222,7 +239,9 @@ private fun DotNetGenericOwnerPhysicalValueShadowRecord.sameValueFactAs(
         predictedStorage == other.predictedStorage && snapshot.let { left ->
     other.snapshot.let { right ->
         left.status == right.status &&
+                left.initializerProducedLayout == right.initializerProducedLayout &&
                 left.initializerProducedCarrier == right.initializerProducedCarrier &&
+                left.storageLayout == right.storageLayout &&
                 left.storageCarrier == right.storageCarrier &&
                 left.guaranteeState == right.guaranteeState &&
                 left.guaranteedViews.map { view -> view.carrier }.toSet() ==
@@ -236,6 +255,14 @@ private fun DotNetGenericOwnerPhysicalValueShadowRecord.sameValueFactAs(
                 left.contentsNullState == right.contentsNullState &&
                 left.unsupportedReason == right.unsupportedReason
     }
+}
+
+private fun DotNetGenericOwnerPhysicalStorageLayout.toSnapshotLayout():
+        DotNetGenericOwnerPhysicalValueLayoutKind = when (this) {
+    is DotNetGenericOwnerPhysicalStorageLayout.Direct ->
+        DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT
+    is DotNetGenericOwnerPhysicalStorageLayout.SplitNullable ->
+        DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE
 }
 
 private fun DotNetGenericOwnerPhysicalCarrier.toObservedCarrierOrNull():

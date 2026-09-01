@@ -223,6 +223,14 @@ internal class DotNetBackendContext(
     /** Immutable physical-family contracts published identically to local and external consumers. */
     val publishedGenericInterfaceFamilies:
         MutableMap<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = linkedMapOf()
+    /**
+     * Creation-site identity binding from each local logical member to its published physical
+     * contract. Executable compilations deliberately have no library linkage-key table, so later
+     * signature and operation consumers must not try to rediscover this relation from names.
+     */
+    val publishedGenericInterfaceMemberContracts:
+        MutableMap<IrSimpleFunction, DotNetPublishedGenericInterfaceMemberContract> =
+        java.util.IdentityHashMap()
     /** Fail-closed evidence consumed only by the atomic CLR-generic rehearsal epoch. */
     val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
     /** Static call-site evidence only; codegen must never consume these route requirements. */

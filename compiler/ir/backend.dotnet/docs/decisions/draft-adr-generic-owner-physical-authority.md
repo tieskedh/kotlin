@@ -162,6 +162,14 @@ The current physical index calls these records `N` and `J`, respectively. The
 dependency is one-way: the presence of `J` requires a matching `N`; the presence
 of `N` never requires `J`.
 
+Within the current producer compilation, family publication binds every local
+source member bijectively, by declaration identity, to exactly one published
+physical member contract. Executable-only compilations need not have a
+serialized linkage-key table; that absence neither removes creation-site
+authority nor permits reconstruction from member name, arity, declaration
+order, or shape. A separate consumer obtains the corresponding relation only
+from the validated producer record.
+
 Value-flow precision is the product lattice described below: carrier placement
 chooses a verifier-valid destination, guaranteed-view sets intersect at joins,
 lineage agrees or disappears, and value layouts join independently. Two normal
@@ -384,9 +392,12 @@ before a representation-preserving logical widening. It is only a selector:
 
 Direct layout tracks known-null, known-non-null, and maybe-null state where
 relevant. Closed `Nullable<V>` and nominal value-class carriers remain direct
-physical carriers. `SplitNullable` is a two-slot callable-boundary layout, not a
-second state field. Diagnostic provenance explains where a fact came from, but
-is not an additional lattice dimension and must not affect convergence.
+physical carriers. `SplitNullable` originates as a two-slot callable-result
+layout. A compiler-controlled local may retain the same payload/flag pair only
+under the bounded placement rule below; this does not authorize split public
+state, a second field, or backward specialization of callable ABI. Diagnostic
+provenance explains where a fact came from, but is not an additional lattice
+dimension and must not affect convergence.
 
 ### 6. Transfer and placement rules
 
@@ -453,6 +464,26 @@ physical MethodDef owner, and the emitter independently observes a direct
 parameter name, and IR origin are not evidence. Nullable, converted, joined,
 foreign, method-parameter, and nested parameter carriers remain unavailable in
 this slice.
+
+The fourth bounded form admits a parameterless, non-method-generic exact
+natural call whose authority-recorded `Direct(!n)` result is retained in an
+equal immutable owner-bound local. The receiver must already guarantee the
+selected construction, an existing semantic route vetoes the transfer, and the
+emitter independently resolves the live MethodDef and result carrier.
+
+The fifth bounded form admits one immutable logical `T?` local whose initializer
+is a parameterless, non-method-generic exact natural call producing
+`SplitNullable(!n, bool)`. The enclosing physical MethodDef must itself return
+the identical split payload, the local must have exactly one read which directly
+returns it to that MethodDef, and that return must be outside every
+`try`/`catch`/`finally` region. The payload must be the same
+substitution-dependent owner parameter of the live physical MethodDef owner.
+Emission stores the payload and null flag in two distinct compiler-private CLR
+locals, independently resolves the same split MethodDef, and copies only the
+private flag into the enclosing final `out bool` at return. Arguments,
+MethodSpecs, semantic or `super` routes, mutation, joins, captures, multiple
+reads, protected-region returns, and any carrier mismatch receive no pair-
+retention token and use the ordinary materializing path.
 
 #### Joins
 
@@ -667,7 +698,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
 | `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
-| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Separately, exact operations now consume final ordinary arguments, preserve a split-nullable result layout, bind one authority-backed current-owner MethodSpec vector, and compose that binder with a split-nullable owner result. Local result placement remains parameterless; broader MethodSpec carriers and split-pair materialization still require their independent policies. |
+| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement now also covers the first parameterless `SplitNullable` pair-retention form. Argument-bearing and MethodSpec operations may preserve their result layout for routing, but do not yet retain split pairs in locals; broader consumers and control flow require independent policies. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 
@@ -701,10 +732,12 @@ result:     SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)
 
 and emits an exact `!V Get(!K, out bool)` without a `Map`, member-name, package,
 or combined-role exception. Exact value-type calls remain unboxed. The operation
-consumer preserves this layout but does not yet materialize its payload/flag
-pair into one Kotlin local. Semantic or unknown routes may materialize the
-logical nullable value only at their operation boundary. Split result layout
-never authorizes split fields or duplicate state.
+consumer preserves this exact layout. The first bounded local consumer can now
+retain a parameterless split result as two verifier-visible private locals and
+return that pair through an enclosing MethodDef with the identical split layout,
+without boxing or logical nullable materialization. Every other consumer still
+materializes at its ordinary Kotlin value boundary. Split result layout never
+authorizes split fields or duplicate state.
 
 The MethodDef binder composes by the same rule. The first closed structural
 form is:
@@ -850,7 +883,8 @@ concrete method search, marker attribute, interface enumeration order, or
 logical signature reconstruction participates in slot identity. The callable
 record keeps parameter policies and result layout orthogonal. In particular, a
 split-nullable MethodDef token includes its physical trailing `bool&`, while the
-recorded result layout tells the invoker how to materialize the logical result.
+recorded result layout tells the invoker how to carry the payload/flag result
+and, at an ordinary logical value boundary, materialize it.
 
 Retained foreign CLR metadata is independent physical authority. A foreign
 TypeDef or MethodDef is identified by its selected assembly metadata and
@@ -1160,7 +1194,10 @@ covers at least:
 - producer/consumer libraries compiled separately and stale or contradictory
   physical records;
 - direct and split-nullable results for references, signed value types,
-  `Nullable<V>`, open owner/method parameters, and Kotlin value classes; and
+  `Nullable<V>`, open owner/method parameters, and Kotlin value classes;
+- split-result locals with a sole direct return, an ordinary argument or other
+  materializing consumer, multiple reads, and a return inside an exception-
+  protected region; and
 - Framework 4.8, current CoreCLR, ReadyToRun, trimming, and NativeAOT.
 
 Each positive test must prove object identity, authoritative state, selected
@@ -1240,11 +1277,12 @@ unmarked producer records, value arguments, and caller-authored delegate facts
 fail closed. This declaration proof does not claim producer-side delegate
 synthesis, constrained producer delegate rows, delegate members, or operation
 routing. Direct equal-carrier local placement, one exhaustive unique-common-
-interface join, bare and constructed-natural exact parameter entries, and one
-parameterless natural MethodDef `Direct` result now consume final value facts
-through an explicit authority adapter. Constructed locals and entries remain
-local owner-bound reference `C<!n,...>` forms; the bare entry and direct-result
-slices add `!n` with substitution-dependent null encoding. The result path selects a bound MethodDef
+interface join, bare and constructed-natural exact parameter entries, one
+parameterless natural MethodDef `Direct` result, and one parameterless single-
+return `SplitNullable` pair now consume final value facts through an explicit
+authority adapter. Constructed locals and entries remain local owner-bound
+reference `C<!n,...>` forms; the bare entry and result slices add `!n` with
+substitution-dependent null encoding. The result path selects a bound MethodDef
 and only a receiver construction already guaranteed by provenance; an existing
 semantic route vetoes natural production, while the absence of an older route-
 census record supplies no evidence and does not hide an ordinary natural call.
@@ -1262,10 +1300,10 @@ Separate consumers bind the producer record, direct exact calls remain
 unboxed, and ordinary natural-only C# implementations are reached by widened
 Kotlin calls without changing identity. Each placement path independently
 checks the live emitter or every fixed-boundary branch. The next boundary
-generalizes MethodSpec carrier authority where justified, materializes split
-pairs across local/control-flow boundaries, and closes remaining parameter-
-entry forms, then null/bottom/unknown joins and explicit conversions—not
-another state or stdlib recognizer.
+generalizes split-pair placement to justified argument-bearing or MethodSpec
+calls, multiple consumers, and control-flow joins, then closes remaining
+parameter-entry forms and explicit conversions—not another state or stdlib
+recognizer.
 
 ## Consequences
 

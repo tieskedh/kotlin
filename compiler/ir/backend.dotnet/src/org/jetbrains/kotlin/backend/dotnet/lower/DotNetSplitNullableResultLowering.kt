@@ -143,6 +143,10 @@ internal class DotNetSplitNullableResultLowering(
 
     private fun IrSimpleFunction.hasSplitNullableResultLayout(): Boolean {
         val owner = parent as? IrClass ?: return false
+        context.publishedGenericInterfaceMemberContracts[this]?.let { member ->
+            return member.resultLayout ==
+                    DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+        }
         val contract = context.publishedGenericInterfaceFamilies[owner]
             ?: externalDeclarations.publishedGenericInterfaceFamilyOrNull(owner)
             ?: return false

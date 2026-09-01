@@ -68,6 +68,14 @@ enum class DotNetGenericOwnerPhysicalValueShadowNullState {
     UNKNOWN,
 }
 
+/** Whether one logical value occupies one carrier or a typed payload plus a null flag. */
+enum class DotNetGenericOwnerPhysicalValueLayoutKind {
+    DIRECT,
+    SPLIT_NULLABLE,
+    NULL,
+    UNKNOWN,
+}
+
 /** One verifier-visible carrier without retaining an IR or metadata handle. */
 data class DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
     val kind: DotNetGenericOwnerPhysicalValueShadowCarrierKind,
@@ -129,6 +137,7 @@ enum class DotNetGenericOwnerPhysicalValueLocalSelectionKind {
     DECLARED_TYPE,
     EXACT_ARRAY_OVERRIDE,
     PHYSICAL_VALUE_RETAINED_PRODUCER,
+    PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE,
     EXACT_GENERIC_OWNER_OVERRIDE,
     OPEN_NULLABLE_ARRAY_OVERRIDE,
     NESTED_GENERIC_CONSTRUCTION_OVERRIDE,
@@ -162,7 +171,9 @@ data class DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot(
     val prediction: DotNetGenericOwnerPhysicalValueShadowSnapshot,
     val actualPhysicalMethodOwnerName: String?,
     val actualPhysicalMethodOwnerTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView?,
+    val actualStorageLayout: DotNetGenericOwnerPhysicalValueLayoutKind,
     val actualStorageCarrier: DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot,
+    val actualAuxiliarySlotIndex: Int?,
     val actualSelectionKind: DotNetGenericOwnerPhysicalValueLocalSelectionKind?,
     val continuity: DotNetGenericOwnerPhysicalValuePlacementContinuity,
     val relation: DotNetGenericOwnerPhysicalValuePlacementRelation,
@@ -176,7 +187,19 @@ data class DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot(
                 actualPhysicalMethodOwnerTypeDefView == null) {
             "an emitted local placement view requires its physical MethodDef owner"
         }
+        require(
+            when (actualStorageLayout) {
+                DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT ->
+                    actualAuxiliarySlotIndex == null
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE ->
+                    actualAuxiliarySlotIndex != null && actualAuxiliarySlotIndex >= 0
+                DotNetGenericOwnerPhysicalValueLayoutKind.NULL,
+                DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN,
+                -> actualAuxiliarySlotIndex == null
+            }
+        ) { "an observed local layout has incoherent auxiliary-slot evidence" }
         require(relation != DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH ||
+                prediction.storageLayout == actualStorageLayout &&
                 prediction.storageCarrier == actualStorageCarrier &&
                 prediction.storageCarrier.kind != DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN) {
             "a matching physical-value placement requires equal known carriers"
@@ -231,7 +254,9 @@ data class DotNetGenericOwnerPhysicalValueShadowSnapshot(
     val phase: DotNetGenericOwnerPhysicalValueShadowPhase,
     val variableName: String,
     val status: DotNetGenericOwnerPhysicalValueShadowStatus,
+    val initializerProducedLayout: DotNetGenericOwnerPhysicalValueLayoutKind,
     val initializerProducedCarrier: DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot,
+    val storageLayout: DotNetGenericOwnerPhysicalValueLayoutKind,
     val storageCarrier: DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot,
     val guaranteeState: DotNetGenericOwnerPhysicalValueShadowGuaranteeState,
     val guaranteedViews: List<DotNetGenericOwnerPhysicalValueShadowViewSnapshot>,
@@ -262,15 +287,24 @@ data class DotNetGenericOwnerPhysicalValueShadowSnapshot(
             when (status) {
                 DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED ->
                     unsupportedReason == null &&
+                            initializerProducedLayout !=
+                            DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN &&
                             initializerProducedCarrier.kind !=
                             DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
+                            storageLayout in setOf(
+                                DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT,
+                                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE,
+                            ) &&
                             storageCarrier.kind != DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
                             initializerNullState != DotNetGenericOwnerPhysicalValueShadowNullState.UNKNOWN &&
                             contentsNullState != DotNetGenericOwnerPhysicalValueShadowNullState.UNKNOWN
                 DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED ->
                     !unsupportedReason.isNullOrEmpty() &&
+                            initializerProducedLayout ==
+                            DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN &&
                             initializerProducedCarrier.kind ==
                             DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
+                            storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN &&
                             storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN &&
                             guaranteeState == DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
                             initializerNullState == DotNetGenericOwnerPhysicalValueShadowNullState.UNKNOWN &&

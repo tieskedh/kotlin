@@ -451,6 +451,7 @@ internal class DotNetIlExpressionCodegen(
     ): DotNetIlValueType? {
         val source = expression.identityPhysicalProducer()
         val read = source as? IrGetValue ?: return null
+        if (methodContext.splitNullableLocalOrNull(read.symbol) != null) return null
         return methodContext.reference(read.symbol).type
     }
 
@@ -468,6 +469,33 @@ internal class DotNetIlExpressionCodegen(
         if (intrinsicMethods.getIntrinsic(call.symbol) != null) return null
         val resolved = resolveCall(call)
         if (resolved.info.signature.hasSplitNullableResult) return null
+        return (resolved.returnType as? DotNetIlReturnType.Value)?.type
+    }
+
+    /**
+     * Reads the payload carrier of an actually direct split-result call selected for emission.
+     * Semantic and foreign-dispatch targets are rejected even if their logical source member has
+     * a natural split MethodDef: only the route which codegen will invoke may authorize a pair.
+     */
+    fun directPhysicalSplitCallResultPayloadTypeOrNull(
+        expression: IrExpression,
+    ): DotNetIlValueType? {
+        val call = expression as? IrCall ?: return null
+        if (call.superQualifierSymbol != null ||
+            intrinsicMethods.getIntrinsic(call.symbol) != null
+        ) return null
+        val source = call.symbol.owner.let { candidate ->
+            candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
+            ?: candidate
+        }
+        if (source.typeParameters.isNotEmpty() ||
+            source.parameters.any { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver
+            }
+        ) return null
+        splitNullableNaturalCallOrNull(call, source) ?: return null
+        val resolved = resolveCall(call)
+        if (!resolved.info.signature.hasSplitNullableResult) return null
         return (resolved.returnType as? DotNetIlReturnType.Value)?.type
     }
 
@@ -2528,9 +2556,20 @@ internal class DotNetIlExpressionCodegen(
      */
     fun emitCall(call: IrCall): DotNetIlReturnType = emitPhysicalCall(call).returnType
 
-    private fun emitPhysicalCall(call: IrCall): EmittedCall {
+    private fun emitPhysicalCall(
+        call: IrCall,
+        forwardedSplitNullFlagLocal: DotNetIlSlot.Local? = null,
+    ): EmittedCall {
         val resolved = resolveCall(call)
-        val splitNullFlagSlot = if (resolved.info.signature.hasSplitNullableResult) {
+        check(forwardedSplitNullFlagLocal == null ||
+                resolved.info.signature.hasSplitNullableResult &&
+                forwardedSplitNullFlagLocal.type == DotNetIlValueType.Boolean) {
+            "Internal .NET backend error: a split-null flag was supplied to an ordinary call"
+        }
+        val splitNullFlagSlot = if (
+            resolved.info.signature.hasSplitNullableResult &&
+            forwardedSplitNullFlagLocal == null
+        ) {
             methodContext.declareSyntheticLocal(DotNetIlValueType.Boolean, "<splitNullableIsNull>")
         } else {
             null
@@ -2555,8 +2594,13 @@ internal class DotNetIlExpressionCodegen(
         } else {
             emitArguments(call.arguments, resolved.parameterTypes, "'${resolved.calleeName}'")
         }
-        splitNullFlagSlot?.let { slot ->
-            methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+        when {
+            forwardedSplitNullFlagLocal != null -> methodContext.emit(
+                loadLocalAddressInstruction(forwardedSplitNullFlagLocal.index),
+                pushes = 1,
+            )
+            splitNullFlagSlot != null ->
+                methodContext.emit(loadLocalAddressInstruction(splitNullFlagSlot.index), pushes = 1)
         }
         if (constrainedReceiverType != null && resolved.virtual) {
             // `constrained.` is a prefix and must be immediately adjacent to its `callvirt`.
@@ -2573,6 +2617,35 @@ internal class DotNetIlExpressionCodegen(
             pushes = if (resolved.info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
         return EmittedCall(resolved.returnType, splitNullFlagSlot)
+    }
+
+    /**
+     * Emits a previously validated direct split call into one compiler-private Boolean local.
+     *
+     * Keeping the destination as a [DotNetIlSlot.Local], rather than accepting an arbitrary
+     * address-producing callback, prevents this bounded local-placement path from forwarding a
+     * caller-visible `out bool` address through a virtual call.
+     */
+    fun emitDirectPhysicalSplitCall(
+        call: IrCall,
+        nullFlagSlot: DotNetIlSlot.Local,
+    ): DotNetIlValueType {
+        check(nullFlagSlot.type == DotNetIlValueType.Boolean) {
+            "Internal .NET backend error: split-null flag local must have Boolean carrier"
+        }
+        val expectedPayload = directPhysicalSplitCallResultPayloadTypeOrNull(call)
+            ?: dotNetUnsupported(
+                "call to '${call.symbol.owner.name.asString()}' is not one direct split-nullable operation",
+            )
+        val emitted = emitPhysicalCall(call, nullFlagSlot)
+        check(emitted.splitNullFlagSlot == null) {
+            "Internal .NET backend error: a forwarded split call allocated a private null flag"
+        }
+        val actualPayload = (emitted.returnType as? DotNetIlReturnType.Value)?.type
+        check(actualPayload == expectedPayload) {
+            "Internal .NET backend error: split-call payload changed between validation and emission"
+        }
+        return actualPayload
     }
 
     private data class EmittedCall(
@@ -3505,6 +3578,22 @@ internal class DotNetIlExpressionCodegen(
         val payloadType = (returnType as? DotNetIlReturnType.Value)?.type
             ?: dotNetUnsupported("split nullable call to '$calleeName' has no typed payload")
         val payloadSlot = spillToSyntheticLocal(payloadType, "<splitNullablePayload>")
+        emitSplitNullableLogicalResult(
+            payloadSlot,
+            nullFlagSlot,
+            expectedType,
+            calleeName,
+        )
+    }
+
+    /** Materializes a split pair only at an ordinary logical Kotlin value boundary. */
+    private fun emitSplitNullableLogicalResult(
+        payloadSlot: DotNetIlSlot.Local,
+        nullFlagSlot: DotNetIlSlot.Local,
+        expectedType: DotNetIlValueType,
+        valueName: String,
+    ) {
+        val payloadType = payloadSlot.type
         val nonNullLabel = methodContext.nextLabel("splitNullableNonNull")
         val endLabel = methodContext.nextLabel("splitNullableResult")
         methodContext.emit(loadLocalInstruction(nullFlagSlot.index), pushes = 1)
@@ -3529,13 +3618,13 @@ internal class DotNetIlExpressionCodegen(
                 } else if (payloadType == DotNetIlValueType.Object) {
                     val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
                         ?: dotNetUnsupported(
-                            "split nullable call to '$calleeName' cannot narrow object to " +
+                            "split nullable value '$valueName' cannot narrow object to " +
                                     expectedType.nameInSignature
                         )
                     methodContext.emit(narrowing, pops = 1, pushes = 1)
                 } else {
                     dotNetUnsupported(
-                        "split nullable call to '$calleeName' produces ${payloadType.nameInSignature} " +
+                        "split nullable value '$valueName' produces ${payloadType.nameInSignature} " +
                                 "where ${expectedType.nameInSignature} is expected"
                     )
                 }

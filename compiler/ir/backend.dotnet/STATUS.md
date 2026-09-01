@@ -63,7 +63,7 @@ Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority, plus retained interface/delegate reference
 variance with conversion-scoped constraint validation. The current focused
-evidence compiles the importer and test fixture and passes 172 model tests: 87
+evidence compiles the importer and test fixture and passes 175 model tests: 90
 shared physical-value tests and 85 retained-metadata tests. Six unconstrained
 memberless external-DLL pipelines remain green with both FIR parsers. Git owns
 the intermediate chronology.
@@ -76,7 +76,7 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-Final physical-value facts now authorize four bounded local-placement forms. A
+Final physical-value facts now authorize five bounded local-placement forms. A
 direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
@@ -94,14 +94,30 @@ present in every recorded closure; missing or ambiguous views remain unavailable
 and never fabricate `I<object>`. The emitter reconstructs each carrier from the
 physical MethodDef owner and independently validates the whole initializer,
 every branch at its fixed storage boundary, the direct live parameter read, or
-the live resolved MethodDef result. Source and compiler-owned aliases share the
-rule; star/projected and mutable/multiple-write controls receive no token. Exact
+the live resolved MethodDef result. Fifth, one parameterless exact natural
+`SplitNullable(!n, bool)` result may remain in two compiler-private locals when
+an immutable logical `T?` local has one direct return to an enclosing MethodDef
+with the identical split layout and that return crosses no exception-protected
+region. The emitter independently resolves the live MethodDef, passes only the
+private Boolean local to the nested virtual call, and emits no boxing or logical
+nullable materialization. Every ordinary consumer, argument-bearing or
+MethodSpec call, mutation, join, capture, multiple read, protected-region
+return, or carrier mismatch uses the ordinary materializing path. Local
+producer publication now binds each source member bijectively by declaration
+identity to its physical member contract; executable compilations do not need a
+serialized linkage-key table, while external consumers still require the
+validated producer record. Source and compiler-owned aliases share the rules;
+star/projected and mutable/multiple-write controls receive no token. Exact
 evidence is in the
 [direct-placement](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md),
 [control-flow](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md),
 [typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md),
-and [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md)
+[typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md),
+and [split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md)
 archives.
+The focused gate reports 90 green physical-value model tests. Candidate and
+production-erased inverse each cover four green tests across PSI, LightTree,
+Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 The first argument-bearing authoritative operation now composes an exact
 constructed `Lookup<!T,!T>` entry, one final `!T` argument fact,
@@ -116,7 +132,7 @@ decision. A logically widened `Lookup<T, Any?>` retains its semantic route even
 when its value still has an exact physical carrier, including `T = Int`. Exact
 evidence is in the
 [owner-input operation archive](docs/archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
-The focused XML audit contains 172 green model tests; candidate and erased
+The focused XML audit contains 175 green model tests; candidate and erased
 inverse each contain four suites and eight green tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
@@ -132,7 +148,7 @@ mistaken for owner authority. Exact evidence is in the
 [MethodSpec operation](docs/archive/generic-owner-physical-methodspec-operation-2026-09-01.md)
 and
 [MethodSpec/split composition](docs/archive/generic-owner-methodspec-split-nullable-composition-2026-09-01.md)
-archives. The focused audit contains 172 green model tests. Candidate and
+archives. The focused audit contains 175 green model tests. Candidate and
 production-erased evidence each cover eight tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
@@ -162,7 +178,8 @@ authority and value provenance are consolidated in rehearsal mode.
 
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
-natural parameter entries, and one exact direct natural-MethodDef result. The
+natural parameter entries, one exact direct natural-MethodDef result, and one
+parameterless exact split-result pair with a sole direct unprotected return. The
 join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
@@ -187,8 +204,9 @@ arity from IR, or claim broad semantic receivers. Producer and consumer now
 also compose this binder with one strict owner input and a split-nullable owner
 result, including producer records, separate Kotlin assemblies, objective PE,
 and ordinary natural-only C# implementations. The next consolidation boundary
-materializes split-nullable payload/flag results across local/control-flow
-boundaries, then closes remaining parameter-entry forms. Concrete,
+extends split-pair retention to independently proven argument-bearing or
+MethodSpec calls, multiple consumers, and control-flow joins, then closes
+remaining parameter-entry forms. Concrete,
 constrained, nullable, nested, foreign, and multiple MethodSpec carriers,
 null/bottom/unknown joins, and explicit representation-changing conversions
 remain later structural proofs rather than local exceptions.
@@ -366,15 +384,17 @@ The shared model and remaining boundary are owned by the
 and [way forward](docs/programmes/way-forward.md).
 
 The retained-metadata model gate passes 85 tests, the shared physical-value
-model passes 87 tests (172 combined), and the producer-delegate authority gate
+model passes 90 tests (175 combined), and the producer-delegate authority gate
 passes 8 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
 ## Current blockers
 
-- Callable composition remains bounded to one structural root member. Multiple
-  members/inputs, properties/defaults, constraints, method generics, deeper
+- The strict-owner-input plus split-result composition grammar remains bounded
+  to one structural root member. Multiple members/inputs,
+  properties/defaults, constraints, broader MethodSpec carriers,
+  method-generic inheritance/composition, deeper
   inheritance, explicit MethodImpls, value-class payloads, and Runtime/Stdlib
   application are not yet closed. The existing
   `genericOwnerSemanticBodyExactResultChain` rehearsal currently reaches this

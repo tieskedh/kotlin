@@ -76,11 +76,14 @@ The same contract can later describe `Map<K, out V>.get(K): V?` without a Map,
 package, or member-name rule. Exact `Lookup<int,int>` and `Map<int,int>` calls
 then keep both the key and result unboxed.
 
-An exact receiver invokes the recorded natural slot and reconstructs logical
-nullability from payload plus flag. A semantic, star, projection, or otherwise
-unnameable route may materialize boxed-or-null `object` only at its operation
-boundary. It must not erase the owner, fields, unrelated parameters, helpers,
-or result chains.
+An exact receiver invokes the recorded natural slot. At an ordinary logical
+Kotlin value boundary the compiler reconstructs nullability from payload plus
+flag. The physical-authority model may instead retain the exact pair through a
+compiler-controlled local when its complete use and destination layout are
+independently proven. A semantic, star, projection, or otherwise unnameable
+route may materialize boxed-or-null `object` only at its operation boundary. It
+must not erase the owner, fields, unrelated parameters, helpers, or result
+chains.
 
 ## C# and override surface
 
@@ -99,7 +102,8 @@ is never retrospectively rewritten.
 
 ## State boundary
 
-This draft covers callable results only. It does not authorize:
+This draft covers callable results and representation-preserving local
+transport of an already selected result layout. It does not authorize:
 
 - two physical fields for one logical property;
 - a payload field plus unsynchronized null flag;
@@ -140,6 +144,15 @@ value classes, richer virtual/inheritance shapes, deployment lanes, stale and
 contradictory layout records, and broader input-policy composition. Evidence is
 recorded in the
 [Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
+
+The first local-transport slice retains one parameterless natural
+`SplitNullable(!T, out bool)` result in two compiler-private locals only when it
+has one direct, unprotected return to an enclosing MethodDef with the identical
+split result layout. It proves value, reference, and nullable-value
+substitutions plus ordinary-consumer and exception-region materialization
+negatives. It does not close general exception paths, control flow, fields, or
+acceptance. Evidence is recorded in the
+[split-nullable local-placement archive](../archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md).
 
 This remains a **GO** for production-inert consolidation. It is not a GO for
 public ABI or for applying the layout to `Map`; the custom proof passing removes

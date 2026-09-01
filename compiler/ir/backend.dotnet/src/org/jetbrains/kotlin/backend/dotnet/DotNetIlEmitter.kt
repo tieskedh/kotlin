@@ -2310,7 +2310,9 @@ internal class DotNetIlEmitter(
                 physicalMethodOwner = physicalOwner,
                 variable = raw.variable,
                 slotIndex = raw.slotIndex,
+                layout = raw.layout,
                 carrier = normalizeObservedCarrier(raw, physicalOwner),
+                auxiliarySlotIndex = raw.auxiliarySlotIndex,
                 selectionKind = raw.selectionKind,
             )
         }

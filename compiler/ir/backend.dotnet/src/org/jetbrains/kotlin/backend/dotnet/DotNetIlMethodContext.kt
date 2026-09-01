@@ -6,6 +6,18 @@ import org.jetbrains.kotlin.ir.expressions.IrLoop
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.util.render
 
+/** Two verifier-visible locals which together carry one logical open-nullable Kotlin value. */
+internal data class DotNetIlSplitNullableLocal(
+    val payload: DotNetIlSlot.Local,
+    val isNull: DotNetIlSlot.Local,
+) {
+    init {
+        require(payload.index != isNull.index && isNull.type == DotNetIlValueType.Boolean) {
+            "a split-nullable local requires distinct payload and Boolean flag slots"
+        }
+    }
+}
+
 /**
  * Per-method emission state: the buffered body text, operand stack depth tracking used to compute
  * `.maxstack`, local slots collected lazily as declarations are encountered, and label allocation.
@@ -27,6 +39,7 @@ internal class DotNetIlMethodContext(
 ) {
     private val bodyBuilder = StringBuilder()
     private val slots = hashMapOf<IrValueSymbol, DotNetIlSlot>()
+    private val splitNullableLocals = hashMapOf<IrValueSymbol, DotNetIlSplitNullableLocal>()
     private val localSlots = mutableListOf<DotNetIlSlot.Local>()
     private val usedLocalNames = hashSetOf<String>()
     private val branchTargetStackDepths = hashMapOf<String, Int>()
@@ -381,6 +394,10 @@ internal class DotNetIlMethodContext(
         variable: IrVariable,
         physicalTypeOverride: DotNetIlValueType? = null,
     ): DotNetIlSlot.Local {
+        check(variable.symbol !in splitNullableLocals) {
+            "Internal .NET backend error: split-nullable local '${variable.name.asString()}' " +
+                    "cannot also have one direct CLR slot"
+        }
         slots[variable.symbol]?.let { existingSlot ->
             return existingSlot as? DotNetIlSlot.Local
                 ?: dotNetUnsupported("local '${variable.name.asString()}' shadows a parameter")
@@ -397,6 +414,38 @@ internal class DotNetIlMethodContext(
         slots[variable.symbol] = slot
         return slot
     }
+
+    /**
+     * Declares one coordinated payload/flag pair without publishing either half as the ordinary
+     * slot of [variable]. A bare [reference] must therefore fail unless its caller explicitly
+     * understands the split layout; no payload-only read can masquerade as the logical `T?`.
+     */
+    fun declareSplitNullableLocal(
+        variable: IrVariable,
+        payloadType: DotNetIlValueType,
+    ): DotNetIlSplitNullableLocal {
+        check(variable.symbol !in slots && variable.symbol !in splitNullableLocals) {
+            "Internal .NET backend error: local '${variable.name.asString()}' was declared twice"
+        }
+        val payload = DotNetIlSlot.Local(
+            index = localSlots.size,
+            type = payloadType,
+            name = uniqueLocalName(variable.name.asString()),
+        )
+        localSlots += payload
+        val isNull = DotNetIlSlot.Local(
+            index = localSlots.size,
+            type = DotNetIlValueType.Boolean,
+            name = uniqueLocalName("${variable.name.asString()}@isNull"),
+        )
+        localSlots += isNull
+        return DotNetIlSplitNullableLocal(payload, isNull).also { local ->
+            splitNullableLocals[variable.symbol] = local
+        }
+    }
+
+    fun splitNullableLocalOrNull(symbol: IrValueSymbol): DotNetIlSplitNullableLocal? =
+        splitNullableLocals[symbol]
 
     fun reference(symbol: IrValueSymbol): DotNetIlSlot =
         slots[symbol] ?: dotNetUnsupported("reference to unsupported value '${symbol.owner.name.asString()}'")
