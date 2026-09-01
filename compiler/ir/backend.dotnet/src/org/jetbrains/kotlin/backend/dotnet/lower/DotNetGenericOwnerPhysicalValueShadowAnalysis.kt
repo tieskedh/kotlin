@@ -10,7 +10,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRoutePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteRequest
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
@@ -44,7 +43,6 @@ import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
-import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalOperationRoute
 import org.jetbrains.kotlin.backend.dotnet.selectRecordedPhysicalInterfaceViewOrNull
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.ir.IrElement
@@ -517,13 +515,16 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     error("Internal .NET backend error: ${selection.reason}")
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
             }
-            val selectedRoute = when (val selection = selectDotNetGenericOwnerPhysicalOperationRoute(
-                declarations = ownerAuthority.declarations,
-                selectedMethod = selectedMethod,
-                request = DotNetGenericOwnerPhysicalOperationRouteRequest(requiredView),
-                receiver = receiver,
-                arguments = emptyList(),
-            )) {
+            val selectedRoute = when (val selection =
+                bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError(
+                    call = expression,
+                    physicalOwner = owner,
+                    source = source,
+                    selectedEntry = DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE,
+                    requiredView = requiredView,
+                    authority = ownerAuthority.physicalAuthority,
+                    evaluateValue = { value -> evaluateInitializerOrNull(value, storage) },
+                ) ?: return null) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> selection.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
                     error("Internal .NET backend error: ${selection.reason}")
