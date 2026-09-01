@@ -200,9 +200,23 @@ consumer no longer requires a complete-surface rewrite plan merely to recognize
 a TypeDef which the producer actually emits, and no consumer may independently
 rederive the vector from logical IR.
 
-Storage-placement consumption is now the next value/state boundary. Only after
-that bounded family should the graph grammar widen to properties, class nodes,
-MethodImpls, or Runtime/Stdlib declarations.
+The first authoritative storage-placement consumer is now closed for a direct
+local reference construction whose producer and independently chosen storage
+carrier are exactly the same local `C<!n>` bound to the physical MethodDef
+owner. It consumes final IR-bound facts through an explicit adapter; diagnostic
+snapshots and IR origins are not inputs. The emitter independently reconstructs
+the expected carrier from local TypeDef authority and the physical owner binder,
+then requires the live initializer carrier to agree. The permission therefore
+cannot authorize a cast, semantic adaptation, boxing, nullable materialization,
+field/state choice, or ABI change. Ordinary source aliases and compiler-created
+aliases follow the same rule. Star/projected values, mutable or multiple-write
+locals, foreign/fixed/nested constructions, and split layouts receive no token.
+The previous compiler-origin recognizer remains only as migration fallback.
+
+The next value boundary is explicit transfer and placement through
+representation-changing conversions and control-flow joins. That grammar must
+be proved before widening the consumer to fields, captures, properties, class
+nodes, MethodImpls, or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an

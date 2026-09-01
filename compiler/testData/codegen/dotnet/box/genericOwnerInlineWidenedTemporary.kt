@@ -40,6 +40,18 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
         val nested = { sourceNestedAlias.produce() == element }
         return nested()
     }
+
+    fun starAliasMatches(): Boolean {
+        val sourceStarAlias: InlineProducer<*> = this
+        return sourceStarAlias === this && sourceStarAlias.produce() == value
+    }
+
+    fun mutableAliasTracks(other: InlineProducer<T>): Boolean {
+        var sourceMutableAlias: InlineProducer<Any?> = this
+        if (sourceMutableAlias !== this) return false
+        sourceMutableAlias = other
+        return sourceMutableAlias === other
+    }
 }
 
 // Both implementations share InlineProducer's semantic declaration slot. Their explicit
@@ -72,7 +84,12 @@ fun box(): String {
     if (!strings.nestedAliasMatches("inline") || strings.nestedAliasMatches("other")) {
         return "reference nested alias"
     }
-
+    if (!ints.starAliasMatches() || !strings.starAliasMatches()) return "star alias"
+    val otherInts = InlineSecondView(7)
+    val otherStrings = InlineSecondView("other")
+    if (!ints.mutableAliasTracks(otherInts) || !strings.mutableAliasTracks(otherStrings)) {
+        return "mutable alias"
+    }
     // A source-declared wide variable remains a semantic Kotlin view. In particular, its
     // physical carrier must not be pinned to the first exact value by the temporary fast path.
     var widened: InlineProducer<Any?> = ints
@@ -82,7 +99,7 @@ fun box(): String {
 
     // Execute the second implementation through the same shared semantic declaration slot. Its
     // private MethodImpl body must remain distinct from InlineSelfView's dispatcher.
-    val secondExact = InlineSecondView(7)
+    val secondExact = otherInts
     val second: InlineProducer<Any?> = secondExact
     if (second !== secondExact || second.produce() != 7) return "second implementation"
 

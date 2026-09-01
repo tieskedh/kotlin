@@ -779,6 +779,17 @@ object DotNetBackend {
             } else {
                 null
             }
+        val genericOwnerPhysicalValueLocalPlacementAuthority =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                when (val binding = context.genericOwnerPhysicalValueLocalPlacementAuthority) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                }
+            } else {
+                null
+            }
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -809,6 +820,8 @@ object DotNetBackend {
                     genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                     genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
                     localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
+                    genericOwnerPhysicalValueLocalPlacementAuthority =
+                        genericOwnerPhysicalValueLocalPlacementAuthority,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                     publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                     reifiedGenericInterfacePhysicalVariances =
@@ -980,6 +993,8 @@ object DotNetBackend {
                 genericOwnerRehearsal = configuration.dotNetGenericOwnerRehearsal,
                 genericOwnerArchitecturePlans = context.genericOwnerArchitecturePlans,
                 localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
+                genericOwnerPhysicalValueLocalPlacementAuthority =
+                    genericOwnerPhysicalValueLocalPlacementAuthority,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                 publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                 reifiedGenericInterfacePhysicalVariances =

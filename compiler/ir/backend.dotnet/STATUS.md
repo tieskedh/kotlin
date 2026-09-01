@@ -74,6 +74,17 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
+The first final physical-value fact now has an authoritative emitter consumer.
+For one direct local, owner-bound reference construction, final value flow may
+retain the initializer's already-produced `C<!n>` carrier only when the
+independently selected local storage carrier is exactly equal. The emitter then
+reconstructs that carrier from the physical MethodDef owner and checks it against
+the live initializer before selecting the slot. Source and compiler-owned
+immutable aliases therefore share one origin-independent rule; star/projected
+and mutable/multiple-write controls receive no token. The model test and focused
+candidate plus erased-inverse matrix are green; exact evidence is in the
+[local-placement archive](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md).
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -98,11 +109,17 @@ across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
-The local natural-TypeDef variance record is now shared by declaration binding
-and emission. It neither changes candidate CIL nor broadens interface admission;
-it prevents an already selected and emitted TypeDef from disappearing when a
-later physical query requires authority. Storage-placement consumption remains
-the next boundary.
+The first local storage-placement consumer now binds final IR value records to
+one identity-keyed permission and independently verifies the live emitter
+carrier. It neither reconstructs a slot from logical Kotlin type nor authorizes
+conversion, adaptation, boxing, state, or ABI changes. The older compiler-origin
+recognizer remains only as migration fallback for transfer shapes the shared
+model has not yet derived.
+
+The next consolidation boundary is explicit value transfer and placement across
+representation-changing conversions and control-flow joins. Fields, captures,
+foreign/fixed/nested carriers, stars/projections, and split-nullable layouts stay
+outside this first consumer rather than acquiring local exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the

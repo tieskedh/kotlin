@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteNatural
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfacePolarity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueLocalPlacementAuthority
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
@@ -2827,6 +2828,14 @@ internal class DotNetGenericOwnerFinalRoutingLowering(
             }
             DotNetGenericOwnerPhysicalValueShadowAnalysis(context).analyze(irModule)
             DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(context).analyze(irModule)
+            context.genericOwnerPhysicalValueLocalPlacementAuthority =
+                DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
+                    context.genericOwnerPhysicalValueShadowRecords,
+                ).also { placement ->
+                    if (placement is DotNetGenericOwnerPhysicalBindingResult.Conflict) {
+                        error("Internal .NET backend error: ${placement.reason}")
+                    }
+                }
         }
     }
 }

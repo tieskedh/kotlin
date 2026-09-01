@@ -123,6 +123,7 @@ data class DotNetGenericOwnerPhysicalValueShadowFamilySnapshot(
 enum class DotNetGenericOwnerPhysicalValueLocalSelectionKind {
     DECLARED_TYPE,
     EXACT_ARRAY_OVERRIDE,
+    PHYSICAL_VALUE_RETAINED_PRODUCER,
     EXACT_GENERIC_OWNER_OVERRIDE,
     OPEN_NULLABLE_ARRAY_OVERRIDE,
     NESTED_GENERIC_CONSTRUCTION_OVERRIDE,

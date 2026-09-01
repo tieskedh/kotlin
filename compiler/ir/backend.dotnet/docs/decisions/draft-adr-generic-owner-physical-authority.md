@@ -419,6 +419,17 @@ is not an additional lattice dimension and must not affect convergence.
   substitutions. It does not grant exactness merely because the inliner created
   a temporary.
 
+The first authoritative placement consumer implements only the smallest direct
+case of these rules. A final IR record may mint an identity-keyed local token
+when `ProducedLayout` and `StorageLayout` are the same direct, reference-shaped,
+local construction, every argument is an owner type parameter bound to the
+physical MethodDef owner, and no transfer is required. The emitter does not trust
+the token's carrier blindly: it reconstructs the construction from declaration
+authority and the live physical owner, observes the initializer independently,
+and fails closed on disagreement. Diagnostic snapshots and IR origins cannot
+mint the token. Unsupported records grant no authority; contradictory duplicate
+final records are `Conflict`.
+
 #### Joins
 
 - Logical Kotlin type joining and verifier-valid carrier placement are separate.
@@ -595,7 +606,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `ec04adb7` erased bootstrap interface edges | a TypeDef may mention only generic binders it physically owns | **Fundamental; retain.** This is a metadata validity guard, not an optimization recognizer. |
 | `8dd5800d` closed semantic interface inputs | a broad parameter may enter a semantic domain without erasing unrelated exact receiver/state facts | **Temporary proof restriction.** The current final/non-generic and paired-body slice should generalize to entry-environment facts plus independent parameter domains. |
 | `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
-| `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable and removable.** IR origin and compiler ownership are not evidence; ordinary reaching-definition, placement, and binder-safe inlining rules must derive the result. |
+| `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; first authoritative consumer landed.** The shared final-fact adapter now derives the direct equal-carrier case for both source and compiler-owned aliases without IR-origin evidence. The old recognizer remains migration fallback until conversion, join, and remaining carrier shapes are derived. |
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
 | `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Temporary proof restriction, then removable.** Parameterlessness is conservative; the general condition is that no argument or semantic input selects an incompatible result construction. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
@@ -1151,8 +1162,11 @@ binders retain their exact construction while ordinary variant classes,
 unmarked producer records, value arguments, and caller-authored delegate facts
 fail closed. This declaration proof does not claim producer-side delegate
 synthesis, constrained producer delegate rows, delegate members, or operation
-routing. Storage placement is the next separate boundary; this is not another
-shape-specific state recognizer or a resumed stdlib census.
+routing. The first direct equal-carrier local placement now consumes final value
+facts through an explicit authority adapter. It covers only local owner-bound
+reference `C<!n>` carriers and independently checks the live emitter mapping;
+the next boundary is explicit conversion/join transfer, not another state or
+stdlib recognizer.
 
 ## Consequences
 

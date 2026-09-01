@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-local-storage-consumption-2026-09-01.md`](generic-owner-physical-local-storage-consumption-2026-09-01.md)
+  records the first authoritative final-value-to-local-placement consumer: one
+  direct equal local owner-bound `C<!n>` carrier, independent live-emitter
+  validation, origin-independent source/compiler aliases, hostile star and
+  mutable exclusions, semantic-route preservation, and the exact erased inverse.
 - [`generic-owner-local-natural-variance-authority-2026-09-01.md`](generic-owner-local-natural-variance-authority-2026-09-01.md)
   records the rehearsal-only repair which fixes one producer-selected CLR
   `GenericParam` variance vector for every admitted local natural TypeDef,
