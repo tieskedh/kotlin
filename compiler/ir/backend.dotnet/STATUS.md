@@ -60,10 +60,9 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 inherited-interface, binder-forwarding, and lazy TypeDef transport authority.
 The current focused evidence compiles the importer and test fixture, retains
-the 40-test metadata model gate, and runs the same-assembly, cross-assembly,
-multiple-edge, and multiple-owner-view memberless external-DLL pipelines with
-both FIR parsers. The resulting focused totals are recorded below; Git owns the
-intermediate chronology.
+the 42-test metadata model gate, and runs five memberless external-DLL pipelines
+with both FIR parsers. The resulting focused totals are recorded below; Git owns
+the intermediate chronology.
 
 ## Production binding state
 
@@ -144,6 +143,13 @@ lineage may select either guaranteed view, but cannot manufacture
 `Source<object>`. The adapter re-resolves raw metadata in the same assembly
 graph, rejects retained disagreement, and never promotes a derived base view
 into new provenance. Ambiguous or genuinely broad receivers remain unavailable.
+When a receiver's sole edge does not yet reach the MethodDef owner, one
+additional memberless interface may supply the exact edge. That intermediate
+has its own authenticated TypeDef, zero or one unconstrained binder, no fields,
+methods, properties, base class, or MethodImpl, and exactly one retained/raw
+`InterfaceImpl` to the MethodDef owner. Its binder is not borrowed from the
+leaf: ordinary physical-closure substitution derives
+`IntSource -> ForwardingSource<int> -> Source<int>` across three assemblies.
 The shared route independently admits arguments and produces the instantiated
 direct, void, or split-nullable result fact.
 
@@ -157,29 +163,29 @@ identity. Other targets retain the previous null metadata behavior.
 
 The production importer now accepts a complete interface contract with no
 declared public callable. Resource-free external CLR DLLs prove same-assembly,
-cross-assembly, multiple-edge, and multiple-owner-view
+cross-assembly, multiple-edge, multiple-owner-view, and one-intermediate
 FIR-to-lazy-FIR2IR-to-CIL paths. The hostile multiple-edge child records
 `Marker` before `Source<int>`; invocation still targets the parent's retained
 `Read` MethodDef. A second child implements both `Source<int>` and
 `Source<bool>`; explicitly typed Kotlin locals invoke each exact constructed
-slot. All exact views return by plain `ldarg.0; ret`. No registry, fake member,
-copied MethodDef, name lookup, row-order selection, cast, wrapper, or fabricated
-construction is used.
+slot. The deep child closes the intermediate binder at `int32`; direct and
+selected calls still target the original parent MethodDef. All exact views
+return by plain `ldarg.0; ret`. No registry, fake member, copied MethodDef, name
+lookup, row-order selection, cast, wrapper, or fabricated construction is used.
 
-The next retained-foreign boundary is one additional memberless interface hop,
-including a separate-assembly chain. Every intermediate TypeDef and
-`InterfaceImpl` must be authenticated from retained metadata, physical closure
-must derive the final owner construction by substitution, and invocation must
-still target the original parent MethodDef. No logical supertype reconstruction
-or member-name search may fill a missing intermediate edge. Multiple members or
-binders, variance conversions, constraints, classes, MethodImpls, and
-Runtime/Stdlib application remain later.
+The next retained-foreign boundary replaces the one-hop admission with a
+resource-bounded recursive authentication of an acyclic memberless interface
+graph. Every visited TypeDef, binder, and `InterfaceImpl` must remain retained
+metadata authority; physical closure must do all substitution, and branching or
+depth may never authorize a route by logical-supertype or member-name search.
+Multiple members or binders, variance conversions, constraints, classes,
+MethodImpls, and Runtime/Stdlib application remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The current focused gate passed the retained-metadata model suite (40 tests)
-and all four memberless pipelines under both FIR parsers (8 tests), with zero
+The current focused gate passed the retained-metadata model suite (42 tests)
+and all five memberless pipelines under both FIR parsers (10 tests), with zero
 failures, errors, or skips.
 
 ## Current blockers
@@ -188,18 +194,21 @@ failures, errors, or skips.
   members/inputs, properties/defaults, constraints, method generics, deeper
   inheritance, explicit MethodImpls, value-class payloads, and Runtime/Stdlib
   application are not yet closed.
-- Declaration and implementation authority is not yet closed for deeper base
-  chains or multiple/distinct constructed views.
+- Declaration and implementation authority is not yet closed for arbitrary
+  deeper or branching base graphs. Distinct constructions are retained, but
+  selecting one still requires independently proven lineage.
 - Retained foreign CLR declaration authority remains bounded to an open root
   interface, one selected MethodDef, and either its root receiver or one
   memberless child interface with at most one unconstrained binder and at most
   two exact `InterfaceImpl` rows, in the same selected graph but not necessarily
   the same assembly. A second edge may be a non-generic root interface or a
-  distinct construction of the MethodDef owner. More than two rows, a dual-owner
-  plus auxiliary combination, generic or deeper auxiliary hierarchies,
-  multiple binders or members, variance conversions, constraints, classes,
-  MethodImpls, wider nominal carriers, and broader operation routing remain
-  incomplete.
+  distinct construction of the MethodDef owner. If the leaf has one edge and no
+  direct owner edge, that edge may pass through exactly one separately
+  authenticated memberless zero/one-binder interface whose sole edge reaches
+  the owner. More than two leaf rows, deeper or branching intermediate graphs,
+  a dual-owner plus auxiliary combination, multiple binders or members,
+  variance conversions, constraints, classes, MethodImpls, wider nominal
+  carriers, and broader operation routing remain incomplete.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

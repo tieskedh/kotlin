@@ -117,12 +117,20 @@ no cast or adapter. A dual child now retains both `Source<int>` and
 `Source<bool>`. Without a unique already-proven view its operation is
 unavailable; selected lineage can choose either guaranteed construction but
 cannot invent another. The actual importer and emitter call both exact slots
-without casts, wrappers, or `object` carriers. The next ordered boundary adds
-one authenticated memberless intermediate interface, including across an
-assembly edge, so transitive physical closure rather than logical-supertype or
-name reconstruction derives the MethodDef owner view. MethodImpls, multiple
-binders/members, variance conversions, constraints, classes, and Runtime/Stdlib
-application remain later.
+without casts, wrappers, or `object` carriers. One authenticated memberless
+generic intermediate is now admitted as well. A three-assembly fixture closes
+its own binder at `int32`; transitive physical closure derives the final owner
+view and invocation still targets the original parent MethodDef. Missing
+intermediate hierarchy authority fails closed.
+
+The next ordered boundary replaces that one-hop proof restriction with one
+resource-bounded recursive walk over an acyclic memberless interface graph.
+Every visited TypeDef, GenericParam binder, and complete edge set must be
+authenticated independently before the existing physical closure substitutes
+it. Depth and branching must not introduce logical-supertype reconstruction,
+row-order selection, member-name search, or fabricated constructions.
+MethodImpls, multiple binders/members, variance conversions, constraints,
+classes, and Runtime/Stdlib application remain later.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;
