@@ -804,25 +804,39 @@ The first inherited-receiver grammar admits one public top-level abstract
 interface with an exact retained TypeDef carrier in the same selected assembly
 graph. It may declare no callable. It has zero or one unconstrained type
 parameter whose exact CLR variance is retained, no base class, no MethodImpl,
-and a complete set of one or two retained and raw `InterfaceImpl` rows. Exactly
-one row reaches the selected MethodDef owner by retained TypeDef identity. An
-optional second row may target an independently authenticated public,
-non-generic root interface; that target receives its own TypeDef authority and
-complete empty edge set. Receiver and targets may reside in different selected
-assemblies. Each raw TypeSpec must bind through its exact AssemblyRef identity;
-an unbound or mismatched reference is a declaration conflict rather than
-permission to search by name. The owner edge may close the selected MethodDef
-owner with supported declaration-independent carriers or reference the child
-`!0`, recursively through the admitted SZ-array carrier. The adapter resolves
-the receiver's exact open GenericParam context, re-resolves every raw edge, and
-requires exact retained/raw agreement. It records the child binder on its own
-TypeDef and retains the entire direct edge set as an unordered physical set;
-ordinary physical-closure substitution derives `Base<int>` from `Child<int>`.
+and a complete set of one or two retained and raw `InterfaceImpl` rows. At least
+one row reaches the selected MethodDef owner by retained TypeDef identity. If
+only one row reaches that owner, an optional second row may target an
+independently authenticated public, non-generic root interface; that target
+receives its own TypeDef authority and complete empty edge set. Alternatively,
+both rows may reach the MethodDef owner as distinct exact constructions. Two
+identical physical edges contradict the complete metadata set and are
+`Conflict`, not an ambiguous value fact. Receiver and targets may reside in
+different selected assemblies. Each raw TypeSpec must bind through its exact
+AssemblyRef identity; an unbound or mismatched reference is a declaration
+conflict rather than permission to search by name. An owner edge may close the
+selected MethodDef owner with supported declaration-independent carriers or
+reference the child `!0`, recursively through the admitted SZ-array carrier.
+The adapter resolves the receiver's exact open GenericParam context, re-resolves
+every raw edge, and requires exact retained/raw agreement. It records the child
+binder on its own TypeDef and retains the entire direct edge set as an unordered
+physical set; ordinary physical-closure substitution derives `Base<int>` from
+`Child<int>`.
+
+When two distinct owner constructions remain in that closure, declaration
+authority proves both views but selects neither operation view. A receiver with
+no selected lineage therefore produces `Unavailable`. Existing lineage may
+select either construction only after the closure independently guarantees it;
+it cannot manufacture a third construction. InterfaceImpl row order never
+breaks the tie. The external-DLL pipeline proves this with one memberless child
+implementing both `Source<int>` and `Source<bool>` and exact typed calls through
+both selected Kotlin locals.
+
 No logical type or InterfaceImpl row order participates. Additional binders,
-multiple selected-owner views, generic or deeper auxiliary interfaces,
-constraints, variance conversions, classes, MethodImpls, unsupported carrier
-leaves, and hierarchy disagreement remain unavailable or conflicting according
-to the ordinary validity boundary.
+more than two direct edges, a dual-owner plus auxiliary combination, generic or
+deeper auxiliary interfaces, constraints, variance conversions, classes,
+MethodImpls, unsupported carrier leaves, and hierarchy disagreement remain
+unavailable or conflicting according to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical

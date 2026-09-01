@@ -26878,6 +26878,11 @@ private class DotNetEnvironmentConfigurator(
                 configuration::addDotNetClasspathRoot,
             )
         }
+        if (DotNetCodegenDirectives.DOTNET_FOREIGN_MULTIPLE_OWNER_VIEW_INTERFACE in module.directives) {
+            getOrCreateForeignMultipleOwnerViewInterfaces().forEach(
+                configuration::addDotNetClasspathRoot,
+            )
+        }
         configuration.dotNetFriendPaths = module.friendDependencies
             .filter { dependency -> dependency.kind == DependencyKind.Binary }
             .map { dependency ->
@@ -26971,6 +26976,20 @@ private class DotNetEnvironmentConfigurator(
             ),
         )
 
+    private fun getOrCreateForeignMultipleOwnerViewInterfaces(): List<File> =
+        listOf(
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-multiple-owner-view-interface",
+                assemblyName = "Foreign.Dual.Parent",
+                sourceText = FOREIGN_MULTIPLE_OWNER_VIEW_PARENT_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-multiple-owner-view-interface",
+                assemblyName = "Foreign.Dual.Child",
+                sourceText = FOREIGN_MULTIPLE_OWNER_VIEW_CHILD_IL,
+            ),
+        )
+
     private fun getOrCreateResourceFreeForeignAssembly(
         directoryName: String,
         assemblyName: String,
@@ -27059,6 +27078,9 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     )
     val DOTNET_FOREIGN_MULTIPLE_EDGE_MEMBERLESS_INTERFACE by directive(
         "Add CLR assemblies whose memberless child retains two exact inherited interfaces"
+    )
+    val DOTNET_FOREIGN_MULTIPLE_OWNER_VIEW_INTERFACE by directive(
+        "Add CLR assemblies whose memberless child retains two constructions of one interface"
     )
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
@@ -27163,6 +27185,41 @@ private val FOREIGN_MULTIPLE_EDGE_CHILD_IL = """
       .class interface public abstract auto ansi 'IntSource'
              implements [Foreign.Multiple.Parent]Foreign.Multiple.Marker,
                         class [Foreign.Multiple.Parent]'Foreign.Multiple.Source`1'<int32>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_MULTIPLE_OWNER_VIEW_PARENT_IL = """
+    .assembly extern mscorlib {}
+    .assembly 'Foreign.Dual.Parent' {}
+    .module 'Foreign.Dual.Parent.dll'
+
+    .namespace Foreign.Dual
+    {
+      .class interface public abstract auto ansi 'Source`1'<+ T>
+      {
+        .method public hidebysig newslot abstract virtual instance !T 'Read'() cil managed
+        {
+        }
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_MULTIPLE_OWNER_VIEW_CHILD_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Dual.Parent'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Dual.Child' {}
+    .module 'Foreign.Dual.Child.dll'
+
+    .namespace Foreign.Dual
+    {
+      .class interface public abstract auto ansi 'DualSource'
+             implements class [Foreign.Dual.Parent]'Foreign.Dual.Source`1'<int32>,
+                        class [Foreign.Dual.Parent]'Foreign.Dual.Source`1'<bool>
       {
       }
     }

@@ -98,12 +98,13 @@ The first inherited grammar authenticates one child interface with an exact
 TypeDef carrier, zero or one unconstrained parameter with exact CLR variance,
 and a complete set of one or two `InterfaceImpl` rows in the same selected
 graph. Parent and child may reside in different assemblies; every raw edge must
-bind through its exact AssemblyRef. Exactly one edge reaches the selected
-MethodDef owner. An optional second edge is independently authenticated as a
-non-generic root interface and remains in the closure. The carrier is
-independent of declared members; the hostile child has no marker MethodDef. The
-owner edge may close the root owner or forward the child binder through the
-admitted carrier grammar.
+bind through its exact AssemblyRef. At least one edge reaches the selected
+MethodDef owner. With one owner edge, an optional second edge is independently
+authenticated as a non-generic root interface and remains in the closure. Both
+edges may instead be distinct exact constructions of the MethodDef owner;
+duplicates conflict. The carrier is independent of declared members; the
+hostile child has no marker MethodDef. An owner edge may close the root owner or
+forward the child binder through the admitted carrier grammar.
 Recorded physical substitution, rather than a logical Kotlin type, derives each
 concrete parent view. A narrow target hook now transports that class-level
 carrier through lazy external FIR2IR as compilation-local class metadata;
@@ -112,11 +113,16 @@ separate. Resource-free external DLLs now prove same-assembly, cross-assembly,
 and multiple-edge memberless children through the actual compiler pipeline.
 The hostile two-edge child records `Marker` before `Source<int>`; the call still
 targets the parent's retained MethodDef by identity and both exact views require
-no cast or adapter. The next ordered boundary retains two distinct constructions
-of the selected MethodDef owner, requires an already-proven selected lineage to
-disambiguate them, and proves that lineage cannot create a missing view.
-MethodImpls, multiple binders/members, variance conversions, constraints,
-classes, and Runtime/Stdlib application remain later.
+no cast or adapter. A dual child now retains both `Source<int>` and
+`Source<bool>`. Without a unique already-proven view its operation is
+unavailable; selected lineage can choose either guaranteed construction but
+cannot invent another. The actual importer and emitter call both exact slots
+without casts, wrappers, or `object` carriers. The next ordered boundary adds
+one authenticated memberless intermediate interface, including across an
+assembly edge, so transitive physical closure rather than logical-supertype or
+name reconstruction derives the MethodDef owner view. MethodImpls, multiple
+binders/members, variance conversions, constraints, classes, and Runtime/Stdlib
+application remain later.
 Broader state shapes and multi-member or Runtime/Stdlib callable application
 remain later extensions of the same model. A bounded slice may stop emitting a
 comparison surface only after downstream owner closure is an epoch invariant;
