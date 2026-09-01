@@ -201,73 +201,31 @@ and state unchanged. The record deliberately supplies no delegate member or
 operation authority. Producer-side delegate synthesis and constrained producer
 delegate rows remain later schema/emission work.
 
-Every admitted local natural interface now records its producer-selected
-physical variance vector at the same admission point. Both the BOUND declaration
-index and emitter consume that record, including older bounded families whose
-already-selected physical vector equals their declaration variance. A later
-consumer no longer requires a complete-surface rewrite plan merely to recognize
-a TypeDef which the producer actually emits, and no consumer may independently
-rederive the vector from logical IR.
+Physical authority and value provenance remain the active prerequisite to the
+source-built Stdlib census. Five bounded local-placement forms are executable
+evidence: equal direct carriers, one unique recorded control-flow construction,
+bare or constructed current-owner parameter entries, a parameterless natural
+`Direct(!n)` result, and a parameterless natural `SplitNullable(!n, bool)`
+result retained in two private locals for one direct unprotected return. Local
+producer members are bound to published contracts by declaration identity;
+separate consumers use validated producer records. Exact rules and current
+evidence belong in the owning ADR and `STATUS.md`, not in this route map.
 
-Authoritative local placement is now closed for four bounded forms. First,
-producer and independently chosen storage may be the same local `C<!n>` bound
-to the physical MethodDef owner. Second, an exhaustive `IrWhen`
-may preserve an identical direct carrier or select the unique construction in
-one interface family which every reaching arm already possesses through
-recorded physical edges. The logical result classifier selects only the family;
-it cannot prove a construction. Equal selected lineage may disambiguate a view
-only after the shared closure proves it, while ordinary ambiguity is unavailable
-dataflow precision rather than declaration conflict. The emitter reconstructs
-the selected carrier and either checks the whole initializer or emits every
-control-flow arm against that fixed boundary. Third, a regular parameter whose
-role-specific physical entry prototype is exactly one parameter of the current
-owner, or one admitted natural interface construction whose complete argument
-vector consists of current-owner parameters, may produce and store that same
-`!n` or `I<!n,...>`. The emitter admits it only when the live direct parameter
-read has the identical owner-bound carrier. A paired semantic hook is analyzed
-from its own prototype, so an object-domain entry does not inherit the typed
-entry's fact. Fourth, a parameterless, non-method-generic
-natural MethodDef may produce its authority-recorded `Direct` result through an
-already-guaranteed receiver construction and retain the same owner-bound `!n`
-in an immutable local. An existing semantic route vetoes this transfer; the
-older route census need not contain an ordinary natural call. The emitter must
-independently resolve the live call to the same result carrier. Diagnostic
-snapshots, logical source types, IR origins, names, and stdlib identity are not
-physical authority.
+These proofs authorize no cast, semantic adaptation, field/state choice, ABI
+change, or fabricated construction. The split pair is not general local state:
+argument-bearing and MethodSpec calls, multiple consumers, control-flow joins,
+captures, fields, and exception-protected returns still use their independently
+proven layout or the ordinary materializing boundary. Star/projected or truly
+broad source values never gain exact authority from a logical type.
 
-These permissions authorize no cast, semantic adaptation, boxing, nullable
-materialization, field/state choice, or ABI change. Ordinary source aliases and
-compiler-created aliases follow the same rules. Star/projected values, mutable
-or multiple-write locals, unknown/null/bottom arms, non-exhaustive control flow,
-foreign/fixed/nested constructions, argument-bearing or MethodSpec call
-results, and split layouts receive no corresponding **local-placement** token.
-An exact operation may consume final receiver/value facts and one complete
-current-owner MethodSpec vector without materializing its result in a local.
-The previous compiler-origin recognizer remains only as migration fallback.
-
-Exact typed parameter entry is closed for a bare current-owner parameter and
-for an admitted natural construction whose invariant argument vector contains
-only current-owner parameters. The first exact local result transfer remains
-closed to a parameterless natural MethodDef with one `Direct` result. The first
-exact operation now composes owner-dependent arguments with a split-nullable
-result and independently binds a generic MethodDef's exact MethodSpec vector
-when every entry is a non-null bare parameter of the current physical class.
-Caller-MethodDef, concrete, constrained, nullable, nested, and foreign
-MethodSpec carriers remain unavailable. The declaration grammar now composes
-one direct unconstrained MethodDef binder with the strict owner input and
-split-nullable output, and separate consumers use the same producer-recorded
-MethodDef. Next materialize split-nullable results across local/control-flow
-boundaries and complete the remaining parameter-entry forms. Then extend joins
-to null, bottom, and unknown arms and make representation-changing conversions
-explicit. Prove those grammars before widening the consumer to fields,
-captures, properties, class nodes, MethodImpls, or Runtime/Stdlib declarations.
-
-Broader state shapes remain later extensions of the same model. A bounded slice
-may stop emitting a comparison surface only after downstream owner closure is an
-epoch invariant; complete removal still waits for the selected-family freeze
-and hostile inverse. Generic-child-capability to separately owned base-
-capability conversion remains an independent interface-routing proof, not part
-of Stages 6 or 7.
+The next sequence is: extend split-pair retention to justified argument-bearing
+or MethodSpec calls, multiple consumers, and control-flow joins; close remaining
+parameter-entry forms; then prove null/bottom/unknown joins and explicit
+representation-changing conversions. Only after those value rules stabilize
+should the consumer widen to captures, properties, class nodes, MethodImpls, or
+new Runtime/Stdlib declarations. Broader state remains a separate producer-wide
+proof. A comparison surface may disappear only after downstream owner closure
+is an epoch invariant and its hostile erased inverse remains exact.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to

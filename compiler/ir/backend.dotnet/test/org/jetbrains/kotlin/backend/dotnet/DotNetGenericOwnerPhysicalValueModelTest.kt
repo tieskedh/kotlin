@@ -3041,14 +3041,18 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     fun `every admitted storage fact can produce a valid read fact`() {
         assertFailsWith<IllegalArgumentException> {
             DotNetGenericOwnerPhysicalStorageFact(
-                DotNetGenericOwnerStorageCarrier.Fixed(int32Carrier()),
+                DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                    DotNetGenericOwnerStorageCarrier.Fixed(int32Carrier()),
+                ),
                 unknownProvenance(),
                 DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
             )
         }
         assertFailsWith<IllegalArgumentException> {
             DotNetGenericOwnerPhysicalStorageFact(
-                DotNetGenericOwnerStorageCarrier.Fixed(int32Carrier()),
+                DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                    DotNetGenericOwnerStorageCarrier.Fixed(int32Carrier()),
+                ),
                 DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews(),
                 DotNetGenericOwnerPhysicalNullState.NULL,
             )
@@ -3105,7 +3109,9 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val localCarrier = boundCarrier(localDeclarations, construction)
         val localProduced = directValue(localCarrier, knownProvenance(view(construction)))
         val localStorage = DotNetGenericOwnerPhysicalStorageFact(
-            DotNetGenericOwnerStorageCarrier.Fixed(localCarrier),
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(localCarrier),
+            ),
             localProduced.provenance,
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
         )
@@ -3119,7 +3125,9 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
         )
         val parameterStorage = DotNetGenericOwnerPhysicalStorageFact(
-            DotNetGenericOwnerStorageCarrier.Fixed(ownerParameterCarrier),
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(ownerParameterCarrier),
+            ),
             parameterProduced.provenance,
             DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
         )
@@ -3139,9 +3147,11 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 phase = DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING,
                 variableName = "value",
                 status = DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED,
+                initializerProducedLayout = DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT,
                 initializerProducedCarrier = DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
                     DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
                 ),
+                storageLayout = DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT,
                 storageCarrier = DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
                     DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
                 ),
@@ -3193,7 +3203,9 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val foreignCarrier = referenceCarrier(source(int32Type()))
         val foreignProduced = directValue(foreignCarrier)
         val foreignStorage = DotNetGenericOwnerPhysicalStorageFact(
-            DotNetGenericOwnerStorageCarrier.Fixed(foreignCarrier),
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(foreignCarrier),
+            ),
             foreignProduced.provenance,
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
         )
@@ -3268,7 +3280,9 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     fun `a constructed storage carrier guarantees its own view on read`() {
         val sourceInt = source(int32Type())
         val stored = DotNetGenericOwnerPhysicalStorageFact(
-            DotNetGenericOwnerStorageCarrier.Fixed(referenceCarrier(sourceInt)),
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(referenceCarrier(sourceInt)),
+            ),
             unknownProvenance(),
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
         )
@@ -3399,6 +3413,127 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         assertIs<DotNetGenericOwnerProducedValueLayout.Unknown>(
             split.join(nullValue(), ::truthfulCommonCarrier).layout,
         )
+    }
+
+    @Test
+    fun `split nullable placement preserves its payload and null flag layout`() {
+        val payload = boundCarrier(boundTypeParameter(declarationIndex, lookupOwner, 1))
+        val split = DotNetGenericOwnerProducedValueFact(
+            layout = DotNetGenericOwnerProducedValueLayout.SplitNullable(payload),
+            provenance = unknownProvenance(),
+            nullState = DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+        )
+        val storageLayout = DotNetGenericOwnerPhysicalStorageLayout.SplitNullable(
+            DotNetGenericOwnerStorageCarrier.Fixed(payload),
+        )
+
+        val stored = split.placeInStorageOrNull(
+            storageLayout,
+            ::canStoreIdentityPreserving,
+        )!!
+
+        assertEquals(split, stored.read().value)
+        assertNull(
+            directValue(payload).placeInStorageOrNull(
+                storageLayout,
+                ::canStoreIdentityPreserving,
+            ),
+        )
+        assertNull(
+            nullValue().placeInStorageOrNull(
+                storageLayout,
+                ::canStoreIdentityPreserving,
+            ),
+        )
+        assertNull(
+            split.copy(
+                layout = DotNetGenericOwnerProducedValueLayout.SplitNullable(objectCarrier()),
+            ).placeInStorageOrNull(
+                storageLayout,
+                ::canStoreIdentityPreserving,
+            ),
+        )
+        assertNull(stored.joinAlternativeWrite(split, ::canStoreIdentityPreserving))
+        assertNull(stored.overwriteOrNull(split, ::canStoreIdentityPreserving))
+
+        val construction = source(int32Type())
+        val constructedPayload = boundCarrier(declarationIndex, construction)
+        val constructedSplit = split.copy(
+            layout = DotNetGenericOwnerProducedValueLayout.SplitNullable(constructedPayload),
+            provenance = unknownProvenance(),
+        )
+        val constructedRead = constructedSplit.placeInStorageOrNull(
+            DotNetGenericOwnerPhysicalStorageLayout.SplitNullable(
+                DotNetGenericOwnerStorageCarrier.Fixed(constructedPayload),
+            ),
+            ::canStoreIdentityPreserving,
+        )!!.read().value
+        val constructedViews = assertIs<DotNetGenericOwnerGuaranteedViews.Known>(
+            constructedRead.provenance.guaranteedViews,
+        )
+        assertEquals(
+            setOf(DotNetGenericOwnerPhysicalViewEvidence.STORAGE_READ),
+            constructedViews.evidenceByView[view(construction)],
+        )
+    }
+
+    @Test
+    fun `split local payload must match the enclosing owner parameter`() {
+        val key = boundCarrier(boundTypeParameter(declarationIndex, lookupOwner, 0))
+        val value = boundCarrier(boundTypeParameter(declarationIndex, lookupOwner, 1))
+        val produced = DotNetGenericOwnerProducedValueFact(
+            layout = DotNetGenericOwnerProducedValueLayout.SplitNullable(value),
+            provenance = unknownProvenance(),
+            nullState = DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+        )
+        val carriers = listOf(key, value)
+
+        assertNull(
+            splitNullableOwnerParameterStorageLayoutOrNull(
+                produced,
+                localOwnerParameterIndex = 1,
+                enclosingOwnerParameterIndex = 0,
+                ownerParameterCarriers = carriers,
+            ),
+            "a logical B? local must not retain !B+bool for an enclosing !A+bool MethodDef",
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalStorageLayout.SplitNullable(
+                DotNetGenericOwnerStorageCarrier.Fixed(value),
+            ),
+            splitNullableOwnerParameterStorageLayoutOrNull(
+                produced,
+                localOwnerParameterIndex = 1,
+                enclosingOwnerParameterIndex = 1,
+                ownerParameterCarriers = carriers,
+            ),
+        )
+    }
+
+    @Test
+    fun `split local use summary admits only one unprotected direct return`() {
+        fun summary(
+            reads: Int,
+            ownReturns: Int,
+            otherReturns: Int = 0,
+            protectedReturns: Int = 0,
+        ) = DotNetGenericOwnerPhysicalSplitLocalUseSummary(
+            readCount = reads,
+            directFunctionReturnCount = ownReturns,
+            directOtherReturnCount = otherReturns,
+            protectedRegionReturnCount = protectedReturns,
+            returnValueKinds = setOf("IrGetValueImpl"),
+        )
+
+        assertTrue(summary(reads = 1, ownReturns = 1).isSingleDirectFunctionReturn)
+        listOf(
+            summary(reads = 1, ownReturns = 0),
+            summary(reads = 2, ownReturns = 1),
+            summary(reads = 1, ownReturns = 0, otherReturns = 1),
+            summary(reads = 1, ownReturns = 1, protectedReturns = 1),
+        ).forEach { hostile ->
+            assertFalse(hostile.isSingleDirectFunctionReturn, hostile.toString())
+        }
     }
 
     @Test

@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResu
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueProvenance
@@ -30,6 +31,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowGuaranteeState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueLayoutKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowNullState
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowSelectedViewSnapshot
@@ -40,10 +42,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.hasSingleDirectReturnUseIn
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
 import org.jetbrains.kotlin.backend.dotnet.selectRecordedPhysicalInterfaceViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.splitNullableOwnerParameterStorageLayoutOrNull
+import org.jetbrains.kotlin.backend.dotnet.splitLocalUseSummaryIn
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -347,8 +352,22 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             }
             val selection = selectStorageCarrierOrNull(variable, produced, ownerAuthority)
             if (selection == null) {
+                val splitDiagnostic = if (
+                    produced.layout is DotNetGenericOwnerProducedValueLayout.SplitNullable &&
+                    variable.type.nullableCurrentOwnerParameterIndexOrNull(owner) != null
+                ) {
+                    val use = variable.splitLocalUseSummaryIn(physical)
+                    "; split use reads=${use.readCount}, direct function returns=" +
+                            "${use.directFunctionReturnCount}, direct other returns=" +
+                            "${use.directOtherReturnCount}, protected returns=" +
+                            "${use.protectedRegionReturnCount}, return values=${use.returnValueKinds}, " +
+                            "enclosing split=${physical in context.splitNullableResultPayloadTypes}"
+                } else {
+                    ""
+                }
                 records += diagnostic.unsupported(
-                    "deferred storage has no independently proven direct reference carrier",
+                    "deferred storage has no independently proven direct reference carrier" +
+                            splitDiagnostic,
                 )
                 return false
             }
@@ -374,6 +393,23 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             produced: DotNetGenericOwnerProducedValueFact,
             ownerAuthority: OwnerAuthority,
         ): SelectedStorage? {
+            variable.type.nullableCurrentOwnerParameterIndexOrNull(owner)?.let { index ->
+                if (variable.initializer !is IrCall ||
+                    !variable.hasSingleDirectReturnUseIn(physical)
+                ) return null
+                val enclosingPayloadIndex = context.splitNullableResultPayloadTypes[physical]
+                    ?.exactCurrentOwnerParameterIndexOrNull(owner) ?: return null
+                val splitStorage = splitNullableOwnerParameterStorageLayoutOrNull(
+                    produced,
+                    localOwnerParameterIndex = index,
+                    enclosingOwnerParameterIndex = enclosingPayloadIndex,
+                    ownerParameterCarriers = ownerAuthority.ownerParameterCarriers,
+                ) ?: return null
+                return SelectedStorage(
+                    produced,
+                    splitStorage,
+                )
+            }
             val requestedCarrier: DotNetGenericOwnerStorageCarrier = when {
                 variable.type.isObjectShadowType() ->
                     DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier)
@@ -389,7 +425,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 else -> DotNetGenericOwnerStorageCarrier.Unknown
             }
             if (requestedCarrier is DotNetGenericOwnerStorageCarrier.Fixed) {
-                return SelectedStorage(produced, requestedCarrier)
+                return SelectedStorage(
+                    produced,
+                    DotNetGenericOwnerPhysicalStorageLayout.Direct(requestedCarrier),
+                )
             }
             if (requestedCarrier != DotNetGenericOwnerStorageCarrier.Deferred) return null
 
@@ -417,13 +456,20 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 }
                 return SelectedStorage(
                     selected,
-                    DotNetGenericOwnerStorageCarrier.Fixed(selectedCarrier),
+                    DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                        DotNetGenericOwnerStorageCarrier.Fixed(selectedCarrier),
+                    ),
                 )
             }
             val guaranteed = (produced.provenance.guaranteedViews as?
                     DotNetGenericOwnerGuaranteedViews.Known)?.views.orEmpty()
             if (DotNetGenericOwnerPhysicalView(construction) !in guaranteed) return null
-            return SelectedStorage(produced, DotNetGenericOwnerStorageCarrier.Fixed(carrier))
+            return SelectedStorage(
+                produced,
+                DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                    DotNetGenericOwnerStorageCarrier.Fixed(carrier),
+                ),
+            )
         }
 
         private fun exactNaturalDestinationSelectorOrNull(
@@ -468,10 +514,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
          * A recorded logical route may veto a semantic call but is not required for an ordinary
          * natural call. Declaration authority selects the natural MethodDef; value provenance
          * selects only a construction of its owner which the receiver already guarantees. The
-         * shared physical operation query then instantiates the recorded result layout. This
-         * local-result slice deliberately excludes arguments, MethodSpecs, super, semantic routes,
-         * and split results; argument-bearing split operations are authorized separately and do
-         * not yet materialize their pair into one Kotlin local.
+         * shared physical operation query then instantiates the recorded result layout. Super and
+         * semantic routes remain excluded. Both direct and split-result local placement retain the
+         * first parameterless, non-MethodSpec boundary; argument-bearing calls remain operations
+         * until their storage policy is proven independently.
          */
         private fun evaluateCallResultOrNull(
             expression: IrCall,
@@ -488,13 +534,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
                 ?: candidate
             }
-            if (
-                expression.superQualifierSymbol != null ||
-                source.typeParameters.isNotEmpty() ||
-                source.parameters.any { parameter ->
-                    parameter.kind != IrParameterKind.DispatchReceiver
-                }
-            ) return null
+            if (expression.superQualifierSymbol != null || source.typeParameters.isNotEmpty()) {
+                return null
+            }
             val receiverExpression = expression.dispatchReceiver ?: return null
             val receiver = evaluateInitializerOrNull(receiverExpression, storage) ?: return null
             val ownerAuthority = authority ?: return null
@@ -532,7 +574,16 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             }
             val result = selectedRoute.producedResult ?: return null
             return result.takeIf { produced ->
-                produced.layout is DotNetGenericOwnerProducedValueLayout.Direct
+                when (produced.layout) {
+                    is DotNetGenericOwnerProducedValueLayout.Direct,
+                    is DotNetGenericOwnerProducedValueLayout.SplitNullable ->
+                        source.parameters.all { parameter ->
+                            parameter.kind == IrParameterKind.DispatchReceiver
+                        }
+                    DotNetGenericOwnerProducedValueLayout.Null,
+                    DotNetGenericOwnerProducedValueLayout.Unknown,
+                    -> false
+                }
             }
         }
 
@@ -750,7 +801,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                         return null
                     }
                     return DotNetGenericOwnerPhysicalStorageFact(
-                        DotNetGenericOwnerStorageCarrier.Fixed(carrier),
+                        DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                            DotNetGenericOwnerStorageCarrier.Fixed(carrier),
+                        ),
                         DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews().guarantee(
                             naturalView,
                             DotNetGenericOwnerPhysicalViewEvidence.FROZEN_PARAMETER_OR_RESULT,
@@ -766,8 +819,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             val parameterIndex = plannedType.exactCurrentOwnerParameterIndexOrNull(owner)
                 ?: return null
             return DotNetGenericOwnerPhysicalStorageFact(
-                DotNetGenericOwnerStorageCarrier.Fixed(
-                    ownerAuthority.ownerParameterCarriers[parameterIndex],
+                DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                    DotNetGenericOwnerStorageCarrier.Fixed(
+                        ownerAuthority.ownerParameterCarriers[parameterIndex],
+                    ),
                 ),
                 DotNetGenericOwnerPhysicalValueProvenance(
                     DotNetGenericOwnerGuaranteedViews.Unknown,
@@ -782,7 +837,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             plannedType: IrType,
             ownerAuthority: OwnerAuthority,
         ) = DotNetGenericOwnerPhysicalStorageFact(
-            DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier),
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier),
+            ),
             DotNetGenericOwnerPhysicalValueProvenance(
                 DotNetGenericOwnerGuaranteedViews.Unknown,
             ),
@@ -865,7 +922,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             objectCarrier,
             ownerParameterCarriers,
             DotNetGenericOwnerPhysicalStorageFact(
-                DotNetGenericOwnerStorageCarrier.Fixed(receiverCarrier),
+                DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                    DotNetGenericOwnerStorageCarrier.Fixed(receiverCarrier),
+                ),
                 receiverProvenance,
                 DotNetGenericOwnerPhysicalNullState.NON_NULL,
             ),
@@ -908,7 +967,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
 
     private data class SelectedStorage(
         val produced: DotNetGenericOwnerProducedValueFact,
-        val storage: DotNetGenericOwnerStorageCarrier.Fixed,
+        val storage: DotNetGenericOwnerPhysicalStorageLayout,
     )
 
     private data class ShadowDiagnosticIdentity(
@@ -930,7 +989,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 phase = phase,
                 variableName = variable.name.asString(),
                 status = DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED,
+                initializerProducedLayout = DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN,
                 initializerProducedCarrier = unknownCarrierSnapshot,
+                storageLayout = DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN,
                 storageCarrier = unknownCarrierSnapshot,
                 guaranteeState = DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN,
                 guaranteedViews = emptyList(),
@@ -952,7 +1013,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             val known = provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known
             val initializerCarrier = initializer.layout.toCarrierSnapshot(authority)
             val storageCarrier = authority.physicalAuthority
-                .carrierSnapshotOrNull(storage.storageCarrier.carrier)
+                .carrierSnapshotOrNull(storage.storageLayout.primaryCarrier.carrier)
                 ?: unknownCarrierSnapshot
             if (initializerCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN ||
                 storageCarrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN
@@ -1016,7 +1077,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     phase = phase,
                     variableName = variable.name.asString(),
                     status = DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED,
+                    initializerProducedLayout = initializer.layout.toSnapshotLayout(),
                     initializerProducedCarrier = initializerCarrier,
+                    storageLayout = storage.storageLayout.toSnapshotLayout(),
                     storageCarrier = storageCarrier,
                     guaranteeState = if (known == null) {
                         DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN
@@ -1078,11 +1141,21 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         fun org.jetbrains.kotlin.ir.types.IrType.isPhysicalValueShadowCandidateType(
             owner: IrClass,
         ): Boolean = isObjectShadowType() || isDeferredGenericShadowType() ||
-                exactCurrentOwnerParameterIndexOrNull(owner) != null
+                exactCurrentOwnerParameterIndexOrNull(owner) != null ||
+                nullableCurrentOwnerParameterIndexOrNull(owner) != null
 
         fun IrType.exactCurrentOwnerParameterIndexOrNull(owner: IrClass): Int? {
             val simple = this as? IrSimpleType ?: return null
             if (simple.isMarkedNullable() || simple.arguments.isNotEmpty()) return null
+            val parameter = simple.classifier as? IrTypeParameterSymbol ?: return null
+            return owner.typeParameters.indexOfFirst { candidate ->
+                candidate.symbol === parameter
+            }.takeIf { index -> index >= 0 }
+        }
+
+        fun IrType.nullableCurrentOwnerParameterIndexOrNull(owner: IrClass): Int? {
+            val simple = this as? IrSimpleType ?: return null
+            if (!simple.isMarkedNullable() || simple.arguments.isNotEmpty()) return null
             val parameter = simple.classifier as? IrTypeParameterSymbol ?: return null
             return owner.typeParameters.indexOfFirst { candidate ->
                 candidate.symbol === parameter
@@ -1102,10 +1175,32 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         ): DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot = when (this) {
             is DotNetGenericOwnerProducedValueLayout.Direct ->
                 authority.physicalAuthority.carrierSnapshotOrNull(carrier) ?: unknownCarrierSnapshot
+            is DotNetGenericOwnerProducedValueLayout.SplitNullable ->
+                authority.physicalAuthority.carrierSnapshotOrNull(payloadCarrier)
+                    ?: unknownCarrierSnapshot
             DotNetGenericOwnerProducedValueLayout.Null,
-            is DotNetGenericOwnerProducedValueLayout.SplitNullable,
             DotNetGenericOwnerProducedValueLayout.Unknown,
             -> unknownCarrierSnapshot
+        }
+
+        fun DotNetGenericOwnerProducedValueLayout.toSnapshotLayout():
+                DotNetGenericOwnerPhysicalValueLayoutKind = when (this) {
+            is DotNetGenericOwnerProducedValueLayout.Direct ->
+                DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT
+            is DotNetGenericOwnerProducedValueLayout.SplitNullable ->
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE
+            DotNetGenericOwnerProducedValueLayout.Null ->
+                DotNetGenericOwnerPhysicalValueLayoutKind.NULL
+            DotNetGenericOwnerProducedValueLayout.Unknown ->
+                DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN
+        }
+
+        fun DotNetGenericOwnerPhysicalStorageLayout.toSnapshotLayout():
+                DotNetGenericOwnerPhysicalValueLayoutKind = when (this) {
+            is DotNetGenericOwnerPhysicalStorageLayout.Direct ->
+                DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT
+            is DotNetGenericOwnerPhysicalStorageLayout.SplitNullable ->
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE
         }
 
         fun DotNetGenericOwnerPhysicalNullState.toSnapshot():

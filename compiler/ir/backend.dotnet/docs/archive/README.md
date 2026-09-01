@@ -14,6 +14,13 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-local-placement-2026-09-01.md`](generic-owner-physical-split-nullable-local-placement-2026-09-01.md)
+  records the first bounded two-slot local retention of a natural
+  `SplitNullable(!T, out bool)` result, creation-site member-contract authority
+  for executable producers, unboxed direct-return execution for reference,
+  value, and nullable-value substitutions, ordinary-consumer and exception-
+  region materialization negatives, and the exact Framework 4.8/.NET 10 erased
+  inverse.
 - [`generic-owner-methodspec-split-nullable-composition-2026-09-01.md`](generic-owner-methodspec-split-nullable-composition-2026-09-01.md)
   records the first structural composition of MethodDef binders, strict owner
   inputs, and split-nullable owner outputs: `!V lookup<!!R>(!K, !!R, out bool)`,

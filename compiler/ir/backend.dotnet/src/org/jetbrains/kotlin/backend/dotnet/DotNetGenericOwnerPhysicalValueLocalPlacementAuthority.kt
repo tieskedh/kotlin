@@ -5,16 +5,23 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrReturn
+import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import java.util.IdentityHashMap
 
 internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
@@ -114,24 +121,25 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
         }
     }
 
-    private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindOwnerParameterOrNull(
+}
+
+/** Permission to retain one split call as its typed payload plus Boolean null flag. */
+internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal constructor(
+    val payloadCarrier: DotNetGenericOwnerPhysicalCarrier,
+) {
+    fun bindEmitterPayloadOrNull(
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
+        initializerPayload: DotNetIlValueType?,
     ): DotNetIlValueType.TypeParameter? {
-        val binder = (binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type)
-            ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
-        if (binder.classInfoOrNull(typeMapper) !== physicalMethodOwner ||
-            index !in 0 until physicalMethodOwner.typeParameterCount
+        if (payloadCarrier.nullEncoding !=
+            DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT
         ) return null
-        return DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
-    }
-
-    private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.classInfoOrNull(
-        typeMapper: DotNetIlTypeMapper,
-    ): DotNetIlClassInfo? = if (view == null) {
-        typeMapper.classInfoOrNull(owner.owner)
-    } else {
-        typeMapper.genericInterfaceInfoOrNull(owner.owner)?.classInfo(view)
+        val parameter = payloadCarrier.type as?
+                DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+        val expected = parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
+            ?: return null
+        return expected.takeIf { candidate -> candidate == initializerPayload }
     }
 }
 
@@ -148,12 +156,23 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     IrFunctionSymbol,
                     IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalValueRetainedProducedCarrier>,
                     >,
+    private val retainedSplitNullableByFunction:
+            IdentityHashMap<
+                    IrFunctionSymbol,
+                    IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalValueRetainedSplitNullable>,
+                    >,
 ) {
     fun retainedProducedCarrierOrNull(
         function: IrFunctionSymbol,
         variable: IrValueSymbol,
     ): DotNetGenericOwnerPhysicalValueRetainedProducedCarrier? =
         retainedProducedCarriersByFunction[function]?.get(variable)
+
+    fun retainedSplitNullableOrNull(
+        function: IrFunctionSymbol,
+        variable: IrValueSymbol,
+    ): DotNetGenericOwnerPhysicalValueRetainedSplitNullable? =
+        retainedSplitNullableByFunction[function]?.get(variable)
 
     companion object {
         fun bind(
@@ -168,6 +187,13 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     IdentityHashMap<
                             IrValueSymbol,
                             DotNetGenericOwnerPhysicalValueRetainedProducedCarrier,
+                            >,
+                    >()
+            val retainedSplitByFunction = IdentityHashMap<
+                    IrFunctionSymbol,
+                    IdentityHashMap<
+                            IrValueSymbol,
+                            DotNetGenericOwnerPhysicalValueRetainedSplitNullable,
                             >,
                     >()
 
@@ -188,13 +214,46 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
 
                     val produced = record.predictedProducedValue ?: return@forEach
                     val storage = record.predictedStorage ?: return@forEach
-                    val direct = produced.layout as? DotNetGenericOwnerProducedValueLayout.Direct
-                        ?: return@forEach
                     val physicalOwner = (record.physicalFunction.owner.parent as? IrClass)?.symbol
                         ?: return@forEach
-                    if (direct.carrier != storage.storageCarrier.carrier) {
+                    val split = produced.layout as?
+                            DotNetGenericOwnerProducedValueLayout.SplitNullable
+                    val splitStorage = storage.storageLayout as?
+                            DotNetGenericOwnerPhysicalStorageLayout.SplitNullable
+                    if (split != null && splitStorage != null) {
+                        if (split.payloadCarrier != splitStorage.primaryCarrier.carrier ||
+                            (record.variable.owner as? IrVariable)?.let { variable ->
+                                variable.initializer is IrCall &&
+                                        variable.hasSingleDirectReturnUseIn(
+                                            record.physicalFunction.owner,
+                                        )
+                            } != true
+                        ) return@forEach
+                        val parameter = split.payloadCarrier.type as?
+                                DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                            ?: return@forEach
+                        val binder = (parameter.binder as?
+                                DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+                            ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                            ?: return@forEach
+                        if (split.payloadCarrier.nullEncoding !=
+                            DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT ||
+                            binder.owner !== physicalOwner ||
+                            parameter.index !in physicalOwner.owner.typeParameters.indices
+                        ) return@forEach
+                        retainedSplitByFunction.getOrPut(record.physicalFunction) {
+                            IdentityHashMap()
+                        }[record.variable] =
+                            DotNetGenericOwnerPhysicalValueRetainedSplitNullable(
+                                split.payloadCarrier,
+                            )
                         return@forEach
                     }
+                    val direct = produced.layout as? DotNetGenericOwnerProducedValueLayout.Direct
+                        ?: return@forEach
+                    val directStorage = storage.storageLayout as?
+                            DotNetGenericOwnerPhysicalStorageLayout.Direct ?: return@forEach
+                    if (direct.carrier != directStorage.primaryCarrier.carrier) return@forEach
                     val emitterValidation = when (val symbolic = direct.carrier.type) {
                         is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
                             val binder = (symbolic.binder as?
@@ -248,14 +307,107 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     )
                 }
 
-            if (retainedByFunction.isEmpty()) {
+            if (retainedByFunction.isEmpty() && retainedSplitByFunction.isEmpty()) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
             return DotNetGenericOwnerPhysicalBindingResult.Bound(
-                DotNetGenericOwnerPhysicalValueLocalPlacementAuthority(retainedByFunction),
+                DotNetGenericOwnerPhysicalValueLocalPlacementAuthority(
+                    retainedByFunction,
+                    retainedSplitByFunction,
+                ),
             )
         }
     }
+}
+
+/**
+ * The first split-local slice has exactly one non-materializing consumer: the local is returned
+ * directly from the same physical function. Any comparison, argument, capture, copy, or second
+ * read must keep using the established materializing path until its own transfer is proven.
+ */
+internal data class DotNetGenericOwnerPhysicalSplitLocalUseSummary(
+    val readCount: Int,
+    val directFunctionReturnCount: Int,
+    val directOtherReturnCount: Int,
+    val protectedRegionReturnCount: Int,
+    val returnValueKinds: Set<String>,
+) {
+    val isSingleDirectFunctionReturn: Boolean
+        get() = readCount == 1 && directFunctionReturnCount == 1 &&
+                directOtherReturnCount == 0 && protectedRegionReturnCount == 0
+}
+
+internal fun IrVariable.splitLocalUseSummaryIn(
+    function: IrSimpleFunction,
+): DotNetGenericOwnerPhysicalSplitLocalUseSummary {
+    var readCount = 0
+    var directFunctionReturnCount = 0
+    var directOtherReturnCount = 0
+    var protectedRegionReturnCount = 0
+    var protectedRegionDepth = 0
+    val returnValueKinds = linkedSetOf<String>()
+    function.body?.acceptVoid(object : IrVisitorVoid() {
+        override fun visitElement(element: IrElement) {
+            element.acceptChildrenVoid(this)
+        }
+
+        override fun visitGetValue(expression: IrGetValue) {
+            if (expression.symbol === symbol) readCount++
+            expression.acceptChildrenVoid(this)
+        }
+
+        override fun visitReturn(expression: IrReturn) {
+            returnValueKinds += expression.value.javaClass.simpleName
+            if ((expression.value as? IrGetValue)?.symbol === symbol) {
+                if (expression.returnTargetSymbol === function.symbol) {
+                    directFunctionReturnCount++
+                    if (protectedRegionDepth > 0) protectedRegionReturnCount++
+                } else {
+                    directOtherReturnCount++
+                }
+            }
+            expression.acceptChildrenVoid(this)
+        }
+
+        override fun visitTry(aTry: IrTry) {
+            protectedRegionDepth++
+            try {
+                aTry.acceptChildrenVoid(this)
+            } finally {
+                protectedRegionDepth--
+            }
+        }
+    })
+    return DotNetGenericOwnerPhysicalSplitLocalUseSummary(
+        readCount,
+        directFunctionReturnCount,
+        directOtherReturnCount,
+        protectedRegionReturnCount,
+        returnValueKinds,
+    )
+}
+
+internal fun IrVariable.hasSingleDirectReturnUseIn(function: IrSimpleFunction): Boolean =
+    splitLocalUseSummaryIn(function).isSingleDirectFunctionReturn
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindOwnerParameterOrNull(
+    typeMapper: DotNetIlTypeMapper,
+    physicalMethodOwner: DotNetIlClassInfo,
+): DotNetIlValueType.TypeParameter? {
+    val binder = (binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+        ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+    if (binder.classInfoOrNull(typeMapper) !== physicalMethodOwner ||
+        index !in 0 until physicalMethodOwner.typeParameterCount
+    ) return null
+    return DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+}
+
+private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.classInfoOrNull(
+    typeMapper: DotNetIlTypeMapper,
+): DotNetIlClassInfo? = if (view == null) {
+    typeMapper.classInfoOrNull(owner.owner)
+} else {
+    typeMapper.genericInterfaceInfoOrNull(owner.owner)?.classInfo(view)
 }
 
 private fun IrExpression.directOwnerParameterEmitterValidationOrNull():

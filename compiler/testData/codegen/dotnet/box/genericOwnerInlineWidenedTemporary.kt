@@ -15,6 +15,13 @@ interface InlineLookup<K, out V> {
     fun lookup(key: K): V?
 }
 
+interface InlineSplitLocalProducer<out T> {
+    fun read(): T?
+    fun readThroughLocal(): T?
+    fun readThroughMaterialization(): T?
+    fun readThroughProtectedRegion(): T?
+}
+
 interface InlineMethodProducer<out T> {
     fun <R> produce(marker: R): T
 }
@@ -37,6 +44,36 @@ private class InlineLookupRoute<T> {
         return sourceWideAlias.lookup(exactArgumentAlias)
     }
 }
+
+private class InlineSplitLocalRoute<T>(private val value: T?) : InlineSplitLocalProducer<T> {
+    override fun read(): T? = value
+
+    override fun readThroughLocal(): T? {
+        val sourceNaturalAlias: InlineSplitLocalProducer<T> = this
+        val exactResultAlias: T? = sourceNaturalAlias.read()
+        return exactResultAlias
+    }
+
+    private fun materialize(value: T?): T? = value
+
+    override fun readThroughMaterialization(): T? {
+        val sourceNaturalAlias: InlineSplitLocalProducer<T> = this
+        val materializedResultAlias: T? = sourceNaturalAlias.read()
+        return materialize(materializedResultAlias)
+    }
+
+    override fun readThroughProtectedRegion(): T? {
+        val sourceNaturalAlias: InlineSplitLocalProducer<T> = this
+        val protectedResultAlias: T? = sourceNaturalAlias.read()
+        try {
+            return protectedResultAlias
+        } finally {
+            inlineSplitFinallyCount++
+        }
+    }
+}
+
+private var inlineSplitFinallyCount = 0
 
 private class InlineIntLookup : InlineLookup<Int, Int> {
     override fun lookup(key: Int): Int? = key.takeUnless { it < 0 }
@@ -218,6 +255,36 @@ fun box(): String {
     }
     if (InlineLookupRoute<String>().routeExactArgument(InlineStringLookup(), "") != null) {
         return "reference null result argument route"
+    }
+    if (InlineSplitLocalRoute(52).readThroughLocal() != 52) {
+        return "value split local route"
+    }
+    if (InlineSplitLocalRoute<Int>(null).readThroughLocal() != null) {
+        return "value null split local argument route"
+    }
+    if (InlineSplitLocalRoute("split local").readThroughLocal() != "split local") {
+        return "reference split local argument route"
+    }
+    if (InlineSplitLocalRoute<String>(null).readThroughLocal() != null) {
+        return "reference null split local argument route"
+    }
+    if (InlineSplitLocalRoute<Int?>(53).readThroughLocal() != 53) {
+        return "nullable value split local argument route"
+    }
+    if (InlineSplitLocalRoute<Int?>(null).readThroughLocal() != null) {
+        return "nullable value null split local argument route"
+    }
+    if (InlineSplitLocalRoute(54).readThroughMaterialization() != 54) {
+        return "ordinary split materialization route"
+    }
+    if (InlineSplitLocalRoute<Int>(null).readThroughMaterialization() != null) {
+        return "ordinary null split materialization route"
+    }
+    val finallyCountBefore = inlineSplitFinallyCount
+    if (InlineSplitLocalRoute(55).readThroughProtectedRegion() != 55 ||
+        inlineSplitFinallyCount != finallyCountBefore + 1
+    ) {
+        return "protected split materialization route"
     }
     if (InlineLookupRoute<Int>().routeWidenedResult(InlineIntLookup(), 43) != 43) {
         return "value widened result route"

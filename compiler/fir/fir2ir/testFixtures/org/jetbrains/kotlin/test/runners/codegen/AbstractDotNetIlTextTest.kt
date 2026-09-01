@@ -125,6 +125,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDispatc
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeScope
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueLayoutKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowEvidence
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
@@ -518,11 +519,6 @@ private class BackendCliDotNetFacade(
                 .orEmpty()
             "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
         }
-        validateGenericOwnerPhysicalValueShadow(
-            genericOwnerRehearsal = genericOwnerRehearsal,
-            snapshots = completedOutput.genericOwnerPhysicalValueShadows,
-            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
-        )
         validateGenericInterfaceCompleteSurfaceVarianceShadow(
             genericOwnerRehearsal = genericOwnerRehearsal,
             snapshots = completedOutput.genericInterfaceCompleteSurfaceVarianceShadows,
@@ -531,6 +527,11 @@ private class BackendCliDotNetFacade(
         validateGenericOwnerPhysicalOperationRouteShadow(
             genericOwnerRehearsal = genericOwnerRehearsal,
             snapshots = completedOutput.genericOwnerPhysicalOperationRouteShadows,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
+        validateGenericOwnerPhysicalValueShadow(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            snapshots = completedOutput.genericOwnerPhysicalValueShadows,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
         validateGenericOwnerPhysicalMethodDefEmissionComparison(
@@ -995,6 +996,7 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
 
     val exactArgumentRoute = snapshots.single { candidate ->
         candidate.ownerName.endsWith("InlineLookupRoute") &&
+                candidate.physicalFunctionName == "routeExactArgument" &&
                 candidate.receiverVariableName == "sourceNaturalAlias" &&
                 candidate.logicalMemberName == "lookup"
     }
@@ -1029,6 +1031,39 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
             exactArgumentRoute.diagnostic == null) {
         "An exact owner-dependent !K argument must preserve the natural !V+bool result route: " +
                 exactArgumentRoute
+    }
+    listOf(
+        "readThroughLocal",
+        "readThroughMaterialization",
+        "readThroughProtectedRegion",
+    ).forEach { physicalFunctionName ->
+        val splitLocalReadRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+            candidate.ownerName.endsWith("InlineSplitLocalRoute") &&
+                    candidate.physicalFunctionName == physicalFunctionName &&
+                    candidate.receiverVariableName == "sourceNaturalAlias" &&
+                    candidate.logicalMemberName == "read"
+        }) {
+            "The split-local producer call must publish one exact operation route: " +
+                    snapshots.filter { candidate ->
+                        candidate.ownerName.endsWith("InlineSplitLocalRoute")
+                    }
+        }
+        check(splitLocalReadRoute.status ==
+                DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+                splitLocalReadRoute.logicalSelector ==
+                DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                splitLocalReadRoute.predictedRouteKind ==
+                DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+                splitLocalReadRoute.resultLayout ==
+                DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+                splitLocalReadRoute.actualRoute ==
+                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+                splitLocalReadRoute.relation ==
+                DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+                splitLocalReadRoute.diagnostic == null) {
+            "The exact split-local producer call must retain its natural !T+bool result: " +
+                    splitLocalReadRoute
+        }
     }
     val widenedArgumentRoute = checkNotNull(snapshots.singleOrNull { candidate ->
         candidate.ownerName.endsWith("InlineLookupRoute") &&
@@ -2112,9 +2147,12 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         if (probesCompilerAlias) {
             val emittedIl = emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
             check(emittedIl.isFile && emittedIl.readText().let { ilText ->
-                "'InlineProducer`1'" !in ilText && "IInlineProducerKotlinSemantic" !in ilText
+                "'InlineProducer`1'" !in ilText &&
+                        "IInlineProducerKotlinSemantic" !in ilText &&
+                        "'InlineSplitLocalProducer`1'" !in ilText &&
+                        "InlineSplitLocalProducerKotlinSemantic" !in ilText
             }) {
-                "The production-erased inverse emitted a natural or semantic InlineProducer TypeDef or use: " +
+                "The production-erased inverse emitted a candidate natural or semantic TypeDef or use: " +
                         emittedIl.path
             }
         }
@@ -2217,6 +2255,158 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         } == true) {
             "The constructed typed entry must preserve its authority-recorded " +
                     "InlineLookup<!T,!T> carrier: source=$lookupSourceAlias, all=$comparisons"
+        }
+        val splitResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName ==
+                    "readThroughLocal" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "exactResultAlias"
+        }
+        check(splitResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val payload = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    prediction.storageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    payload.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    payload.localOwnerName == null &&
+                    payload.localTypeDefView == null &&
+                    payload.ownerParameterIndices == listOf(0) &&
+                    payload.parameterBinderOwnerName?.endsWith("InlineSplitLocalRoute") == true &&
+                    payload.parameterBinderTypeDefView == null &&
+                    prediction.storageCarrier == payload &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSplitLocalRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    comparison.actualStorageCarrier == payload &&
+                    comparison.actualAuxiliarySlotIndex != null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "An exact natural split result must remain !T plus its null flag in local storage: " +
+                    "result=$splitResultAlias, all=$comparisons"
+        }
+        val materializedSplitResult = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName ==
+                    "readThroughMaterialization" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "materializedResultAlias"
+        }
+        check(materializedSplitResult?.let { comparison ->
+            comparison.prediction.status ==
+                    DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
+                    comparison.prediction.unsupportedReason?.contains(
+                        "split use reads=1, direct function returns=0",
+                    ) == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    comparison.actualStorageCarrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                    comparison.actualAuxiliarySlotIndex == null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE &&
+                    comparison.relation ==
+                    DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
+        } == true) {
+            "A non-direct split-result consumer must use the ordinary materializing path: " +
+                    "result=$materializedSplitResult, all=$comparisons"
+        }
+        val protectedSplitResult = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName ==
+                    "readThroughProtectedRegion" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "protectedResultAlias"
+        }
+        check(protectedSplitResult?.let { comparison ->
+            comparison.prediction.status ==
+                    DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
+                    comparison.prediction.unsupportedReason?.contains(
+                        "direct function returns=1, direct other returns=0, protected returns=1",
+                    ) == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    comparison.actualAuxiliarySlotIndex == null &&
+                    comparison.actualSelectionKind !=
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                    comparison.relation ==
+                    DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
+        } == true) {
+            "A split local returned across a protected region must remain materialized: " +
+                    "result=$protectedSplitResult, all=$comparisons"
+        }
+        val splitEmittedIl = emittedArtifact.resolveSibling(
+            "${emittedArtifact.nameWithoutExtension}.il",
+        )
+        check(splitEmittedIl.isFile) {
+            "The split-local probe has no emitted IL sibling: ${splitEmittedIl.path}"
+        }
+        val splitIlText = splitEmittedIl.readText().removePrefix("\uFEFF")
+        val splitMethodStarts = Regex("(?m)^\\s*\\.method\\b")
+            .findAll(splitIlText)
+            .map { match -> match.range.first }
+            .toList()
+        val splitMethodWindows = splitMethodStarts.mapIndexed { index, start ->
+            splitIlText.substring(
+                start,
+                splitMethodStarts.getOrElse(index + 1) { splitIlText.length },
+            )
+        }
+        val splitMethod = splitMethodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'readThroughLocal'(") &&
+                    "::'read'(" in method
+        }
+        check(splitMethod != null) {
+            "Cannot isolate the emitted readThroughLocal MethodDef: ${splitEmittedIl.path}"
+        }
+        val splitCalls = splitMethod.lineSequence().map(String::trim).filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'read'(" in line
+        }.toList()
+        check(splitCalls.singleOrNull()?.let { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!0\\s+class\\s+" +
+                        "'InlineSplitLocalProducer`1'<!0>::'read'\\(bool&\\)$",
+            ).matches(call)
+        } == true) {
+            "The split local must receive one natural !T/bool pair without materialization: " +
+                    "calls=$splitCalls, method=$splitMethod"
+        }
+        val forbiddenSplitMaterialization = listOf(
+            "System.Nullable",
+            "splitNullableNonNull",
+            "splitNullableResult",
+            "KotlinSemantic",
+        ).filter(splitMethod::contains)
+        val boxingInstructions = splitMethod.lineSequence().map(String::trim).filter { line ->
+            Regex("^(box|unbox\\.any)\\b").containsMatchIn(line)
+        }.toList()
+        check(forbiddenSplitMaterialization.isEmpty() && boxingInstructions.isEmpty()) {
+            "The split local materialized or crossed a semantic route: " +
+                    "forbidden=$forbiddenSplitMaterialization, boxing=$boxingInstructions, " +
+                    "method=$splitMethod"
         }
         val sourceAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSelfView") &&

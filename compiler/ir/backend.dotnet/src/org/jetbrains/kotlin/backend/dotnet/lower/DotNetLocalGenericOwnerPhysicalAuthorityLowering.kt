@@ -581,12 +581,10 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                         family.capabilityBindingKind ==
                         DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED
             } ?: return null
-        // This first callable grammar admits exactly one declared member. The source symbol and
-        // its capability slot are already creation-site authority inside this compilation, so a
-        // pre-lowering linkage key is not required for executable-only producers (which do not
-        // publish library linkage keys). Multi-member grammars must bind an explicit recorded
-        // member relation rather than rediscovering one from names.
-        val memberContract = contract.declaredMembers.singleOrNull() ?: return null
+        // Prefer the exact creation-site relation. Executable-only producers deliberately have no
+        // module linkage-key table, while external members are bound through their producer record.
+        // Neither names, arity, declaration order, nor a sibling member's shape may select a slot.
+        val memberContract = context.publishedGenericInterfaceMemberContracts[source] ?: return null
         if (source.isSuspend || source.visibility != DescriptorVisibilities.PUBLIC ||
             source.modality != Modality.ABSTRACT || source.body != null ||
             source.parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
@@ -628,12 +626,21 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         ) return null
         val isCompleteDirectProducerCandidate = when (memberContract.role) {
             DotNetPublishedGenericInterfaceMemberRole.PRODUCER -> {
-                if (memberContract.resultLayout !=
-                    DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ||
-                    sourceResultType.isMarkedNullable() ||
-                    parameterBindings.any { binding -> binding is CallableParameterBinding.Owner }
+                if (parameterBindings.any { binding ->
+                        binding is CallableParameterBinding.Owner
+                    }
                 ) return null
-                true
+                when (memberContract.resultLayout) {
+                    DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT -> {
+                        if (sourceResultType.isMarkedNullable()) return null
+                        true
+                    }
+                    DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE -> {
+                        if (!sourceResultType.isMarkedNullable()) return null
+                        false
+                    }
+                    DotNetPublishedGenericInterfaceMemberResultLayout.VOID -> return null
+                }
             }
             DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT -> {
                 if (memberContract.resultLayout !=

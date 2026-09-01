@@ -84,11 +84,24 @@ internal data class DotNetIlRawLocalPlacementObservation(
     val physicalOwner: DotNetIlClassInfo,
     val variable: IrVariableSymbol,
     val slotIndex: Int,
+    val layout: DotNetGenericOwnerPhysicalValueLayoutKind,
     val carrier: DotNetIlValueType,
+    val auxiliarySlotIndex: Int?,
     val selectionKind: DotNetGenericOwnerPhysicalValueLocalSelectionKind,
 ) {
     init {
         require(slotIndex >= 0) { "an observed IL local requires a non-negative slot index" }
+        require(
+            when (layout) {
+                DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT -> auxiliarySlotIndex == null
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE ->
+                    auxiliarySlotIndex != null && auxiliarySlotIndex >= 0 &&
+                            auxiliarySlotIndex != slotIndex
+                DotNetGenericOwnerPhysicalValueLayoutKind.NULL,
+                DotNetGenericOwnerPhysicalValueLayoutKind.UNKNOWN,
+                -> false
+            }
+        ) { "an observed IL local requires one coherent direct or split layout" }
     }
 }
 
@@ -1843,6 +1856,67 @@ internal class DotNetIlMethodCodegen(
 
     private fun emitVariable(variable: IrVariable) {
         val initializer = variable.initializer
+        val retainedSplitNullablePayload = if (initializer == null) {
+            null
+        } else {
+            genericOwnerPhysicalValueLocalPlacementAuthority
+                ?.retainedSplitNullableOrNull(function.symbol, variable.symbol)
+                ?.let { selection ->
+                    val livePayload = expressionCodegen
+                        .directPhysicalSplitCallResultPayloadTypeOrNull(initializer)
+                    selection.bindEmitterPayloadOrNull(
+                        typeMapper,
+                        functionInfo.owner,
+                        livePayload,
+                    ) ?: dotNetUnsupported(
+                        "final split-nullable authority for local " +
+                                "'${variable.name.asString()}' does not match its live call payload " +
+                                "(authority=${selection.payloadCarrier}, live=$livePayload, " +
+                                "MethodDefOwner=${functionInfo.owner.ilTypeRef})",
+                    )
+                }
+        }
+        if (retainedSplitNullablePayload != null) {
+            val enclosingPayload = (signature.returnType as? DotNetIlReturnType.Value)?.type
+            if (!signature.hasSplitNullableResult ||
+                enclosingPayload != retainedSplitNullablePayload
+            ) {
+                dotNetUnsupported(
+                    "split-nullable local '${variable.name.asString()}' does not match its " +
+                            "enclosing MethodDef result (local=$retainedSplitNullablePayload, " +
+                            "MethodDef=$enclosingPayload, split=${signature.hasSplitNullableResult})",
+                )
+            }
+            val call = initializer as? IrCall ?: dotNetUnsupported(
+                "split-nullable local '${variable.name.asString()}' no longer has one direct call initializer",
+            )
+            val local = methodContext.declareSplitNullableLocal(
+                variable,
+                retainedSplitNullablePayload,
+            )
+            localPlacementObservations?.add(
+                DotNetIlRawLocalPlacementObservation(
+                    function = function.symbol,
+                    physicalOwner = functionInfo.owner,
+                    variable = variable.symbol,
+                    slotIndex = local.payload.index,
+                    layout = DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE,
+                    carrier = local.payload.type,
+                    auxiliarySlotIndex = local.isNull.index,
+                    selectionKind = DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE,
+                ),
+            )
+            expressionCodegen.withFixedPhysicalBoundary(
+                DotNetIlFixedPhysicalBoundary(
+                    "split-nullable initialization of local '${variable.name.asString()}'",
+                ),
+            ) {
+                expressionCodegen.emitDirectPhysicalSplitCall(call, local.isNull)
+            }
+            methodContext.emit(storeLocalInstruction(local.payload.index), pops = 1)
+            return
+        }
         val retainedProducedStorage = if (initializer == null) {
             null
         } else {
@@ -1935,7 +2009,9 @@ internal class DotNetIlMethodCodegen(
                 physicalOwner = functionInfo.owner,
                 variable = variable.symbol,
                 slotIndex = slot.index,
+                layout = DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT,
                 carrier = slot.type,
+                auxiliarySlotIndex = null,
                 selectionKind = selectionKind,
             )
         }
@@ -2150,6 +2226,16 @@ internal class DotNetIlMethodCodegen(
         expression: IrExpression,
         payloadType: DotNetIlValueType,
     ) {
+        (expression as? IrGetValue)
+            ?.let { value -> methodContext.splitNullableLocalOrNull(value.symbol) }
+            ?.let { local ->
+                emitSplitNullFlagAddress()
+                methodContext.emit(loadLocalInstruction(local.isNull.index), pushes = 1)
+                methodContext.emit("stind.i1", pops = 2)
+                methodContext.emit(loadLocalInstruction(local.payload.index), pushes = 1)
+                emitSplitPayloadCoercion(local.payload.type, payloadType)
+                return
+            }
         val sourceType = typeMapper.toDotNetIlValueType(expression.type)
             ?: dotNetUnsupported("split nullable result has unsupported source type ${expression.type.render()}")
         when (sourceType) {
