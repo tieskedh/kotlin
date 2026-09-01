@@ -858,10 +858,11 @@ The first constrained-edge grammar admits a nominal
 
 - it is TypeSpec-backed and its signature fits the bounded primitive/owner-
   parameter/SZ-array carrier grammar, including recursive constructions of an
-  exact public generic interface or ordinary reference class with a complete
-  supported binder vector; or
-- it directly names a public, top-level, non-generic CLR interface or ordinary
-  reference class whose selected hierarchy exactly agrees with raw metadata.
+  exact public generic interface, ordinary reference class, or value type with
+  a complete supported binder vector; or
+- it directly names a public, top-level, non-generic CLR interface, ordinary
+  reference class, or value type whose selected hierarchy exactly agrees with
+  raw metadata.
 
 The second form records the exact auxiliary TypeDef and may supply the same
 exact named carrier to an `InterfaceImpl` argument. It does not infer a TypeDef
@@ -884,18 +885,24 @@ services is `Unavailable`.
 
 Recursive constructed carriers use the physical ABI's depth ceiling of 64 and
 aggregate node ceiling of 65,536. Every constructed TypeDef is independently
-selected and raw-authenticated; its exact binder variance is retained. An
-ordinary reference class is admitted only after the shared physical classifier
-proves its class encoding; its selected base/interface hierarchy remains
-authority but is not copied into the auxiliary declaration index as a complete
-edge set. Variant non-interface TypeDefs remain unavailable because CLR permits
-variance on delegates and this slice does not yet distinguish them from
-ordinary classes. A TypeDef with supported nominal binder constraints may occur
-at any nested depth inside one exact retained `InterfaceImpl` construction.
-Before admission, the shared validator must prove that exact constrained
-subtree in the source TypeDef's open binder context. Exact `class`, `struct`,
-`new()`, and `allows ref struct` binders therefore compose at direct and nested
-positions in the same retained edge. Constrained constructions in other
+selected and raw-authenticated; its exact binder variance is retained.
+Reference, non-nullable-value, and nullable-value carriers are admitted only
+after the shared physical classifier proves their kind. An actual named or
+generic-instance signature must carry the same class/value marker as the
+selected TypeDef. A bare TypeDef/TypeRef `GenericParamConstraint` row contains
+no signature marker, so only that form may infer the kind from the selected
+definition. Non-nullable value types retain `NON_NULL_ONLY`; the selected
+`System.Nullable<T>` TypeDef retains `INLINE_NULLABLE_VALUE`. The selected base/
+interface hierarchy remains authority but is not copied into the auxiliary
+declaration index as a complete edge set. Variant non-interface TypeDefs remain
+unavailable because CLR permits variance on delegates and this slice does not
+yet distinguish them from ordinary classes. A TypeDef with supported nominal
+binder constraints may occur at any nested depth inside one exact retained
+`InterfaceImpl` construction. Before admission, the shared validator must prove
+that exact constrained subtree in the source TypeDef's open binder context.
+Exact `class`, `struct`, `new()`, and `allows ref struct` binders therefore
+compose at direct and nested positions in the same retained edge. Constrained
+constructions in other
 metadata positions remain unavailable.
 
 Successful validation records a constraint-satisfaction proof keyed by the
@@ -927,8 +934,8 @@ implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
 No logical type or InterfaceImpl row order participates. Constrained
-constructions outside authenticated direct-supertype edges, value-type and
-variant-delegate nominal carriers, declared members on inherited graph nodes,
+constructions outside authenticated direct-supertype edges, variant-delegate
+nominal carriers, declared members on inherited graph nodes,
 variance conversions, classes as graph nodes, MethodImpls, unsupported carrier
 leaves, and hierarchy disagreement remain unavailable or conflicting according
 to the ordinary validity boundary.
@@ -1054,17 +1061,20 @@ MethodDef. Ordered multi-binder forwarding and permutation now use the same
 physical-interface closure without another substitution engine. Exact retained
 edge proofs now admit bounded TypeSpec nominal constraints, including dependent
 parameter implication, without widening the general construction helper. Exact
-direct nominal non-generic interface and ordinary reference-class carriers are
-retained from selected and raw-authenticated TypeDefs without fabricating their
-edge closure. Recursive constructed carriers retain both forms, including
-exact value-type arguments, under the shared physical depth/node budgets.
+direct nominal non-generic interface, ordinary reference-class, and value-type
+carriers are retained from selected and raw-authenticated TypeDefs without
+fabricating their edge closure. Recursive constructed carriers retain all three
+forms, including exact value-type arguments, under the shared physical depth/
+node budgets. Actual signature class/value markers must agree with the retained
+TypeDef, and non-nullable versus `System.Nullable<T>` carriers preserve their
+distinct physical null encodings.
 Nominally or specially constrained TypeDefs may now occur recursively inside an
 exact retained edge, with separate source/edge/subtree proofs and operation-
 scoped authority that cannot escape into general construction. Reference,
 value, default-constructor, and by-ref-like binder forms compose through the
 shared target-aware validator rather than a backend-local substitute. The next
-ordered work admits wider value-type and variant-delegate nominal carriers; it
-is not another shape-specific state recognizer or a resumed stdlib census.
+ordered work admits variant-delegate nominal carriers; it is not another shape-
+specific state recognizer or a resumed stdlib census.
 
 ## Consequences
 
