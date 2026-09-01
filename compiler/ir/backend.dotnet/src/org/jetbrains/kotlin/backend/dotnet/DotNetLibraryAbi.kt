@@ -340,6 +340,19 @@ enum class DotNetInterfaceDefaultPromotionView {
 }
 
 /**
+ * Orthogonal physical authority for a producer TypeDef whose CLR category is `class`.
+ *
+ * Kotlin logical classifier kind remains KLIB authority. This fact exists solely because CLR
+ * declaration-site variance is legal on an interface or a sealed delegate, but not on an
+ * ordinary class. `SEALED_CLR_DELEGATE` is producer-recorded physical metadata; a consumer must
+ * never infer it from a Kotlin function shape, an `Invoke` member, or a TypeDef name.
+ */
+enum class DotNetPhysicalClassVarianceKind {
+    ORDINARY,
+    SEALED_CLR_DELEGATE,
+}
+
+/**
  * Physical CLR information paired with Kotlin's existing public [org.jetbrains.kotlin.ir.util.IdSignature].
  *
  * The index is deliberately not an export selector or a second Kotlin signature language. The
@@ -367,6 +380,9 @@ sealed interface DotNetPhysicalDeclaration {
             List(physicalTypeParameterCount) {
                 DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
             },
+        /** Exact physical exception which permits a variant TypeDef whose CLR category is class. */
+        val physicalClassVarianceKind: DotNetPhysicalClassVarianceKind =
+            DotNetPhysicalClassVarianceKind.ORDINARY,
         val staticInitialization: DotNetStaticInitialization? = null,
         val objectInstance: DotNetObjectInstance? = null,
         val valueClassAbi: DotNetValueClassAbi? = null,
@@ -378,6 +394,19 @@ sealed interface DotNetPhysicalDeclaration {
             }
             require(physicalTypeParameterVariances.size == physicalTypeParameterCount) {
                 "a physical CLR class requires one variance fact per GenericParam"
+            }
+            require(physicalClassVarianceKind != DotNetPhysicalClassVarianceKind.SEALED_CLR_DELEGATE ||
+                    physicalTypeParameterCount > 0 && physicalTypeParameterVariances.any { variance ->
+                        variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                    }
+            ) {
+                "sealed CLR delegate variance authority requires a variant generic TypeDef"
+            }
+            require(physicalClassVarianceKind != DotNetPhysicalClassVarianceKind.SEALED_CLR_DELEGATE ||
+                    staticInitialization == null && objectInstance == null &&
+                    valueClassAbi == null && genericOwnerAbi == null
+            ) {
+                "sealed CLR delegate variance authority cannot overlap another Kotlin class ABI"
             }
             require(genericOwnerAbi == null || physicalTypeParameterCount > 0) {
                 "an erased or non-generic physical class cannot publish a generic-owner capability"
@@ -1083,7 +1112,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "65"
+    const val ABI_VERSION = "66"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -2887,6 +2916,7 @@ object DotNetLibraryAbiCodec {
             genericOwnerAbi?.capabilityAssemblyName.orEmpty(),
             genericOwnerCapabilityPath.size.toString(),
             genericOwnerCapabilitySuperInterfaces.size.toString(),
+            physicalClassVarianceKind.name,
         ) + physicalTypeParameterVariances.map { variance -> variance.name } +
                 ownerPath + initializationPath + objectInstancePath + genericOwnerCapabilityPath +
                 genericOwnerCapabilitySuperInterfaces.flatMap { superInterface ->
@@ -2919,7 +2949,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.Class {
-        require(fields.size >= 17) {
+        require(fields.size >= 18) {
             "class declaration '$logicalKey' has an incomplete CLR identity"
         }
         fun pathSize(fieldIndex: Int, view: String, allowAbsent: Boolean = false): Int {
@@ -2957,7 +2987,12 @@ object DotNetLibraryAbiCodec {
         require((genericOwnerCapabilitySize == 0) == fields[13].isEmpty()) {
             "class declaration '$logicalKey' has an inconsistent generic-owner capability assembly"
         }
-        var offset = 16
+        val physicalClassVarianceKind = DotNetPhysicalClassVarianceKind.entries.singleOrNull { kind ->
+            kind.name == fields[16]
+        } ?: throw IllegalArgumentException(
+            "class declaration '$logicalKey' has invalid physical class variance kind '${fields[16]}'"
+        )
+        var offset = 17
         require(offset + physicalTypeParameterCount <= fields.size) {
             "class declaration '$logicalKey' has a truncated GenericParam variance payload"
         }
@@ -3030,6 +3065,7 @@ object DotNetLibraryAbiCodec {
             ownerPath = ownerPath,
             physicalTypeParameterCount = physicalTypeParameterCount,
             physicalTypeParameterVariances = physicalTypeParameterVariances,
+            physicalClassVarianceKind = physicalClassVarianceKind,
             staticInitialization = initialization,
             objectInstance = objectInstance,
             valueClassAbi = fields[7].takeIf(String::isNotEmpty)?.let { primaryConstructorMethodName ->
@@ -3819,17 +3855,32 @@ internal class DotNetExternalDeclarations(
                     "${declaration.physicalTypeParameterCount}; expected erased arity 0 or complete logical arity " +
                     irClass.typeParameters.size
         }
-        // CLR class GenericParams remain invariant. A producer-recorded reified interface binds
-        // the variance emitted on its natural TypeDef; logical KLIB variance may deliberately be
-        // stronger and therefore cannot reconstruct this physical fact.
-        val canonicalVariances = if (irClass.isInterface && declaration.genericOwnerAbi != null) {
-            checkNotNull(publishedGenericInterfaceNaturalFixedTypeInputOrNull(irClass)) {
-                "external Kotlin/.NET interface '$logicalKey' lost its physical variance family"
-            }.physicalVariances.map { variance ->
-                variance.toDotNetIlVariance()
+        // Ordinary CLR class GenericParams remain invariant. A producer-recorded reified
+        // interface and a producer-recorded sealed CLR delegate instead bind the variance emitted
+        // on their exact TypeDef; logical KLIB variance may be stronger and cannot reconstruct
+        // that physical fact.
+        val canonicalVariances = when {
+            irClass.isInterface && declaration.genericOwnerAbi != null ->
+                checkNotNull(publishedGenericInterfaceNaturalFixedTypeInputOrNull(irClass)) {
+                    "external Kotlin/.NET interface '$logicalKey' lost its physical variance family"
+                }.physicalVariances.map { variance -> variance.toDotNetIlVariance() }
+            declaration.physicalClassVarianceKind ==
+                    DotNetPhysicalClassVarianceKind.SEALED_CLR_DELEGATE -> {
+                require(!irClass.isInterface && declaration.physicalTypeParameterCount ==
+                        irClass.typeParameters.size &&
+                        declaration.physicalTypeParameterVariances.indices.all { index ->
+                            declaration.physicalTypeParameterVariances[index]
+                                .isNoStrongerThan(irClass.typeParameters[index].variance)
+                        }
+                ) {
+                    "external Kotlin/.NET delegate '$logicalKey' has physical variance " +
+                            "inconsistent with its KLIB classifier"
+                }
+                declaration.physicalTypeParameterVariances.map { variance ->
+                    variance.toDotNetIlVariance()
+                }
             }
-        } else {
-            List(declaration.physicalTypeParameterCount) { Variance.INVARIANT }
+            else -> List(declaration.physicalTypeParameterCount) { Variance.INVARIANT }
         }
         val classInfo = buildClassInfo(
             bound.library.artifact.assemblyName,

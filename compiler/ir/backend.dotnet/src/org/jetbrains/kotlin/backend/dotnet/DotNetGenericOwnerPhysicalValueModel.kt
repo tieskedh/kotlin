@@ -131,7 +131,7 @@ internal class DotNetGenericOwnerPhysicalTypeDefReference(
     genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference>,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
     val supportsInlineNull: Boolean = false,
-    /** Exact retained proof that this variant CLASS TypeDef is a sealed CLR delegate. */
+    /** Exact retained-metadata or producer-recorded proof of a sealed variant CLR delegate. */
     val supportsClrDelegateVariance: Boolean = false,
 ) {
     val genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference> =
@@ -614,6 +614,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
     private val retainedForeignMethodDefinitions:
             Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
+    private val producerRecordedDelegateTypeDefinitions:
+            Set<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer>,
 ) {
     fun advance(
         nextEpoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
@@ -637,6 +639,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             varianceConstraintAuthorities.values.toSet(),
             retainedForeignTypeDefinitions,
             retainedForeignMethodDefinitions,
+            producerRecordedDelegateTypeDefinitions,
         )
     }
 
@@ -1540,6 +1543,29 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 varianceConstraintAuthorities = emptySet(),
                 retainedForeignTypeDefinitions = emptySet(),
                 retainedForeignMethodDefinitions = emptySet(),
+                producerRecordedDelegateTypeDefinitions = emptySet(),
+            )
+
+        /**
+         * Binds exact variant delegate TypeDefs only after the producer ABI adapter authenticated
+         * their sealed-delegate record. Caller-authored producer descriptions remain unavailable
+         * through [bind].
+         */
+        internal fun bindProducerRecordedDelegates(
+            declarations: DotNetProducerGenericDelegatePhysicalDeclarations,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> =
+            bindInternal(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                declarations.typeDefinitions,
+                methodDefinitions = emptyList(),
+                directSupertypeEdgeSets = emptyList(),
+                fieldDefinitions = emptyList(),
+                directSupertypeConstraintProofs = emptySet(),
+                varianceConstraintAuthorities = emptySet(),
+                retainedForeignTypeDefinitions = emptySet(),
+                retainedForeignMethodDefinitions = emptySet(),
+                producerRecordedDelegateTypeDefinitions =
+                    declarations.delegateTypeDefinitions.toSet(),
             )
 
         /**
@@ -1609,6 +1635,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     .mapTo(linkedSetOf()) { definition ->
                         definition.identity as DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr
                     },
+                producerRecordedDelegateTypeDefinitions = emptySet(),
             )
         }
 
@@ -1624,6 +1651,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     Set<DotNetGenericOwnerPhysicalVarianceConstraintAuthority>,
             retainedForeignTypeDefinitions: Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
             retainedForeignMethodDefinitions: Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
+            producerRecordedDelegateTypeDefinitions:
+                    Set<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer>,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val typesByIdentity = linkedMapOf<
                     DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -1632,6 +1661,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             for (candidate in typeDefinitions) {
                 val foreignIdentity = candidate.identity as?
                         DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                val producerIdentity = candidate.identity as?
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer
                 val hasVariantParameter = candidate.genericParameters.any { parameter ->
                     parameter.variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
                 }
@@ -1655,10 +1686,11 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
                 if (candidate.supportsClrDelegateVariance &&
-                    foreignIdentity !in retainedForeignTypeDefinitions
+                    foreignIdentity !in retainedForeignTypeDefinitions &&
+                    producerIdentity !in producerRecordedDelegateTypeDefinitions
                 ) {
-                    // Only the retained selected/raw classifier currently authenticates this
-                    // orthogonal CLASS fact. A local or producer description may not assert it.
+                    // Only the retained selected/raw classifier or the exact producer ABI
+                    // adapter may authenticate this orthogonal CLASS fact.
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
                 if ((candidate.identity as? DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary)
@@ -1675,6 +1707,17 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     )
                 }
                 typesByIdentity.putIfAbsent(candidate.identity, candidate)
+            }
+            for (identity in producerRecordedDelegateTypeDefinitions) {
+                val description = typesByIdentity[identity]
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                if (!description.supportsClrDelegateVariance ||
+                    description.category != DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "producer delegate authority does not match a variant class TypeDef",
+                    )
+                }
             }
 
             val methodsByIdentity = linkedMapOf<
@@ -1770,6 +1813,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 varianceAuthoritiesByDefinition,
                 retainedForeignTypeDefinitions,
                 retainedForeignMethodDefinitions,
+                producerRecordedDelegateTypeDefinitions,
             )
             for (candidate in typesByIdentity.values) {
                 for (parameter in candidate.genericParameters) {
@@ -1997,6 +2041,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     varianceAuthoritiesByDefinition,
                     retainedForeignTypeDefinitions,
                     retainedForeignMethodDefinitions,
+                    producerRecordedDelegateTypeDefinitions,
                 ),
             )
         }

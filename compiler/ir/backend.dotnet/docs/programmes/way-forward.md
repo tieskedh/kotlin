@@ -179,11 +179,22 @@ Constraint-safe variance composition is now closed without making the general
 construction helper permissive or treating an earlier edge proof as authority
 for a different construction. The same selected-graph service validates direct
 owners and inherited graphs, nominal plus special constraints, nested carriers,
-and Framework 4.8/.NET 10 target profiles. Producer-recorded delegate authority
-is the next declaration-authority boundary; storage-placement consumption
-remains the following value/state boundary. Only after those bounded families
-should the graph grammar widen to properties, class nodes, MethodImpls, or
-Runtime/Stdlib declarations.
+and Framework 4.8/.NET 10 target profiles.
+
+The bounded producer-recorded delegate declaration boundary is now closed for
+unconstrained TypeDefs. Physical-library ABI 66 carries an orthogonal
+`SEALED_CLR_DELEGATE` fact beside the ordered GenericParam variance vector. Only
+the decoded producer adapter may turn that record into class-category delegate
+authority; the general declaration binder still rejects caller-authored facts,
+and names or `Invoke` shapes remain irrelevant. Mixed `in`/`out` binder vectors
+reuse the same reference-only conversion and leave ancestry, carrier, identity,
+and state unchanged. The record deliberately supplies no delegate member or
+operation authority. Producer-side delegate synthesis and constrained producer
+delegate rows remain later schema/emission work.
+
+Storage-placement consumption is now the next value/state boundary. Only after
+that bounded family should the graph grammar widen to properties, class nodes,
+MethodImpls, or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an

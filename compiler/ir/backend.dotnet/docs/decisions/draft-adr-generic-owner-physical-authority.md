@@ -631,6 +631,18 @@ value provenance. A consumer binds those facts by artifact identity, physical
 owner/member identity, binder scope, and complete recorded contract. It does
 not infer them from generated names or reinterpret them from substituted KLIB.
 
+Physical-library ABI 66 records the CLR sealed-delegate variance exception as
+an orthogonal class-TypeDef fact. The fact remains separate from logical KLIB
+classifier kind and from method/member authority. For the current bounded
+producer grammar, the record carries one complete ordered, unconstrained
+GenericParam variance vector. Only the decoded producer-library adapter may
+authenticate `supportsClrDelegateVariance`; the general declaration binder
+rejects the same Boolean on a caller-authored producer identity. A TypeDef name,
+Kotlin function shape, or `Invoke` member proves nothing. The adapter preserves
+the category `CLASS`, publishes no fabricated base/interface edge, and supplies
+no operation endpoint. A consumer must still join the physical record with its
+independent KLIB classifier before using the recorded variance.
+
 When the current emitter owns the final natural generic-interface MethodDef,
 the bounded local route emits its exact open-declaration token, selects an
 already-proven closed construction implemented by the receiver, and uses the
@@ -1121,10 +1133,15 @@ one reference-variance conversion. The declaration index carries only selected-
 metadata authority for this query; success records a per-value view, leaves the
 source carrier and InterfaceImpl closure untouched, and cannot be reused by the
 general construction helper or a sibling target. Direct retained owners and
-inherited graphs share this rule on Framework 4.8 and .NET 10. Producer-recorded
-delegate authority is the next declaration boundary; storage placement remains
-separate. This is not another shape-specific state recognizer or a resumed
-stdlib census.
+inherited graphs share this rule on Framework 4.8 and .NET 10. ABI 66
+additionally admits unconstrained producer-recorded sealed delegates through
+the same reference-only conversion. Covariant, contravariant, and mixed ordered
+binders retain their exact construction while ordinary variant classes,
+unmarked producer records, value arguments, and caller-authored delegate facts
+fail closed. This declaration proof does not claim producer-side delegate
+synthesis, constrained producer delegate rows, delegate members, or operation
+routing. Storage placement is the next separate boundary; this is not another
+shape-specific state recognizer or a resumed stdlib census.
 
 ## Consequences
 
