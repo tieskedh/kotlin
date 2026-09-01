@@ -202,28 +202,30 @@ operation authority. Producer-side delegate synthesis and constrained producer
 delegate rows remain later schema/emission work.
 
 Physical authority and value provenance remain the active prerequisite to the
-source-built Stdlib census. Six bounded local-placement forms are executable
+source-built Stdlib census. Seven bounded local-placement forms are executable
 evidence: equal direct carriers, one unique recorded control-flow construction,
 bare or constructed current-owner parameter entries, a parameterless natural
 `Direct(!n)` result, and a natural `SplitNullable(!n, bool)` result retained in
 two private locals for one direct unprotected return. Every retained split call
 consumes one final exact-natural operation witness; it may be parameterless or
-may have one identity-preserving `STRICT_OWNER_INPUT(!m)` and no MethodSpec. Local
+may have one identity-preserving `STRICT_OWNER_INPUT(!m)` and no MethodSpec. One
+further exact shape composes `<R>(K, R): V?` with open `!K`/`!!R` inputs, an
+owner-bound `<!m>` MethodSpec, and an independent split `!V` result. Local
 producer members are bound to published contracts by declaration identity;
 separate consumers use validated producer records. Exact rules and current
 evidence belong in the owning ADR and `STATUS.md`, not in this route map.
 
 These proofs authorize no cast, semantic adaptation, field/state choice, ABI
 change, or fabricated construction. The split pair is not general local state:
-multiple ordinary arguments, MethodSpec calls, multiple consumers, control-flow
+other multi-argument or MethodSpec calls, multiple consumers, control-flow
 joins, captures, fields, and exception-protected returns still use their
 independently proven layout or the ordinary materializing boundary.
 Star/projected or truly broad source values never gain exact authority from a
 logical type.
 
-The next sequence is: extend split-pair retention to justified MethodSpec calls,
-multiple consumers, and control-flow joins; close multiple ordinary inputs and
-remaining parameter-entry forms; then prove null/bottom/unknown joins and
+The next sequence is: extend split-pair retention to multiple consumers and
+control-flow joins; close general multi-input and remaining parameter-entry
+forms; then prove null/bottom/unknown joins and
 explicit representation-changing conversions. Only after those value rules stabilize
 should the consumer widen to captures, properties, class nodes, MethodImpls, or
 new Runtime/Stdlib declarations. Broader state remains a separate producer-wide

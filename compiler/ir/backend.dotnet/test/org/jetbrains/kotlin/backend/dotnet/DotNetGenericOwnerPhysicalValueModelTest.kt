@@ -2478,6 +2478,132 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `owner and method inputs compose with a split nullable owner result`() {
+        val owner = localOwnerIdentity(IrClassSymbolImpl())
+        val natural = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            IrClassSymbolImpl(),
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val method = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            IrSimpleFunctionSymbolImpl(),
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val types = listOf(
+            typeDescription(owner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(natural, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val ownerT = boundTypeParameter(provisional, owner, 0)
+        val naturalK = boundTypeParameter(provisional, natural, 0)
+        val naturalV = boundTypeParameter(provisional, natural, 1)
+        val methodR = DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+            method,
+            0,
+        )
+        val methodReference = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = method,
+            declaringType = natural,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout =
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
+                        callableSlot(
+                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                            naturalV,
+                        ),
+                    ),
+                parameterSlots = listOf(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                        naturalK,
+                    ),
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        methodR,
+                    ),
+                ),
+            ),
+            genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+        )
+        val naturalTemplate = boundConstruction(
+            provisional,
+            natural,
+            listOf(ownerT, ownerT),
+        )
+        val declarations = boundDeclarationIndex(
+            types,
+            listOf(methodReference),
+            edgeSets = listOf(
+                edgeSet(owner, baseEdge(objectType()), interfaceEdge(naturalTemplate)),
+                edgeSet(natural),
+            ),
+        )
+        val ownerConstruction = boundConstruction(declarations, owner, listOf(ownerT))
+        val naturalConstruction = boundConstruction(
+            declarations,
+            natural,
+            listOf(ownerT, ownerT),
+        )
+        val receiver = directValue(boundCarrier(declarations, ownerConstruction))
+        val ownerValue = directValue(boundCarrier(declarations, ownerT))
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                method,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(
+                    view(naturalConstruction),
+                    methodArguments = listOf(ownerT),
+                ),
+                receiver,
+                listOf(ownerValue, ownerValue),
+            ),
+        ).value
+
+        assertEquals(1, route.instantiatedSignature.genericArity)
+        assertEquals(listOf(ownerT), route.methodArguments)
+        assertEquals(
+            listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+            ),
+            route.instantiatedSignature.parameterSlots.map { slot -> slot.domain },
+        )
+        assertEquals(
+            listOf(ownerT, ownerT),
+            route.instantiatedSignature.parameterSlots.map { slot -> slot.carrier },
+        )
+        assertEquals(methodR, route.method.signature.parameterSlots[1].carrier)
+        val split = assertIs<
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable,
+                >(route.instantiatedSignature.resultLayout)
+        assertEquals(ownerT, split.payloadSlot.carrier)
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.SplitNullable(
+                boundCarrier(declarations, ownerT),
+            ),
+            assertNotNull(route.producedResult).layout,
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                method,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(
+                    view(naturalConstruction),
+                    methodArguments = listOf(ownerT),
+                ),
+                receiver,
+                listOf(ownerValue, directValue(boundCarrier(declarations, objectType()))),
+            ),
+        )
+    }
+
+    @Test
     fun `direct-supertype targets may reference only their source TypeDef parameters`() {
         val source = localOwnerIdentity(IrClassSymbolImpl())
         val other = localOwnerIdentity(IrClassSymbolImpl())

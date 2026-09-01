@@ -489,17 +489,26 @@ internal class DotNetIlExpressionCodegen(
             candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
             ?: candidate
         }
-        if (source.typeParameters.isNotEmpty()) return null
+        if (source.typeParameters.size != expected.methodArgumentTypes.size ||
+            call.typeArguments.size != expected.methodArgumentTypes.size
+        ) return null
         splitNullableNaturalCallOrNull(call, source) ?: return null
         val resolved = resolveCall(call)
         if (!resolved.info.signature.hasSplitNullableResult ||
             resolved.info.genericOwnerPhysicalMethodIdentity != expected.methodIdentity ||
             resolved.info.owner != expected.receiverType.classInfo ||
+            !resolved.info.signature.hasThis ||
+            resolved.info.signature.methodGenericParameterCount !=
+                expected.methodArgumentTypes.size ||
+            resolved.info.signature.parameterTypes !=
+                listOf(expected.declaredReceiverType) + expected.declaredParameterTypes ||
+            resolved.info.signature.returnType !=
+                DotNetIlReturnType.Value(expected.declaredPayloadType) ||
             resolved.receiverType
                 ?.dotNetUniqueViewAsGenericOwner(expected.receiverType.classInfo) !=
                 expected.receiverType ||
             resolved.ownerToken != expected.receiverType.nameInSignature ||
-            resolved.methodInstantiation.isNotEmpty() ||
+            resolved.methodInstantiation != expected.methodArgumentTypes ||
             !resolved.virtual ||
             resolved.parameterTypes != listOf(expected.receiverType) + expected.parameterTypes ||
             resolved.info.signature.physicalParameterCount != resolved.parameterTypes.size + 1 ||

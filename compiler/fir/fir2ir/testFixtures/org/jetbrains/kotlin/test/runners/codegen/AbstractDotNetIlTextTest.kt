@@ -2197,6 +2197,11 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                         "IInlineLookupKotlinSemantic" !in ilText &&
                         "'InlineArgumentSplitLocalRoute`1'" !in ilText &&
                         "InlineArgumentSplitLocalRoute\$lookup\$sourceNaturalAlias\$1`1" !in ilText &&
+                        "'InlineMethodLookup`2'" !in ilText &&
+                        "IInlineMethodLookupKotlinSemantic" !in ilText &&
+                        "'InlineMethodSpecSplitLocalRoute`1'" !in ilText &&
+                        "InlineMethodSpecSplitLocalRoute\$lookup\$methodSpecSourceNaturalAlias\$1`1" !in ilText &&
+                        "methodSpecResultAlias@isNull" !in ilText &&
                         "'InlineSplitLocalProducer`1'" !in ilText &&
                         "InlineSplitLocalProducerKotlinSemantic" !in ilText
             }) {
@@ -2565,6 +2570,115 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The strict-input split local materialized or crossed a semantic route: " +
                     "forbidden=$forbiddenArgumentSplitMaterialization, " +
                     "boxing=$argumentSplitBoxing, method=$argumentSplitMethod"
+        }
+        val methodSpecSplitResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineMethodSpecSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName == "lookup" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "methodSpecResultAlias"
+        }
+        check(methodSpecSplitResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val payload = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    prediction.storageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    payload.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    payload.ownerParameterIndices == listOf(0) &&
+                    payload.parameterBinderOwnerName
+                        ?.endsWith("InlineMethodSpecSplitLocalRoute") == true &&
+                    prediction.storageCarrier == payload &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineMethodSpecSplitLocalRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    comparison.actualStorageCarrier == payload &&
+                    comparison.actualAuxiliarySlotIndex != null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                    comparison.relation ==
+                    DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "An exact MethodSpec call must retain its !T plus null flag: " +
+                    "result=$methodSpecSplitResultAlias, all=$comparisons"
+        }
+        val methodSpecSplitFlagSlot = checkNotNull(
+            methodSpecSplitResultAlias.actualAuxiliarySlotIndex,
+        ) {
+            "The MethodSpec split local has no recorded Boolean slot: $methodSpecSplitResultAlias"
+        }
+        val methodSpecSplitMethod = splitMethodWindows.singleOrNull { method ->
+            "'methodSpecResultAlias'" in method &&
+                    "'methodSpecResultAlias@isNull'" in method &&
+                    "'InlineMethodLookup`2'<!0, !0>::'lookup'<!0>" in method
+        }
+        check(methodSpecSplitMethod != null) {
+            "Cannot isolate the MethodSpec split-local MethodDef: ${splitEmittedIl.path}"
+        }
+        val methodSpecSplitInstructions = methodSpecSplitMethod.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        val methodSpecSplitCalls = methodSpecSplitInstructions.filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "'InlineMethodLookup`2'<!0, !0>::'lookup'" in line
+        }
+        val methodSpecSplitCall = methodSpecSplitCalls.singleOrNull()
+        check(methodSpecSplitCall?.let { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!1\\s+class\\s+" +
+                        "'InlineMethodLookup`2'<!0,\\s*!0>::'lookup'<!0>" +
+                        "\\(!0,\\s*!!0,\\s*bool&\\)$",
+            ).matches(call)
+        } == true) {
+            "The open !K/!!R MethodDef, owner-bound MethodSpec and !V/bool result must remain " +
+                    "independent: calls=$methodSpecSplitCalls, method=$methodSpecSplitMethod"
+        }
+        val methodSpecSplitCallIndex = methodSpecSplitInstructions.indexOf(methodSpecSplitCall)
+        check(methodSpecSplitCallIndex > 0 &&
+                methodSpecSplitInstructions[methodSpecSplitCallIndex - 1] ==
+                "ldloca $methodSpecSplitFlagSlot") {
+            "The nested MethodSpec call must receive its private null-flag local by address: " +
+                    "method=$methodSpecSplitMethod"
+        }
+        check(Regex(
+            "\\[${methodSpecSplitFlagSlot - 1}]\\s+!0\\s+'methodSpecResultAlias'",
+        ).containsMatchIn(methodSpecSplitMethod) && Regex(
+            "\\[$methodSpecSplitFlagSlot]\\s+bool\\s+'methodSpecResultAlias@isNull'",
+        ).containsMatchIn(methodSpecSplitMethod)) {
+            "The MethodSpec split local must allocate distinct !V and Boolean locals: " +
+                    "method=$methodSpecSplitMethod"
+        }
+        val forbiddenMethodSpecSplitMaterialization = listOf(
+            "System.Nullable",
+            "splitNullableNonNull",
+            "splitNullableResult",
+            "KotlinSemantic",
+        ).filter(methodSpecSplitMethod::contains)
+        val methodSpecSplitBoxing = methodSpecSplitInstructions.filter { line ->
+            Regex("^(box|unbox\\.any)\\b").containsMatchIn(line)
+        }
+        check(forbiddenMethodSpecSplitMaterialization.isEmpty() &&
+                methodSpecSplitBoxing.isEmpty()) {
+            "The MethodSpec split local materialized or crossed a semantic route: " +
+                    "forbidden=$forbiddenMethodSpecSplitMaterialization, " +
+                    "boxing=$methodSpecSplitBoxing, method=$methodSpecSplitMethod"
         }
         val sourceAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSelfView") &&

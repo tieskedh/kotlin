@@ -11,7 +11,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvena
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRoutePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullState
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
@@ -517,9 +520,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
          * selects only a construction of its owner which the receiver already guarantees. The
          * shared physical operation query then instantiates the recorded result layout. Super and
          * semantic routes remain excluded. Direct results retain the first parameterless,
-         * non-MethodSpec boundary. Split results additionally admit one exact-routed strict owner
-         * input whose final value fact entered the instantiated `!n` slot identity-preservingly;
-         * broader inputs, multiple inputs, and MethodSpecs remain operation-only.
+         * non-MethodSpec boundary. Split results additionally admit either one exact-routed strict
+         * owner input, or the bounded `<R>(K, R): V?` composition whose open `!n`/`!!n` slots,
+         * exact owner-bound MethodSpec and instantiated arguments are independently proven.
+         * Broader inputs and every other multi-input or MethodSpec shape remain operation-only.
          */
         private fun evaluateCallResultOrNull(
             expression: IrCall,
@@ -536,9 +540,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
                 ?: candidate
             }
-            if (expression.superQualifierSymbol != null || source.typeParameters.isNotEmpty()) {
-                return null
-            }
+            if (expression.superQualifierSymbol != null) return null
             val receiverExpression = expression.dispatchReceiver ?: return null
             val receiver = evaluateInitializerOrNull(receiverExpression, storage) ?: return null
             val ownerAuthority = authority ?: return null
@@ -578,7 +580,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             return result.takeIf { produced ->
                 when (produced.layout) {
                     is DotNetGenericOwnerProducedValueLayout.Direct ->
-                        source.parameters.all { parameter ->
+                        source.typeParameters.isEmpty() && source.parameters.all { parameter ->
                             parameter.kind == IrParameterKind.DispatchReceiver
                         }
                     is DotNetGenericOwnerProducedValueLayout.SplitNullable -> {
@@ -587,8 +589,12 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                         }
                         val slots = selectedRoute.instantiatedSignature.parameterSlots
                         when (slots.size) {
-                            0 -> ordinaryParameters.isEmpty()
+                            0 -> ordinaryParameters.isEmpty() &&
+                                    source.typeParameters.isEmpty() &&
+                                    selectedRoute.methodArguments.isEmpty() &&
+                                    selectedRoute.instantiatedSignature.genericArity == 0
                             1 -> ordinaryParameters.size == 1 &&
+                                    source.typeParameters.isEmpty() &&
                                     selectedRoute.methodArguments.isEmpty() &&
                                     selectedRoute.instantiatedSignature.genericArity == 0 &&
                                     slots.single().domain ==
@@ -596,6 +602,56 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                                     ownerAuthority.ownerParameterCarriers.any { carrier ->
                                         carrier.type == slots.single().carrier
                                     }
+                            2 -> {
+                                val declaredSlots = selectedRoute.method.signature.parameterSlots
+                                val methodArgument = selectedRoute.methodArguments.singleOrNull()
+                                val declaredResult = selectedRoute.method.signature.resultLayout as?
+                                        DotNetGenericOwnerPhysicalCallableResultLayoutReference
+                                            .SplitNullable
+                                val instantiatedResult =
+                                    selectedRoute.instantiatedSignature.resultLayout as?
+                                        DotNetGenericOwnerPhysicalCallableResultLayoutReference
+                                            .SplitNullable
+                                ordinaryParameters.size == 2 &&
+                                        source.typeParameters.size == 1 &&
+                                        selectedRoute.method.signature.genericArity == 1 &&
+                                        selectedRoute.instantiatedSignature.genericArity == 1 &&
+                                        selectedRoute.method.genericParameters.singleOrNull()
+                                            ?.isUnconstrained == true &&
+                                        declaredSlots.map { slot -> slot.domain } == listOf(
+                                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                                        ) &&
+                                        slots.map { slot -> slot.domain } ==
+                                        declaredSlots.map { slot -> slot.domain } &&
+                                        declaredSlots[0].carrier.isTypeParameterOf(
+                                            selectedRoute.method.declaringType,
+                                        ) &&
+                                        declaredSlots[1].carrier.isMethodParameterOf(
+                                            selectedRoute.method.identity,
+                                            index = 0,
+                                        ) &&
+                                        methodArgument != null &&
+                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                            carrier.type == methodArgument
+                                        } &&
+                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                            carrier.type == slots[0].carrier
+                                        } &&
+                                        slots[1].carrier == methodArgument &&
+                                        declaredResult?.payloadSlot?.domain ==
+                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                                        declaredResult.payloadSlot.carrier.isTypeParameterOf(
+                                            selectedRoute.method.declaringType,
+                                        ) &&
+                                        instantiatedResult?.payloadSlot?.domain ==
+                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                            carrier.type == instantiatedResult.payloadSlot.carrier
+                                        } &&
+                                        instantiatedResult.payloadSlot.carrier ==
+                                        produced.layout.payloadCarrier.type
+                            }
                             else -> false
                         }
                     }
@@ -604,6 +660,27 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     -> false
                 }
             }
+        }
+
+        private fun DotNetGenericOwnerSymbolicCarrierReference.isTypeParameterOf(
+            definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        ): Boolean {
+            val parameter = this as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                ?: return false
+            val binder = parameter.binder as?
+                    DotNetGenericOwnerPhysicalGenericBinderReference.Type ?: return false
+            return binder.definition == definition
+        }
+
+        private fun DotNetGenericOwnerSymbolicCarrierReference.isMethodParameterOf(
+            definition: DotNetGenericOwnerPhysicalMethodDefIdentity,
+            index: Int,
+        ): Boolean {
+            val parameter = this as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                ?: return false
+            val binder = parameter.binder as?
+                    DotNetGenericOwnerPhysicalGenericBinderReference.Method ?: return false
+            return binder.definition == definition && parameter.index == index
         }
 
         private fun evaluateConstructorResultOrNull(

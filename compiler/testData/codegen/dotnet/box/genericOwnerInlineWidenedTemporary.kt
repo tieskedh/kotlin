@@ -56,6 +56,23 @@ private class InlineArgumentSplitLocalRoute<T> : InlineLookup<T, T> {
     }
 }
 
+private class InlineMethodSpecSplitLocalRoute<T> : InlineLookup<T, T> {
+    override fun lookup(key: T): T? {
+        val methodSpecSourceNaturalAlias: InlineMethodLookup<T, T> =
+            object : InlineMethodLookup<T, T> {
+                override fun <S> lookup(key: T, marker: S): T? = key
+            }
+        val methodSpecKeyAlias: T = key
+        val methodSpecMarkerAlias: T = key
+        val methodSpecResultAlias: T? =
+            methodSpecSourceNaturalAlias.lookup<T>(
+                methodSpecKeyAlias,
+                methodSpecMarkerAlias,
+            )
+        return methodSpecResultAlias
+    }
+}
+
 private class InlineSplitLocalRoute<T>(private val value: T?) : InlineSplitLocalProducer<T> {
     override fun read(): T? = value
 
@@ -277,6 +294,20 @@ fun box(): String {
     }
     if (InlineArgumentSplitLocalRoute<Int?>().lookup(null) != null) {
         return "nullable value argument split local route"
+    }
+    if (InlineMethodSpecSplitLocalRoute<Int>().lookup(56) != 56) {
+        return "value MethodSpec split local route"
+    }
+    if (InlineMethodSpecSplitLocalRoute<String>().lookup("method split local") !=
+        "method split local"
+    ) {
+        return "reference MethodSpec split local route"
+    }
+    if (InlineMethodSpecSplitLocalRoute<Int?>().lookup(57) != 57) {
+        return "nullable value MethodSpec split local value route"
+    }
+    if (InlineMethodSpecSplitLocalRoute<Int?>().lookup(null) != null) {
+        return "nullable value MethodSpec split local route"
     }
     if (InlineSplitLocalRoute(52).readThroughLocal() != 52) {
         return "value split local route"

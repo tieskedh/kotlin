@@ -168,8 +168,20 @@ storage reads for receiver and argument, and uses a private Boolean local as the
 nested call's null-flag address, never the enclosing flag. The interface
 MethodDef's independent `!K`/`!V` binder positions are
 preserved even when the concrete proof binds both to one outer type parameter.
-Multiple arguments and MethodSpecs remain outside this slice. Evidence is in the
+Additional ordinary arguments and every MethodSpec remain outside this second
+slice. Evidence is in the
 [strict-input local-placement archive](../archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md).
+
+The third local-transport slice admits exactly one MethodSpec-bearing operation
+shape: `<R>(K, R): V?`. Its retained authority contains both the declaration-
+time receiver, `!K`/`!!R` parameter vector and `!V` payload, and the independently
+instantiated receiver, parameters, owner-bound `<!m>` MethodSpec and payload.
+This prevents equal call-site carriers from hiding a TypeDef/MethodDef binder
+swap. The sole MethodDef parameter must be fully unconstrained, every call value
+must be a direct exact storage read, and all earlier pair-use restrictions stay
+in force. This proves one composition, not arbitrary MethodSpecs or argument
+vectors. Evidence is in the
+[MethodSpec local-placement archive](../archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md).
 
 This remains a **GO** for production-inert consolidation. It is not a GO for
 public ABI or for applying the layout to `Map`; the custom proof passing removes

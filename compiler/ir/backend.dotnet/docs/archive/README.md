@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md`](generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md)
+  records the first retained MethodSpec-bearing split-result local: the exact
+  `<R>(K, R): V?` composition, independent open TypeDef/MethodDef binders and
+  instantiated carriers, one owner-bound MethodSpec, unboxed value/reference/
+  nullable execution, and the exact Framework 4.8/.NET 10 erased inverse.
 - [`generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md`](generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md)
   records the first retained argument-bearing split-result local: one final
   exact-natural operation witness, one identity-preserving
