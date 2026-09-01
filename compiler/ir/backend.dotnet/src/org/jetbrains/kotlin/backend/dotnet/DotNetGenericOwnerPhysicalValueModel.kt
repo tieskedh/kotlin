@@ -10,13 +10,17 @@ import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeAuthority
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrReferenceVariancePlan
+import org.jetbrains.kotlin.load.dotnet.DotNetClrReferenceVarianceStep
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.planDotNetClrReferenceVariance
 
 /** Monotone physical-declaration authority epochs. Value flow never advances this epoch. */
 internal enum class DotNetGenericOwnerPhysicalAuthorityEpoch {
@@ -127,6 +131,8 @@ internal class DotNetGenericOwnerPhysicalTypeDefReference(
     genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference>,
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
     val supportsInlineNull: Boolean = false,
+    /** Exact retained proof that this variant CLASS TypeDef is a sealed CLR delegate. */
+    val supportsClrDelegateVariance: Boolean = false,
 ) {
     val genericParameters: List<DotNetGenericOwnerPhysicalGenericParameterReference> =
         genericParameters.toList()
@@ -136,6 +142,14 @@ internal class DotNetGenericOwnerPhysicalTypeDefReference(
     init {
         require(!supportsInlineNull || category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE) {
             "a physical TypeDef description requires coherent inline-null support"
+        }
+        require(!supportsClrDelegateVariance ||
+                category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+                genericParameters.any { parameter ->
+                    parameter.variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                }
+        ) {
+            "CLR delegate-variance authority requires a variant class TypeDef"
         }
     }
 
@@ -147,19 +161,22 @@ internal class DotNetGenericOwnerPhysicalTypeDefReference(
                 identity == other.identity &&
                 genericParameters == other.genericParameters &&
                 category == other.category &&
-                supportsInlineNull == other.supportsInlineNull
+                supportsInlineNull == other.supportsInlineNull &&
+                supportsClrDelegateVariance == other.supportsClrDelegateVariance
 
     override fun hashCode(): Int {
         var result = identity.hashCode()
         result = 31 * result + genericParameters.hashCode()
         result = 31 * result + category.hashCode()
         result = 31 * result + supportsInlineNull.hashCode()
+        result = 31 * result + supportsClrDelegateVariance.hashCode()
         return result
     }
 
     override fun toString(): String =
         "TypeDef(identity=$identity, genericParameters=$genericParameters, " +
-                "category=$category, supportsInlineNull=$supportsInlineNull)"
+                "category=$category, supportsInlineNull=$supportsInlineNull, " +
+                "supportsClrDelegateVariance=$supportsClrDelegateVariance)"
 }
 
 /** Stable compilation-local identity of one real or planned CLR MethodDef. */
@@ -785,6 +802,282 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         }
     }
 
+    private enum class PhysicalReferenceShape {
+        REFERENCE,
+        VALUE,
+    }
+
+    private data class PhysicalReferenceAssignmentPair(
+        val source: DotNetGenericOwnerSymbolicCarrierReference,
+        val target: DotNetGenericOwnerSymbolicCarrierReference,
+    )
+
+    private class PhysicalReferenceAssignmentState(
+        var visitedPairs: Int = 0,
+        val activePairs: MutableSet<PhysicalReferenceAssignmentPair> = mutableSetOf(),
+    )
+
+    /**
+     * Proves one same-TypeDef CLR generic variance conversion from physical authority only.
+     *
+     * Recorded ancestry and variance deliberately remain different facts: this query never adds an
+     * InterfaceImpl edge to [physicalInterfaceViewClosureOrError]. Differing arguments must occupy
+     * variant rows, both sides must be physically reference-shaped, and their direction must be
+     * assignment-compatible through exact recorded hierarchy plus this same rule recursively.
+     * Value arguments therefore remain invariant and boxing is never considered.
+     */
+    fun proveClrReferenceVarianceConversionOrError(
+        source: DotNetGenericOwnerPhysicalView,
+        target: DotNetGenericOwnerPhysicalView,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        if (source.family != target.family) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        for (construction in listOf(source.construction, target.construction)) {
+            when (val validation = validateConstructionOrError(
+                construction.definition,
+                construction.arguments,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+            }
+        }
+        if (source == target) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        return proveSameDefinitionReferenceVarianceOrError(
+            source.construction,
+            target.construction,
+            PhysicalReferenceAssignmentState(),
+        )
+    }
+
+    private fun proveSameDefinitionReferenceVarianceOrError(
+        source: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        target: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        state: PhysicalReferenceAssignmentState,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        if (source.definition != target.definition) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val description = typeDefinitions[source.definition]
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (description.category != DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE &&
+            !description.supportsClrDelegateVariance
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val plan = when (val candidate = planDotNetClrReferenceVariance(
+            description.genericParameters.map { parameter ->
+                when (parameter.variance) {
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT ->
+                        DotNetClrGenericParameterVariance.INVARIANT
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT ->
+                        DotNetClrGenericParameterVariance.COVARIANT
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT ->
+                        DotNetClrGenericParameterVariance.CONTRAVARIANT
+                }
+            },
+            source.arguments,
+            target.arguments,
+        )) {
+            is DotNetClrReferenceVariancePlan.Planned -> candidate
+            DotNetClrReferenceVariancePlan.InvalidGenericParameterLayout ->
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "physical variance conversion contradicts its TypeDef arity",
+                )
+        }
+
+        for (step in plan.steps) {
+            val assignment = when (step) {
+                DotNetClrReferenceVarianceStep.InvariantMismatch ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                is DotNetClrReferenceVarianceStep.Assignment -> step
+            }
+            for (argument in listOf(assignment.actual, assignment.expected)) {
+                when (val shape = physicalReferenceShapeOrError(argument)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                        if (shape.value != PhysicalReferenceShape.REFERENCE) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Conflict(shape.reason)
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            }
+            when (val argumentAssignment = provePhysicalReferenceAssignmentOrError(
+                assignment.source,
+                assignment.destination,
+                state,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        argumentAssignment.reason,
+                    )
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+        }
+        return if (plan.steps.isNotEmpty()) {
+            DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        } else {
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    }
+
+    private fun provePhysicalReferenceAssignmentOrError(
+        source: DotNetGenericOwnerSymbolicCarrierReference,
+        target: DotNetGenericOwnerSymbolicCarrierReference,
+        state: PhysicalReferenceAssignmentState,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        if (source == target) return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        if (++state.visitedPairs > MAX_PHYSICAL_REFERENCE_ASSIGNMENT_PAIRS) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val pair = PhysicalReferenceAssignmentPair(source, target)
+        if (!state.activePairs.add(pair)) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "cyclic physical reference-assignability proof",
+            )
+        }
+        return try {
+            for (carrier in listOf(source, target)) {
+                when (val shape = physicalReferenceShapeOrError(carrier)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                        if (shape.value != PhysicalReferenceShape.REFERENCE) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Conflict(shape.reason)
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            }
+            if (target == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()) {
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+            }
+            if (source is DotNetGenericOwnerSymbolicCarrierReference.SzArray &&
+                target is DotNetGenericOwnerSymbolicCarrierReference.SzArray
+            ) {
+                return provePhysicalReferenceAssignmentOrError(
+                    source.element,
+                    target.element,
+                    state,
+                )
+            }
+            val sourceConstruction = source as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            val targetConstruction = target as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            if (sourceConstruction.definition == targetConstruction.definition) {
+                return proveSameDefinitionReferenceVarianceOrError(
+                    sourceConstruction,
+                    targetConstruction,
+                    state,
+                )
+            }
+            val targetDescription = typeDefinitions[targetConstruction.definition]
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            if (targetDescription.category != DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val closure = when (val result =
+                physicalInterfaceViewClosureOrError(sourceConstruction)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(result.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            for (candidate in closure.interfaceViews) {
+                if (candidate.family != targetConstruction.definition) continue
+                if (candidate.construction == targetConstruction) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+                }
+                when (val conversion = proveSameDefinitionReferenceVarianceOrError(
+                    candidate.construction,
+                    targetConstruction,
+                    state,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> return conversion
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return conversion
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+                }
+            }
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        } finally {
+            check(state.activePairs.remove(pair)) {
+                "physical reference-assignability proof lost its active pair"
+            }
+        }
+    }
+
+    private fun physicalReferenceShapeOrError(
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+    ): DotNetGenericOwnerPhysicalBindingResult<PhysicalReferenceShape> {
+        return when (carrier) {
+            is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> when (carrier.kind) {
+                DotNetGenericOwnerPhysicalTypeKind.STRING,
+                DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+                -> DotNetGenericOwnerPhysicalBindingResult.Bound(PhysicalReferenceShape.REFERENCE)
+                DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+                DotNetGenericOwnerPhysicalTypeKind.INT32,
+                -> DotNetGenericOwnerPhysicalBindingResult.Bound(PhysicalReferenceShape.VALUE)
+                DotNetGenericOwnerPhysicalTypeKind.VOID ->
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "void cannot participate in physical reference assignability",
+                    )
+                DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+                DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+                DotNetGenericOwnerPhysicalTypeKind.NAMED,
+                DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+                -> error("a structural physical type kind cannot occur as a symbolic leaf")
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+                val parameter = when (val binder = carrier.binder) {
+                    is DotNetGenericOwnerPhysicalGenericBinderReference.Type ->
+                        typeDefinitions[binder.definition]
+                            ?.genericParameters?.getOrNull(carrier.index)
+                    is DotNetGenericOwnerPhysicalGenericBinderReference.Method ->
+                        methodDefinitions[binder.definition]
+                            ?.genericParameters?.getOrNull(carrier.index)
+                } ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                when {
+                    parameter.hasReferenceTypeConstraint ->
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(
+                            PhysicalReferenceShape.REFERENCE,
+                        )
+                    parameter.hasNotNullableValueTypeConstraint ->
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(
+                            PhysicalReferenceShape.VALUE,
+                        )
+                    else -> DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                val description = typeDefinitions[carrier.definition]
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                when (description.category) {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        PhysicalReferenceShape.REFERENCE,
+                    )
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE ->
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(
+                            PhysicalReferenceShape.VALUE,
+                        )
+                }
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(PhysicalReferenceShape.REFERENCE)
+        }
+    }
+
     fun carrierOrError(
         type: DotNetGenericOwnerSymbolicCarrierReference,
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> =
@@ -1125,6 +1418,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     }
 
     companion object {
+        private const val MAX_PHYSICAL_REFERENCE_ASSIGNMENT_PAIRS = 65_536
+
         fun bind(
             epoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
             typeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -1224,8 +1519,33 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             for (candidate in typeDefinitions) {
                 val foreignIdentity = candidate.identity as?
                         DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                val hasVariantParameter = candidate.genericParameters.any { parameter ->
+                    parameter.variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                }
+                if (hasVariantParameter &&
+                    candidate.category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a physical value TypeDef cannot declare CLR variance",
+                    )
+                }
+                if (hasVariantParameter &&
+                    candidate.category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+                    !candidate.supportsClrDelegateVariance
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a variant physical class TypeDef requires sealed CLR delegate authority",
+                    )
+                }
                 if (foreignIdentity != null && foreignIdentity !in retainedForeignTypeDefinitions) {
                     // The identity retains the row, but only the metadata adapter may describe it.
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                if (candidate.supportsClrDelegateVariance &&
+                    foreignIdentity !in retainedForeignTypeDefinitions
+                ) {
+                    // Only the retained selected/raw classifier currently authenticates this
+                    // orthogonal CLASS fact. A local or producer description may not assert it.
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
                 if ((candidate.identity as? DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary)
@@ -1911,6 +2231,7 @@ internal enum class DotNetGenericOwnerPhysicalViewEvidence {
     PRODUCER_ABI,
     RETAINED_FOREIGN_METADATA,
     CHECKED_RUNTIME_BARRIER,
+    CLR_REFERENCE_VARIANCE_CONVERSION,
     IDENTITY_PRESERVING_TRANSFER,
     STORAGE_READ,
 }
@@ -2096,6 +2417,37 @@ internal data class DotNetGenericOwnerProducedValueFact(
     }
 }
 
+/** Collects only direct or recorded views rooted in already-guaranteed value evidence. */
+private fun DotNetGenericOwnerProducedValueFact.recordedPhysicalSourceViewsOrError(
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+): DotNetGenericOwnerPhysicalBindingResult<Set<DotNetGenericOwnerPhysicalView>> {
+    if (!nullState.canBeNonNull) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val knownViews = (provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known)
+        ?.views ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val sourceViews = linkedSetOf<DotNetGenericOwnerPhysicalView>()
+    sourceViews += knownViews
+    val sourceConstructions = linkedSetOf<
+            DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+            >()
+    ((layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier?.type as?
+            DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+        ?.let { construction ->
+            sourceConstructions += construction
+            sourceViews += DotNetGenericOwnerPhysicalView(construction)
+        }
+    knownViews.mapTo(sourceConstructions) { view -> view.construction }
+    for (sourceConstruction in sourceConstructions) {
+        when (val closure = declarations.physicalInterfaceViewClosureOrError(sourceConstruction)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                sourceViews += closure.value.interfaceViews
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(closure.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+        }
+    }
+    return DotNetGenericOwnerPhysicalBindingResult.Bound(sourceViews.toSet())
+}
+
 /**
  * Capability minted only after one value independently proves an already-selected physical view.
  * Merely naming a construction, including as selected lineage, can never create this authority.
@@ -2112,27 +2464,29 @@ internal class DotNetGenericOwnerAuthenticatedPhysicalView private constructor(
             declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
             requiredView: DotNetGenericOwnerPhysicalView,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerAuthenticatedPhysicalView> {
-            if (!value.nullState.canBeNonNull) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            val sourceViews = when (val sources =
+                value.recordedPhysicalSourceViewsOrError(declarations)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> sources.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(sources.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            val knownViews = (value.provenance.guaranteedViews as?
-                    DotNetGenericOwnerGuaranteedViews.Known)?.views
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-
-            val sourceConstructions =
-                linkedSetOf<DotNetGenericOwnerSymbolicCarrierReference.Constructed>()
-            ((value.layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier?.type as?
-                    DotNetGenericOwnerSymbolicCarrierReference.Constructed)
-                ?.let(sourceConstructions::add)
-            for (view in knownViews) sourceConstructions += view.construction
-            var found = requiredView in knownViews
-            for (source in sourceConstructions) {
-                when (val closure = declarations.physicalInterfaceViewClosureOrError(source)) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
-                        found = found || requiredView in closure.value.interfaceViews
+            var found = requiredView in sourceViews
+            if (!found) {
+                for (sourceView in sourceViews) {
+                    if (sourceView.family != requiredView.family) continue
+                    when (val conversion = declarations
+                        .proveClrReferenceVarianceConversionOrError(sourceView, requiredView)
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                            found = true
+                            break
+                        }
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return conversion
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
                     }
-                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return closure
-                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
                 }
             }
             if (!found) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
@@ -2188,6 +2542,56 @@ internal fun DotNetGenericOwnerProducedValueFact.selectRecordedPhysicalInterface
     }
     selectedProvenance = selectedProvenance.selectViewOrNull(desiredView) ?: return null
     return copy(provenance = selectedProvenance)
+}
+
+/**
+ * Records one verifier-valid CLR variance view without changing the produced reference carrier.
+ * The target is derived only from a construction already guaranteed on this same non-null value;
+ * logical Kotlin subtyping and selected lineage never enter the proof.
+ */
+internal fun DotNetGenericOwnerProducedValueFact.selectClrReferenceVarianceViewOrError(
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    desiredView: DotNetGenericOwnerPhysicalView,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerProducedValueFact> {
+    if (!nullState.canBeNonNull) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val knownViews = (provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known)
+        ?.views ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    if (desiredView in knownViews) {
+        val selected = provenance.selectViewOrNull(desiredView)
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(copy(provenance = selected))
+    }
+
+    val sourceViews = when (val sources = recordedPhysicalSourceViewsOrError(declarations)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> sources.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(sources.reason)
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    for (sourceView in sourceViews) {
+        if (sourceView.family != desiredView.family || sourceView == desiredView) continue
+        when (val conversion = declarations.proveClrReferenceVarianceConversionOrError(
+            sourceView,
+            desiredView,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                val converted = provenance.guarantee(
+                    desiredView,
+                    DotNetGenericOwnerPhysicalViewEvidence.CLR_REFERENCE_VARIANCE_CONVERSION,
+                ).selectViewOrNull(desiredView)
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a proven CLR variance view could not become selected lineage",
+                    )
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    copy(provenance = converted),
+                )
+            }
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return conversion
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+        }
+    }
+    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
 }
 
 /** Unreachable is flow bottom and contributes neither a carrier nor provenance. */

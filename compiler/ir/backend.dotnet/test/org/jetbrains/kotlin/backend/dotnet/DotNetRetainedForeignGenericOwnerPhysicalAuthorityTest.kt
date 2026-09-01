@@ -180,9 +180,72 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 .genericParameters.single().variance,
         )
         assertEquals(
+            false,
+            assertNotNull(declarations.typeDescriptionOrNull(ownerIdentity))
+                .supportsClrDelegateVariance,
+        )
+        assertEquals(
             DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
             assertNotNull(declarations.methodDescriptionOrNull(methodIdentity))
                 .signature.parameterSlots[1].domain,
+        )
+    }
+
+    @Test
+    fun `retained CLR covariance selects the widened MethodDef owner without erasing its carrier`() {
+        val fixture = fixture(
+            ownerParameterAttributes = COVARIANT_ATTRIBUTE,
+            ownerDependentInput = false,
+        )
+        val declarations = boundDeclarations(fixture)
+        val owner = retainedOwnerIdentity(fixture)
+        val sourceConstruction = boundConstruction(
+            declarations,
+            owner,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.stringCarrier()),
+        )
+        val targetConstruction = boundConstruction(
+            declarations,
+            owner,
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+        )
+        val sourceValue = directValue(declarations, sourceConstruction)
+        val targetView = DotNetGenericOwnerPhysicalView(targetConstruction)
+
+        assertEquals(
+            setOf(DotNetGenericOwnerPhysicalView(sourceConstruction)),
+            assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalInterfaceViewClosure,
+                    >>(
+                declarations.physicalInterfaceViewClosureOrError(sourceConstruction),
+            ).value.interfaceViews,
+        )
+        val converted = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerProducedValueFact,
+                >>(
+            sourceValue.selectClrReferenceVarianceViewOrError(declarations, targetView),
+        ).value
+        assertEquals(sourceValue.layout, converted.layout)
+        assertEquals(targetView, converted.provenance.selectedViewLineage[owner])
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                converted,
+                exactTransferArguments(
+                    declarations,
+                    DotNetGenericOwnerSymbolicCarrierReference.stringCarrier(),
+                ),
+            )
+        ).value
+        assertEquals(targetView, route.requiredReceiverView)
+        assertEquals(
+            DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                route.instantiatedSignature.resultLayout,
+            ).slot.carrier,
         )
     }
 
@@ -1241,10 +1304,70 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                         },
                         delegateDescription.genericParameters.single().variance,
                     )
+                    assertEquals(true, delegateDescription.supportsClrDelegateVariance)
                     assertEquals(
                         DotNetGenericOwnerPhysicalBindingResult.Unavailable,
                         declarations.directSupertypeEdgesOrUnavailable(delegateIdentity),
                     )
+
+                    if (constructionDepth == 1) {
+                        val sourceArgument = if (contravariant) {
+                            DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+                        } else {
+                            DotNetGenericOwnerSymbolicCarrierReference.stringCarrier()
+                        }
+                        val targetArgument = if (contravariant) {
+                            DotNetGenericOwnerSymbolicCarrierReference.stringCarrier()
+                        } else {
+                            DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+                        }
+                        val sourceDelegate = boundConstruction(
+                            declarations,
+                            delegateIdentity,
+                            listOf(sourceArgument),
+                        )
+                        val targetDelegate = boundConstruction(
+                            declarations,
+                            delegateIdentity,
+                            listOf(targetArgument),
+                        )
+                        val sourceValue = directValue(declarations, sourceDelegate)
+                        val targetView = DotNetGenericOwnerPhysicalView(targetDelegate)
+                        val converted = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                                DotNetGenericOwnerProducedValueFact,
+                                >>(
+                            sourceValue.selectClrReferenceVarianceViewOrError(
+                                declarations,
+                                targetView,
+                            )
+                        ).value
+                        assertEquals(sourceValue.layout, converted.layout)
+                        assertEquals(
+                            targetView,
+                            converted.provenance.selectedViewLineage[delegateIdentity],
+                        )
+                        assertEquals(
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                            directValue(declarations, targetDelegate)
+                                .selectClrReferenceVarianceViewOrError(
+                                    declarations,
+                                    DotNetGenericOwnerPhysicalView(sourceDelegate),
+                                ),
+                        )
+                        val valueDelegate = boundConstruction(
+                            declarations,
+                            delegateIdentity,
+                            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+                        )
+                        assertEquals(
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                            directValue(declarations, valueDelegate)
+                                .selectClrReferenceVarianceViewOrError(
+                                    declarations,
+                                    targetView,
+                                ),
+                        )
+                    }
 
                     var expectedCarrier: DotNetGenericOwnerSymbolicCarrierReference =
                         DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()

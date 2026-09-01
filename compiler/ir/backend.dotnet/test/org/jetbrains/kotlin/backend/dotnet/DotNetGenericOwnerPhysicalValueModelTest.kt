@@ -159,6 +159,400 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `CLR covariance adds a selected view without rewriting the produced carrier or ancestry`() {
+        val covariant = localOwnerIdentity(IrClassSymbolImpl())
+        val declarations = boundDeclarationIndex(
+            listOf(variantTypeDescription(
+                covariant,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+            )),
+            emptyList(),
+            edgeSets = listOf(edgeSet(covariant)),
+        )
+        val sourceConstruction = boundConstruction(declarations, covariant, listOf(stringType()))
+        val targetConstruction = boundConstruction(declarations, covariant, listOf(objectType()))
+        val sourceView = view(sourceConstruction)
+        val targetView = view(targetConstruction)
+        val sourceValue = directValue(boundCarrier(declarations, sourceConstruction))
+
+        val closure = boundInterfaceClosure(declarations, sourceConstruction)
+        assertEquals(setOf(sourceView), closure.interfaceViews)
+        assertFalse(targetView in closure.interfaceViews)
+
+        val converted = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerProducedValueFact,
+                >>(
+            sourceValue.selectClrReferenceVarianceViewOrError(declarations, targetView),
+        ).value
+        assertEquals(sourceValue.layout, converted.layout)
+        assertEquals(
+            setOf(sourceView, targetView),
+            knownViewsOf(converted.provenance),
+        )
+        assertEquals(targetView, converted.provenance.selectedViewLineage[covariant])
+        assertEquals(
+            setOf(DotNetGenericOwnerPhysicalViewEvidence.CLR_REFERENCE_VARIANCE_CONVERSION),
+            assertIs<DotNetGenericOwnerGuaranteedViews.Known>(
+                converted.provenance.guaranteedViews,
+            ).evidenceByView[targetView],
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            DotNetGenericOwnerAuthenticatedPhysicalView.prove(
+                sourceValue,
+                declarations,
+                targetView,
+            ),
+        )
+
+        val logicallyBroad = directValue(
+            boundCarrier(declarations, objectType()),
+            knownProvenance(sourceView),
+        )
+        val broadConversion = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerProducedValueFact,
+                >>(
+            logicallyBroad.selectClrReferenceVarianceViewOrError(
+                declarations,
+                targetView,
+            )
+        ).value
+        assertEquals(logicallyBroad.layout, broadConversion.layout)
+        assertEquals(targetView, broadConversion.provenance.selectedViewLineage[covariant])
+
+        val otherConstruction = boundConstruction(declarations, covariant, listOf(int32Type()))
+        val joined = sourceValue.join(
+            directValue(boundCarrier(declarations, otherConstruction)),
+        ) { _, _ -> boundCarrier(declarations, objectType()) }
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            joined.selectClrReferenceVarianceViewOrError(declarations, targetView),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            nullValue().selectClrReferenceVarianceViewOrError(declarations, targetView),
+        )
+    }
+
+    @Test
+    fun `CLR variance obeys direction and never boxes value arguments`() {
+        val covariant = localOwnerIdentity(IrClassSymbolImpl())
+        val contravariant = localOwnerIdentity(IrClassSymbolImpl())
+        val invariant = localOwnerIdentity(IrClassSymbolImpl())
+        val nullable = localOwnerIdentity(IrClassSymbolImpl())
+        val declarations = boundDeclarationIndex(
+            listOf(
+                variantTypeDescription(
+                    covariant,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                ),
+                variantTypeDescription(
+                    contravariant,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT,
+                ),
+                typeDescription(
+                    invariant,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                ),
+                typeDescription(
+                    nullable,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+                    supportsInlineNull = true,
+                ),
+            ),
+            emptyList(),
+        )
+
+        fun conversion(
+            owner: DotNetGenericOwnerPhysicalTypeDefIdentity,
+            sourceArgument: DotNetGenericOwnerSymbolicCarrierReference,
+            targetArgument: DotNetGenericOwnerSymbolicCarrierReference,
+        ) = declarations.proveClrReferenceVarianceConversionOrError(
+            view(boundConstruction(declarations, owner, listOf(sourceArgument))),
+            view(boundConstruction(declarations, owner, listOf(targetArgument))),
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            conversion(covariant, stringType(), objectType()),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            conversion(covariant, objectType(), stringType()),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            conversion(contravariant, objectType(), stringType()),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            conversion(contravariant, stringType(), objectType()),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            conversion(invariant, stringType(), objectType()),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(variantTypeDescription(
+                    localOwnerIdentity(IrClassSymbolImpl()),
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                )),
+                emptyList(),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(DotNetGenericOwnerPhysicalTypeDefReference(
+                    localOwnerIdentity(IrClassSymbolImpl()),
+                    listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                        constraints = emptyList(),
+                    )),
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    supportsClrDelegateVariance = true,
+                )),
+                emptyList(),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            conversion(covariant, int32Type(), objectType()),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            conversion(
+                covariant,
+                DotNetGenericOwnerSymbolicCarrierReference.SzArray(stringType()),
+                DotNetGenericOwnerSymbolicCarrierReference.SzArray(objectType()),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            conversion(
+                covariant,
+                DotNetGenericOwnerSymbolicCarrierReference.SzArray(int32Type()),
+                DotNetGenericOwnerSymbolicCarrierReference.SzArray(objectType()),
+            ),
+        )
+        val nullableInt = boundConstruction(declarations, nullable, listOf(int32Type()))
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            conversion(covariant, nullableInt, objectType()),
+        )
+    }
+
+    @Test
+    fun `nested covariance composes through exact recorded interface ancestry`() {
+        val child = localOwnerIdentity(IrClassSymbolImpl())
+        val parent = localOwnerIdentity(IrClassSymbolImpl())
+        val outer = localOwnerIdentity(IrClassSymbolImpl())
+        val types = listOf(
+            typeDescription(child, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            variantTypeDescription(
+                parent,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+            ),
+            variantTypeDescription(
+                outer,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+            ),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val childParameter = boundTypeParameter(provisional, child, 0)
+        val parentOfChildParameter = boundConstruction(
+            provisional,
+            parent,
+            listOf(childParameter),
+        )
+        val declarations = boundDeclarationIndex(
+            types,
+            emptyList(),
+            edgeSets = listOf(
+                edgeSet(child, interfaceEdge(parentOfChildParameter)),
+                edgeSet(parent),
+                edgeSet(outer),
+            ),
+        )
+        val childOfString = boundConstruction(declarations, child, listOf(stringType()))
+        val parentOfString = boundConstruction(declarations, parent, listOf(stringType()))
+        val parentOfObject = boundConstruction(declarations, parent, listOf(objectType()))
+        val source = view(boundConstruction(declarations, outer, listOf(childOfString)))
+        val target = view(boundConstruction(declarations, outer, listOf(parentOfObject)))
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            declarations.proveClrReferenceVarianceConversionOrError(source, target),
+        )
+        val childClosure = boundInterfaceClosure(declarations, childOfString)
+        assertTrue(view(parentOfString) in childClosure.interfaceViews)
+        assertFalse(view(parentOfObject) in childClosure.interfaceViews)
+
+        val missingAncestry = boundDeclarationIndex(types, emptyList())
+        val missingSource = view(boundConstruction(
+            missingAncestry,
+            outer,
+            listOf(boundConstruction(missingAncestry, child, listOf(stringType()))),
+        ))
+        val missingTarget = view(boundConstruction(
+            missingAncestry,
+            outer,
+            listOf(boundConstruction(missingAncestry, parent, listOf(objectType()))),
+        ))
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            missingAncestry.proveClrReferenceVarianceConversionOrError(
+                missingSource,
+                missingTarget,
+            ),
+        )
+    }
+
+    @Test
+    fun `reference-constrained binders and unchanged value arguments compose without narrowing`() {
+        val variant = localOwnerIdentity(IrClassSymbolImpl())
+        val referenceBinderOwner = localOwnerIdentity(IrClassSymbolImpl())
+        val unknownBinderOwner = localOwnerIdentity(IrClassSymbolImpl())
+        val declarations = boundDeclarationIndex(
+            listOf(
+                variantTypeDescription(
+                    variant,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                ),
+                DotNetGenericOwnerPhysicalTypeDefReference(
+                    referenceBinderOwner,
+                    listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                        constraints = emptyList(),
+                        hasReferenceTypeConstraint = true,
+                    )),
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                ),
+                typeDescription(
+                    unknownBinderOwner,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                ),
+            ),
+            emptyList(),
+        )
+        val referenceParameter = boundTypeParameter(declarations, referenceBinderOwner, 0)
+        val unknownParameter = boundTypeParameter(declarations, unknownBinderOwner, 0)
+
+        fun variantView(
+            first: DotNetGenericOwnerSymbolicCarrierReference,
+            second: DotNetGenericOwnerSymbolicCarrierReference,
+        ) = view(boundConstruction(declarations, variant, listOf(first, second)))
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            declarations.proveClrReferenceVarianceConversionOrError(
+                variantView(referenceParameter, int32Type()),
+                variantView(objectType(), int32Type()),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            declarations.proveClrReferenceVarianceConversionOrError(
+                variantView(unknownParameter, int32Type()),
+                variantView(objectType(), int32Type()),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            declarations.proveClrReferenceVarianceConversionOrError(
+                variantView(stringType(), int32Type()),
+                variantView(objectType(), DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier()),
+            ),
+        )
+    }
+
+    @Test
+    fun `exact operation arguments use CLR variance without a semantic or object route`() {
+        val receiverOwner = localOwnerIdentity(IrClassSymbolImpl())
+        val covariant = localOwnerIdentity(IrClassSymbolImpl())
+        val method = localMethodIdentity(IrSimpleFunctionSymbolImpl())
+        val types = listOf(
+            typeDescription(
+                receiverOwner,
+                0,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            ),
+            variantTypeDescription(
+                covariant,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+            ),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val receiverConstruction = boundConstruction(
+            provisional,
+            receiverOwner,
+            emptyList(),
+        )
+        val sourceOfObject = boundConstruction(
+            provisional,
+            covariant,
+            listOf(objectType()),
+        )
+        val methodDescription = callableMethodDescription(
+            method,
+            receiverOwner,
+            listOf(callableSlot(
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                sourceOfObject,
+            )),
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void,
+        )
+        val declarations = boundDeclarationIndex(
+            types,
+            listOf(methodDescription),
+            edgeSets = listOf(edgeSet(receiverOwner), edgeSet(covariant)),
+        )
+        val receiver = directValue(boundCarrier(declarations, receiverConstruction))
+        val sourceOfString = boundConstruction(
+            declarations,
+            covariant,
+            listOf(stringType()),
+        )
+        val sourceOfInt = boundConstruction(
+            declarations,
+            covariant,
+            listOf(int32Type()),
+        )
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                method,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(view(receiverConstruction)),
+                receiver,
+                listOf(directValue(boundCarrier(declarations, sourceOfString))),
+            )
+        ).value
+        assertEquals(sourceOfObject, route.instantiatedSignature.parameterSlots.single().carrier)
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                method,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(view(receiverConstruction)),
+                receiver,
+                listOf(directValue(boundCarrier(declarations, sourceOfInt))),
+            ),
+        )
+    }
+
+    @Test
     fun `declaration authority rejects conflicting TypeDef descriptions`() {
         val identity = localOwnerIdentity(IrClassSymbolImpl())
 
@@ -2952,6 +3346,21 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         dotNetInvariantUnconstrainedPhysicalGenericParameters(arity),
         category,
         supportsInlineNull,
+    )
+
+    private fun variantTypeDescription(
+        identity: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+        vararg variances: DotNetGenericOwnerPhysicalTypeParameterVariance,
+    ) = DotNetGenericOwnerPhysicalTypeDefReference(
+        identity,
+        variances.map { variance ->
+            DotNetGenericOwnerPhysicalGenericParameterReference(
+                variance,
+                constraints = emptyList(),
+            )
+        },
+        category,
     )
 
     private fun methodDescription(
