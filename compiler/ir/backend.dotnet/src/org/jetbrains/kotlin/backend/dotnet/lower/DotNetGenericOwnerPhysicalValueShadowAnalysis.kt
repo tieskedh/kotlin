@@ -7,6 +7,10 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRoutePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteRequest
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
@@ -22,6 +26,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStorageCarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerGuaranteedViews
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableEntryKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
@@ -38,6 +43,8 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
+import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
+import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalOperationRoute
 import org.jetbrains.kotlin.backend.dotnet.selectRecordedPhysicalInterfaceViewOrNull
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.ir.IrElement
@@ -55,6 +62,7 @@ import org.jetbrains.kotlin.ir.expressions.IrBody
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrComposite
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
@@ -75,10 +83,13 @@ import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
+import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.types.Variance
+import java.util.IdentityHashMap
 
 /**
  * Production-inert generic-owner physical-value transfer analysis.
@@ -90,6 +101,14 @@ import org.jetbrains.kotlin.types.Variance
 internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
     private val context: DotNetBackendContext,
 ) {
+    private val callRoutesByCall = IdentityHashMap<IrCall, DotNetGenericOwnerCallRoutePlan>().apply {
+        context.genericOwnerCallRoutes.forEach { route ->
+            check(put(route.call, route) == null) {
+                "one generic-owner call site received more than one logical route plan"
+            }
+        }
+    }
+
     /** Captures the moved authoritative body before any owner-dependent semantic type remap. */
     fun captureBeforeSemanticRemap(
         owner: IrClass,
@@ -438,10 +457,81 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 else -> null
             }
             is IrConstructorCall -> evaluateConstructorResultOrNull(expression)
+            is IrCall -> evaluateCallResultOrNull(expression, storage)
             is IrWhen -> evaluateWhenResultOrNull(expression, storage)
             is IrBlock -> evaluateContainerOrNull(expression.statements, storage)
             is IrComposite -> evaluateContainerOrNull(expression.statements, storage)
             else -> null
+        }
+
+        /**
+         * Produces the result fixed by one already-selected natural MethodDef.
+         *
+         * A recorded logical route may veto a semantic call but is not required for an ordinary
+         * natural call. Declaration authority selects the natural MethodDef; value provenance
+         * selects only a construction of its owner which the receiver already guarantees. The
+         * shared physical operation query then instantiates the recorded result layout. This
+         * bounded slice deliberately excludes arguments, MethodSpecs, super, semantic routes, and
+         * split results.
+         */
+        private fun evaluateCallResultOrNull(
+            expression: IrCall,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val route = callRoutesByCall[expression]
+            if (route != null &&
+                (route.receiverProvenance !=
+                        DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION ||
+                        route.routeRequirement !=
+                        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY)
+            ) return null
+            val source = route?.callee ?: expression.symbol.owner.let { candidate ->
+                candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
+                ?: candidate
+            }
+            if (
+                expression.superQualifierSymbol != null ||
+                source.typeParameters.isNotEmpty() ||
+                source.parameters.any { parameter ->
+                    parameter.kind != IrParameterKind.DispatchReceiver
+                }
+            ) return null
+            val receiverExpression = expression.dispatchReceiver ?: return null
+            val receiver = evaluateInitializerOrNull(receiverExpression, storage) ?: return null
+            val ownerAuthority = authority ?: return null
+            val selectedMethod = ownerAuthority.physicalAuthority.callableMethodOrNull(
+                source.symbol,
+                DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE,
+            ) ?: return null
+            val method = ownerAuthority.declarations.methodDescriptionOrNull(selectedMethod)
+                ?: return null
+            val requiredView = when (val selection =
+                receiver.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError(
+                    ownerAuthority.declarations,
+                    method.declaringType,
+                )
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> selection.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${selection.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            }
+            val selectedRoute = when (val selection = selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations = ownerAuthority.declarations,
+                selectedMethod = selectedMethod,
+                request = DotNetGenericOwnerPhysicalOperationRouteRequest(requiredView),
+                receiver = receiver,
+                arguments = emptyList(),
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> selection.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${selection.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            }
+            val result = selectedRoute.producedResult ?: return null
+            return result.takeIf { produced ->
+                produced.layout is DotNetGenericOwnerProducedValueLayout.Direct
+            }
         }
 
         private fun evaluateConstructorResultOrNull(

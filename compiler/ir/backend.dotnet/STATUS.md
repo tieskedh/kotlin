@@ -74,23 +74,29 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-Final physical-value facts now authorize three bounded local-placement forms. A
+Final physical-value facts now authorize four bounded local-placement forms. A
 direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
 across all reaching arms. A regular parameter whose role-specific physical
 entry prototype is exactly the current owner parameter may enter and remain in
 local storage as the same `!n`; an object-domain semantic-hook prototype remains
-object-domain. Selected lineage can disambiguate only a view already present in
-every recorded closure; missing or ambiguous views remain unavailable and never
-fabricate `I<object>`. The emitter reconstructs each carrier from the physical
-MethodDef owner and independently validates the whole initializer, every branch
-at its fixed storage boundary, or the direct live parameter read. Source and
-compiler-owned aliases share the rule; star/projected and mutable/multiple-write
-controls receive no token. Exact evidence is in the
+object-domain. A parameterless, non-method-generic natural MethodDef may now
+produce its recorded direct result and retain an equal owner-bound `!n` local.
+The declaration index selects the MethodDef, while receiver provenance supplies
+only a construction which it already guarantees; an existing semantic route
+vetoes the transfer. Selected lineage can disambiguate only a view already
+present in every recorded closure; missing or ambiguous views remain unavailable
+and never fabricate `I<object>`. The emitter reconstructs each carrier from the
+physical MethodDef owner and independently validates the whole initializer,
+every branch at its fixed storage boundary, the direct live parameter read, or
+the live resolved MethodDef result. Source and compiler-owned aliases share the
+rule; star/projected and mutable/multiple-write controls receive no token. Exact
+evidence is in the
 [direct-placement](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md),
 [control-flow](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md),
-and [typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md)
+[typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md),
+and [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md)
 archives.
 
 ## Production binding state
@@ -118,22 +124,28 @@ The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
 The local placement consumer now covers direct equal-carrier aliases, one
-exhaustive reference-shaped control-flow join, and one exact owner-parameter
-entry. The join uses a logical interface only to select a family; physical
-construction authority comes exclusively from the intersection of recorded
-interface closures. The parameter entry comes only from the role-specific
-physical prototype and is checked against the live MethodDef slot; a Kotlin
-source type cannot manufacture `!T`, and a semantic prototype does not inherit
-the typed entry's fact. None of these permissions authorizes conversion,
-adaptation, boxing, state, or ABI changes. The older compiler-origin recognizer
-remains only as migration fallback for transfer shapes the shared model has not
-yet derived.
+exhaustive reference-shaped control-flow join, one exact owner-parameter entry,
+and one exact direct natural-MethodDef result. The join uses a logical interface
+only to select a family; physical construction authority comes exclusively from
+the intersection of recorded interface closures. The parameter entry comes only
+from the role-specific physical prototype and is checked against the live
+MethodDef slot; a Kotlin source type cannot manufacture `!T`, and a semantic
+prototype does not inherit the typed entry's fact. The result transfer selects
+the natural MethodDef from bound declaration authority, instantiates it only
+through an already-guaranteed receiver construction, and is checked against the
+live resolved call result. An absent legacy route-census record is not evidence,
+while an existing semantic route prevents the natural transfer. None of these
+permissions authorizes conversion, adaptation, boxing, state, or ABI changes.
+The older compiler-origin recognizer remains only as migration fallback for
+transfer shapes the shared model has not yet derived.
 
-The next consolidation boundary is exact typed result entry/production and the
-remaining parameter-entry compositions, followed by null/bottom/unknown
-control-flow arms and explicit representation-changing conversions. Fields,
+The next consolidation boundary composes owner-dependent call arguments and
+result layouts—including split-nullable production—with the same operation
+query, plus the remaining parameter-entry compositions, followed by
+null/bottom/unknown control-flow arms and explicit representation-changing
+conversions. Fields,
 captures, foreign/fixed/nested carriers, stars/projections, and split-nullable
-layouts stay outside these local consumers rather than acquiring local
+local placement stay outside these consumers rather than acquiring local
 exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
@@ -314,7 +326,10 @@ errors, or skips.
 - Callable composition remains bounded to one structural root member. Multiple
   members/inputs, properties/defaults, constraints, method generics, deeper
   inheritance, explicit MethodImpls, value-class payloads, and Runtime/Stdlib
-  application are not yet closed.
+  application are not yet closed. The existing
+  `genericOwnerSemanticBodyExactResultChain` rehearsal currently reaches this
+  inherited-owner admission blocker before value transfer; the same failure is
+  present at the preceding checkpoint, so it is not a typed-result regression.
 - Retained foreign CLR declaration authority remains independently bounded per
   selected MethodDef on an open root interface and a resource-bounded acyclic
   inherited graph. Multiple members and same-name/same-arity overloads can

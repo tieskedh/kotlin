@@ -2056,6 +2056,47 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     "storage: parameter=$parameterAlias, all=$comparisons"
         }
 
+        val resultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSelfView") &&
+                    comparison.prediction.sourceFunctionName == "sourceAliasMatches" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "exactResultAlias"
+        }
+        check(resultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    carrier.localOwnerName == null &&
+                    carrier.localTypeDefView == null &&
+                    carrier.ownerParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName?.endsWith("InlineSelfView") == true &&
+                    carrier.parameterBinderTypeDefView == null &&
+                    prediction.storageCarrier == carrier &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "An exact natural MethodDef result must produce and retain the same owner-bound !T: " +
+                    "result=$resultAlias, all=$comparisons"
+        }
+
         listOf(
             "wideAliasMatches" to "sourceWideAlias",
             "nullableAliasMatches" to "sourceNullableAlias",

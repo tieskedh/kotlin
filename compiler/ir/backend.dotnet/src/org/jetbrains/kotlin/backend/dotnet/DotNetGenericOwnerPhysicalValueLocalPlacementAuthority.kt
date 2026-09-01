@@ -7,6 +7,11 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
@@ -14,6 +19,8 @@ import java.util.IdentityHashMap
 
 internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
     WHOLE_EXPRESSION_CARRIER,
+    DIRECT_STORAGE_READ_CARRIER,
+    DIRECT_CALL_RESULT_CARRIER,
     CONTROL_FLOW_BRANCHES,
 }
 
@@ -34,7 +41,9 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
      * Joins symbolic authority with the live emitter mapping without trusting either alone.
      *
      * The physical MethodDef owner authenticates every `!n` binder. A direct initializer must
-     * independently report exactly that reconstructed verifier-visible construction. An [IrWhen]
+     * independently report exactly that reconstructed verifier-visible construction. An owner
+     * parameter additionally requires either the live `ldarg`/`ldloc` source carrier or the live
+     * resolved MethodDef result carrier, according to its recorded initializer shape. An [IrWhen]
      * must remain a live control-flow initializer; the variable emitter then supplies the selected
      * local type as a fixed boundary and independently validates every branch during emission. A
      * changed or evicted mapping fails closed instead of silently selecting another carrier.
@@ -44,18 +53,30 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
         physicalMethodOwner: DotNetIlClassInfo,
         initializerCarrier: DotNetIlValueType?,
         initializerDirectStorageReadCarrier: DotNetIlValueType?,
+        initializerDirectCallResultCarrier: DotNetIlValueType?,
         initializerUsesControlFlowBranches: Boolean,
     ): DotNetIlValueType? {
         val parameter = carrier.type as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
         if (parameter != null) {
             if (carrier.nullEncoding !=
                 DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT ||
-                emitterValidation !=
-                DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER
+                (emitterValidation !=
+                    DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER &&
+                        emitterValidation !=
+                        DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER)
             ) return null
             val expected = parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
                 ?: return null
-            return initializerDirectStorageReadCarrier?.takeIf { actual -> actual == expected }
+            val actual = when (emitterValidation) {
+                DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER ->
+                    initializerDirectStorageReadCarrier
+                DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER ->
+                    initializerDirectCallResultCarrier
+                DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER,
+                DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES,
+                -> null
+            }
+            return actual?.takeIf { candidate -> candidate == expected }
         }
 
         // Preserve the already-proven constructed-reference consumer verbatim. The parameter
@@ -87,6 +108,9 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
                 initializerCarrier?.takeIf { actual -> actual == expected }
             DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES ->
                 expected.takeIf { initializerUsesControlFlowBranches }
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER,
+            -> null
         }
     }
 
@@ -171,7 +195,7 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     if (direct.carrier != storage.storageCarrier.carrier) {
                         return@forEach
                     }
-                    when (val symbolic = direct.carrier.type) {
+                    val emitterValidation = when (val symbolic = direct.carrier.type) {
                         is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
                             val binder = (symbolic.binder as?
                                     DotNetGenericOwnerPhysicalGenericBinderReference.Type)
@@ -183,6 +207,10 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                                 symbolic.index !in physicalOwner.owner.typeParameters.indices ||
                                 (record.variable.owner as? IrVariable)?.initializer is IrWhen
                             ) return@forEach
+                            (record.variable.owner as? IrVariable)
+                                ?.initializer
+                                ?.directOwnerParameterEmitterValidationOrNull()
+                                ?: return@forEach
                         }
                         is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
                             if (symbolic.definition !is DotNetGenericOwnerPhysicalTypeDefIdentity.Local) {
@@ -202,6 +230,11 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                                 } || direct.carrier.nullEncoding !=
                                 DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE
                             ) return@forEach
+                            if ((record.variable.owner as? IrVariable)?.initializer is IrWhen) {
+                                DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES
+                            } else {
+                                DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER
+                            }
                         }
                         is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
                         is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
@@ -211,11 +244,7 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         IdentityHashMap()
                     }[record.variable] = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
                         direct.carrier,
-                        if ((record.variable.owner as? IrVariable)?.initializer is IrWhen) {
-                            DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES
-                        } else {
-                            DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER
-                        },
+                        emitterValidation,
                     )
                 }
 
@@ -226,5 +255,25 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                 DotNetGenericOwnerPhysicalValueLocalPlacementAuthority(retainedByFunction),
             )
         }
+    }
+}
+
+private fun IrExpression.directOwnerParameterEmitterValidationOrNull():
+        DotNetGenericOwnerPhysicalValueEmitterValidation? {
+    val source = when (this) {
+        is IrTypeOperatorCall -> if (
+            operator == IrTypeOperator.IMPLICIT_CAST ||
+            operator == IrTypeOperator.IMPLICIT_NOTNULL
+        ) {
+            argument
+        } else {
+            this
+        }
+        else -> this
+    }
+    return when (source) {
+        is IrGetValue -> DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER
+        is IrCall -> DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER
+        else -> null
     }
 }

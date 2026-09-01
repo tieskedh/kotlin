@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
@@ -3171,6 +3172,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             Name.identifier("foreign"),
             owner.typeParameters.single().defaultType,
         ).symbol as IrVariableSymbolImpl
+        val parameterSource = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("parameterSource"),
+            owner.typeParameters.single().defaultType,
+        ).symbol as IrVariableSymbolImpl
         val parameterVariable = buildVariable(
             function,
             0,
@@ -3178,7 +3187,9 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             IrDeclarationOrigin.DEFINED,
             Name.identifier("parameter"),
             owner.typeParameters.single().defaultType,
-        ).symbol as IrVariableSymbolImpl
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, parameterSource)
+        }.symbol as IrVariableSymbolImpl
         val foreignCarrier = referenceCarrier(source(int32Type()))
         val foreignProduced = directValue(foreignCarrier)
         val foreignStorage = DotNetGenericOwnerPhysicalStorageFact(

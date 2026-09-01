@@ -22,7 +22,8 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
 
     fun sourceAliasMatches(element: T): Boolean {
         val sourceNaturalAlias: InlineProducer<T> = this
-        return sourceNaturalAlias.produce() == element
+        val exactResultAlias: T = sourceNaturalAlias.produce()
+        return exactResultAlias == element
     }
 
     fun parameterAliasMatches(candidate: T, expected: T): Boolean {

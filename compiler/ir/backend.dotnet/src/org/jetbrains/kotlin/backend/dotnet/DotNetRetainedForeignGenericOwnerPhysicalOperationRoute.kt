@@ -57,7 +57,7 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
         ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
             "retained foreign declaration authority omitted its selected MethodDef",
         )
-    val requiredView = when (val selection = receiver.selectRetainedForeignMethodOwnerViewOrError(
+    val requiredView = when (val selection = receiver.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError(
         declarations,
         methodDescription.declaringType,
     )) {
@@ -76,40 +76,4 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
         receiver = receiver,
         arguments = arguments,
     )
-}
-
-private fun DotNetGenericOwnerProducedValueFact.selectRetainedForeignMethodOwnerViewOrError(
-    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
-    owner: DotNetGenericOwnerPhysicalTypeDefIdentity,
-): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalView> {
-    if (!nullState.canBeNonNull) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-    provenance.selectedViewLineage[owner]?.let { selected ->
-        return DotNetGenericOwnerPhysicalBindingResult.Bound(selected)
-    }
-
-    val currentConstruction = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)
-        ?.carrier?.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed
-    if (currentConstruction?.definition == owner) {
-        return DotNetGenericOwnerPhysicalBindingResult.Bound(
-            DotNetGenericOwnerPhysicalView(currentConstruction),
-        )
-    }
-
-    val knownViews = (provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known)
-        ?.views ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-    val candidates = knownViews.filterTo(linkedSetOf()) { view -> view.family == owner }
-    val sourceConstructions = linkedSetOf<DotNetGenericOwnerSymbolicCarrierReference.Constructed>()
-    currentConstruction?.let(sourceConstructions::add)
-    knownViews.mapTo(sourceConstructions) { view -> view.construction }
-    for (sourceConstruction in sourceConstructions) {
-        when (val closure = declarations.physicalInterfaceViewClosureOrError(sourceConstruction)) {
-            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
-                closure.value.interfaceViews.filterTo(candidates) { view -> view.family == owner }
-            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return closure
-            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
-        }
-    }
-    return candidates.singleOrNull()?.let {
-        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
-    } ?: DotNetGenericOwnerPhysicalBindingResult.Unavailable
 }
