@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
@@ -24,6 +25,7 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
     arguments: List<DotNetGenericOwnerProducedValueFact>,
     methodArguments: List<DotNetGenericOwnerSymbolicCarrierReference> = emptyList(),
     inheritedReceiverSource: DotNetClrImportedTypeSource? = null,
+    target: DotNetTarget? = null,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalOperationRoute> {
     val declarations = when (
         val binding = if (inheritedReceiverSource == null) {
@@ -33,6 +35,7 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
                 source,
                 method,
                 inheritedReceiverSource,
+                target,
             )
         }
     ) {

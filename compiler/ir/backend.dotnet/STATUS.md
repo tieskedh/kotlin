@@ -60,8 +60,8 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority. The current focused evidence compiles the importer
-and test fixture and passes 140 model tests: 76 shared physical-value tests and
-64 retained-metadata tests. Six unconstrained memberless external-DLL pipelines
+and test fixture and passes 146 model tests: 76 shared physical-value tests and
+70 retained-metadata tests. Six unconstrained memberless external-DLL pipelines
 remain green with both FIR parsers. Git owns the intermediate chronology.
 
 ## Production binding state
@@ -121,22 +121,28 @@ ordered vector of up to 1,024 CLR parameters with exact variance, no base
 class or MethodImpl, and a complete retained/raw `InterfaceImpl` edge set.
 Bounded TypeSpec-backed nominal constraints and exact nominal rows to public
 interfaces are retained. Auxiliary generic interfaces and ordinary reference
-classes require a complete supported binder vector; their recursive
-constructions are depth- and node-bounded. A nominally constrained construction
-may occur at any depth inside one retained edge only after the shared CLR
-validator proves that exact subtree in the source TypeDef's open binder
-context. Its proof is keyed by source, exact edge root, and constrained subtree;
-neither the outer proof nor a caller-authored construction can reuse it. These
-TypeDefs and their raw-authenticated identity are authority; an unretained edge
-set is not. Every edge is authenticated through its exact AssemblyRef and
-retained in the shared physical-view closure; that closure remains the sole
-substitution engine. The graph may be deep, branching, and diamond-shaped, and
-must reach the selected MethodDef owner by retained identity. Cycles, violated
-constraints, and retained/raw disagreement are conflicts; missing authority,
-unsupported shapes, and the depth/node/edge/binder/constraint ceilings fail
-unavailable. Raw binder and constraint-row counts are reserved before the
-shared generic-context resolver allocates their normalized views; duplicate
-metadata handles do not reduce the raw row budget.
+classes require a complete supported binder vector, including exact CLR
+reference/value/default-constructor and by-ref-like flags; their recursive
+constructions are depth- and node-bounded. A constrained construction may occur
+at any depth inside one retained edge only after the shared CLR nominal and
+special-constraint validators prove that exact subtree in the source TypeDef's
+open binder context. Open binder rows themselves remain target-independent
+metadata authority. Construction proofs involving special constraints or a
+possibly by-ref-like argument require an explicit target profile; implicit
+by-ref-like eligibility is checked even when the target binder has no other
+constraint. Their proof is keyed by source, exact edge root, and constrained
+subtree; neither the outer proof nor a caller-authored construction can reuse
+it. These TypeDefs and their raw-authenticated identity are authority; an
+unretained edge set is not. Every edge is authenticated through its exact
+AssemblyRef and retained in the shared physical-view closure; that closure
+remains the sole substitution engine. The graph may be deep, branching, and
+diamond-shaped, and must reach the selected MethodDef owner by retained
+identity. Cycles, violated constraints, and retained/raw disagreement are
+conflicts; missing target/core authority, unsupported shapes, and the depth/
+node/edge/binder/constraint ceilings fail unavailable. Raw binder and
+constraint-row counts are reserved before the shared generic-context resolver
+allocates their normalized views; duplicate metadata handles do not reduce the
+raw row budget.
 
 An imported operation selects its receiver construction only from existing
 value facts and this recorded closure. Selected lineage may choose an already-
@@ -184,22 +190,25 @@ type argument. The same exact carrier may close or flow through an inherited
 edge without fabricating the auxiliary TypeDef's edge closure. Ordinary class
 carriers are classified through the shared physical type classifier; variant
 non-interface TypeDefs remain unavailable until delegates are distinguished.
-Nominally constrained TypeDefs may now occur recursively inside one exact
-retained edge, but each constrained subtree receives its own shared-validator
-proof; an outer proof alone is insufficient and the general construction helper
-remains closed. Special constraints, constrained constructions in other
-metadata positions, value-type nominal carriers, variance conversions, classes
-as inherited graph nodes, MethodImpls, properties, and Runtime/Stdlib
-application remain later. The fast external-DLL FIR fixture intentionally has
-no selected physical core catalog, so this constrained slice is proven in the
-metadata model with a complete synthetic selected core; an end-to-end
-constrained FIR pipeline remains an explicit later gate rather than using a
-second local constraint solver.
+Constrained TypeDefs may now occur recursively inside one exact retained edge,
+but each constrained subtree receives its own shared-validator proof; an outer
+proof alone is insufficient and the general construction helper remains
+closed. Exact `class`, `struct`, `new()`, and `allows ref struct` binder forms
+compose through the same direct and nested grammar. Target-aware propagation
+proves an open by-ref-like-capable binder on .NET 10 and rejects it on Framework
+4.8; no target remains unavailable. Constrained constructions in other metadata
+positions, value-type nominal carriers, variance conversions, classes as
+inherited graph nodes, MethodImpls, properties, and Runtime/Stdlib application
+remain later. The fast external-DLL FIR fixture intentionally has no selected
+physical core catalog, so this constrained slice is proven in the metadata
+model with a complete synthetic selected core; an end-to-end constrained FIR
+pipeline remains an explicit later gate rather than using a second local
+constraint solver.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 64 tests. All six unconstrained
+The retained-metadata model gate passes 70 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -216,12 +225,14 @@ errors, or skips.
   top-level memberless interfaces with a bounded ordered binder vector. Only
   bounded TypeSpec-backed nominal constraints, exact direct nominal rows, and
   recursive constructions of public generic interfaces or ordinary reference
-  classes with supported binders are admitted. A nominally constrained
-  construction is admitted only as an independently validated subtree of one
-  exact retained edge. Special constraints, constrained constructions in other
-  metadata positions, value-type and variant-delegate nominal carriers,
-  variance conversions, classes as graph nodes, MethodImpls, properties, and
-  broader operation routing remain incomplete. Distinct
+  classes with complete nominal and special binder authority are admitted. A
+  constrained construction is admitted only as an independently validated
+  subtree of one exact retained edge. A target profile is required wherever
+  special-constraint or possible by-ref-like validation participates.
+  Constrained constructions in other metadata positions, value-type and
+  variant-delegate nominal carriers, variance conversions, classes as graph
+  nodes, MethodImpls, properties, and broader operation routing remain
+  incomplete. Distinct
   constructions are retained, but selecting one still requires independently
   proven lineage.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
