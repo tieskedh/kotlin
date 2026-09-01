@@ -136,8 +136,11 @@ capability conversion; that remains an interface-routing prerequisite.
 
 The Stage 7 evidence is recorded in the
 [callable-contract composition archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
-It does not admit multi-member Runtime/Stdlib families or authorize production
-migration.
+The first authoritative argument-bearing consumer of that contract is recorded
+in the
+[owner-input operation archive](../archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
+Neither proof admits multi-member Runtime/Stdlib families or authorizes
+production migration.
 
 ## Rules during ordinary feature work
 

@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-owner-input-operation-2026-09-01.md`](generic-owner-physical-owner-input-operation-2026-09-01.md)
+  records the first authoritative argument-bearing natural operation: a
+  constructed `I<!T,!T>` typed entry, exact owner-dependent input, orthogonal
+  split-nullable output, explicit semantic-result-policy priority, downstream
+  conservative-route correction, hostile widened value-type isolation, and
+  the exact Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-typed-call-result-2026-09-01.md`](generic-owner-physical-typed-call-result-2026-09-01.md)
   records the first authority-backed natural-MethodDef result transfer: a
   parameterless `Direct` result instantiated through an already-guaranteed

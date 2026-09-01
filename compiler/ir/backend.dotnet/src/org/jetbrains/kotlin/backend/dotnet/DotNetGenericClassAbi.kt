@@ -1054,6 +1054,8 @@ internal data class DotNetGenericOwnerMemberFamilyPlan(
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
     val roles: Set<DotNetGenericOwnerMemberFamilyRole>,
     val semanticHookReasons: Set<DotNetGenericOwnerSemanticHookReason>,
+    /** Logical policy; value provenance may never replace this route with a natural result. */
+    val requiresSemanticResultCapability: Boolean,
     val requiresDirectSuperTargets: Boolean,
     val directSuperCallCount: Int,
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallPlan>,

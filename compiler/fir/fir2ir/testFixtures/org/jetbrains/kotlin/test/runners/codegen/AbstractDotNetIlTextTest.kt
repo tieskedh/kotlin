@@ -992,6 +992,52 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
         "The implicitly widened inline receiver",
     )
+
+    val exactArgumentRoute = snapshots.single { candidate ->
+        candidate.ownerName.endsWith("InlineLookupRoute") &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
+                candidate.logicalMemberName == "lookup"
+    }
+    check(exactArgumentRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            exactArgumentRoute.physicalFunctionName == "routeExactArgument" &&
+            exactArgumentRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            exactArgumentRoute.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            exactArgumentRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineLookup") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0, 0) &&
+                        carrier.parameterBinderOwnerName?.endsWith("InlineLookupRoute") == true
+            } && exactArgumentRoute.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+            exactArgumentRoute.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            exactArgumentRoute.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            exactArgumentRoute.resultCarrierParameterBinderOwnerName
+                ?.endsWith("InlineLookupRoute") == true &&
+            exactArgumentRoute.resultCarrierParameterIndex == 0 &&
+            exactArgumentRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            exactArgumentRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            exactArgumentRoute.diagnostic == null) {
+        "An exact owner-dependent !K argument must preserve the natural !V+bool result route: " +
+                exactArgumentRoute
+    }
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineLookupRoute") &&
+                candidate.physicalFunctionName == "routeWidenedResult" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "A logically widened multi-parameter view must not acquire an exact natural route: " +
+                snapshots
+    }
     check(snapshots.none { candidate ->
         candidate.ownerName.endsWith("InlineSelfView") &&
                 candidate.physicalFunctionName == "nestedAliasMatches" &&
@@ -1944,6 +1990,54 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
     }
 
     if (probesCompilerAlias) {
+        val lookupSourceAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineLookupRoute") &&
+                    comparison.prediction.sourceFunctionName == "routeExactArgument" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "sourceNaturalAlias"
+        }
+        check(lookupSourceAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            val guaranteed = prediction.guaranteedViews.singleOrNull()
+            val selected = prediction.selectedViewLineage.singleOrNull()
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                    carrier.localOwnerName?.endsWith("InlineLookup") == true &&
+                    carrier.localTypeDefView ==
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                    carrier.ownerParameterIndices == listOf(0, 0) &&
+                    carrier.parameterBinderOwnerName?.endsWith("InlineLookupRoute") == true &&
+                    carrier.parameterBinderTypeDefView == null &&
+                    prediction.storageCarrier == carrier &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    guaranteed?.carrier == carrier &&
+                    DotNetGenericOwnerPhysicalValueShadowEvidence.FROZEN_PARAMETER_OR_RESULT in
+                    guaranteed.evidence &&
+                    selected?.family?.let { family ->
+                        family.kind ==
+                                DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                                family.localOwnerName.endsWith("InlineLookup") &&
+                                family.localTypeDefView ==
+                                DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED
+                    } == true && selected.view == guaranteed &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineLookupRoute") == true &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "The constructed typed entry must preserve its authority-recorded " +
+                    "InlineLookup<!T,!T> carrier: source=$lookupSourceAlias, all=$comparisons"
+        }
         val sourceAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSelfView") &&
                     comparison.prediction.sourceFunctionName == "sourceAliasMatches" &&
