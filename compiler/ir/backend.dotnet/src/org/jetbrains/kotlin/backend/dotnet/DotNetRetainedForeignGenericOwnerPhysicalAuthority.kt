@@ -988,6 +988,9 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 genericParameters = parameters,
                 category = typeKind.category,
                 supportsInlineNull = typeKind.supportsInlineNull,
+                supportsClrDelegateVariance =
+                    typeKind.category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+                            allowsVariantParameters,
             )
             if (auxiliaryNominalTypeDefinitions.size >=
                 MAX_RETAINED_INTERFACE_GRAPH_NODES

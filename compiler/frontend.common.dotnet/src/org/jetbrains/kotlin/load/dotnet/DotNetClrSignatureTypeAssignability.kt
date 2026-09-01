@@ -357,45 +357,41 @@ class DotNetClrSignatureTypeAssignabilityResolver(
             )
         }
 
-        for (parameter in parameters) {
-            val actualArgument = actual.arguments[parameter.number]
-            val expectedArgument = expected.arguments[parameter.number]
-            if (actualArgument == expectedArgument) continue
-            if (parameter.variance == DotNetClrGenericParameterVariance.INVARIANT) {
-                return DotNetClrTypeAssignability.NotAssignable
+        val plan = when (val candidate = planDotNetClrReferenceVariance(
+            parameters.map(DotNetClrGenericParameterDefinition::variance),
+            actual.arguments,
+            expected.arguments,
+        )) {
+            is DotNetClrReferenceVariancePlan.Planned -> candidate
+            DotNetClrReferenceVariancePlan.InvalidGenericParameterLayout ->
+                return DotNetClrTypeAssignability.InvalidVariance(
+                    actual,
+                    expected,
+                    DotNetClrVarianceFailure.GENERIC_PARAMETER_LAYOUT,
+                )
+        }
+        for (step in plan.steps) {
+            val assignment = when (step) {
+                DotNetClrReferenceVarianceStep.InvariantMismatch ->
+                    return DotNetClrTypeAssignability.NotAssignable
+                is DotNetClrReferenceVarianceStep.Assignment -> step
             }
-            val actualKind = classifyReferenceArgument(actualArgument)
+            val actualKind = classifyReferenceArgument(assignment.actual)
             if (actualKind !is ReferenceArgumentClassification.Reference) {
                 return actualKind.asAssignabilityFailure(original)
             }
-            val expectedKind = classifyReferenceArgument(expectedArgument)
+            val expectedKind = classifyReferenceArgument(assignment.expected)
             if (expectedKind !is ReferenceArgumentClassification.Reference) {
                 return expectedKind.asAssignabilityFailure(original)
             }
-
-            val source = when (parameter.variance) {
-                DotNetClrGenericParameterVariance.COVARIANT ->
-                    actualKind.type
-
-                DotNetClrGenericParameterVariance.CONTRAVARIANT ->
-                    expectedKind.type
-
-                DotNetClrGenericParameterVariance.INVARIANT ->
-                    error("Invariant arguments were handled before reference classification")
-            }
-            val destination = when (parameter.variance) {
-                DotNetClrGenericParameterVariance.COVARIANT ->
-                    expectedKind.type
-
-                DotNetClrGenericParameterVariance.CONTRAVARIANT ->
-                    actualKind.type
-
-                DotNetClrGenericParameterVariance.INVARIANT ->
-                    error("Invariant arguments were handled before reference classification")
-            }
             when (
                 val argumentResult =
-                    isAssignable(source, destination, active, counter)
+                    isAssignable(
+                        assignment.source,
+                        assignment.destination,
+                        active,
+                        counter,
+                    )
             ) {
                 DotNetClrTypeAssignability.Assignable -> Unit
                 else -> return argumentResult

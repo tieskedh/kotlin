@@ -903,11 +903,37 @@ an `Invoke`-shaped method is not delegate evidence. Ordinary variant classes
 and non-sealed delegates are invalid metadata and therefore `Conflict`; missing
 selected core or hierarchy authority remains `Unavailable`. Covariant and
 contravariant delegate binders are retained on the exact TypeDef construction,
-including recursive constructions with value arguments. This does not claim a
-reference-only variance conversion, copy the delegate base edge into the
-auxiliary index, or authenticate any declared delegate member as operation
-authority. A TypeDef with supported nominal binder constraints may occur at any
-nested depth inside one exact retained `InterfaceImpl` construction. Before
+including recursive constructions with value arguments. An orthogonal
+`supportsClrDelegateVariance` fact records the selected/raw sealed-delegate
+proof without changing the physical category from `CLASS`. It is authority for
+the same reference-only conversion algorithm used by interfaces, but does not
+copy the delegate base edge into the auxiliary index or authenticate any
+declared delegate member as operation authority.
+
+That conversion is a value transfer, not declaration ancestry. A shared
+representation-neutral planner preserves exact CLR GenericParam order and maps
+each differing `out` argument to `actual -> expected`, each differing `in`
+argument to `expected -> actual`, and each differing invariant argument to
+failure. Importer signatures and backend physical authority then apply their
+representation-specific physical classification and hierarchy proofs to those
+same obligations. Both arguments must be reference-shaped; equal arguments
+need no obligation and may therefore be the same value type while another
+parameter varies. Nested interface conversions and reference-array covariance
+compose recursively. The proof is bounded and missing hierarchy is
+`Unavailable`.
+
+The exact recorded-interface closure is not enriched. A successful conversion
+adds only the requested construction to the non-null value's guaranteed views
+with `CLR_REFERENCE_VARIANCE_CONVERSION` evidence and may select it as lineage.
+The source produced carrier remains unchanged. Operation authentication and
+strict callable inputs can consume the resulting verifier-valid view directly;
+no semantic route, object remap, wrapper, proxy, cast, or state change occurs.
+Kotlin logical variance never enters the proof. Differing primitive,
+`Nullable<T>`, or other value carriers fail rather than box; ordinary variant
+classes and caller-asserted delegate authority cannot enter the index.
+
+A TypeDef with supported nominal binder constraints may occur at any nested
+depth inside one exact retained `InterfaceImpl` construction. Before
 admission, the shared validator must prove
 that exact constrained subtree in the source TypeDef's open binder context.
 Exact `class`, `struct`, `new()`, and `allows ref struct` binders therefore
@@ -944,9 +970,9 @@ implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
 No logical type or InterfaceImpl row order participates. Constrained
-constructions outside authenticated direct-supertype edges, declared members
-on inherited graph nodes, variance conversions, classes as graph nodes,
-MethodImpls, unsupported carrier
+constructions outside authenticated direct-supertype edges, including a new
+constraint-bearing variance target, declared members on inherited graph nodes,
+classes as graph nodes, MethodImpls, unsupported carrier
 leaves, and hierarchy disagreement remain unavailable or conflicting according
 to the ordinary validity boundary.
 
@@ -1079,16 +1105,20 @@ under the shared physical depth/node budgets. Actual signature class/value
 markers must agree with the retained TypeDef, and non-nullable versus
 `System.Nullable<T>` carriers preserve their distinct physical null encodings.
 Covariant and contravariant delegate constructions require shared selected-root
-and sealed-TypeDef classification; declared delegate members and variance
-conversions are not implied by that authority.
+and sealed-TypeDef classification. Their reference-only conversions now share
+the interface argument-direction planner, physical classifier, exact ancestry,
+and value-provenance transfer; declared delegate members are not implied by
+that authority.
 Nominally or specially constrained TypeDefs may now occur recursively inside an
 exact retained edge, with separate source/edge/subtree proofs and operation-
 scoped authority that cannot escape into general construction. Reference,
 value, default-constructor, and by-ref-like binder forms compose through the
 shared target-aware validator rather than a backend-local substitute. The next
-ordered work proves retained reference-only variance conversions for already
-admitted interface and delegate carriers; it is not another shape-specific
-state recognizer or a resumed stdlib census.
+ordered work composes that validator with constraint-bearing variance targets
+under conversion-scoped authority; it must neither open the general
+construction helper nor let one exact edge proof authorize another
+construction. It is not another shape-specific state recognizer or a resumed
+stdlib census.
 
 ## Consequences
 

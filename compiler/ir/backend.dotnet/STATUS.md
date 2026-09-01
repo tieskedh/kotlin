@@ -59,10 +59,11 @@ owning archives and ADR; this current snapshot does not duplicate it.
 
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
-TypeDef transport authority. The current focused evidence compiles the importer
-and test fixture and passes 155 model tests: 76 shared physical-value tests and
-79 retained-metadata tests. Six unconstrained memberless external-DLL pipelines
-remain green with both FIR parsers. Git owns the intermediate chronology.
+TypeDef transport authority, plus retained interface/delegate reference
+variance. The current focused evidence compiles the importer and test fixture
+and passes 161 model tests: 81 shared physical-value tests and 80 retained-
+metadata tests. Six unconstrained memberless external-DLL pipelines remain
+green with both FIR parsers. Git owns the intermediate chronology.
 
 ## Production binding state
 
@@ -207,8 +208,15 @@ Exact direct and recursively constructed non-nullable value types retain
 `VALUE_TYPE`/`NON_NULL_ONLY` on Framework 4.8 and .NET 10; a validated
 `System.Nullable<int>` edge retains `VALUE_TYPE`/`INLINE_NULLABLE_VALUE` without
 opening its constrained construction to unrelated callers. Exact delegate
-constructions are retained; this does not yet authorize delegate variance
-conversions or import the delegate's declared members as operation authority.
+constructions now participate in the same bounded CLR reference-variance proof
+as interfaces. The shared frontend/backend planner fixes ordered `in`/`out`
+assignment direction, while physical authority proves reference shape and exact
+ancestry. Conversion preserves the produced carrier and records only a per-
+value view; recorded closure, identity, and state remain unchanged. Nested and
+array reference conversions compose, while differing value arguments, unknown
+binders, wrong direction, and missing hierarchy fail closed. The full boundary
+and hostile matrix are in the
+[physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md).
 Constrained TypeDefs may now occur recursively inside one exact retained edge,
 but each constrained subtree receives its own shared-validator proof; an outer
 proof alone is insufficient and the general construction helper remains
@@ -216,18 +224,19 @@ closed. Exact `class`, `struct`, `new()`, and `allows ref struct` binder forms
 compose through the same direct and nested grammar. Target-aware propagation
 proves an open by-ref-like-capable binder on .NET 10 and rejects it on Framework
 4.8; no target remains unavailable. Constrained constructions in other metadata
-positions, variance conversions, classes as inherited graph nodes, MethodImpls,
-properties, and Runtime/Stdlib application
-remain later. The fast external-DLL FIR fixture intentionally has no selected
-physical core catalog, so this constrained slice is proven in the metadata
-model with a complete synthetic selected core; an end-to-end constrained FIR
-pipeline remains an explicit later gate rather than using a second local
+positions, including as newly constructed variance targets, remain unavailable;
+classes as inherited graph nodes, MethodImpls, properties, and Runtime/Stdlib
+application remain later. The fast external-DLL FIR fixture intentionally has
+no selected physical core catalog, so this constrained slice is proven in the
+metadata model with a complete synthetic selected core; an end-to-end
+constrained FIR pipeline remains an explicit later gate rather than using a second local
 constraint solver.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 79 tests. All six unconstrained
+The retained-metadata model gate passes 80 tests, and the shared physical-value
+model passes 81 tests (161 combined). All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -250,11 +259,14 @@ errors, or skips.
   subtree of one exact retained edge. A target profile is required wherever
   special-constraint or possible by-ref-like validation participates.
   Variant delegate constructions require exact selected delegate-root identity
-  and sealed metadata. Constrained constructions in other metadata positions,
-  reference-only variance conversions, classes as graph nodes, MethodImpls,
-  properties, and broader operation routing remain incomplete. Distinct
-  constructions are retained, but selecting one still requires independently
-  proven lineage.
+  and sealed metadata. Reference-only variance is available for already
+  admitted unconstrained interface and retained delegate constructions, using
+  only physical binder rows, reference classification, exact ancestry, and
+  per-value provenance. Constraint-bearing target constructions, producer-
+  recorded delegate authority, classes as graph nodes, MethodImpls, properties,
+  and broader operation routing remain incomplete. Distinct exact constructions
+  are retained; selection still requires independently proven lineage or a
+  verifier-valid variance transfer to the requested construction.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

@@ -151,10 +151,20 @@ only when the shared classifier proves a sealed TypeDef whose immediate selected
 base is the exact selected `System.MulticastDelegate`. Names and `Invoke`-
 shaped members are not evidence; ordinary variant classes and non-sealed
 delegates conflict, while missing core/hierarchy authority is unavailable.
-Exact covariant and contravariant delegate constructions are retained without
-claiming their declared members or a variance conversion. Carrier traversal
-shares the physical ABI's depth and node ceilings. Constrained constructions
-outside retained edges remain unavailable.
+Exact covariant and contravariant delegate constructions are retained. An
+orthogonal TypeDef fact records the selected/raw proof that a variant `CLASS`
+is a sealed CLR delegate; category remains `CLASS`. Interfaces and those
+delegates then share one reference-only variance transfer. The transfer uses a
+single frontend/backend argument-direction planner, physical reference
+classification, and exact recorded ancestry. It preserves the source carrier
+and object identity, adds the converted construction only to per-value
+provenance, and never mutates the recorded-interface closure. Nested interface
+variance and SZ-array reference covariance compose; differing value arguments,
+unknown open binders, wrong direction, missing ancestry, or an unauthenticated
+variant class fail closed. Declared delegate members are still outside retained
+operation authority. Carrier traversal shares the physical ABI's depth and
+node ceilings. Constrained constructions outside retained edges remain
+unavailable.
 
 Raw inherited-graph and auxiliary-nominal binder counts, plus their aggregate
 constraint-row count, are reserved before generic-context resolution. Both
@@ -162,13 +172,17 @@ reuse the physical-artifact collection ceiling, so hostile metadata cannot
 force an unbounded normalized constraint graph before the adapter returns
 `Unavailable`.
 
-The next ordered boundary is retained CLR reference-only variance conversion
-for already admitted interface and delegate carriers. It must consume only
-producer/retained binder authority plus the shared physical assignability rules;
-Kotlin logical variance, value-type arguments, or missing selected hierarchy
-must never fabricate a construction. Only after this bounded constraint family
-should the graph grammar widen to properties, class nodes, MethodImpls, or
-Runtime/Stdlib declarations.
+The next ordered boundary is constraint-safe composition of this variance
+transfer. The current general construction helper deliberately rejects a
+TypeDef with nominal or special GenericParam constraints, so a converted target
+cannot yet escape the exact retained-edge proof that admitted a constrained
+construction. The next slice must reuse the shared nominal/special validators
+under conversion-scoped authority; it may not make the general construction
+helper permissive or treat an earlier edge proof as authority for a different
+construction. Producer-recorded delegate authority and storage-placement
+consumption remain separate follow-ons. Only after this bounded constraint
+family should the graph grammar widen to properties, class nodes, MethodImpls,
+or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an
