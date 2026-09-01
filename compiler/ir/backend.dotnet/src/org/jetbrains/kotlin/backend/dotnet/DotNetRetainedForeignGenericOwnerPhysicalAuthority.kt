@@ -65,12 +65,13 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * construction substitution. Row order never selects the callable owner, and two distinct exact
  * constructions of that owner require already-proven selected lineage at the operation boundary.
  * Each admitted interface has a resource-bounded ordered binder vector whose exact CLR variance
- * and supported nominal constraints are retained. An exact direct nominal carrier is admitted
- * only for a public non-generic interface whose selected hierarchy agrees with raw metadata; its
- * unretained edge set remains unknown. A constrained target edge is admitted only after the shared
- * CLR validator proves the exact metadata construction in the source TypeDef's open binder
- * context. Declared members, special constraints, MethodImpls, classes, and carrier shapes outside
- * the bounded grammar remain unavailable.
+ * and supported nominal constraints are retained. An exact nominal carrier is admitted only for a
+ * public interface whose selected hierarchy agrees with raw metadata; a generic auxiliary carrier
+ * additionally requires a complete unconstrained binder vector. Recursive constructed carriers
+ * are depth- and node-bounded, and an unretained auxiliary edge set remains unknown. A constrained
+ * target edge is admitted only after the shared CLR validator proves the exact metadata
+ * construction in the source TypeDef's open binder context. Declared members, special constraints,
+ * MethodImpls, classes, and carrier shapes outside the bounded grammar remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -113,6 +114,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
                 DotNetGenericOwnerPhysicalTypeDefReference,
                 >()
+        private var translatedCarrierNodeCount = 0
         private val nominalConstraintValidator by lazy(LazyThreadSafetyMode.NONE) {
             createNominalConstraintValidator()
         }
@@ -194,11 +196,13 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 type: DotNetClrResolvedTypeDefinition,
             ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
                 val parameterHandles = linkedSetOf<DotNetClrMetadataHandle>()
+                var parameterRowCount = 0
                 for (parameter in type.assembly.genericParameterDefinitions) {
                     if (parameter.owner != type.definition.handle) continue
-                    if (parameterHandles.size >= MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE) {
+                    if (parameterRowCount >= MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE) {
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                     }
+                    parameterRowCount++
                     parameterHandles += parameter.handle
                 }
                 for (constraint in type.assembly.genericParameterConstraints) {
@@ -593,6 +597,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                                 context,
                                 declaringType,
                                 "$subject GenericParam constraint",
+                                depth = 1,
                             )
                     }
                     when (carrier) {
@@ -617,12 +622,53 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         private fun translateExactNominalInterfaceCarrier(
             type: DotNetClrResolvedTypeDefinition,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
+            val description = when (
+                val retention = retainExactAuxiliaryInterfaceTypeDefinition(type)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> retention.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return retention
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            if (description.genericArity != 0) {
+                // A direct TypeDef/TypeRef constraint carries no generic arguments. Treating it
+                // as an open construction would invent verifier-visible type arguments.
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            return bound(
+                DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
+                    description.identity,
+                    emptyList(),
+                )
+            )
+        }
+
+        private fun retainExactAuxiliaryInterfaceTypeDefinition(
+            type: DotNetClrResolvedTypeDefinition,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalTypeDefReference> {
+            val identity =
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type)
+            auxiliaryNominalTypeDefinitions[identity]?.let { existing ->
+                return bound(existing)
+            }
             val retainedHierarchy = source.graph.hierarchyOrNull(type)
                 ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            if (type.assembly.genericParameterDefinitions.any { parameter ->
-                    parameter.owner == type.definition.handle
+            val parameterHandles = linkedSetOf<DotNetClrMetadataHandle>()
+            var parameterRowCount = 0
+            for (parameter in type.assembly.genericParameterDefinitions) {
+                if (parameter.owner != type.definition.handle) continue
+                if (parameterRowCount >= MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                parameterRowCount++
+                parameterHandles += parameter.handle
+            }
+            if (type.assembly.genericParameterConstraints.any { constraint ->
+                    constraint.owner in parameterHandles
                 }
             ) {
+                // A nested construction of a constrained TypeDef requires its own satisfaction
+                // proof. The outer InterfaceImpl proof cannot authorize that inner construction.
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
             val rawHierarchy = when (
@@ -648,7 +694,14 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 return conflict("retained nominal carrier changed its declaring TypeDef")
             }
             val definition = type.definition
-            if (context.typeParameters.isNotEmpty() ||
+            val openArguments = List(context.typeParameters.size) { index ->
+                DotNetClrResolvedTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    index,
+                )
+            }
+            if (!retainedHierarchy.type.type.hasSameIdentityAs(type) ||
+                retainedHierarchy.type.arguments != openArguments ||
                 !definition.isInterface ||
                 !definition.isAbstract ||
                 definition.isSealed ||
@@ -659,29 +712,29 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             ) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            val identity =
-                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type)
+            val parameters = when (val translation = translateInterfaceParameters(
+                context,
+                identity,
+                definition,
+                "retained auxiliary interface",
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
             val description = DotNetGenericOwnerPhysicalTypeDefReference(
                 identity,
-                genericParameters = emptyList(),
+                genericParameters = parameters,
                 category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
             )
-            val existing = auxiliaryNominalTypeDefinitions[identity]
-            if (existing != null && existing.conflictsWith(description)) {
-                return conflict("retained nominal carrier TypeDef changed physical shape")
-            }
-            if (existing == null &&
-                auxiliaryNominalTypeDefinitions.size >= MAX_RETAINED_INTERFACE_GRAPH_NODES
+            if (auxiliaryNominalTypeDefinitions.size >=
+                MAX_RETAINED_INTERFACE_GRAPH_NODES
             ) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            auxiliaryNominalTypeDefinitions.putIfAbsent(identity, description)
-            return bound(
-                DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
-                    identity,
-                    emptyList(),
-                )
-            )
+            auxiliaryNominalTypeDefinitions[identity] = description
+            return bound(description)
         }
 
         private fun translateInheritedCarrier(
@@ -690,7 +743,14 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             context: DotNetClrResolvedGenericParameterContext,
             declaringType: DotNetClrTypeDefinition,
             subject: String,
+            depth: Int = 1,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
+            if (depth > MAX_RETAINED_INTERFACE_CARRIER_DEPTH ||
+                translatedCarrierNodeCount >= MAX_RETAINED_INTERFACE_CARRIER_NODES
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            translatedCarrierNodeCount++
             return when (type) {
                 DotNetClrResolvedTypeSignature.Void ->
                     conflict("void appeared in a retained InterfaceImpl argument")
@@ -730,6 +790,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                         context,
                         declaringType,
                         subject,
+                        depth + 1,
                     )
                 ) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> bound(
@@ -744,7 +805,46 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     } else {
                         translateExactNominalInterfaceCarrier(type.type)
                     }
-                is DotNetClrResolvedTypeSignature.GenericInstance,
+                is DotNetClrResolvedTypeSignature.GenericInstance -> {
+                    if (type.genericType.isValueType) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    val description = when (
+                        val retention = retainExactAuxiliaryInterfaceTypeDefinition(
+                            type.genericType.type,
+                        )
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> retention.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return retention
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    if (type.arguments.size != description.genericArity) {
+                        return conflict("$subject contradicts its nominal TypeDef arity")
+                    }
+                    val arguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+                    for (argument in type.arguments) {
+                        when (val translation = translateInheritedCarrier(
+                            argument,
+                            declaringIdentity,
+                            context,
+                            declaringType,
+                            subject,
+                            depth + 1,
+                        )) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                                arguments += translation.value
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                                return translation
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                                return translation
+                        }
+                    }
+                    bound(
+                        DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                            .unboundTypeReference(description.identity, arguments),
+                    )
+                }
                 DotNetClrResolvedTypeSignature.TypedReference,
                 is DotNetClrResolvedTypeSignature.Pointer,
                 is DotNetClrResolvedTypeSignature.ByReference,
@@ -775,6 +875,10 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
             const val MAX_RETAINED_INTERFACE_GRAPH_CONSTRAINT_ROWS =
                 DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
+            const val MAX_RETAINED_INTERFACE_CARRIER_DEPTH =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_TYPE_DEPTH
+            const val MAX_RETAINED_INTERFACE_CARRIER_NODES =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_TYPE_NODES
         }
 
         private data class InheritedInterfaceDeclaration(

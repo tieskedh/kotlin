@@ -60,7 +60,7 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority. The current focused evidence compiles the importer
-and test fixture, runs the 54-test metadata model gate, and runs six
+and test fixture, runs the 59-test metadata model gate, and runs six
 unconstrained memberless external-DLL pipelines with both FIR parsers. Git owns
 the intermediate chronology.
 
@@ -119,12 +119,13 @@ inherited receiver may now be the root of a resource-bounded acyclic graph of
   public top-level memberless interfaces. Every visited TypeDef has a complete
   ordered vector of up to 1,024 CLR parameters with exact variance, no base
   class or MethodImpl, and a complete retained/raw `InterfaceImpl` edge set.
-  Bounded TypeSpec-backed nominal constraints and exact direct nominal rows to
-  public non-generic interfaces are retained. The latter TypeDefs and their
-  raw-authenticated identity are authority; an unretained edge set is not. A
-  constrained target edge is usable only when the shared CLR constraint
-  validator proves that exact metadata construction in the source TypeDef's
-  open binder context.
+  Bounded TypeSpec-backed nominal constraints and exact nominal rows to public
+  interfaces are retained. Auxiliary generic interfaces require a complete
+  supported unconstrained binder vector; their recursive constructions are
+  depth- and node-bounded. These TypeDefs and their raw-authenticated identity
+  are authority; an unretained edge set is not. A constrained target edge is
+  usable only when the shared CLR constraint validator proves that exact
+  metadata construction in the source TypeDef's open binder context.
   The resulting proof is keyed by the exact source and unbound target edge; it
   cannot authorize a caller-authored construction of the same TypeDef. Every
   edge is authenticated through its exact AssemblyRef and retained in the
@@ -134,7 +135,8 @@ inherited receiver may now be the root of a resource-bounded acyclic graph of
   constraints, and retained/raw disagreement are conflicts; missing authority,
   unsupported shapes, and the depth/node/edge/binder/constraint ceilings fail
   unavailable. Raw binder and constraint-row counts are reserved before the
-  shared generic-context resolver allocates their normalized views.
+  shared generic-context resolver allocates their normalized views; duplicate
+  metadata handles do not reduce the raw row budget.
 
 An imported operation selects its receiver construction only from existing
 value facts and this recorded closure. Selected lineage may choose an already-
@@ -172,20 +174,23 @@ The first constrained inherited-binder boundary is now closed for nominal
 TypeSpec rows expressible by the bounded carrier grammar, including a forwarded
 `TDerived : TBase` implication and a concrete `string : object` close. An exact
 direct nominal row may also name a selected, raw-authenticated public
-non-generic CLR interface; the same exact carrier may close or flow through an
-inherited edge without authorizing arbitrary constructions or fabricating that
-auxiliary interface's edge closure. Nested generic constraint carriers, special
-constraints, wider nominal carriers, variance conversions, classes,
-MethodImpls, properties, and Runtime/Stdlib application remain later. The fast
-external-DLL FIR fixture intentionally has no selected physical core catalog,
-so this constrained slice is proven in the metadata model with a complete
-synthetic selected core; an end-to-end constrained FIR pipeline remains an
-explicit later gate rather than using a second local constraint solver.
+non-generic CLR interface. A TypeSpec may recursively construct a selected
+public generic interface whose complete binder vector is supported and
+unconstrained, including an exact value-type argument. The same exact carrier
+may close or flow through an inherited edge without fabricating the auxiliary
+interface's edge closure. The outer edge proof cannot authorize a nested
+constrained TypeDef. Special constraints, constrained nested TypeDefs, wider
+nominal carriers, variance conversions, classes, MethodImpls, properties, and
+Runtime/Stdlib application remain later. The fast external-DLL FIR fixture
+intentionally has no selected physical core catalog, so this constrained slice
+is proven in the metadata model with a complete synthetic selected core; an
+end-to-end constrained FIR pipeline remains an explicit later gate rather than
+using a second local constraint solver.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 54 tests. All six unconstrained
+The retained-metadata model gate passes 59 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -200,12 +205,13 @@ errors, or skips.
   inherited graph. Multiple members and same-name/same-arity overloads can
   coexist without becoming a name-based family. Graph nodes must be public
   top-level memberless interfaces with a bounded ordered binder vector. Only
-  bounded TypeSpec-backed nominal constraints and exact direct nominal rows to
-  public non-generic interfaces are admitted. Special constraints, nested
-  generic constraint carriers, variance conversions, classes, MethodImpls,
-  properties, wider nominal carriers, and broader operation routing remain
-  incomplete. Distinct constructions are retained, but selecting one still
-  requires independently proven lineage.
+  bounded TypeSpec-backed nominal constraints, exact direct nominal rows, and
+  recursive constructions of public generic interfaces with supported
+  unconstrained binders are admitted. Special constraints, constrained nested
+  TypeDefs, variance conversions, classes, MethodImpls, properties, wider
+  nominal carriers, and broader operation routing remain incomplete. Distinct
+  constructions are retained, but selecting one still requires independently
+  proven lineage.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,
