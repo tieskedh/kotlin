@@ -1044,14 +1044,129 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
-    fun `multiple InterfaceImpl rows reaching the selected owner remain unavailable`() {
+    fun `distinct constructions of one owner require independently proven lineage`() {
+        for (booleanEdgeFirst in listOf(true, false)) {
+            val booleanCarrier = DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier()
+            val fixture = fixture(
+                includeInheritedReceiver = true,
+                secondRawInheritedArgument = DotNetClrTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.BOOLEAN,
+                ),
+                secondRetainedInheritedArgument = DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.BOOLEAN,
+                ),
+                secondInheritedEdgeFirst = booleanEdgeFirst,
+            )
+            val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+            val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalDeclarationIndex,
+                    >>(
+                DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                    fixture.source,
+                    fixture.method,
+                    receiverSource,
+                )
+            ).value
+            val receiverConstruction = boundConstruction(
+                declarations,
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource),
+                emptyList(),
+            )
+            val ownerIdentity = retainedOwnerIdentity(fixture)
+            val intConstruction = boundConstruction(
+                declarations,
+                ownerIdentity,
+                listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+            )
+            val booleanConstruction = boundConstruction(
+                declarations,
+                ownerIdentity,
+                listOf(booleanCarrier),
+            )
+            val intView = DotNetGenericOwnerPhysicalView(intConstruction)
+            val booleanView = DotNetGenericOwnerPhysicalView(booleanConstruction)
+            val receiver = directValue(declarations, receiverConstruction)
+
+            val closure = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalInterfaceViewClosure,
+                    >>(
+                declarations.physicalInterfaceViewClosureOrError(receiverConstruction)
+            ).value
+            assertEquals(true, closure.isComplete)
+            assertEquals(
+                setOf(
+                    DotNetGenericOwnerPhysicalView(receiverConstruction),
+                    intView,
+                    booleanView,
+                ),
+                closure.interfaceViews,
+            )
+            assertEquals(
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                selectRetainedRoute(
+                    fixture,
+                    receiver,
+                    exactTransferArguments(declarations),
+                    receiverSource,
+                ),
+            )
+
+            listOf(
+                intView to DotNetGenericOwnerSymbolicCarrierReference.int32Carrier(),
+                booleanView to booleanCarrier,
+            ).forEach { entry ->
+                val selectedView = entry.first
+                val ownerArgument = entry.second
+                val selectedReceiver = assertNotNull(
+                    receiver.selectRecordedPhysicalInterfaceViewOrNull(
+                        declarations,
+                        selectedView,
+                    )
+                )
+                val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetGenericOwnerPhysicalOperationRoute,
+                        >>(
+                    selectRetainedRoute(
+                        fixture,
+                        selectedReceiver,
+                        exactTransferArguments(declarations, ownerArgument),
+                        receiverSource,
+                    )
+                ).value
+                assertEquals(selectedView, route.requiredReceiverView)
+                assertEquals(
+                    ownerArgument,
+                    assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                        route.instantiatedSignature.resultLayout,
+                    ).slot.carrier,
+                )
+            }
+
+            val fabricatedObjectView = DotNetGenericOwnerPhysicalView(
+                boundConstruction(
+                    declarations,
+                    ownerIdentity,
+                    listOf(DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()),
+                )
+            )
+            assertEquals(
+                null,
+                receiver.selectRecordedPhysicalInterfaceViewOrNull(
+                    declarations,
+                    fabricatedObjectView,
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `duplicate InterfaceImpl rows reaching the selected owner are a conflict`() {
         val fixture = fixture(
             includeInheritedReceiver = true,
             inheritedInterfaceCount = 2,
         )
 
-        assertEquals(
-            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
             DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
                 fixture.source,
                 fixture.method,
@@ -1514,6 +1629,9 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         rawInheritedArgument: DotNetClrTypeSignature? = null,
         retainedInheritedArgument: DotNetClrResolvedTypeSignature? = null,
         inheritedInterfaceCount: Int = 1,
+        secondRawInheritedArgument: DotNetClrTypeSignature? = null,
+        secondRetainedInheritedArgument: DotNetClrResolvedTypeSignature? = null,
+        secondInheritedEdgeFirst: Boolean = false,
         includeInheritedRelatedEdge: Boolean = false,
         inheritedRelatedEdgeFirst: Boolean = true,
     ): Fixture {
@@ -1521,11 +1639,14 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         require(!closedInheritedReceiverView || openInheritedReceiver)
         require(inheritedInterfaceCount >= 0)
         require(!includeInheritedRelatedEdge || includeInheritedReceiver)
+        require((secondRawInheritedArgument == null) == (secondRetainedInheritedArgument == null))
+        require(secondRawInheritedArgument == null || includeInheritedReceiver)
         val ownerHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
         val relatedHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 2)
         val inheritedReceiverHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 3)
         val methodHandle = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 1)
         val inheritedTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 1)
+        val secondInheritedTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 2)
         val owner = DotNetClrTypeDefinition(
             handle = ownerHandle,
             namespaceName = "Foreign",
@@ -1644,9 +1765,25 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             ),
             rawSignature = emptyList(),
         )
+        val secondInheritedTypeSpecification = secondRawInheritedArgument?.let { argument ->
+            DotNetClrTypeSpecification(
+                handle = secondInheritedTypeSpecHandle,
+                signature = DotNetClrTypeSignature.GenericInstance(
+                    DotNetClrTypeSignature.Named(ownerHandle, isValueType = false),
+                    listOf(argument),
+                ),
+                rawSignature = emptyList(),
+            )
+        }
         val inheritedInterfaceTargets = buildList {
             if (includeInheritedRelatedEdge && inheritedRelatedEdgeFirst) add(relatedHandle)
+            if (secondInheritedTypeSpecification != null && secondInheritedEdgeFirst) {
+                add(secondInheritedTypeSpecHandle)
+            }
             repeat(inheritedInterfaceCount) { add(inheritedTypeSpecHandle) }
+            if (secondInheritedTypeSpecification != null && !secondInheritedEdgeFirst) {
+                add(secondInheritedTypeSpecHandle)
+            }
             if (includeInheritedRelatedEdge && !inheritedRelatedEdgeFirst) add(relatedHandle)
         }
         val inheritedInterfaceImplementations = inheritedInterfaceTargets.mapIndexed { index, target ->
@@ -1677,7 +1814,10 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             },
             exportedTypes = emptyList(),
             typeSpecifications = if (includeInheritedReceiver) {
-                listOf(inheritedTypeSpecification)
+                buildList {
+                    add(inheritedTypeSpecification)
+                    secondInheritedTypeSpecification?.let(::add)
+                }
             } else {
                 emptyList()
             },
@@ -1763,7 +1903,13 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                     } else {
                         DotNetClrResolvedTypeView(
                             resolvedOwner,
-                            listOf(effectiveRetainedInheritedArgument),
+                            listOf(
+                                if (target == secondInheritedTypeSpecHandle) {
+                                    checkNotNull(secondRetainedInheritedArgument)
+                                } else {
+                                    effectiveRetainedInheritedArgument
+                                }
+                            ),
                         )
                     },
                 )

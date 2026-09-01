@@ -49,10 +49,11 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * independent of declared members, so a genuinely memberless child can participate, including
  * when a raw InterfaceImpl reaches the selected MethodDef owner through an exact AssemblyRef. One
  * additional exact edge to a non-generic root interface is admitted and retained as part of the
- * receiver's complete edge set; row order never selects the callable owner. The owner edge may
- * close that owner or forward the receiver parameter through supported carriers. Its exact CLR
- * variance is retained. Multiple binders, multiple owner views, deeper auxiliary hierarchies,
- * constraints, MethodImpls, and classes remain unavailable.
+ * receiver's complete edge set; row order never selects the callable owner. Two distinct exact
+ * constructions of the callable owner may coexist and require already-proven selected lineage at
+ * the operation boundary. An owner edge may close that owner or forward the receiver parameter
+ * through supported carriers. Its exact CLR variance is retained. Multiple binders, deeper
+ * auxiliary hierarchies, constraints, MethodImpls, and classes remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -139,9 +140,9 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             }
 
             val methodOwner = source.declaringHierarchy.type.type
-            if (rawHierarchy.interfaces.count { implementation ->
+            if (rawHierarchy.interfaces.none { implementation ->
                     implementation.interfaceType.type.hasSameIdentityAs(methodOwner)
-                } != 1
+                }
             ) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
@@ -207,6 +208,9 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                         targetArguments,
                     ),
                 )
+            }
+            if (receiverEdges.size != receiverEdges.toSet().size) {
+                return conflict("retained receiver contains duplicate physical InterfaceImpl edges")
             }
             return DotNetGenericOwnerPhysicalBindingResult.Bound(
                 DotNetRetainedForeignGenericOwnerPhysicalDeclarations(
