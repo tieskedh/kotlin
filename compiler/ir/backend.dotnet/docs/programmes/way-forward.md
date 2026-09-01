@@ -118,14 +118,22 @@ metadata-model evidence. The resource-free external FIR fixture has no selected
 physical core catalog, so constrained end-to-end FIR remains a later gate rather
 than acquiring a duplicate local validator.
 
+An exact direct nominal constraint may now name a public, top-level,
+non-generic CLR interface whose retained hierarchy agrees with raw metadata.
+Its exact TypeDef becomes an auxiliary carrier and may also close an inherited
+edge. This does not infer the interface by name, authorize a constrained generic
+construction, or claim a complete edge set for the auxiliary TypeDef; missing
+selected hierarchy remains `Unavailable`.
+
 Raw inherited-graph binder counts and the aggregate constraint-row count are
 reserved before generic-context resolution. Both reuse the physical-artifact
 collection ceiling, so hostile metadata cannot force an unbounded normalized
 constraint graph before the adapter returns `Unavailable`.
 
-The next ordered boundary is the remaining constrained-binder grammar: direct
-nominal and nested constraint carriers, then reference/value/default-constructor
-and by-ref-like special constraints through the existing shared validators.
+The next ordered boundary is the remaining constrained-binder grammar: nested
+generic and wider nominal constraint carriers, then reference/value/default-
+constructor and by-ref-like special constraints through the existing shared
+validators.
 Keep proof authority edge-specific and keep parameter domains and direct/void/
 split-nullable result layouts independently composable. Only after this bounded
 constraint family should the grammar widen to properties, classes, MethodImpls,
