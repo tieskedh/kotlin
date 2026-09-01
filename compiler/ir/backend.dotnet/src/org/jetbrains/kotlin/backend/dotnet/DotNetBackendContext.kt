@@ -273,6 +273,16 @@ internal class DotNetBackendContext(
     /** Read-only comparison between BOUND callable authority and the existing final router. */
     val genericOwnerPhysicalOperationRouteShadows:
         MutableList<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = mutableListOf()
+    /**
+     * Final exact-natural operation witnesses keyed by the unchanged final [IrCall].
+     *
+     * The operation shadow publishes an entry only after BOUND declaration/value authority and
+     * the final router agree on the same direct natural MethodDef. Value placement may consume
+     * this map through its explicit authority adapter; a diagnostic snapshot is never authority.
+    */
+    val genericOwnerAuthoritativePhysicalOperationRoutes:
+        MutableMap<IrCall, DotNetGenericOwnerPhysicalOperationRoute> =
+        java.util.IdentityHashMap()
     /** Distinguishes a completed operation shadow from an unavailable BOUND authority. */
     var genericOwnerPhysicalOperationRouteShadowAnalysisCompleted: Boolean = false
     /** One rehearsal-only, monotone local TypeDef/InterfaceImpl authority lineage. */

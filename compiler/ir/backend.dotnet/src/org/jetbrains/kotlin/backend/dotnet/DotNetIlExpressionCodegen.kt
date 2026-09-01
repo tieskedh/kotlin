@@ -479,7 +479,8 @@ internal class DotNetIlExpressionCodegen(
      */
     fun directPhysicalSplitCallResultPayloadTypeOrNull(
         expression: IrExpression,
-    ): DotNetIlValueType? {
+        expected: DotNetGenericOwnerPhysicalValueBoundSplitNullableCall,
+    ): DotNetIlValueType.TypeParameter? {
         val call = expression as? IrCall ?: return null
         if (call.superQualifierSymbol != null ||
             intrinsicMethods.getIntrinsic(call.symbol) != null
@@ -488,15 +489,39 @@ internal class DotNetIlExpressionCodegen(
             candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
             ?: candidate
         }
-        if (source.typeParameters.isNotEmpty() ||
-            source.parameters.any { parameter ->
-                parameter.kind != IrParameterKind.DispatchReceiver
-            }
-        ) return null
+        if (source.typeParameters.isNotEmpty()) return null
         splitNullableNaturalCallOrNull(call, source) ?: return null
         val resolved = resolveCall(call)
-        if (!resolved.info.signature.hasSplitNullableResult) return null
-        return (resolved.returnType as? DotNetIlReturnType.Value)?.type
+        if (!resolved.info.signature.hasSplitNullableResult ||
+            resolved.info.genericOwnerPhysicalMethodIdentity != expected.methodIdentity ||
+            resolved.info.owner != expected.receiverType.classInfo ||
+            resolved.receiverType
+                ?.dotNetUniqueViewAsGenericOwner(expected.receiverType.classInfo) !=
+                expected.receiverType ||
+            resolved.ownerToken != expected.receiverType.nameInSignature ||
+            resolved.methodInstantiation.isNotEmpty() ||
+            !resolved.virtual ||
+            resolved.parameterTypes != listOf(expected.receiverType) + expected.parameterTypes ||
+            resolved.info.signature.physicalParameterCount != resolved.parameterTypes.size + 1 ||
+            (resolved.returnType as? DotNetIlReturnType.Value)?.type != expected.payloadType ||
+            source.parameters.count { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver
+            } != expected.parameterTypes.size ||
+            call.arguments.size != expected.parameterTypes.size + 1
+        ) return null
+        val receiver = call.arguments.firstOrNull() ?: return null
+        if (directPhysicalStorageReadCarrierTypeOrNull(receiver)
+                ?.dotNetUniqueViewAsGenericOwner(expected.receiverType.classInfo) !=
+            expected.receiverType
+        ) return null
+        call.arguments.drop(1).zip(expected.parameterTypes).forEach { pair ->
+            val argument = pair.first
+            val parameterType = pair.second
+            if (argument == null ||
+                directPhysicalStorageReadCarrierTypeOrNull(argument) != parameterType
+            ) return null
+        }
+        return expected.payloadType
     }
 
     private fun IrExpression.identityPhysicalProducer(): IrExpression =
@@ -504,7 +529,7 @@ internal class DotNetIlExpressionCodegen(
             (operator == IrTypeOperator.IMPLICIT_CAST ||
                     operator == IrTypeOperator.IMPLICIT_NOTNULL)
         ) {
-            argument
+            argument.identityPhysicalProducer()
         } else {
             this
         }
@@ -2629,11 +2654,12 @@ internal class DotNetIlExpressionCodegen(
     fun emitDirectPhysicalSplitCall(
         call: IrCall,
         nullFlagSlot: DotNetIlSlot.Local,
+        expected: DotNetGenericOwnerPhysicalValueBoundSplitNullableCall,
     ): DotNetIlValueType {
         check(nullFlagSlot.type == DotNetIlValueType.Boolean) {
             "Internal .NET backend error: split-null flag local must have Boolean carrier"
         }
-        val expectedPayload = directPhysicalSplitCallResultPayloadTypeOrNull(call)
+        val expectedPayload = directPhysicalSplitCallResultPayloadTypeOrNull(call, expected)
             ?: dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' is not one direct split-nullable operation",
             )

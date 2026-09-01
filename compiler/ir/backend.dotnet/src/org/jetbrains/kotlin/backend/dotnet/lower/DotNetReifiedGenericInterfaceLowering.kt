@@ -2884,6 +2884,7 @@ internal class DotNetGenericOwnerFinalRoutingLowering(
             context.genericOwnerPhysicalValueLocalPlacementAuthority =
                 DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
                     context.genericOwnerPhysicalValueShadowRecords,
+                    context.genericOwnerAuthoritativePhysicalOperationRoutes,
                 ).also { placement ->
                     if (placement is DotNetGenericOwnerPhysicalBindingResult.Conflict) {
                         error("Internal .NET backend error: ${placement.reason}")

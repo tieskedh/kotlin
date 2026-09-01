@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResu
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullState
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
@@ -515,9 +516,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
          * natural call. Declaration authority selects the natural MethodDef; value provenance
          * selects only a construction of its owner which the receiver already guarantees. The
          * shared physical operation query then instantiates the recorded result layout. Super and
-         * semantic routes remain excluded. Both direct and split-result local placement retain the
-         * first parameterless, non-MethodSpec boundary; argument-bearing calls remain operations
-         * until their storage policy is proven independently.
+         * semantic routes remain excluded. Direct results retain the first parameterless,
+         * non-MethodSpec boundary. Split results additionally admit one exact-routed strict owner
+         * input whose final value fact entered the instantiated `!n` slot identity-preservingly;
+         * broader inputs, multiple inputs, and MethodSpecs remain operation-only.
          */
         private fun evaluateCallResultOrNull(
             expression: IrCall,
@@ -575,11 +577,28 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             val result = selectedRoute.producedResult ?: return null
             return result.takeIf { produced ->
                 when (produced.layout) {
-                    is DotNetGenericOwnerProducedValueLayout.Direct,
-                    is DotNetGenericOwnerProducedValueLayout.SplitNullable ->
+                    is DotNetGenericOwnerProducedValueLayout.Direct ->
                         source.parameters.all { parameter ->
                             parameter.kind == IrParameterKind.DispatchReceiver
                         }
+                    is DotNetGenericOwnerProducedValueLayout.SplitNullable -> {
+                        val ordinaryParameters = source.parameters.filter { parameter ->
+                            parameter.kind != IrParameterKind.DispatchReceiver
+                        }
+                        val slots = selectedRoute.instantiatedSignature.parameterSlots
+                        when (slots.size) {
+                            0 -> ordinaryParameters.isEmpty()
+                            1 -> ordinaryParameters.size == 1 &&
+                                    selectedRoute.methodArguments.isEmpty() &&
+                                    selectedRoute.instantiatedSignature.genericArity == 0 &&
+                                    slots.single().domain ==
+                                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                                    ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                        carrier.type == slots.single().carrier
+                                    }
+                            else -> false
+                        }
+                    }
                     DotNetGenericOwnerProducedValueLayout.Null,
                     DotNetGenericOwnerProducedValueLayout.Unknown,
                     -> false

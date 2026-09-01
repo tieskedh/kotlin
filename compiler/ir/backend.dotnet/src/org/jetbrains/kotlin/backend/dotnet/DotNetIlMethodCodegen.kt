@@ -1856,27 +1856,34 @@ internal class DotNetIlMethodCodegen(
 
     private fun emitVariable(variable: IrVariable) {
         val initializer = variable.initializer
-        val retainedSplitNullablePayload = if (initializer == null) {
+        val retainedSplitNullableCall = if (initializer == null) {
             null
         } else {
             genericOwnerPhysicalValueLocalPlacementAuthority
                 ?.retainedSplitNullableOrNull(function.symbol, variable.symbol)
                 ?.let { selection ->
-                    val livePayload = expressionCodegen
-                        .directPhysicalSplitCallResultPayloadTypeOrNull(initializer)
-                    selection.bindEmitterPayloadOrNull(
+                    val expectedCall = selection.bindEmitterCallOrNull(
                         typeMapper,
                         functionInfo.owner,
-                        livePayload,
                     ) ?: dotNetUnsupported(
                         "final split-nullable authority for local " +
-                                "'${variable.name.asString()}' does not match its live call payload " +
-                                "(authority=${selection.payloadCarrier}, live=$livePayload, " +
+                                "'${variable.name.asString()}' cannot bind its authoritative call " +
+                                "(authority=${selection.payloadCarrier}, " +
                                 "MethodDefOwner=${functionInfo.owner.ilTypeRef})",
                     )
+                    val livePayload = expressionCodegen
+                        .directPhysicalSplitCallResultPayloadTypeOrNull(initializer, expectedCall)
+                        ?: dotNetUnsupported(
+                            "final split-nullable authority for local " +
+                                    "'${variable.name.asString()}' does not match its live call " +
+                                    "(authority=${selection.payloadCarrier}, " +
+                                    "MethodDefOwner=${functionInfo.owner.ilTypeRef})",
+                        )
+                    expectedCall.takeIf { call -> call.payloadType == livePayload }
                 }
         }
-        if (retainedSplitNullablePayload != null) {
+        if (retainedSplitNullableCall != null) {
+            val retainedSplitNullablePayload = retainedSplitNullableCall.payloadType
             val enclosingPayload = (signature.returnType as? DotNetIlReturnType.Value)?.type
             if (!signature.hasSplitNullableResult ||
                 enclosingPayload != retainedSplitNullablePayload
@@ -1912,7 +1919,11 @@ internal class DotNetIlMethodCodegen(
                     "split-nullable initialization of local '${variable.name.asString()}'",
                 ),
             ) {
-                expressionCodegen.emitDirectPhysicalSplitCall(call, local.isNull)
+                expressionCodegen.emitDirectPhysicalSplitCall(
+                    call,
+                    local.isNull,
+                    retainedSplitNullableCall,
+                )
             }
             methodContext.emit(storeLocalInstruction(local.payload.index), pops = 1)
             return

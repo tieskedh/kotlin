@@ -76,7 +76,7 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-Final physical-value facts now authorize five bounded local-placement forms. A
+Final physical-value facts now authorize six bounded local-placement forms. A
 direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
@@ -98,11 +98,22 @@ the live resolved MethodDef result. Fifth, one parameterless exact natural
 `SplitNullable(!n, bool)` result may remain in two compiler-private locals when
 an immutable logical `T?` local has one direct return to an enclosing MethodDef
 with the identical split layout and that return crosses no exception-protected
-region. The emitter independently resolves the live MethodDef, passes only the
-private Boolean local to the nested virtual call, and emits no boxing or logical
-nullable materialization. Every ordinary consumer, argument-bearing or
-MethodSpec call, mutation, join, capture, multiple read, protected-region
-return, or carrier mismatch uses the ordinary materializing path. Local
+region. Both split forms now require the post-final-routing operation consumer
+to publish the exact `IrCall` as a BOUND direct-natural operation after it
+agrees with the completed final router. Sixth, that same pair may survive one
+ordinary argument when its sole instantiated slot is
+`STRICT_OWNER_INPUT(!m)`, payload and input both bind to current-owner
+parameters, and no MethodSpec is present.
+Placement retains the complete MethodDef, receiver, parameter-vector, and
+result-layout witness rather than a payload-only permission. The emitter
+independently resolves the live virtual MethodDef, requires one unique recorded
+receiver view, validates direct storage reads for receiver and argument, passes
+only the private Boolean local as the nested call's null-flag address, never the
+enclosing flag, and emits no boxing or logical nullable materialization.
+Multiple arguments, MethodSpec calls,
+semantic or `super` routes, mutation, joins, captures, multiple reads,
+protected-region returns, and carrier mismatches use the ordinary materializing
+path. Local
 producer publication now binds each source member bijectively by declaration
 identity to its physical member contract; executable compilations do not need a
 serialized linkage-key table, while external consumers still require the
@@ -113,7 +124,8 @@ evidence is in the
 [control-flow](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md),
 [typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md),
 [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md),
-and [split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md)
+[split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md),
+and [strict-input split-result local](docs/archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md)
 archives.
 The focused gate reports 90 green physical-value model tests. Candidate and
 production-erased inverse each cover four green tests across PSI, LightTree,
@@ -179,8 +191,10 @@ authority and value provenance are consolidated in rehearsal mode.
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
 natural parameter entries, one exact direct natural-MethodDef result, and one
-parameterless exact split-result pair with a sole direct unprotected return. The
-join uses a logical interface
+exact split-result pair with a sole direct unprotected return. Every retained
+split call consumes its exact final operation route as the placement witness;
+the call may be parameterless or may carry one final identity-preserving
+`STRICT_OWNER_INPUT` argument. The join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
 from the role-specific physical prototype and is checked against the live
@@ -204,9 +218,9 @@ arity from IR, or claim broad semantic receivers. Producer and consumer now
 also compose this binder with one strict owner input and a split-nullable owner
 result, including producer records, separate Kotlin assemblies, objective PE,
 and ordinary natural-only C# implementations. The next consolidation boundary
-extends split-pair retention to independently proven argument-bearing or
-MethodSpec calls, multiple consumers, and control-flow joins, then closes
-remaining parameter-entry forms. Concrete,
+extends split-pair retention to independently proven MethodSpec calls, multiple
+consumers, and control-flow joins, then closes remaining parameter-entry forms.
+Multiple ordinary arguments, concrete,
 constrained, nullable, nested, foreign, and multiple MethodSpec carriers,
 null/bottom/unknown joins, and explicit representation-changing conversions
 remain later structural proofs rather than local exceptions.
