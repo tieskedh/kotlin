@@ -93,27 +93,38 @@ MethodDef authority unit rather than a one-member declaration restriction: one
 consumer now independently binds a no-argument method and two same-name, same-
 arity overloads with different physical parameter signatures. Its receiver may
 be the root of a resource-bounded acyclic graph of public top-level memberless
-interfaces, each with a complete ordered vector of up to 1,024 unconstrained
-binders and a complete retained/raw edge set. Graphs may cross assemblies,
-branch, share diamond nodes, and close, forward, or permute binders at every
-level. The existing physical-view closure performs all substitution; selected
-lineage may select an already-proven construction but cannot establish one.
-Cycles and metadata disagreement conflict, while missing authority and resource
-limits fail unavailable. Resource-free external pipelines cover direct, cross-
-assembly, multi-edge, multi-view, intermediate, and recursive four-assembly
-forms. The recursive proof derives
+interfaces, each with a complete ordered vector of up to 1,024 binders and a
+complete retained/raw edge set. Graphs may cross assemblies, branch, share
+diamond nodes, and close, forward, or permute binders at every level. The
+existing physical-view closure performs all substitution; selected lineage may
+select an already-proven construction but cannot establish one. Cycles and
+metadata disagreement conflict, while missing authority and resource limits
+fail unavailable. Resource-free external pipelines cover direct,
+cross-assembly, multi-edge, multi-view, intermediate, and recursive
+four-assembly unconstrained forms. The recursive proof derives
 `PairOuter<int,string> -> PairForwarding<string,int> -> Source<int>` without a
 false `Source<string>` view. The overload proof emits each exact original parent
 signature without names, arity heuristics, or interface row order as physical
 authority.
 
-The next ordered boundary is constrained TypeDef binders in the retained
-inherited graph. Prove both the exact ordered constraint rows and authority that
-each closed or forwarded construction satisfies them; a recorded constraint is
-not by itself construction authority. Keep parameter domains and direct/void/
-split-nullable result layouts independently composable. Only after this proof
-should the grammar widen to properties, classes, MethodImpls, or Runtime/Stdlib
-declarations.
+The first constrained TypeDef boundary now admits bounded TypeSpec-backed
+nominal rows in the retained inherited graph. The shared CLR validator proves
+each exact closed or forwarded `InterfaceImpl` construction in its source
+TypeDef's open binder context. That proof is keyed by source and exact unbound
+target edge and survives substitution only along that edge; it cannot authorize
+arbitrary constructions of the constrained target. A positive dependent
+`TDerived : TBase` chain and a missing-implication conflict are executable
+metadata-model evidence. The resource-free external FIR fixture has no selected
+physical core catalog, so constrained end-to-end FIR remains a later gate rather
+than acquiring a duplicate local validator.
+
+The next ordered boundary is the remaining constrained-binder grammar: direct
+nominal and nested constraint carriers, then reference/value/default-constructor
+and by-ref-like special constraints through the existing shared validators.
+Keep proof authority edge-specific and keep parameter domains and direct/void/
+split-nullable result layouts independently composable. Only after this bounded
+constraint family should the grammar widen to properties, classes, MethodImpls,
+or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an
