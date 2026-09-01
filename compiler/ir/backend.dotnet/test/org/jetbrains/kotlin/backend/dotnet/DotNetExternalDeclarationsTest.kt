@@ -141,6 +141,77 @@ class DotNetExternalDeclarationsTest {
     }
 
     @Test
+    fun consumesOnlyCompatibleProducerRecordedDelegateVariance() {
+        val moduleDescriptor = ModuleDescriptorImpl(
+            Name.special("<delegateVarianceTestModule>"),
+            LockBasedStorageManager("DotNetExternalDelegateVarianceTest"),
+            DefaultBuiltIns.Instance,
+        )
+        val module = IrModuleFragmentImpl(moduleDescriptor)
+        val externalPackage = createEmptyExternalPackageFragment(module, FqName("sample"))
+        val logicalDelegate = IrFactoryImpl.buildClass {
+            name = Name.identifier("ProducerDelegate")
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply { parent = externalPackage }
+        logicalDelegate.addTypeParameter {
+            name = Name.identifier("T")
+            variance = Variance.OUT_VARIANCE
+        }
+        externalPackage.declarations += logicalDelegate
+        val logicalKey = checkNotNull(logicalDelegate.dotNetLibraryAbiKeyOrNull("C"))
+
+        fun resolver(
+            physicalVariance: DotNetGenericOwnerPhysicalTypeParameterVariance,
+        ): DotNetExternalDeclarations = DotNetExternalDeclarations(listOf(
+            DotNetExternalLibrary(
+                artifact = DotNetLibraryArtifact("sample.Library", "netstandard2.0"),
+                assemblyFile = File("sample.Library.dll"),
+                declarations = mapOf(
+                    logicalKey to DotNetPhysicalDeclaration.Class(
+                        ownerPath = listOf("sample.ProducerDelegate`1"),
+                        physicalTypeParameterCount = 1,
+                        physicalTypeParameterVariances = listOf(physicalVariance),
+                        physicalClassVarianceKind =
+                            DotNetPhysicalClassVarianceKind.SEALED_CLR_DELEGATE,
+                    ),
+                ),
+                friendAssemblies = emptySet(),
+            ),
+        ))
+
+        val covariantResolver = resolver(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+        )
+        val covariantMapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            externalDeclarations = covariantResolver,
+            genericOwnerRehearsal = true,
+        )
+        assertEquals(
+            listOf(Variance.OUT_VARIANCE),
+            checkNotNull(covariantResolver.classInfoOrNull(logicalDelegate, covariantMapper))
+                .typeParameterVariances,
+        )
+
+        val contravariantResolver = resolver(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT,
+        )
+        val contravariantMapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            externalDeclarations = contravariantResolver,
+            genericOwnerRehearsal = true,
+        )
+        val failure = assertFailsWith<IllegalArgumentException> {
+            contravariantResolver.classInfoOrNull(logicalDelegate, contravariantMapper)
+        }
+        assertEquals(
+            "external Kotlin/.NET delegate '$logicalKey' has physical variance " +
+                    "inconsistent with its KLIB classifier",
+            failure.message,
+        )
+    }
+
+    @Test
     fun resolvesProducerRecordedExactGenericInterfaceOwner() {
         val logicalOwnerKey = "C:sample/GenericOwner"
         val logicalMemberKey = "F:sample/GenericOwner/member"

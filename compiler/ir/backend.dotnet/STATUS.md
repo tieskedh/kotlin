@@ -11,7 +11,7 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `2868cfb88a7ea111ea6f6bf02f24430dc0e039e5`.
-- Current checkpoint: physical library ABI 65, generic-owner artifact schema
+- Current checkpoint: physical library ABI 66, generic-owner artifact schema
   21, compiler/runtime surface 60.
 - Stage 7 separates semantic member role from physical result layout and proves
   the structural `Lookup<K, out V>.lookup(K): V?` contract as
@@ -91,14 +91,15 @@ The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
-`SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 65 records
-semantic role and result layout separately in `H`; local BOUND, producer-final
-`N`, direct consumers, semantic capability dispatch, and ordinary natural-only
-C# implementations consume the same MethodDef authority. The admitted grammar
-is deliberately limited to a single-member root interface with one invariant
-input and one distinct covariant nullable output. Existing result-only
-split-nullable families remain green and Runtime `Map` retains its previous
-contract.
+`SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the
+independent `H` semantic-role/result-layout fields introduced in ABI 65 and
+adds producer-recorded sealed-delegate variance authority; local BOUND,
+producer-final `N`, direct consumers, semantic capability dispatch, and
+ordinary natural-only C# implementations consume the same MethodDef authority.
+The admitted grammar is deliberately limited to a single-member root interface
+with one invariant input and one distinct covariant nullable output. Existing
+result-only split-nullable families remain green and Runtime `Map` retains its
+previous contract.
 
 The exact scope, PE/reflection/C# evidence, erased inverse, and discovered
 downstream object-remapping repair are owned by the
@@ -237,12 +238,28 @@ catalog, so this constrained slice is proven in the metadata model with a
 complete synthetic selected core; an end-to-end constrained FIR pipeline
 remains an explicit later gate rather than using a second local constraint
 solver.
+
+Physical-library ABI 66 now records the sealed CLR delegate exception as an
+orthogonal class-TypeDef fact. The consumer adapter admits only that decoded
+producer record, preserves its complete ordered unconstrained variance vector,
+and binds the TypeDef as `CLASS`; a TypeDef name, Kotlin function shape,
+`Invoke` member, ordinary variant class record, or caller-authored
+`supportsClrDelegateVariance` flag remains insufficient. Covariant,
+contravariant, and mixed two-binder constructions use the same reference-only
+variance proof as retained delegates. Successful conversion changes only the
+per-value view; it does not add an InterfaceImpl edge, rewrite the carrier, or
+create state. The producer schema currently records no delegate GenericParam
+constraints, delegate members, or operation endpoints, and the Kotlin emitter
+does not yet synthesize a sealed delegate TypeDef from an ordinary Kotlin
+declaration; those facts remain outside this bounded declaration proof.
+
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 85 tests, and the shared physical-value
-model passes 82 tests (167 combined). All six unconstrained
+The retained-metadata model gate passes 85 tests, the shared physical-value
+model passes 82 tests (167 combined), and the producer-delegate authority gate
+passes 8 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -271,8 +288,10 @@ errors, or skips.
   admitted interface and retained delegate constructions, including constraint-
   bearing targets independently proven from selected raw metadata, using
   physical binder rows, shared constraint/reference classification, exact
-  ancestry, and per-value provenance. Producer-recorded delegate authority,
-  classes as graph nodes, MethodImpls, properties, and broader operation routing
+  ancestry, and per-value provenance. ABI 66 closes unconstrained producer-
+  recorded delegate declaration authority, but producer delegate constraints,
+  emitted members/operations, and source production remain incomplete. Classes
+  as graph nodes, MethodImpls, properties, and broader operation routing also
   remain incomplete. Distinct exact constructions are retained; selection still
   requires independently proven lineage or a verifier-valid variance transfer
   to the requested construction.
