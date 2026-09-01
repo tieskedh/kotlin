@@ -127,11 +127,11 @@ complete edge set for the auxiliary TypeDef; missing selected hierarchy remains
 `Unavailable`.
 
 A TypeSpec may also recursively construct an exact public generic interface,
-ordinary reference class, or value type whose selected/raw TypeDef has a
-complete supported binder vector. The construction can contain exact value
-arguments and can close or flow through an inherited edge. Reference,
-non-nullable-value, and nullable-value carriers use the shared physical
-classifier. An actual signature must agree with the selected TypeDef's
+ordinary reference class, sealed CLR delegate, or value type whose selected/raw
+TypeDef has a complete supported binder vector. The construction can contain
+exact value arguments and can close or flow through an inherited edge.
+Reference, non-nullable-value, and nullable-value carriers use the shared
+physical classifier. An actual signature must agree with the selected TypeDef's
 class/value marker. Only a bare TypeDef/TypeRef constraint row may infer that
 marker from the selected definition because the metadata row has no signature-
 side kind. Non-nullable values preserve `NON_NULL_ONLY`; a selected
@@ -146,10 +146,15 @@ explicit target. This proves by-ref-like-capable binder forwarding on .NET 10,
 rejects it on Framework 4.8, and remains unavailable without a target. The
 proof is scoped to source, exact edge root, and constrained subtree. An outer
 proof cannot satisfy an inner construction by implication, and the general
-construction helper remains closed. Non-interface variance is not admitted
-until delegates have separate proof. Carrier traversal shares the physical
-ABI's depth and node ceilings. Constrained constructions outside retained edges
-remain unavailable.
+construction helper remains closed. A variant non-interface binder is admitted
+only when the shared classifier proves a sealed TypeDef whose immediate selected
+base is the exact selected `System.MulticastDelegate`. Names and `Invoke`-
+shaped members are not evidence; ordinary variant classes and non-sealed
+delegates conflict, while missing core/hierarchy authority is unavailable.
+Exact covariant and contravariant delegate constructions are retained without
+claiming their declared members or a variance conversion. Carrier traversal
+shares the physical ABI's depth and node ceilings. Constrained constructions
+outside retained edges remain unavailable.
 
 Raw inherited-graph and auxiliary-nominal binder counts, plus their aggregate
 constraint-row count, are reserved before generic-context resolution. Both
@@ -157,11 +162,13 @@ reuse the physical-artifact collection ceiling, so hostile metadata cannot
 force an unbounded normalized constraint graph before the adapter returns
 `Unavailable`.
 
-The next ordered boundary is variant-delegate nominal carriers. Keep proof
-authority edge-specific and keep parameter domains and direct/void/split-
-nullable result layouts independently composable. Only after this bounded
-constraint family should the graph grammar widen to properties, class nodes,
-MethodImpls, or Runtime/Stdlib declarations.
+The next ordered boundary is retained CLR reference-only variance conversion
+for already admitted interface and delegate carriers. It must consume only
+producer/retained binder authority plus the shared physical assignability rules;
+Kotlin logical variance, value-type arguments, or missing selected hierarchy
+must never fabricate a construction. Only after this bounded constraint family
+should the graph grammar widen to properties, class nodes, MethodImpls, or
+Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an

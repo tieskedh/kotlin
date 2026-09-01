@@ -4,6 +4,51 @@ class DotNetClrDelegateRuntimeTypes internal constructor(
     val systemMulticastDelegate: DotNetClrResolvedTypeDefinition,
 )
 
+enum class DotNetClrDelegateTypeFailure {
+    DELEGATE_IS_NOT_SEALED,
+}
+
+sealed interface DotNetClrDelegateTypeClassification {
+    data object Delegate : DotNetClrDelegateTypeClassification
+
+    data object NotDelegate : DotNetClrDelegateTypeClassification
+
+    data class Invalid(
+        val failure: DotNetClrDelegateTypeFailure,
+    ) : DotNetClrDelegateTypeClassification
+}
+
+/**
+ * Classifies one already-resolved CLR hierarchy by exact delegate-root identity.
+ *
+ * Names and `Invoke`-shaped members are not evidence. A non-interface TypeDef is a delegate only
+ * when its immediate selected base is the selected `System.MulticastDelegate` TypeDef and the
+ * derived TypeDef is sealed, matching the CLR variance boundary.
+ */
+class DotNetClrDelegateTypeClassifier(
+    private val runtimeTypes: DotNetClrDelegateRuntimeTypes,
+) {
+    fun classify(
+        hierarchy: DotNetClrResolvedTypeHierarchy,
+    ): DotNetClrDelegateTypeClassification {
+        val definition = hierarchy.type.type.definition
+        if (definition.isInterface ||
+            hierarchy.baseType?.type?.hasSameIdentityAs(
+                runtimeTypes.systemMulticastDelegate,
+            ) != true
+        ) {
+            return DotNetClrDelegateTypeClassification.NotDelegate
+        }
+        return if (definition.isSealed) {
+            DotNetClrDelegateTypeClassification.Delegate
+        } else {
+            DotNetClrDelegateTypeClassification.Invalid(
+                DotNetClrDelegateTypeFailure.DELEGATE_IS_NOT_SEALED,
+            )
+        }
+    }
+}
+
 enum class DotNetClrDelegateRuntimeTypeFailure {
     SYSTEM_MULTICAST_DELEGATE_IS_INTERFACE,
     SYSTEM_MULTICAST_DELEGATE_IS_NOT_ABSTRACT,
