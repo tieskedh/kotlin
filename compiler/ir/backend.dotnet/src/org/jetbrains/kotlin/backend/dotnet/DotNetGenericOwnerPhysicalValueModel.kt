@@ -542,6 +542,19 @@ internal class DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
 }
 
 /**
+ * Proof that one exact recorded direct-supertype construction satisfies its target TypeDef's
+ * GenericParam rows in the source TypeDef's open declaration context.
+ *
+ * This is deliberately narrower than general construction authority. It cannot authorize the
+ * same target with caller-chosen arguments, and it remains tied to the exact metadata edge whose
+ * source binder supplied the constraint implication.
+ */
+internal data class DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
+    val source: DotNetGenericOwnerPhysicalTypeDefIdentity,
+    val target: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+)
+
+/**
  * One conflict-checked declaration-authority snapshot. Value provenance consumes only identities;
  * all arity/category descriptions are validated here before a symbolic carrier can be created.
  */
@@ -555,6 +568,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Map<DotNetGenericOwnerPhysicalFieldDefIdentity, DotNetGenericOwnerPhysicalFieldDefReference>,
     private val directSupertypeEdgeSets:
             Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
+    private val directSupertypeConstraintProofs:
+            Set<DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof>,
     private val retainedForeignTypeDefinitions:
             Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
     private val retainedForeignMethodDefinitions:
@@ -578,6 +593,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             this.methodDefinitions.values + methodDefinitions,
             this.directSupertypeEdgeSets.values + directSupertypeEdgeSets,
             this.fieldDefinitions.values + fieldDefinitions,
+            directSupertypeConstraintProofs,
             retainedForeignTypeDefinitions,
             retainedForeignMethodDefinitions,
         )
@@ -593,19 +609,33 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
         arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
     ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        when (val shape = validateConstructionShapeOrError(definition, arguments)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return shape
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return shape
+        }
         val description = typeDefinitions[definition]
             ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-        if (arguments.size != description.genericArity) {
-            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                "physical TypeDef expects ${description.genericArity} arguments but received ${arguments.size}",
-            )
-        }
         if (description.genericParameters.any { parameter -> !parameter.isUnconstrained }) {
             // The declaration index records exact GenericParam authority, but this generic
             // construction helper does not yet prove nominal or special-constraint satisfaction.
             // A retained metadata construction may eventually carry separate proof; arbitrary
             // symbolic arguments must not become verifier truth merely because their arity fits.
             return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+    }
+
+    private fun validateConstructionShapeOrError(
+        definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        val description = typeDefinitions[definition]
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (arguments.size != description.genericArity) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "physical TypeDef expects ${description.genericArity} arguments but received ${arguments.size}",
+            )
         }
         if (arguments.any { argument -> argument == voidCarrier() }) {
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
@@ -700,7 +730,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             val nextActiveDefinitions = activeDefinitions + current.definition
             for (edge in edgeSet.edges) {
                 val target = when (val substitution = substituteDirectSupertypeTargetOrError(
-                    edge.target,
+                    edge,
                     current,
                 )) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> substitution.value
@@ -806,7 +836,22 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         }
 
         for (edge in edgeSet.edges) {
-            when (val carrierValidation = validateCarrierOrError(edge.target)) {
+            val targetConstruction = edge.target as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed
+            val hasConstraintProof = targetConstruction != null &&
+                    DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
+                        edgeSet.source,
+                        targetConstruction,
+                    ) in directSupertypeConstraintProofs
+            val carrierValidation = if (hasConstraintProof) {
+                validateConstructionShapeOrError(
+                    targetConstruction.definition,
+                    targetConstruction.arguments,
+                )
+            } else {
+                validateCarrierOrError(edge.target)
+            }
+            when (carrierValidation) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return carrierValidation
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return carrierValidation
@@ -878,6 +923,72 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     }
 
     private fun substituteDirectSupertypeTargetOrError(
+        edge: DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference,
+        source: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
+        val target = edge.target
+        return when (target) {
+            is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(target)
+            is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+                if (target.binder != DotNetGenericOwnerPhysicalGenericBinderReference.Type(source.definition)) {
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a recorded direct-supertype edge escaped its source TypeDef binder",
+                    )
+                } else {
+                    source.arguments.getOrNull(target.index)?.let {
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
+                    } ?: DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a recorded direct-supertype parameter is outside its constructed source arity",
+                    )
+                }
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                val substitutedArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+                for (argument in target.arguments) {
+                    when (val substitution = substituteDirectSupertypeCarrierOrError(argument, source)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                            substitutedArguments += substitution.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return substitution
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return substitution
+                    }
+                }
+                val proof = DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
+                    source.definition,
+                    target,
+                )
+                if (proof in directSupertypeConstraintProofs) {
+                    when (val shape = validateConstructionShapeOrError(
+                        target.definition,
+                        substitutedArguments,
+                    )) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                            return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                                DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                                    .unboundTypeReference(target.definition, substitutedArguments),
+                            )
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return shape
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                } else {
+                    return constructTypeOrError(target.definition, substitutedArguments)
+                }
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> when (
+                val element = substituteDirectSupertypeCarrierOrError(target.element, source)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetGenericOwnerSymbolicCarrierReference.SzArray(element.value),
+                    )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> element
+            }
+        }
+    }
+
+    private fun substituteDirectSupertypeCarrierOrError(
         target: DotNetGenericOwnerSymbolicCarrierReference,
         source: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
@@ -898,9 +1009,11 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 }
             }
             is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                // Nested constrained constructions require their own proof. This retained graph
+                // grammar does not admit them merely because the outer InterfaceImpl is proven.
                 val substitutedArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
                 for (argument in target.arguments) {
-                    when (val substitution = substituteDirectSupertypeTargetOrError(argument, source)) {
+                    when (val substitution = substituteDirectSupertypeCarrierOrError(argument, source)) {
                         is DotNetGenericOwnerPhysicalBindingResult.Bound ->
                             substitutedArguments += substitution.value
                         is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return substitution
@@ -910,7 +1023,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 constructTypeOrError(target.definition, substitutedArguments)
             }
             is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> when (
-                val element = substituteDirectSupertypeTargetOrError(target.element, source)
+                val element = substituteDirectSupertypeCarrierOrError(target.element, source)
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound ->
                     DotNetGenericOwnerPhysicalBindingResult.Bound(
@@ -936,6 +1049,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 methodDefinitions,
                 directSupertypeEdgeSets,
                 fieldDefinitions,
+                directSupertypeConstraintProofs = emptySet(),
                 retainedForeignTypeDefinitions = emptySet(),
                 retainedForeignMethodDefinitions = emptySet(),
             )
@@ -990,6 +1104,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 declarations.methodDefinitions,
                 declarations.directSupertypeEdgeSets,
                 fieldDefinitions = emptyList(),
+                directSupertypeConstraintProofs = declarations.directSupertypeConstraintProofs.toSet(),
                 retainedForeignTypeDefinitions = declarations.typeDefinitions
                     .mapTo(linkedSetOf()) { definition ->
                         definition.identity as DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
@@ -1007,6 +1122,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
             directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
             fieldDefinitions: Iterable<DotNetGenericOwnerPhysicalFieldDefReference>,
+            directSupertypeConstraintProofs:
+                    Set<DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof>,
             retainedForeignTypeDefinitions: Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
             retainedForeignMethodDefinitions: Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
@@ -1100,6 +1217,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 methodsByIdentity,
                 fieldsByIdentity,
                 emptyMap(),
+                directSupertypeConstraintProofs,
                 retainedForeignTypeDefinitions,
                 retainedForeignMethodDefinitions,
             )
@@ -1235,6 +1353,38 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 }
                 edgesBySource.putIfAbsent(candidate.source, candidate)
             }
+            for (proof in directSupertypeConstraintProofs) {
+                val source = proof.source as?
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a direct-supertype constraint proof requires a retained foreign source",
+                    )
+                val target = proof.target.definition as?
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a direct-supertype constraint proof requires a retained foreign target",
+                    )
+                if (source !in retainedForeignTypeDefinitions ||
+                    target !in retainedForeignTypeDefinitions
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                if (typesByIdentity[target]?.genericParameters
+                        ?.all(DotNetGenericOwnerPhysicalGenericParameterReference::isUnconstrained) != false
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a direct-supertype constraint proof must target a constrained TypeDef",
+                    )
+                }
+                if (edgesBySource[source]?.edges?.any { edge ->
+                        edge.target == proof.target
+                    } != true
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a direct-supertype constraint proof does not match a recorded edge",
+                    )
+                }
+            }
 
             val activeDefinitions = mutableSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity>()
             val completedDefinitions = mutableSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity>()
@@ -1282,6 +1432,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     methodsByIdentity,
                     fieldsByIdentity,
                     edgesBySource,
+                    directSupertypeConstraintProofs,
                     retainedForeignTypeDefinitions,
                     retainedForeignMethodDefinitions,
                 ),
