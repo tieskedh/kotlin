@@ -6,9 +6,16 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import java.util.IdentityHashMap
+
+internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
+    WHOLE_EXPRESSION_CARRIER,
+    CONTROL_FLOW_BRANCHES,
+}
 
 /**
  * One operation-scoped permission to retain the carrier which an initializer already produces.
@@ -20,18 +27,22 @@ import java.util.IdentityHashMap
  */
 internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal constructor(
     val carrier: DotNetGenericOwnerPhysicalCarrier,
+    private val emitterValidation: DotNetGenericOwnerPhysicalValueEmitterValidation,
 ) {
     /**
      * Joins symbolic authority with the live emitter mapping without trusting either alone.
      *
-     * The physical MethodDef owner authenticates every `!n` binder. The initializer must then
-     * report exactly the independently reconstructed verifier-visible construction; a changed or
-     * evicted mapping fails closed instead of silently selecting another local carrier.
+     * The physical MethodDef owner authenticates every `!n` binder. A direct initializer must
+     * independently report exactly that reconstructed verifier-visible construction. An [IrWhen]
+     * must remain a live control-flow initializer; the variable emitter then supplies the selected
+     * local type as a fixed boundary and independently validates every branch during emission. A
+     * changed or evicted mapping fails closed instead of silently selecting another carrier.
      */
     fun bindEmitterCarrierOrNull(
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
         initializerCarrier: DotNetIlValueType?,
+        initializerUsesControlFlowBranches: Boolean,
     ): DotNetIlValueType? {
         if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return null
         val construction = carrier.type as?
@@ -54,8 +65,12 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
             DotNetIlValueType.TypeParameter(parameter.index, isMethodParameter = false)
         }
         val expected = DotNetIlValueType.GenericInstance(classInfo, arguments)
-        return initializerCarrier?.takeIf { actual ->
-            actual == expected && actual.isDotNetReferenceShaped()
+        if (!expected.isDotNetReferenceShaped()) return null
+        return when (emitterValidation) {
+            DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER ->
+                initializerCarrier?.takeIf { actual -> actual == expected }
+            DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES ->
+                expected.takeIf { initializerUsesControlFlowBranches }
         }
     }
 
@@ -155,6 +170,11 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         IdentityHashMap()
                     }[record.variable] = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
                         direct.carrier,
+                        if ((record.variable.owner as? IrVariable)?.initializer is IrWhen) {
+                            DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES
+                        } else {
+                            DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER
+                        },
                     )
                 }
 

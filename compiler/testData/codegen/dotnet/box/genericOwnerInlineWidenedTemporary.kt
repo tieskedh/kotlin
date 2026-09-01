@@ -52,6 +52,17 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
         sourceMutableAlias = other
         return sourceMutableAlias === other
     }
+
+    fun joinedAliasMatches(
+        selectThis: Boolean,
+        otherValue: T,
+        expected: T,
+    ): Boolean {
+        val other = InlineSecondView(otherValue)
+        val sourceJoinedAlias: InlineProducer<Any?> = if (selectThis) this else other
+        val selected: Any? = if (selectThis) this else other
+        return sourceJoinedAlias === selected && sourceJoinedAlias.produce() == expected
+    }
 }
 
 // Both implementations share InlineProducer's semantic declaration slot. Their explicit
@@ -89,6 +100,13 @@ fun box(): String {
     val otherStrings = InlineSecondView("other")
     if (!ints.mutableAliasTracks(otherInts) || !strings.mutableAliasTracks(otherStrings)) {
         return "mutable alias"
+    }
+    if (!ints.joinedAliasMatches(true, 7, 42) ||
+        !ints.joinedAliasMatches(false, 7, 7) ||
+        !strings.joinedAliasMatches(true, "other", "inline") ||
+        !strings.joinedAliasMatches(false, "other", "other")
+    ) {
+        return "joined alias"
     }
     // A source-declared wide variable remains a semantic Kotlin view. In particular, its
     // physical carrier must not be pinned to the first exact value by the temporary fast path.

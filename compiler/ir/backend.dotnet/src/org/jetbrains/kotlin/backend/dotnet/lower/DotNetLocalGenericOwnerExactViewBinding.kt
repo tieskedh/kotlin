@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalView
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
@@ -29,6 +30,28 @@ internal fun bindExactLocalGenericOwnerNaturalViewOrError(
     type: IrType,
     physicalOwner: IrClass,
     authority: DotNetLocalGenericOwnerPhysicalAuthority,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalView> =
+    bindExactLocalGenericOwnerViewOrError(type, physicalOwner, authority) { targetOwner ->
+        authority.naturalInterfaceIdentityOrNull(targetOwner.symbol)
+    }
+
+/** Exact local class or natural-interface construction selected by existing TypeDef authority. */
+internal fun bindExactLocalGenericOwnerConstructedViewOrError(
+    type: IrType,
+    physicalOwner: IrClass,
+    authority: DotNetLocalGenericOwnerPhysicalAuthority,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalView> =
+    bindExactLocalGenericOwnerViewOrError(type, physicalOwner, authority) { targetOwner ->
+        authority.genericClassIdentityOrNull(targetOwner.symbol)
+            ?: authority.naturalInterfaceIdentityOrNull(targetOwner.symbol)
+    }
+
+private inline fun bindExactLocalGenericOwnerViewOrError(
+    type: IrType,
+    physicalOwner: IrClass,
+    authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    selectTargetIdentity: (IrClass) ->
+        DotNetGenericOwnerPhysicalTypeDefIdentity.Local?,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalView> {
     val declarations = authority.boundDeclarations
         ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
@@ -38,7 +61,7 @@ internal fun bindExactLocalGenericOwnerNaturalViewOrError(
         ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     val targetOwner = (simple.classifier as? IrClassSymbol)?.owner
         ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-    val targetIdentity = authority.naturalInterfaceIdentityOrNull(targetOwner.symbol)
+    val targetIdentity = selectTargetIdentity(targetOwner)
         ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     if (simple.arguments.size != targetOwner.typeParameters.size) {
         return DotNetGenericOwnerPhysicalBindingResult.Unavailable

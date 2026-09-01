@@ -2135,9 +2135,58 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                         comparison.relation ==
                         DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
             } == true) {
-                "A projected, mutable, or joined source value acquired exact placement " +
+                "A projected or mutable source value acquired exact placement " +
                         "authority: probe=$probe, comparison=$hostile, all=$comparisons"
             }
+        }
+
+        val joinedAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSelfView") &&
+                    comparison.prediction.sourceFunctionName == "joinedAliasMatches" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "sourceJoinedAlias"
+        }
+        check(joinedAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val commonCarrier = prediction.initializerProducedCarrier
+            val commonView = prediction.guaranteedViews.singleOrNull()
+            val selected = prediction.selectedViewLineage.singleOrNull()
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    commonCarrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                    commonCarrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                    commonCarrier.localTypeDefView ==
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                    commonCarrier.ownerParameterIndices == listOf(0) &&
+                    prediction.storageCarrier == commonCarrier &&
+                    commonView?.carrier == commonCarrier &&
+                    DotNetGenericOwnerPhysicalValueShadowEvidence.RECORDED_INTERFACE_EDGE in
+                    commonView.evidence &&
+                    selected?.view == commonView &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == commonCarrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "The control-flow join did not retain its unique recorded InlineProducer<!T> view: " +
+                    "joined=$joinedAlias, all=$comparisons"
+        }
+
+        val joinedMethod = methodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'joinedAliasMatches'(")
+        }
+        check(joinedMethod != null &&
+                "class 'InlineProducer`1'<!0>" in joinedMethod &&
+                "class 'InlineProducer`1'<object>" !in joinedMethod
+        ) {
+            "The emitted control-flow join must use InlineProducer<!T>, never its fabricated " +
+                    "object sibling: method=$joinedMethod"
         }
     }
 }

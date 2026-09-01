@@ -200,23 +200,31 @@ consumer no longer requires a complete-surface rewrite plan merely to recognize
 a TypeDef which the producer actually emits, and no consumer may independently
 rederive the vector from logical IR.
 
-The first authoritative storage-placement consumer is now closed for a direct
-local reference construction whose producer and independently chosen storage
-carrier are exactly the same local `C<!n>` bound to the physical MethodDef
-owner. It consumes final IR-bound facts through an explicit adapter; diagnostic
-snapshots and IR origins are not inputs. The emitter independently reconstructs
-the expected carrier from local TypeDef authority and the physical owner binder,
-then requires the live initializer carrier to agree. The permission therefore
-cannot authorize a cast, semantic adaptation, boxing, nullable materialization,
-field/state choice, or ABI change. Ordinary source aliases and compiler-created
-aliases follow the same rule. Star/projected values, mutable or multiple-write
-locals, foreign/fixed/nested constructions, and split layouts receive no token.
+Authoritative local placement is now closed for two direct reference-shaped
+forms. First, producer and independently chosen storage may be the same local
+`C<!n>` bound to the physical MethodDef owner. Second, an exhaustive `IrWhen`
+may preserve an identical direct carrier or select the unique construction in
+one interface family which every reaching arm already possesses through
+recorded physical edges. The logical result classifier selects only the family;
+it cannot prove a construction. Equal selected lineage may disambiguate a view
+only after the shared closure proves it, while ordinary ambiguity is unavailable
+dataflow precision rather than declaration conflict. The emitter reconstructs
+the selected carrier and either checks the whole initializer or emits every
+control-flow arm against that fixed boundary. Diagnostic snapshots, IR origins,
+names, and stdlib identity are not authority.
+
+These permissions authorize no cast, semantic adaptation, boxing, nullable
+materialization, field/state choice, or ABI change. Ordinary source aliases and
+compiler-created aliases follow the same rules. Star/projected values, mutable
+or multiple-write locals, unknown/null/bottom arms, non-exhaustive control flow,
+foreign/fixed/nested constructions, and split layouts receive no join token.
 The previous compiler-origin recognizer remains only as migration fallback.
 
-The next value boundary is explicit transfer and placement through
-representation-changing conversions and control-flow joins. That grammar must
-be proved before widening the consumer to fields, captures, properties, class
-nodes, MethodImpls, or Runtime/Stdlib declarations.
+The next value boundary is an authority-backed entry environment for exact
+typed parameters/results. Then extend joins to null, bottom, and unknown arms
+and make representation-changing conversions explicit. Prove those grammars
+before widening the consumer to fields, captures, properties, class nodes,
+MethodImpls, or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an

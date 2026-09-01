@@ -61,7 +61,7 @@ Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority, plus retained interface/delegate reference
 variance with conversion-scoped constraint validation. The current focused
-evidence compiles the importer and test fixture and passes 167 model tests: 82
+evidence compiles the importer and test fixture and passes 172 model tests: 87
 shared physical-value tests and 85 retained-metadata tests. Six unconstrained
 memberless external-DLL pipelines remain green with both FIR parsers. Git owns
 the intermediate chronology.
@@ -74,16 +74,19 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-The first final physical-value fact now has an authoritative emitter consumer.
-For one direct local, owner-bound reference construction, final value flow may
-retain the initializer's already-produced `C<!n>` carrier only when the
-independently selected local storage carrier is exactly equal. The emitter then
-reconstructs that carrier from the physical MethodDef owner and checks it against
-the live initializer before selecting the slot. Source and compiler-owned
-immutable aliases therefore share one origin-independent rule; star/projected
-and mutable/multiple-write controls receive no token. The model test and focused
-candidate plus erased-inverse matrix are green; exact evidence is in the
-[local-placement archive](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md).
+Final physical-value facts now authorize two bounded local-placement forms. A
+direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
+carrier. An exhaustive control-flow initializer may retain an identical carrier
+or the unique construction of one physically recorded common interface family
+across all reaching arms. Selected lineage can disambiguate only a view already
+present in every recorded closure; missing or ambiguous views remain
+unavailable and never fabricate `I<object>`. The emitter reconstructs the
+carrier from the physical MethodDef owner and independently validates either
+the whole initializer or every branch at its fixed storage boundary. Source and
+compiler-owned aliases share the rule; star/projected and mutable/multiple-write
+controls receive no token. Exact evidence is in the
+[direct-placement archive](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md)
+and [control-flow archive](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md).
 
 ## Production binding state
 
@@ -109,17 +112,19 @@ candidate plus erased-inverse matrix are green; exact evidence is in the
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
-The first local storage-placement consumer now binds final IR value records to
-one identity-keyed permission and independently verifies the live emitter
-carrier. It neither reconstructs a slot from logical Kotlin type nor authorizes
+The local placement consumer now covers direct equal-carrier aliases and one
+exhaustive reference-shaped control-flow join. The join uses a logical interface
+only to select a family; physical construction authority comes exclusively from
+the intersection of recorded interface closures. It neither authorizes
 conversion, adaptation, boxing, state, or ABI changes. The older compiler-origin
 recognizer remains only as migration fallback for transfer shapes the shared
 model has not yet derived.
 
-The next consolidation boundary is explicit value transfer and placement across
-representation-changing conversions and control-flow joins. Fields, captures,
+The next consolidation boundary is the entry environment for exact typed
+parameters/results, followed by null/bottom/unknown control-flow arms and
+explicit representation-changing conversions. Fields, captures,
 foreign/fixed/nested carriers, stars/projections, and split-nullable layouts stay
-outside this first consumer rather than acquiring local exceptions.
+outside these local consumers rather than acquiring local exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the
@@ -289,7 +294,7 @@ The shared model and remaining boundary are owned by the
 and [way forward](docs/programmes/way-forward.md).
 
 The retained-metadata model gate passes 85 tests, the shared physical-value
-model passes 82 tests (167 combined), and the producer-delegate authority gate
+model passes 87 tests (172 combined), and the producer-delegate authority gate
 passes 8 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.

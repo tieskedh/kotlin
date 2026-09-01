@@ -35,6 +35,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectRecordedPhysicalInterfaceViewOrNull
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -53,11 +54,13 @@ import org.jetbrains.kotlin.ir.expressions.IrBody
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrComposite
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
+import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
@@ -68,17 +71,19 @@ import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isFalseConst
+import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.types.Variance
 
 /**
- * First production-inert consumer of the generic-owner physical-value model.
+ * Production-inert generic-owner physical-value transfer analysis.
  *
- * The shadow recognizes only exact current-receiver flow, broad object parameters, and immutable
- * single-definition object/generic aliases. It observes both the moved pre-remap body and the final
- * routing fixpoint, but it neither mutates IR nor publishes a fact to any routing/emission structure.
+ * Diagnostic snapshots remain read-only. Final IR-bound records may be consumed only through an
+ * explicit authority adapter after this analysis completes; the analysis itself neither mutates IR
+ * nor supplies a logical type as physical evidence.
  */
 internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
     private val context: DotNetBackendContext,
@@ -415,9 +420,87 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     transferIdentityPreservingReferenceOperatorOrNull(expression, storage, forceNonNull = true)
                 else -> null
             }
+            is IrConstructorCall -> evaluateConstructorResultOrNull(expression)
+            is IrWhen -> evaluateWhenResultOrNull(expression, storage)
             is IrBlock -> evaluateContainerOrNull(expression.statements, storage)
             is IrComposite -> evaluateContainerOrNull(expression.statements, storage)
             else -> null
+        }
+
+        private fun evaluateConstructorResultOrNull(
+            expression: IrConstructorCall,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val ownerAuthority = authority ?: return null
+            val view = when (val binding = bindExactLocalGenericOwnerConstructedViewOrError(
+                expression.type,
+                owner,
+                ownerAuthority.physicalAuthority,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${binding.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            }
+            val carrier = when (val binding = ownerAuthority.declarations.carrierOrError(
+                view.construction,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${binding.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            }
+            if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) {
+                return null
+            }
+            return DotNetGenericOwnerProducedValueFact(
+                DotNetGenericOwnerProducedValueLayout.Direct(carrier),
+                DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews().guarantee(
+                    view,
+                    DotNetGenericOwnerPhysicalViewEvidence.CONSTRUCTOR_ALLOCATION,
+                ),
+                DotNetGenericOwnerPhysicalNullState.NON_NULL,
+            )
+        }
+
+        private fun evaluateWhenResultOrNull(
+            expression: IrWhen,
+            storage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val ownerAuthority = authority ?: return null
+            val logicalOwner = ((expression.type as? IrSimpleType)?.classifier as? IrClassSymbol)
+                ?: return null
+            val selectedFamily = ownerAuthority.physicalAuthority
+                .naturalInterfaceIdentityOrNull(logicalOwner)
+                ?: return null
+            val reaching = mutableListOf<DotNetGenericOwnerProducedValueFact>()
+            var hasElse = false
+            for (branch in expression.branches) {
+                if (branch.condition.isFalseConst()) continue
+                val result = evaluateInitializerOrNull(
+                    branch.result,
+                    LinkedHashMap(storage),
+                ) ?: return null
+                reaching += result
+                if (branch.condition.isTrueConst()) {
+                    hasElse = true
+                    break
+                }
+            }
+            if (!hasElse || reaching.size < 2) return null
+            var joined = reaching.first()
+            for (next in reaching.drop(1)) {
+                joined = when (val result = joined.joinAtRecordedPhysicalInterfaceFamilyOrError(
+                    next,
+                    ownerAuthority.declarations,
+                    selectedFamily,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${result.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                }
+            }
+            return joined
         }
 
         private fun transferIdentityPreservingReferenceOperatorOrNull(
