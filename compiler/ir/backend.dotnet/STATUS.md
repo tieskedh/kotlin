@@ -60,10 +60,11 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority, plus retained interface/delegate reference
-variance. The current focused evidence compiles the importer and test fixture
-and passes 161 model tests: 81 shared physical-value tests and 80 retained-
-metadata tests. Six unconstrained memberless external-DLL pipelines remain
-green with both FIR parsers. Git owns the intermediate chronology.
+variance with conversion-scoped constraint validation. The current focused
+evidence compiles the importer and test fixture and passes 167 model tests: 82
+shared physical-value tests and 85 retained-metadata tests. Six unconstrained
+memberless external-DLL pipelines remain green with both FIR parsers. Git owns
+the intermediate chronology.
 
 ## Production binding state
 
@@ -223,20 +224,25 @@ proof alone is insufficient and the general construction helper remains
 closed. Exact `class`, `struct`, `new()`, and `allows ref struct` binder forms
 compose through the same direct and nested grammar. Target-aware propagation
 proves an open by-ref-like-capable binder on .NET 10 and rejects it on Framework
-4.8; no target remains unavailable. Constrained constructions in other metadata
-positions, including as newly constructed variance targets, remain unavailable;
-classes as inherited graph nodes, MethodImpls, properties, and Runtime/Stdlib
-application remain later. The fast external-DLL FIR fixture intentionally has
-no selected physical core catalog, so this constrained slice is proven in the
-metadata model with a complete synthetic selected core; an end-to-end
-constrained FIR pipeline remains an explicit later gate rather than using a second local
-constraint solver.
+4.8; no target remains unavailable. A newly requested CLR-variance target now
+receives a fresh conversion-scoped proof from the same selected metadata and
+shared nominal/special validators. The authority covers directly retained
+owners and inherited graphs, validates every constrained subtree, and is tied
+to the exact target profile and argument vector. It neither reuses an edge proof
+nor opens the general construction helper; successful conversion adds only a
+per-value view and does not mutate recorded ancestry. Classes as inherited graph
+nodes, MethodImpls, properties, and Runtime/Stdlib application remain later.
+The fast external-DLL FIR fixture intentionally has no selected physical core
+catalog, so this constrained slice is proven in the metadata model with a
+complete synthetic selected core; an end-to-end constrained FIR pipeline
+remains an explicit later gate rather than using a second local constraint
+solver.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 80 tests, and the shared physical-value
-model passes 81 tests (161 combined). All six unconstrained
+The retained-metadata model gate passes 85 tests, and the shared physical-value
+model passes 82 tests (167 combined). All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -254,19 +260,22 @@ errors, or skips.
   bounded TypeSpec-backed nominal constraints, exact direct nominal rows, and
   recursive constructions of public generic interfaces, ordinary reference
   classes, sealed CLR delegates, or value types with complete nominal and
-  special binder authority are admitted. A
-  constrained construction is admitted only as an independently validated
-  subtree of one exact retained edge. A target profile is required wherever
-  special-constraint or possible by-ref-like validation participates.
+  special binder authority are admitted. A constrained construction is admitted
+  as an independently validated subtree of one exact retained edge, or solely
+  as the target of one conversion-scoped variance proof. A target profile is
+  required wherever special-constraint or possible by-ref-like validation
+  participates; the result never becomes reusable declaration, edge, or general
+  construction authority.
   Variant delegate constructions require exact selected delegate-root identity
   and sealed metadata. Reference-only variance is available for already
-  admitted unconstrained interface and retained delegate constructions, using
-  only physical binder rows, reference classification, exact ancestry, and
-  per-value provenance. Constraint-bearing target constructions, producer-
-  recorded delegate authority, classes as graph nodes, MethodImpls, properties,
-  and broader operation routing remain incomplete. Distinct exact constructions
-  are retained; selection still requires independently proven lineage or a
-  verifier-valid variance transfer to the requested construction.
+  admitted interface and retained delegate constructions, including constraint-
+  bearing targets independently proven from selected raw metadata, using
+  physical binder rows, shared constraint/reference classification, exact
+  ancestry, and per-value provenance. Producer-recorded delegate authority,
+  classes as graph nodes, MethodImpls, properties, and broader operation routing
+  remain incomplete. Distinct exact constructions are retained; selection still
+  requires independently proven lineage or a verifier-valid variance transfer
+  to the requested construction.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

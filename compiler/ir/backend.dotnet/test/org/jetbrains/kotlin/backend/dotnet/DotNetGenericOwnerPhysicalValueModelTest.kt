@@ -721,6 +721,50 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `caller-authored constrained TypeDef cannot mint conversion authority`() {
+        val identity = localOwnerIdentity(IrClassSymbolImpl())
+        val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalDeclarationIndex,
+                >>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
+                listOf(DotNetGenericOwnerPhysicalTypeDefReference(
+                    identity,
+                    listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                        constraints = emptyList(),
+                        hasReferenceTypeConstraint = true,
+                    )),
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                )),
+                emptyList(),
+                listOf(edgeSet(identity)),
+            )
+        ).value
+        val source = DotNetGenericOwnerPhysicalView(
+            DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
+                identity,
+                listOf(stringType()),
+            )
+        )
+        val target = DotNetGenericOwnerPhysicalView(
+            DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
+                identity,
+                listOf(objectType()),
+            )
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            declarations.proveClrReferenceVarianceConversionOrError(source, target),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            declarations.constructTypeOrError(identity, target.construction.arguments),
+        )
+    }
+
+    @Test
     fun `declaration authority rejects conflicting MethodDef descriptions`() {
         val owner = localOwnerIdentity(IrClassSymbolImpl())
         val identity = localMethodIdentity(IrSimpleFunctionSymbolImpl())

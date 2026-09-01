@@ -969,12 +969,14 @@ breaks the tie. The external-DLL pipeline proves this with one memberless child
 implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
-No logical type or InterfaceImpl row order participates. Constrained
-constructions outside authenticated direct-supertype edges, including a new
-constraint-bearing variance target, declared members on inherited graph nodes,
-classes as graph nodes, MethodImpls, unsupported carrier
-leaves, and hierarchy disagreement remain unavailable or conflicting according
-to the ordinary validity boundary.
+No logical type or InterfaceImpl row order participates. A constraint-bearing
+variance target is independently revalidated from selected raw metadata inside
+that exact conversion; it never borrows the source edge proof and never becomes
+general construction authority. Other constrained constructions outside
+authenticated direct-supertype edges, declared members on inherited graph
+nodes, classes as graph nodes, MethodImpls, unsupported carrier leaves, and
+hierarchy disagreement remain unavailable or conflicting according to the
+ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
@@ -1113,11 +1115,15 @@ Nominally or specially constrained TypeDefs may now occur recursively inside an
 exact retained edge, with separate source/edge/subtree proofs and operation-
 scoped authority that cannot escape into general construction. Reference,
 value, default-constructor, and by-ref-like binder forms compose through the
-shared target-aware validator rather than a backend-local substitute. The next
-ordered work composes that validator with constraint-bearing variance targets
-under conversion-scoped authority; it must neither open the general
-construction helper nor let one exact edge proof authorize another
-construction. It is not another shape-specific state recognizer or a resumed
+shared target-aware validator rather than a backend-local substitute. That same
+validator now authenticates each exact constrained source/target subtree for
+one reference-variance conversion. The declaration index carries only selected-
+metadata authority for this query; success records a per-value view, leaves the
+source carrier and InterfaceImpl closure untouched, and cannot be reused by the
+general construction helper or a sibling target. Direct retained owners and
+inherited graphs share this rule on Framework 4.8 and .NET 10. Producer-recorded
+delegate authority is the next declaration boundary; storage placement remains
+separate. This is not another shape-specific state recognizer or a resumed
 stdlib census.
 
 ## Consequences

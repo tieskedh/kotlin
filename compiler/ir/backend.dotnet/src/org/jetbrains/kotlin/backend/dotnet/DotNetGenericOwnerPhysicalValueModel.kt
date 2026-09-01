@@ -575,6 +575,21 @@ internal data class DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
 )
 
 /**
+ * Selected-metadata authority which can revalidate one exact retained CLR construction.
+ *
+ * This is intentionally not general construction authority. The declaration index consults it
+ * only while proving one CLR reference-variance conversion, and the validated construction is
+ * never published as a reusable edge, carrier, or declaration fact.
+ */
+internal interface DotNetGenericOwnerPhysicalVarianceConstraintAuthority {
+    val constrainedTypeDefinitions: Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>
+
+    fun validateConstructionOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit>
+}
+
+/**
  * One conflict-checked declaration-authority snapshot. Value provenance consumes only identities;
  * all arity/category descriptions are validated here before a symbolic carrier can be created.
  */
@@ -590,6 +605,11 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Map<DotNetGenericOwnerPhysicalTypeDefIdentity, DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
     private val directSupertypeConstraintProofs:
             Set<DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof>,
+    private val varianceConstraintAuthorities:
+            Map<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+                    DotNetGenericOwnerPhysicalVarianceConstraintAuthority,
+                    >,
     private val retainedForeignTypeDefinitions:
             Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
     private val retainedForeignMethodDefinitions:
@@ -614,6 +634,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             this.directSupertypeEdgeSets.values + directSupertypeEdgeSets,
             this.fieldDefinitions.values + fieldDefinitions,
             directSupertypeConstraintProofs,
+            varianceConstraintAuthorities.values.toSet(),
             retainedForeignTypeDefinitions,
             retainedForeignMethodDefinitions,
         )
@@ -722,8 +743,26 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
      */
     fun physicalInterfaceViewClosureOrError(
         construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalInterfaceViewClosure> =
+        physicalInterfaceViewClosureOrError(construction) { root ->
+            validateConstructionOrError(root.definition, root.arguments)
+        }
+
+    private fun physicalInterfaceViewClosureForReferenceVarianceOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        state: PhysicalReferenceAssignmentState,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalInterfaceViewClosure> =
+        physicalInterfaceViewClosureOrError(construction) { root ->
+            validateConstructionForReferenceVarianceOrError(root, state)
+        }
+
+    private fun physicalInterfaceViewClosureOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        validateRoot: (
+            DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        ) -> DotNetGenericOwnerPhysicalBindingResult<Unit>,
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalInterfaceViewClosure> {
-        when (val validation = validateConstructionOrError(construction.definition, construction.arguments)) {
+        when (val validation = validateRoot(construction)) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
             is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
@@ -815,6 +854,9 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     private class PhysicalReferenceAssignmentState(
         var visitedPairs: Int = 0,
         val activePairs: MutableSet<PhysicalReferenceAssignmentPair> = mutableSetOf(),
+        val validatedConstructions:
+                MutableSet<DotNetGenericOwnerSymbolicCarrierReference.Constructed> =
+            mutableSetOf(),
     )
 
     /**
@@ -833,16 +875,6 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         if (source.family != target.family) {
             return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         }
-        for (construction in listOf(source.construction, target.construction)) {
-            when (val validation = validateConstructionOrError(
-                construction.definition,
-                construction.arguments,
-            )) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
-            }
-        }
         if (source == target) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         return proveSameDefinitionReferenceVarianceOrError(
             source.construction,
@@ -858,6 +890,15 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
         if (source.definition != target.definition) {
             return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        for (construction in listOf(source, target)) {
+            when (val validation =
+                validateConstructionForReferenceVarianceOrError(construction, state)
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+            }
         }
         val description = typeDefinitions[source.definition]
             ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
@@ -985,7 +1026,10 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
             val closure = when (val result =
-                physicalInterfaceViewClosureOrError(sourceConstruction)
+                physicalInterfaceViewClosureForReferenceVarianceOrError(
+                    sourceConstruction,
+                    state,
+                )
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
@@ -1014,6 +1058,65 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 "physical reference-assignability proof lost its active pair"
             }
         }
+    }
+
+    /**
+     * Validates every constrained subtree only for the active variance proof. An exact retained
+     * edge proof is not consulted here, and success does not make [constructTypeOrError]
+     * permissive for this or any sibling construction.
+     */
+    private fun validateConstructionForReferenceVarianceOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        state: PhysicalReferenceAssignmentState,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        if (construction in state.validatedConstructions) {
+            return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        }
+        when (val header = validateConstructionHeaderOrError(
+            construction.definition,
+            construction.arguments,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return header
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return header
+        }
+        val description = typeDefinitions[construction.definition]
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (description.genericParameters.any { parameter -> !parameter.isUnconstrained }) {
+            val foreignDefinition = construction.definition as?
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            val authority = varianceConstraintAuthorities[foreignDefinition]
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            when (val validation = authority.validateConstructionOrError(construction)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+            }
+        }
+        for (argument in construction.arguments) {
+            when (val validation = validateCarrierForReferenceVarianceOrError(argument, state)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+            }
+        }
+        state.validatedConstructions += construction
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+    }
+
+    private fun validateCarrierForReferenceVarianceOrError(
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+        state: PhysicalReferenceAssignmentState,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> = when (carrier) {
+        is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+            DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+            validateParameterOrError(carrier.binder, carrier.index)
+        is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+            validateConstructionForReferenceVarianceOrError(carrier, state)
+        is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+            validateCarrierForReferenceVarianceOrError(carrier.element, state)
     }
 
     private fun physicalReferenceShapeOrError(
@@ -1434,6 +1537,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 directSupertypeEdgeSets,
                 fieldDefinitions,
                 directSupertypeConstraintProofs = emptySet(),
+                varianceConstraintAuthorities = emptySet(),
                 retainedForeignTypeDefinitions = emptySet(),
                 retainedForeignMethodDefinitions = emptySet(),
             )
@@ -1446,10 +1550,15 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         fun bindRetainedForeign(
             source: DotNetClrImportedMethodSource,
             method: DotNetClrMethodDefinition,
+            target: DotNetTarget? = null,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val declarations = when (
                 val candidate =
-                    DotNetRetainedForeignGenericOwnerPhysicalDeclarations.build(source, method)
+                    DotNetRetainedForeignGenericOwnerPhysicalDeclarations.build(
+                        source,
+                        method,
+                        target,
+                    )
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> candidate.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
@@ -1490,6 +1599,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 declarations.directSupertypeEdgeSets,
                 fieldDefinitions = emptyList(),
                 directSupertypeConstraintProofs = declarations.directSupertypeConstraintProofs.toSet(),
+                varianceConstraintAuthorities =
+                    declarations.varianceConstraintAuthorities.toSet(),
                 retainedForeignTypeDefinitions = declarations.typeDefinitions
                     .mapTo(linkedSetOf()) { definition ->
                         definition.identity as DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
@@ -1509,6 +1620,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             fieldDefinitions: Iterable<DotNetGenericOwnerPhysicalFieldDefReference>,
             directSupertypeConstraintProofs:
                     Set<DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof>,
+            varianceConstraintAuthorities:
+                    Set<DotNetGenericOwnerPhysicalVarianceConstraintAuthority>,
             retainedForeignTypeDefinitions: Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>,
             retainedForeignMethodDefinitions: Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
@@ -1621,6 +1734,32 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 fieldsByIdentity.putIfAbsent(candidate.identity, candidate)
             }
 
+            val varianceAuthoritiesByDefinition = linkedMapOf<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+                    DotNetGenericOwnerPhysicalVarianceConstraintAuthority,
+                    >()
+            for (authority in varianceConstraintAuthorities) {
+                if (authority.constrainedTypeDefinitions.isEmpty()) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a variance constraint authority must name retained TypeDefs",
+                    )
+                }
+                for (definition in authority.constrainedTypeDefinitions) {
+                    if (definition !in retainedForeignTypeDefinitions ||
+                        definition !in typesByIdentity
+                    ) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    val existing = varianceAuthoritiesByDefinition[definition]
+                    if (existing != null && existing !== authority) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                            "multiple selected constraint authorities describe one retained TypeDef",
+                        )
+                    }
+                    varianceAuthoritiesByDefinition[definition] = authority
+                }
+            }
+
             val declarationsWithoutEdges = DotNetGenericOwnerPhysicalDeclarationIndex(
                 epoch,
                 typesByIdentity,
@@ -1628,6 +1767,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 fieldsByIdentity,
                 emptyMap(),
                 directSupertypeConstraintProofs,
+                varianceAuthoritiesByDefinition,
                 retainedForeignTypeDefinitions,
                 retainedForeignMethodDefinitions,
             )
@@ -1854,6 +1994,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     fieldsByIdentity,
                     edgesBySource,
                     directSupertypeConstraintProofs,
+                    varianceAuthoritiesByDefinition,
                     retainedForeignTypeDefinitions,
                     retainedForeignMethodDefinitions,
                 ),
