@@ -859,7 +859,7 @@ The first constrained-edge grammar admits a nominal
 - it is TypeSpec-backed and its signature fits the bounded primitive/owner-
   parameter/SZ-array carrier grammar, including recursive constructions of an
   exact public generic interface or ordinary reference class with a complete
-  supported unconstrained binder vector; or
+  supported binder vector; or
 - it directly names a public, top-level, non-generic CLR interface or ordinary
   reference class whose selected hierarchy exactly agrees with raw metadata.
 
@@ -868,12 +868,19 @@ exact named carrier to an `InterfaceImpl` argument. It does not infer a TypeDef
 by namespace/name, claim a complete direct-edge set for that auxiliary
 TypeDef, or authorize an arbitrary constrained generic construction. Missing
 selected hierarchy is `Unavailable`; retained/raw disagreement is `Conflict`.
-Special constraint flags remain unavailable. Before recording a constrained
-target edge, the adapter resolves the target's substituted constraints and asks
-the shared CLR nominal-constraint validator whether the exact metadata
+The complete binder includes exact CLR variance, nominal rows, reference/value/
+default-constructor flags, and by-ref-like permission. Open binder rows are
+target-independent declaration authority. Before recording a constrained target
+edge, the adapter resolves the target's substituted constraints and asks the
+shared CLR nominal and special-constraint validators whether the exact metadata
 construction follows from the source TypeDef's open generic-parameter context.
-A violation or invalid assignability is `Conflict`; unsupported validation or
-missing selected core services is `Unavailable`.
+Special-constraint validation also checks implicit by-ref-like eligibility for
+every construction which might carry such an argument, even when the target
+binder has no other constraint. It requires an explicit target profile: .NET 10
+can prove eligible by-ref-like forwarding, Framework 4.8 rejects it, and a
+missing target is `Unavailable`. A violation or invalid classification/
+assignability is `Conflict`; unsupported validation or missing selected core
+services is `Unavailable`.
 
 Recursive constructed carriers use the physical ABI's depth ceiling of 64 and
 aggregate node ceiling of 65,536. Every constructed TypeDef is independently
@@ -886,8 +893,10 @@ variance on delegates and this slice does not yet distinguish them from
 ordinary classes. A TypeDef with supported nominal binder constraints may occur
 at any nested depth inside one exact retained `InterfaceImpl` construction.
 Before admission, the shared validator must prove that exact constrained
-subtree in the source TypeDef's open binder context. Special binder constraints
-and constrained constructions in other metadata positions remain unavailable.
+subtree in the source TypeDef's open binder context. Exact `class`, `struct`,
+`new()`, and `allows ref struct` binders therefore compose at direct and nested
+positions in the same retained edge. Constrained constructions in other
+metadata positions remain unavailable.
 
 Successful validation records a constraint-satisfaction proof keyed by the
 source TypeDef identity, the exact unbound direct-supertype root, and the exact
@@ -917,12 +926,12 @@ breaks the tie. The external-DLL pipeline proves this with one memberless child
 implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
-No logical type or InterfaceImpl row order participates. Special constraints,
-constrained constructions outside authenticated direct-supertype edges,
-value-type and variant-delegate nominal carriers, declared members on inherited
-graph nodes, variance conversions, classes as graph nodes, MethodImpls,
-unsupported carrier leaves, and hierarchy disagreement remain unavailable or
-conflicting according to the ordinary validity boundary.
+No logical type or InterfaceImpl row order participates. Constrained
+constructions outside authenticated direct-supertype edges, value-type and
+variant-delegate nominal carriers, declared members on inherited graph nodes,
+variance conversions, classes as graph nodes, MethodImpls, unsupported carrier
+leaves, and hierarchy disagreement remain unavailable or conflicting according
+to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
@@ -1049,12 +1058,13 @@ direct nominal non-generic interface and ordinary reference-class carriers are
 retained from selected and raw-authenticated TypeDefs without fabricating their
 edge closure. Recursive constructed carriers retain both forms, including
 exact value-type arguments, under the shared physical depth/node budgets.
-Nominally constrained TypeDefs may now occur recursively inside an exact
-retained edge, with separate source/edge/subtree proofs and operation-scoped
-authority that cannot escape into general construction. The next ordered work
-completes special constrained-binder forms and wider nominal carriers through
-shared validators; it is not another shape-specific state recognizer or a
-resumed stdlib census.
+Nominally or specially constrained TypeDefs may now occur recursively inside an
+exact retained edge, with separate source/edge/subtree proofs and operation-
+scoped authority that cannot escape into general construction. Reference,
+value, default-constructor, and by-ref-like binder forms compose through the
+shared target-aware validator rather than a backend-local substitute. The next
+ordered work admits wider value-type and variant-delegate nominal carriers; it
+is not another shape-specific state recognizer or a resumed stdlib census.
 
 ## Consequences
 

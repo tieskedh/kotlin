@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
@@ -1169,10 +1170,11 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             source: DotNetClrImportedMethodSource,
             method: DotNetClrMethodDefinition,
             receiverSource: DotNetClrImportedTypeSource,
+            target: DotNetTarget? = null,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val declarations = when (
                 val candidate = DotNetRetainedForeignGenericOwnerPhysicalDeclarations
-                    .buildInheritedReceiver(source, method, receiverSource)
+                    .buildInheritedReceiver(source, method, receiverSource, target)
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> candidate.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
