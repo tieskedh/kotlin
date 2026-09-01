@@ -813,6 +813,25 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
+    fun `retained constraint graph beyond its row budget is unavailable`() {
+        val fixture = deepCrossAssemblyFixture(
+            intermediateDepth = 2,
+            intermediateGenericArity = 2,
+            dependentParameterConstraint = true,
+            dependentConstraintCopies = 1_025,
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            ),
+        )
+    }
+
+    @Test
     fun `multiple intermediate binders preserve ordered permutation across assemblies`() {
         val fixture = deepCrossAssemblyFixture(
             intermediateDepth = 2,
@@ -2619,6 +2638,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         reverseIntermediateArguments: Boolean = false,
         dependentParameterConstraint: Boolean = false,
         omitLastDependentConstraint: Boolean = false,
+        dependentConstraintCopies: Int = 1,
     ): Fixture {
         require(intermediateDepth >= 1)
         require(intermediateGenericArity >= 1)
@@ -2627,6 +2647,8 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         require(!dependentParameterConstraint || intermediateGenericArity == 2)
         require(!dependentParameterConstraint || !reverseIntermediateArguments)
         require(!omitLastDependentConstraint || dependentParameterConstraint)
+        require(dependentConstraintCopies >= 1)
+        require(dependentConstraintCopies == 1 || dependentParameterConstraint)
         val constraintCore = if (dependentParameterConstraint) {
             minimalConstraintCoreFixture()
         } else {
@@ -2770,14 +2792,19 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             }
             val retainsDependentConstraint = dependentParameterConstraint &&
                     !(omitLastDependentConstraint && index == intermediateDepth - 1)
-            val dependentConstraint = if (retainsDependentConstraint) {
-                DotNetClrGenericParameterConstraint(
-                    handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_CONSTRAINT_TABLE, 1),
-                    owner = parameters[1].handle,
-                    constraint = constraintTypeSpecHandle,
-                )
+            val dependentConstraints = if (retainsDependentConstraint) {
+                List(dependentConstraintCopies) { constraintIndex ->
+                    DotNetClrGenericParameterConstraint(
+                        handle = DotNetClrMetadataHandle(
+                            GENERIC_PARAMETER_CONSTRAINT_TABLE,
+                            constraintIndex + 1,
+                        ),
+                        owner = parameters[1].handle,
+                        constraint = constraintTypeSpecHandle,
+                    )
+                }
             } else {
-                null
+                emptyList()
             }
             val metadata = DotNetClrAssemblyMetadata(
                 identity = DotNetManagedAssemblyIdentity(
@@ -2822,7 +2849,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 propertyDefinitions = emptyList(),
                 methodSemantics = emptyList(),
                 genericParameterDefinitions = parameters,
-                genericParameterConstraints = listOfNotNull(dependentConstraint),
+                genericParameterConstraints = dependentConstraints,
             )
             val assembly = DotNetClrClasspathAssembly.WithoutCarrier(
                 File("${metadata.identity.name}.dll"),

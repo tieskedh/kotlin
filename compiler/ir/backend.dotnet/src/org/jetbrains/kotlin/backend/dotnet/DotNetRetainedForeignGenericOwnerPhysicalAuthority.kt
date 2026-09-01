@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintSatisfaction
@@ -178,7 +179,29 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     >()
             val active = mutableSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>()
             var edgeCount = 0
+            var constraintRowCount = 0
             var reachesMethodOwner = false
+
+            fun reserveGenericRows(
+                type: DotNetClrResolvedTypeDefinition,
+            ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+                val parameterHandles = linkedSetOf<DotNetClrMetadataHandle>()
+                for (parameter in type.assembly.genericParameterDefinitions) {
+                    if (parameter.owner != type.definition.handle) continue
+                    if (parameterHandles.size >= MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    parameterHandles += parameter.handle
+                }
+                for (constraint in type.assembly.genericParameterConstraints) {
+                    if (constraint.owner !in parameterHandles) continue
+                    if (constraintRowCount >= MAX_RETAINED_INTERFACE_GRAPH_CONSTRAINT_ROWS) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    constraintRowCount++
+                }
+                return bound(Unit)
+            }
 
             fun visit(
                 type: DotNetClrResolvedTypeDefinition,
@@ -205,6 +228,13 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 }
                 if (definitions.size + active.size >= MAX_RETAINED_INTERFACE_GRAPH_NODES) {
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                when (val reservation = reserveGenericRows(type)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        return conflict(reservation.reason)
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
 
                 val rawHierarchy = when (
@@ -634,6 +664,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             const val MAX_RETAINED_INTERFACE_GRAPH_EDGES =
                 DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
             const val MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
+            const val MAX_RETAINED_INTERFACE_GRAPH_CONSTRAINT_ROWS =
                 DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
         }
 

@@ -60,7 +60,7 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority. The current focused evidence compiles the importer
-and test fixture, runs the 50-test metadata model gate, and runs six
+and test fixture, runs the 51-test metadata model gate, and runs six
 unconstrained memberless external-DLL pipelines with both FIR parsers. Git owns
 the intermediate chronology.
 
@@ -129,7 +129,9 @@ inherited receiver may now be the root of a resource-bounded acyclic graph of
   engine. The graph may be deep, branching, and diamond-shaped, and must reach
   the selected MethodDef owner by retained identity. Cycles, violated
   constraints, and retained/raw disagreement are conflicts; missing authority,
-  unsupported shapes, and the depth/node/edge/binder ceilings fail unavailable.
+  unsupported shapes, and the depth/node/edge/binder/constraint ceilings fail
+  unavailable. Raw binder and constraint-row counts are reserved before the
+  shared generic-context resolver allocates their normalized views.
 
 An imported operation selects its receiver construction only from existing
 value facts and this recorded closure. Selected lineage may choose an already-
@@ -177,7 +179,7 @@ The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 50 tests. All six unconstrained
+The retained-metadata model gate passes 51 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
