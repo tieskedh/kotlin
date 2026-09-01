@@ -60,7 +60,7 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, and lazy TypeDef transport
 authority. The current focused evidence compiles the importer and test fixture,
-runs the 46-test metadata model gate, and runs six memberless external-DLL
+runs the 48-test metadata model gate, and runs six memberless external-DLL
 pipelines with both FIR parsers. Git owns the intermediate chronology.
 
 ## Production binding state
@@ -115,15 +115,15 @@ one selected abstract MethodDef from exact raw metadata. Authority deliberately
 remains per MethodDef: a consumer may bind multiple independently retained
 methods from the same owner without forming a name-based declaration family. An
 inherited receiver may now be the root of a resource-bounded acyclic graph of
-public top-level memberless interfaces. Every visited TypeDef has zero or one
-unconstrained CLR parameter with exact variance, no base class or MethodImpl,
-and a complete retained/raw `InterfaceImpl` edge set. Every edge is
-authenticated through its exact AssemblyRef and retained in the shared
-physical-view closure; that closure remains the sole substitution engine. The
-graph may be deep, branching, and diamond-shaped, and must reach the selected
-MethodDef owner by retained identity. Cycles and retained/raw disagreement are
-conflicts; missing authority, unsupported shapes, and the depth/node/edge
-ceilings fail unavailable.
+public top-level memberless interfaces. Every visited TypeDef has a complete
+ordered vector of up to 1,024 unconstrained CLR parameters with exact variance,
+no base class or MethodImpl, and a complete retained/raw `InterfaceImpl` edge
+set. Every edge is authenticated through its exact AssemblyRef and retained in
+the shared physical-view closure; that closure remains the sole substitution
+engine. The graph may be deep, branching, and diamond-shaped, and must reach
+the selected MethodDef owner by retained identity. Cycles and retained/raw
+disagreement are conflicts; missing authority, unsupported shapes, and the
+depth/node/edge/binder ceilings fail unavailable.
 
 An imported operation selects its receiver construction only from existing
 value facts and this recorded closure. Selected lineage may choose an already-
@@ -145,28 +145,29 @@ identity. Other targets retain the previous null metadata behavior.
 The production importer now accepts an inherited interface contract with no
 declared public callable. Six resource-free external CLR pipelines prove same-
 assembly, cross-assembly, multiple-edge, multiple-owner-view, one-intermediate,
-and recursive four-assembly paths through FIR, lazy FIR2IR, and CIL. The
-recursive fixture closes two independent binders at `int32` and consumes three
-independently retained parent MethodDefs. Two have the same name and arity but
-different `int32` and string parameter signatures. Both parser pipelines emit
-the exact original overload tokens; direct and selected calls likewise target
-the original parent MethodDef, with no references to the two intermediate
-assemblies in emitted CIL. No registry, fake member, copied MethodDef, name or
-arity lookup, row-order selection, cast, wrapper, or fabricated construction is
-used.
+and recursive four-assembly paths through FIR, lazy FIR2IR, and CIL. One
+recursive path closes two one-binder intermediates at `int32`; another proves
+`PairOuter<int,string> -> PairForwarding<string,int> -> Source<int>`. The latter
+retains both ordered binders and their permutation without admitting the false
+`Source<string>` view. The fixture also consumes three independently retained
+parent MethodDefs. Two have the same name and arity but different `int32` and
+string parameter signatures. Both parser pipelines emit the exact original
+overload tokens; direct and selected calls likewise target the original parent
+MethodDef, with no references to the two intermediate assemblies in emitted
+CIL. No registry, fake member, copied MethodDef, name or arity lookup, row-order
+selection, cast, wrapper, or fabricated construction is used.
 
-The next retained-foreign boundary is multiple TypeDef binders in the inherited
-graph. It must preserve ordered GenericParam identity and exact substitution
-through forwarding, closure, and separate assemblies without inferring a
-construction from logical Kotlin types. Variance conversions, constraints,
-classes, MethodImpls, properties, and Runtime/Stdlib application remain later.
+The next retained-foreign boundary is constrained TypeDef binders in the
+inherited graph. Retaining constraint rows is not enough: closed and forwarded
+constructions must have exact constraint-satisfaction authority or fail closed.
+Variance conversions, classes, MethodImpls, properties, and Runtime/Stdlib
+application remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The unchanged retained-metadata model keeps its green 46-test checkpoint. This
-delta passed all six memberless pipelines under both FIR parsers (12 tests),
-with zero failures, errors, or skips.
+The retained-metadata model gate passes 48 tests. All six memberless pipelines
+pass under both FIR parsers (12 tests), with zero failures, errors, or skips.
 
 ## Current blockers
 
@@ -178,8 +179,8 @@ with zero failures, errors, or skips.
   selected MethodDef on an open root interface and a resource-bounded acyclic
   inherited graph. Multiple members and same-name/same-arity overloads can
   coexist without becoming a name-based family. Graph nodes must be public
-  top-level memberless interfaces with zero or one unconstrained binder.
-  Multiple binders, variance conversions, constraints, classes, MethodImpls,
+  top-level memberless interfaces with a bounded ordered vector of unconstrained
+  binders. Variance conversions, constrained binders, classes, MethodImpls,
   properties, wider nominal carriers, and broader operation routing remain
   incomplete. Distinct constructions are retained, but selecting one still
   requires independently proven lineage.

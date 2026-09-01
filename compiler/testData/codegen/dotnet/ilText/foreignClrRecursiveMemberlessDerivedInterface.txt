@@ -65,4 +65,17 @@
     callvirt instance !0 class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32>::'Read'()
     ret
   }
+  .method public hidebysig static int32 'readPermutedPairSource'(class [Foreign.Recursive.Child]'Foreign.Recursive.PairIntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32>::'Read'()
+    ret
+  }
+  .method public hidebysig static class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32> 'retainPermutedPairSource'(class [Foreign.Recursive.Child]'Foreign.Recursive.PairIntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
 }

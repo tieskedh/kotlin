@@ -691,6 +691,135 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
+    fun `multiple intermediate binders preserve ordered permutation across assemblies`() {
+        val fixture = deepCrossAssemblyFixture(
+            intermediateDepth = 2,
+            intermediateGenericArity = 2,
+            reverseIntermediateArguments = true,
+        )
+        val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+        val receiverType = receiverSource.declaringHierarchy.type.type
+        val intermediateTypes = fixture.source.graph.hierarchies
+            .map { hierarchy -> hierarchy.type.type }
+            .filter { type ->
+                !type.hasSameIdentityAs(fixture.source.declaringHierarchy.type.type) &&
+                        !type.hasSameIdentityAs(receiverType)
+            }
+        assertEquals(2, intermediateTypes.size)
+
+        val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalDeclarationIndex,
+                >>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                receiverSource,
+            )
+        ).value
+        val intCarrier = DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()
+        val stringCarrier = DotNetGenericOwnerSymbolicCarrierReference.stringCarrier()
+        val receiverConstruction = boundConstruction(
+            declarations,
+            DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource),
+            emptyList(),
+        )
+        val innerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(
+            receiverSource,
+            intermediateTypes[0],
+        )
+        val outerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(
+            receiverSource,
+            intermediateTypes[1],
+        )
+        val innerConstruction = boundConstruction(
+            declarations,
+            innerIdentity,
+            listOf(stringCarrier, intCarrier),
+        )
+        val outerConstruction = boundConstruction(
+            declarations,
+            outerIdentity,
+            listOf(intCarrier, stringCarrier),
+        )
+        val parentIdentity = retainedOwnerIdentity(fixture)
+        val parentIntConstruction = boundConstruction(
+            declarations,
+            parentIdentity,
+            listOf(intCarrier),
+        )
+        val parentStringConstruction = boundConstruction(
+            declarations,
+            parentIdentity,
+            listOf(stringCarrier),
+        )
+
+        listOf(innerIdentity, outerIdentity).forEach { identity ->
+            assertEquals(
+                listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                ),
+                assertNotNull(declarations.typeDescriptionOrNull(identity))
+                    .genericParameters.map { parameter -> parameter.variance },
+            )
+        }
+        val closure = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalInterfaceViewClosure,
+                >>(
+            declarations.physicalInterfaceViewClosureOrError(receiverConstruction)
+        ).value
+        assertEquals(true, closure.isComplete)
+        assertEquals(
+            setOf(
+                receiverConstruction,
+                outerConstruction,
+                innerConstruction,
+                parentIntConstruction,
+            ).map(::DotNetGenericOwnerPhysicalView).toSet(),
+            closure.interfaceViews,
+        )
+        assertEquals(
+            false,
+            DotNetGenericOwnerPhysicalView(parentStringConstruction) in closure.interfaceViews,
+        )
+
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, receiverConstruction),
+                exactTransferArguments(declarations),
+                receiverSource,
+            )
+        ).value
+        assertEquals(parentIntConstruction, route.requiredReceiverView.construction)
+        assertEquals(
+            intCarrier,
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                route.instantiatedSignature.resultLayout,
+            ).slot.carrier,
+        )
+    }
+
+    @Test
+    fun `intermediate binder vector beyond its resource budget is unavailable`() {
+        val overLimit = DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE + 1
+        val fixture = deepCrossAssemblyFixture(
+            intermediateGenericArity = overLimit,
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            ),
+        )
+    }
+
+    @Test
     fun `recursive retained graph authenticates a complete intermediate diamond`() {
         val fixture = deepCrossAssemblyFixture(
             intermediateDepth = 2,
@@ -2364,8 +2493,12 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         intermediateDepth: Int = 1,
         includeIntermediateAuxiliaryBranch: Boolean = false,
         includeIntermediateSelfCycle: Boolean = false,
+        intermediateGenericArity: Int = 1,
+        reverseIntermediateArguments: Boolean = false,
     ): Fixture {
         require(intermediateDepth >= 1)
+        require(intermediateGenericArity >= 1)
+        require(!reverseIntermediateArguments || intermediateGenericArity > 1)
         val parentFixture = fixture()
         val parentSource = parentFixture.source
         val parentAssembly = parentSource.assembly
@@ -2374,6 +2507,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         val intermediateTypes = mutableListOf<DotNetClrResolvedTypeDefinition>()
         var previousAssembly = parentAssembly
         var previousType = parentSource.declaringHierarchy.type.type
+        var previousGenericArity = 1
         repeat(intermediateDepth) { index ->
             val assemblyReferenceHandle = DotNetClrMetadataHandle(ASSEMBLY_REFERENCE_TABLE, 1)
             val parentTypeReferenceHandle = DotNetClrMetadataHandle(TYPE_REFERENCE_TABLE, 1)
@@ -2387,9 +2521,9 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 handle = typeHandle,
                 namespaceName = "Foreign.Deep",
                 metadataName = if (intermediateDepth == 1) {
-                    "ForwardingSource`1"
+                    "ForwardingSource`$intermediateGenericArity"
                 } else {
-                    "ForwardingSource${index + 1}`1"
+                    "ForwardingSource${index + 1}`$intermediateGenericArity"
                 },
                 attributes = PUBLIC_ABSTRACT_INTERFACE_ATTRIBUTES,
                 baseType = null,
@@ -2418,16 +2552,23 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 metadataName = previousType.definition.metadataName,
                 resolutionScope = assemblyReferenceHandle,
             )
+            val parentArgumentIndices = when {
+                reverseIntermediateArguments && previousGenericArity == 1 ->
+                    listOf(intermediateGenericArity - 1)
+                reverseIntermediateArguments ->
+                    (0 until previousGenericArity).reversed()
+                else -> (0 until previousGenericArity).toList()
+            }
             val parentTypeSpecification = DotNetClrTypeSpecification(
                 handle = parentTypeSpecHandle,
                 signature = DotNetClrTypeSignature.GenericInstance(
                     DotNetClrTypeSignature.Named(parentTypeReferenceHandle, isValueType = false),
-                    listOf(
+                    parentArgumentIndices.map { parameterIndex ->
                         DotNetClrTypeSignature.GenericParameter(
                             DotNetClrGenericParameterKind.TYPE,
-                            0,
+                            parameterIndex,
                         )
-                    ),
+                    },
                 ),
                 rawSignature = emptyList(),
             )
@@ -2435,12 +2576,12 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 handle = selfTypeSpecHandle,
                 signature = DotNetClrTypeSignature.GenericInstance(
                     DotNetClrTypeSignature.Named(typeHandle, isValueType = false),
-                    listOf(
+                    (0 until intermediateGenericArity).map { parameterIndex ->
                         DotNetClrTypeSignature.GenericParameter(
                             DotNetClrGenericParameterKind.TYPE,
-                            0,
+                            parameterIndex,
                         )
-                    ),
+                    },
                 ),
                 rawSignature = emptyList(),
             )
@@ -2448,7 +2589,9 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 handle = auxiliaryParentTypeSpecHandle,
                 signature = DotNetClrTypeSignature.GenericInstance(
                     DotNetClrTypeSignature.Named(parentTypeReferenceHandle, isValueType = false),
-                    listOf(DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)),
+                    List(previousGenericArity) {
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                    },
                 ),
                 rawSignature = emptyList(),
             )
@@ -2472,13 +2615,15 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 implementingType = auxiliaryTypeHandle,
                 interfaceType = auxiliaryParentTypeSpecHandle,
             )
-            val parameter = DotNetClrGenericParameterDefinition(
-                handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, 1),
-                number = 0,
-                attributes = COVARIANT_ATTRIBUTE,
-                owner = typeHandle,
-                name = "T",
-            )
+            val parameters = List(intermediateGenericArity) { parameterIndex ->
+                DotNetClrGenericParameterDefinition(
+                    handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, parameterIndex + 1),
+                    number = parameterIndex,
+                    attributes = COVARIANT_ATTRIBUTE,
+                    owner = typeHandle,
+                    name = "T$parameterIndex",
+                )
+            }
             val metadata = DotNetClrAssemblyMetadata(
                 identity = DotNetManagedAssemblyIdentity(
                     name = if (intermediateDepth == 1) "Foreign.Middle" else "Foreign.Middle${index + 1}",
@@ -2520,7 +2665,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 customAttributes = emptyList(),
                 propertyDefinitions = emptyList(),
                 methodSemantics = emptyList(),
-                genericParameterDefinitions = listOf(parameter),
+                genericParameterDefinitions = parameters,
                 genericParameterConstraints = emptyList(),
             )
             val assembly = DotNetClrClasspathAssembly.WithoutCarrier(
@@ -2532,12 +2677,12 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             val hierarchy = DotNetClrResolvedTypeHierarchy(
                 type = DotNetClrResolvedTypeView(
                     resolvedType,
-                    listOf(
+                    (0 until intermediateGenericArity).map { parameterIndex ->
                         DotNetClrResolvedTypeSignature.GenericParameter(
                             DotNetClrGenericParameterKind.TYPE,
-                            0,
+                            parameterIndex,
                         )
-                    ),
+                    },
                 ),
                 baseType = null,
                 interfaces = buildList {
@@ -2546,12 +2691,12 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                             parentInterfaceImplementation,
                             DotNetClrResolvedTypeView(
                                 previousType,
-                                listOf(
+                                parentArgumentIndices.map { parameterIndex ->
                                     DotNetClrResolvedTypeSignature.GenericParameter(
                                         DotNetClrGenericParameterKind.TYPE,
-                                        0,
+                                        parameterIndex,
                                     )
-                                ),
+                                },
                             ),
                         )
                     )
@@ -2569,12 +2714,12 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                                 selfInterfaceImplementation,
                                 DotNetClrResolvedTypeView(
                                     resolvedType,
-                                    listOf(
+                                    (0 until intermediateGenericArity).map { parameterIndex ->
                                         DotNetClrResolvedTypeSignature.GenericParameter(
                                             DotNetClrGenericParameterKind.TYPE,
-                                            0,
+                                            parameterIndex,
                                         )
-                                    ),
+                                    },
                                 ),
                             )
                         )
@@ -2589,11 +2734,11 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                         auxiliaryParentInterfaceImplementation,
                         DotNetClrResolvedTypeView(
                             previousType,
-                            listOf(
+                            List(previousGenericArity) {
                                 DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.INT32,
                                 )
-                            ),
+                            },
                         ),
                     )
                 ),
@@ -2606,6 +2751,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             intermediateTypes += resolvedType
             previousAssembly = assembly
             previousType = resolvedType
+            previousGenericArity = intermediateGenericArity
         }
 
         val childAssemblyReferenceHandle = DotNetClrMetadataHandle(ASSEMBLY_REFERENCE_TABLE, 1)
@@ -2642,9 +2788,15 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                     childMiddleTypeReferenceHandle,
                     isValueType = false,
                 ),
-                listOf(
-                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
-                ),
+                (0 until previousGenericArity).map { parameterIndex ->
+                    DotNetClrTypeSignature.Primitive(
+                        if (parameterIndex == 0) {
+                            DotNetClrPrimitiveType.INT32
+                        } else {
+                            DotNetClrPrimitiveType.STRING
+                        }
+                    )
+                },
             ),
             rawSignature = emptyList(),
         )
@@ -2694,11 +2846,15 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                     childInterfaceImplementation,
                     DotNetClrResolvedTypeView(
                         previousType,
-                        listOf(
+                        (0 until previousGenericArity).map { parameterIndex ->
                             DotNetClrResolvedTypeSignature.Primitive(
-                                DotNetClrPrimitiveType.INT32,
+                                if (parameterIndex == 0) {
+                                    DotNetClrPrimitiveType.INT32
+                                } else {
+                                    DotNetClrPrimitiveType.STRING
+                                },
                             )
-                        ),
+                        },
                     ),
                 )
             ),

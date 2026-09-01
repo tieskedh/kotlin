@@ -51,9 +51,9 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * physical authority. The shared physical-interface closure, rather than this adapter, performs
  * construction substitution. Row order never selects the callable owner, and two distinct exact
  * constructions of that owner require already-proven selected lineage at the operation boundary.
- * Each admitted interface has zero or one unconstrained binder, whose exact CLR variance is
- * retained. Multiple binders, declared members, constraints, MethodImpls, classes, and carrier
- * shapes outside the bounded grammar remain unavailable.
+ * Each admitted interface has a resource-bounded ordered vector of unconstrained binders whose
+ * exact CLR variance is retained. Declared members, constraints, MethodImpls, classes, and
+ * carrier shapes outside the bounded grammar remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -310,14 +310,14 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         ): Boolean {
             val definition = type.definition
             val genericArity = context.typeParameters.size
+            if (genericArity > MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE) return false
             val openArguments = List(genericArity) { index ->
                 DotNetClrResolvedTypeSignature.GenericParameter(
                     DotNetClrGenericParameterKind.TYPE,
                     index,
                 )
             }
-            return genericArity <= 1 &&
-                    hierarchy.type.type.hasSameIdentityAs(type) &&
+            return hierarchy.type.type.hasSameIdentityAs(type) &&
                     hierarchy.type.arguments == openArguments &&
                     definition.isInterface &&
                     definition.isAbstract &&
@@ -473,6 +473,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             const val MAX_RETAINED_INTERFACE_GRAPH_NODES =
                 DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
             const val MAX_RETAINED_INTERFACE_GRAPH_EDGES =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
+            const val MAX_RETAINED_INTERFACE_BINDERS_PER_TYPE =
                 DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
         }
 

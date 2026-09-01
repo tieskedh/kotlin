@@ -27376,6 +27376,10 @@ private val FOREIGN_RECURSIVE_MIDDLE_IL = """
              implements class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<!T>
       {
       }
+      .class interface public abstract auto ansi 'PairForwardingSource`2'<+ TFirst, + TSecond>
+             implements class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<!TSecond>
+      {
+      }
     }
 """.trimIndent()
 
@@ -27394,6 +27398,10 @@ private val FOREIGN_RECURSIVE_OUTER_IL = """
              implements class [Foreign.Recursive.Middle]'Foreign.Recursive.ForwardingSource`1'<!T>
       {
       }
+      .class interface public abstract auto ansi 'PairOuterSource`2'<+ TFirst, + TSecond>
+             implements class [Foreign.Recursive.Middle]'Foreign.Recursive.PairForwardingSource`2'<!TSecond, !TFirst>
+      {
+      }
     }
 """.trimIndent()
 
@@ -27410,6 +27418,10 @@ private val FOREIGN_RECURSIVE_CHILD_IL = """
     {
       .class interface public abstract auto ansi 'IntSource'
              implements class [Foreign.Recursive.Outer]'Foreign.Recursive.OuterSource`1'<int32>
+      {
+      }
+      .class interface public abstract auto ansi 'PairIntSource'
+             implements class [Foreign.Recursive.Outer]'Foreign.Recursive.PairOuterSource`2'<int32, string>
       {
       }
     }
