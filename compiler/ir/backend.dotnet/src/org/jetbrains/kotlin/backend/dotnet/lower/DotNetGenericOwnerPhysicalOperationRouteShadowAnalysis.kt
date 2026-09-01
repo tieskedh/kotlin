@@ -16,12 +16,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRe
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRoute
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteKindSnapshot
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteRequest
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowRelation
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerProducedValueFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
@@ -31,13 +29,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierRefe
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableEntryKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
-import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalOperationRoute
 import org.jetbrains.kotlin.backend.dotnet.unknownPhysicalValueCarrierSnapshot
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
-import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
@@ -208,45 +204,21 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             is LogicalReceiverSelectionResult.Selected -> Unit
             LogicalReceiverSelectionResult.Unsupported -> error("handled above")
         }
-        val selectedMethod = authority.callableMethodOrNull(
-            source.symbol,
-            selection.selectedEntry,
-        ) ?: return diagnostic.unavailable()
-        val selectedDescription = declarations.methodDescriptionOrNull(selectedMethod)
-            ?: return diagnostic.unavailable()
-        val methodArguments = when (val binding = bindMethodArgumentsOrError(
-            call,
-            owner,
-            selectedDescription.signature.genericArity,
-            authority,
-        )) {
-            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                return diagnostic.conflict(binding.reason)
-            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
-        }
-        val arguments = mutableListOf<DotNetGenericOwnerProducedValueFact>()
-        source.parameters.forEach { parameter ->
-            if (parameter.kind == IrParameterKind.DispatchReceiver) {
-                return@forEach
+        val prediction = bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError(
+            call = call,
+            physicalOwner = owner,
+            source = source,
+            selectedEntry = selection.selectedEntry,
+            requiredView = selection.requiredView,
+            authority = authority,
+        ) { expression ->
+            val value = expression.identityGetValueOrNull()
+                ?: return@bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError null
+            if (value.symbol in conflictingValues) {
+                return@bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError null
             }
-            val argument = call.arguments.getOrNull(parameter.indexInParameters)
-                ?.identityGetValueOrNull()
-                ?: return null
-            if (argument.symbol in conflictingValues) return null
-            val argumentStorage = storageByValue[argument.symbol] ?: return null
-            arguments += argumentStorage.read().value
-        }
-        val prediction = selectDotNetGenericOwnerPhysicalOperationRoute(
-            declarations = declarations,
-            selectedMethod = selectedMethod,
-            request = DotNetGenericOwnerPhysicalOperationRouteRequest(
-                selection.requiredView,
-                methodArguments,
-            ),
-            receiver = storage.read().value,
-            arguments = arguments,
-        )
+            storageByValue[value.symbol]?.read()?.value
+        } ?: return null
         return when (prediction) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
                 if (selection.selectedEntry ==
@@ -266,47 +238,6 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                 diagnostic.unavailable()
         }
-    }
-
-    /**
-     * Binds the selected MethodDef's whole MethodSpec vector from final caller authority.
-     *
-     * The logical call type locates a current-owner parameter only. The sealed declaration index
-     * proves the corresponding CLR `!n`; neither the IR vector nor its length can define the
-     * selected MethodDef's arity. Concrete, nullable, nested, foreign, constrained, and caller-
-     * MethodDef binders remain outside this first consumer.
-     */
-    private fun bindMethodArgumentsOrError(
-        call: IrCall,
-        owner: IrClass,
-        expectedArity: Int,
-        authority: DotNetLocalGenericOwnerPhysicalAuthority,
-    ): DotNetGenericOwnerPhysicalBindingResult<List<DotNetGenericOwnerSymbolicCarrierReference>> {
-        if (call.typeArguments.size != expectedArity) {
-            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                "selected physical MethodDef has generic arity $expectedArity, " +
-                        "but final IR supplies ${call.typeArguments.size} type arguments",
-            )
-        }
-        if (expectedArity == 0) {
-            return DotNetGenericOwnerPhysicalBindingResult.Bound(emptyList())
-        }
-        val arguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
-        for (type in call.typeArguments) {
-            type ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            when (val binding = bindExactLocalGenericOwnerParameterCarrierOrError(
-                type,
-                owner,
-                authority,
-            )) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> arguments += binding.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-        }
-        return DotNetGenericOwnerPhysicalBindingResult.Bound(arguments)
     }
 
     /**
