@@ -838,8 +838,10 @@ Source<int>`, while invocation retains the original `Source<T>.Read` MethodDef.
 The latter closure does not acquire `Source<string>`. Depth and resource limits
 reuse the shared physical-artifact ceilings: recursive traversal depth is capped
 at 64, while visited nodes, direct edges, and each TypeDef binder vector are
-capped at 1,024. Exceeding a resource ceiling or missing retained hierarchy is
-`Unavailable`.
+capped at 1,024. The aggregate admitted `GenericParamConstraint` row count is
+also capped at 1,024. Raw binder and constraint counts are reserved before
+generic-context resolution allocates their normalized views. Exceeding a
+resource ceiling or missing retained hierarchy is `Unavailable`.
 
 The first constrained-edge grammar admits nominal `GenericParamConstraint`
 rows only when they are TypeSpec-backed and their signatures fit that same

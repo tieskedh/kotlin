@@ -118,6 +118,11 @@ metadata-model evidence. The resource-free external FIR fixture has no selected
 physical core catalog, so constrained end-to-end FIR remains a later gate rather
 than acquiring a duplicate local validator.
 
+Raw inherited-graph binder counts and the aggregate constraint-row count are
+reserved before generic-context resolution. Both reuse the physical-artifact
+collection ceiling, so hostile metadata cannot force an unbounded normalized
+constraint graph before the adapter returns `Unavailable`.
+
 The next ordered boundary is the remaining constrained-binder grammar: direct
 nominal and nested constraint carriers, then reference/value/default-constructor
 and by-ref-like special constraints through the existing shared validators.
