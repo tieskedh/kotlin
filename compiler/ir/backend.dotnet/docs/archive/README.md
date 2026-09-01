@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-methodspec-operation-2026-09-01.md`](generic-owner-physical-methodspec-operation-2026-09-01.md)
+  records the first final-IR MethodSpec operation consumer: producer-recorded
+  MethodDef arity, a BOUND current-owner `!T` argument vector, independent
+  TypeDef/MethodDef substitution, exact natural value/reference execution,
+  broad-semantic and caller-MethodDef hostile isolation, and the exact
+  Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-owner-input-operation-2026-09-01.md`](generic-owner-physical-owner-input-operation-2026-09-01.md)
   records the first authoritative argument-bearing natural operation: a
   constructed `I<!T,!T>` typed entry, exact owner-dependent input, orthogonal

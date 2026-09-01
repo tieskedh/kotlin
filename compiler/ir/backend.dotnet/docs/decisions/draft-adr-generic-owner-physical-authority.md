@@ -608,6 +608,19 @@ contained in that token's exact construction. A bare construction is never an
 authority argument, so selected lineage or a caller-authored symbolic carrier
 cannot authenticate itself.
 
+A generic operation additionally supplies one complete MethodSpec vector. The
+selected physical MethodDef is sole authority for its generic arity, binder,
+GenericParam rows, and constraints; final IR type arguments are call-site
+locators, not declaration facts. Every locator must bind to an independently
+authenticated physical carrier, and TypeDef `!n` substitution remains separate
+from MethodDef `!!m` substitution. Missing or extra arguments, a carrier from
+the wrong binder, or an unproved constraint make the operation unavailable or
+conflicting rather than defining a plausible MethodSpec. The first executable
+local consumer deliberately binds only non-null bare parameters of its current
+physical class. That is a proof restriction, not a rule that caller-MethodDef,
+concrete, foreign, nullable, or nested MethodSpec arguments are inherently
+invalid.
+
 After parameter admission, the route produces its result from the instantiated
 MethodDef layout. `Void` produces no value, `Direct` produces that exact
 carrier, and `SplitNullable` produces its exact payload-plus-flag layout.
@@ -654,7 +667,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
 | `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
-| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Separately, an argument-bearing exact operation now consumes final argument facts and preserves a split-nullable result layout. Local result placement remains parameterless; MethodSpecs and split-pair materialization still require their independent policies. |
+| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Separately, exact operations now consume final ordinary arguments, preserve a split-nullable result layout, and bind one authority-backed current-owner MethodSpec vector. Local result placement remains parameterless; broader MethodSpec carriers and split-pair materialization still require their independent policies. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 
@@ -1221,11 +1234,17 @@ census record supplies no evidence and does not hide an ordinary natural call.
 One exact argument-bearing operation now additionally binds every final argument
 fact to its instantiated slot, preserves an orthogonal split-nullable result,
 and corrects a weaker semantic fallback only after explicit logical-result
-policy permits it. Each placement path independently checks the live emitter or
-every fixed-boundary branch. The next boundary adds MethodSpecs, split-pair
-local/control-flow materialization, and remaining parameter-entry forms, then
-null/bottom/unknown joins and explicit conversions—not another state or stdlib
-recognizer.
+policy permits it. A second exact operation binds the selected MethodDef's
+producer-recorded generic arity to one complete MethodSpec vector whose entries
+are proven current-owner parameters; TypeDef and MethodDef substitution remain
+independent, broad logical receivers remain semantic, and a caller-MethodDef
+parameter supplies no false class-binder authority. Each placement path
+independently checks the live emitter or every fixed-boundary branch. The next
+boundary generalizes MethodSpec carrier authority where justified, admits the
+method-generic plus split-nullable declaration composition, materializes split
+pairs across local/control-flow boundaries, and closes remaining parameter-
+entry forms, then null/bottom/unknown joins and explicit conversions—not
+another state or stdlib recognizer.
 
 ## Consequences
 

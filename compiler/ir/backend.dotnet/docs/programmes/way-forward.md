@@ -235,24 +235,27 @@ These permissions authorize no cast, semantic adaptation, boxing, nullable
 materialization, field/state choice, or ABI change. Ordinary source aliases and
 compiler-created aliases follow the same rules. Star/projected values, mutable
 or multiple-write locals, unknown/null/bottom arms, non-exhaustive control flow,
-foreign/fixed/nested constructions, argument-bearing or MethodSpec calls, and
-split layouts receive no corresponding **local-placement** token. An exact
-argument-bearing operation may now consume final receiver/argument facts and
-retain its recorded split result layout without materializing that pair in a
-local. The previous compiler-
-origin recognizer remains only as migration fallback.
+foreign/fixed/nested constructions, argument-bearing or MethodSpec call
+results, and split layouts receive no corresponding **local-placement** token.
+An exact operation may consume final receiver/value facts and one complete
+current-owner MethodSpec vector without materializing its result in a local.
+The previous compiler-origin recognizer remains only as migration fallback.
 
 Exact typed parameter entry is closed for a bare current-owner parameter and
 for an admitted natural construction whose invariant argument vector contains
 only current-owner parameters. The first exact local result transfer remains
 closed to a parameterless natural MethodDef with one `Direct` result. The first
 exact operation now composes owner-dependent arguments with a split-nullable
-result. Next add MethodSpecs, materialize split-nullable results across local/
-control-flow boundaries, and complete the remaining parameter-entry forms.
-Then extend joins to null, bottom, and unknown arms and make representation-
-changing conversions explicit. Prove those grammars before widening the
-consumer to fields, captures, properties, class nodes, MethodImpls, or
-Runtime/Stdlib declarations.
+result and independently binds a generic MethodDef's exact MethodSpec vector
+when every entry is a non-null bare parameter of the current physical class.
+Caller-MethodDef, concrete, constrained, nullable, nested, and foreign
+MethodSpec carriers remain unavailable. Next admit the still-missing method-
+generic plus split-nullable declaration composition, materialize split-
+nullable results across local/control-flow boundaries, and complete the
+remaining parameter-entry forms. Then extend joins to null, bottom, and
+unknown arms and make representation-changing conversions explicit. Prove
+those grammars before widening the consumer to fields, captures, properties,
+class nodes, MethodImpls, or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an

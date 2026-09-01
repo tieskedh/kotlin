@@ -15,6 +15,10 @@ interface InlineLookup<K, out V> {
     fun lookup(key: K): V?
 }
 
+interface InlineMethodProducer<out T> {
+    fun <R> produce(marker: R): T
+}
+
 private class InlineLookupRoute<T> {
     fun routeExactArgument(source: InlineLookup<T, T>, key: T): T? {
         val sourceNaturalAlias: InlineLookup<T, T> = source
@@ -36,6 +40,50 @@ private class InlineIntLookup : InlineLookup<Int, Int> {
 
 private class InlineStringLookup : InlineLookup<String, String> {
     override fun lookup(key: String): String? = key.takeUnless { it.isEmpty() }
+}
+
+private class InlineMethodProducerRoute<T> {
+    fun routeExactMethodArgument(
+        source: InlineMethodProducer<T>,
+        marker: T,
+    ): T {
+        val sourceNaturalAlias: InlineMethodProducer<T> = source
+        val exactMarkerAlias: T = marker
+        return sourceNaturalAlias.produce<T>(exactMarkerAlias)
+    }
+
+    fun routeWidenedMethodResult(
+        source: InlineMethodProducer<T>,
+        marker: T,
+    ): Any? {
+        val sourceNaturalAlias: InlineMethodProducer<T> = source
+        val sourceWideAlias: InlineMethodProducer<Any?> = sourceNaturalAlias
+        val exactMarkerAlias: T = marker
+        return sourceWideAlias.produce<T>(exactMarkerAlias)
+    }
+
+    fun <R> routeCallerMethodArgument(
+        source: InlineMethodProducer<T>,
+        marker: R,
+    ): T {
+        val sourceNaturalAlias: InlineMethodProducer<T> = source
+        val callerMarkerAlias: R = marker
+        return sourceNaturalAlias.produce<R>(callerMarkerAlias)
+    }
+}
+
+private class InlineIntMethodProducer(private val value: Int) : InlineMethodProducer<Int> {
+    override fun <R> produce(marker: R): Int {
+        if (marker != value) error("unexpected Int MethodSpec marker")
+        return value
+    }
+}
+
+private class InlineStringMethodProducer(private val value: String) : InlineMethodProducer<String> {
+    override fun <R> produce(marker: R): String {
+        if (marker != value) error("unexpected String MethodSpec marker")
+        return value
+    }
 }
 
 private inline fun <T> InlineProducer<T>.indexOfFirst(
@@ -128,6 +176,32 @@ fun box(): String {
     }
     if (InlineLookupRoute<String>().routeWidenedResult(InlineStringLookup(), "") != null) {
         return "reference null widened result route"
+    }
+
+    if (InlineMethodProducerRoute<Int>().routeExactMethodArgument(
+            InlineIntMethodProducer(44), 44
+        ) != 44) {
+        return "value MethodSpec route"
+    }
+    if (InlineMethodProducerRoute<String>().routeExactMethodArgument(
+            InlineStringMethodProducer("method"), "method"
+        ) != "method") {
+        return "reference MethodSpec route"
+    }
+    if (InlineMethodProducerRoute<Int>().routeWidenedMethodResult(
+            InlineIntMethodProducer(46), 46
+        ) != 46) {
+        return "value widened MethodSpec route"
+    }
+    if (InlineMethodProducerRoute<String>().routeWidenedMethodResult(
+            InlineStringMethodProducer("wide method"), "wide method"
+        ) != "wide method") {
+        return "reference widened MethodSpec route"
+    }
+    if (InlineMethodProducerRoute<Int>().routeCallerMethodArgument(
+            InlineIntMethodProducer(48), 48
+        ) != 48) {
+        return "caller MethodDef MethodSpec route"
     }
 
     val ints = InlineSelfView(42)

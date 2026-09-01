@@ -118,6 +118,21 @@ The focused XML audit contains 172 green model tests; candidate and erased
 inverse each contain four suites and eight green tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
+The final operation consumer now also binds the complete MethodSpec vector of
+one selected generic MethodDef. Physical MethodDef arity comes only from BOUND
+declaration authority; a final IR type argument may locate one non-null bare
+parameter of the current physical class, and the declaration index alone turns
+that locator into `!n`. The shared operation query then substitutes its `!!m`
+slots independently from the receiver TypeDef construction and validates the
+ordinary value arguments against the instantiated signature. The operation
+snapshot publishes that bound vector. A broad logical receiver remains
+semantic, and a caller-MethodDef parameter with the same index is deliberately
+not mistaken for current-owner authority. Exact evidence is in the
+[MethodSpec operation archive](docs/archive/generic-owner-physical-methodspec-operation-2026-09-01.md).
+The focused XML audit remains 172 green model tests; this delta's candidate and
+erased inverse each contain four suites and four green tests across PSI,
+LightTree, Framework 4.8, and .NET 10, with no failures, errors, or skips.
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -162,13 +177,18 @@ permissions authorizes conversion, adaptation, boxing, state, or ABI changes.
 The older compiler-origin recognizer remains only as migration fallback for
 transfer shapes the shared model has not yet derived.
 
-The next consolidation boundary adds MethodSpec arguments and split-nullable
-local/control-flow materialization to the same operation query, plus the
-remaining parameter-entry compositions, followed by null/bottom/unknown
-control-flow arms and explicit representation-changing conversions. Fields,
-captures, foreign/fixed/nested carriers, stars/projections, and split-nullable
-local placement stay outside these consumers rather than acquiring local
-exceptions.
+The operation query now additionally accepts one complete MethodSpec vector
+whose entries are non-null bare parameters of the current physical class. It
+does not confuse a caller MethodDef's `!!n` with class `!n`, infer physical
+arity from IR, or claim broad semantic receivers. The next consolidation
+boundary generalizes MethodSpec carrier authority where justified, admits the
+still-missing method-generic plus split-nullable declaration composition, and
+materializes split-nullable payload/flag results across local/control-flow
+boundaries. Remaining parameter-entry compositions, then null/bottom/unknown
+control-flow arms and explicit representation-changing conversions follow.
+Fields, captures, foreign/fixed/nested carriers, stars/projections, and split-
+nullable local placement stay outside these consumers rather than acquiring
+local exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the
