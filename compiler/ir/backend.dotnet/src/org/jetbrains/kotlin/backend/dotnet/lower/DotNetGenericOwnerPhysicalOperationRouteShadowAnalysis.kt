@@ -137,7 +137,20 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                         storageByValue,
                         conflictingValues,
                         authority,
-                    )?.let(snapshots::add)
+                    )?.let { observation ->
+                        snapshots += observation.snapshot
+                        observation.authoritativeExactNaturalRoute?.let { route ->
+                            check(
+                                context.genericOwnerAuthoritativePhysicalOperationRoutes.put(
+                                    expression,
+                                    route,
+                                ) == null,
+                            ) {
+                                "one final generic-owner call received multiple authoritative " +
+                                        "physical operation routes"
+                            }
+                        }
+                    }
                 }
             })
         }
@@ -159,7 +172,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         storageByValue: IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         conflictingValues: Set<IrValueSymbol>,
         authority: DotNetLocalGenericOwnerPhysicalAuthority,
-    ): DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot? {
+    ): OperationObservation? {
         val source = call.symbol.owner.let { candidate ->
             candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
         }
@@ -198,9 +211,9 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         )
         when (selection) {
             is LogicalReceiverSelectionResult.Conflict ->
-                return diagnostic.conflict(selection.reason)
+                return OperationObservation(diagnostic.conflict(selection.reason))
             is LogicalReceiverSelectionResult.Unavailable ->
-                return diagnostic.unavailable()
+                return OperationObservation(diagnostic.unavailable())
             is LogicalReceiverSelectionResult.Selected -> Unit
             LogicalReceiverSelectionResult.Unsupported -> error("handled above")
         }
@@ -231,14 +244,32 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                     context.genericOwnerForeignDispatchCallTargets.remove(call)
                     diagnostic.actual = actualRoute(call)
                 }
-                diagnostic.bound(prediction.value, call, selection.selectedEntry)
+                val snapshot = diagnostic.bound(prediction.value, call, selection.selectedEntry)
+                OperationObservation(
+                    snapshot,
+                    prediction.value.takeIf {
+                        selection.selectedEntry ==
+                                DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
+                                selection.selector ==
+                                DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                                snapshot.actualRoute ==
+                                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+                                snapshot.relation ==
+                                DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH
+                    },
+                )
             }
             is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                diagnostic.conflict(prediction.reason)
+                OperationObservation(diagnostic.conflict(prediction.reason))
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                diagnostic.unavailable()
+                OperationObservation(diagnostic.unavailable())
         }
     }
+
+    private data class OperationObservation(
+        val snapshot: DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot,
+        val authoritativeExactNaturalRoute: DotNetGenericOwnerPhysicalOperationRoute? = null,
+    )
 
     /**
      * A semantic-result policy remains logical authority even when a natural receiver happens to

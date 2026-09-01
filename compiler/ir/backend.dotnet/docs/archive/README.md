@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md`](generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md)
+  records the first retained argument-bearing split-result local: one final
+  exact-natural operation witness, one identity-preserving
+  `STRICT_OWNER_INPUT`, full MethodDef/receiver/parameter/result validation,
+  independent interface `!K`/`!V` binders, unboxed value/reference/nullable
+  execution, and the exact Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-split-nullable-local-placement-2026-09-01.md`](generic-owner-physical-split-nullable-local-placement-2026-09-01.md)
   records the first bounded two-slot local retention of a natural
   `SplitNullable(!T, out bool)` result, creation-site member-contract authority

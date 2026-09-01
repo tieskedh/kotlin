@@ -123,23 +123,72 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
 
 }
 
-/** Permission to retain one split call as its typed payload plus Boolean null flag. */
+/** Verifier-visible shape independently reconstructed from one authoritative exact operation. */
+internal data class DotNetGenericOwnerPhysicalValueBoundSplitNullableCall(
+    val methodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    val receiverType: DotNetIlValueType.GenericInstance,
+    val parameterTypes: List<DotNetIlValueType>,
+    val payloadType: DotNetIlValueType.TypeParameter,
+) {
+    init {
+        require(parameterTypes.size <= 1) {
+            "the bounded split-local call grammar admits at most one ordinary parameter"
+        }
+    }
+}
+
+/** Permission to retain one authoritative split call as its typed payload plus null flag. */
 internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal constructor(
     val payloadCarrier: DotNetGenericOwnerPhysicalCarrier,
+    private val operation: DotNetGenericOwnerPhysicalOperationRoute,
 ) {
-    fun bindEmitterPayloadOrNull(
+    fun bindEmitterCallOrNull(
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
-        initializerPayload: DotNetIlValueType?,
-    ): DotNetIlValueType.TypeParameter? {
-        if (payloadCarrier.nullEncoding !=
-            DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT
+    ): DotNetGenericOwnerPhysicalValueBoundSplitNullableCall? {
+        val methodIdentity = operation.method.identity as?
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return null
+        if (!operation.method.signature.isInstance ||
+            operation.method.signature.genericArity != 0 ||
+            operation.instantiatedSignature.genericArity != 0 ||
+            operation.methodArguments.isNotEmpty() ||
+            operation.method.declaringType != operation.requiredReceiverView.family
         ) return null
-        val parameter = payloadCarrier.type as?
-                DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
-        val expected = parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
+        val declaredResult = operation.method.signature.resultLayout as?
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable
             ?: return null
-        return expected.takeIf { candidate -> candidate == initializerPayload }
+        val instantiatedResult = operation.instantiatedSignature.resultLayout as?
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable
+            ?: return null
+        if (declaredResult.nullFlag != instantiatedResult.nullFlag ||
+            instantiatedResult.payloadSlot.domain !=
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+            instantiatedResult.payloadSlot.carrier != payloadCarrier.type ||
+            operation.producedResult?.layout !=
+            DotNetGenericOwnerProducedValueLayout.SplitNullable(payloadCarrier)
+        ) return null
+        val receiverType = operation.requiredReceiverView.construction
+            .bindCurrentOwnerConstructionOrNull(typeMapper, physicalMethodOwner)
+            ?: return null
+        if (operation.instantiatedSignature.parameterSlots.size > 1) return null
+        val parameterTypes = operation.instantiatedSignature.parameterSlots.map { slot ->
+            if (slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT) {
+                return null
+            }
+            val parameter = slot.carrier as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+            parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner) ?: return null
+        }
+        val payloadType = payloadCarrier.bindCurrentOwnerParameterOrNull(
+            typeMapper,
+            physicalMethodOwner,
+        ) ?: return null
+        return DotNetGenericOwnerPhysicalValueBoundSplitNullableCall(
+            methodIdentity,
+            receiverType,
+            parameterTypes,
+            payloadType,
+        )
     }
 }
 
@@ -177,6 +226,8 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
     companion object {
         fun bind(
             records: List<DotNetGenericOwnerPhysicalValueShadowRecord>,
+            authoritativeOperationsByCall:
+                Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> = emptyMap(),
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalValueLocalPlacementAuthority> {
             val finalRecordsByFunction = IdentityHashMap<
                     IrFunctionSymbol,
@@ -221,13 +272,12 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     val splitStorage = storage.storageLayout as?
                             DotNetGenericOwnerPhysicalStorageLayout.SplitNullable
                     if (split != null && splitStorage != null) {
+                        val variable = record.variable.owner as? IrVariable ?: return@forEach
+                        val initializer = variable.initializer as? IrCall ?: return@forEach
+                        val operation = authoritativeOperationsByCall[initializer] ?: return@forEach
                         if (split.payloadCarrier != splitStorage.primaryCarrier.carrier ||
-                            (record.variable.owner as? IrVariable)?.let { variable ->
-                                variable.initializer is IrCall &&
-                                        variable.hasSingleDirectReturnUseIn(
-                                            record.physicalFunction.owner,
-                                        )
-                            } != true
+                            operation.producedResult != produced ||
+                            !variable.hasSingleDirectReturnUseIn(record.physicalFunction.owner)
                         ) return@forEach
                         val parameter = split.payloadCarrier.type as?
                                 DotNetGenericOwnerSymbolicCarrierReference.Parameter
@@ -246,6 +296,7 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         }[record.variable] =
                             DotNetGenericOwnerPhysicalValueRetainedSplitNullable(
                                 split.payloadCarrier,
+                                operation,
                             )
                         return@forEach
                     }
@@ -389,6 +440,33 @@ internal fun IrVariable.splitLocalUseSummaryIn(
 
 internal fun IrVariable.hasSingleDirectReturnUseIn(function: IrSimpleFunction): Boolean =
     splitLocalUseSummaryIn(function).isSingleDirectFunctionReturn
+
+private fun DotNetGenericOwnerPhysicalCarrier.bindCurrentOwnerParameterOrNull(
+    typeMapper: DotNetIlTypeMapper,
+    physicalMethodOwner: DotNetIlClassInfo,
+): DotNetIlValueType.TypeParameter? {
+    if (nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT) return null
+    val parameter = type as? DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+    return parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        .bindCurrentOwnerConstructionOrNull(
+            typeMapper: DotNetIlTypeMapper,
+            physicalMethodOwner: DotNetIlClassInfo,
+        ): DotNetIlValueType.GenericInstance? {
+    val definition = definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+    val classInfo = definition.classInfoOrNull(typeMapper) ?: return null
+    if (classInfo.typeParameterCount == 0 || classInfo.typeParameterCount != arguments.size) {
+        return null
+    }
+    val boundArguments = arguments.map { argument ->
+        val parameter = argument as?
+                DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+        parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner) ?: return null
+    }
+    return DotNetIlValueType.GenericInstance(classInfo, boundArguments)
+}
 
 private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindOwnerParameterOrNull(
     typeMapper: DotNetIlTypeMapper,

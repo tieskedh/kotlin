@@ -154,6 +154,23 @@ negatives. It does not close general exception paths, control flow, fields, or
 acceptance. Evidence is recorded in the
 [split-nullable local-placement archive](../archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md).
 
+The current placement authority additionally requires the complete final BOUND
+direct-natural operation witness for this parameterless form. A result payload
+or diagnostic snapshot alone no longer grants the original pair token.
+
+The second local-transport slice permits exactly one ordinary argument on that
+same operation witness. It does not infer safety from the result layout: the
+sole instantiated slot must be `STRICT_OWNER_INPUT` with an identity-preserving current-owner
+carrier, and the MethodSpec vector must be empty. Placement retains the complete
+MethodDef/receiver/parameter/result witness. Emission re-resolves the live
+virtual MethodDef, requires one unique recorded receiver view, verifies direct
+storage reads for receiver and argument, and uses a private Boolean local as the
+nested call's null-flag address, never the enclosing flag. The interface
+MethodDef's independent `!K`/`!V` binder positions are
+preserved even when the concrete proof binds both to one outer type parameter.
+Multiple arguments and MethodSpecs remain outside this slice. Evidence is in the
+[strict-input local-placement archive](../archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md).
+
 This remains a **GO** for production-inert consolidation. It is not a GO for
 public ABI or for applying the layout to `Map`; the custom proof passing removes
 only that prerequisite, not the broader Runtime-family and release gates.

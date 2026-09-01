@@ -45,6 +45,17 @@ private class InlineLookupRoute<T> {
     }
 }
 
+private class InlineArgumentSplitLocalRoute<T> : InlineLookup<T, T> {
+    override fun lookup(key: T): T? {
+        val sourceNaturalAlias: InlineLookup<T, T> = object : InlineLookup<T, T> {
+            override fun lookup(key: T): T? = key
+        }
+        val exactArgumentAlias: T = key
+        val exactResultAlias: T? = sourceNaturalAlias.lookup(exactArgumentAlias)
+        return exactResultAlias
+    }
+}
+
 private class InlineSplitLocalRoute<T>(private val value: T?) : InlineSplitLocalProducer<T> {
     override fun read(): T? = value
 
@@ -255,6 +266,17 @@ fun box(): String {
     }
     if (InlineLookupRoute<String>().routeExactArgument(InlineStringLookup(), "") != null) {
         return "reference null result argument route"
+    }
+    if (InlineArgumentSplitLocalRoute<Int>().lookup(52) != 52) {
+        return "value argument split local route"
+    }
+    if (InlineArgumentSplitLocalRoute<String>().lookup("argument split") !=
+        "argument split"
+    ) {
+        return "reference argument split local route"
+    }
+    if (InlineArgumentSplitLocalRoute<Int?>().lookup(null) != null) {
+        return "nullable value argument split local route"
     }
     if (InlineSplitLocalRoute(52).readThroughLocal() != 52) {
         return "value split local route"

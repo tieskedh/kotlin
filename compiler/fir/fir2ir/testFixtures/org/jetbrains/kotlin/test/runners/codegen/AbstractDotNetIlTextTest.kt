@@ -1032,6 +1032,50 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "An exact owner-dependent !K argument must preserve the natural !V+bool result route: " +
                 exactArgumentRoute
     }
+    val retainedArgumentSplitRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineArgumentSplitLocalRoute") &&
+                candidate.physicalFunctionName == "lookup" &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "The strict-input split-local call must publish one exact operation route: " +
+                "operations=${snapshots.filter { candidate ->
+                    candidate.ownerName.endsWith("InlineArgumentSplitLocalRoute")
+                }}"
+    }
+    check(retainedArgumentSplitRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            retainedArgumentSplitRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            retainedArgumentSplitRoute.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            retainedArgumentSplitRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineLookup") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0, 0) &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineArgumentSplitLocalRoute") == true
+            } && retainedArgumentSplitRoute.methodArgumentCarriers.isEmpty() &&
+            retainedArgumentSplitRoute.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+            retainedArgumentSplitRoute.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            retainedArgumentSplitRoute.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            retainedArgumentSplitRoute.resultCarrierParameterBinderOwnerName
+                ?.endsWith("InlineArgumentSplitLocalRoute") == true &&
+            retainedArgumentSplitRoute.resultCarrierParameterIndex == 0 &&
+            retainedArgumentSplitRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            retainedArgumentSplitRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            retainedArgumentSplitRoute.diagnostic == null) {
+        "A strict owner input must preserve one exact !T -> !T+bool route: " +
+                retainedArgumentSplitRoute
+    }
     listOf(
         "readThroughLocal",
         "readThroughMaterialization",
@@ -2149,6 +2193,10 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             check(emittedIl.isFile && emittedIl.readText().let { ilText ->
                 "'InlineProducer`1'" !in ilText &&
                         "IInlineProducerKotlinSemantic" !in ilText &&
+                        "'InlineLookup`2'" !in ilText &&
+                        "IInlineLookupKotlinSemantic" !in ilText &&
+                        "'InlineArgumentSplitLocalRoute`1'" !in ilText &&
+                        "InlineArgumentSplitLocalRoute\$lookup\$sourceNaturalAlias\$1`1" !in ilText &&
                         "'InlineSplitLocalProducer`1'" !in ilText &&
                         "InlineSplitLocalProducerKotlinSemantic" !in ilText
             }) {
@@ -2255,6 +2303,61 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         } == true) {
             "The constructed typed entry must preserve its authority-recorded " +
                     "InlineLookup<!T,!T> carrier: source=$lookupSourceAlias, all=$comparisons"
+        }
+        val argumentSplitResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineArgumentSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName == "lookup" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "exactResultAlias"
+        }
+        check(argumentSplitResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val payload = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    prediction.storageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    payload.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    payload.localOwnerName == null &&
+                    payload.localTypeDefView == null &&
+                    payload.ownerParameterIndices == listOf(0) &&
+                    payload.parameterBinderOwnerName
+                        ?.endsWith("InlineArgumentSplitLocalRoute") == true &&
+                    payload.parameterBinderTypeDefView == null &&
+                    prediction.storageCarrier == payload &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineArgumentSplitLocalRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    comparison.actualStorageCarrier == payload &&
+                    comparison.actualAuxiliarySlotIndex != null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                    comparison.relation ==
+                    DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "An exact strict-input call must retain its !T plus null flag: " +
+                    "result=$argumentSplitResultAlias, all=$comparisons"
+        }
+        val argumentSplitFlagSlot = checkNotNull(
+            argumentSplitResultAlias.actualAuxiliarySlotIndex,
+        ) {
+            "The strict-input split local has no recorded Boolean slot: $argumentSplitResultAlias"
         }
         val splitResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
@@ -2407,6 +2510,61 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The split local materialized or crossed a semantic route: " +
                     "forbidden=$forbiddenSplitMaterialization, boxing=$boxingInstructions, " +
                     "method=$splitMethod"
+        }
+        val argumentSplitMethod = splitMethodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'lookup'(") &&
+                    "'exactResultAlias'" in method &&
+                    "'exactResultAlias@isNull'" in method
+        }
+        check(argumentSplitMethod != null) {
+            "Cannot isolate the argument-bearing split-local MethodDef: ${splitEmittedIl.path}"
+        }
+        val argumentSplitInstructions = argumentSplitMethod.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        val argumentSplitCalls = argumentSplitInstructions.filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "'InlineLookup`2'<!0, !0>::'lookup'" in line
+        }
+        val argumentSplitCall = argumentSplitCalls.singleOrNull()
+        check(argumentSplitCall?.let { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!1\\s+class\\s+" +
+                        "'InlineLookup`2'<!0,\\s*!0>::'lookup'\\(!0,\\s*bool&\\)$",
+            ).matches(call)
+        } == true) {
+            "The strict !K input must compose with the independent !V/bool result: " +
+                    "calls=$argumentSplitCalls, method=$argumentSplitMethod"
+        }
+        val argumentSplitCallIndex = argumentSplitInstructions.indexOf(argumentSplitCall)
+        check(argumentSplitCallIndex > 0 &&
+                argumentSplitInstructions[argumentSplitCallIndex - 1] ==
+                "ldloca $argumentSplitFlagSlot") {
+            "The nested virtual call must receive a private final null-flag local by address: " +
+                    "method=$argumentSplitMethod"
+        }
+        check(Regex(
+            "\\[${argumentSplitFlagSlot - 1}]\\s+!0\\s+'exactResultAlias'",
+        ).containsMatchIn(argumentSplitMethod) && Regex(
+            "\\[$argumentSplitFlagSlot]\\s+bool\\s+'exactResultAlias@isNull'",
+        ).containsMatchIn(argumentSplitMethod)) {
+            "The argument-bearing split local must allocate distinct !V and Boolean locals: " +
+                    "method=$argumentSplitMethod"
+        }
+        val forbiddenArgumentSplitMaterialization = listOf(
+            "System.Nullable",
+            "splitNullableNonNull",
+            "splitNullableResult",
+            "KotlinSemantic",
+        ).filter(argumentSplitMethod::contains)
+        val argumentSplitBoxing = argumentSplitInstructions.filter { line ->
+            Regex("^(box|unbox\\.any)\\b").containsMatchIn(line)
+        }
+        check(forbiddenArgumentSplitMaterialization.isEmpty() && argumentSplitBoxing.isEmpty()) {
+            "The strict-input split local materialized or crossed a semantic route: " +
+                    "forbidden=$forbiddenArgumentSplitMaterialization, " +
+                    "boxing=$argumentSplitBoxing, method=$argumentSplitMethod"
         }
         val sourceAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSelfView") &&
