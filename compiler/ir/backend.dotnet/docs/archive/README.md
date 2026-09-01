@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-control-flow-join-placement-2026-09-01.md`](generic-owner-physical-control-flow-join-placement-2026-09-01.md)
+  records the bounded final-value control-flow consumer: identical-carrier
+  retention or one unique common recorded natural-interface construction,
+  selector-only lineage, fail-closed missing/ambiguous edges, fixed-boundary
+  branch emission, hostile `Int`/`String` identity and semantic routing, and the
+  exact Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-local-storage-consumption-2026-09-01.md`](generic-owner-physical-local-storage-consumption-2026-09-01.md)
   records the first authoritative final-value-to-local-placement consumer: one
   direct equal local owner-bound `C<!n>` carrier, independent live-emitter

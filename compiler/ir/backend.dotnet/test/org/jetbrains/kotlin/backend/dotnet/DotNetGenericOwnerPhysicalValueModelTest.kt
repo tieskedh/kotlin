@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.builders.declarations.buildVariable
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
@@ -2817,6 +2818,167 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `recorded interface join selects the unique shared physical construction`() {
+        val types = listOf(
+            typeDescription(sourceOwner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            typeDescription(leftOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(rightOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val sharedConstruction = boundConstruction(provisional, sourceOwner, listOf(objectType()))
+        val declarations = boundDeclarationIndex(
+            types,
+            emptyList(),
+            edgeSets = listOf(
+                edgeSet(leftOwner, baseEdge(objectType()), interfaceEdge(sharedConstruction)),
+                edgeSet(rightOwner, baseEdge(objectType()), interfaceEdge(sharedConstruction)),
+                edgeSet(sourceOwner),
+            ),
+        )
+        val left = directValue(
+            boundCarrier(declarations, boundConstruction(declarations, leftOwner, emptyList())),
+        )
+        val right = directValue(
+            boundCarrier(declarations, boundConstruction(declarations, rightOwner, emptyList())),
+        )
+
+        val joined = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerProducedValueFact,
+                >>(
+            left.joinAtRecordedPhysicalInterfaceFamilyOrError(right, declarations, sourceOwner),
+        ).value
+        val sharedView = view(sharedConstruction)
+
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.Direct(boundCarrier(declarations, sharedConstruction)),
+            joined.layout,
+        )
+        assertTrue(sharedView in knownViewsOf(joined.provenance))
+        assertEquals(sharedView, joined.provenance.selectedViewLineage[sourceOwner])
+    }
+
+    @Test
+    fun `recorded interface join does not weaken an identical direct carrier`() {
+        val types = listOf(
+            typeDescription(sourceOwner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            typeDescription(leftOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+        )
+        val declarations = boundDeclarationIndex(
+            types,
+            emptyList(),
+            edgeSets = listOf(edgeSet(leftOwner, baseEdge(objectType())), edgeSet(sourceOwner)),
+        )
+        val leftConstruction = boundConstruction(declarations, leftOwner, emptyList())
+        val value = directValue(boundCarrier(declarations, leftConstruction))
+
+        val joined = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerProducedValueFact,
+                >>(
+            value.joinAtRecordedPhysicalInterfaceFamilyOrError(value, declarations, sourceOwner),
+        ).value
+
+        assertEquals(value, joined)
+    }
+
+    @Test
+    fun `recorded interface join cannot invent a missing physical edge`() {
+        val types = listOf(
+            typeDescription(sourceOwner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            typeDescription(leftOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(rightOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val leftView = boundConstruction(provisional, sourceOwner, listOf(objectType()))
+        val declarations = boundDeclarationIndex(
+            types,
+            emptyList(),
+            edgeSets = listOf(
+                edgeSet(leftOwner, baseEdge(objectType()), interfaceEdge(leftView)),
+                edgeSet(rightOwner, baseEdge(objectType())),
+                edgeSet(sourceOwner),
+            ),
+        )
+        val left = directValue(
+            boundCarrier(declarations, boundConstruction(declarations, leftOwner, emptyList())),
+        )
+        val right = directValue(
+            boundCarrier(declarations, boundConstruction(declarations, rightOwner, emptyList())),
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            left.joinAtRecordedPhysicalInterfaceFamilyOrError(right, declarations, sourceOwner),
+        )
+    }
+
+    @Test
+    fun `recorded interface join treats ambiguous constructions as lost precision`() {
+        val types = listOf(
+            typeDescription(sourceOwner, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            typeDescription(leftOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(rightOwner, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val intConstruction = boundConstruction(provisional, sourceOwner, listOf(int32Type()))
+        val stringConstruction = boundConstruction(provisional, sourceOwner, listOf(stringType()))
+        val declarations = boundDeclarationIndex(
+            types,
+            emptyList(),
+            edgeSets = listOf(
+                edgeSet(
+                    leftOwner,
+                    baseEdge(objectType()),
+                    interfaceEdge(intConstruction),
+                    interfaceEdge(stringConstruction),
+                ),
+                edgeSet(
+                    rightOwner,
+                    baseEdge(objectType()),
+                    interfaceEdge(intConstruction),
+                    interfaceEdge(stringConstruction),
+                ),
+                edgeSet(sourceOwner),
+            ),
+        )
+        val leftCarrier = boundCarrier(
+            declarations,
+            boundConstruction(declarations, leftOwner, emptyList()),
+        )
+        val rightCarrier = boundCarrier(
+            declarations,
+            boundConstruction(declarations, rightOwner, emptyList()),
+        )
+        val left = directValue(leftCarrier)
+        val right = directValue(rightCarrier)
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            left.joinAtRecordedPhysicalInterfaceFamilyOrError(right, declarations, sourceOwner),
+        )
+
+        val selectedInt = knownProvenance(view(intConstruction), view(stringConstruction))
+            .selectViewOrNull(view(intConstruction))!!
+        val selectedJoin = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerProducedValueFact,
+                >>(
+            directValue(leftCarrier, selectedInt).joinAtRecordedPhysicalInterfaceFamilyOrError(
+                directValue(rightCarrier, selectedInt),
+                declarations,
+                sourceOwner,
+            ),
+        ).value
+
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.Direct(boundCarrier(declarations, intConstruction)),
+            selectedJoin.layout,
+        )
+        assertEquals(
+            view(intConstruction),
+            selectedJoin.provenance.selectedViewLineage[sourceOwner],
+        )
+    }
+
+    @Test
     fun `a direct constructed carrier cannot start with unknown self-view provenance`() {
         val sourceInt = source(int32Type())
 
@@ -2979,8 +3141,22 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             storage,
         )
 
-        val localVariable = IrVariableSymbolImpl()
-        val foreignVariable = IrVariableSymbolImpl()
+        val localVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("local"),
+            owner.typeParameters.single().defaultType,
+        ).symbol as IrVariableSymbolImpl
+        val foreignVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("foreign"),
+            owner.typeParameters.single().defaultType,
+        ).symbol as IrVariableSymbolImpl
         val foreignCarrier = referenceCarrier(source(int32Type()))
         val foreignProduced = directValue(foreignCarrier)
         val foreignStorage = DotNetGenericOwnerPhysicalStorageFact(

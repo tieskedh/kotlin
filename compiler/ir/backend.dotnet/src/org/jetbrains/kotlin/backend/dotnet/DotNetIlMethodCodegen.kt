@@ -1852,10 +1852,15 @@ internal class DotNetIlMethodCodegen(
                     selection.bindEmitterCarrierOrNull(
                         typeMapper,
                         functionInfo.owner,
-                        expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(
-                            initializer,
-                            variable.type,
-                        ) ?: expressionCodegen.mappedNaturalType(initializer),
+                        if (initializer is IrWhen) {
+                            null
+                        } else {
+                            expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(
+                                initializer,
+                                variable.type,
+                            ) ?: expressionCodegen.mappedNaturalType(initializer)
+                        },
+                        initializerUsesControlFlowBranches = initializer is IrWhen,
                     ) ?: dotNetUnsupported(
                         "final physical-value authority for local '${variable.name.asString()}' " +
                                 "does not match its live initializer carrier",

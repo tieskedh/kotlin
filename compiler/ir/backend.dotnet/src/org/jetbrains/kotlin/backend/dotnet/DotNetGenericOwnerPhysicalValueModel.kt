@@ -2731,6 +2731,78 @@ internal fun DotNetGenericOwnerProducedValueFact.selectRecordedPhysicalInterface
 }
 
 /**
+ * Joins two reaching values at one interface family already guaranteed by both physical graphs.
+ *
+ * An identical direct carrier survives without being weakened. Otherwise [family] is only a
+ * selector: the replacement construction must occur in the recorded source-view closure of both
+ * non-null values. A common selected lineage may disambiguate several shared constructions;
+ * otherwise exactly one construction in the selected family is required. Ordinary ambiguity is
+ * unavailable dataflow precision, not contradictory declaration authority.
+ */
+internal fun DotNetGenericOwnerProducedValueFact.joinAtRecordedPhysicalInterfaceFamilyOrError(
+    other: DotNetGenericOwnerProducedValueFact,
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    family: DotNetGenericOwnerPhysicalTypeDefIdentity,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerProducedValueFact> {
+    if (!nullState.canBeNonNull || !other.nullState.canBeNonNull ||
+        layout !is DotNetGenericOwnerProducedValueLayout.Direct ||
+        other.layout !is DotNetGenericOwnerProducedValueLayout.Direct
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val leftCarrier = layout.carrier
+    val rightCarrier = other.layout.carrier
+    if (leftCarrier == rightCarrier) {
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(
+            join(other) { first, second -> first.takeIf { it == second } },
+        )
+    }
+    val leftViews = when (val sources = recordedPhysicalSourceViewsOrError(declarations)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> sources.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return sources
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val rightViews = when (val sources = other.recordedPhysicalSourceViewsOrError(declarations)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> sources.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return sources
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val sharedViews = (leftViews intersect rightViews).filter { view -> view.family == family }.toSet()
+    val sharedLineage = provenance.selectedViewLineage[family]?.takeIf { selected ->
+        other.provenance.selectedViewLineage[family] == selected && selected in sharedViews
+    }
+    val selectedView = sharedLineage ?: sharedViews.singleOrNull()
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val selectedCarrier = when (val carrier = declarations.carrierOrError(selectedView.construction)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> carrier.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return carrier
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    if (selectedCarrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+
+    fun DotNetGenericOwnerProducedValueFact.selectSharedView():
+            DotNetGenericOwnerProducedValueFact {
+        val selected = provenance
+            .guarantee(
+                selectedView,
+                DotNetGenericOwnerPhysicalViewEvidence.RECORDED_INTERFACE_EDGE,
+            )
+            .selectViewOrNull(selectedView)
+            ?: error("a shared recorded physical view must remain selectable")
+        return copy(provenance = selected)
+    }
+
+    return DotNetGenericOwnerPhysicalBindingResult.Bound(
+        selectSharedView().join(other.selectSharedView()) { _, _ -> selectedCarrier },
+    )
+}
+
+/**
  * Records one verifier-valid CLR variance view without changing the produced reference carrier.
  * The target is derived only from a construction already guaranteed on this same non-null value;
  * logical Kotlin subtyping and selected lineage never enter the proof.
