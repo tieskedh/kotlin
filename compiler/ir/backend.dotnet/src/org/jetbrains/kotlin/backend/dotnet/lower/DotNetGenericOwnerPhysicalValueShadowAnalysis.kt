@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowViewSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
@@ -63,6 +64,7 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
@@ -104,6 +106,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             ?: return
         val records = analyzeFunction(
             owner = owner,
+            plan = plan,
             function = physical,
             semanticSource = source,
             authority = bindOwnerAuthorityOrNull(
@@ -141,6 +144,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     .forEach { function ->
                         records += analyzeFunction(
                             plan.owner,
+                            plan,
                             function,
                             sourceBySemanticHook[function],
                             authority,
@@ -157,6 +161,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
 
     private fun analyzeFunction(
         owner: IrClass,
+        plan: DotNetGenericOwnerArchitecturePlan,
         function: IrSimpleFunction,
         semanticSource: IrSimpleFunction?,
         authority: OwnerAuthority?,
@@ -173,6 +178,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         }
         return FunctionShadowEngine(
             owner,
+            plan,
             source,
             function,
             role,
@@ -188,6 +194,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
      */
     private inner class FunctionShadowEngine(
         private val owner: IrClass,
+        private val plan: DotNetGenericOwnerArchitecturePlan,
         private val source: IrSimpleFunction,
         private val physical: IrSimpleFunction,
         private val role: DotNetGenericOwnerPhysicalValueShadowFunctionRole,
@@ -213,24 +220,26 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             })
 
             authority?.let { ownerAuthority ->
+                val prototypeParameters = entryPrototypeParametersOrNull()
                 physical.parameters.forEach { parameter ->
                     when {
                         parameter === physical.dispatchReceiverParameter ->
                             storageByValue[parameter.symbol] = ownerAuthority.receiverStorage
-                        parameter.kind == IrParameterKind.Regular && parameter.type.isObjectShadowType() -> {
-                            val nullState = if (parameter.type.isNullableAny()) {
-                                DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
-                            } else {
-                                DotNetGenericOwnerPhysicalNullState.NON_NULL
-                            }
-                            storageByValue[parameter.symbol] = DotNetGenericOwnerPhysicalStorageFact(
-                                DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier),
-                                DotNetGenericOwnerPhysicalValueProvenance(
-                                    DotNetGenericOwnerGuaranteedViews.Unknown,
-                                ),
-                                nullState,
-                            )
-                        }
+                        parameter.kind == IrParameterKind.Regular ->
+                            plannedEntryStorageOrNull(
+                                prototypeParameters?.get(parameter.symbol),
+                                ownerAuthority,
+                            )?.let { storage ->
+                                storageByValue[parameter.symbol] = storage
+                            } ?: if (parameter.type.isObjectShadowType()) {
+                                // Object is a conservative fallback for generated helpers which
+                                // have no detached member prototype. It cannot manufacture an
+                                // exact view or narrow an independently broad value.
+                                storageByValue[parameter.symbol] = objectEntryStorage(
+                                    parameter.type,
+                                    ownerAuthority,
+                                )
+                            } else Unit
                     }
                 }
             }
@@ -245,7 +254,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         ) {
             statements.forEach { statement ->
                 when (statement) {
-                    is IrVariable -> if (statement.type.isPhysicalValueShadowCandidateType()) {
+                    is IrVariable -> if (statement.type.isPhysicalValueShadowCandidateType(owner)) {
                         processVariable(statement, storage)
                     } else {
                         statement.initializer?.let { initializer ->
@@ -286,7 +295,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             variable: IrVariable,
             storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         ): Boolean {
-            if (!variable.type.isPhysicalValueShadowCandidateType()) return false
+            if (!variable.type.isPhysicalValueShadowCandidateType(owner)) return false
             val diagnostic = ShadowDiagnosticIdentity(owner, source, physical, role, phase, variable)
             val ownerAuthority = authority
             if (ownerAuthority == null) {
@@ -351,6 +360,14 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             val requestedCarrier: DotNetGenericOwnerStorageCarrier = when {
                 variable.type.isObjectShadowType() ->
                     DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier)
+                variable.type.exactCurrentOwnerParameterIndexOrNull(owner) != null -> {
+                    val index = checkNotNull(
+                        variable.type.exactCurrentOwnerParameterIndexOrNull(owner),
+                    )
+                    DotNetGenericOwnerStorageCarrier.Fixed(
+                        ownerAuthority.ownerParameterCarriers[index],
+                    )
+                }
                 variable.type.isDeferredGenericShadowType() -> DotNetGenericOwnerStorageCarrier.Deferred
                 else -> DotNetGenericOwnerStorageCarrier.Unknown
             }
@@ -575,6 +592,77 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         ): Boolean = processTransparentStatements(statements, LinkedHashMap(outerStorage))
 
         private fun Int?.orZero(): Int = this ?: 0
+
+        /**
+         * Aligns the live physical parameters with one role-specific RepresentationPlan member.
+         * The prototype is physical signature authority for this early epoch; source Kotlin types
+         * and parameter names are deliberately not consulted. A missing or changed vector yields
+         * no exact seed and will later fail closed.
+         */
+        private fun entryPrototypeParametersOrNull(): Map<IrValueSymbol, IrType>? {
+            val familyRole = when (role) {
+                DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY,
+                DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER,
+                -> DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK ->
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+            }
+            if (role != DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
+                physical !== source
+            ) return null
+            val prototype = plan.prototypeMembers[source]?.get(familyRole) ?: return null
+            if (prototype.source !== source || prototype.function.parent !== owner) return null
+            val physicalParameters = physical.parameters.filter { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver
+            }
+            val plannedParameters = prototype.function.parameters.filter { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver
+            }
+            if (physicalParameters.size != plannedParameters.size ||
+                physicalParameters.zip(plannedParameters).any { pair -> pair.first.kind != pair.second.kind }
+            ) return null
+            return physicalParameters.zip(plannedParameters).associate { pair ->
+                pair.first.symbol to pair.second.type
+            }
+        }
+
+        private fun plannedEntryStorageOrNull(
+            plannedType: IrType?,
+            ownerAuthority: OwnerAuthority,
+        ): DotNetGenericOwnerPhysicalStorageFact? {
+            plannedType ?: return null
+            if (plannedType.isObjectShadowType()) {
+                return objectEntryStorage(plannedType, ownerAuthority)
+            }
+            val parameterIndex = plannedType.exactCurrentOwnerParameterIndexOrNull(owner)
+                ?: return null
+            return DotNetGenericOwnerPhysicalStorageFact(
+                DotNetGenericOwnerStorageCarrier.Fixed(
+                    ownerAuthority.ownerParameterCarriers[parameterIndex],
+                ),
+                DotNetGenericOwnerPhysicalValueProvenance(
+                    DotNetGenericOwnerGuaranteedViews.Unknown,
+                ),
+                // An unconstrained CLR !T can be a nullable reference substitution. The exact
+                // entry carrier is known; its current null state is intentionally not narrowed.
+                DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+            )
+        }
+
+        private fun objectEntryStorage(
+            plannedType: IrType,
+            ownerAuthority: OwnerAuthority,
+        ) = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerStorageCarrier.Fixed(ownerAuthority.objectCarrier),
+            DotNetGenericOwnerPhysicalValueProvenance(
+                DotNetGenericOwnerGuaranteedViews.Unknown,
+            ),
+            if (plannedType.isNullableAny()) {
+                DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+            } else {
+                DotNetGenericOwnerPhysicalNullState.NON_NULL
+            },
+        )
     }
 
     /** Binds one value-flow epoch to the context-owned immutable declaration-authority lineage. */
@@ -601,6 +689,14 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         val identity = physicalAuthority.genericClassIdentityOrNull(owner.symbol) ?: return null
         val arguments = owner.typeParameters.indices.map { index ->
             when (val result = declarations.typeParameterOrError(identity, index)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> return null
+            }
+        }
+        val ownerParameterCarriers = arguments.map { parameter ->
+            when (val result = declarations.carrierOrError(parameter)) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict,
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable,
@@ -638,6 +734,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             declarations,
             physicalAuthority,
             objectCarrier,
+            ownerParameterCarriers,
             DotNetGenericOwnerPhysicalStorageFact(
                 DotNetGenericOwnerStorageCarrier.Fixed(receiverCarrier),
                 receiverProvenance,
@@ -676,6 +773,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         val declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
         val physicalAuthority: DotNetLocalGenericOwnerPhysicalAuthority,
         val objectCarrier: DotNetGenericOwnerPhysicalCarrier,
+        val ownerParameterCarriers: List<DotNetGenericOwnerPhysicalCarrier>,
         val receiverStorage: DotNetGenericOwnerPhysicalStorageFact,
     )
 
@@ -848,8 +946,19 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         fun org.jetbrains.kotlin.ir.types.IrType.isDeferredGenericShadowType(): Boolean =
             (this as? IrSimpleType)?.arguments?.isNotEmpty() == true
 
-        fun org.jetbrains.kotlin.ir.types.IrType.isPhysicalValueShadowCandidateType(): Boolean =
-            isObjectShadowType() || isDeferredGenericShadowType()
+        fun org.jetbrains.kotlin.ir.types.IrType.isPhysicalValueShadowCandidateType(
+            owner: IrClass,
+        ): Boolean = isObjectShadowType() || isDeferredGenericShadowType() ||
+                exactCurrentOwnerParameterIndexOrNull(owner) != null
+
+        fun IrType.exactCurrentOwnerParameterIndexOrNull(owner: IrClass): Int? {
+            val simple = this as? IrSimpleType ?: return null
+            if (simple.isMarkedNullable() || simple.arguments.isNotEmpty()) return null
+            val parameter = simple.classifier as? IrTypeParameterSymbol ?: return null
+            return owner.typeParameters.indexOfFirst { candidate ->
+                candidate.symbol === parameter
+            }.takeIf { index -> index >= 0 }
+        }
 
         fun org.jetbrains.kotlin.ir.types.IrType.hasUnsupportedProjection(): Boolean {
             val simple = this as? IrSimpleType ?: return false

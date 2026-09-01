@@ -1299,6 +1299,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
             )
+        carrier.type is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+            parameterSnapshotOrNull(carrier.type)
         carrier.type is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
             constructionSnapshotOrNull(carrier.type)
         else -> null
@@ -1362,6 +1364,24 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             localOwnerName = input.logicalOwnerName,
             ownerParameterIndices = parameters.map { parameter -> parameter.index },
             localTypeDefView = identity.view?.toShadowView(),
+            parameterBinderOwnerName = binderInput.logicalOwnerName,
+            parameterBinderTypeDefView = binder.view?.toShadowView(),
+        )
+    }
+
+    private fun parameterSnapshotOrNull(
+        parameter: DotNetGenericOwnerSymbolicCarrierReference.Parameter,
+    ): DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot? {
+        val binder = (parameter.binder as?
+                DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+            ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+        val binderInput = inputsByIdentity[binder] ?: return null
+        if (binderInput.role == DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY) {
+            return null
+        }
+        return DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+            kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER,
+            ownerParameterIndices = listOf(parameter.index),
             parameterBinderOwnerName = binderInput.logicalOwnerName,
             parameterBinderTypeDefView = binder.view?.toShadowView(),
         )

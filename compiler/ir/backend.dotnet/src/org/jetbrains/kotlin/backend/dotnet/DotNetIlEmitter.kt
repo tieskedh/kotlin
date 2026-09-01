@@ -2242,6 +2242,22 @@ internal class DotNetIlEmitter(
             physicalOwner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local?,
         ): DotNetGenericOwnerObservedLocalCarrier = when (val carrier = raw.carrier) {
             DotNetIlValueType.Object -> DotNetGenericOwnerObservedLocalCarrier.Object
+            is DotNetIlValueType.TypeParameter -> when {
+                carrier.isMethodParameter -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                    "the emitted local is bound by a MethodDef generic parameter",
+                )
+                physicalOwner == null -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                    "the emitted owner-parameter local has no local physical TypeDef binder",
+                )
+                carrier.index !in 0 until raw.physicalOwner.typeParameterCount ->
+                    DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted owner-parameter local exceeds its physical TypeDef arity",
+                    )
+                else -> DotNetGenericOwnerObservedLocalCarrier.OwnerParameter(
+                    physicalOwner,
+                    carrier.index,
+                )
+            }
             is DotNetIlValueType.UserClass -> {
                 val capabilityOwners = capabilityOwnersByClassInfo[carrier.classInfo].orEmpty()
                 when {

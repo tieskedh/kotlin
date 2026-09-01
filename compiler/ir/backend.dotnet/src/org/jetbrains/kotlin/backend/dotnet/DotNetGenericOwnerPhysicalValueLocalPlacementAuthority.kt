@@ -21,8 +21,9 @@ internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
  * One operation-scoped permission to retain the carrier which an initializer already produces.
  *
  * The destination is not reconstructed from its logical Kotlin type. The token exists only when
- * final value flow independently selected exactly the same direct, constructed, reference-shaped
- * carrier for production and storage. It therefore authorizes no cast, variance conversion,
+ * final value flow independently selected exactly the same direct carrier for production and
+ * storage. The bounded vocabulary admits either a local owner-bound constructed reference or one
+ * direct parameter of that same owner. It therefore authorizes no cast, variance conversion,
  * semantic adaptation, boxing, nullable materialization, field/state choice, or ABI change.
  */
 internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal constructor(
@@ -42,8 +43,23 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
         initializerCarrier: DotNetIlValueType?,
+        initializerDirectStorageReadCarrier: DotNetIlValueType?,
         initializerUsesControlFlowBranches: Boolean,
     ): DotNetIlValueType? {
+        val parameter = carrier.type as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
+        if (parameter != null) {
+            if (carrier.nullEncoding !=
+                DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT ||
+                emitterValidation !=
+                DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER
+            ) return null
+            val expected = parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
+                ?: return null
+            return initializerDirectStorageReadCarrier?.takeIf { actual -> actual == expected }
+        }
+
+        // Preserve the already-proven constructed-reference consumer verbatim. The parameter
+        // extension above must not alter which semantic-hook locals this earlier rule admits.
         if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return null
         val construction = carrier.type as?
                 DotNetGenericOwnerSymbolicCarrierReference.Constructed ?: return null
@@ -54,15 +70,15 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
             classInfo.typeParameterCount != construction.arguments.size
         ) return null
         val arguments = construction.arguments.map { argument ->
-            val parameter = argument as?
+            val ownerParameter = argument as?
                     DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
-            val binder = (parameter.binder as?
+            val binder = (ownerParameter.binder as?
                     DotNetGenericOwnerPhysicalGenericBinderReference.Type)
                 ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
             if (binder.classInfoOrNull(typeMapper) !== physicalMethodOwner ||
-                parameter.index !in 0 until physicalMethodOwner.typeParameterCount
+                ownerParameter.index !in 0 until physicalMethodOwner.typeParameterCount
             ) return null
-            DotNetIlValueType.TypeParameter(parameter.index, isMethodParameter = false)
+            DotNetIlValueType.TypeParameter(ownerParameter.index, isMethodParameter = false)
         }
         val expected = DotNetIlValueType.GenericInstance(classInfo, arguments)
         if (!expected.isDotNetReferenceShaped()) return null
@@ -72,6 +88,18 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
             DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES ->
                 expected.takeIf { initializerUsesControlFlowBranches }
         }
+    }
+
+    private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindOwnerParameterOrNull(
+        typeMapper: DotNetIlTypeMapper,
+        physicalMethodOwner: DotNetIlClassInfo,
+    ): DotNetIlValueType.TypeParameter? {
+        val binder = (binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+            ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+        if (binder.classInfoOrNull(typeMapper) !== physicalMethodOwner ||
+            index !in 0 until physicalMethodOwner.typeParameterCount
+        ) return null
+        return DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
     }
 
     private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.classInfoOrNull(
@@ -138,33 +166,46 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     val storage = record.predictedStorage ?: return@forEach
                     val direct = produced.layout as? DotNetGenericOwnerProducedValueLayout.Direct
                         ?: return@forEach
-                    val construction = direct.carrier.type as?
-                            DotNetGenericOwnerSymbolicCarrierReference.Constructed
-                        ?: return@forEach
-                    if (construction.definition !is DotNetGenericOwnerPhysicalTypeDefIdentity.Local) {
-                        return@forEach
-                    }
                     val physicalOwner = (record.physicalFunction.owner.parent as? IrClass)?.symbol
                         ?: return@forEach
-                    if (construction.arguments.any { argument ->
-                            val parameter = argument as?
-                                    DotNetGenericOwnerSymbolicCarrierReference.Parameter
-                                ?: return@any true
-                            val binder = (parameter.binder as?
-                                    DotNetGenericOwnerPhysicalGenericBinderReference.Type)
-                                ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
-                                ?: return@any true
-                            binder.owner !== physicalOwner ||
-                                    parameter.index !in physicalOwner.owner.typeParameters.indices
-                        }
-                    ) {
+                    if (direct.carrier != storage.storageCarrier.carrier) {
                         return@forEach
                     }
-                    if (direct.carrier != storage.storageCarrier.carrier ||
-                        direct.carrier.nullEncoding !=
-                        DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE
-                    ) {
-                        return@forEach
+                    when (val symbolic = direct.carrier.type) {
+                        is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+                            val binder = (symbolic.binder as?
+                                    DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+                                ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                                ?: return@forEach
+                            if (direct.carrier.nullEncoding !=
+                                DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT ||
+                                binder.owner !== physicalOwner ||
+                                symbolic.index !in physicalOwner.owner.typeParameters.indices ||
+                                (record.variable.owner as? IrVariable)?.initializer is IrWhen
+                            ) return@forEach
+                        }
+                        is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                            if (symbolic.definition !is DotNetGenericOwnerPhysicalTypeDefIdentity.Local) {
+                                return@forEach
+                            }
+                            if (symbolic.arguments.any { argument ->
+                                    val ownerParameter = argument as?
+                                            DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                                        ?: return@any true
+                                    val binder = (ownerParameter.binder as?
+                                            DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+                                        ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                                        ?: return@any true
+                                    binder.owner !== physicalOwner ||
+                                            ownerParameter.index !in
+                                            physicalOwner.owner.typeParameters.indices
+                                } || direct.carrier.nullEncoding !=
+                                DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE
+                            ) return@forEach
+                        }
+                        is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
+                        is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
+                        -> return@forEach
                     }
                     retainedByFunction.getOrPut(record.physicalFunction) {
                         IdentityHashMap()

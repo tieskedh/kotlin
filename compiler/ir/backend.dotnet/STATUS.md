@@ -74,19 +74,24 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-Final physical-value facts now authorize two bounded local-placement forms. A
+Final physical-value facts now authorize three bounded local-placement forms. A
 direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
-across all reaching arms. Selected lineage can disambiguate only a view already
-present in every recorded closure; missing or ambiguous views remain
-unavailable and never fabricate `I<object>`. The emitter reconstructs the
-carrier from the physical MethodDef owner and independently validates either
-the whole initializer or every branch at its fixed storage boundary. Source and
+across all reaching arms. A regular parameter whose role-specific physical
+entry prototype is exactly the current owner parameter may enter and remain in
+local storage as the same `!n`; an object-domain semantic-hook prototype remains
+object-domain. Selected lineage can disambiguate only a view already present in
+every recorded closure; missing or ambiguous views remain unavailable and never
+fabricate `I<object>`. The emitter reconstructs each carrier from the physical
+MethodDef owner and independently validates the whole initializer, every branch
+at its fixed storage boundary, or the direct live parameter read. Source and
 compiler-owned aliases share the rule; star/projected and mutable/multiple-write
 controls receive no token. Exact evidence is in the
-[direct-placement archive](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md)
-and [control-flow archive](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md).
+[direct-placement](docs/archive/generic-owner-physical-local-storage-consumption-2026-09-01.md),
+[control-flow](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md),
+and [typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md)
+archives.
 
 ## Production binding state
 
@@ -112,19 +117,24 @@ and [control-flow archive](docs/archive/generic-owner-physical-control-flow-join
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
-The local placement consumer now covers direct equal-carrier aliases and one
-exhaustive reference-shaped control-flow join. The join uses a logical interface
-only to select a family; physical construction authority comes exclusively from
-the intersection of recorded interface closures. It neither authorizes
-conversion, adaptation, boxing, state, or ABI changes. The older compiler-origin
-recognizer remains only as migration fallback for transfer shapes the shared
-model has not yet derived.
+The local placement consumer now covers direct equal-carrier aliases, one
+exhaustive reference-shaped control-flow join, and one exact owner-parameter
+entry. The join uses a logical interface only to select a family; physical
+construction authority comes exclusively from the intersection of recorded
+interface closures. The parameter entry comes only from the role-specific
+physical prototype and is checked against the live MethodDef slot; a Kotlin
+source type cannot manufacture `!T`, and a semantic prototype does not inherit
+the typed entry's fact. None of these permissions authorizes conversion,
+adaptation, boxing, state, or ABI changes. The older compiler-origin recognizer
+remains only as migration fallback for transfer shapes the shared model has not
+yet derived.
 
-The next consolidation boundary is the entry environment for exact typed
-parameters/results, followed by null/bottom/unknown control-flow arms and
-explicit representation-changing conversions. Fields, captures,
-foreign/fixed/nested carriers, stars/projections, and split-nullable layouts stay
-outside these local consumers rather than acquiring local exceptions.
+The next consolidation boundary is exact typed result entry/production and the
+remaining parameter-entry compositions, followed by null/bottom/unknown
+control-flow arms and explicit representation-changing conversions. Fields,
+captures, foreign/fixed/nested carriers, stars/projections, and split-nullable
+layouts stay outside these local consumers rather than acquiring local
+exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the

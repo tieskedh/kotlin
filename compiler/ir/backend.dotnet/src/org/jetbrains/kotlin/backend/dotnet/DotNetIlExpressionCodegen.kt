@@ -439,6 +439,31 @@ internal class DotNetIlExpressionCodegen(
         return physicalType
     }
 
+    /**
+     * Reads the verifier-visible `ldarg`/`ldloc` source carrier for physical-value authority.
+     *
+     * Only identity-preserving compiler casts may be unwrapped. Unlike ordinary logical mapping,
+     * this query observes the live method-context slot and therefore catches a stale early
+     * RepresentationPlan before it can authorize a `!T` local.
+     */
+    fun directPhysicalStorageReadCarrierTypeOrNull(
+        expression: IrExpression,
+    ): DotNetIlValueType? {
+        val source = when (expression) {
+            is IrTypeOperatorCall -> if (
+                expression.operator == IrTypeOperator.IMPLICIT_CAST ||
+                expression.operator == IrTypeOperator.IMPLICIT_NOTNULL
+            ) {
+                expression.argument
+            } else {
+                expression
+            }
+            else -> expression
+        }
+        val read = source as? IrGetValue ?: return null
+        return methodContext.reference(read.symbol).type
+    }
+
     private fun naturalConstructedGenericCarrierTypeOrNull(
         type: IrType,
     ): DotNetIlValueType.GenericInstance? {

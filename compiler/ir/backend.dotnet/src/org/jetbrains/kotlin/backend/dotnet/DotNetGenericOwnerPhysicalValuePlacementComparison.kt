@@ -35,6 +35,17 @@ internal data class DotNetGenericOwnerPhysicalValueShadowRecord(
 internal sealed interface DotNetGenericOwnerObservedLocalCarrier {
     data object Object : DotNetGenericOwnerObservedLocalCarrier
 
+    data class OwnerParameter(
+        val parameterBinder: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        val index: Int,
+    ) : DotNetGenericOwnerObservedLocalCarrier {
+        init {
+            require(index >= 0) {
+                "an observed owner-parameter local requires a non-negative parameter index"
+            }
+        }
+    }
+
     data class LocalConstruction(
         val definition: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
         val parameterBinder: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
@@ -231,9 +242,18 @@ private fun DotNetGenericOwnerPhysicalCarrier.toObservedCarrierOrNull():
         DotNetGenericOwnerObservedLocalCarrier? = when {
     type == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() ->
         DotNetGenericOwnerObservedLocalCarrier.Object
+    type is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+        type.toObservedCarrierOrNull()
     type is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
         type.toObservedCarrierOrNull()
     else -> null
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.toObservedCarrierOrNull():
+        DotNetGenericOwnerObservedLocalCarrier.OwnerParameter? {
+    val binder = (binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+        ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+    return DotNetGenericOwnerObservedLocalCarrier.OwnerParameter(binder, index)
 }
 
 private fun DotNetGenericOwnerSymbolicCarrierReference.Constructed.toObservedCarrierOrNull():
@@ -259,6 +279,13 @@ internal fun DotNetGenericOwnerObservedLocalCarrier.toSnapshot():
     DotNetGenericOwnerObservedLocalCarrier.Object -> DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
         DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
     )
+    is DotNetGenericOwnerObservedLocalCarrier.OwnerParameter ->
+        DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+            kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER,
+            ownerParameterIndices = listOf(index),
+            parameterBinderOwnerName = parameterBinder.owner.owner.dotNetPhysicalValueStableName(),
+            parameterBinderTypeDefView = parameterBinder.view?.toShadowView(),
+        )
     is DotNetGenericOwnerObservedLocalCarrier.LocalConstruction ->
         DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
             kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION,
