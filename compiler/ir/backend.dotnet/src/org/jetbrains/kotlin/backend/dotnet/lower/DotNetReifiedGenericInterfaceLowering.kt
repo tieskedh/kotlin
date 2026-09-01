@@ -2250,12 +2250,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
             parameter.variance == Variance.OUT_VARIANCE
         } ?: return null
         val member = declaredInterfaceMembers().singleOrNull() ?: return null
-        if (!member.isDirectOwnerInputSplitNullableOutputMember(this)) return null
-        val input = member.parameters.singleOrNull { parameter ->
-            parameter.kind == IrParameterKind.Regular
-        } ?: return null
-        val inputParameter = ((input.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
-        val resultParameter = ((member.returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
+        val parameterPair = member.directOwnerInputSplitNullableParametersOrNull(this)
+        parameterPair ?: return null
+        val inputParameter = parameterPair.first
+        val resultParameter = parameterPair.second
         return member.takeIf {
             inputParameter === invariantParameter && resultParameter === covariantParameter
         }
@@ -2552,9 +2550,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
     /** Whether this callable owns the direct open-nullable result convention for [parameter]. */
     private fun IrSimpleFunction.hasDirectSplitNullableResult(parameter: IrTypeParameter): Boolean {
+        val owner = parameter.parent as? IrClass ?: return false
         if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
             body != null || this in context.interfaceDefaultImplementations ||
-            correspondingPropertySymbol != null || isSuspend || typeParameters.isNotEmpty() ||
+            correspondingPropertySymbol != null || isSuspend ||
+            !hasAdmissibleGenericInterfaceMethodParameterVector(owner) ||
             parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
             parameters.drop(1).any { input ->
                 input.kind != IrParameterKind.Regular || input.defaultValue != null
@@ -2570,24 +2570,55 @@ internal class DotNetReifiedGenericInterfaceLowering(
      * input policies are classified independently from the split result layout.
      */
     private fun IrSimpleFunction.isDirectNullableProducerMember(parameter: IrTypeParameter): Boolean =
-        hasDirectSplitNullableResult(parameter) && parameters.drop(1).none { input ->
-            input.type.referencesTypeParameterOf(parameter.parent as IrClass)
-        }
+        typeParameters.isEmpty() && hasDirectSplitNullableResult(parameter) &&
+                parameters.drop(1).none { input ->
+                    input.type.referencesTypeParameterOf(parameter.parent as IrClass)
+                }
 
     /** One direct owner-parameter input composed with a direct open-nullable owner output. */
-    private fun IrSimpleFunction.isDirectOwnerInputSplitNullableOutputMember(owner: IrClass): Boolean {
+    private fun IrSimpleFunction.directOwnerInputSplitNullableParametersOrNull(
+        owner: IrClass,
+    ): Pair<IrTypeParameter, IrTypeParameter>? {
         val resultParameter = owner.typeParameters.singleOrNull { parameter ->
             hasDirectSplitNullableResult(parameter)
-        } ?: return false
-        val input = parameters.singleOrNull { parameter ->
+        } ?: return null
+        if (!hasUnconstrainedMethodParameterVector()) return null
+        val inputs = parameters.filter { parameter ->
             parameter.kind == IrParameterKind.Regular
-        } ?: return false
-        if (parameters.size != 2) return false
-        val inputType = input.type as? IrSimpleType ?: return false
-        if (inputType.isMarkedNullable()) return false
-        val inputParameter = (inputType.classifier as? IrTypeParameterSymbol)?.owner ?: return false
-        return inputParameter in owner.typeParameters && resultParameter in owner.typeParameters
+        }
+        val directOwnerInputs = inputs.mapNotNull { input ->
+            val inputType = input.type as? IrSimpleType ?: return@mapNotNull null
+            if (inputType.isMarkedNullable()) return@mapNotNull null
+            (inputType.classifier as? IrTypeParameterSymbol)?.owner
+                ?.takeIf { parameter -> parameter in owner.typeParameters }
+        }
+        if (directOwnerInputs.size != 1) return null
+        val directOwnerInput = directOwnerInputs.single()
+        if (!inputs.all { input ->
+            val inputType = input.type as? IrSimpleType ?: return@all false
+            if (inputType.isMarkedNullable()) return@all false
+            val parameter = (inputType.classifier as? IrTypeParameterSymbol)?.owner
+                ?: return@all false
+            parameter === directOwnerInput || parameter.parent === this
+        }) {
+            return null
+        }
+        return directOwnerInput to resultParameter
     }
+
+    /**
+     * The first owner-input/split-result composition retains only MethodDef parameters whose CLR
+     * binder is already complete without an owner-relative or representation-changing bound.
+     */
+    private fun IrSimpleFunction.hasUnconstrainedMethodParameterVector(): Boolean =
+        typeParameters.all { parameter ->
+            parameter.parent === this && !parameter.isReified &&
+                    parameter.variance == Variance.INVARIANT &&
+                    parameter.superTypes.all { bound -> bound.isAny() || bound.isNullableAny() }
+        }
+
+    private fun IrSimpleFunction.isDirectOwnerInputSplitNullableOutputMember(owner: IrClass): Boolean =
+        directOwnerInputSplitNullableParametersOrNull(owner) != null
 
     /**
      * A declaration-independent input vector does not change the owner construction selected by a
@@ -2849,18 +2880,8 @@ internal fun materializeExternalReifiedGenericInterfaceCapabilitySlot(
     val owner = source.parent as? IrClass
         ?: error("Internal .NET backend error: external reified-interface member has no owner")
     val ownerParameters = owner.typeParameters
-    val singleOwnerParameter = ownerParameters.singleOrNull()
     require(source.parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver &&
-            (source.typeParameters.isEmpty() ||
-                    singleOwnerParameter != null &&
-                    source.hasDirectMethodGenericProducerSignature(singleOwnerParameter) { constraintOwner ->
-                        val contract = externalDeclarations
-                            .publishedGenericInterfaceFamilyOrNull(constraintOwner)
-                        constraintOwner.typeParameters.singleOrNull()?.variance == Variance.IN_VARIANCE &&
-                                contract?.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
-                                contract.declaredMembers.singleOrNull()?.role ==
-                                    DotNetPublishedGenericInterfaceMemberRole.CONSUMER
-                    })) {
+            source.hasAdmissibleGenericInterfaceMethodParameterVector(owner)) {
         "External reified-interface member '${source.name}' is outside the admitted structural family"
     }
     val binding = externalDeclarations.genericOwnerMemberFamilyOrNull(source)
@@ -2968,6 +2989,18 @@ private fun SpecialMethodWithDefaultInfo.toDotNetWrongShapePolicy(): DotNetCShar
         fallbackParameterIndex = argumentsToCheck
             .takeIf { defaultValueKind == SpecialBridgeDefaultValueKind.SECOND_ARGUMENT },
     )
+
+/**
+ * Whether this MethodDef's own generic-parameter vector can be retained independently from its
+ * enclosing generic-interface construction. Producer admission still proves the logical member
+ * shape; this predicate only rejects method parameters whose CLR identity or owner-relative bounds
+ * would require a representation-changing adapter.
+ */
+private fun IrSimpleFunction.hasAdmissibleGenericInterfaceMethodParameterVector(
+    owner: IrClass,
+): Boolean = typeParameters.all { parameter ->
+    parameter.parent === this && !parameter.isReified && parameter.variance == Variance.INVARIANT
+} && dotNetDirectOwnerRelativeMethodBoundsOrNull(owner) != null
 
 private fun IrSimpleFunction.hasDirectMethodGenericProducerSignature(
     ownerParameter: IrTypeParameter,

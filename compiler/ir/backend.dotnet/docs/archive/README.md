@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-methodspec-split-nullable-composition-2026-09-01.md`](generic-owner-methodspec-split-nullable-composition-2026-09-01.md)
+  records the first structural composition of MethodDef binders, strict owner
+  inputs, and split-nullable owner outputs: `!V lookup<!!R>(!K, !!R, out bool)`,
+  exact and widened routing, producer records and PE, separate Kotlin
+  assemblies, ordinary natural-only C# implementations, and the exact
+  Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-methodspec-operation-2026-09-01.md`](generic-owner-physical-methodspec-operation-2026-09-01.md)
   records the first final-IR MethodSpec operation consumer: producer-recorded
   MethodDef arity, a BOUND current-owner `!T` argument vector, independent

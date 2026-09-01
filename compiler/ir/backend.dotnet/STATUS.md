@@ -13,10 +13,12 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   `2868cfb88a7ea111ea6f6bf02f24430dc0e039e5`.
 - Current checkpoint: physical library ABI 66, generic-owner artifact schema
   21, compiler/runtime surface 60.
-- Stage 7 separates semantic member role from physical result layout and proves
-  the structural `Lookup<K, out V>.lookup(K): V?` contract as
-  `!V lookup(!K, out bool)` without migrating Runtime `Map`. Exact value calls
-  remain unboxed; semantic and ordinary C# routes preserve the same object.
+- Stage 7 composes callable policies structurally. It proves both
+  `Lookup<K, out V>.lookup(K): V?` as `!V lookup(!K, out bool)` and
+  `MethodLookup<K, out V>.lookup<R>(K, R): V?` as
+  `!V lookup<!!R>(!K, !!R, out bool)`, without migrating Runtime `Map`. Exact
+  value calls remain unboxed; semantic and ordinary C# routes preserve the
+  same object.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
@@ -118,20 +120,21 @@ The focused XML audit contains 172 green model tests; candidate and erased
 inverse each contain four suites and eight green tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
-The final operation consumer now also binds the complete MethodSpec vector of
-one selected generic MethodDef. Physical MethodDef arity comes only from BOUND
-declaration authority; a final IR type argument may locate one non-null bare
-parameter of the current physical class, and the declaration index alone turns
-that locator into `!n`. The shared operation query then substitutes its `!!m`
-slots independently from the receiver TypeDef construction and validates the
-ordinary value arguments against the instantiated signature. The operation
-snapshot publishes that bound vector. A broad logical receiver remains
-semantic, and a caller-MethodDef parameter with the same index is deliberately
-not mistaken for current-owner authority. Exact evidence is in the
-[MethodSpec operation archive](docs/archive/generic-owner-physical-methodspec-operation-2026-09-01.md).
-The focused XML audit remains 172 green model tests; this delta's candidate and
-erased inverse each contain four suites and four green tests across PSI,
-LightTree, Framework 4.8, and .NET 10, with no failures, errors, or skips.
+The final operation consumer binds a complete MethodSpec vector from the
+selected physical MethodDef. The producer-side callable binder and authority
+validator now compose that binder independently with ordinary parameter
+domains and `Direct`/`SplitNullable` result layout. The closed structural form
+is one direct invariant owner input, direct unconstrained MethodDef inputs, and
+one distinct covariant nullable owner output; it introduces no combined member
+role. TypeDef `!n` and MethodDef `!!m` substitutions remain independent. Broad
+logical receivers stay semantic, and a caller-MethodDef parameter is not
+mistaken for owner authority. Exact evidence is in the
+[MethodSpec operation](docs/archive/generic-owner-physical-methodspec-operation-2026-09-01.md)
+and
+[MethodSpec/split composition](docs/archive/generic-owner-methodspec-split-nullable-composition-2026-09-01.md)
+archives. The focused audit contains 172 green model tests. Candidate and
+production-erased evidence each cover eight tests across PSI, LightTree,
+Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 ## Production binding state
 
@@ -180,15 +183,15 @@ transfer shapes the shared model has not yet derived.
 The operation query now additionally accepts one complete MethodSpec vector
 whose entries are non-null bare parameters of the current physical class. It
 does not confuse a caller MethodDef's `!!n` with class `!n`, infer physical
-arity from IR, or claim broad semantic receivers. The next consolidation
-boundary generalizes MethodSpec carrier authority where justified, admits the
-still-missing method-generic plus split-nullable declaration composition, and
+arity from IR, or claim broad semantic receivers. Producer and consumer now
+also compose this binder with one strict owner input and a split-nullable owner
+result, including producer records, separate Kotlin assemblies, objective PE,
+and ordinary natural-only C# implementations. The next consolidation boundary
 materializes split-nullable payload/flag results across local/control-flow
-boundaries. Remaining parameter-entry compositions, then null/bottom/unknown
-control-flow arms and explicit representation-changing conversions follow.
-Fields, captures, foreign/fixed/nested carriers, stars/projections, and split-
-nullable local placement stay outside these consumers rather than acquiring
-local exceptions.
+boundaries, then closes remaining parameter-entry forms. Concrete,
+constrained, nullable, nested, foreign, and multiple MethodSpec carriers,
+null/bottom/unknown joins, and explicit representation-changing conversions
+remain later structural proofs rather than local exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the
@@ -196,9 +199,11 @@ independent `H` semantic-role/result-layout fields introduced in ABI 65 and
 adds producer-recorded sealed-delegate variance authority; local BOUND,
 producer-final `N`, direct consumers, semantic capability dispatch, and
 ordinary natural-only C# implementations consume the same MethodDef authority.
-The final local operation consumer now also proves this exact composition from
-constructed receiver and argument value facts and removes a weaker legacy
-semantic fallback only when logical semantic-result policy permits it.
+The same contract now independently carries an unconstrained MethodDef binder
+and direct `!!R` input. The final local operation consumer proves the exact
+composition from constructed receiver, argument, and MethodSpec facts and
+removes a weaker legacy semantic fallback only when logical semantic-result
+policy permits it.
 The admitted grammar is deliberately limited to a single-member root interface
 with one invariant input and one distinct covariant nullable output. Existing
 result-only split-nullable families remain green and Runtime `Map` retains its

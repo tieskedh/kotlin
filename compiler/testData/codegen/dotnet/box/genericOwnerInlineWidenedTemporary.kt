@@ -19,6 +19,10 @@ interface InlineMethodProducer<out T> {
     fun <R> produce(marker: R): T
 }
 
+interface InlineMethodLookup<K, out V> {
+    fun <R> lookup(key: K, marker: R): V?
+}
+
 private class InlineLookupRoute<T> {
     fun routeExactArgument(source: InlineLookup<T, T>, key: T): T? {
         val sourceNaturalAlias: InlineLookup<T, T> = source
@@ -83,6 +87,56 @@ private class InlineStringMethodProducer(private val value: String) : InlineMeth
     override fun <R> produce(marker: R): String {
         if (marker != value) error("unexpected String MethodSpec marker")
         return value
+    }
+}
+
+private class InlineMethodLookupRoute<T> {
+    fun routeExactMethodLookup(
+        source: InlineMethodLookup<T, T>,
+        key: T,
+        marker: T,
+    ): T? {
+        val sourceNaturalAlias: InlineMethodLookup<T, T> = source
+        val exactKeyAlias: T = key
+        val exactMarkerAlias: T = marker
+        return sourceNaturalAlias.lookup<T>(exactKeyAlias, exactMarkerAlias)
+    }
+
+    fun routeWidenedMethodLookup(
+        source: InlineMethodLookup<T, T>,
+        key: T,
+        marker: T,
+    ): Any? {
+        val sourceNaturalAlias: InlineMethodLookup<T, T> = source
+        val sourceWideAlias: InlineMethodLookup<T, Any?> = sourceNaturalAlias
+        val exactKeyAlias: T = key
+        val exactMarkerAlias: T = marker
+        return sourceWideAlias.lookup<T>(exactKeyAlias, exactMarkerAlias)
+    }
+
+    fun <R> routeCallerMethodLookup(
+        source: InlineMethodLookup<T, T>,
+        key: T,
+        marker: R,
+    ): T? {
+        val sourceNaturalAlias: InlineMethodLookup<T, T> = source
+        val exactKeyAlias: T = key
+        val callerMarkerAlias: R = marker
+        return sourceNaturalAlias.lookup<R>(exactKeyAlias, callerMarkerAlias)
+    }
+}
+
+private class InlineIntMethodLookup : InlineMethodLookup<Int, Int> {
+    override fun <R> lookup(key: Int, marker: R): Int? {
+        if (marker != key) error("unexpected Int split MethodSpec marker")
+        return key.takeUnless { it < 0 }
+    }
+}
+
+private class InlineStringMethodLookup : InlineMethodLookup<String, String> {
+    override fun <R> lookup(key: String, marker: R): String? {
+        if (marker != key) error("unexpected String split MethodSpec marker")
+        return key.takeUnless { it.isEmpty() }
     }
 }
 
@@ -202,6 +256,43 @@ fun box(): String {
             InlineIntMethodProducer(48), 48
         ) != 48) {
         return "caller MethodDef MethodSpec route"
+    }
+
+    val intMethodLookupRoute = InlineMethodLookupRoute<Int>()
+    if (intMethodLookupRoute.routeExactMethodLookup(InlineIntMethodLookup(), 49, 49) != 49) {
+        return "value split MethodSpec route"
+    }
+    if (intMethodLookupRoute.routeExactMethodLookup(InlineIntMethodLookup(), -1, -1) != null) {
+        return "value null split MethodSpec route"
+    }
+    val stringMethodLookupRoute = InlineMethodLookupRoute<String>()
+    if (stringMethodLookupRoute.routeExactMethodLookup(
+            InlineStringMethodLookup(), "split method", "split method"
+        ) != "split method") {
+        return "reference split MethodSpec route"
+    }
+    if (stringMethodLookupRoute.routeExactMethodLookup(
+            InlineStringMethodLookup(), "", ""
+        ) != null) {
+        return "reference null split MethodSpec route"
+    }
+    if (intMethodLookupRoute.routeWidenedMethodLookup(
+            InlineIntMethodLookup(), 50, 50
+        ) != 50) {
+        return "value widened split MethodSpec route"
+    }
+    if (intMethodLookupRoute.routeWidenedMethodLookup(
+            InlineIntMethodLookup(), -1, -1
+        ) != null) {
+        return "value null widened split MethodSpec route"
+    }
+    if (stringMethodLookupRoute.routeWidenedMethodLookup(
+            InlineStringMethodLookup(), "wide split", "wide split"
+        ) != "wide split") {
+        return "reference widened split MethodSpec route"
+    }
+    if (intMethodLookupRoute.routeCallerMethodLookup(InlineIntMethodLookup(), 51, 51) != 51) {
+        return "caller MethodDef split MethodSpec route"
     }
 
     val ints = InlineSelfView(42)

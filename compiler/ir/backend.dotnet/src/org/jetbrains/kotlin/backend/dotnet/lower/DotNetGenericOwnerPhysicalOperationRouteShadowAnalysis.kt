@@ -386,29 +386,20 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
         }
 
-        // Broad/open semantic selection is still intentionally bounded to the original one-
-        // parameter covariant grammar. Exact natural selection above is arity-independent and
-        // derives its whole construction from declaration authority plus current-owner binders.
-        val interfaceParameter = logicalInterface.typeParameters.singleOrNull()
-            ?: return LogicalReceiverSelectionResult.Unsupported
-        if (simple.arguments.size != 1 || owner.typeParameters.size != 1 ||
-            owner.typeParameters.single().superTypes.any { bound ->
-                !bound.isAny() && !bound.isNullableAny()
+        // A semantic view may widen only those individual arguments whose declaration-site
+        // variance permits it. Other arguments must remain direct current-owner parameters. This
+        // classifies the logical view; it never proves or fabricates a natural CLR construction.
+        if (simple.arguments.size != logicalInterface.typeParameters.size ||
+            owner.typeParameters.isEmpty() || owner.typeParameters.any { parameter ->
+                parameter.superTypes.any { bound ->
+                    !bound.isAny() && !bound.isNullableAny()
+                }
             }
         ) return LogicalReceiverSelectionResult.Unsupported
-        val projection = simple.arguments.single() as? IrTypeProjection
-            ?: return LogicalReceiverSelectionResult.Unsupported
-        if (projection.variance != Variance.INVARIANT) {
-            return LogicalReceiverSelectionResult.Unsupported
-        }
-        val argument = projection.type
 
         fun semanticSelection(
             selector: DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot,
         ): LogicalReceiverSelectionResult {
-            if (interfaceParameter.variance != Variance.OUT_VARIANCE) {
-                return LogicalReceiverSelectionResult.Unsupported
-            }
             val semantic = semanticMethod?.let(declarations::methodDescriptionOrNull)
                 ?: return LogicalReceiverSelectionResult.Unavailable(selector)
             return when (val required = declarations.constructTypeOrError(
@@ -429,20 +420,44 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             }
         }
 
-        if (argument.isNullableAny()) {
+        var hasBroadUniversalArgument = false
+        var hasOpenNullableArgument = false
+        simple.arguments.forEachIndexed { index, typeArgument ->
+            val projection = typeArgument as? IrTypeProjection
+                ?: return LogicalReceiverSelectionResult.Unsupported
+            if (projection.variance != Variance.INVARIANT) {
+                return LogicalReceiverSelectionResult.Unsupported
+            }
+            val interfaceParameter = logicalInterface.typeParameters[index]
+            val argument = projection.type
+            if (argument.isNullableAny()) {
+                if (interfaceParameter.variance != Variance.OUT_VARIANCE) {
+                    return LogicalReceiverSelectionResult.Unsupported
+                }
+                hasBroadUniversalArgument = true
+                return@forEachIndexed
+            }
+            val argumentType = argument as? IrSimpleType
+                ?: return LogicalReceiverSelectionResult.Unsupported
+            val parameter = argumentType.classifier as? IrTypeParameterSymbol
+                ?: return LogicalReceiverSelectionResult.Unsupported
+            val isOwnerParameter = owner.typeParameters.any { candidate ->
+                candidate.symbol == parameter
+            }
+            if (!isOwnerParameter) return LogicalReceiverSelectionResult.Unsupported
+            if (argumentType.isMarkedNullable()) {
+                if (interfaceParameter.variance != Variance.OUT_VARIANCE) {
+                    return LogicalReceiverSelectionResult.Unsupported
+                }
+                hasOpenNullableArgument = true
+            }
+        }
+        if (hasBroadUniversalArgument) {
             return semanticSelection(
                 DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
             )
         }
-        val parameter = (argument as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
-            ?: return LogicalReceiverSelectionResult.Unsupported
-        // Type-use nullability and annotations may make a type-parameter use unequal to the
-        // owner's freshly materialized defaultType even though both carry the same authoritative
-        // symbol. The classifier identity is the declaration fact; do not lose T? routing by
-        // rediscovering it through IrType object equality.
-        val isOwnerParameter = owner.typeParameters.any { candidate -> candidate.symbol == parameter }
-        if (!isOwnerParameter) return LogicalReceiverSelectionResult.Unsupported
-        if (argument.isMarkedNullable()) {
+        if (hasOpenNullableArgument) {
             return semanticSelection(
                 DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.OPEN_NULLABLE,
             )
