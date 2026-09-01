@@ -1929,14 +1929,16 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     comparison.continuity == DotNetGenericOwnerPhysicalValuePlacementContinuity.STABLE &&
                     comparison.actualPhysicalMethodOwnerName?.endsWith("ShadowOwner") == true &&
                     comparison.actualSelectionKind ==
-                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE &&
-                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.DIFFERENT &&
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH &&
                     comparison.actualStorageCarrier.let { carrier ->
-                        carrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
-                                carrier.localOwnerName?.endsWith("ShadowOwner") == true
+                        carrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                                carrier.localOwnerName?.endsWith("ShadowOwner") == true &&
+                                carrier.ownerParameterIndices == listOf(0) &&
+                                carrier.parameterBinderOwnerName?.endsWith("ShadowOwner") == true
                     }
         } == true) {
-            "The explicit source alias must expose one stable exact-to-semantic contrast: " +
+            "The explicit source alias must retain its stable exact receiver construction: " +
                     "source=$sourceAlias, all=$comparisons"
         }
     }
