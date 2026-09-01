@@ -26883,6 +26883,11 @@ private class DotNetEnvironmentConfigurator(
                 configuration::addDotNetClasspathRoot,
             )
         }
+        if (DotNetCodegenDirectives.DOTNET_FOREIGN_DEEP_MEMBERLESS_INTERFACE in module.directives) {
+            getOrCreateForeignDeepMemberlessInterfaces().forEach(
+                configuration::addDotNetClasspathRoot,
+            )
+        }
         configuration.dotNetFriendPaths = module.friendDependencies
             .filter { dependency -> dependency.kind == DependencyKind.Binary }
             .map { dependency ->
@@ -26990,6 +26995,25 @@ private class DotNetEnvironmentConfigurator(
             ),
         )
 
+    private fun getOrCreateForeignDeepMemberlessInterfaces(): List<File> =
+        listOf(
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-deep-memberless-interface",
+                assemblyName = "Foreign.Deep.Parent",
+                sourceText = FOREIGN_DEEP_PARENT_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-deep-memberless-interface",
+                assemblyName = "Foreign.Deep.Middle",
+                sourceText = FOREIGN_DEEP_MIDDLE_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-deep-memberless-interface",
+                assemblyName = "Foreign.Deep.Child",
+                sourceText = FOREIGN_DEEP_CHILD_IL,
+            ),
+        )
+
     private fun getOrCreateResourceFreeForeignAssembly(
         directoryName: String,
         assemblyName: String,
@@ -27081,6 +27105,9 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     )
     val DOTNET_FOREIGN_MULTIPLE_OWNER_VIEW_INTERFACE by directive(
         "Add CLR assemblies whose memberless child retains two constructions of one interface"
+    )
+    val DOTNET_FOREIGN_DEEP_MEMBERLESS_INTERFACE by directive(
+        "Add three CLR assemblies with one exact memberless generic interface hop"
     )
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
@@ -27220,6 +27247,61 @@ private val FOREIGN_MULTIPLE_OWNER_VIEW_CHILD_IL = """
       .class interface public abstract auto ansi 'DualSource'
              implements class [Foreign.Dual.Parent]'Foreign.Dual.Source`1'<int32>,
                         class [Foreign.Dual.Parent]'Foreign.Dual.Source`1'<bool>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_DEEP_PARENT_IL = """
+    .assembly extern mscorlib {}
+    .assembly 'Foreign.Deep.Parent' {}
+    .module 'Foreign.Deep.Parent.dll'
+
+    .namespace Foreign.Deep
+    {
+      .class interface public abstract auto ansi 'Source`1'<+ T>
+      {
+        .method public hidebysig newslot abstract virtual instance !T 'Read'() cil managed
+        {
+        }
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_DEEP_MIDDLE_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Deep.Parent'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Deep.Middle' {}
+    .module 'Foreign.Deep.Middle.dll'
+
+    .namespace Foreign.Deep
+    {
+      // ForwardingSource owns no members. Its own exact binder must be substituted
+      // through the retained parent InterfaceImpl rather than reconstructed logically.
+      .class interface public abstract auto ansi 'ForwardingSource`1'<+ T>
+             implements class [Foreign.Deep.Parent]'Foreign.Deep.Source`1'<!T>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_DEEP_CHILD_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Deep.Middle'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Deep.Child' {}
+    .module 'Foreign.Deep.Child.dll'
+
+    .namespace Foreign.Deep
+    {
+      // IntSource closes the intermediate binder in a third assembly.
+      .class interface public abstract auto ansi 'IntSource'
+             implements class [Foreign.Deep.Middle]'Foreign.Deep.ForwardingSource`1'<int32>
       {
       }
     }

@@ -823,6 +823,20 @@ binder on its own TypeDef and retains the entire direct edge set as an unordered
 physical set; ordinary physical-closure substitution derives `Base<int>` from
 `Child<int>`.
 
+One further bounded form admits a receiver whose sole exact edge does not yet
+reach the selected MethodDef owner. That edge may target one public top-level
+abstract intermediate interface with zero or one unconstrained type parameter,
+no fields, MethodDefs, Properties, base class, or MethodImpl, and exactly one
+retained/raw `InterfaceImpl` which reaches the MethodDef owner. The
+intermediate's ordered GenericParam row and exact variance belong to its own
+binder; neither the leaf binder nor a logical Kotlin substitution may stand in
+for them. Its owner edge uses the same declaration-independent carrier grammar.
+Receiver, intermediate, and owner may reside in three separately selected
+assemblies. The shared physical-interface closure performs both substitutions,
+deriving `Source<int>` from
+`IntSource -> ForwardingSource<int> -> Source<!0>`, while invocation retains the
+original `Source<T>.Read` MethodDef.
+
 When two distinct owner constructions remain in that closure, declaration
 authority proves both views but selects neither operation view. A receiver with
 no selected lineage therefore produces `Unavailable`. Existing lineage may
@@ -833,8 +847,8 @@ implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
 No logical type or InterfaceImpl row order participates. Additional binders,
-more than two direct edges, a dual-owner plus auxiliary combination, generic or
-deeper auxiliary interfaces, constraints, variance conversions, classes,
+more than two leaf edges, a dual-owner plus auxiliary combination, deeper or
+branching intermediate graphs, constraints, variance conversions, classes,
 MethodImpls, unsupported carrier leaves, and hierarchy disagreement remain
 unavailable or conflicting according to the ordinary validity boundary.
 
