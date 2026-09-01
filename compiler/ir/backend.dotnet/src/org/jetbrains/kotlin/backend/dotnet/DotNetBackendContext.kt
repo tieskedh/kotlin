@@ -249,14 +249,19 @@ internal class DotNetBackendContext(
         java.util.IdentityHashMap()
     /** Distinguishes a completed rehearsal shadow from an unavailable run or production epoch. */
     var genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted: Boolean = false
-    /** Read-only physical-value shadow evidence; no lowering or emitter may consume it. */
+    /** IR-free physical-value diagnostics; no lowering or emitter may consume these snapshots. */
     val genericOwnerPhysicalValueShadows: MutableList<DotNetGenericOwnerPhysicalValueShadowSnapshot> =
         mutableListOf()
-    /** IR-bound correlation for the read-only shadow; never an emitter or routing input. */
+    /** IR-bound value facts; only the explicit final local-placement adapter may consume them. */
     val genericOwnerPhysicalValueShadowRecords:
         MutableList<DotNetGenericOwnerPhysicalValueShadowRecord> = mutableListOf()
     /** Distinguishes a successfully completed final shadow from pre-remap capture or no run. */
     var genericOwnerPhysicalValueShadowFinalAnalysisCompleted: Boolean = false
+    /** Bounded final-IR permission to retain one initializer's already-produced local carrier. */
+    var genericOwnerPhysicalValueLocalPlacementAuthority:
+            DotNetGenericOwnerPhysicalBindingResult<
+                    DotNetGenericOwnerPhysicalValueLocalPlacementAuthority,
+                    > = DotNetGenericOwnerPhysicalBindingResult.Unavailable
     /** Read-only comparison between BOUND callable authority and the existing final router. */
     val genericOwnerPhysicalOperationRouteShadows:
         MutableList<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = mutableListOf()

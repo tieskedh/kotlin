@@ -196,6 +196,8 @@ internal class DotNetIlEmitter(
     private val genericOwnerRehearsal: Boolean = false,
     private val genericOwnerArchitecturePlans: Map<IrClass, DotNetGenericOwnerArchitecturePlan> = emptyMap(),
     private val localGenericOwnerPhysicalAuthority: DotNetLocalGenericOwnerPhysicalAuthority? = null,
+    private val genericOwnerPhysicalValueLocalPlacementAuthority:
+            DotNetGenericOwnerPhysicalValueLocalPlacementAuthority? = null,
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val publishedGenericInterfaceFamilies:
             Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
@@ -1491,6 +1493,8 @@ internal class DotNetIlEmitter(
                             else -> null
                         },
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                        genericOwnerPhysicalValueLocalPlacementAuthority =
+                            genericOwnerPhysicalValueLocalPlacementAuthority,
                         capturePhysicalLocalPlacements = genericOwnerRehearsal,
                         capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                     ).render()
@@ -1544,6 +1548,8 @@ internal class DotNetIlEmitter(
                             typeMapper = typeMapper,
                             facadeClassInfoByFile = facadeClassInfoByFile,
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                            genericOwnerPhysicalValueLocalPlacementAuthority =
+                                genericOwnerPhysicalValueLocalPlacementAuthority,
                             capturePhysicalLocalPlacements = genericOwnerRehearsal,
                             capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                         ).render()
@@ -4090,6 +4096,8 @@ internal class DotNetIlEmitter(
                     genericOwnerDirectForeignOverrideDispatch =
                         genericOwnerDirectForeignOverrideDispatches[member],
                     genericOwnerForeignOverrideProbeTarget = genericOwnerForeignOverrideProbeTargets[member],
+                    genericOwnerPhysicalValueLocalPlacementAuthority =
+                        genericOwnerPhysicalValueLocalPlacementAuthority,
                     capturePhysicalLocalPlacements = genericOwnerRehearsal,
                     capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                 ).render()
@@ -4114,6 +4122,8 @@ internal class DotNetIlEmitter(
                         typeMapper = physicalTypeMapper,
                         facadeClassInfoByFile = facadeClassInfoByFile,
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                        genericOwnerPhysicalValueLocalPlacementAuthority =
+                            genericOwnerPhysicalValueLocalPlacementAuthority,
                         capturePhysicalLocalPlacements = genericOwnerRehearsal,
                         capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                     ).render()
@@ -4218,6 +4228,8 @@ internal class DotNetIlEmitter(
                             typeMapper = physicalTypeMapper,
                             facadeClassInfoByFile = facadeClassInfoByFile,
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
+                            genericOwnerPhysicalValueLocalPlacementAuthority =
+                                genericOwnerPhysicalValueLocalPlacementAuthority,
                             capturePhysicalLocalPlacements = genericOwnerRehearsal,
                             capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                         ).render()
@@ -4439,6 +4451,8 @@ internal class DotNetIlEmitter(
                 intrinsicMethods = intrinsicMethods,
                 typeMapper = signatureTypeMapper,
                 facadeClassInfoByFile = facadeClassInfoByFile,
+                genericOwnerPhysicalValueLocalPlacementAuthority =
+                    genericOwnerPhysicalValueLocalPlacementAuthority,
                 capturePhysicalLocalPlacements = genericOwnerRehearsal,
                 capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
             ).render()

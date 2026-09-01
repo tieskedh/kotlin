@@ -629,6 +629,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 contentsNullState = DotNetGenericOwnerPhysicalValueShadowNullState.UNKNOWN,
                 unsupportedReason = reason,
             ),
+            predictedProducedValue = null,
             predictedStorage = null,
         )
 
@@ -718,6 +719,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     contentsNullState = storage.contentsNullState.toSnapshot(),
                     unsupportedReason = null,
                 ),
+                predictedProducedValue = initializer,
                 predictedStorage = storage,
             )
         }

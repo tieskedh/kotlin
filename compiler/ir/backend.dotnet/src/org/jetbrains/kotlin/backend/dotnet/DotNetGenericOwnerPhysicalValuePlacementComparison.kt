@@ -21,8 +21,15 @@ internal data class DotNetGenericOwnerPhysicalValueShadowRecord(
     val physicalFunction: IrSimpleFunctionSymbol,
     val variable: IrValueSymbol,
     val snapshot: DotNetGenericOwnerPhysicalValueShadowSnapshot,
+    val predictedProducedValue: DotNetGenericOwnerProducedValueFact?,
     val predictedStorage: DotNetGenericOwnerPhysicalStorageFact?,
-)
+) {
+    init {
+        require((predictedProducedValue == null) == (predictedStorage == null)) {
+            "a physical-value record must retain both analyzed value facts or neither"
+        }
+    }
+}
 
 /** Neutral structural form of one emitter-selected local carrier in the current compilation. */
 internal sealed interface DotNetGenericOwnerObservedLocalCarrier {
@@ -200,7 +207,8 @@ private fun comparePlacement(
 
 private fun DotNetGenericOwnerPhysicalValueShadowRecord.sameValueFactAs(
     other: DotNetGenericOwnerPhysicalValueShadowRecord,
-): Boolean = predictedStorage == other.predictedStorage && snapshot.let { left ->
+): Boolean = predictedProducedValue == other.predictedProducedValue &&
+        predictedStorage == other.predictedStorage && snapshot.let { left ->
     other.snapshot.let { right ->
         left.status == right.status &&
                 left.initializerProducedCarrier == right.initializerProducedCarrier &&

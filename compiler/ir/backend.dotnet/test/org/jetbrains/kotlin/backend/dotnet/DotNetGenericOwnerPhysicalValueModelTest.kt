@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
+import org.jetbrains.kotlin.ir.symbols.impl.IrVariableSymbolImpl
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
@@ -2899,6 +2900,115 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             broad.placeInStorageOrNull(
                 DotNetGenericOwnerStorageCarrier.Fixed(referenceCarrier(source(int32Type()))),
                 ::canStoreIdentityPreserving,
+            ),
+        )
+    }
+
+    @Test
+    fun `local placement authority admits only an equal local owner-bound carrier`() {
+        val owner = testOwner("PlacementOwner")
+        val function = IrFactoryImpl.buildFun {
+            name = Name.identifier("place")
+            returnType = owner.typeParameters.single().defaultType
+        }.also { declaration ->
+            declaration.parent = owner
+            owner.declarations += declaration
+        }
+        val ownerIdentity = localOwnerIdentity(owner.symbol as IrClassSymbolImpl)
+        val interfaceIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            IrClassSymbolImpl(),
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val localDeclarations = boundDeclarationIndex(
+            listOf(
+                typeDescription(
+                    ownerIdentity,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                ),
+                typeDescription(
+                    interfaceIdentity,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                ),
+            ),
+            emptyList(),
+        )
+        val construction = boundConstruction(
+            localDeclarations,
+            interfaceIdentity,
+            listOf(boundTypeParameter(localDeclarations, ownerIdentity, 0)),
+        )
+        val localCarrier = boundCarrier(localDeclarations, construction)
+        val localProduced = directValue(localCarrier, knownProvenance(view(construction)))
+        val localStorage = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerStorageCarrier.Fixed(localCarrier),
+            localProduced.provenance,
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+
+        fun record(
+            variable: IrVariableSymbolImpl,
+            produced: DotNetGenericOwnerProducedValueFact,
+            storage: DotNetGenericOwnerPhysicalStorageFact,
+        ) = DotNetGenericOwnerPhysicalValueShadowRecord(
+            function.symbol,
+            variable,
+            DotNetGenericOwnerPhysicalValueShadowSnapshot(
+                ownerName = "PlacementOwner",
+                sourceFunctionName = "place",
+                physicalFunctionName = "place",
+                functionRole = DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER,
+                phase = DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING,
+                variableName = "value",
+                status = DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED,
+                initializerProducedCarrier = DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
+                ),
+                storageCarrier = DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
+                ),
+                guaranteeState = DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN,
+                guaranteedViews = emptyList(),
+                selectedViewLineage = emptyList(),
+                initializerNullState = DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL,
+                contentsNullState = DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL,
+                unsupportedReason = null,
+            ),
+            produced,
+            storage,
+        )
+
+        val localVariable = IrVariableSymbolImpl()
+        val foreignVariable = IrVariableSymbolImpl()
+        val foreignCarrier = referenceCarrier(source(int32Type()))
+        val foreignProduced = directValue(foreignCarrier)
+        val foreignStorage = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerStorageCarrier.Fixed(foreignCarrier),
+            foreignProduced.provenance,
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+        val authority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetGenericOwnerPhysicalValueLocalPlacementAuthority,
+                        >,
+                >(
+            DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
+                listOf(
+                    record(localVariable, localProduced, localStorage),
+                    record(foreignVariable, foreignProduced, foreignStorage),
+                ),
+            ),
+        ).value
+
+        assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, localVariable))
+        assertNull(authority.retainedProducedCarrierOrNull(function.symbol, foreignVariable))
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
+                listOf(
+                    record(localVariable, localProduced, localStorage),
+                    record(localVariable, localProduced, localStorage),
+                ),
             ),
         )
     }

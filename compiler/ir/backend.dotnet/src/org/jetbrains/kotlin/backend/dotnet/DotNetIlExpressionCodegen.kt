@@ -104,6 +104,7 @@ internal class DotNetIlExpressionCodegen(
     private val currentOwner: DotNetIlClassInfo,
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val retainsProducedLocalCarrier: (IrVariable) -> Boolean = { false },
 ) {
     internal val coreLibraryProfile: DotNetCoreLibraryProfile
         get() = typeMapper.coreLibrary
@@ -292,7 +293,9 @@ internal class DotNetIlExpressionCodegen(
             val slotType = methodContext.reference(expression.symbol).type
             val variable = expression.symbol.owner as? IrVariable
             val logicalGenericOwner = naturalConstructedGenericCarrierTypeOrNull(expression.type)
-            if (variable?.isDotNetImmutableCompilerCarrierAlias() == true &&
+            if (variable != null &&
+                (retainsProducedLocalCarrier(variable) ||
+                        variable.isDotNetImmutableCompilerCarrierAlias()) &&
                 logicalGenericOwner != null && slotType != logicalGenericOwner &&
                 slotType != DotNetIlValueType.Object && slotType.isDotNetReferenceShaped() &&
                 !typeMapper.isGenericOwnerCapabilityViewOf(slotType, logicalGenericOwner)
@@ -399,14 +402,13 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Retains the exact natural carrier behind one compiler-generated immutable generic-owner
-     * alias. Kotlin inference can instantiate a covariant inline receiver at `Any?` even when
-     * the supplied value is an exact `I<T>` or generic class construction. The logical widened
-     * view remains authoritative inside the inline body, but materializing `I<object>` would be
-     * false for value/open `T`; the temporary can instead keep the producer's already-proven CLR
-     * carrier. Semantic/object producers remain on their selected capability route.
+     * Reports the exact natural carrier already produced before a logical generic-owner widening.
+     *
+     * This is a live emitter observation, not storage authority: callers must independently prove
+     * that the destination selected this same carrier. Semantic/object producers and values which
+     * already fit the logical construction deliberately return null.
      */
-    fun exactGenericOwnerTemporaryCarrierTypeOrNull(
+    fun exactGenericOwnerProducedCarrierTypeOrNull(
         expression: IrExpression,
         logicalType: IrType,
     ): DotNetIlValueType? {

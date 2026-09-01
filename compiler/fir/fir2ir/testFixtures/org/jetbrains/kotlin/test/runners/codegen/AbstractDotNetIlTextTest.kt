@@ -2048,16 +2048,16 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                                     view.carrier.ownerParameterIndices != listOf(0)
                         } &&
                         comparison.continuity !=
-                        DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                                DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
                         comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
                         comparison.actualSelectionKind ==
-                        DotNetGenericOwnerPhysicalValueLocalSelectionKind.DECLARED_TYPE &&
-                        comparison.actualStorageCarrier.kind ==
-                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                        DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                            .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                        comparison.actualStorageCarrier == producedSelf &&
                         comparison.relation ==
-                        DotNetGenericOwnerPhysicalValuePlacementRelation.DIFFERENT
+                        DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
             } == true) {
-                "A logically broad alias selected or fabricated a natural CLR construction: " +
+                "A logically broad alias did not retain only its proven produced carrier: " +
                         "probe=$probe, alias=$hostileAlias, all=$comparisons"
             }
         }
@@ -2102,7 +2102,8 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             comparison.continuity != DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
                     comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSelfView") == true &&
                     comparison.actualSelectionKind ==
-                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.EXACT_GENERIC_OWNER_OVERRIDE &&
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
                     comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH &&
                     comparison.actualStorageCarrier == comparison.prediction.storageCarrier
         }) {
@@ -2111,6 +2112,32 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         }
         check(observed.size == compilerAliases.size) {
             "The compiler-alias probe contains an unexplained final local: $observed"
+        }
+
+        listOf(
+            "starAliasMatches" to "sourceStarAlias",
+            "mutableAliasTracks" to "sourceMutableAlias",
+        ).forEach { probe ->
+            val hostile = comparisons.singleOrNull { comparison ->
+                comparison.prediction.ownerName.endsWith("InlineSelfView") &&
+                        comparison.prediction.sourceFunctionName == probe.first &&
+                        comparison.prediction.functionRole ==
+                        DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                        comparison.prediction.variableName == probe.second
+            }
+            check(hostile?.let { comparison ->
+                comparison.prediction.status ==
+                        DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
+                        !comparison.prediction.unsupportedReason.isNullOrEmpty() &&
+                        comparison.actualSelectionKind !=
+                        DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                            .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                        comparison.relation ==
+                        DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
+            } == true) {
+                "A projected, mutable, or joined source value acquired exact placement " +
+                        "authority: probe=$probe, comparison=$hostile, all=$comparisons"
+            }
         }
     }
 }

@@ -744,6 +744,8 @@ internal class DotNetIlMethodCodegen(
     private val genericOwnerDirectForeignOverrideDispatch:
         DotNetGenericOwnerDirectForeignOverrideDispatch? = null,
     private val genericOwnerForeignOverrideProbeTarget: IrSimpleFunction? = null,
+    private val genericOwnerPhysicalValueLocalPlacementAuthority:
+            DotNetGenericOwnerPhysicalValueLocalPlacementAuthority? = null,
     private val capturePhysicalLocalPlacements: Boolean = false,
     private val capturePhysicalMethodDefHeaders: Boolean = false,
 ) {
@@ -819,6 +821,10 @@ internal class DotNetIlMethodCodegen(
                 }
             },
             genericOwnerCapabilitySlots,
+            retainsProducedLocalCarrier = { variable ->
+                genericOwnerPhysicalValueLocalPlacementAuthority
+                    ?.retainedProducedCarrierOrNull(function.symbol, variable.symbol) != null
+            },
         )
 
     /**
@@ -1837,16 +1843,42 @@ internal class DotNetIlMethodCodegen(
 
     private fun emitVariable(variable: IrVariable) {
         val initializer = variable.initializer
-        val exactArrayStorage = if (initializer == null) null else variable.exactCompilerTemporaryArrayStorageOrNull()
+        val retainedProducedStorage = if (initializer == null) {
+            null
+        } else {
+            genericOwnerPhysicalValueLocalPlacementAuthority
+                ?.retainedProducedCarrierOrNull(function.symbol, variable.symbol)
+                ?.let { selection ->
+                    selection.bindEmitterCarrierOrNull(
+                        typeMapper,
+                        functionInfo.owner,
+                        expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(
+                            initializer,
+                            variable.type,
+                        ) ?: expressionCodegen.mappedNaturalType(initializer),
+                    ) ?: dotNetUnsupported(
+                        "final physical-value authority for local '${variable.name.asString()}' " +
+                                "does not match its live initializer carrier",
+                    )
+                }
+        }
+        val exactArrayStorage = if (
+            retainedProducedStorage == null && initializer != null
+        ) {
+            variable.exactCompilerTemporaryArrayStorageOrNull()
+        } else {
+            null
+        }
         val exactGenericOwnerStorage = if (
-            exactArrayStorage == null && initializer != null
+            retainedProducedStorage == null && exactArrayStorage == null && initializer != null
         ) {
             variable.exactCompilerTemporaryGenericOwnerStorageOrNull()
         } else {
             null
         }
         val localOpenNullableArrayStorage = if (
-            exactArrayStorage == null && exactGenericOwnerStorage == null &&
+            retainedProducedStorage == null && exactArrayStorage == null &&
+            exactGenericOwnerStorage == null &&
             initializer != null && !variable.isVar &&
             initializer is IrWhen && variable.type.isDotNetInvariantOpenNullableGenericArray()
         ) {
@@ -1858,7 +1890,8 @@ internal class DotNetIlMethodCodegen(
             null
         }
         val nestedConstructionStorage = if (
-            exactArrayStorage == null && exactGenericOwnerStorage == null &&
+            retainedProducedStorage == null && exactArrayStorage == null &&
+            exactGenericOwnerStorage == null &&
             localOpenNullableArrayStorage == null &&
             initializer != null && !variable.isVar
         ) {
@@ -1871,11 +1904,13 @@ internal class DotNetIlMethodCodegen(
         }
         val slot = methodContext.declareLocal(
             variable,
-            exactArrayStorage ?: exactGenericOwnerStorage ?:
+            retainedProducedStorage ?: exactArrayStorage ?: exactGenericOwnerStorage ?:
                 localOpenNullableArrayStorage ?: nestedConstructionStorage,
         )
         localPlacementObservations?.let { observations ->
             val selectionKind = when {
+                retainedProducedStorage != null ->
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind.PHYSICAL_VALUE_RETAINED_PRODUCER
                 exactArrayStorage != null ->
                     DotNetGenericOwnerPhysicalValueLocalSelectionKind.EXACT_ARRAY_OVERRIDE
                 exactGenericOwnerStorage != null ->
@@ -1918,7 +1953,7 @@ internal class DotNetIlMethodCodegen(
     private fun IrVariable.exactCompilerTemporaryGenericOwnerStorageOrNull(): DotNetIlValueType? {
         if (!isDotNetImmutableCompilerCarrierAlias()) return null
         val initializer = initializer ?: return null
-        return expressionCodegen.exactGenericOwnerTemporaryCarrierTypeOrNull(initializer, type)
+        return expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(initializer, type)
     }
 
     /**
