@@ -21,6 +21,7 @@ class DotNetClrSignatureTypeAssignabilityResolver(
     private val exactResolver =
         DotNetClrTypeAssignabilityResolver(typeResolver, resolutionLimit)
     private val hierarchyResolver = DotNetClrTypeHierarchyViewResolver(typeResolver)
+    private val delegateTypeClassifier = DotNetClrDelegateTypeClassifier(delegateRuntimeTypes)
     private val resolutionLimit = resolutionLimit.also { limit ->
         require(limit in 1..MAX_RESOLUTION_LIMIT) {
             "CLR signature assignability resolution limit must be in 1..$MAX_RESOLUTION_LIMIT"
@@ -319,24 +320,23 @@ class DotNetClrSignatureTypeAssignabilityResolver(
                         resolution,
                     )
             }
-            if (
-                hierarchy.baseType?.type?.hasSameIdentityAs(
-                    delegateRuntimeTypes.systemMulticastDelegate
-                ) != true
-            ) {
-                return DotNetClrTypeAssignability.InvalidVariance(
-                    actual,
-                    expected,
-                    DotNetClrVarianceFailure
-                        .OWNER_IS_NOT_INTERFACE_OR_DELEGATE,
-                )
-            }
-            if (!actual.type.definition.isSealed) {
-                return DotNetClrTypeAssignability.InvalidVariance(
-                    actual,
-                    expected,
-                    DotNetClrVarianceFailure.DELEGATE_IS_NOT_SEALED,
-                )
+            when (val classification = delegateTypeClassifier.classify(hierarchy)) {
+                DotNetClrDelegateTypeClassification.Delegate -> Unit
+                DotNetClrDelegateTypeClassification.NotDelegate ->
+                    return DotNetClrTypeAssignability.InvalidVariance(
+                        actual,
+                        expected,
+                        DotNetClrVarianceFailure.OWNER_IS_NOT_INTERFACE_OR_DELEGATE,
+                    )
+                is DotNetClrDelegateTypeClassification.Invalid ->
+                    return DotNetClrTypeAssignability.InvalidVariance(
+                        actual,
+                        expected,
+                        when (classification.failure) {
+                            DotNetClrDelegateTypeFailure.DELEGATE_IS_NOT_SEALED ->
+                                DotNetClrVarianceFailure.DELEGATE_IS_NOT_SEALED
+                        },
+                    )
             }
         }
 

@@ -12,8 +12,12 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassifier
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateRuntimeTypes
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateRuntimeTypesResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateRuntimeTypesResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateTypeClassification
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateTypeClassifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateTypeFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
@@ -299,7 +303,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                         identity,
                         type.definition,
                         DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
-                        "retained foreign interface",
+                        allowsVariantParameters = true,
+                        subject = "retained foreign interface",
                     )
                 ) {
                     is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
@@ -626,15 +631,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 is DotNetClrArrayRuntimeTypesResolution.Invalid ->
                     return conflict("selected CLR array runtime metadata is invalid")
             }
-            val delegateRuntimeTypes = when (
-                val resolution = DotNetClrDelegateRuntimeTypesResolver(typeResolver)
-                    .resolve(coreAssembly)
-            ) {
-                is DotNetClrDelegateRuntimeTypesResolution.Resolved -> resolution.types
-                is DotNetClrDelegateRuntimeTypesResolution.Unresolved ->
+            val delegateRuntimeTypes = when (val resolution = resolveDelegateRuntimeTypes()) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> resolution.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return resolution
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                is DotNetClrDelegateRuntimeTypesResolution.Invalid ->
-                    return conflict("selected CLR delegate runtime metadata is invalid")
             }
             return bound(
                 DotNetClrNominalConstraintValidator(
@@ -645,6 +646,22 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     delegateRuntimeTypes,
                 )
             )
+        }
+
+        private fun resolveDelegateRuntimeTypes():
+                DotNetGenericOwnerPhysicalBindingResult<DotNetClrDelegateRuntimeTypes> {
+            val coreAssembly = source.graph.physicalCoreTypes?.systemValueType?.assembly
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            return when (
+                val resolution = DotNetClrDelegateRuntimeTypesResolver(typeResolver)
+                    .resolve(coreAssembly)
+            ) {
+                is DotNetClrDelegateRuntimeTypesResolution.Resolved -> bound(resolution.types)
+                is DotNetClrDelegateRuntimeTypesResolution.Unresolved ->
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                is DotNetClrDelegateRuntimeTypesResolution.Invalid ->
+                    conflict("selected CLR delegate runtime metadata is invalid")
+            }
         }
 
         private fun createSpecialConstraintValidator():
@@ -711,6 +728,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             declaringIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
             declaringType: DotNetClrTypeDefinition,
             category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+            allowsVariantParameters: Boolean,
             subject: String,
         ): DotNetGenericOwnerPhysicalBindingResult<
                 List<DotNetGenericOwnerPhysicalGenericParameterReference>,
@@ -751,11 +769,9 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                         DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
                 }
                 if (category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
-                    variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                    variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT &&
+                    !allowsVariantParameters
                 ) {
-                    // CLR variance is valid on delegates as well as interfaces. Delegate
-                    // classification is outside this ordinary-reference-class slice, so do not
-                    // misclassify a valid delegate row as an invalid class declaration.
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
                 if (category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE &&
@@ -944,11 +960,22 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
             }
+            val allowsVariantParameters = when (val allowance = variantParameterAllowance(
+                context,
+                typeKind.category,
+                retainedHierarchy,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> allowance.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return allowance
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
             val parameters = when (val translation = translateTypeParameters(
                 context,
                 identity,
                 definition,
                 typeKind.category,
+                allowsVariantParameters,
                 "retained auxiliary nominal TypeDef",
             )) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
@@ -969,6 +996,46 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             }
             auxiliaryNominalTypeDefinitions[identity] = description
             return bound(description)
+        }
+
+        private fun variantParameterAllowance(
+            context: DotNetClrResolvedGenericParameterContext,
+            category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+            hierarchy: DotNetClrResolvedTypeHierarchy,
+        ): DotNetGenericOwnerPhysicalBindingResult<Boolean> {
+            if (category == DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE) {
+                return bound(true)
+            }
+            if (category != DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS ||
+                context.typeParameters.none { binding ->
+                    val variance = binding.parameter.attributes and
+                            GENERIC_PARAMETER_VARIANCE_MASK
+                    variance != 0 && variance != GENERIC_PARAMETER_VARIANCE_MASK
+                }
+            ) {
+                return bound(false)
+            }
+            val runtimeTypes = when (val resolution = resolveDelegateRuntimeTypes()) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> resolution.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return resolution
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            return when (
+                val classification = DotNetClrDelegateTypeClassifier(runtimeTypes)
+                    .classify(hierarchy)
+            ) {
+                DotNetClrDelegateTypeClassification.Delegate -> bound(true)
+                DotNetClrDelegateTypeClassification.NotDelegate -> conflict(
+                    "retained variant non-interface TypeDef is not a CLR delegate",
+                )
+                is DotNetClrDelegateTypeClassification.Invalid -> conflict(
+                    when (classification.failure) {
+                        DotNetClrDelegateTypeFailure.DELEGATE_IS_NOT_SEALED ->
+                            "retained CLR delegate TypeDef is not sealed"
+                    }
+                )
+            }
         }
 
         private fun classifyAuxiliaryNominalType(

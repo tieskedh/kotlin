@@ -60,8 +60,8 @@ owning archives and ADR; this current snapshot does not duplicate it.
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority. The current focused evidence compiles the importer
-and test fixture and passes 152 model tests: 76 shared physical-value tests and
-76 retained-metadata tests. Six unconstrained memberless external-DLL pipelines
+and test fixture and passes 155 model tests: 76 shared physical-value tests and
+79 retained-metadata tests. Six unconstrained memberless external-DLL pipelines
 remain green with both FIR parsers. Git owns the intermediate chronology.
 
 ## Production binding state
@@ -120,12 +120,15 @@ public top-level memberless interfaces. Every visited TypeDef has a complete
 ordered vector of up to 1,024 CLR parameters with exact variance, no base
 class or MethodImpl, and a complete retained/raw `InterfaceImpl` edge set.
 Bounded TypeSpec-backed nominal constraints and exact nominal rows to public
-interfaces, ordinary reference classes, and value types are retained. Auxiliary
-generic TypeDefs require a complete supported binder vector, including exact CLR
-reference/value/default-constructor and by-ref-like flags; their recursive
-constructions are depth- and node-bounded. Reference, non-nullable-value, and
-nullable-value carriers use the shared physical classifier. An actual signature
-must agree with the selected TypeDef's class/value marker; only a bare
+interfaces, ordinary reference classes, sealed CLR delegates, and value types
+are retained. Auxiliary generic TypeDefs require a complete supported binder
+vector, including exact CLR reference/value/default-constructor and by-ref-like
+flags; their recursive constructions are depth- and node-bounded. Reference,
+non-nullable-value, and nullable-value carriers use the shared physical
+classifier. Variant non-interface binders are accepted only when the shared
+delegate classifier proves a sealed TypeDef whose immediate selected base is
+the selected `System.MulticastDelegate`. An actual signature must agree with
+the selected TypeDef's class/value marker; only a bare
 TypeDef/TypeRef constraint row may infer that marker because the row has no
 signature-side kind. Non-nullable and `System.Nullable<T>` carriers preserve
 `NON_NULL_ONLY` and `INLINE_NULLABLE_VALUE` respectively. A constrained
@@ -195,11 +198,17 @@ binder vector is supported and unconstrained, including with an exact value-
 type argument. The same exact carrier may close or flow through an inherited
 edge without fabricating the auxiliary TypeDef's edge closure. Ordinary class
 and value carriers are classified through the shared physical type classifier.
+Covariant and contravariant delegate binders are retained only for a sealed
+TypeDef whose immediate selected base has the exact selected
+`System.MulticastDelegate` identity; an `Invoke`-shaped member or name is never
+evidence. Ordinary variant classes and non-sealed delegate TypeDefs conflict,
+while missing selected core or hierarchy authority remains unavailable.
 Exact direct and recursively constructed non-nullable value types retain
 `VALUE_TYPE`/`NON_NULL_ONLY` on Framework 4.8 and .NET 10; a validated
 `System.Nullable<int>` edge retains `VALUE_TYPE`/`INLINE_NULLABLE_VALUE` without
-opening its constrained construction to unrelated callers. Variant
-non-interface TypeDefs remain unavailable until delegates are distinguished.
+opening its constrained construction to unrelated callers. Exact delegate
+constructions are retained; this does not yet authorize delegate variance
+conversions or import the delegate's declared members as operation authority.
 Constrained TypeDefs may now occur recursively inside one exact retained edge,
 but each constrained subtree receives its own shared-validator proof; an outer
 proof alone is insufficient and the general construction helper remains
@@ -207,8 +216,8 @@ closed. Exact `class`, `struct`, `new()`, and `allows ref struct` binder forms
 compose through the same direct and nested grammar. Target-aware propagation
 proves an open by-ref-like-capable binder on .NET 10 and rejects it on Framework
 4.8; no target remains unavailable. Constrained constructions in other metadata
-positions, variant-delegate nominal carriers, variance conversions, classes as
-inherited graph nodes, MethodImpls, properties, and Runtime/Stdlib application
+positions, variance conversions, classes as inherited graph nodes, MethodImpls,
+properties, and Runtime/Stdlib application
 remain later. The fast external-DLL FIR fixture intentionally has no selected
 physical core catalog, so this constrained slice is proven in the metadata
 model with a complete synthetic selected core; an end-to-end constrained FIR
@@ -218,7 +227,7 @@ The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 76 tests. All six unconstrained
+The retained-metadata model gate passes 79 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -235,13 +244,14 @@ errors, or skips.
   top-level memberless interfaces with a bounded ordered binder vector. Only
   bounded TypeSpec-backed nominal constraints, exact direct nominal rows, and
   recursive constructions of public generic interfaces, ordinary reference
-  classes, or value types with complete nominal and special binder authority
-  are admitted. A
+  classes, sealed CLR delegates, or value types with complete nominal and
+  special binder authority are admitted. A
   constrained construction is admitted only as an independently validated
   subtree of one exact retained edge. A target profile is required wherever
   special-constraint or possible by-ref-like validation participates.
-  Constrained constructions in other metadata positions, variant-delegate
-  nominal carriers, variance conversions, classes as graph nodes, MethodImpls,
+  Variant delegate constructions require exact selected delegate-root identity
+  and sealed metadata. Constrained constructions in other metadata positions,
+  reference-only variance conversions, classes as graph nodes, MethodImpls,
   properties, and broader operation routing remain incomplete. Distinct
   constructions are retained, but selecting one still requires independently
   proven lineage.
