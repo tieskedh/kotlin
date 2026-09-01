@@ -45,18 +45,15 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * leaves, exact owner/method parameters, SZ arrays, and recursive uses of the same interface.
  * These restrictions are proof boundaries, not declaration- or member-name policy.
  *
- * The first inherited-receiver extension admits one retained interface with zero or one
- * unconstrained type parameter in the same selected graph. Its exact TypeDef carrier is
- * independent of declared members, so a genuinely memberless child can participate, including
- * when a raw InterfaceImpl reaches the selected MethodDef owner through an exact AssemblyRef. One
- * additional exact edge to a non-generic root interface is admitted and retained as part of the
- * receiver's complete edge set; row order never selects the callable owner. Two distinct exact
- * constructions of the callable owner may coexist and require already-proven selected lineage at
- * the operation boundary. An owner edge may close that owner or forward the receiver parameter
- * through supported carriers. One memberless zero/one-binder intermediate interface may forward
- * that construction through its own exact edge, including across another AssemblyRef. Exact CLR
- * variance is retained at each binder. Multiple binders, deeper or branching intermediate
- * hierarchies, constraints, MethodImpls, and classes remain unavailable.
+ * The inherited-receiver extension authenticates a resource-bounded acyclic graph of retained
+ * memberless interfaces in the same selected graph. Every visited TypeDef, GenericParam binder,
+ * and complete direct InterfaceImpl edge set is re-resolved from raw metadata before it becomes
+ * physical authority. The shared physical-interface closure, rather than this adapter, performs
+ * construction substitution. Row order never selects the callable owner, and two distinct exact
+ * constructions of that owner require already-proven selected lineage at the operation boundary.
+ * Each admitted interface has zero or one unconstrained binder, whose exact CLR variance is
+ * retained. Multiple binders, declared members, constraints, MethodImpls, classes, and carrier
+ * shapes outside the bounded grammar remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -78,7 +75,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             InheritedReceiverBuilder(source, method, receiverSource).build()
     }
 
-    /** Bounded hierarchy slice: one leaf edge set and at most one exact memberless intermediate. */
+    /** Retained/raw-authenticated memberless graph; construction substitution stays in the index. */
     private class InheritedReceiverBuilder(
         private val source: DotNetClrImportedMethodSource,
         private val method: DotNetClrMethodDefinition,
@@ -105,61 +102,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
 
-            val retainedHierarchy = receiverSource.declaringHierarchy
-            val rawHierarchy = when (
-                val resolution = DotNetClrTypeHierarchyViewResolver(typeResolver).resolve(
-                    retainedHierarchy.type,
-                )
-            ) {
-                is DotNetClrTypeHierarchyViewResolution.Resolved -> resolution.hierarchy
-                is DotNetClrTypeHierarchyViewResolution.Invalid ->
-                    return conflict("retained foreign receiver has an invalid raw hierarchy")
-            }
-            if (rawHierarchy != retainedHierarchy) {
-                return conflict("retained foreign receiver hierarchy contradicts raw metadata")
-            }
-            val receiverContext = when (
-                val resolution = genericContextResolver.resolve(retainedHierarchy.type)
-            ) {
-                is DotNetClrGenericParameterContextResolution.Resolved -> resolution.context
-                is DotNetClrGenericParameterContextResolution.Invalid ->
-                    return conflict("retained foreign receiver has an invalid generic-parameter context")
-            }
-            if (receiverContext.method != null ||
-                receiverContext.declaringType != retainedHierarchy.type
-            ) {
-                return conflict("retained foreign receiver generic context changed its declaring TypeDef")
-            }
-            if (!hasSupportedInheritedInterfaceShape(
-                    retainedHierarchy.type.type,
-                    rawHierarchy,
-                    receiverContext,
-                    1..2,
-                )
-            ) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val receiverParameters = when (
-                val translation = translateInterfaceParameters(
-                    receiverContext,
-                    receiverSource.declaringType,
-                    "retained foreign receiver",
-                )
-            ) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-
             val methodOwner = source.declaringHierarchy.type.type
-            val directOwnerEdgeCount = rawHierarchy.interfaces.count { implementation ->
-                implementation.interfaceType.type.hasSameIdentityAs(methodOwner)
-            }
-            val requiresIntermediate = directOwnerEdgeCount == 0
-            if (requiresIntermediate && rawHierarchy.interfaces.size != 1) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
             val receiverIdentity =
                 DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource)
             val parentIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(source)
@@ -169,207 +112,201 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             if (receiverIdentity == parentIdentity) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            val additionalDefinitions = linkedMapOf<
-                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
-                    DotNetGenericOwnerPhysicalTypeDefReference,
-                    >()
-            val additionalEdgeSets = linkedMapOf<
-                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
-                    DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet,
-                    >()
-            val receiverEdges = mutableListOf<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference>()
-            for (implementation in rawHierarchy.interfaces) {
-                val targetType = implementation.interfaceType.type
-                val targetIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
-                val targetDescription: DotNetGenericOwnerPhysicalTypeDefReference
-                if (targetType.hasSameIdentityAs(methodOwner)) {
-                    targetIdentity = parentIdentity
-                    targetDescription = parentDescription
-                } else {
-                    val auxiliary = when (val binding = if (requiresIntermediate) {
-                        buildSingleIntermediateInterface(
-                            targetType,
-                            methodOwner,
-                            parentIdentity,
-                            parentDescription,
-                        )
-                    } else {
-                        buildAuxiliaryRootInterface(targetType)
-                    }) {
-                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
-                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                    }
-                    targetIdentity = auxiliary.identity
-                    targetDescription = auxiliary.definition
-                    additionalDefinitions[targetIdentity] = targetDescription
-                    additionalEdgeSets[targetIdentity] = auxiliary.edgeSet
-                }
-
-                val targetArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
-                for (argument in implementation.interfaceType.arguments) {
-                    when (val translation = translateInheritedCarrier(
-                        argument,
-                        receiverIdentity,
-                        receiverContext,
-                        receiverSource.declaringType,
-                        "retained receiver InterfaceImpl",
-                    )) {
-                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
-                            targetArguments += translation.value
-                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
-                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                    }
-                }
-                if (targetArguments.size != targetDescription.genericArity) {
-                    return conflict("retained InterfaceImpl contradicts its target TypeDef arity")
-                }
-                receiverEdges += DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
-                    DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
-                    DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
-                        targetIdentity,
-                        targetArguments,
-                    ),
+            val inheritedGraph = when (
+                val binding = buildMemberlessInterfaceGraph(
+                    receiverSource.declaringHierarchy.type.type,
+                    methodOwner,
+                    parentIdentity,
+                    parentDescription,
                 )
-            }
-            if (receiverEdges.size != receiverEdges.toSet().size) {
-                return conflict("retained receiver contains duplicate physical InterfaceImpl edges")
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
             return DotNetGenericOwnerPhysicalBindingResult.Bound(
                 DotNetRetainedForeignGenericOwnerPhysicalDeclarations(
                     typeDefinitions = methodDeclarations.typeDefinitions +
-                            additionalDefinitions.values +
-                            DotNetGenericOwnerPhysicalTypeDefReference(
-                                identity = receiverIdentity,
-                                genericParameters = receiverParameters,
-                                category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
-                            ),
+                            inheritedGraph.typeDefinitions,
                     methodDefinitions = methodDeclarations.methodDefinitions,
                     directSupertypeEdgeSets = methodDeclarations.directSupertypeEdgeSets +
-                            additionalEdgeSets.values +
-                            DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
-                                receiverIdentity,
-                                receiverEdges,
-                            ),
+                            inheritedGraph.directSupertypeEdgeSets,
                 )
             )
         }
 
-        private fun buildSingleIntermediateInterface(
-            type: DotNetClrResolvedTypeDefinition,
+        private fun buildMemberlessInterfaceGraph(
+            receiverType: DotNetClrResolvedTypeDefinition,
             methodOwner: DotNetClrResolvedTypeDefinition,
             parentIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
             parentDescription: DotNetGenericOwnerPhysicalTypeDefReference,
-        ): DotNetGenericOwnerPhysicalBindingResult<InheritedInterfaceDeclaration> {
-            val retainedHierarchy = source.graph.hierarchyOrNull(type)
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val rawHierarchy = when (
-                val resolution = DotNetClrTypeHierarchyViewResolver(typeResolver).resolve(
-                    retainedHierarchy.type,
-                )
-            ) {
-                is DotNetClrTypeHierarchyViewResolution.Resolved -> resolution.hierarchy
-                is DotNetClrTypeHierarchyViewResolution.Invalid ->
-                    return conflict("intermediate retained interface has an invalid raw hierarchy")
-            }
-            if (rawHierarchy != retainedHierarchy) {
-                return conflict("intermediate retained interface hierarchy contradicts raw metadata")
-            }
-            val context = when (
-                val resolution = genericContextResolver.resolve(retainedHierarchy.type)
-            ) {
-                is DotNetClrGenericParameterContextResolution.Resolved -> resolution.context
-                is DotNetClrGenericParameterContextResolution.Invalid ->
-                    return conflict("intermediate retained interface has an invalid generic context")
-            }
-            if (context.method != null || context.declaringType != retainedHierarchy.type) {
-                return conflict("intermediate retained interface changed its declaring TypeDef")
-            }
-            if (!hasSupportedInheritedInterfaceShape(type, rawHierarchy, context, 1..1) ||
-                type.assembly.methodDefinitions.any { candidate ->
-                    candidate.declaringType == type.definition.handle
-                } ||
-                type.assembly.propertyDefinitions.any { candidate ->
-                    candidate.declaringType == type.definition.handle
-                } ||
-                type.assembly.fieldDefinitions.any { candidate ->
-                    candidate.declaringType == type.definition.handle
-                }
-            ) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val implementation = rawHierarchy.interfaces.single()
-            if (!implementation.interfaceType.type.hasSameIdentityAs(methodOwner)) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val identity =
-                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type)
-            if (identity == parentIdentity ||
-                identity == DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource)
-            ) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val parameters = when (
-                val translation = translateInterfaceParameters(
-                    context,
-                    type.definition,
-                    "intermediate retained interface",
-                )
-            ) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+        ): DotNetGenericOwnerPhysicalBindingResult<InheritedInterfaceGraph> {
+            val definitions = linkedMapOf<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+                    DotNetGenericOwnerPhysicalTypeDefReference,
+                    >()
+            val edgeSets = linkedMapOf<
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+                    DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet,
+                    >()
+            val active = mutableSetOf<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr>()
+            var edgeCount = 0
+            var reachesMethodOwner = false
+
+            fun visit(
+                type: DotNetClrResolvedTypeDefinition,
+                depth: Int,
+            ): DotNetGenericOwnerPhysicalBindingResult<InheritedInterfaceDeclaration> {
+                if (depth > MAX_RETAINED_INTERFACE_GRAPH_DEPTH) {
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val targetArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
-            for (argument in implementation.interfaceType.arguments) {
-                when (val translation = translateInheritedCarrier(
-                    argument,
-                    identity,
-                    context,
-                    type.definition,
-                    "intermediate retained InterfaceImpl",
-                )) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound ->
-                        targetArguments += translation.value
+                }
+                val retainedHierarchy = source.graph.hierarchyOrNull(type)
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                val identity =
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type)
+                if (identity in active) {
+                    return conflict("retained foreign interface graph contains a cycle")
+                }
+                definitions[identity]?.let { definition ->
+                    return bound(
+                        InheritedInterfaceDeclaration(
+                            identity,
+                            definition,
+                            edgeSets.getValue(identity),
+                        )
+                    )
+                }
+                if (definitions.size + active.size >= MAX_RETAINED_INTERFACE_GRAPH_NODES) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+
+                val rawHierarchy = when (
+                    val resolution = DotNetClrTypeHierarchyViewResolver(typeResolver).resolve(
+                        retainedHierarchy.type,
+                    )
+                ) {
+                    is DotNetClrTypeHierarchyViewResolution.Resolved -> resolution.hierarchy
+                    is DotNetClrTypeHierarchyViewResolution.Invalid ->
+                        return conflict("retained foreign interface has an invalid raw hierarchy")
+                }
+                if (rawHierarchy != retainedHierarchy) {
+                    return conflict("retained foreign interface hierarchy contradicts raw metadata")
+                }
+                val context = when (
+                    val resolution = genericContextResolver.resolve(retainedHierarchy.type)
+                ) {
+                    is DotNetClrGenericParameterContextResolution.Resolved -> resolution.context
+                    is DotNetClrGenericParameterContextResolution.Invalid ->
+                        return conflict("retained foreign interface has an invalid generic context")
+                }
+                if (context.method != null || context.declaringType != retainedHierarchy.type) {
+                    return conflict("retained foreign interface changed its declaring TypeDef")
+                }
+                if (!hasSupportedMemberlessInterfaceShape(type, rawHierarchy, context)) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                val parameters = when (
+                    val translation = translateInterfaceParameters(
+                        context,
+                        type.definition,
+                        "retained foreign interface",
+                    )
+                ) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
                     is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
-            }
-            if (targetArguments.size != parentDescription.genericArity) {
-                return conflict("intermediate InterfaceImpl contradicts its target TypeDef arity")
-            }
-            val definition = DotNetGenericOwnerPhysicalTypeDefReference(
-                identity = identity,
-                genericParameters = parameters,
-                category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
-            )
-            return bound(
-                InheritedInterfaceDeclaration(
+                val definition = DotNetGenericOwnerPhysicalTypeDefReference(
                     identity = identity,
-                    definition = definition,
-                    edgeSet = DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
-                        identity,
-                        listOf(
-                            DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
-                                DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
-                                DotNetGenericOwnerSymbolicCarrierReference.Constructed
-                                    .unboundTypeReference(parentIdentity, targetArguments),
-                            )
+                    genericParameters = parameters,
+                    category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                )
+
+                active += identity
+                val edges = mutableListOf<DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference>()
+                for (implementation in rawHierarchy.interfaces) {
+                    if (edgeCount >= MAX_RETAINED_INTERFACE_GRAPH_EDGES) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    edgeCount++
+                    val targetType = implementation.interfaceType.type
+                    val targetIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                    val targetDescription: DotNetGenericOwnerPhysicalTypeDefReference
+                    if (targetType.hasSameIdentityAs(methodOwner)) {
+                        targetIdentity = parentIdentity
+                        targetDescription = parentDescription
+                        reachesMethodOwner = true
+                    } else {
+                        val target = when (val binding = visit(targetType, depth + 1)) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                        targetIdentity = target.identity
+                        targetDescription = target.definition
+                    }
+
+                    val targetArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+                    for (argument in implementation.interfaceType.arguments) {
+                        when (val translation = translateInheritedCarrier(
+                            argument,
+                            identity,
+                            context,
+                            type.definition,
+                            "retained foreign InterfaceImpl",
+                        )) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                                targetArguments += translation.value
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    }
+                    if (targetArguments.size != targetDescription.genericArity) {
+                        return conflict("retained InterfaceImpl contradicts its target TypeDef arity")
+                    }
+                    edges += DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference(
+                        DotNetGenericOwnerDirectSupertypeKind.INTERFACE,
+                        DotNetGenericOwnerSymbolicCarrierReference.Constructed.unboundTypeReference(
+                            targetIdentity,
+                            targetArguments,
                         ),
-                    ),
+                    )
+                }
+                if (edges.size != edges.toSet().size) {
+                    return conflict("retained interface contains duplicate physical InterfaceImpl edges")
+                }
+                active -= identity
+                val edgeSet = DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(identity, edges)
+                definitions[identity] = definition
+                edgeSets[identity] = edgeSet
+                return bound(InheritedInterfaceDeclaration(identity, definition, edgeSet))
+            }
+
+            when (val receiver = visit(receiverType, 0)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return receiver
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            if (!reachesMethodOwner) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            return bound(
+                InheritedInterfaceGraph(
+                    typeDefinitions = definitions.values.toList(),
+                    directSupertypeEdgeSets = edgeSets.values.toList(),
                 )
             )
         }
 
-        private fun hasSupportedInheritedInterfaceShape(
+        private fun hasSupportedMemberlessInterfaceShape(
             type: DotNetClrResolvedTypeDefinition,
             hierarchy: DotNetClrResolvedTypeHierarchy,
             context: DotNetClrResolvedGenericParameterContext,
-            supportedInterfaceCount: IntRange,
         ): Boolean {
             val definition = type.definition
             val genericArity = context.typeParameters.size
@@ -389,72 +326,18 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     definition.visibility == DotNetClrTypeVisibility.PUBLIC &&
                     definition.baseType == null &&
                     hierarchy.baseType == null &&
-                    hierarchy.interfaces.size in supportedInterfaceCount &&
                     type.assembly.methodImplementations.none { implementation ->
                         implementation.implementingType == definition.handle
+                    } &&
+                    type.assembly.methodDefinitions.none { candidate ->
+                        candidate.declaringType == definition.handle
+                    } &&
+                    type.assembly.propertyDefinitions.none { candidate ->
+                        candidate.declaringType == definition.handle
+                    } &&
+                    type.assembly.fieldDefinitions.none { candidate ->
+                        candidate.declaringType == definition.handle
                     }
-        }
-
-        private fun buildAuxiliaryRootInterface(
-            type: DotNetClrResolvedTypeDefinition,
-        ): DotNetGenericOwnerPhysicalBindingResult<InheritedInterfaceDeclaration> {
-            val retainedHierarchy = source.graph.hierarchyOrNull(type)
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val rawHierarchy = when (
-                val resolution = DotNetClrTypeHierarchyViewResolver(typeResolver).resolve(
-                    retainedHierarchy.type,
-                )
-            ) {
-                is DotNetClrTypeHierarchyViewResolution.Resolved -> resolution.hierarchy
-                is DotNetClrTypeHierarchyViewResolution.Invalid ->
-                    return conflict("auxiliary retained interface has an invalid raw hierarchy")
-            }
-            if (rawHierarchy != retainedHierarchy) {
-                return conflict("auxiliary retained interface hierarchy contradicts raw metadata")
-            }
-            val context = when (
-                val resolution = genericContextResolver.resolve(retainedHierarchy.type)
-            ) {
-                is DotNetClrGenericParameterContextResolution.Resolved -> resolution.context
-                is DotNetClrGenericParameterContextResolution.Invalid ->
-                    return conflict("auxiliary retained interface has an invalid generic context")
-            }
-            val definition = type.definition
-            if (context.method != null ||
-                context.declaringType != retainedHierarchy.type
-            ) {
-                return conflict("auxiliary retained interface changed its declaring TypeDef")
-            }
-            if (context.typeParameters.isNotEmpty() ||
-                retainedHierarchy.type.arguments.isNotEmpty() ||
-                !definition.isInterface ||
-                !definition.isAbstract ||
-                definition.isSealed ||
-                definition.declaringType != null ||
-                definition.visibility != DotNetClrTypeVisibility.PUBLIC ||
-                definition.baseType != null ||
-                retainedHierarchy.baseType != null ||
-                retainedHierarchy.interfaces.isNotEmpty()
-            ) {
-                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val identity =
-                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type)
-            val physicalDefinition = DotNetGenericOwnerPhysicalTypeDefReference(
-                identity = identity,
-                genericParameters = emptyList(),
-                category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
-            )
-            return bound(
-                InheritedInterfaceDeclaration(
-                    identity = identity,
-                    definition = physicalDefinition,
-                    edgeSet = DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
-                        identity,
-                        emptyList(),
-                    ),
-                )
-            )
         }
 
         private fun translateInterfaceParameters(
@@ -585,12 +468,23 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
 
         private companion object {
             const val GENERIC_PARAMETER_VARIANCE_MASK = 0x0003
+            const val MAX_RETAINED_INTERFACE_GRAPH_DEPTH =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_TYPE_DEPTH
+            const val MAX_RETAINED_INTERFACE_GRAPH_NODES =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
+            const val MAX_RETAINED_INTERFACE_GRAPH_EDGES =
+                DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_COLLECTION_SIZE
         }
 
         private data class InheritedInterfaceDeclaration(
             val identity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
             val definition: DotNetGenericOwnerPhysicalTypeDefReference,
             val edgeSet: DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet,
+        )
+
+        private data class InheritedInterfaceGraph(
+            val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
+            val directSupertypeEdgeSets: List<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
         )
     }
 

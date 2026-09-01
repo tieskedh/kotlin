@@ -800,42 +800,39 @@ an incomplete retained hierarchy, invalid generic binder/flags, or disagreement
 between retained and raw signatures is `Conflict`. Recorded constraints still
 do not prove an arbitrary constrained construction.
 
-The first inherited-receiver grammar admits one public top-level abstract
-interface with an exact retained TypeDef carrier in the same selected assembly
-graph. It may declare no callable. It has zero or one unconstrained type
-parameter whose exact CLR variance is retained, no base class, no MethodImpl,
-and a complete set of one or two retained and raw `InterfaceImpl` rows. At least
-one row reaches the selected MethodDef owner by retained TypeDef identity. If
-only one row reaches that owner, an optional second row may target an
-independently authenticated public, non-generic root interface; that target
-receives its own TypeDef authority and complete empty edge set. Alternatively,
-both rows may reach the MethodDef owner as distinct exact constructions. Two
-identical physical edges contradict the complete metadata set and are
-`Conflict`, not an ambiguous value fact. Receiver and targets may reside in
-different selected assemblies. Each raw TypeSpec must bind through its exact
-AssemblyRef identity; an unbound or mismatched reference is a declaration
-conflict rather than permission to search by name. An owner edge may close the
-selected MethodDef owner with supported declaration-independent carriers or
-reference the child `!0`, recursively through the admitted SZ-array carrier.
-The adapter resolves the receiver's exact open GenericParam context, re-resolves
-every raw edge, and requires exact retained/raw agreement. It records the child
-binder on its own TypeDef and retains the entire direct edge set as an unordered
-physical set; ordinary physical-closure substitution derives `Base<int>` from
-`Child<int>`.
+The inherited-receiver grammar admits a resource-bounded acyclic graph of
+public top-level abstract memberless interfaces in the same selected assembly
+graph. The root comes from its selected retained class carrier; every visited
+TypeDef is independently authenticated from the graph's retained hierarchy and
+its re-resolved raw hierarchy. It has zero or one unconstrained type parameter
+whose exact CLR variance belongs to that TypeDef, no base class, no fields,
+MethodDefs, Properties, or MethodImpls, and a complete retained/raw
+`InterfaceImpl` edge set. The graph must reach the separately authenticated
+selected MethodDef owner by retained TypeDef identity. Receiver, intermediate,
+branch, and owner TypeDefs may reside in different selected assemblies. Every
+raw TypeSpec binds through its exact AssemblyRef identity; an unbound or
+mismatched reference is a declaration conflict rather than permission to search
+by name.
 
-One further bounded form admits a receiver whose sole exact edge does not yet
-reach the selected MethodDef owner. That edge may target one public top-level
-abstract intermediate interface with zero or one unconstrained type parameter,
-no fields, MethodDefs, Properties, base class, or MethodImpl, and exactly one
-retained/raw `InterfaceImpl` which reaches the MethodDef owner. The
-intermediate's ordered GenericParam row and exact variance belong to its own
-binder; neither the leaf binder nor a logical Kotlin substitution may stand in
-for them. Its owner edge uses the same declaration-independent carrier grammar.
-Receiver, intermediate, and owner may reside in three separately selected
-assemblies. The shared physical-interface closure performs both substitutions,
-deriving `Source<int>` from
-`IntSource -> ForwardingSource<int> -> Source<!0>`, while invocation retains the
-original `Source<T>.Read` MethodDef.
+An edge may close its target with supported declaration-independent carriers or
+reference the current TypeDef's own `!0`, recursively through the admitted
+SZ-array carrier. It may not borrow a child or ancestor binder. The adapter
+retains every direct edge set and each visited GenericParam row; the existing
+physical-interface closure is the only component that substitutes them. This
+derives, for example, `Source<int>` from
+`IntSource -> OuterSource<int> -> ForwardingSource<!0> -> Source<!0>` while
+invocation retains the original `Source<T>.Read` MethodDef. Depth and resource
+limits reuse the shared physical-artifact ceilings: recursive traversal depth
+is capped at 64, and visited nodes and direct edges are each capped at 1,024.
+Exceeding a resource ceiling or missing retained hierarchy is `Unavailable`.
+
+Branching and shared DAG nodes are legal, including a diamond whose paths close
+the same construction. Every branch remains in the physical closure even when
+another branch reaches the selected owner. A retained cycle, duplicate exact
+edge, invalid metadata, or retained/raw disagreement is `Conflict`. Traversal
+order never selects an operation and a logical supertype never fills a missing
+edge. A graph which is otherwise supported but does not reach the selected
+MethodDef owner is `Unavailable`.
 
 When two distinct owner constructions remain in that closure, declaration
 authority proves both views but selects neither operation view. A receiver with
@@ -846,11 +843,10 @@ breaks the tie. The external-DLL pipeline proves this with one memberless child
 implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
-No logical type or InterfaceImpl row order participates. Additional binders,
-more than two leaf edges, a dual-owner plus auxiliary combination, deeper or
-branching intermediate graphs, constraints, variance conversions, classes,
-MethodImpls, unsupported carrier leaves, and hierarchy disagreement remain
-unavailable or conflicting according to the ordinary validity boundary.
+No logical type or InterfaceImpl row order participates. Multiple binders,
+declared members on inherited graph nodes, constraints, variance conversions,
+classes, MethodImpls, unsupported carrier leaves, and hierarchy disagreement
+remain unavailable or conflicting according to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
@@ -965,9 +961,11 @@ The bounded Stage 6 state slice implements the declaration/state half of this
 model and is retained as executable evidence. Stage 7 independently composes a
 strict owner input with a split-nullable owner result on a custom structural
 family, including producer-recorded MethodDef consumption, ordinary C#
-implementation, and the exact erased inverse. The next ordered work closes
-retained/foreign declaration authority and shared value/operation provenance;
-it is not another shape-specific state recognizer or a resumed stdlib census.
+implementation, and the exact erased inverse. Retained/foreign operation
+authority now also covers a resource-bounded recursive memberless interface
+graph. The next ordered work closes complete multi-member declaration and
+operation authority without name-based overload selection; it is not another
+shape-specific state recognizer or a resumed stdlib census.
 
 ## Consequences
 

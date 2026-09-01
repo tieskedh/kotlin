@@ -624,6 +624,146 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
+    fun `recursive cross assembly binders preserve the exact inherited MethodDef route`() {
+        val fixture = deepCrossAssemblyFixture(intermediateDepth = 2)
+        val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+        val receiverType = receiverSource.declaringHierarchy.type.type
+        val intermediateTypes = fixture.source.graph.hierarchies
+            .map { hierarchy -> hierarchy.type.type }
+            .filter { type ->
+                !type.hasSameIdentityAs(fixture.source.declaringHierarchy.type.type) &&
+                        !type.hasSameIdentityAs(receiverType)
+            }
+        assertEquals(2, intermediateTypes.size)
+
+        val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalDeclarationIndex,
+                >>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                receiverSource,
+            )
+        ).value
+        val intCarrier = DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()
+        val receiverConstruction = boundConstruction(
+            declarations,
+            DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource),
+            emptyList(),
+        )
+        val intermediateConstructions = intermediateTypes.map { type ->
+            boundConstruction(
+                declarations,
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type),
+                listOf(intCarrier),
+            )
+        }
+        val parentConstruction = boundConstruction(
+            declarations,
+            retainedOwnerIdentity(fixture),
+            listOf(intCarrier),
+        )
+        val closure = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalInterfaceViewClosure,
+                >>(
+            declarations.physicalInterfaceViewClosureOrError(receiverConstruction)
+        ).value
+
+        assertEquals(true, closure.isComplete)
+        assertEquals(
+            (listOf(receiverConstruction) + intermediateConstructions + parentConstruction)
+                .map(::DotNetGenericOwnerPhysicalView)
+                .toSet(),
+            closure.interfaceViews,
+        )
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, receiverConstruction),
+                exactTransferArguments(declarations),
+                receiverSource,
+            )
+        ).value
+        assertEquals(parentConstruction, route.requiredReceiverView.construction)
+        assertEquals(retainedMethodIdentity(fixture), route.method.identity)
+    }
+
+    @Test
+    fun `recursive retained graph authenticates a complete intermediate diamond`() {
+        val fixture = deepCrossAssemblyFixture(
+            intermediateDepth = 2,
+            includeIntermediateAuxiliaryBranch = true,
+        )
+        val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+        val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalDeclarationIndex,
+                >>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                receiverSource,
+            )
+        ).value
+        val receiverConstruction = boundConstruction(
+            declarations,
+            DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource),
+            emptyList(),
+        )
+        val closure = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalInterfaceViewClosure,
+                >>(
+            declarations.physicalInterfaceViewClosureOrError(receiverConstruction)
+        ).value
+
+        assertEquals(true, closure.isComplete)
+        assertEquals(5, closure.interfaceViews.size)
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectRetainedRoute(
+                fixture,
+                directValue(declarations, receiverConstruction),
+                exactTransferArguments(declarations),
+                receiverSource,
+            )
+        ).value
+        assertEquals(retainedOwnerIdentity(fixture), route.requiredReceiverView.construction.definition)
+        assertEquals(
+            listOf(DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()),
+            route.requiredReceiverView.construction.arguments,
+        )
+    }
+
+    @Test
+    fun `cyclic retained intermediate graph is a declaration conflict`() {
+        val fixture = deepCrossAssemblyFixture(includeIntermediateSelfCycle = true)
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            )
+        )
+    }
+
+    @Test
+    fun `retained intermediate graph beyond its depth budget is unavailable`() {
+        val fixture = deepCrossAssemblyFixture(intermediateDepth = 65)
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            ),
+        )
+    }
+
+    @Test
     fun `intermediate interface without retained hierarchy cannot prove a deep route`() {
         val fixture = deepCrossAssemblyFixture(includeRetainedIntermediateHierarchy = false)
 
@@ -2221,124 +2361,252 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
 
     private fun deepCrossAssemblyFixture(
         includeRetainedIntermediateHierarchy: Boolean = true,
+        intermediateDepth: Int = 1,
+        includeIntermediateAuxiliaryBranch: Boolean = false,
+        includeIntermediateSelfCycle: Boolean = false,
     ): Fixture {
+        require(intermediateDepth >= 1)
         val parentFixture = fixture()
         val parentSource = parentFixture.source
         val parentAssembly = parentSource.assembly
-        val parentMetadata = parentAssembly.metadata
-
-        val middleAssemblyReferenceHandle = DotNetClrMetadataHandle(ASSEMBLY_REFERENCE_TABLE, 1)
-        val middleParentTypeReferenceHandle = DotNetClrMetadataHandle(TYPE_REFERENCE_TABLE, 1)
-        val middleTypeHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
-        val middleParentTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 1)
-        val middleType = DotNetClrTypeDefinition(
-            handle = middleTypeHandle,
-            namespaceName = "Foreign.Deep",
-            metadataName = "ForwardingSource`1",
-            attributes = PUBLIC_ABSTRACT_INTERFACE_ATTRIBUTES,
-            baseType = null,
-            declaringType = null,
-        )
-        val middleAssemblyReference = DotNetClrAssemblyReference(
-            handle = middleAssemblyReferenceHandle,
-            name = parentMetadata.identity.name,
-            version = parentMetadata.identity.version,
-            culture = parentMetadata.identity.culture,
-            flags = 0,
-            publicKeyOrToken = emptyList(),
-            hashValue = emptyList(),
-        )
-        val middleParentTypeReference = DotNetClrTypeReference(
-            handle = middleParentTypeReferenceHandle,
-            namespaceName = parentSource.declaringType.namespaceName,
-            metadataName = parentSource.declaringType.metadataName,
-            resolutionScope = middleAssemblyReferenceHandle,
-        )
-        val middleParentTypeSpecification = DotNetClrTypeSpecification(
-            handle = middleParentTypeSpecHandle,
-            signature = DotNetClrTypeSignature.GenericInstance(
-                DotNetClrTypeSignature.Named(
-                    middleParentTypeReferenceHandle,
-                    isValueType = false,
-                ),
-                listOf(
-                    DotNetClrTypeSignature.GenericParameter(
-                        DotNetClrGenericParameterKind.TYPE,
-                        0,
-                    )
-                ),
-            ),
-            rawSignature = emptyList(),
-        )
-        val middleInterfaceImplementation = DotNetClrInterfaceImplementation(
-            handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 1),
-            implementingType = middleTypeHandle,
-            interfaceType = middleParentTypeSpecHandle,
-        )
-        val middleParameter = DotNetClrGenericParameterDefinition(
-            handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, 1),
-            number = 0,
-            attributes = COVARIANT_ATTRIBUTE,
-            owner = middleTypeHandle,
-            name = "T",
-        )
-        val middleMetadata = DotNetClrAssemblyMetadata(
-            identity = DotNetManagedAssemblyIdentity(
-                name = "Foreign.Middle",
-                version = "1.0.0.0",
-                culture = "neutral",
-                publicKey = emptyList(),
-                publicKeyToken = emptyList(),
-            ),
-            assemblyReferences = listOf(middleAssemblyReference),
-            typeReferences = listOf(middleParentTypeReference),
-            typeDefinitions = listOf(middleType),
-            interfaceImplementations = listOf(middleInterfaceImplementation),
-            exportedTypes = emptyList(),
-            typeSpecifications = listOf(middleParentTypeSpecification),
-            fieldDefinitions = emptyList(),
-            methodDefinitions = emptyList(),
-            parameterDefinitions = emptyList(),
-            constantDefinitions = emptyList(),
-            fieldMarshalDefinitions = emptyList(),
-            memberReferences = emptyList(),
-            customAttributes = emptyList(),
-            propertyDefinitions = emptyList(),
-            methodSemantics = emptyList(),
-            genericParameterDefinitions = listOf(middleParameter),
-            genericParameterConstraints = emptyList(),
-        )
-        val middleAssembly = DotNetClrClasspathAssembly.WithoutCarrier(
-            File("Foreign.Middle.dll"),
-            middleMetadata,
-        )
-        val resolvedMiddleType = DotNetClrResolvedTypeDefinition(middleMetadata, middleType)
-        val middleHierarchy = DotNetClrResolvedTypeHierarchy(
-            type = DotNetClrResolvedTypeView(
-                resolvedMiddleType,
-                listOf(
-                    DotNetClrResolvedTypeSignature.GenericParameter(
-                        DotNetClrGenericParameterKind.TYPE,
-                        0,
-                    )
-                ),
-            ),
-            baseType = null,
-            interfaces = listOf(
-                DotNetClrResolvedInterfaceImplementation(
-                    middleInterfaceImplementation,
-                    DotNetClrResolvedTypeView(
-                        parentSource.declaringHierarchy.type.type,
-                        listOf(
-                            DotNetClrResolvedTypeSignature.GenericParameter(
-                                DotNetClrGenericParameterKind.TYPE,
-                                0,
-                            )
-                        ),
+        val intermediateAssemblies = mutableListOf<DotNetClrClasspathAssembly.WithoutCarrier>()
+        val intermediateHierarchies = mutableListOf<DotNetClrResolvedTypeHierarchy>()
+        val intermediateTypes = mutableListOf<DotNetClrResolvedTypeDefinition>()
+        var previousAssembly = parentAssembly
+        var previousType = parentSource.declaringHierarchy.type.type
+        repeat(intermediateDepth) { index ->
+            val assemblyReferenceHandle = DotNetClrMetadataHandle(ASSEMBLY_REFERENCE_TABLE, 1)
+            val parentTypeReferenceHandle = DotNetClrMetadataHandle(TYPE_REFERENCE_TABLE, 1)
+            val typeHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
+            val auxiliaryTypeHandle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 2)
+            val parentTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 1)
+            val selfTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 2)
+            val auxiliaryParentTypeSpecHandle = DotNetClrMetadataHandle(TYPE_SPEC_TABLE, 3)
+            val addsHostileEdges = index == intermediateDepth - 1
+            val type = DotNetClrTypeDefinition(
+                handle = typeHandle,
+                namespaceName = "Foreign.Deep",
+                metadataName = if (intermediateDepth == 1) {
+                    "ForwardingSource`1"
+                } else {
+                    "ForwardingSource${index + 1}`1"
+                },
+                attributes = PUBLIC_ABSTRACT_INTERFACE_ATTRIBUTES,
+                baseType = null,
+                declaringType = null,
+            )
+            val auxiliaryType = DotNetClrTypeDefinition(
+                handle = auxiliaryTypeHandle,
+                namespaceName = "Foreign.Deep",
+                metadataName = "Auxiliary${index + 1}",
+                attributes = PUBLIC_ABSTRACT_INTERFACE_ATTRIBUTES,
+                baseType = null,
+                declaringType = null,
+            )
+            val assemblyReference = DotNetClrAssemblyReference(
+                handle = assemblyReferenceHandle,
+                name = previousAssembly.metadata.identity.name,
+                version = previousAssembly.metadata.identity.version,
+                culture = previousAssembly.metadata.identity.culture,
+                flags = 0,
+                publicKeyOrToken = emptyList(),
+                hashValue = emptyList(),
+            )
+            val parentTypeReference = DotNetClrTypeReference(
+                handle = parentTypeReferenceHandle,
+                namespaceName = previousType.definition.namespaceName,
+                metadataName = previousType.definition.metadataName,
+                resolutionScope = assemblyReferenceHandle,
+            )
+            val parentTypeSpecification = DotNetClrTypeSpecification(
+                handle = parentTypeSpecHandle,
+                signature = DotNetClrTypeSignature.GenericInstance(
+                    DotNetClrTypeSignature.Named(parentTypeReferenceHandle, isValueType = false),
+                    listOf(
+                        DotNetClrTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        )
                     ),
-                )
-            ),
-        )
+                ),
+                rawSignature = emptyList(),
+            )
+            val selfTypeSpecification = DotNetClrTypeSpecification(
+                handle = selfTypeSpecHandle,
+                signature = DotNetClrTypeSignature.GenericInstance(
+                    DotNetClrTypeSignature.Named(typeHandle, isValueType = false),
+                    listOf(
+                        DotNetClrTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        )
+                    ),
+                ),
+                rawSignature = emptyList(),
+            )
+            val auxiliaryParentTypeSpecification = DotNetClrTypeSpecification(
+                handle = auxiliaryParentTypeSpecHandle,
+                signature = DotNetClrTypeSignature.GenericInstance(
+                    DotNetClrTypeSignature.Named(parentTypeReferenceHandle, isValueType = false),
+                    listOf(DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)),
+                ),
+                rawSignature = emptyList(),
+            )
+            val parentInterfaceImplementation = DotNetClrInterfaceImplementation(
+                handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 1),
+                implementingType = typeHandle,
+                interfaceType = parentTypeSpecHandle,
+            )
+            val auxiliaryInterfaceImplementation = DotNetClrInterfaceImplementation(
+                handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 2),
+                implementingType = typeHandle,
+                interfaceType = auxiliaryTypeHandle,
+            )
+            val selfInterfaceImplementation = DotNetClrInterfaceImplementation(
+                handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 3),
+                implementingType = typeHandle,
+                interfaceType = selfTypeSpecHandle,
+            )
+            val auxiliaryParentInterfaceImplementation = DotNetClrInterfaceImplementation(
+                handle = DotNetClrMetadataHandle(INTERFACE_IMPLEMENTATION_TABLE, 4),
+                implementingType = auxiliaryTypeHandle,
+                interfaceType = auxiliaryParentTypeSpecHandle,
+            )
+            val parameter = DotNetClrGenericParameterDefinition(
+                handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, 1),
+                number = 0,
+                attributes = COVARIANT_ATTRIBUTE,
+                owner = typeHandle,
+                name = "T",
+            )
+            val metadata = DotNetClrAssemblyMetadata(
+                identity = DotNetManagedAssemblyIdentity(
+                    name = if (intermediateDepth == 1) "Foreign.Middle" else "Foreign.Middle${index + 1}",
+                    version = "1.0.0.0",
+                    culture = "neutral",
+                    publicKey = emptyList(),
+                    publicKeyToken = emptyList(),
+                ),
+                assemblyReferences = listOf(assemblyReference),
+                typeReferences = listOf(parentTypeReference),
+                typeDefinitions = buildList {
+                    add(type)
+                    if (addsHostileEdges && includeIntermediateAuxiliaryBranch) add(auxiliaryType)
+                },
+                interfaceImplementations = buildList {
+                    add(parentInterfaceImplementation)
+                    if (addsHostileEdges && includeIntermediateAuxiliaryBranch) {
+                        add(auxiliaryInterfaceImplementation)
+                        add(auxiliaryParentInterfaceImplementation)
+                    }
+                    if (addsHostileEdges && includeIntermediateSelfCycle) {
+                        add(selfInterfaceImplementation)
+                    }
+                },
+                exportedTypes = emptyList(),
+                typeSpecifications = buildList {
+                    add(parentTypeSpecification)
+                    if (addsHostileEdges && includeIntermediateSelfCycle) add(selfTypeSpecification)
+                    if (addsHostileEdges && includeIntermediateAuxiliaryBranch) {
+                        add(auxiliaryParentTypeSpecification)
+                    }
+                },
+                fieldDefinitions = emptyList(),
+                methodDefinitions = emptyList(),
+                parameterDefinitions = emptyList(),
+                constantDefinitions = emptyList(),
+                fieldMarshalDefinitions = emptyList(),
+                memberReferences = emptyList(),
+                customAttributes = emptyList(),
+                propertyDefinitions = emptyList(),
+                methodSemantics = emptyList(),
+                genericParameterDefinitions = listOf(parameter),
+                genericParameterConstraints = emptyList(),
+            )
+            val assembly = DotNetClrClasspathAssembly.WithoutCarrier(
+                File("${metadata.identity.name}.dll"),
+                metadata,
+            )
+            val resolvedType = DotNetClrResolvedTypeDefinition(metadata, type)
+            val resolvedAuxiliaryType = DotNetClrResolvedTypeDefinition(metadata, auxiliaryType)
+            val hierarchy = DotNetClrResolvedTypeHierarchy(
+                type = DotNetClrResolvedTypeView(
+                    resolvedType,
+                    listOf(
+                        DotNetClrResolvedTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        )
+                    ),
+                ),
+                baseType = null,
+                interfaces = buildList {
+                    add(
+                        DotNetClrResolvedInterfaceImplementation(
+                            parentInterfaceImplementation,
+                            DotNetClrResolvedTypeView(
+                                previousType,
+                                listOf(
+                                    DotNetClrResolvedTypeSignature.GenericParameter(
+                                        DotNetClrGenericParameterKind.TYPE,
+                                        0,
+                                    )
+                                ),
+                            ),
+                        )
+                    )
+                    if (addsHostileEdges && includeIntermediateAuxiliaryBranch) {
+                        add(
+                            DotNetClrResolvedInterfaceImplementation(
+                                auxiliaryInterfaceImplementation,
+                                DotNetClrResolvedTypeView(resolvedAuxiliaryType, emptyList()),
+                            )
+                        )
+                    }
+                    if (addsHostileEdges && includeIntermediateSelfCycle) {
+                        add(
+                            DotNetClrResolvedInterfaceImplementation(
+                                selfInterfaceImplementation,
+                                DotNetClrResolvedTypeView(
+                                    resolvedType,
+                                    listOf(
+                                        DotNetClrResolvedTypeSignature.GenericParameter(
+                                            DotNetClrGenericParameterKind.TYPE,
+                                            0,
+                                        )
+                                    ),
+                                ),
+                            )
+                        )
+                    }
+                },
+            )
+            val auxiliaryHierarchy = DotNetClrResolvedTypeHierarchy(
+                type = DotNetClrResolvedTypeView(resolvedAuxiliaryType, emptyList()),
+                baseType = null,
+                interfaces = listOf(
+                    DotNetClrResolvedInterfaceImplementation(
+                        auxiliaryParentInterfaceImplementation,
+                        DotNetClrResolvedTypeView(
+                            previousType,
+                            listOf(
+                                DotNetClrResolvedTypeSignature.Primitive(
+                                    DotNetClrPrimitiveType.INT32,
+                                )
+                            ),
+                        ),
+                    )
+                ),
+            )
+            intermediateAssemblies += assembly
+            intermediateHierarchies += hierarchy
+            if (addsHostileEdges && includeIntermediateAuxiliaryBranch) {
+                intermediateHierarchies += auxiliaryHierarchy
+            }
+            intermediateTypes += resolvedType
+            previousAssembly = assembly
+            previousType = resolvedType
+        }
 
         val childAssemblyReferenceHandle = DotNetClrMetadataHandle(ASSEMBLY_REFERENCE_TABLE, 1)
         val childMiddleTypeReferenceHandle = DotNetClrMetadataHandle(TYPE_REFERENCE_TABLE, 1)
@@ -2354,17 +2622,17 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         )
         val childAssemblyReference = DotNetClrAssemblyReference(
             handle = childAssemblyReferenceHandle,
-            name = middleMetadata.identity.name,
-            version = middleMetadata.identity.version,
-            culture = middleMetadata.identity.culture,
+            name = previousAssembly.metadata.identity.name,
+            version = previousAssembly.metadata.identity.version,
+            culture = previousAssembly.metadata.identity.culture,
             flags = 0,
             publicKeyOrToken = emptyList(),
             hashValue = emptyList(),
         )
         val childMiddleTypeReference = DotNetClrTypeReference(
             handle = childMiddleTypeReferenceHandle,
-            namespaceName = middleType.namespaceName,
-            metadataName = middleType.metadataName,
+            namespaceName = previousType.definition.namespaceName,
+            metadataName = previousType.definition.metadataName,
             resolutionScope = childAssemblyReferenceHandle,
         )
         val childMiddleTypeSpecification = DotNetClrTypeSpecification(
@@ -2425,7 +2693,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 DotNetClrResolvedInterfaceImplementation(
                     childInterfaceImplementation,
                     DotNetClrResolvedTypeView(
-                        resolvedMiddleType,
+                        previousType,
                         listOf(
                             DotNetClrResolvedTypeSignature.Primitive(
                                 DotNetClrPrimitiveType.INT32,
@@ -2436,10 +2704,10 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             ),
         )
         val graph = DotNetClrImportedDeclarationGraph(
-            assemblies = listOf(parentAssembly, middleAssembly, childAssembly),
+            assemblies = listOf(parentAssembly) + intermediateAssemblies + childAssembly,
             hierarchies = buildList {
                 add(parentSource.declaringHierarchy)
-                if (includeRetainedIntermediateHierarchy) add(middleHierarchy)
+                if (includeRetainedIntermediateHierarchy) addAll(intermediateHierarchies)
                 add(childHierarchy)
             },
         )
@@ -2462,7 +2730,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             method = parentFixture.method,
             relatedType = null,
             inheritedReceiverSource = receiverSource,
-            intermediateType = resolvedMiddleType,
+            intermediateType = intermediateTypes.last(),
         )
     }
 

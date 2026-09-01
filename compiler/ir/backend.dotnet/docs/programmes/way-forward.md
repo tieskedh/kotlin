@@ -87,56 +87,33 @@ parameter domains, and result layout remain independent; the existing Runtime
 `Map` family is deliberately unchanged. The bounded proof and its exact erased
 inverse are recorded in the
 [Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
-The first retained-foreign declaration adapter now authenticates one bounded
-open root-interface MethodDef directly from its selected raw metadata; wider
-hierarchies, MethodImpls, nominal carriers, and constrained constructions remain
-outside that grammar. One production-inert imported route now derives its
-receiver construction solely from its direct verifier carrier, shared guaranteed
-views, their recorded physical-interface closure, and selected lineage, then
-produces its exact instantiated MethodDef result through the same value model.
-The first inherited grammar authenticates one child interface with an exact
-TypeDef carrier, zero or one unconstrained parameter with exact CLR variance,
-and a complete set of one or two `InterfaceImpl` rows in the same selected
-graph. Parent and child may reside in different assemblies; every raw edge must
-bind through its exact AssemblyRef. At least one edge reaches the selected
-MethodDef owner. With one owner edge, an optional second edge is independently
-authenticated as a non-generic root interface and remains in the closure. Both
-edges may instead be distinct exact constructions of the MethodDef owner;
-duplicates conflict. The carrier is independent of declared members; the
-hostile child has no marker MethodDef. An owner edge may close the root owner or
-forward the child binder through the admitted carrier grammar.
-Recorded physical substitution, rather than a logical Kotlin type, derives each
-concrete parent view. A narrow target hook now transports that class-level
-carrier through lazy external FIR2IR as compilation-local class metadata;
-Common neither interprets nor serializes it, and callable authority remains
-separate. Resource-free external DLLs now prove same-assembly, cross-assembly,
-and multiple-edge memberless children through the actual compiler pipeline.
-The hostile two-edge child records `Marker` before `Source<int>`; the call still
-targets the parent's retained MethodDef by identity and both exact views require
-no cast or adapter. A dual child now retains both `Source<int>` and
-`Source<bool>`. Without a unique already-proven view its operation is
-unavailable; selected lineage can choose either guaranteed construction but
-cannot invent another. The actual importer and emitter call both exact slots
-without casts, wrappers, or `object` carriers. One authenticated memberless
-generic intermediate is now admitted as well. A three-assembly fixture closes
-its own binder at `int32`; transitive physical closure derives the final owner
-view and invocation still targets the original parent MethodDef. Missing
-intermediate hierarchy authority fails closed.
+The retained-foreign adapter authenticates one selected open root-interface
+MethodDef directly from retained and re-resolved raw metadata. Its receiver may
+now be the root of a resource-bounded acyclic graph of public top-level
+memberless interfaces, each with zero or one unconstrained binder and a complete
+retained/raw edge set. Graphs may cross assemblies, branch, share diamond nodes,
+and close binders at every level. The existing physical-view closure performs
+all substitution; selected lineage may select an already-proven construction
+but cannot establish one. Cycles and metadata disagreement conflict, while
+missing authority and resource limits fail unavailable. Resource-free external
+pipelines cover direct, cross-assembly, multi-edge, multi-view, intermediate,
+and recursive four-assembly forms.
 
-The next ordered boundary replaces that one-hop proof restriction with one
-resource-bounded recursive walk over an acyclic memberless interface graph.
-Every visited TypeDef, GenericParam binder, and complete edge set must be
-authenticated independently before the existing physical closure substitutes
-it. Depth and branching must not introduce logical-supertype reconstruction,
-row-order selection, member-name search, or fabricated constructions.
-MethodImpls, multiple binders/members, variance conversions, constraints,
-classes, and Runtime/Stdlib application remain later.
-Broader state shapes and multi-member or Runtime/Stdlib callable application
-remain later extensions of the same model. A bounded slice may stop emitting a
-comparison surface only after downstream owner closure is an epoch invariant;
-complete removal still waits for the selected-family freeze and hostile
-inverse. Generic-child-capability to separately owned base-capability conversion
-remains an independent interface-routing proof, not part of Stages 6 or 7.
+The next ordered boundary is multi-member retained-foreign consumption. Bind at
+least two independently selected MethodDefs from one root into one consumer,
+including same-name overloads, and prove that inherited invocation continues to
+use retained handles and signatures rather than names, arity heuristics, or
+interface row order. Keep parameter domains and direct/void/split-nullable
+result layouts independently composable. Only after this proof should the
+grammar widen to multiple TypeDef binders, constraints, properties, classes,
+MethodImpls, or Runtime/Stdlib declarations.
+
+Broader state shapes remain later extensions of the same model. A bounded slice
+may stop emitting a comparison surface only after downstream owner closure is an
+epoch invariant; complete removal still waits for the selected-family freeze
+and hostile inverse. Generic-child-capability to separately owned base-
+capability conversion remains an independent interface-routing proof, not part
+of Stages 6 or 7.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to
