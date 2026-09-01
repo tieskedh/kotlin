@@ -68,6 +68,8 @@ data class DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot(
     val status: DotNetGenericOwnerPhysicalOperationRouteShadowStatus,
     val predictedRouteKind: DotNetGenericOwnerPhysicalOperationRouteKindSnapshot?,
     val requiredReceiverCarrier: DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot,
+    /** Bound MethodSpec arguments in selected-MethodDef order; empty when absent or unbound. */
+    val methodArgumentCarriers: List<DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot>,
     val resultLayout: DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot?,
     val resultSlotDomain: DotNetGenericOwnerPhysicalSlotDomain?,
     val resultCarrierKind: DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot?,
@@ -84,6 +86,15 @@ data class DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot(
         }
         require(resultCarrierParameterIndex == null || resultCarrierParameterIndex >= 0) {
             "a physical-operation result cannot reference a negative owner-parameter index"
+        }
+        require(status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND ||
+                methodArgumentCarriers.isEmpty()) {
+            "an unbound physical operation cannot publish a MethodSpec vector"
+        }
+        require(methodArgumentCarriers.none { carrier ->
+            carrier.kind == DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN
+        }) {
+            "a BOUND MethodSpec vector cannot publish an unknown argument carrier"
         }
         require((resultCarrierParameterBinderOwnerName == null) ==
                 (resultCarrierParameterIndex == null)) {

@@ -139,7 +139,9 @@ The Stage 7 evidence is recorded in the
 The first authoritative argument-bearing consumer of that contract is recorded
 in the
 [owner-input operation archive](../archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
-Neither proof admits multi-member Runtime/Stdlib families or authorizes
+The independent final-IR MethodSpec-vector consumer is recorded in the
+[MethodSpec operation archive](../archive/generic-owner-physical-methodspec-operation-2026-09-01.md).
+None of these proofs admits multi-member Runtime/Stdlib families or authorizes
 production migration.
 
 ## Rules during ordinary feature work

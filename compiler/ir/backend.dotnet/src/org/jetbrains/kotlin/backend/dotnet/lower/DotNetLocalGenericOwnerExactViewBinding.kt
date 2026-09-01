@@ -22,6 +22,30 @@ import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.types.Variance
 
+/** Binds one exact non-null type use to an already recorded current-owner CLR parameter. */
+internal fun bindExactLocalGenericOwnerParameterCarrierOrError(
+    type: IrType,
+    physicalOwner: IrClass,
+    authority: DotNetLocalGenericOwnerPhysicalAuthority,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
+    val declarations = authority.boundDeclarations
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val physicalOwnerIdentity = authority.genericClassIdentityOrNull(physicalOwner.symbol)
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val simple = type as? IrSimpleType
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    if (simple.isMarkedNullable() || simple.arguments.isNotEmpty()) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val parameter = simple.classifier as? IrTypeParameterSymbol
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val parameterIndex = physicalOwner.typeParameters.indexOfFirst { candidate ->
+        candidate.symbol === parameter
+    }.takeIf { index -> index >= 0 }
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    return declarations.typeParameterOrError(physicalOwnerIdentity, parameterIndex)
+}
+
 /**
  * Binds an exact logical interface application only through already selected local CLR authority.
  * Logical type equality locates owner parameters; it never proves a TypeDef or InterfaceImpl row.

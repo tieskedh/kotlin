@@ -1038,6 +1038,87 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "A logically widened multi-parameter view must not acquire an exact natural route: " +
                 snapshots
     }
+
+    val exactMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
+                candidate.physicalFunctionName == "routeExactMethodArgument" &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "The owner-bound MethodSpec must publish one exact operation snapshot: $snapshots"
+    }
+    check(exactMethodSpecRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            exactMethodSpecRoute.physicalFunctionName == "routeExactMethodArgument" &&
+            exactMethodSpecRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            exactMethodSpecRoute.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            exactMethodSpecRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineMethodProducer") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0) &&
+                        carrier.parameterBinderOwnerName?.endsWith("InlineMethodProducerRoute") == true
+            } && exactMethodSpecRoute.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.DIRECT &&
+            exactMethodSpecRoute.methodArgumentCarriers.singleOrNull().let { carrier ->
+                carrier?.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                        carrier.ownerParameterIndices == listOf(0) &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineMethodProducerRoute") == true
+            } &&
+            exactMethodSpecRoute.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            exactMethodSpecRoute.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            exactMethodSpecRoute.resultCarrierParameterBinderOwnerName
+                ?.endsWith("InlineMethodProducerRoute") == true &&
+            exactMethodSpecRoute.resultCarrierParameterIndex == 0 &&
+            exactMethodSpecRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            exactMethodSpecRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            exactMethodSpecRoute.diagnostic == null) {
+        "An exact owner-bound MethodSpec must preserve the natural !!R -> !T route: " +
+                exactMethodSpecRoute
+    }
+    val widenedMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
+                candidate.physicalFunctionName == "routeWidenedMethodResult" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "The widened MethodSpec must remain visible as explicit fail-closed evidence: $snapshots"
+    }
+    check(widenedMethodSpecRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE &&
+            widenedMethodSpecRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL &&
+            widenedMethodSpecRoute.predictedRouteKind == null &&
+            widenedMethodSpecRoute.requiredReceiverCarrier.kind ==
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+            widenedMethodSpecRoute.methodArgumentCarriers.isEmpty() &&
+            widenedMethodSpecRoute.resultLayout == null &&
+            widenedMethodSpecRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
+                .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
+            widenedMethodSpecRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.PREDICTION_UNAVAILABLE &&
+            !widenedMethodSpecRoute.diagnostic.isNullOrEmpty()) {
+        "A logically widened MethodSpec must not acquire an exact natural route: " +
+                widenedMethodSpecRoute
+    }
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
+                candidate.physicalFunctionName == "routeCallerMethodArgument" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "A caller-MethodDef binder must not be mistaken for current-owner !T authority: " +
+                snapshots
+    }
     check(snapshots.none { candidate ->
         candidate.ownerName.endsWith("InlineSelfView") &&
                 candidate.physicalFunctionName == "nestedAliasMatches" &&

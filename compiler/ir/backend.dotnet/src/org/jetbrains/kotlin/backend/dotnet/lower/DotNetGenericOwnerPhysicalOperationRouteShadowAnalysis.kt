@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRo
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerProducedValueFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalView
@@ -213,10 +214,16 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         ) ?: return diagnostic.unavailable()
         val selectedDescription = declarations.methodDescriptionOrNull(selectedMethod)
             ?: return diagnostic.unavailable()
-        if (selectedDescription.signature.genericArity != 0) {
-            // This bounded IR shadow does not yet own value facts for MethodSpec arguments. Omit
-            // such a call rather than presenting an absent vector as a contradictory MethodSpec.
-            return null
+        val methodArguments = when (val binding = bindMethodArgumentsOrError(
+            call,
+            owner,
+            selectedDescription.signature.genericArity,
+            authority,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                return diagnostic.conflict(binding.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
         }
         val arguments = mutableListOf<DotNetGenericOwnerProducedValueFact>()
         source.parameters.forEach { parameter ->
@@ -235,6 +242,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             selectedMethod = selectedMethod,
             request = DotNetGenericOwnerPhysicalOperationRouteRequest(
                 selection.requiredView,
+                methodArguments,
             ),
             receiver = storage.read().value,
             arguments = arguments,
@@ -258,6 +266,47 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                 diagnostic.unavailable()
         }
+    }
+
+    /**
+     * Binds the selected MethodDef's whole MethodSpec vector from final caller authority.
+     *
+     * The logical call type locates a current-owner parameter only. The sealed declaration index
+     * proves the corresponding CLR `!n`; neither the IR vector nor its length can define the
+     * selected MethodDef's arity. Concrete, nullable, nested, foreign, constrained, and caller-
+     * MethodDef binders remain outside this first consumer.
+     */
+    private fun bindMethodArgumentsOrError(
+        call: IrCall,
+        owner: IrClass,
+        expectedArity: Int,
+        authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    ): DotNetGenericOwnerPhysicalBindingResult<List<DotNetGenericOwnerSymbolicCarrierReference>> {
+        if (call.typeArguments.size != expectedArity) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "selected physical MethodDef has generic arity $expectedArity, " +
+                        "but final IR supplies ${call.typeArguments.size} type arguments",
+            )
+        }
+        if (expectedArity == 0) {
+            return DotNetGenericOwnerPhysicalBindingResult.Bound(emptyList())
+        }
+        val arguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+        for (type in call.typeArguments) {
+            type ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            when (val binding = bindExactLocalGenericOwnerParameterCarrierOrError(
+                type,
+                owner,
+                authority,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> arguments += binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+        }
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(arguments)
     }
 
     /**
@@ -483,9 +532,24 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                             }
             }
             val result = route.instantiatedSignature.resultLayout.toSnapshot(authority)
+            val methodArguments = route.methodArguments.map { argument ->
+                when (val carrier = checkNotNull(authority.boundDeclarations)
+                    .carrierOrError(argument)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                        authority.carrierSnapshotOrNull(carrier.value)
+                            ?: error(
+                                "a BOUND physical operation has an unrenderable " +
+                                        "MethodSpec argument carrier",
+                            )
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                    -> error("a BOUND physical operation contains an unbound MethodSpec argument")
+                }
+            }
             return snapshot(
                 status = DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND,
                 predictedKind = selectedEntry.toSnapshot(),
+                methodArguments = methodArguments,
                 result = result,
                 relation = if (matches) {
                     DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH
@@ -500,6 +564,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         fun unavailable() = snapshot(
             status = DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE,
             predictedKind = null,
+            methodArguments = emptyList(),
             result = null,
             relation = DotNetGenericOwnerPhysicalOperationRouteShadowRelation.PREDICTION_UNAVAILABLE,
             diagnostic = "the selected physical operation route is not proven by BOUND authority",
@@ -508,6 +573,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         fun conflict(reason: String) = snapshot(
             status = DotNetGenericOwnerPhysicalOperationRouteShadowStatus.CONFLICT,
             predictedKind = null,
+            methodArguments = emptyList(),
             result = null,
             relation = DotNetGenericOwnerPhysicalOperationRouteShadowRelation.DECLARATION_CONFLICT,
             diagnostic = reason,
@@ -516,6 +582,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         private fun snapshot(
             status: DotNetGenericOwnerPhysicalOperationRouteShadowStatus,
             predictedKind: DotNetGenericOwnerPhysicalOperationRouteKindSnapshot?,
+            methodArguments: List<DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot>,
             result: ResultSnapshot?,
             relation: DotNetGenericOwnerPhysicalOperationRouteShadowRelation,
             diagnostic: String?,
@@ -539,6 +606,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                 status = status,
                 predictedRouteKind = predictedKind,
                 requiredReceiverCarrier = requiredCarrier,
+                methodArgumentCarriers = methodArguments,
                 resultLayout = result?.layout,
                 resultSlotDomain = result?.slot?.domain,
                 resultCarrierKind = result?.slot?.carrierKind,
