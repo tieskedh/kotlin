@@ -26888,6 +26888,11 @@ private class DotNetEnvironmentConfigurator(
                 configuration::addDotNetClasspathRoot,
             )
         }
+        if (DotNetCodegenDirectives.DOTNET_FOREIGN_RECURSIVE_MEMBERLESS_INTERFACE in module.directives) {
+            getOrCreateForeignRecursiveMemberlessInterfaces().forEach(
+                configuration::addDotNetClasspathRoot,
+            )
+        }
         configuration.dotNetFriendPaths = module.friendDependencies
             .filter { dependency -> dependency.kind == DependencyKind.Binary }
             .map { dependency ->
@@ -27014,6 +27019,30 @@ private class DotNetEnvironmentConfigurator(
             ),
         )
 
+    private fun getOrCreateForeignRecursiveMemberlessInterfaces(): List<File> =
+        listOf(
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-recursive-memberless-interface",
+                assemblyName = "Foreign.Recursive.Parent",
+                sourceText = FOREIGN_RECURSIVE_PARENT_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-recursive-memberless-interface",
+                assemblyName = "Foreign.Recursive.Middle",
+                sourceText = FOREIGN_RECURSIVE_MIDDLE_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-recursive-memberless-interface",
+                assemblyName = "Foreign.Recursive.Outer",
+                sourceText = FOREIGN_RECURSIVE_OUTER_IL,
+            ),
+            getOrCreateResourceFreeForeignAssembly(
+                directoryName = "dotnet-foreign-recursive-memberless-interface",
+                assemblyName = "Foreign.Recursive.Child",
+                sourceText = FOREIGN_RECURSIVE_CHILD_IL,
+            ),
+        )
+
     private fun getOrCreateResourceFreeForeignAssembly(
         directoryName: String,
         assemblyName: String,
@@ -27108,6 +27137,9 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     )
     val DOTNET_FOREIGN_DEEP_MEMBERLESS_INTERFACE by directive(
         "Add three CLR assemblies with one exact memberless generic interface hop"
+    )
+    val DOTNET_FOREIGN_RECURSIVE_MEMBERLESS_INTERFACE by directive(
+        "Add four CLR assemblies with two exact memberless generic interface hops"
     )
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
@@ -27302,6 +27334,76 @@ private val FOREIGN_DEEP_CHILD_IL = """
       // IntSource closes the intermediate binder in a third assembly.
       .class interface public abstract auto ansi 'IntSource'
              implements class [Foreign.Deep.Middle]'Foreign.Deep.ForwardingSource`1'<int32>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_RECURSIVE_PARENT_IL = """
+    .assembly extern mscorlib {}
+    .assembly 'Foreign.Recursive.Parent' {}
+    .module 'Foreign.Recursive.Parent.dll'
+
+    .namespace Foreign.Recursive
+    {
+      .class interface public abstract auto ansi 'Source`1'<+ T>
+      {
+        .method public hidebysig newslot abstract virtual instance !T 'Read'() cil managed
+        {
+        }
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_RECURSIVE_MIDDLE_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Recursive.Parent'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Recursive.Middle' {}
+    .module 'Foreign.Recursive.Middle.dll'
+
+    .namespace Foreign.Recursive
+    {
+      .class interface public abstract auto ansi 'ForwardingSource`1'<+ T>
+             implements class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<!T>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_RECURSIVE_OUTER_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Recursive.Middle'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Recursive.Outer' {}
+    .module 'Foreign.Recursive.Outer.dll'
+
+    .namespace Foreign.Recursive
+    {
+      .class interface public abstract auto ansi 'OuterSource`1'<+ T>
+             implements class [Foreign.Recursive.Middle]'Foreign.Recursive.ForwardingSource`1'<!T>
+      {
+      }
+    }
+""".trimIndent()
+
+private val FOREIGN_RECURSIVE_CHILD_IL = """
+    .assembly extern mscorlib {}
+    .assembly extern 'Foreign.Recursive.Outer'
+    {
+      .ver 0:0:0:0
+    }
+    .assembly 'Foreign.Recursive.Child' {}
+    .module 'Foreign.Recursive.Child.dll'
+
+    .namespace Foreign.Recursive
+    {
+      .class interface public abstract auto ansi 'IntSource'
+             implements class [Foreign.Recursive.Outer]'Foreign.Recursive.OuterSource`1'<int32>
       {
       }
     }

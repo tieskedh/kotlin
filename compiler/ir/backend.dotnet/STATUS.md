@@ -58,11 +58,10 @@ and the retained-foreign adapter. Their focused design evidence remains in the
 owning archives and ADR; this current snapshot does not duplicate it.
 
 Since that aggregate, the retained-foreign rehearsal has added exact operation,
-inherited-interface, binder-forwarding, and lazy TypeDef transport authority.
-The current focused evidence compiles the importer and test fixture, retains
-the 42-test metadata model gate, and runs five memberless external-DLL pipelines
-with both FIR parsers. The resulting focused totals are recorded below; Git owns
-the intermediate chronology.
+recursive inherited-interface, binder-forwarding, and lazy TypeDef transport
+authority. The current focused evidence compiles the importer and test fixture,
+runs the 46-test metadata model gate, and runs six memberless external-DLL
+pipelines with both FIR parsers. Git owns the intermediate chronology.
 
 ## Production binding state
 
@@ -111,47 +110,26 @@ can prove; detached producer artifacts retain their recorded constraints, while
 generic core/assembly references and arbitrary constrained constructions fail
 closed until exact metadata or constraint-satisfaction authority is joined.
 
-One bounded retained-foreign adapter now binds an open, parentless CLR generic
-interface and one selected abstract MethodDef from exact raw metadata. It
-cross-checks the retained signature and complete empty hierarchy, preserves
-ordered GenericParam facts, authenticates only the exact selected rows, and
-distinguishes unsupported valid shapes from contradictory carriers. Direct
-caller descriptions, MethodImpl owners, unsupported carrier leaves,
-and arbitrary constrained constructions remain unavailable.
+One retained-foreign adapter binds an open, parentless CLR generic interface and
+one selected abstract MethodDef from exact raw metadata. An inherited receiver
+may now be the root of a resource-bounded acyclic graph of public top-level
+memberless interfaces. Every visited TypeDef has zero or one unconstrained CLR
+parameter with exact variance, no base class or MethodImpl, and a complete
+retained/raw `InterfaceImpl` edge set. Every edge is authenticated through its
+exact AssemblyRef and retained in the shared physical-view closure; that closure
+remains the sole substitution engine. The graph may be deep, branching, and
+diamond-shaped, and must reach the selected MethodDef owner by retained identity.
+Cycles and retained/raw disagreement are conflicts; missing authority,
+unsupported shapes, and the depth/node/edge ceilings fail unavailable.
 
-One imported operation now uses that retained MethodDef as its endpoint and
-selects a receiver construction only from the existing value fact and recorded
-physical edges. Selected lineage wins; otherwise the direct carrier or one
-unique recorded physical-view closure must identify the construction. The first
-inherited grammar authenticates one child interface with an exact retained
-TypeDef carrier and zero or one unconstrained CLR parameter, preserving its
-exact variance. The carrier is sealed, validates selected assembly, TypeDef,
-hierarchy, and graph identity, and does not depend on a callable declared by
-the child. Its complete set contains one or two exact `InterfaceImpl` rows and
-at least one construction of the selected MethodDef owner. With one owner edge,
-an optional second row may target a separately authenticated non-generic root
-interface. Alternatively, both rows may be distinct exact constructions of the
-MethodDef owner; duplicate physical edges are a declaration conflict. An owner
-edge may close the owner or forward the receiver binder, including through the
-admitted SZ-array carrier. Selection is by retained TypeDef identity, never row
-order, and every row remains in the physical-view closure. The memberless
-hostile child has no marker MethodDef. Recorded substitution maps `Child<int>`
-and `Child<string>` to distinct exact parent views; the value-type route remains
-`int32`, not `object`. When one receiver implements both `Source<int>` and
-`Source<bool>`, an operation without selected lineage is unavailable. Existing
-lineage may select either guaranteed view, but cannot manufacture
-`Source<object>`. The adapter re-resolves raw metadata in the same assembly
-graph, rejects retained disagreement, and never promotes a derived base view
-into new provenance. Ambiguous or genuinely broad receivers remain unavailable.
-When a receiver's sole edge does not yet reach the MethodDef owner, one
-additional memberless interface may supply the exact edge. That intermediate
-has its own authenticated TypeDef, zero or one unconstrained binder, no fields,
-methods, properties, base class, or MethodImpl, and exactly one retained/raw
-`InterfaceImpl` to the MethodDef owner. Its binder is not borrowed from the
-leaf: ordinary physical-closure substitution derives
-`IntSource -> ForwardingSource<int> -> Source<int>` across three assemblies.
-The shared route independently admits arguments and produces the instantiated
-direct, void, or split-nullable result fact.
+An imported operation selects its receiver construction only from existing
+value facts and this recorded closure. Selected lineage may choose an already-
+guaranteed construction but cannot establish one; otherwise the direct carrier
+or a unique closed view must select it. Distinct owner constructions remain
+ambiguous without lineage. The shared route then admits arguments and produces
+the instantiated direct, void, or split-nullable result fact without a logical-
+supertype reconstruction, member-name search, fabricated construction, or
+`object` fallback.
 
 Lazy external FIR2IR now transports this already-recorded TypeDef carrier
 through a narrow target hook and compilation-local class metadata. Common IR
@@ -161,31 +139,27 @@ searching for a callable; callable MethodDefs retain separate authority and
 must agree with the class carrier by assembly, TypeDef, hierarchy, and graph
 identity. Other targets retain the previous null metadata behavior.
 
-The production importer now accepts a complete interface contract with no
-declared public callable. Resource-free external CLR DLLs prove same-assembly,
-cross-assembly, multiple-edge, multiple-owner-view, and one-intermediate
-FIR-to-lazy-FIR2IR-to-CIL paths. The hostile multiple-edge child records
-`Marker` before `Source<int>`; invocation still targets the parent's retained
-`Read` MethodDef. A second child implements both `Source<int>` and
-`Source<bool>`; explicitly typed Kotlin locals invoke each exact constructed
-slot. The deep child closes the intermediate binder at `int32`; direct and
-selected calls still target the original parent MethodDef. All exact views
-return by plain `ldarg.0; ret`. No registry, fake member, copied MethodDef, name
-lookup, row-order selection, cast, wrapper, or fabricated construction is used.
+The production importer now accepts an inherited interface contract with no
+declared public callable. Six resource-free external CLR pipelines prove same-
+assembly, cross-assembly, multiple-edge, multiple-owner-view, one-intermediate,
+and recursive four-assembly paths through FIR, lazy FIR2IR, and CIL. The
+recursive fixture closes two independent binders at `int32`; direct and selected
+calls still target the original parent MethodDef, with no references to the two
+intermediate assemblies in emitted CIL. No registry, fake member, copied
+MethodDef, name lookup, row-order selection, cast, wrapper, or fabricated
+construction is used.
 
-The next retained-foreign boundary replaces the one-hop admission with a
-resource-bounded recursive authentication of an acyclic memberless interface
-graph. Every visited TypeDef, binder, and `InterfaceImpl` must remain retained
-metadata authority; physical closure must do all substitution, and branching or
-depth may never authorize a route by logical-supertype or member-name search.
-Multiple members or binders, variance conversions, constraints, classes,
-MethodImpls, and Runtime/Stdlib application remain later.
+The next retained-foreign boundary is complete multi-member declaration and
+operation authority: separately authenticate multiple selected MethodDefs on
+one root and prove their inherited routes and overload identity without name
+matching. Multiple binders, variance conversions, constraints, classes,
+MethodImpls, properties, and Runtime/Stdlib application remain later.
 The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The current focused gate passed the retained-metadata model suite (42 tests)
-and all five memberless pipelines under both FIR parsers (10 tests), with zero
+The current focused gate passed the retained-metadata model suite (46 tests)
+and all six memberless pipelines under both FIR parsers (12 tests), with zero
 failures, errors, or skips.
 
 ## Current blockers
@@ -194,21 +168,14 @@ failures, errors, or skips.
   members/inputs, properties/defaults, constraints, method generics, deeper
   inheritance, explicit MethodImpls, value-class payloads, and Runtime/Stdlib
   application are not yet closed.
-- Declaration and implementation authority is not yet closed for arbitrary
-  deeper or branching base graphs. Distinct constructions are retained, but
-  selecting one still requires independently proven lineage.
-- Retained foreign CLR declaration authority remains bounded to an open root
-  interface, one selected MethodDef, and either its root receiver or one
-  memberless child interface with at most one unconstrained binder and at most
-  two exact `InterfaceImpl` rows, in the same selected graph but not necessarily
-  the same assembly. A second edge may be a non-generic root interface or a
-  distinct construction of the MethodDef owner. If the leaf has one edge and no
-  direct owner edge, that edge may pass through exactly one separately
-  authenticated memberless zero/one-binder interface whose sole edge reaches
-  the owner. More than two leaf rows, deeper or branching intermediate graphs,
-  a dual-owner plus auxiliary combination, multiple binders or members,
-  variance conversions, constraints, classes, MethodImpls, wider nominal
-  carriers, and broader operation routing remain incomplete.
+- Retained foreign CLR declaration authority remains bounded to one selected
+  MethodDef on an open root interface and a resource-bounded acyclic inherited
+  graph. Graph nodes must be public top-level memberless interfaces with zero or
+  one unconstrained binder. Multiple selected members and overloads, multiple
+  binders, variance conversions, constraints, classes, MethodImpls, properties,
+  wider nominal carriers, and broader operation routing remain incomplete.
+  Distinct constructions are retained, but selecting one still requires
+  independently proven lineage.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-
   parameter/plain-field grammar, including nested carriers, multiple owner-
   dependent fields,

@@ -1,0 +1,52 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern 'Foreign.Recursive.Child'
+{
+  .ver 0:0:0:0
+}
+.assembly extern 'Foreign.Recursive.Parent'
+{
+  .ver 0:0:0:0
+}
+.assembly 'foreignClrRecursiveMemberlessDerivedInterface' {}
+.module 'main-foreignClrRecursiveMemberlessDerivedInterface.il'
+
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'foreignClrRecursiveMemberlessDerivedInterfaceKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'readRecursiveSource'(class [Foreign.Recursive.Child]'Foreign.Recursive.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32>::'Read'()
+    ret
+  }
+  .method public hidebysig static class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32> 'retainRecursiveSource'(class [Foreign.Recursive.Child]'Foreign.Recursive.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static int32 'readSelectedRecursiveSource'(class [Foreign.Recursive.Child]'Foreign.Recursive.IntSource' 'source') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32> 'selected'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    callvirt instance !0 class [Foreign.Recursive.Parent]'Foreign.Recursive.Source`1'<int32>::'Read'()
+    ret
+  }
+}
