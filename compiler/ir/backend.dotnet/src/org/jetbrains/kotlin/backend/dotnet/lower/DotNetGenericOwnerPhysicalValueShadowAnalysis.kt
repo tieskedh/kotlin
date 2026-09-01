@@ -471,8 +471,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
          * natural call. Declaration authority selects the natural MethodDef; value provenance
          * selects only a construction of its owner which the receiver already guarantees. The
          * shared physical operation query then instantiates the recorded result layout. This
-         * bounded slice deliberately excludes arguments, MethodSpecs, super, semantic routes, and
-         * split results.
+         * local-result slice deliberately excludes arguments, MethodSpecs, super, semantic routes,
+         * and split results; argument-bearing split operations are authorized separately and do
+         * not yet materialize their pair into one Kotlin local.
          */
         private fun evaluateCallResultOrNull(
             expression: IrCall,
@@ -723,6 +724,43 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             plannedType ?: return null
             if (plannedType.isObjectShadowType()) {
                 return objectEntryStorage(plannedType, ownerAuthority)
+            }
+            if ((plannedType as? IrSimpleType)?.arguments?.isNotEmpty() == true) {
+                val naturalView = when (val binding = bindExactLocalGenericOwnerNaturalViewOrError(
+                    plannedType,
+                    owner,
+                    ownerAuthority.physicalAuthority,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                }
+                if (naturalView != null) {
+                    val carrier = when (val binding = ownerAuthority.declarations.carrierOrError(
+                        naturalView.construction,
+                    )) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                            error("Internal .NET backend error: ${binding.reason}")
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                    }
+                    if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) {
+                        return null
+                    }
+                    return DotNetGenericOwnerPhysicalStorageFact(
+                        DotNetGenericOwnerStorageCarrier.Fixed(carrier),
+                        DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews().guarantee(
+                            naturalView,
+                            DotNetGenericOwnerPhysicalViewEvidence.FROZEN_PARAMETER_OR_RESULT,
+                        ),
+                        if (plannedType.isMarkedNullable()) {
+                            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+                        } else {
+                            DotNetGenericOwnerPhysicalNullState.NON_NULL
+                        },
+                    )
+                }
             }
             val parameterIndex = plannedType.exactCurrentOwnerParameterIndexOrNull(owner)
                 ?: return null

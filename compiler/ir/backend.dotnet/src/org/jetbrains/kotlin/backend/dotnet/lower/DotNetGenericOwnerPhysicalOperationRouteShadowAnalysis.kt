@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRo
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerProducedValueFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
@@ -35,6 +36,7 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
@@ -65,9 +67,11 @@ import java.util.IdentityHashMap
  * Compares one BOUND callable/provenance query with the existing final router.
  *
  * The query runs synchronously after the routing fixpoint and reads its stable final context maps.
- * It does not populate a call-target map, alter IR, choose a carrier, or authorize emission. Calls
- * without one unique successful POST storage fact are deliberately omitted from this bounded
- * shadow rather than reported as covered.
+ * A BOUND exact-natural operation may remove an older conservative local semantic target when
+ * the logical route does not mandate a semantic-result contract. This is the first authoritative
+ * operation consumer: declaration authority still chooses the MethodDef, value provenance only
+ * proves its receiver and arguments, and no IR or carrier is rewritten. Calls without one unique
+ * successful POST storage fact are deliberately omitted from this bounded comparison.
  */
 internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
     private val context: DotNetBackendContext,
@@ -182,7 +186,6 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             semanticMethod,
             authority,
         )
-        val actual = actualRoute(call)
         if (selection is LogicalReceiverSelectionResult.Unsupported) return null
         val selector = selection.selector
         val requiredView = (selection as? LogicalReceiverSelectionResult.Selected)?.requiredView
@@ -193,7 +196,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             source = source,
             selector = selector,
             requiredView = requiredView,
-            actual = actual,
+            actual = actualRoute(call),
             authority = authority,
         )
         when (selection) {
@@ -211,11 +214,21 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         val selectedDescription = declarations.methodDescriptionOrNull(selectedMethod)
             ?: return diagnostic.unavailable()
         if (selectedDescription.signature.genericArity != 0) {
-            // This bounded IR shadow does not yet own value facts for method type arguments or
-            // ordinary call arguments. Omit such a call rather than presenting an absent vector
-            // as a contradictory MethodSpec; the pure route model and emitter binder test that
-            // physical contract independently.
+            // This bounded IR shadow does not yet own value facts for MethodSpec arguments. Omit
+            // such a call rather than presenting an absent vector as a contradictory MethodSpec.
             return null
+        }
+        val arguments = mutableListOf<DotNetGenericOwnerProducedValueFact>()
+        source.parameters.forEach { parameter ->
+            if (parameter.kind == IrParameterKind.DispatchReceiver) {
+                return@forEach
+            }
+            val argument = call.arguments.getOrNull(parameter.indexInParameters)
+                ?.identityGetValueOrNull()
+                ?: return null
+            if (argument.symbol in conflictingValues) return null
+            val argumentStorage = storageByValue[argument.symbol] ?: return null
+            arguments += argumentStorage.read().value
         }
         val prediction = selectDotNetGenericOwnerPhysicalOperationRoute(
             declarations = declarations,
@@ -224,16 +237,59 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                 selection.requiredView,
             ),
             receiver = storage.read().value,
-            arguments = emptyList(),
+            arguments = arguments,
         )
         return when (prediction) {
-            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                if (selection.selectedEntry ==
+                    DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
+                    selection.selector ==
+                    DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                    mayReplaceConservativeSemanticTarget(call, prediction.value)
+                ) {
+                    context.genericOwnerCapabilityCallTargets.remove(call)
+                    context.genericOwnerForeignDispatchCallTargets.remove(call)
+                    diagnostic.actual = actualRoute(call)
+                }
                 diagnostic.bound(prediction.value, call, selection.selectedEntry)
+            }
             is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
                 diagnostic.conflict(prediction.reason)
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                 diagnostic.unavailable()
         }
+    }
+
+    /**
+     * A semantic-result policy remains logical authority even when a natural receiver happens to
+     * be available. Ordinary semantic-capability selection may instead be an imprecise legacy
+     * value-flow fallback; a complete BOUND exact operation is stronger positive evidence.
+     */
+    private fun mayReplaceConservativeSemanticTarget(
+        call: IrCall,
+        route: DotNetGenericOwnerPhysicalOperationRoute,
+    ): Boolean {
+        if (call.superQualifierSymbol != null ||
+            call !in context.genericOwnerCapabilityCallTargets
+        ) return false
+        val source = (route.method.identity as?
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local)
+            ?.function
+            ?.owner
+            ?: return false
+        val owner = source.parent as? IrClass ?: return false
+        context.genericOwnerArchitecturePlans[owner]
+            ?.memberFamilies
+            ?.get(source)
+            ?.let { family -> return !family.requiresSemanticResultCapability }
+
+        // Published generic interfaces do not own generic-class architecture plans. Their
+        // materialized capability slot is nevertheless explicit policy authority: a slot marked
+        // for foreign/object result dispatch is the semantic-result route, while an unmarked slot
+        // (such as K -> V?) may yield to a fully proven exact natural operation.
+        if (context.publishedGenericInterfaceFamilies[owner] == null) return false
+        val semanticSlot = context.genericOwnerCapabilitySlots[source] ?: return false
+        return semanticSlot !in context.genericOwnerForeignDispatchDeclarations
     }
 
     private fun selectLogicalReceiver(
@@ -251,11 +307,42 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                 DotNetGenericOwnerPhysicalTypeDefIdentity.Local
             ?: return LogicalReceiverSelectionResult.Unsupported
         val logicalInterface = naturalOwner.owner.owner
+        val simple = type as? IrSimpleType ?: return LogicalReceiverSelectionResult.Unsupported
+        if (simple.classifier != logicalInterface.symbol) {
+            return LogicalReceiverSelectionResult.Unsupported
+        }
+
+        val exactSelector = DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL
+        when (val required = bindExactLocalGenericOwnerNaturalViewOrError(
+            type,
+            owner,
+            authority,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                return if (required.value.family != natural.declaringType) {
+                    LogicalReceiverSelectionResult.Conflict(
+                        exactSelector,
+                        "logical callable and exact local view select different natural TypeDefs",
+                    )
+                } else {
+                    LogicalReceiverSelectionResult.Selected(
+                        exactSelector,
+                        DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE,
+                        required.value,
+                    )
+                }
+            }
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                return LogicalReceiverSelectionResult.Conflict(exactSelector, required.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+        }
+
+        // Broad/open semantic selection is still intentionally bounded to the original one-
+        // parameter covariant grammar. Exact natural selection above is arity-independent and
+        // derives its whole construction from declaration authority plus current-owner binders.
         val interfaceParameter = logicalInterface.typeParameters.singleOrNull()
             ?: return LogicalReceiverSelectionResult.Unsupported
-        val simple = type as? IrSimpleType ?: return LogicalReceiverSelectionResult.Unsupported
-        if (simple.classifier != logicalInterface.symbol ||
-            simple.arguments.size != 1 || owner.typeParameters.size != 1 ||
+        if (simple.arguments.size != 1 || owner.typeParameters.size != 1 ||
             owner.typeParameters.single().superTypes.any { bound ->
                 !bound.isAny() && !bound.isNullableAny()
             }
@@ -311,31 +398,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                 DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.OPEN_NULLABLE,
             )
         }
-        val selector = DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL
-        return when (val required = bindExactLocalGenericOwnerNaturalViewOrError(
-            type,
-            owner,
-            authority,
-        )) {
-            is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
-                if (required.value.family != natural.declaringType) {
-                    LogicalReceiverSelectionResult.Conflict(
-                        selector,
-                        "logical callable and exact local view select different natural TypeDefs",
-                    )
-                } else {
-                    LogicalReceiverSelectionResult.Selected(
-                        selector,
-                        DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE,
-                        required.value,
-                    )
-                }
-            }
-            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                LogicalReceiverSelectionResult.Conflict(selector, required.reason)
-            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                LogicalReceiverSelectionResult.Unavailable(selector)
-        }
+        return LogicalReceiverSelectionResult.Unavailable(exactSelector)
     }
 
     private fun actualRoute(call: IrCall): DotNetGenericOwnerPhysicalOperationActualRouteSnapshot {
@@ -396,7 +459,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         val source: IrSimpleFunction,
         val selector: DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot,
         val requiredView: DotNetGenericOwnerPhysicalView?,
-        val actual: DotNetGenericOwnerPhysicalOperationActualRouteSnapshot,
+        var actual: DotNetGenericOwnerPhysicalOperationActualRouteSnapshot,
         val authority: DotNetLocalGenericOwnerPhysicalAuthority,
     ) {
         fun bound(

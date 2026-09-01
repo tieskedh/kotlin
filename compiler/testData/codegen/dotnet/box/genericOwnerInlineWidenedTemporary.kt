@@ -11,6 +11,33 @@ interface InlineProducer<out T> {
     fun produce(): T
 }
 
+interface InlineLookup<K, out V> {
+    fun lookup(key: K): V?
+}
+
+private class InlineLookupRoute<T> {
+    fun routeExactArgument(source: InlineLookup<T, T>, key: T): T? {
+        val sourceNaturalAlias: InlineLookup<T, T> = source
+        val exactArgumentAlias: T = key
+        return sourceNaturalAlias.lookup(exactArgumentAlias)
+    }
+
+    fun routeWidenedResult(source: InlineLookup<T, T>, key: T): Any? {
+        val sourceNaturalAlias: InlineLookup<T, T> = source
+        val sourceWideAlias: InlineLookup<T, Any?> = sourceNaturalAlias
+        val exactArgumentAlias: T = key
+        return sourceWideAlias.lookup(exactArgumentAlias)
+    }
+}
+
+private class InlineIntLookup : InlineLookup<Int, Int> {
+    override fun lookup(key: Int): Int? = key.takeUnless { it < 0 }
+}
+
+private class InlineStringLookup : InlineLookup<String, String> {
+    override fun lookup(key: String): String? = key.takeUnless { it.isEmpty() }
+}
+
 private inline fun <T> InlineProducer<T>.indexOfFirst(
     predicate: (T) -> Boolean,
 ): Int = if (predicate(produce())) 0 else -1
@@ -78,6 +105,31 @@ private class InlineSecondView<T>(private val value: T) : InlineProducer<T> {
 }
 
 fun box(): String {
+    if (InlineLookupRoute<Int>().routeExactArgument(InlineIntLookup(), 42) != 42) {
+        return "value argument route"
+    }
+    if (InlineLookupRoute<Int>().routeExactArgument(InlineIntLookup(), -1) != null) {
+        return "value null argument route"
+    }
+    if (InlineLookupRoute<String>().routeExactArgument(InlineStringLookup(), "typed") != "typed") {
+        return "reference result argument route"
+    }
+    if (InlineLookupRoute<String>().routeExactArgument(InlineStringLookup(), "") != null) {
+        return "reference null result argument route"
+    }
+    if (InlineLookupRoute<Int>().routeWidenedResult(InlineIntLookup(), 43) != 43) {
+        return "value widened result route"
+    }
+    if (InlineLookupRoute<Int>().routeWidenedResult(InlineIntLookup(), -1) != null) {
+        return "value null widened result route"
+    }
+    if (InlineLookupRoute<String>().routeWidenedResult(InlineStringLookup(), "wide") != "wide") {
+        return "reference widened result route"
+    }
+    if (InlineLookupRoute<String>().routeWidenedResult(InlineStringLookup(), "") != null) {
+        return "reference null widened result route"
+    }
+
     val ints = InlineSelfView(42)
     if (ints.indexOf(42) != 0 || ints.indexOf(43) != -1) return "value self-view"
     if (!ints.sourceAliasMatches(42) || ints.sourceAliasMatches(43)) return "value source alias"

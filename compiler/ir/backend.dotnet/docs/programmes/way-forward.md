@@ -84,9 +84,14 @@ proof; they are not hard user errors.
 Stage 7 now composes one strict owner-dependent callable input with a distinct
 split-nullable owner result on a custom structural declaration. Semantic role,
 parameter domains, and result layout remain independent; the existing Runtime
-`Map` family is deliberately unchanged. The bounded proof and its exact erased
-inverse are recorded in the
-[Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
+`Map` family is deliberately unchanged. Final local operation authority now
+consumes the same contract from an exact constructed receiver plus argument
+facts, and may replace a weaker conservative semantic fallback only when the
+logical family has no semantic-result requirement. The bounded declaration and
+operation proofs and their exact erased inverses are recorded in the
+[Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md)
+and
+[owner-input operation archive](../archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
 The retained-foreign adapter authenticates one selected open root-interface
 MethodDef directly from retained and re-resolved raw metadata. This is a per-
 MethodDef authority unit rather than a one-member declaration restriction: one
@@ -212,10 +217,12 @@ dataflow precision rather than declaration conflict. The emitter reconstructs
 the selected carrier and either checks the whole initializer or emits every
 control-flow arm against that fixed boundary. Third, a regular parameter whose
 role-specific physical entry prototype is exactly one parameter of the current
-owner may produce and store that same `!n`. The emitter admits it only when the
-live direct parameter read has the identical owner-bound carrier. A paired
-semantic hook is analyzed from its own prototype, so an object-domain entry does
-not inherit the typed entry's fact. Fourth, a parameterless, non-method-generic
+owner, or one admitted natural interface construction whose complete argument
+vector consists of current-owner parameters, may produce and store that same
+`!n` or `I<!n,...>`. The emitter admits it only when the live direct parameter
+read has the identical owner-bound carrier. A paired semantic hook is analyzed
+from its own prototype, so an object-domain entry does not inherit the typed
+entry's fact. Fourth, a parameterless, non-method-generic
 natural MethodDef may produce its authority-recorded `Direct` result through an
 already-guaranteed receiver construction and retain the same owner-bound `!n`
 in an immutable local. An existing semantic route vetoes this transfer; the
@@ -229,14 +236,19 @@ materialization, field/state choice, or ABI change. Ordinary source aliases and
 compiler-created aliases follow the same rules. Star/projected values, mutable
 or multiple-write locals, unknown/null/bottom arms, non-exhaustive control flow,
 foreign/fixed/nested constructions, argument-bearing or MethodSpec calls, and
-split layouts receive no corresponding placement token. The previous compiler-
+split layouts receive no corresponding **local-placement** token. An exact
+argument-bearing operation may now consume final receiver/argument facts and
+retain its recorded split result layout without materializing that pair in a
+local. The previous compiler-
 origin recognizer remains only as migration fallback.
 
-The first exact typed parameter entry is closed only for a bare current-owner
-parameter and direct local alias. The first exact result transfer is closed only
-for a parameterless natural MethodDef with one `Direct` result. Next compose
-owner-dependent argument domains, MethodSpecs, and split-nullable results with
-the same operation query, and complete the remaining parameter-entry forms.
+Exact typed parameter entry is closed for a bare current-owner parameter and
+for an admitted natural construction whose invariant argument vector contains
+only current-owner parameters. The first exact local result transfer remains
+closed to a parameterless natural MethodDef with one `Direct` result. The first
+exact operation now composes owner-dependent arguments with a split-nullable
+result. Next add MethodSpecs, materialize split-nullable results across local/
+control-flow boundaries, and complete the remaining parameter-entry forms.
 Then extend joins to null, bottom, and unknown arms and make representation-
 changing conversions explicit. Prove those grammars before widening the
 consumer to fields, captures, properties, class nodes, MethodImpls, or

@@ -2012,6 +2012,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 parameterSlotDomains = parameterSlotDomains,
                 roles = roles,
                 semanticHookReasons = semanticHookReasons,
+                requiresSemanticResultCapability =
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in roles &&
+                            member.returnType.containsReifiedVariantOwnerApplicationOf(owner),
                 requiresDirectSuperTargets = member.modality != Modality.FINAL,
                 directSuperCallCount = directSuperCalls.size,
                 directSuperCalls = directSuperCalls,
@@ -3008,16 +3011,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         } else {
                             receiverProvenance(target.receiver)
                         }
-                        val exactResultNeedsSemanticRoute =
-                            target.callee.returnType.containsReifiedVariantOwnerApplicationOf(target.owner) &&
-                                    target.localFamily?.roles?.contains(
-                                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
-                                    ) == true
                         val requirement = when {
                             target.localFamily == null ->
                                 DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED
                             provenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION &&
-                                    exactResultNeedsSemanticRoute ->
+                                    target.localFamily.requiresSemanticResultCapability ->
                                 DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
                             provenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION -> {
                                 check(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY in target.localFamily.roles) {

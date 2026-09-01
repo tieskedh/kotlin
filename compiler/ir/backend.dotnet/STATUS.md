@@ -79,9 +79,11 @@ direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
 across all reaching arms. A regular parameter whose role-specific physical
-entry prototype is exactly the current owner parameter may enter and remain in
-local storage as the same `!n`; an object-domain semantic-hook prototype remains
-object-domain. A parameterless, non-method-generic natural MethodDef may now
+entry prototype is exactly the current owner parameter, or an exact natural
+interface construction made solely from current-owner parameters, may enter and
+remain in local storage as that same `!n` or `I<!n,...>`; an object-domain
+semantic-hook prototype remains object-domain. A parameterless,
+non-method-generic natural MethodDef may now
 produce its recorded direct result and retain an equal owner-bound `!n` local.
 The declaration index selects the MethodDef, while receiver provenance supplies
 only a construction which it already guarantees; an existing semantic route
@@ -98,6 +100,23 @@ evidence is in the
 [typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md),
 and [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md)
 archives.
+
+The first argument-bearing authoritative operation now composes an exact
+constructed `Lookup<!T,!T>` entry, one final `!T` argument fact,
+`STRICT_OWNER_INPUT(!K)`, and the producer-recorded
+`SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. Exact natural receiver
+selection is arity-independent; broad/open semantic selection remains bounded.
+When the logical member family has no explicit semantic-result requirement, a
+fully BOUND exact operation may replace an older conservative local semantic
+target after the routing fixpoint. Generic-class plans record that policy;
+published interface capability slots carry the equivalent producer-owned
+decision. A logically widened `Lookup<T, Any?>` retains its semantic route even
+when its value still has an exact physical carrier, including `T = Int`. Exact
+evidence is in the
+[owner-input operation archive](docs/archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
+The focused XML audit contains 172 green model tests; candidate and erased
+inverse each contain four suites and eight green tests across PSI, LightTree,
+Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 ## Production binding state
 
@@ -124,13 +143,17 @@ The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
 The local placement consumer now covers direct equal-carrier aliases, one
-exhaustive reference-shaped control-flow join, one exact owner-parameter entry,
-and one exact direct natural-MethodDef result. The join uses a logical interface
+exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
+natural parameter entries, and one exact direct natural-MethodDef result. The
+join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
 from the role-specific physical prototype and is checked against the live
 MethodDef slot; a Kotlin source type cannot manufacture `!T`, and a semantic
-prototype does not inherit the typed entry's fact. The result transfer selects
+prototype does not inherit the typed entry's fact. An exact constructed entry
+also requires an already admitted natural TypeDef and binds every argument to a
+current physical-owner parameter; source type syntax alone cannot admit it. The
+result transfer selects
 the natural MethodDef from bound declaration authority, instantiates it only
 through an already-guaranteed receiver construction, and is checked against the
 live resolved call result. An absent legacy route-census record is not evidence,
@@ -139,11 +162,10 @@ permissions authorizes conversion, adaptation, boxing, state, or ABI changes.
 The older compiler-origin recognizer remains only as migration fallback for
 transfer shapes the shared model has not yet derived.
 
-The next consolidation boundary composes owner-dependent call arguments and
-result layouts—including split-nullable production—with the same operation
-query, plus the remaining parameter-entry compositions, followed by
-null/bottom/unknown control-flow arms and explicit representation-changing
-conversions. Fields,
+The next consolidation boundary adds MethodSpec arguments and split-nullable
+local/control-flow materialization to the same operation query, plus the
+remaining parameter-entry compositions, followed by null/bottom/unknown
+control-flow arms and explicit representation-changing conversions. Fields,
 captures, foreign/fixed/nested carriers, stars/projections, and split-nullable
 local placement stay outside these consumers rather than acquiring local
 exceptions.
@@ -154,6 +176,9 @@ independent `H` semantic-role/result-layout fields introduced in ABI 65 and
 adds producer-recorded sealed-delegate variance authority; local BOUND,
 producer-final `N`, direct consumers, semantic capability dispatch, and
 ordinary natural-only C# implementations consume the same MethodDef authority.
+The final local operation consumer now also proves this exact composition from
+constructed receiver and argument value facts and removes a weaker legacy
+semantic fallback only when logical semantic-result policy permits it.
 The admitted grammar is deliberately limited to a single-member root interface
 with one invariant input and one distinct covariant nullable output. Existing
 result-only split-nullable families remain green and Runtime `Map` retains its
