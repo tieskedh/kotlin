@@ -800,6 +800,17 @@ an incomplete retained hierarchy, invalid generic binder/flags, or disagreement
 between retained and raw signatures is `Conflict`. Recorded constraints still
 do not prove an arbitrary constrained construction.
 
+The one-MethodDef adapter is a unit of authority, not a one-member declaration
+restriction. The importer may create any number of these bindings for one
+retained owner. Each imported function keeps its own retained MethodDef and
+re-resolved signature; no declaration-wide name or arity index becomes
+physical authority. Consequently, methods with the same name and argument
+count remain distinct when their retained parameter signatures differ. A
+recursive external-DLL proof consumes a no-argument method plus `int32` and
+string one-argument overloads through one inherited receiver and emits all
+three original parent MethodDef signatures. A batch adapter would add no
+authority and is not required.
+
 The inherited-receiver grammar admits a resource-bounded acyclic graph of
 public top-level abstract memberless interfaces in the same selected assembly
 graph. The root comes from its selected retained class carrier; every visited
@@ -963,9 +974,11 @@ strict owner input with a split-nullable owner result on a custom structural
 family, including producer-recorded MethodDef consumption, ordinary C#
 implementation, and the exact erased inverse. Retained/foreign operation
 authority now also covers a resource-bounded recursive memberless interface
-graph. The next ordered work closes complete multi-member declaration and
-operation authority without name-based overload selection; it is not another
-shape-specific state recognizer or a resumed stdlib census.
+graph. Multi-member consumption, including same-name/same-arity overloads, is
+now executable evidence that authority remains independently per retained
+MethodDef. The next ordered work widens the inherited graph to multiple TypeDef
+binders; it is not another shape-specific state recognizer or a resumed stdlib
+census.
 
 ## Consequences
 
