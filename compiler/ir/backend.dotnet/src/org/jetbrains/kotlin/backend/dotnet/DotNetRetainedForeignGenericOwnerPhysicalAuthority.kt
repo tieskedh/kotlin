@@ -23,7 +23,9 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintSatisfaction
 import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintValidator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassification
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalogResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalogResolver
@@ -64,14 +66,16 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
  * physical authority. The shared physical-interface closure, rather than this adapter, performs
  * construction substitution. Row order never selects the callable owner, and two distinct exact
  * constructions of that owner require already-proven selected lineage at the operation boundary.
- * Each admitted interface has a resource-bounded ordered binder vector whose exact CLR variance
- * and supported nominal constraints are retained. An exact nominal carrier is admitted only for a
- * public interface whose selected hierarchy agrees with raw metadata; a generic auxiliary carrier
- * additionally requires a complete unconstrained binder vector. Recursive constructed carriers
- * are depth- and node-bounded, and an unretained auxiliary edge set remains unknown. A constrained
- * target edge is admitted only after the shared CLR validator proves the exact metadata
- * construction in the source TypeDef's open binder context. Declared members, special constraints,
- * MethodImpls, classes, and carrier shapes outside the bounded grammar remain unavailable.
+ * Each admitted graph interface has a resource-bounded ordered binder vector whose exact CLR
+ * variance and supported nominal constraints are retained. An exact nominal carrier may be a
+ * public interface or ordinary reference class whose selected hierarchy agrees with raw metadata;
+ * a generic auxiliary carrier additionally requires a complete unconstrained binder vector.
+ * Recursive constructed carriers are depth- and node-bounded, and an unretained auxiliary edge
+ * set remains unknown. Variant non-interface TypeDefs remain unavailable until delegates are
+ * classified separately. A constrained target edge is admitted only after the shared CLR
+ * validator proves the exact metadata construction in the source TypeDef's open binder context.
+ * Declared graph members, special constraints, MethodImpls, value types, and carrier shapes
+ * outside the bounded grammar remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -115,6 +119,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetGenericOwnerPhysicalTypeDefReference,
                 >()
         private var translatedCarrierNodeCount = 0
+        private val physicalTypeClassifier by lazy(LazyThreadSafetyMode.NONE) {
+            source.graph.physicalCoreTypes?.let { coreTypes ->
+                DotNetClrPhysicalTypeClassifier(typeResolver, coreTypes)
+            }
+        }
         private val nominalConstraintValidator by lazy(LazyThreadSafetyMode.NONE) {
             createNominalConstraintValidator()
         }
@@ -275,10 +284,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
                 val parameters = when (
-                    val translation = translateInterfaceParameters(
+                    val translation = translateTypeParameters(
                         context,
                         identity,
                         type.definition,
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
                         "retained foreign interface",
                     )
                 ) {
@@ -502,6 +512,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetGenericOwnerPhysicalBindingResult<DotNetClrNominalConstraintValidator> {
             val coreTypes = source.graph.physicalCoreTypes
                 ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            val classifier = physicalTypeClassifier
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             val coreAssembly = coreTypes.systemValueType.assembly
             val primitiveTypes = when (
                 val resolution = DotNetClrPrimitiveTypeCatalogResolver(typeResolver)
@@ -535,17 +547,18 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetClrNominalConstraintValidator(
                     typeResolver,
                     primitiveTypes,
-                    DotNetClrPhysicalTypeClassifier(typeResolver, coreTypes),
+                    classifier,
                     arrayRuntimeTypes,
                     delegateRuntimeTypes,
                 )
             )
         }
 
-        private fun translateInterfaceParameters(
+        private fun translateTypeParameters(
             context: DotNetClrResolvedGenericParameterContext,
             declaringIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
             declaringType: DotNetClrTypeDefinition,
+            category: DotNetGenericOwnerPhysicalNamedTypeCategory,
             subject: String,
         ): DotNetGenericOwnerPhysicalBindingResult<
                 List<DotNetGenericOwnerPhysicalGenericParameterReference>,
@@ -585,11 +598,19 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     DotNetClrGenericParameterVariance.CONTRAVARIANT ->
                         DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
                 }
+                if (category == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+                    variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                ) {
+                    // CLR variance is valid on delegates as well as interfaces. Delegate
+                    // classification is outside this ordinary-reference-class slice, so do not
+                    // misclassify a valid delegate row as an invalid class declaration.
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
                 val constraints = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
                 for (constraint in binding.constraints) {
                     val carrier = when (val type = constraint.type) {
                         is DotNetClrResolvedGenericConstraintType.Nominal ->
-                            translateExactNominalInterfaceCarrier(type.type)
+                            translateExactNominalCarrier(type.type)
                         is DotNetClrResolvedGenericConstraintType.Specification ->
                             translateInheritedCarrier(
                                 type.type,
@@ -619,11 +640,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             return bound(translated.toList())
         }
 
-        private fun translateExactNominalInterfaceCarrier(
+        private fun translateExactNominalCarrier(
             type: DotNetClrResolvedTypeDefinition,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
             val description = when (
-                val retention = retainExactAuxiliaryInterfaceTypeDefinition(type)
+                val retention = retainExactAuxiliaryNominalTypeDefinition(type)
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> retention.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return retention
@@ -643,7 +664,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             )
         }
 
-        private fun retainExactAuxiliaryInterfaceTypeDefinition(
+        private fun retainExactAuxiliaryNominalTypeDefinition(
             type: DotNetClrResolvedTypeDefinition,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalTypeDefReference> {
             val identity =
@@ -702,21 +723,61 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             }
             if (!retainedHierarchy.type.type.hasSameIdentityAs(type) ||
                 retainedHierarchy.type.arguments != openArguments ||
-                !definition.isInterface ||
-                !definition.isAbstract ||
-                definition.isSealed ||
                 definition.declaringType != null ||
-                definition.visibility != DotNetClrTypeVisibility.PUBLIC ||
-                definition.baseType != null ||
-                rawHierarchy.baseType != null
+                definition.visibility != DotNetClrTypeVisibility.PUBLIC
             ) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            val parameters = when (val translation = translateInterfaceParameters(
+            val category = when {
+                definition.isInterface -> {
+                    if (!definition.isAbstract || definition.isSealed ||
+                        definition.baseType != null || rawHierarchy.baseType != null
+                    ) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    }
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                }
+                else -> when (
+                    val classification = physicalTypeClassifier?.classify(
+                        if (openArguments.isEmpty()) {
+                            DotNetClrResolvedTypeSignature.Named(type, isValueType = false)
+                        } else {
+                            DotNetClrResolvedTypeSignature.GenericInstance(
+                                DotNetClrResolvedTypeSignature.Named(type, isValueType = false),
+                                openArguments,
+                            )
+                        },
+                    ) ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                ) {
+                    is DotNetClrPhysicalTypeClassification.Classified ->
+                        if (classification.kind == DotNetClrPhysicalTypeKind.REFERENCE) {
+                            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                        } else {
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                    is DotNetClrPhysicalTypeClassification.Unsupported ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    is DotNetClrPhysicalTypeClassification.Invalid ->
+                        if (classification.definitionIsValueType == true) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        } else {
+                            return conflict(
+                                "retained nominal carrier has an invalid physical kind " +
+                                        "(${classification.failure})",
+                            )
+                        }
+                    is DotNetClrPhysicalTypeClassification.InvalidHierarchy ->
+                        // The shared classifier groups invalid, unsupported, and resource-limited
+                        // assignability results here. None proves a reference-class carrier.
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+            }
+            val parameters = when (val translation = translateTypeParameters(
                 context,
                 identity,
                 definition,
-                "retained auxiliary interface",
+                category,
+                "retained auxiliary nominal TypeDef",
             )) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
@@ -726,7 +787,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             val description = DotNetGenericOwnerPhysicalTypeDefReference(
                 identity,
                 genericParameters = parameters,
-                category = DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                category = category,
             )
             if (auxiliaryNominalTypeDefinitions.size >=
                 MAX_RETAINED_INTERFACE_GRAPH_NODES
@@ -803,14 +864,14 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     if (type.isValueType) {
                         DotNetGenericOwnerPhysicalBindingResult.Unavailable
                     } else {
-                        translateExactNominalInterfaceCarrier(type.type)
+                        translateExactNominalCarrier(type.type)
                     }
                 is DotNetClrResolvedTypeSignature.GenericInstance -> {
                     if (type.genericType.isValueType) {
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                     }
                     val description = when (
-                        val retention = retainExactAuxiliaryInterfaceTypeDefinition(
+                        val retention = retainExactAuxiliaryNominalTypeDefinition(
                             type.genericType.type,
                         )
                     ) {

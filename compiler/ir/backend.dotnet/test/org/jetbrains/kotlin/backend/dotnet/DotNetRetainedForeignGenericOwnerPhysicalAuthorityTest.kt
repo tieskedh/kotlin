@@ -1071,6 +1071,141 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
     }
 
     @Test
+    fun `nominal reference class constraints retain direct and recursive exact carriers`() {
+        for (constructionDepth in listOf(0, 2)) {
+            val fixture = deepCrossAssemblyFixture(
+                intermediateDepth = 2,
+                nominalConstraintConstructionDepth = constructionDepth,
+                nominalConstraintUsesReferenceClass = true,
+            )
+            val receiverSource = assertNotNull(fixture.inheritedReceiverSource)
+            val markerMetadataName = if (constructionDepth == 0) {
+                "MarkerClass"
+            } else {
+                "MarkerClassOf`1"
+            }
+            val markerType = fixture.source.graph.hierarchies
+                .map { hierarchy -> hierarchy.type.type }
+                .single { type ->
+                    type.definition.namespaceName == "Synthetic.Constraint" &&
+                            type.definition.metadataName == markerMetadataName
+                }
+            val declarationBinding =
+                DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                    fixture.source,
+                    fixture.method,
+                    receiverSource,
+                )
+            val declarations = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalDeclarationIndex,
+                    >>(
+                declarationBinding,
+                declarationBinding.toString(),
+            ).value
+            val markerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(
+                receiverSource,
+                markerType,
+            )
+            val markerDescription = assertNotNull(
+                declarations.typeDescriptionOrNull(markerIdentity),
+            )
+            assertEquals(
+                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                markerDescription.category,
+            )
+            assertEquals(if (constructionDepth == 0) 0 else 1, markerDescription.genericArity)
+            assertEquals(
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                declarations.directSupertypeEdgesOrUnavailable(markerIdentity),
+            )
+
+            var expectedCarrier: DotNetGenericOwnerSymbolicCarrierReference =
+                if (constructionDepth == 0) {
+                    boundConstruction(declarations, markerIdentity, emptyList())
+                } else {
+                    DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()
+                }
+            repeat(constructionDepth) {
+                expectedCarrier = boundConstruction(
+                    declarations,
+                    markerIdentity,
+                    listOf(expectedCarrier),
+                )
+            }
+            val expectedConstruction = assertIs<
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+                    >(expectedCarrier)
+            val receiverConstruction = boundConstruction(
+                declarations,
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource),
+                emptyList(),
+            )
+            val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetGenericOwnerPhysicalOperationRoute,
+                    >>(
+                selectRetainedRoute(
+                    fixture,
+                    directValue(declarations, receiverConstruction),
+                    exactTransferArguments(declarations, expectedConstruction),
+                    receiverSource,
+                )
+            ).value
+            assertEquals(
+                boundConstruction(
+                    declarations,
+                    retainedOwnerIdentity(fixture),
+                    listOf(expectedConstruction),
+                ),
+                route.requiredReceiverView.construction,
+            )
+            assertEquals(
+                expectedConstruction,
+                assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct>(
+                    route.instantiatedSignature.resultLayout,
+                ).slot.carrier,
+            )
+        }
+    }
+
+    @Test
+    fun `nominal reference class carrier requires selected hierarchy authority`() {
+        val fixture = deepCrossAssemblyFixture(
+            intermediateDepth = 2,
+            nominalConstraintConstructionDepth = 1,
+            nominalConstraintUsesReferenceClass = true,
+            includeNominalConstraintHierarchy = false,
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            ),
+        )
+    }
+
+    @Test
+    fun `CLR variant reference TypeDef remains outside ordinary class carrier grammar`() {
+        val fixture = deepCrossAssemblyFixture(
+            intermediateDepth = 2,
+            nominalConstraintConstructionDepth = 1,
+            nominalConstraintUsesReferenceClass = true,
+            genericNominalClassCovariant = true,
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
+                fixture.source,
+                fixture.method,
+                assertNotNull(fixture.inheritedReceiverSource),
+            ),
+        )
+    }
+
+    @Test
     fun `missing nested nominal source constraint rejects an inherited edge`() {
         val fixture = deepCrossAssemblyFixture(
             intermediateDepth = 2,
@@ -2948,6 +3083,8 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         omitLastDependentConstraint: Boolean = false,
         dependentConstraintCopies: Int = 1,
         nominalConstraintConstructionDepth: Int? = null,
+        nominalConstraintUsesReferenceClass: Boolean = false,
+        genericNominalClassCovariant: Boolean = false,
         omitLastNominalConstraint: Boolean = false,
         includeNominalConstraintHierarchy: Boolean = true,
         nestedNominalCarrierReferenceConstraint: Boolean = false,
@@ -2968,6 +3105,9 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         require(nominalConstraintConstructionDepth == null || intermediateGenericArity == 1)
         require(nominalConstraintConstructionDepth == null || !reverseIntermediateArguments)
         require(nominalConstraintConstructionDepth == null || !dependentParameterConstraint)
+        require(!nominalConstraintUsesReferenceClass || nominalConstraintConstructionDepth != null)
+        require(!genericNominalClassCovariant || nominalConstraintUsesReferenceClass)
+        require(!genericNominalClassCovariant || nominalConstraintConstructionDepth != 0)
         require(!omitLastNominalConstraint || nominalConstraintConstructionDepth != null)
         require(!nestedNominalCarrierReferenceConstraint ||
                 checkNotNull(nominalConstraintConstructionDepth) > 0)
@@ -2978,7 +3118,10 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         require(duplicateFirstBinderRows == 1 || nominalConstraintConstructionDepth == null)
         val hasNominalConstraint = nominalConstraintConstructionDepth != null
         val constraintCore = if (dependentParameterConstraint || hasNominalConstraint) {
-            minimalConstraintCoreFixture(nestedNominalCarrierReferenceConstraint)
+            minimalConstraintCoreFixture(
+                nestedNominalCarrierReferenceConstraint,
+                genericNominalClassCovariant,
+            )
         } else {
             null
         }
@@ -3057,11 +3200,10 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             )
             val nominalConstraintTypeReference = if (hasNominalConstraint) {
                 val core = checkNotNull(constraintCore)
-                val marker = if (nominalConstraintConstructionDepth == 0) {
-                    core.markerType.definition
-                } else {
-                    core.genericMarkerType.definition
-                }
+                val marker = core.nominalCarrierType(
+                    generic = nominalConstraintConstructionDepth != 0,
+                    referenceClass = nominalConstraintUsesReferenceClass,
+                ).definition
                 DotNetClrTypeReference(
                     handle = nominalConstraintTypeReferenceHandle,
                     namespaceName = marker.namespaceName,
@@ -3419,11 +3561,10 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         )
         val childNominalConstraintTypeReference = if (hasNominalConstraint) {
             val core = checkNotNull(constraintCore)
-            val marker = if (nominalConstraintConstructionDepth == 0) {
-                core.markerType.definition
-            } else {
-                core.genericMarkerType.definition
-            }
+            val marker = core.nominalCarrierType(
+                generic = nominalConstraintConstructionDepth != 0,
+                referenceClass = nominalConstraintUsesReferenceClass,
+            ).definition
             DotNetClrTypeReference(
                 handle = childNominalConstraintTypeReferenceHandle,
                 namespaceName = marker.namespaceName,
@@ -3532,12 +3673,18 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                                 val core = checkNotNull(constraintCore)
                                 if (nominalConstraintConstructionDepth == 0) {
                                     DotNetClrResolvedTypeSignature.Named(
-                                        core.markerType,
+                                        core.nominalCarrierType(
+                                            generic = false,
+                                            referenceClass = nominalConstraintUsesReferenceClass,
+                                        ),
                                         isValueType = false,
                                     )
                                 } else {
                                     nestedResolvedGenericTypeSignature(
-                                        core.genericMarkerType,
+                                        core.nominalCarrierType(
+                                            generic = true,
+                                            referenceClass = nominalConstraintUsesReferenceClass,
+                                        ),
                                         checkNotNull(nominalConstraintConstructionDepth),
                                         DotNetClrResolvedTypeSignature.Primitive(
                                             if (nestedNominalCarrierReferenceConstraint) {
@@ -3571,11 +3718,10 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 if (hasNominalConstraint && includeNominalConstraintHierarchy) {
                     val core = checkNotNull(constraintCore)
                     add(
-                        if (nominalConstraintConstructionDepth == 0) {
-                            core.markerHierarchy
-                        } else {
-                            core.genericMarkerHierarchy
-                        }
+                        core.nominalCarrierHierarchy(
+                            generic = nominalConstraintConstructionDepth != 0,
+                            referenceClass = nominalConstraintUsesReferenceClass,
+                        )
                     )
                 }
                 add(parentSource.declaringHierarchy)
@@ -3641,6 +3787,7 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
 
     private fun minimalConstraintCoreFixture(
         genericMarkerHasReferenceConstraint: Boolean = false,
+        genericMarkerClassCovariant: Boolean = false,
     ): ConstraintCoreFixture {
         val definitions = mutableListOf<DotNetClrTypeDefinition>()
         fun type(
@@ -3705,6 +3852,16 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             "MarkerOf`1",
             attributes = PUBLIC_ABSTRACT_INTERFACE_ATTRIBUTES,
         )
+        val markerClass = type(
+            "Synthetic.Constraint",
+            "MarkerClass",
+            baseType = systemObject.handle,
+        )
+        val genericMarkerClass = type(
+            "Synthetic.Constraint",
+            "MarkerClassOf`1",
+            baseType = systemObject.handle,
+        )
         for (primitive in DotNetClrPrimitiveType.entries) {
             if (primitive == DotNetClrPrimitiveType.OBJECT) continue
             type(
@@ -3717,7 +3874,8 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 },
             )
         }
-        val genericOwners = listOf(systemNullable) + vectorInterfaces + genericMarker
+        val genericOwners = listOf(systemNullable) +
+                vectorInterfaces + genericMarker + genericMarkerClass
         val genericParameters = genericOwners.mapIndexed { index, owner ->
             DotNetClrGenericParameterDefinition(
                 handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, index + 1),
@@ -3725,6 +3883,16 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                 attributes = if (owner === genericMarker) {
                     COVARIANT_ATTRIBUTE or if (genericMarkerHasReferenceConstraint) {
                         REFERENCE_TYPE_CONSTRAINT_ATTRIBUTE
+                    } else {
+                        0
+                    }
+                } else if (owner === genericMarkerClass) {
+                    (if (genericMarkerHasReferenceConstraint) {
+                        REFERENCE_TYPE_CONSTRAINT_ATTRIBUTE
+                    } else {
+                        0
+                    }) or if (genericMarkerClassCovariant) {
+                        COVARIANT_ATTRIBUTE
                     } else {
                         0
                     }
@@ -3767,6 +3935,9 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         )
         val markerType = DotNetClrResolvedTypeDefinition(metadata, marker)
         val genericMarkerType = DotNetClrResolvedTypeDefinition(metadata, genericMarker)
+        val systemObjectType = DotNetClrResolvedTypeDefinition(metadata, systemObject)
+        val markerClassType = DotNetClrResolvedTypeDefinition(metadata, markerClass)
+        val genericMarkerClassType = DotNetClrResolvedTypeDefinition(metadata, genericMarkerClass)
         return ConstraintCoreFixture(
             assembly,
             DotNetClrPhysicalTypeCoreTypes(
@@ -3792,6 +3963,26 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
                     ),
                 ),
                 baseType = null,
+                interfaces = emptyList(),
+            ),
+            markerClassType,
+            DotNetClrResolvedTypeHierarchy(
+                DotNetClrResolvedTypeView(markerClassType, emptyList()),
+                baseType = DotNetClrResolvedTypeView(systemObjectType, emptyList()),
+                interfaces = emptyList(),
+            ),
+            genericMarkerClassType,
+            DotNetClrResolvedTypeHierarchy(
+                DotNetClrResolvedTypeView(
+                    genericMarkerClassType,
+                    listOf(
+                        DotNetClrResolvedTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        )
+                    ),
+                ),
+                baseType = DotNetClrResolvedTypeView(systemObjectType, emptyList()),
                 interfaces = emptyList(),
             ),
         )
@@ -3823,7 +4014,31 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
         val markerHierarchy: DotNetClrResolvedTypeHierarchy,
         val genericMarkerType: DotNetClrResolvedTypeDefinition,
         val genericMarkerHierarchy: DotNetClrResolvedTypeHierarchy,
-    )
+        val markerClassType: DotNetClrResolvedTypeDefinition,
+        val markerClassHierarchy: DotNetClrResolvedTypeHierarchy,
+        val genericMarkerClassType: DotNetClrResolvedTypeDefinition,
+        val genericMarkerClassHierarchy: DotNetClrResolvedTypeHierarchy,
+    ) {
+        fun nominalCarrierType(
+            generic: Boolean,
+            referenceClass: Boolean,
+        ): DotNetClrResolvedTypeDefinition = when {
+            referenceClass && generic -> genericMarkerClassType
+            referenceClass -> markerClassType
+            generic -> genericMarkerType
+            else -> markerType
+        }
+
+        fun nominalCarrierHierarchy(
+            generic: Boolean,
+            referenceClass: Boolean,
+        ): DotNetClrResolvedTypeHierarchy = when {
+            referenceClass && generic -> genericMarkerClassHierarchy
+            referenceClass -> markerClassHierarchy
+            generic -> genericMarkerHierarchy
+            else -> markerHierarchy
+        }
+    }
 
     private data class Fixture(
         val source: DotNetClrImportedMethodSource,
