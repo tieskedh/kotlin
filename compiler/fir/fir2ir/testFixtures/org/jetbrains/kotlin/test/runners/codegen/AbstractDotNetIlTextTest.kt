@@ -1030,13 +1030,33 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "An exact owner-dependent !K argument must preserve the natural !V+bool result route: " +
                 exactArgumentRoute
     }
-    check(snapshots.none { candidate ->
+    val widenedArgumentRoute = checkNotNull(snapshots.singleOrNull { candidate ->
         candidate.ownerName.endsWith("InlineLookupRoute") &&
                 candidate.physicalFunctionName == "routeWidenedResult" &&
                 candidate.logicalMemberName == "lookup"
     }) {
-        "A logically widened multi-parameter view must not acquire an exact natural route: " +
-                snapshots
+        "A logically widened multi-parameter view must remain explicit semantic evidence: $snapshots"
+    }
+    check(widenedArgumentRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE &&
+            widenedArgumentRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL &&
+            widenedArgumentRoute.predictedRouteKind == null &&
+            widenedArgumentRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+                        carrier.localOwnerName?.endsWith("InlineLookup") == true &&
+                        carrier.ownerParameterIndices.isEmpty()
+            } && widenedArgumentRoute.methodArgumentCarriers.isEmpty() &&
+            widenedArgumentRoute.resultLayout == null &&
+            widenedArgumentRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
+                .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
+            widenedArgumentRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.PREDICTION_UNAVAILABLE &&
+            !widenedArgumentRoute.diagnostic.isNullOrEmpty()) {
+        "A logically widened multi-parameter view must never fabricate a natural construction: " +
+                widenedArgumentRoute
     }
 
     val exactMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
@@ -1118,6 +1138,85 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
     }) {
         "A caller-MethodDef binder must not be mistaken for current-owner !T authority: " +
                 snapshots
+    }
+
+    val exactSplitMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineMethodLookupRoute") &&
+                candidate.physicalFunctionName == "routeExactMethodLookup" &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "The owner-input split MethodSpec must publish one exact operation snapshot: $snapshots"
+    }
+    check(exactSplitMethodSpecRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            exactSplitMethodSpecRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            exactSplitMethodSpecRoute.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            exactSplitMethodSpecRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineMethodLookup") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0, 0) &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineMethodLookupRoute") == true
+            } && exactSplitMethodSpecRoute.methodArgumentCarriers.singleOrNull().let { carrier ->
+                carrier?.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                        carrier.ownerParameterIndices == listOf(0) &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineMethodLookupRoute") == true
+            } && exactSplitMethodSpecRoute.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+            exactSplitMethodSpecRoute.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            exactSplitMethodSpecRoute.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            exactSplitMethodSpecRoute.resultCarrierParameterBinderOwnerName
+                ?.endsWith("InlineMethodLookupRoute") == true &&
+            exactSplitMethodSpecRoute.resultCarrierParameterIndex == 0 &&
+            exactSplitMethodSpecRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            exactSplitMethodSpecRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            exactSplitMethodSpecRoute.diagnostic == null) {
+        "An exact !K + !!R -> !V/bool operation must remain fully orthogonal: " +
+                exactSplitMethodSpecRoute
+    }
+    val widenedSplitMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineMethodLookupRoute") &&
+                candidate.physicalFunctionName == "routeWidenedMethodLookup" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "The widened split MethodSpec must remain explicit fail-closed evidence: $snapshots"
+    }
+    check(widenedSplitMethodSpecRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE &&
+            widenedSplitMethodSpecRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL &&
+            widenedSplitMethodSpecRoute.predictedRouteKind == null &&
+            widenedSplitMethodSpecRoute.requiredReceiverCarrier.kind ==
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+            widenedSplitMethodSpecRoute.methodArgumentCarriers.isEmpty() &&
+            widenedSplitMethodSpecRoute.resultLayout == null &&
+            widenedSplitMethodSpecRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
+                .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
+            widenedSplitMethodSpecRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.PREDICTION_UNAVAILABLE &&
+            !widenedSplitMethodSpecRoute.diagnostic.isNullOrEmpty()) {
+        "A widened !K + !!R -> !V/bool view must remain semantic: " +
+                widenedSplitMethodSpecRoute
+    }
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineMethodLookupRoute") &&
+                candidate.physicalFunctionName == "routeCallerMethodLookup" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "A caller-MethodDef binder must not authorize the split MethodSpec operation: $snapshots"
     }
     check(snapshots.none { candidate ->
         candidate.ownerName.endsWith("InlineSelfView") &&
@@ -13348,6 +13447,50 @@ private fun validateGenericOwnerCallableCompositionCSharp(
             } == true) {
                 "The production-erased Lookup PE surface is not object lookup(object): $methods"
             }
+
+            val methodOwnerName = "MethodLookup"
+            val methodClassRecord = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .singleOrNull { declaration ->
+                    declaration.ownerPath.lastOrNull()
+                        ?.substringAfterLast('.')
+                        ?.substringBefore('`') == methodOwnerName
+                }
+            check(methodClassRecord?.let { declaration ->
+                declaration.ownerPath == listOf("$namespaceName.$methodOwnerName") &&
+                        declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true) {
+                "The production-erased MethodLookup physical index is not one arity-zero owner: " +
+                        methodClassRecord
+            }
+            val methodLookup = metadata.typeDefinitions.singleOrNull { type ->
+                type.namespaceName == namespaceName && type.metadataName == methodOwnerName
+            }
+            val methodLookupMethods = methodLookup?.let { type ->
+                metadata.methodDefinitions.filter { method ->
+                    method.declaringType == type.handle
+                }
+            }.orEmpty()
+            val methodParameter =
+                DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.METHOD, 0)
+            check(methodLookup?.isInterface == true &&
+                    metadata.genericParameterDefinitions.none { parameter ->
+                        parameter.owner == methodLookup.handle
+                    } && methodLookupMethods.singleOrNull()?.let { method ->
+                        method.isAbstract && method.isVirtual && method.signature.hasThis &&
+                                method.signature.genericParameterCount == 1 &&
+                                method.signature.returnType == objectType &&
+                                method.signature.parameterTypes == listOf(
+                                    objectType,
+                                    methodParameter,
+                                )
+                    } == true
+            ) {
+                "The production-erased MethodLookup PE surface is not " +
+                        "object lookup<!!0>(object, !!0): $methodLookupMethods"
+            }
         }
         return
     }
@@ -13466,6 +13609,140 @@ private fun validateGenericOwnerCallableCompositionCSharp(
             "Lookup`2 PE MethodDef is not !1 lookup(!0, [out] bool&): $lookupMethod / " +
                     methodParameters
         }
+
+        val methodOwnerName = "MethodLookup"
+        val methodFamily = checkNotNull(
+            declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                .singleOrNull { candidate ->
+                    candidate.ownerPath.lastOrNull() == "$namespaceName.$methodOwnerName`2"
+                }
+        ) {
+            "The callable-composition producer has no unique MethodLookup`2 H record"
+        }
+        val methodMember = checkNotNull(methodFamily.contract.declaredMembers.singleOrNull()) {
+            "MethodLookup`2 did not publish exactly one declaration-local member: $methodFamily"
+        }
+        check(methodFamily.naturalTypeParameterVariances == listOf(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+        ) && methodFamily.exactOwnerPath == null &&
+                methodFamily.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+                methodFamily.contract.capabilityBindingKind ==
+                DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+                methodMember.role == DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT &&
+                methodMember.resultLayout ==
+                DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+        ) {
+            "MethodLookup`2 did not preserve independent input, binder, and result policies: " +
+                    methodFamily
+        }
+        val methodNaturalMethod = checkNotNull(
+            declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+                .singleOrNull { method ->
+                    method.logicalOwnerKey == methodFamily.contract.logicalOwnerKey &&
+                            method.logicalMemberKey == methodMember.logicalMemberKey
+                }
+        ) {
+            "MethodLookup`2 did not publish one producer-recorded natural MethodDef"
+        }.physicalMethod
+        val methodInputs = methodNaturalMethod.signature.parameterSlots
+        val methodResult = methodNaturalMethod.signature.resultLayout as?
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
+        check(methodNaturalMethod.physicalOwnerPath == methodFamily.ownerPath &&
+                methodNaturalMethod.physicalMethodName == "lookup" &&
+                methodNaturalMethod.signature.isInstance &&
+                methodNaturalMethod.signature.genericArity == 1 &&
+                methodInputs.size == 2 &&
+                methodInputs[0].domain ==
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                methodInputs[0].type.kind ==
+                DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                methodInputs[0].type.parameterIndex == 0 &&
+                methodInputs[1].domain ==
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                methodInputs[1].type.kind ==
+                DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER &&
+                methodInputs[1].type.parameterIndex == 0 &&
+                methodResult?.payloadSlot?.domain ==
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                methodResult.payloadSlot.type.kind ==
+                DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                methodResult.payloadSlot.type.parameterIndex == 1
+        ) {
+            "MethodLookup`2 N record is not !V lookup<!!R>(!K, !!R, out bool): " +
+                    methodNaturalMethod
+        }
+        validateReifiedGenericInterfaceCSharpManifest(
+            producer,
+            expectedDeclaredOwner = "MethodLookup`2",
+            expectedMemberName = "lookup",
+            expectedTypeParameterVariances = listOf(
+                DotNetCSharpTypeParameterVariance.INVARIANT,
+                DotNetCSharpTypeParameterVariance.OUT,
+            ),
+            expectedSemanticReturnType = "object",
+            expectedSemanticParameterTypes = listOf("object", "!!0"),
+            expectedNaturalReturnType = "!1",
+            expectedNaturalParameterTypes = listOf("!0", "!!0", "bool&"),
+            expectedMethodGenericArity = 1,
+        )
+
+        val methodLookup = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
+            type.namespaceName == namespaceName && type.metadataName == "$methodOwnerName`2"
+        }) {
+            "The callable-composition PE has no unique MethodLookup`2 TypeDef"
+        }
+        val methodOwnerParameters = metadata.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == methodLookup.handle }
+            .sortedBy { parameter -> parameter.number }
+        check(methodLookup.isInterface &&
+                methodOwnerParameters.map { parameter -> parameter.variance } == listOf(
+                    DotNetClrGenericParameterVariance.INVARIANT,
+                    DotNetClrGenericParameterVariance.COVARIANT,
+                )
+        ) {
+            "MethodLookup`2 PE GenericParams lost their invariant/covariant vector: " +
+                    methodOwnerParameters
+        }
+        val methodTypeParameter = { index: Int ->
+            DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.METHOD, index)
+        }
+        val methodLookupMethod = checkNotNull(metadata.methodDefinitions.singleOrNull { method ->
+            method.declaringType == methodLookup.handle && method.name == "lookup"
+        }) {
+            "MethodLookup`2 PE has no unique lookup MethodDef"
+        }
+        val methodLookupParameters = metadata.parameterDefinitions.filter { parameter ->
+            parameter.declaringMethod == methodLookupMethod.handle
+        }
+        val methodDefinitionParameters = metadata.genericParameterDefinitions.filter { parameter ->
+            parameter.owner == methodLookupMethod.handle
+        }
+        check(methodLookupMethod.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                methodLookupMethod.isAbstract && methodLookupMethod.isVirtual &&
+                methodLookupMethod.signature.hasThis &&
+                methodLookupMethod.signature.genericParameterCount == 1 &&
+                methodLookupMethod.signature.returnType == typeParameter(1) &&
+                methodLookupMethod.signature.parameterTypes == listOf(
+                    typeParameter(0),
+                    methodTypeParameter(0),
+                    DotNetClrTypeSignature.ByReference(boolType),
+                ) && methodLookupParameters.singleOrNull { parameter ->
+                    parameter.parameterIndex == 2
+                }?.isOut == true &&
+                methodDefinitionParameters.singleOrNull()?.let { parameter ->
+                    parameter.number == 0 &&
+                            parameter.variance == DotNetClrGenericParameterVariance.INVARIANT &&
+                            metadata.genericParameterConstraints.none { constraint ->
+                                constraint.owner == parameter.handle
+                            }
+                } == true
+        ) {
+            "MethodLookup`2 PE MethodDef is not !1 lookup<!!0>(!0, !!0, [out] bool&): " +
+                    "$methodLookupMethod / $methodLookupParameters / $methodDefinitionParameters"
+        }
         return
     }
 
@@ -13481,7 +13758,9 @@ private fun validateGenericOwnerCallableCompositionCSharp(
         ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
     }
     fun requireMethodWindow(name: String) = checkNotNull(methodWindows.singleOrNull { window ->
-        "'$name'(" in window.substringBefore('{')
+        window.substringBefore('{').let { header ->
+            "'$name'(" in header || "'$name'<" in header
+        }
     }) {
         "Cannot isolate the callable-composition consumer MethodDef '$name'"
     }
@@ -13497,6 +13776,32 @@ private fun validateGenericOwnerCallableCompositionCSharp(
             "bool&" in widenedRead && "::'InvokeUniqueMember'(" !in widenedRead
     ) {
         "The widened Lookup call did not use its producer-recorded MethodDef:\n$widenedRead"
+    }
+    val exactMethodRead = requireMethodWindow("downstreamExactMethodIntRead")
+    check("MethodLookup`2" in exactMethodRead && "::'lookup'<int32>" in exactMethodRead &&
+            "bool&" in exactMethodRead && "box int32" !in exactMethodRead &&
+            "::'InvokeRecordedMember'(" !in exactMethodRead
+    ) {
+        "The exact value-type MethodLookup call did not stay direct and unboxed:\n" +
+                exactMethodRead
+    }
+    val genericMethodRead = requireMethodWindow("downstreamGenericMethodIntRead")
+    check("MethodLookup`2" in genericMethodRead && "::'lookup'<!!0>" in genericMethodRead &&
+            "bool&" in genericMethodRead && "box int32" !in genericMethodRead &&
+            "::'InvokeRecordedMember'(" !in genericMethodRead
+    ) {
+        "The caller-MethodDef MethodLookup call did not retain its own !!0 binder:\n" +
+                genericMethodRead
+    }
+    val widenedMethodRead = requireMethodWindow("downstreamWidenedMethodRead")
+    check("::'InvokeRecordedMember'(" in widenedMethodRead &&
+            "IMethodLookupKotlinSemantic" in widenedMethodRead &&
+            "<int32>(object, !!0)" in widenedMethodRead &&
+            "MethodLookup`2'::'lookup'<[1]>(!0, !!0, bool&)" in widenedMethodRead &&
+            "::'InvokeUniqueMember'(" !in widenedMethodRead
+    ) {
+        "The widened MethodLookup call did not use its producer-recorded MethodDef:\n" +
+                widenedMethodRead
     }
 
     val lib = directory.resolve("lib.dll")
@@ -13539,6 +13844,26 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                 }
             }
 
+            public sealed class NaturalIntMethodLookup : MethodLookup<int, int>
+            {
+                public int lookup<R>(int key, R marker, out bool isNull)
+                {
+                    bool intMarker = object.Equals(marker, 23);
+                    bool stringMarker = object.Equals(marker, "generic");
+                    isNull = key != 17 || (!intMarker && !stringMarker);
+                    return isNull ? default(int) : (intMarker ? 89 : 91);
+                }
+            }
+
+            public sealed class NaturalStringMethodLookup : MethodLookup<int, string>
+            {
+                public string lookup<R>(int key, R marker, out bool isNull)
+                {
+                    isNull = key != 19 || !object.Equals(marker, "method-marker");
+                    return isNull ? null : "method-foreign";
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -13564,6 +13889,35 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                         methodParameters[1].ParameterType != typeof(bool).MakeByRefType() ||
                         !methodParameters[1].IsOut)
                         throw new InvalidOperationException("Lookup MethodDef is wrong");
+
+                    var methodDefinition = typeof(MethodLookup<,>);
+                    var methodOwnerParameters = methodDefinition.GetGenericArguments();
+                    if (!methodDefinition.IsInterface || methodDefinition.GetInterfaces().Length != 0 ||
+                        methodOwnerParameters.Length != 2 ||
+                        (methodOwnerParameters[0].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.None ||
+                        (methodOwnerParameters[1].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.Covariant)
+                        throw new InvalidOperationException("MethodLookup variance/topology is wrong");
+
+                    var methodLookupMethod = methodDefinition.GetMethod("lookup");
+                    var methodLookupParameters =
+                        methodLookupMethod == null ? null : methodLookupMethod.GetParameters();
+                    var methodTypeParameters =
+                        methodLookupMethod == null ? null : methodLookupMethod.GetGenericArguments();
+                    if (methodLookupMethod == null || !methodLookupMethod.IsAbstract ||
+                        !methodLookupMethod.IsVirtual || !methodLookupMethod.IsGenericMethodDefinition ||
+                        methodTypeParameters.Length != 1 ||
+                        methodTypeParameters[0].GetGenericParameterConstraints().Length != 0 ||
+                        methodLookupMethod.ReturnType != methodOwnerParameters[1] ||
+                        methodLookupParameters.Length != 3 ||
+                        methodLookupParameters[0].ParameterType != methodOwnerParameters[0] ||
+                        methodLookupParameters[1].ParameterType != methodTypeParameters[0] ||
+                        methodLookupParameters[2].ParameterType != typeof(bool).MakeByRefType() ||
+                        !methodLookupParameters[2].IsOut)
+                        throw new InvalidOperationException("MethodLookup MethodDef is wrong");
 
                     var ints = new NaturalIntLookup();
                     bool isNull;
@@ -13600,6 +13954,47 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                         throw new InvalidOperationException(
                             "Kotlin widened C# reference lookup failed");
 
+                    var methodInts = new NaturalIntMethodLookup();
+                    if (methodInts.lookup<int>(17, 23, out isNull) != 89 || isNull ||
+                        methodInts.lookup<int>(18, 23, out isNull) != 0 || !isNull ||
+                        methodInts.GetType().GetInterfaces().Length != 1 ||
+                        methodInts.GetType().GetInterfaces()[0] != typeof(MethodLookup<int, int>))
+                        throw new InvalidOperationException(
+                            "ordinary C# MethodLookup authoring requires compiler ABI");
+                    var methodReader = new MethodLookupReader();
+                    if (methodReader.readExactInt(methodInts, 17, 23) != 89 ||
+                        methodReader.readExactInt(methodInts, 18, 23).HasValue ||
+                        mainKt.downstreamExactMethodIntRead(methodInts, 17, 23) != 89 ||
+                        mainKt.downstreamGenericMethodIntRead<string>(
+                            methodInts, 17, "generic") != 91)
+                        throw new InvalidOperationException("Kotlin exact C# MethodLookup failed");
+                    var widenedMethodInts = contractsKt.widenIntMethodLookup(methodInts);
+                    if (!object.ReferenceEquals(methodInts, widenedMethodInts) ||
+                        !object.Equals(methodReader.readWideInt(widenedMethodInts, 17, 23), 89) ||
+                        methodReader.readWideInt(widenedMethodInts, 18, 23) != null ||
+                        !object.Equals(
+                            mainKt.downstreamWidenedMethodRead(widenedMethodInts, 17, 23), 89) ||
+                        mainKt.downstreamWidenedMethodRead(widenedMethodInts, 18, 23) != null ||
+                        !mainKt.downstreamMethodSame(widenedMethodInts, methodInts))
+                        throw new InvalidOperationException(
+                            "Kotlin widened C# value MethodLookup failed");
+
+                    var methodStrings = new NaturalStringMethodLookup();
+                    if (methodReader.readExactString(
+                            methodStrings, 19, "method-marker") != "method-foreign" ||
+                        methodReader.readExactString(methodStrings, 19, "wrong") != null)
+                        throw new InvalidOperationException(
+                            "Kotlin exact C# reference MethodLookup failed");
+                    var widenedMethodStrings = contractsKt.widenStringMethodLookup(methodStrings);
+                    if (!object.ReferenceEquals(methodStrings, widenedMethodStrings) ||
+                        methodReader.readWideString(
+                            widenedMethodStrings, 19, "method-marker") as string !=
+                            "method-foreign" ||
+                        methodReader.readWideString(widenedMethodStrings, 19, "wrong") != null ||
+                        !mainKt.downstreamMethodSame(widenedMethodStrings, methodStrings))
+                        throw new InvalidOperationException(
+                            "Kotlin widened C# reference MethodLookup changed identity");
+
                     var kotlinInts = implementationsKt.intLookup(3, 37);
                     var kotlinInterfaces = kotlinInts.GetType().GetInterfaces();
                     if (Array.IndexOf(kotlinInterfaces, typeof(Lookup<int, int>)) < 0 ||
@@ -13610,6 +14005,17 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                         kotlinInts.lookup(3, out isNull) != 37 || isNull)
                         throw new InvalidOperationException(
                             "Kotlin implementation fabricated or lost its natural construction");
+                    var kotlinMethodInts = implementationsKt.intMethodLookup(11, 17, 79);
+                    var kotlinMethodInterfaces = kotlinMethodInts.GetType().GetInterfaces();
+                    if (Array.IndexOf(
+                            kotlinMethodInterfaces, typeof(MethodLookup<int, int>)) < 0 ||
+                        Array.Exists(kotlinMethodInterfaces, candidate =>
+                            candidate.IsGenericType &&
+                            candidate.GetGenericTypeDefinition() == typeof(MethodLookup<,>) &&
+                            candidate != typeof(MethodLookup<int, int>)) ||
+                        kotlinMethodInts.lookup<int>(11, 17, out isNull) != 79 || isNull)
+                        throw new InvalidOperationException(
+                            "Kotlin MethodLookup implementation fabricated or lost its natural construction");
                     return 0;
                 }
             }

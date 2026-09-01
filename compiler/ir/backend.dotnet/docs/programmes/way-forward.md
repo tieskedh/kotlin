@@ -83,15 +83,19 @@ proof; they are not hard user errors.
 
 Stage 7 now composes one strict owner-dependent callable input with a distinct
 split-nullable owner result on a custom structural declaration. Semantic role,
-parameter domains, and result layout remain independent; the existing Runtime
-`Map` family is deliberately unchanged. Final local operation authority now
-consumes the same contract from an exact constructed receiver plus argument
-facts, and may replace a weaker conservative semantic fallback only when the
-logical family has no semantic-result requirement. The bounded declaration and
-operation proofs and their exact erased inverses are recorded in the
+MethodDef binder, parameter domains, and result layout remain independent. The
+same grammar now also proves `<R>(K, R): V?` as
+`!V <!!R>(!K, !!R, out bool)` without a combined role; the existing Runtime
+`Map` family is deliberately unchanged. Final local operation authority
+consumes the same contract from an exact constructed receiver plus argument and
+MethodSpec facts, and may replace a weaker conservative semantic fallback only
+when the logical family has no semantic-result requirement. The bounded proofs
+and their exact erased inverses are recorded in the
 [Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md)
 and
-[owner-input operation archive](../archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
+[owner-input operation archive](../archive/generic-owner-physical-owner-input-operation-2026-09-01.md),
+with the generic composition in the
+[MethodSpec/split archive](../archive/generic-owner-methodspec-split-nullable-composition-2026-09-01.md).
 The retained-foreign adapter authenticates one selected open root-interface
 MethodDef directly from retained and re-resolved raw metadata. This is a per-
 MethodDef authority unit rather than a one-member declaration restriction: one
@@ -249,13 +253,14 @@ exact operation now composes owner-dependent arguments with a split-nullable
 result and independently binds a generic MethodDef's exact MethodSpec vector
 when every entry is a non-null bare parameter of the current physical class.
 Caller-MethodDef, concrete, constrained, nullable, nested, and foreign
-MethodSpec carriers remain unavailable. Next admit the still-missing method-
-generic plus split-nullable declaration composition, materialize split-
-nullable results across local/control-flow boundaries, and complete the
-remaining parameter-entry forms. Then extend joins to null, bottom, and
-unknown arms and make representation-changing conversions explicit. Prove
-those grammars before widening the consumer to fields, captures, properties,
-class nodes, MethodImpls, or Runtime/Stdlib declarations.
+MethodSpec carriers remain unavailable. The declaration grammar now composes
+one direct unconstrained MethodDef binder with the strict owner input and
+split-nullable output, and separate consumers use the same producer-recorded
+MethodDef. Next materialize split-nullable results across local/control-flow
+boundaries and complete the remaining parameter-entry forms. Then extend joins
+to null, bottom, and unknown arms and make representation-changing conversions
+explicit. Prove those grammars before widening the consumer to fields,
+captures, properties, class nodes, MethodImpls, or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an
