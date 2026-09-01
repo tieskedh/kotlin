@@ -258,8 +258,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     parameter.specialConstraints.isNotEmpty() || parameter.typeConstraints.isNotEmpty()
                 }
             ) return@mapNotNull null
-            val physicalVariances = context.admittedGenericInterfaceCompleteNaturalAuthorityPlans[owner.symbol]
-                ?.selectedPhysicalVariances
+            val physicalVariances = context.reifiedGenericInterfacePhysicalVariances[owner.symbol]
                 ?: return@mapNotNull null
             if (physicalParameters.size != physicalVariances.size) return@mapNotNull null
             DotNetLocalGenericOwnerPhysicalTypeInput(

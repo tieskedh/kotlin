@@ -192,6 +192,14 @@ and state unchanged. The record deliberately supplies no delegate member or
 operation authority. Producer-side delegate synthesis and constrained producer
 delegate rows remain later schema/emission work.
 
+Every admitted local natural interface now records its producer-selected
+physical variance vector at the same admission point. Both the BOUND declaration
+index and emitter consume that record, including older bounded families whose
+already-selected physical vector equals their declaration variance. A later
+consumer no longer requires a complete-surface rewrite plan merely to recognize
+a TypeDef which the producer actually emits, and no consumer may independently
+rederive the vector from logical IR.
+
 Storage-placement consumption is now the next value/state boundary. Only after
 that bounded family should the graph grammar widen to properties, class nodes,
 MethodImpls, or Runtime/Stdlib declarations.

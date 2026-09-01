@@ -199,8 +199,8 @@ internal class DotNetIlEmitter(
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val publishedGenericInterfaceFamilies:
             Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
-    /** Explicitly admitted complete-natural owners and their selected CLR GenericParam rows. */
-    private val completeNaturalInterfacePhysicalVariances:
+    /** Producer-selected CLR GenericParam variance vector for every local natural TypeDef. */
+    private val reifiedGenericInterfacePhysicalVariances:
             Map<IrClass, List<DotNetGenericOwnerPhysicalTypeParameterVariance>> = emptyMap(),
     /** Producer-planned input domains for final local natural interface MethodDefs. */
     private val genericInterfaceNaturalMethodParameterDomains:
@@ -271,7 +271,12 @@ internal class DotNetIlEmitter(
     }
 
     private fun emitOrThrow(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
-        completeNaturalInterfacePhysicalVariances.forEach { [owner, variances] ->
+        check(!genericOwnerRehearsal ||
+                reifiedGenericInterfacePhysicalVariances.keys == reifiedGenericInterfaces) {
+            "Internal .NET backend error: admitted natural TypeDefs and their physical " +
+                    "GenericParam variance authority differ"
+        }
+        reifiedGenericInterfacePhysicalVariances.forEach { [owner, variances] ->
             check(genericOwnerRehearsal && owner in reifiedGenericInterfaces &&
                     publishedGenericInterfaceFamilies.containsKey(owner) &&
                     variances.size == owner.typeParameters.size) {
@@ -606,8 +611,8 @@ internal class DotNetIlEmitter(
                     irClass !in reifiedGenericInterfaces
             val reifiedInterfaceFamily = publishedGenericInterfaceFamilies[irClass]
                 ?.takeIf { irClass in reifiedGenericInterfaces }
-            val completeNaturalPhysicalVariances =
-                completeNaturalInterfacePhysicalVariances[irClass]?.toKotlinVariances()
+            val naturalPhysicalVariances =
+                reifiedGenericInterfacePhysicalVariances[irClass]?.toKotlinVariances()
             val requiresExactInterface = reifiedInterfaceFamily?.requiresExactInputView == true
             val isErasedGenericClass = irClass.isDotNetGenericClassDeclaration &&
                     (!genericOwnerRehearsal ||
@@ -628,8 +633,9 @@ internal class DotNetIlEmitter(
                     typeParameterVariances = when {
                         isErasedGenericInterface || isErasedGenericClass -> emptyList()
                         irClass.isInterface && irClass in reifiedGenericInterfaces ->
-                            completeNaturalPhysicalVariances
-                                ?: irClass.typeParameters.map { it.variance }
+                            checkNotNull(naturalPhysicalVariances) {
+                                "reified interface '${irClass.name}' lacks physical variance authority"
+                            }
                         else -> List(irClass.typeParameters.size) { Variance.INVARIANT }
                     },
                 )
@@ -3949,7 +3955,7 @@ internal class DotNetIlEmitter(
         val emittedGenericParameterDecisions = emittedTypeParameters.dotNetIlGenericParameterDecisions(
             physicalTypeMapper,
             varianceOverrides = if (irClass.isInterface) {
-                completeNaturalInterfacePhysicalVariances[irClass]?.toKotlinVariances()
+                reifiedGenericInterfacePhysicalVariances[irClass]?.toKotlinVariances()
             } else {
                 List(emittedTypeParameters.size) { Variance.INVARIANT }
             },

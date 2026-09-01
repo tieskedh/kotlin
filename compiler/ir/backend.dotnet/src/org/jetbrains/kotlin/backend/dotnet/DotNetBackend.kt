@@ -760,10 +760,10 @@ object DotNetBackend {
             } else {
                 emptyMap()
             }
-        val completeNaturalInterfacePhysicalVariances =
+        val reifiedGenericInterfacePhysicalVariances =
             if (configuration.dotNetGenericOwnerRehearsal) {
-                context.admittedGenericInterfaceCompleteNaturalAuthorityPlans.values.associate { plan ->
-                    plan.owner.owner to plan.selectedPhysicalVariances
+                context.reifiedGenericInterfacePhysicalVariances.entries.associate { entry ->
+                    entry.key.owner to entry.value
                 }
             } else {
                 emptyMap()
@@ -811,8 +811,8 @@ object DotNetBackend {
                     localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                     publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
-                    completeNaturalInterfacePhysicalVariances =
-                        completeNaturalInterfacePhysicalVariances,
+                    reifiedGenericInterfacePhysicalVariances =
+                        reifiedGenericInterfacePhysicalVariances,
                     genericInterfaceNaturalMethodParameterDomains =
                         context.genericInterfaceNaturalMethodParameterDomains,
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
@@ -982,8 +982,8 @@ object DotNetBackend {
                 localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                 publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
-                completeNaturalInterfacePhysicalVariances =
-                    completeNaturalInterfacePhysicalVariances,
+                reifiedGenericInterfacePhysicalVariances =
+                    reifiedGenericInterfacePhysicalVariances,
                 genericInterfaceNaturalMethodParameterDomains =
                     context.genericInterfaceNaturalMethodParameterDomains,
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,

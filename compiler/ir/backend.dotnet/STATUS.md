@@ -66,6 +66,14 @@ shared physical-value tests and 85 retained-metadata tests. Six unconstrained
 memberless external-DLL pipelines remain green with both FIR parsers. Git owns
 the intermediate chronology.
 
+Local natural-interface admission now records one explicit producer-selected
+physical variance vector for every admitted TypeDef. This repairs the declaration-
+authority gap in which an older bounded `I<out T>` family was emitted correctly
+but omitted from BOUND solely because it had no newer complete-surface rewrite
+plan. The existing value/operation fixture passes in candidate and erased modes
+across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
+[dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
+
 ## Production binding state
 
 - Kotlin Common declarations and Kotlin IR/KLIB remain logical authority.
@@ -89,6 +97,12 @@ the intermediate chronology.
 
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
+
+The local natural-TypeDef variance record is now shared by declaration binding
+and emission. It neither changes candidate CIL nor broadens interface admission;
+it prevents an already selected and emitted TypeDef from disappearing when a
+later physical query requires authority. Storage-placement consumption remains
+the next boundary.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the
