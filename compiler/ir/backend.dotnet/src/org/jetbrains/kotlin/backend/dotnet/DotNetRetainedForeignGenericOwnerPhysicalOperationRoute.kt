@@ -29,7 +29,11 @@ internal fun selectDotNetRetainedForeignGenericOwnerPhysicalOperationRoute(
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalOperationRoute> {
     val declarations = when (
         val binding = if (inheritedReceiverSource == null) {
-            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeign(source, method)
+            DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeign(
+                source,
+                method,
+                target,
+            )
         } else {
             DotNetGenericOwnerPhysicalDeclarationIndex.bindRetainedForeignInheritedReceiver(
                 source,

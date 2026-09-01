@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
@@ -60,6 +61,510 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrCustomAttributeCoreTypes
 import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrSystemType
 
+/** Shared selected-graph services for exact retained CLR construction validation. */
+private class DotNetRetainedForeignConstraintValidationServices(
+    private val graph: DotNetClrImportedDeclarationGraph,
+    private val target: DotNetTarget?,
+) {
+    private val selectedMetadata = graph.assemblies.map { assembly -> assembly.metadata }
+    private val selectedAssemblyBinder = DotNetClrSelectedAssemblyBinder(selectedMetadata)
+    val typeResolver = DotNetClrTypeResolver(selectedAssemblyBinder)
+    val genericContextResolver = DotNetClrGenericParameterContextResolver(typeResolver)
+    private val constructedConstraintResolver =
+        DotNetClrConstructedTypeConstraintResolver(typeResolver)
+    val physicalTypeClassifier by lazy(LazyThreadSafetyMode.NONE) {
+        graph.physicalCoreTypes?.let { coreTypes ->
+            DotNetClrPhysicalTypeClassifier(typeResolver, coreTypes)
+        }
+    }
+    private val nominalConstraintValidator by lazy(LazyThreadSafetyMode.NONE) {
+        createNominalConstraintValidator()
+    }
+    private val specialConstraintValidator by lazy(LazyThreadSafetyMode.NONE) {
+        createSpecialConstraintValidator()
+    }
+
+    fun validateConstructionConstraints(
+        view: DotNetClrResolvedTypeView,
+        sourceContext: DotNetClrResolvedGenericParameterContext?,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        val constraints = when (val resolution = constructedConstraintResolver.resolve(view)) {
+            is DotNetClrConstructedTypeConstraintResolution.Resolved -> resolution.constraints
+            is DotNetClrConstructedTypeConstraintResolution.Invalid ->
+                return conflict("retained construction has invalid GenericParam constraints")
+        }
+        if (constraints.parameters.any { binding -> binding.constraints.isNotEmpty() }) {
+            val validator = when (val services = nominalConstraintValidator) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> services.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return services
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val validation = validator.validate(constraints, sourceContext)
+            for (parameter in validation.parameters) {
+                for (constraint in parameter.constraints) {
+                    when (constraint.satisfaction) {
+                        DotNetClrNominalConstraintSatisfaction.Satisfied -> Unit
+                        DotNetClrNominalConstraintSatisfaction.Violated ->
+                            return conflict("retained construction violates a nominal GenericParam constraint")
+                        is DotNetClrNominalConstraintSatisfaction.Unsupported ->
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        is DotNetClrNominalConstraintSatisfaction.InvalidAssignability ->
+                            return conflict("retained construction constraint assignability is invalid")
+                    }
+                }
+            }
+        }
+        if (constraints.requiresSpecialConstraintValidation(sourceContext)) {
+            val validator = when (val services = specialConstraintValidator) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> services.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return services
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val validation = validator.validate(constraints, sourceContext)
+            for (parameter in validation.parameters) {
+                for (constraint in parameter.constraints) {
+                    when (constraint.satisfaction) {
+                        DotNetClrSpecialConstraintSatisfaction.Satisfied -> Unit
+                        is DotNetClrSpecialConstraintSatisfaction.Violated ->
+                            return conflict("retained construction violates a special GenericParam constraint")
+                        is DotNetClrSpecialConstraintSatisfaction.Unsupported ->
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        is DotNetClrSpecialConstraintSatisfaction.InvalidClassification ->
+                            return conflict("retained construction special-constraint classification is invalid")
+                    }
+                }
+            }
+        }
+        return bound(Unit)
+    }
+
+    fun resolveDelegateRuntimeTypes():
+            DotNetGenericOwnerPhysicalBindingResult<DotNetClrDelegateRuntimeTypes> {
+        val coreAssembly = graph.physicalCoreTypes?.systemValueType?.assembly
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        return when (
+            val resolution = DotNetClrDelegateRuntimeTypesResolver(typeResolver)
+                .resolve(coreAssembly)
+        ) {
+            is DotNetClrDelegateRuntimeTypesResolution.Resolved -> bound(resolution.types)
+            is DotNetClrDelegateRuntimeTypesResolution.Unresolved ->
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            is DotNetClrDelegateRuntimeTypesResolution.Invalid ->
+                conflict("selected CLR delegate runtime metadata is invalid")
+        }
+    }
+
+    private fun createNominalConstraintValidator():
+            DotNetGenericOwnerPhysicalBindingResult<DotNetClrNominalConstraintValidator> {
+        val coreTypes = graph.physicalCoreTypes
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val classifier = physicalTypeClassifier
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val coreAssembly = coreTypes.systemValueType.assembly
+        val primitiveTypes = when (
+            val resolution = DotNetClrPrimitiveTypeCatalogResolver(typeResolver)
+                .resolve(coreAssembly)
+        ) {
+            is DotNetClrPrimitiveTypeCatalogResolution.Resolved -> resolution.catalog
+            is DotNetClrPrimitiveTypeCatalogResolution.Unresolved ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val arrayRuntimeTypes = when (
+            val resolution = DotNetClrArrayRuntimeTypesResolver(typeResolver)
+                .resolve(coreAssembly)
+        ) {
+            is DotNetClrArrayRuntimeTypesResolution.Resolved -> resolution.types
+            is DotNetClrArrayRuntimeTypesResolution.Unresolved ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            is DotNetClrArrayRuntimeTypesResolution.Invalid ->
+                return conflict("selected CLR array runtime metadata is invalid")
+        }
+        val delegateRuntimeTypes = when (val resolution = resolveDelegateRuntimeTypes()) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> resolution.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return resolution
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        return bound(
+            DotNetClrNominalConstraintValidator(
+                typeResolver,
+                primitiveTypes,
+                classifier,
+                arrayRuntimeTypes,
+                delegateRuntimeTypes,
+            )
+        )
+    }
+
+    private fun createSpecialConstraintValidator():
+            DotNetGenericOwnerPhysicalBindingResult<DotNetClrSpecialConstraintValidator> {
+        val selectedTarget = target
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val coreTypes = graph.physicalCoreTypes
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val classifier = physicalTypeClassifier
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val primitiveTypes = when (
+            val resolution = DotNetClrPrimitiveTypeCatalogResolver(typeResolver)
+                .resolve(coreTypes.systemValueType.assembly)
+        ) {
+            is DotNetClrPrimitiveTypeCatalogResolution.Resolved -> resolution.catalog
+            is DotNetClrPrimitiveTypeCatalogResolution.Unresolved ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val customAttributeCoreTypes = resolveDotNetClrCustomAttributeCoreTypes(
+            selectedMetadata,
+            typeResolver,
+        ) ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val serializedTypeResolver = DotNetClrSerializedTypeResolver(
+            typeResolver,
+            DotNetClrSerializedAssemblyBinder {
+                    _,
+                    unqualifiedContextAssembly,
+                    assemblyName,
+                ->
+                if (assemblyName == null) {
+                    unqualifiedContextAssembly
+                } else {
+                    selectedAssemblyBinder.bind(assemblyName)
+                }
+            },
+        )
+        val attributeDecoder = DotNetClrCustomAttributeDecoder(
+            typeResolver,
+            serializedTypeResolver,
+            customAttributeCoreTypes,
+        )
+        val isByRefLikeAttribute = resolveDotNetClrSystemType(
+            selectedMetadata,
+            typeResolver,
+            "System.Runtime.CompilerServices",
+            "IsByRefLikeAttribute",
+        )
+        return bound(
+            DotNetClrSpecialConstraintValidator(
+                selectedTarget,
+                DotNetClrByRefLikeClassifier(
+                    classifier,
+                    attributeDecoder,
+                    isByRefLikeAttribute,
+                ),
+                coreTypes,
+                primitiveTypes,
+            )
+        )
+    }
+
+    private fun DotNetClrResolvedConstructedTypeConstraints.requiresSpecialConstraintValidation(
+        sourceContext: DotNetClrResolvedGenericParameterContext?,
+    ): Boolean = parameters.any { binding ->
+        binding.parameter.hasReferenceTypeConstraint ||
+                binding.parameter.hasNotNullableValueTypeConstraint ||
+                binding.parameter.hasDefaultConstructorConstraint ||
+                binding.parameter.allowsByRefLike ||
+                binding.argument.mayBeByRefLike(sourceContext)
+    }
+
+    private fun DotNetClrResolvedTypeSignature.mayBeByRefLike(
+        sourceContext: DotNetClrResolvedGenericParameterContext?,
+    ): Boolean = when (this) {
+        is DotNetClrResolvedTypeSignature.GenericParameter ->
+            sourceContext?.binding(this)?.parameter?.allowsByRefLike == true
+        is DotNetClrResolvedTypeSignature.Named -> isValueType
+        is DotNetClrResolvedTypeSignature.GenericInstance -> genericType.isValueType
+        is DotNetClrResolvedTypeSignature.Modified ->
+            unmodifiedType.mayBeByRefLike(sourceContext)
+        else -> false
+    }
+
+    private fun <T> bound(value: T): DotNetGenericOwnerPhysicalBindingResult.Bound<T> =
+        DotNetGenericOwnerPhysicalBindingResult.Bound(value)
+
+    private fun conflict(reason: String): DotNetGenericOwnerPhysicalBindingResult.Conflict =
+        DotNetGenericOwnerPhysicalBindingResult.Conflict(reason)
+}
+
+/** Exact-construction validator retained for one selected graph and target profile. */
+private class DotNetRetainedForeignVarianceConstraintAuthority(
+    private val graph: DotNetClrImportedDeclarationGraph,
+    target: DotNetTarget?,
+    typeDescriptions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
+    methodDescriptions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
+) : DotNetGenericOwnerPhysicalVarianceConstraintAuthority {
+    private val services = DotNetRetainedForeignConstraintValidationServices(graph, target)
+    private val descriptionsByIdentity = typeDescriptions.associateBy { description ->
+        description.identity as DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+    }
+    private val methodIdentities = methodDescriptions.mapTo(linkedSetOf()) { description ->
+        description.identity as DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr
+    }
+    private val retainedTypeDefinitions:
+            Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr> =
+        descriptionsByIdentity.keys
+    override val constrainedTypeDefinitions:
+            Set<DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr> =
+        descriptionsByIdentity.values
+            .filter { description -> description.genericParameters.any { !it.isUnconstrained } }
+            .mapTo(linkedSetOf()) { description ->
+                description.identity as DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+            }
+
+    init {
+        require(retainedTypeDefinitions.isNotEmpty() && retainedTypeDefinitions.all { identity ->
+            identity.graph === graph
+        }) {
+            "retained variance constraint authority must stay inside one selected graph"
+        }
+        require(methodIdentities.all { identity -> identity.source.graph === graph }) {
+            "retained variance constraint MethodDefs must stay inside the selected graph"
+        }
+    }
+
+    override fun validateConstructionOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        val definition = construction.definition as?
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (definition !in constrainedTypeDefinitions) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val description = descriptionsByIdentity[definition]
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (construction.arguments.size != description.genericArity) {
+            return conflict("variance target contradicts its retained TypeDef arity")
+        }
+        val binders = BinderSelection()
+        val budget = CarrierBudget()
+        val arguments = mutableListOf<DotNetClrResolvedTypeSignature>()
+        for (argument in construction.arguments) {
+            when (val translation = translateCarrier(argument, binders, budget)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    arguments += translation.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+        }
+        val context = when (val resolution = resolveContext(binders)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> resolution.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return resolution
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        return services.validateConstructionConstraints(
+            DotNetClrResolvedTypeView(definition.type, arguments),
+            context,
+        )
+    }
+
+    private fun translateCarrier(
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+        binders: BinderSelection,
+        budget: CarrierBudget,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetClrResolvedTypeSignature> {
+        if (++budget.nodes > DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_TYPE_NODES) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        if (budget.depth++ >= DotNetGenericOwnerPhysicalFamilyCodec.MAX_PHYSICAL_TYPE_DEPTH) {
+            budget.depth--
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        return try {
+            when (carrier) {
+                is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> when (carrier.kind) {
+                    DotNetGenericOwnerPhysicalTypeKind.BOOLEAN -> bound(
+                        DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN),
+                    )
+                    DotNetGenericOwnerPhysicalTypeKind.INT32 -> bound(
+                        DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                    )
+                    DotNetGenericOwnerPhysicalTypeKind.STRING -> bound(
+                        DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.STRING),
+                    )
+                    DotNetGenericOwnerPhysicalTypeKind.OBJECT -> bound(
+                        DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
+                    )
+                    DotNetGenericOwnerPhysicalTypeKind.VOID ->
+                        conflict("void appeared in a variance construction")
+                    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+                    DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+                    DotNetGenericOwnerPhysicalTypeKind.NAMED,
+                    DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+                    -> error("structural physical kind appeared as a symbolic leaf")
+                }
+                is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> when (
+                    val binder = carrier.binder
+                ) {
+                    is DotNetGenericOwnerPhysicalGenericBinderReference.Type -> {
+                        val identity = binder.definition as?
+                                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        if (identity !in retainedTypeDefinitions || !binders.record(identity)) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                        bound(
+                            DotNetClrResolvedTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.TYPE,
+                                carrier.index,
+                            )
+                        )
+                    }
+                    is DotNetGenericOwnerPhysicalGenericBinderReference.Method -> {
+                        val identity = binder.definition as?
+                                DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr
+                            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        if (identity !in methodIdentities || !binders.record(identity)) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
+                        bound(
+                            DotNetClrResolvedTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.METHOD,
+                                carrier.index,
+                            )
+                        )
+                    }
+                }
+                is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> when (
+                    val element = translateCarrier(carrier.element, binders, budget)
+                ) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> bound(
+                        DotNetClrResolvedTypeSignature.SzArray(element.value),
+                    )
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> element
+                }
+                is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                    val identity = carrier.definition as?
+                            DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    val description = descriptionsByIdentity[identity]
+                        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                    if (carrier.arguments.size != description.genericArity) {
+                        return conflict("nested variance carrier contradicts retained TypeDef arity")
+                    }
+                    val arguments = mutableListOf<DotNetClrResolvedTypeSignature>()
+                    for (argument in carrier.arguments) {
+                        when (val translation = translateCarrier(argument, binders, budget)) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                                arguments += translation.value
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return translation
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return translation
+                        }
+                    }
+                    val named = DotNetClrResolvedTypeSignature.Named(
+                        identity.type,
+                        description.category ==
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+                    )
+                    if (arguments.isEmpty()) {
+                        bound(named)
+                    } else {
+                        bound(DotNetClrResolvedTypeSignature.GenericInstance(named, arguments))
+                    }
+                }
+            }
+        } finally {
+            budget.depth--
+        }
+    }
+
+    private fun resolveContext(
+        binders: BinderSelection,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetClrResolvedGenericParameterContext?> {
+        val method = binders.method
+        if (method != null) {
+            val declaringIdentity =
+                DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(method.source)
+            if (binders.type != null && binders.type != declaringIdentity) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            return when (
+                val resolution = services.genericContextResolver.resolve(
+                    method.source.declaringHierarchy.type,
+                    method.method,
+                )
+            ) {
+                is DotNetClrGenericParameterContextResolution.Resolved ->
+                    bound(resolution.context)
+                is DotNetClrGenericParameterContextResolution.Invalid ->
+                    conflict("variance construction has an invalid retained method context")
+            }
+        }
+        val type = binders.type ?: return bound(null)
+        val description = descriptionsByIdentity.getValue(type)
+        val openView = DotNetClrResolvedTypeView(
+            type.type,
+            List(description.genericArity) { index ->
+                DotNetClrResolvedTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    index,
+                )
+            },
+        )
+        return when (val resolution = services.genericContextResolver.resolve(openView)) {
+            is DotNetClrGenericParameterContextResolution.Resolved -> bound(resolution.context)
+            is DotNetClrGenericParameterContextResolution.Invalid ->
+                conflict("variance construction has an invalid retained type context")
+        }
+    }
+
+    private data class CarrierBudget(var nodes: Int = 0, var depth: Int = 0)
+
+    private class BinderSelection {
+        var type: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr? = null
+            private set
+        var method: DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr? = null
+            private set
+
+        fun record(candidate: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr): Boolean {
+            val existing = type
+            if (existing != null && existing != candidate) return false
+            type = candidate
+            return true
+        }
+
+        fun record(candidate: DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr): Boolean {
+            val existing = method
+            if (existing != null && existing != candidate) return false
+            method = candidate
+            return true
+        }
+    }
+
+    private fun <T> bound(value: T): DotNetGenericOwnerPhysicalBindingResult.Bound<T> =
+        DotNetGenericOwnerPhysicalBindingResult.Bound(value)
+
+    private fun conflict(reason: String): DotNetGenericOwnerPhysicalBindingResult.Conflict =
+        DotNetGenericOwnerPhysicalBindingResult.Conflict(reason)
+}
+
+private fun retainedVarianceConstraintAuthorities(
+    graph: DotNetClrImportedDeclarationGraph,
+    target: DotNetTarget?,
+    typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
+    methodDefinitions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
+): List<DotNetGenericOwnerPhysicalVarianceConstraintAuthority> {
+    if (typeDefinitions.none { description ->
+            description.genericParameters.any { parameter -> !parameter.isUnconstrained }
+        }
+    ) {
+        return emptyList()
+    }
+    val authority = DotNetRetainedForeignVarianceConstraintAuthority(
+        graph,
+        target,
+        typeDefinitions,
+        methodDefinitions,
+    )
+    check(authority.constrainedTypeDefinitions.isNotEmpty()) {
+        "retained constraint authority lost its constrained TypeDefs"
+    }
+    return listOf(authority)
+}
+
 /**
  * Exact retained-metadata input for one bounded foreign generic-interface MethodDef.
  *
@@ -94,9 +599,11 @@ import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrSystemType
  * constraints compose through the shared validators. Open special flags remain declaration
  * authority without a target, but validating a construction which depends on them requires an
  * explicit target profile; implicit by-ref-like eligibility is checked for every admitted
- * construction which might carry a by-ref-like argument. Variant non-interface TypeDefs remain
- * unavailable until delegates are classified separately. Declared graph members, MethodImpls,
- * and carrier shapes outside the bounded grammar remain unavailable.
+ * construction which might carry a by-ref-like argument. The same selected-graph services can
+ * revalidate a newly requested constraint-bearing variance target, but only for that conversion;
+ * the proof is not added to the retained edge set or general construction authority. Variant
+ * non-interface TypeDefs require exact delegate classification. Declared graph members,
+ * MethodImpls, and carrier shapes outside the bounded grammar remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -104,13 +611,35 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
     val directSupertypeEdgeSets: List<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
     val directSupertypeConstraintProofs:
             List<DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof>,
+    val varianceConstraintAuthorities:
+            List<DotNetGenericOwnerPhysicalVarianceConstraintAuthority>,
 ) {
     companion object {
         fun build(
             source: DotNetClrImportedMethodSource,
             method: DotNetClrMethodDefinition,
-        ): DotNetGenericOwnerPhysicalBindingResult<DotNetRetainedForeignGenericOwnerPhysicalDeclarations> =
-            Builder(source, method).build()
+            target: DotNetTarget? = null,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetRetainedForeignGenericOwnerPhysicalDeclarations> {
+            val declarations = when (val binding = Builder(source, method).build()) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return binding
+            }
+            return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetRetainedForeignGenericOwnerPhysicalDeclarations(
+                    declarations.typeDefinitions,
+                    declarations.methodDefinitions,
+                    declarations.directSupertypeEdgeSets,
+                    declarations.directSupertypeConstraintProofs,
+                    retainedVarianceConstraintAuthorities(
+                        source.graph,
+                        target,
+                        declarations.typeDefinitions,
+                        declarations.methodDefinitions,
+                    ),
+                )
+            )
+        }
 
         fun buildInheritedReceiver(
             source: DotNetClrImportedMethodSource,
@@ -133,15 +662,12 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         private val receiverSource: DotNetClrImportedTypeSource,
         private val target: DotNetTarget?,
     ) {
-        private val selectedMetadata = source.graph.assemblies.map { assembly -> assembly.metadata }
-        private val selectedAssemblyBinder = DotNetClrSelectedAssemblyBinder(selectedMetadata)
-        private val typeResolver = DotNetClrTypeResolver(selectedAssemblyBinder)
+        private val constraintValidationServices =
+            DotNetRetainedForeignConstraintValidationServices(source.graph, target)
+        private val typeResolver = constraintValidationServices.typeResolver
         private val typeHierarchyResolver =
             DotNetClrTypeHierarchyViewResolver(typeResolver)
-        private val genericContextResolver =
-            DotNetClrGenericParameterContextResolver(typeResolver)
-        private val constructedConstraintResolver =
-            DotNetClrConstructedTypeConstraintResolver(typeResolver)
+        private val genericContextResolver = constraintValidationServices.genericContextResolver
         private val auxiliaryNominalTypeDefinitions = linkedMapOf<
                 DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
                 DotNetGenericOwnerPhysicalTypeDefReference,
@@ -154,17 +680,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 >()
         private var retainedConstraintRowCount = 0
         private var translatedCarrierNodeCount = 0
-        private val physicalTypeClassifier by lazy(LazyThreadSafetyMode.NONE) {
-            source.graph.physicalCoreTypes?.let { coreTypes ->
-                DotNetClrPhysicalTypeClassifier(typeResolver, coreTypes)
-            }
-        }
-        private val nominalConstraintValidator by lazy(LazyThreadSafetyMode.NONE) {
-            createNominalConstraintValidator()
-        }
-        private val specialConstraintValidator by lazy(LazyThreadSafetyMode.NONE) {
-            createSpecialConstraintValidator()
-        }
+        private val physicalTypeClassifier
+            get() = constraintValidationServices.physicalTypeClassifier
 
         fun build(): DotNetGenericOwnerPhysicalBindingResult<
                 DotNetRetainedForeignGenericOwnerPhysicalDeclarations,
@@ -204,15 +721,22 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
+            val typeDefinitions = methodDeclarations.typeDefinitions +
+                    inheritedGraph.typeDefinitions
             return DotNetGenericOwnerPhysicalBindingResult.Bound(
                 DotNetRetainedForeignGenericOwnerPhysicalDeclarations(
-                    typeDefinitions = methodDeclarations.typeDefinitions +
-                            inheritedGraph.typeDefinitions,
+                    typeDefinitions = typeDefinitions,
                     methodDefinitions = methodDeclarations.methodDefinitions,
                     directSupertypeEdgeSets = methodDeclarations.directSupertypeEdgeSets +
                             inheritedGraph.directSupertypeEdgeSets,
                     directSupertypeConstraintProofs =
                         inheritedGraph.directSupertypeConstraintProofs,
+                    varianceConstraintAuthorities = retainedVarianceConstraintAuthorities(
+                        source.graph,
+                        target,
+                        typeDefinitions,
+                        methodDeclarations.methodDefinitions,
+                    ),
                 )
             )
         }
@@ -523,205 +1047,12 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         private fun validateConstructionConstraints(
             target: DotNetClrResolvedTypeView,
             sourceContext: DotNetClrResolvedGenericParameterContext,
-        ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
-            val constraints = when (val resolution = constructedConstraintResolver.resolve(target)) {
-                is DotNetClrConstructedTypeConstraintResolution.Resolved -> resolution.constraints
-                is DotNetClrConstructedTypeConstraintResolution.Invalid ->
-                    return conflict("retained InterfaceImpl has invalid GenericParam constraints")
-            }
-            if (constraints.parameters.any { binding -> binding.constraints.isNotEmpty() }) {
-                val validator = when (val services = nominalConstraintValidator) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> services.value
-                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return services
-                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                }
-                val validation = validator.validate(constraints, sourceContext)
-                for (parameter in validation.parameters) {
-                    for (constraint in parameter.constraints) {
-                        when (constraint.satisfaction) {
-                            DotNetClrNominalConstraintSatisfaction.Satisfied -> Unit
-                            DotNetClrNominalConstraintSatisfaction.Violated ->
-                                return conflict(
-                                    "retained InterfaceImpl violates a target GenericParam constraint",
-                                )
-                            is DotNetClrNominalConstraintSatisfaction.Unsupported ->
-                                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                            is DotNetClrNominalConstraintSatisfaction.InvalidAssignability ->
-                                return conflict(
-                                    "retained InterfaceImpl constraint assignability is invalid",
-                                )
-                        }
-                    }
-                }
-            }
-            if (constraints.requiresSpecialConstraintValidation(sourceContext)) {
-                val specialValidator = when (val services = specialConstraintValidator) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> services.value
-                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return services
-                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                }
-                val specialValidation = specialValidator.validate(constraints, sourceContext)
-                for (parameter in specialValidation.parameters) {
-                    for (constraint in parameter.constraints) {
-                        when (constraint.satisfaction) {
-                            DotNetClrSpecialConstraintSatisfaction.Satisfied -> Unit
-                            is DotNetClrSpecialConstraintSatisfaction.Violated ->
-                                return conflict(
-                                    "retained InterfaceImpl violates a target special GenericParam constraint",
-                                )
-                            is DotNetClrSpecialConstraintSatisfaction.Unsupported ->
-                                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                            is DotNetClrSpecialConstraintSatisfaction.InvalidClassification ->
-                                return conflict(
-                                    "retained InterfaceImpl special-constraint classification is invalid",
-                                )
-                        }
-                    }
-                }
-            }
-            return bound(Unit)
-        }
-
-        private fun DotNetClrResolvedConstructedTypeConstraints.requiresSpecialConstraintValidation(
-            sourceContext: DotNetClrResolvedGenericParameterContext,
-        ): Boolean = parameters.any { binding ->
-            binding.parameter.hasReferenceTypeConstraint ||
-                    binding.parameter.hasNotNullableValueTypeConstraint ||
-                    binding.parameter.hasDefaultConstructorConstraint ||
-                    binding.parameter.allowsByRefLike ||
-                    binding.argument.mayBeByRefLike(sourceContext)
-        }
-
-        private fun DotNetClrResolvedTypeSignature.mayBeByRefLike(
-            sourceContext: DotNetClrResolvedGenericParameterContext,
-        ): Boolean = when (this) {
-            is DotNetClrResolvedTypeSignature.GenericParameter ->
-                sourceContext.binding(this)?.parameter?.allowsByRefLike == true
-            is DotNetClrResolvedTypeSignature.Named -> isValueType
-            is DotNetClrResolvedTypeSignature.GenericInstance -> genericType.isValueType
-            is DotNetClrResolvedTypeSignature.Modified ->
-                unmodifiedType.mayBeByRefLike(sourceContext)
-            else -> false
-        }
-
-        private fun createNominalConstraintValidator():
-                DotNetGenericOwnerPhysicalBindingResult<DotNetClrNominalConstraintValidator> {
-            val coreTypes = source.graph.physicalCoreTypes
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val classifier = physicalTypeClassifier
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val coreAssembly = coreTypes.systemValueType.assembly
-            val primitiveTypes = when (
-                val resolution = DotNetClrPrimitiveTypeCatalogResolver(typeResolver)
-                    .resolve(coreAssembly)
-            ) {
-                is DotNetClrPrimitiveTypeCatalogResolution.Resolved -> resolution.catalog
-                is DotNetClrPrimitiveTypeCatalogResolution.Unresolved ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val arrayRuntimeTypes = when (
-                val resolution = DotNetClrArrayRuntimeTypesResolver(typeResolver)
-                    .resolve(coreAssembly)
-            ) {
-                is DotNetClrArrayRuntimeTypesResolution.Resolved -> resolution.types
-                is DotNetClrArrayRuntimeTypesResolution.Unresolved ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                is DotNetClrArrayRuntimeTypesResolution.Invalid ->
-                    return conflict("selected CLR array runtime metadata is invalid")
-            }
-            val delegateRuntimeTypes = when (val resolution = resolveDelegateRuntimeTypes()) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> resolution.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return resolution
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            return bound(
-                DotNetClrNominalConstraintValidator(
-                    typeResolver,
-                    primitiveTypes,
-                    classifier,
-                    arrayRuntimeTypes,
-                    delegateRuntimeTypes,
-                )
-            )
-        }
+        ): DotNetGenericOwnerPhysicalBindingResult<Unit> =
+            constraintValidationServices.validateConstructionConstraints(target, sourceContext)
 
         private fun resolveDelegateRuntimeTypes():
-                DotNetGenericOwnerPhysicalBindingResult<DotNetClrDelegateRuntimeTypes> {
-            val coreAssembly = source.graph.physicalCoreTypes?.systemValueType?.assembly
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            return when (
-                val resolution = DotNetClrDelegateRuntimeTypesResolver(typeResolver)
-                    .resolve(coreAssembly)
-            ) {
-                is DotNetClrDelegateRuntimeTypesResolution.Resolved -> bound(resolution.types)
-                is DotNetClrDelegateRuntimeTypesResolution.Unresolved ->
-                    DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                is DotNetClrDelegateRuntimeTypesResolution.Invalid ->
-                    conflict("selected CLR delegate runtime metadata is invalid")
-            }
-        }
-
-        private fun createSpecialConstraintValidator():
-                DotNetGenericOwnerPhysicalBindingResult<DotNetClrSpecialConstraintValidator> {
-            val selectedTarget = target
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val coreTypes = source.graph.physicalCoreTypes
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val classifier = physicalTypeClassifier
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val primitiveTypes = when (
-                val resolution = DotNetClrPrimitiveTypeCatalogResolver(typeResolver)
-                    .resolve(coreTypes.systemValueType.assembly)
-            ) {
-                is DotNetClrPrimitiveTypeCatalogResolution.Resolved -> resolution.catalog
-                is DotNetClrPrimitiveTypeCatalogResolution.Unresolved ->
-                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            }
-            val customAttributeCoreTypes = resolveDotNetClrCustomAttributeCoreTypes(
-                selectedMetadata,
-                typeResolver,
-            ) ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-            val serializedTypeResolver = DotNetClrSerializedTypeResolver(
-                typeResolver,
-                DotNetClrSerializedAssemblyBinder {
-                        _,
-                        unqualifiedContextAssembly,
-                        assemblyName,
-                    ->
-                    if (assemblyName == null) {
-                        unqualifiedContextAssembly
-                    } else {
-                        selectedAssemblyBinder.bind(assemblyName)
-                    }
-                },
-            )
-            val attributeDecoder = DotNetClrCustomAttributeDecoder(
-                typeResolver,
-                serializedTypeResolver,
-                customAttributeCoreTypes,
-            )
-            val isByRefLikeAttribute = resolveDotNetClrSystemType(
-                selectedMetadata,
-                typeResolver,
-                "System.Runtime.CompilerServices",
-                "IsByRefLikeAttribute",
-            )
-            return bound(
-                DotNetClrSpecialConstraintValidator(
-                    selectedTarget,
-                    DotNetClrByRefLikeClassifier(
-                        classifier,
-                        attributeDecoder,
-                        isByRefLikeAttribute,
-                    ),
-                    coreTypes,
-                    primitiveTypes,
-                )
-            )
-        }
+                DotNetGenericOwnerPhysicalBindingResult<DotNetClrDelegateRuntimeTypes> =
+            constraintValidationServices.resolveDelegateRuntimeTypes()
 
         private fun translateTypeParameters(
             context: DotNetClrResolvedGenericParameterContext,
@@ -1468,6 +1799,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                         )
                     ),
                     directSupertypeConstraintProofs = emptyList(),
+                    varianceConstraintAuthorities = emptyList(),
                 )
             )
         }

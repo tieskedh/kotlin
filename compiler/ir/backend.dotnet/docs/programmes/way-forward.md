@@ -163,8 +163,11 @@ variance and SZ-array reference covariance compose; differing value arguments,
 unknown open binders, wrong direction, missing ancestry, or an unauthenticated
 variant class fail closed. Declared delegate members are still outside retained
 operation authority. Carrier traversal shares the physical ABI's depth and
-node ceilings. Constrained constructions outside retained edges remain
-unavailable.
+node ceilings. Constraint-bearing source and target constructions now compose
+only inside one variance transfer: selected raw metadata and the shared nominal/
+special validators revalidate each exact subtree for the requested target
+profile. Success adds a per-value view but no edge or reusable construction
+authority; unrelated constrained constructions remain unavailable.
 
 Raw inherited-graph and auxiliary-nominal binder counts, plus their aggregate
 constraint-row count, are reserved before generic-context resolution. Both
@@ -172,17 +175,15 @@ reuse the physical-artifact collection ceiling, so hostile metadata cannot
 force an unbounded normalized constraint graph before the adapter returns
 `Unavailable`.
 
-The next ordered boundary is constraint-safe composition of this variance
-transfer. The current general construction helper deliberately rejects a
-TypeDef with nominal or special GenericParam constraints, so a converted target
-cannot yet escape the exact retained-edge proof that admitted a constrained
-construction. The next slice must reuse the shared nominal/special validators
-under conversion-scoped authority; it may not make the general construction
-helper permissive or treat an earlier edge proof as authority for a different
-construction. Producer-recorded delegate authority and storage-placement
-consumption remain separate follow-ons. Only after this bounded constraint
-family should the graph grammar widen to properties, class nodes, MethodImpls,
-or Runtime/Stdlib declarations.
+Constraint-safe variance composition is now closed without making the general
+construction helper permissive or treating an earlier edge proof as authority
+for a different construction. The same selected-graph service validates direct
+owners and inherited graphs, nominal plus special constraints, nested carriers,
+and Framework 4.8/.NET 10 target profiles. Producer-recorded delegate authority
+is the next declaration-authority boundary; storage-placement consumption
+remains the following value/state boundary. Only after those bounded families
+should the graph grammar widen to properties, class nodes, MethodImpls, or
+Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an
