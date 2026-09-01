@@ -200,7 +200,7 @@ consumer no longer requires a complete-surface rewrite plan merely to recognize
 a TypeDef which the producer actually emits, and no consumer may independently
 rederive the vector from logical IR.
 
-Authoritative local placement is now closed for three bounded forms. First,
+Authoritative local placement is now closed for four bounded forms. First,
 producer and independently chosen storage may be the same local `C<!n>` bound
 to the physical MethodDef owner. Second, an exhaustive `IrWhen`
 may preserve an identical direct carrier or select the unique construction in
@@ -215,22 +215,32 @@ role-specific physical entry prototype is exactly one parameter of the current
 owner may produce and store that same `!n`. The emitter admits it only when the
 live direct parameter read has the identical owner-bound carrier. A paired
 semantic hook is analyzed from its own prototype, so an object-domain entry does
-not inherit the typed entry's fact. Diagnostic snapshots, logical source types,
-IR origins, names, and stdlib identity are not physical authority.
+not inherit the typed entry's fact. Fourth, a parameterless, non-method-generic
+natural MethodDef may produce its authority-recorded `Direct` result through an
+already-guaranteed receiver construction and retain the same owner-bound `!n`
+in an immutable local. An existing semantic route vetoes this transfer; the
+older route census need not contain an ordinary natural call. The emitter must
+independently resolve the live call to the same result carrier. Diagnostic
+snapshots, logical source types, IR origins, names, and stdlib identity are not
+physical authority.
 
 These permissions authorize no cast, semantic adaptation, boxing, nullable
 materialization, field/state choice, or ABI change. Ordinary source aliases and
 compiler-created aliases follow the same rules. Star/projected values, mutable
 or multiple-write locals, unknown/null/bottom arms, non-exhaustive control flow,
-foreign/fixed/nested constructions, and split layouts receive no join token.
-The previous compiler-origin recognizer remains only as migration fallback.
+foreign/fixed/nested constructions, argument-bearing or MethodSpec calls, and
+split layouts receive no corresponding placement token. The previous compiler-
+origin recognizer remains only as migration fallback.
 
 The first exact typed parameter entry is closed only for a bare current-owner
-parameter and direct local alias. Next complete exact typed result production
-and the remaining parameter-entry compositions. Then extend joins to null,
-bottom, and unknown arms and make representation-changing conversions explicit.
-Prove those grammars before widening the consumer to fields, captures,
-properties, class nodes, MethodImpls, or Runtime/Stdlib declarations.
+parameter and direct local alias. The first exact result transfer is closed only
+for a parameterless natural MethodDef with one `Direct` result. Next compose
+owner-dependent argument domains, MethodSpecs, and split-nullable results with
+the same operation query, and complete the remaining parameter-entry forms.
+Then extend joins to null, bottom, and unknown arms and make representation-
+changing conversions explicit. Prove those grammars before widening the
+consumer to fields, captures, properties, class nodes, MethodImpls, or
+Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an

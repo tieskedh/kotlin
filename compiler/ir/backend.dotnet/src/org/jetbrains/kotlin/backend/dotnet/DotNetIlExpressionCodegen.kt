@@ -449,20 +449,37 @@ internal class DotNetIlExpressionCodegen(
     fun directPhysicalStorageReadCarrierTypeOrNull(
         expression: IrExpression,
     ): DotNetIlValueType? {
-        val source = when (expression) {
-            is IrTypeOperatorCall -> if (
-                expression.operator == IrTypeOperator.IMPLICIT_CAST ||
-                expression.operator == IrTypeOperator.IMPLICIT_NOTNULL
-            ) {
-                expression.argument
-            } else {
-                expression
-            }
-            else -> expression
-        }
+        val source = expression.identityPhysicalProducer()
         val read = source as? IrGetValue ?: return null
         return methodContext.reference(read.symbol).type
     }
+
+    /**
+     * Reads the verifier-visible result carrier of the MethodDef actually selected for emission.
+     *
+     * The physical-value model has already selected a logical route and instantiated its recorded
+     * signature. This independent late query resolves the live call exactly as emission will and
+     * rejects split results, whose payload-plus-flag layout is not one direct local value.
+     */
+    fun directPhysicalCallResultCarrierTypeOrNull(
+        expression: IrExpression,
+    ): DotNetIlValueType? {
+        val call = expression.identityPhysicalProducer() as? IrCall ?: return null
+        if (intrinsicMethods.getIntrinsic(call.symbol) != null) return null
+        val resolved = resolveCall(call)
+        if (resolved.info.signature.hasSplitNullableResult) return null
+        return (resolved.returnType as? DotNetIlReturnType.Value)?.type
+    }
+
+    private fun IrExpression.identityPhysicalProducer(): IrExpression =
+        if (this is IrTypeOperatorCall &&
+            (operator == IrTypeOperator.IMPLICIT_CAST ||
+                    operator == IrTypeOperator.IMPLICIT_NOTNULL)
+        ) {
+            argument
+        } else {
+            this
+        }
 
     private fun naturalConstructedGenericCarrierTypeOrNull(
         type: IrType,

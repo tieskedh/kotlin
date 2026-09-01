@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-typed-call-result-2026-09-01.md`](generic-owner-physical-typed-call-result-2026-09-01.md)
+  records the first authority-backed natural-MethodDef result transfer: a
+  parameterless `Direct` result instantiated through an already-guaranteed
+  receiver construction, retained owner `!T` local storage, independent live-
+  emitter validation, semantic-route veto, hostile value-flow isolation, and
+  the exact Framework 4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-typed-parameter-entry-2026-09-01.md`](generic-owner-physical-typed-parameter-entry-2026-09-01.md)
   records the first role-specific physical entry environment: exact natural
   owner `!T`, independent object-domain semantic-hook entry, direct live-slot

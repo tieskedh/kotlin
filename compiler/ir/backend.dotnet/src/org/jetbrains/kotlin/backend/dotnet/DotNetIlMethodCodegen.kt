@@ -1862,6 +1862,8 @@ internal class DotNetIlMethodCodegen(
                         },
                         initializerDirectStorageReadCarrier =
                             expressionCodegen.directPhysicalStorageReadCarrierTypeOrNull(initializer),
+                        initializerDirectCallResultCarrier =
+                            expressionCodegen.directPhysicalCallResultCarrierTypeOrNull(initializer),
                         initializerUsesControlFlowBranches = initializer is IrWhen,
                     ) ?: dotNetUnsupported(
                         "final physical-value authority for local '${variable.name.asString()}' " +

@@ -134,6 +134,49 @@ internal fun selectDotNetGenericOwnerPhysicalOperationRoute(
     )
 }
 
+/**
+ * Selects one already-guaranteed construction of an authority-selected MethodDef owner.
+ *
+ * The selected MethodDef supplies only the owner family. Lineage may select an existing view but
+ * cannot create one; otherwise the direct carrier or one unique recorded/guaranteed construction
+ * must supply it. This rule is identical for retained foreign and locally emitted CLR owners.
+ */
+internal fun DotNetGenericOwnerProducedValueFact.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError(
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    owner: DotNetGenericOwnerPhysicalTypeDefIdentity,
+): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalView> {
+    if (!nullState.canBeNonNull) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    provenance.selectedViewLineage[owner]?.let { selected ->
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(selected)
+    }
+
+    val currentConstruction = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)
+        ?.carrier?.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed
+    if (currentConstruction?.definition == owner) {
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(
+            DotNetGenericOwnerPhysicalView(currentConstruction),
+        )
+    }
+
+    val knownViews = (provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known)
+        ?.views ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val candidates = knownViews.filterTo(linkedSetOf()) { view -> view.family == owner }
+    val sourceConstructions = linkedSetOf<DotNetGenericOwnerSymbolicCarrierReference.Constructed>()
+    currentConstruction?.let(sourceConstructions::add)
+    knownViews.mapTo(sourceConstructions) { view -> view.construction }
+    for (sourceConstruction in sourceConstructions) {
+        when (val closure = declarations.physicalInterfaceViewClosureOrError(sourceConstruction)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                closure.value.interfaceViews.filterTo(candidates) { view -> view.family == owner }
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return closure
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+        }
+    }
+    return candidates.singleOrNull()?.let {
+        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
+    } ?: DotNetGenericOwnerPhysicalBindingResult.Unavailable
+}
+
 /** Produces exactly the layout fixed by the selected MethodDef, never its later logical view. */
 private fun DotNetGenericOwnerPhysicalCallableResultLayoutReference.produceCallResultOrError(
     declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
