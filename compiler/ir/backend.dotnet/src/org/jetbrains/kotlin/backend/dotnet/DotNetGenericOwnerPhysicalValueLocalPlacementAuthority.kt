@@ -126,13 +126,26 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
 /** Verifier-visible shape independently reconstructed from one authoritative exact operation. */
 internal data class DotNetGenericOwnerPhysicalValueBoundSplitNullableCall(
     val methodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    val declaredReceiverType: DotNetIlValueType.GenericInstance,
+    val declaredParameterTypes: List<DotNetIlValueType>,
+    val declaredPayloadType: DotNetIlValueType,
     val receiverType: DotNetIlValueType.GenericInstance,
     val parameterTypes: List<DotNetIlValueType>,
+    val methodArgumentTypes: List<DotNetIlValueType>,
     val payloadType: DotNetIlValueType.TypeParameter,
 ) {
     init {
-        require(parameterTypes.size <= 1) {
-            "the bounded split-local call grammar admits at most one ordinary parameter"
+        require(declaredParameterTypes.size == parameterTypes.size) {
+            "a bounded split-local call must retain both its open and instantiated parameter vectors"
+        }
+        require(methodArgumentTypes.size <= 1) {
+            "the bounded split-local call grammar admits at most one MethodSpec argument"
+        }
+        require(
+            if (methodArgumentTypes.isEmpty()) parameterTypes.size <= 1
+            else parameterTypes.size == 2
+        ) {
+            "the bounded split-local call grammar received too many ordinary parameters"
         }
     }
 }
@@ -148,10 +161,13 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
     ): DotNetGenericOwnerPhysicalValueBoundSplitNullableCall? {
         val methodIdentity = operation.method.identity as?
                 DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return null
+        val methodArity = operation.method.signature.genericArity
         if (!operation.method.signature.isInstance ||
-            operation.method.signature.genericArity != 0 ||
-            operation.instantiatedSignature.genericArity != 0 ||
-            operation.methodArguments.isNotEmpty() ||
+            methodArity !in 0..1 ||
+            operation.instantiatedSignature.genericArity != methodArity ||
+            operation.methodArguments.size != methodArity ||
+            operation.method.genericParameters.size != methodArity ||
+            operation.method.genericParameters.any { parameter -> !parameter.isUnconstrained } ||
             operation.method.declaringType != operation.requiredReceiverView.family
         ) return null
         val declaredResult = operation.method.signature.resultLayout as?
@@ -161,6 +177,8 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
                 DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable
             ?: return null
         if (declaredResult.nullFlag != instantiatedResult.nullFlag ||
+            declaredResult.payloadSlot.domain !=
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
             instantiatedResult.payloadSlot.domain !=
             DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
             instantiatedResult.payloadSlot.carrier != payloadCarrier.type ||
@@ -170,23 +188,80 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
         val receiverType = operation.requiredReceiverView.construction
             .bindCurrentOwnerConstructionOrNull(typeMapper, physicalMethodOwner)
             ?: return null
-        if (operation.instantiatedSignature.parameterSlots.size > 1) return null
-        val parameterTypes = operation.instantiatedSignature.parameterSlots.map { slot ->
-            if (slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT) {
-                return null
+        val declaredReceiverType = DotNetIlValueType.GenericInstance(
+            receiverType.classInfo,
+            List(receiverType.classInfo.typeParameterCount) { index ->
+                DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+            },
+        )
+        val declaredSlots = operation.method.signature.parameterSlots
+        val instantiatedSlots = operation.instantiatedSignature.parameterSlots
+        if (declaredSlots.size != instantiatedSlots.size) return null
+        val admittedDomains = when (methodArity) {
+            0 -> declaredSlots.size <= 1 && declaredSlots.all { slot ->
+                slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
             }
+            1 -> declaredSlots.map { slot -> slot.domain } == listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+            )
+            else -> false
+        }
+        if (!admittedDomains || declaredSlots.map { slot -> slot.domain } !=
+            instantiatedSlots.map { slot -> slot.domain }
+        ) return null
+        val declaredParameterTypes = declaredSlots.map { slot ->
+            val parameter = slot.carrier as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+            parameter.bindDeclaredParameterOrNull(
+                operation.method,
+                receiverType.classInfo,
+            ) ?: return null
+        }
+        if (declaredParameterTypes.withIndex().any { indexed ->
+                val index = indexed.index
+                val type = indexed.value
+                if (methodArity == 1 && index == 1) {
+                    !type.isMethodParameter || type.index != 0
+                } else {
+                    type.isMethodParameter
+                }
+            }
+        ) return null
+        val parameterTypes = operation.instantiatedSignature.parameterSlots.map { slot ->
             val parameter = slot.carrier as?
                     DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
             parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner) ?: return null
         }
+        val methodArgumentTypes = operation.methodArguments.map { argument ->
+            val parameter = argument as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+            parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner) ?: return null
+        }
+        if (methodArity == 1 &&
+            (declaredParameterTypes.lastOrNull() !=
+                    DotNetIlValueType.TypeParameter(0, isMethodParameter = true) ||
+                    parameterTypes.lastOrNull() != methodArgumentTypes.single())
+        ) return null
+        val declaredPayload = declaredResult.payloadSlot.carrier as?
+                DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+        val declaredPayloadType = declaredPayload.bindDeclaredParameterOrNull(
+            operation.method,
+            receiverType.classInfo,
+        ) ?: return null
+        if (declaredPayloadType.isMethodParameter) return null
         val payloadType = payloadCarrier.bindCurrentOwnerParameterOrNull(
             typeMapper,
             physicalMethodOwner,
         ) ?: return null
         return DotNetGenericOwnerPhysicalValueBoundSplitNullableCall(
             methodIdentity,
+            declaredReceiverType,
+            declaredParameterTypes,
+            declaredPayloadType,
             receiverType,
             parameterTypes,
+            methodArgumentTypes,
             payloadType,
         )
     }
@@ -478,6 +553,22 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindOwnerParame
         index !in 0 until physicalMethodOwner.typeParameterCount
     ) return null
     return DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindDeclaredParameterOrNull(
+    method: DotNetGenericOwnerPhysicalMethodDefReference,
+    declaringType: DotNetIlClassInfo,
+): DotNetIlValueType.TypeParameter? = when (val parameterBinder = binder) {
+    is DotNetGenericOwnerPhysicalGenericBinderReference.Type ->
+        DotNetIlValueType.TypeParameter(index, isMethodParameter = false).takeIf {
+            parameterBinder.definition == method.declaringType &&
+                    index in 0 until declaringType.typeParameterCount
+        }
+    is DotNetGenericOwnerPhysicalGenericBinderReference.Method ->
+        DotNetIlValueType.TypeParameter(index, isMethodParameter = true).takeIf {
+            parameterBinder.definition == method.identity &&
+                    index in 0 until method.signature.genericArity
+        }
 }
 
 private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.classInfoOrNull(

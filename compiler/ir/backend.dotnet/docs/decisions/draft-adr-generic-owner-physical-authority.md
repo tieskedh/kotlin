@@ -505,6 +505,19 @@ route-census marker, or the payload alone cannot authorize placement. The use,
 enclosing-result, exception-region, and materialization restrictions of the
 fifth form remain unchanged.
 
+The seventh bounded form admits the exact generic operation
+`<R>(K, R): V?`. Its open parameter domains and carriers must be
+`STRICT_OWNER_INPUT(!K)` and `DECLARATION_INDEPENDENT(!!0)`, its open result must
+be `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)`, and its sole fully
+unconstrained MethodDef parameter must be instantiated with one bare current-
+owner `!m`. The retained token carries the open declaration receiver, parameter
+vector and payload separately from the instantiated receiver, parameters,
+MethodSpec vector and payload. The late emitter validates both layers against
+the exact live MethodDef before passing the private Boolean local. Equal
+instantiated carriers therefore cannot conceal a TypeDef/MethodDef binder swap.
+Every other MethodSpec or multi-input shape remains unavailable; the fifth and
+sixth forms remain independently bounded.
+
 #### Joins
 
 - Logical Kotlin type joining and verifier-valid carrier placement are separate.
@@ -718,7 +731,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
 | `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
-| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable` pair retention and one exact-natural single-`STRICT_OWNER_INPUT` operation. MethodSpec and multi-argument operations may preserve their result layout for routing but do not yet retain split pairs in locals; broader consumers and control flow require independent policies. |
+| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, one exact-natural single-`STRICT_OWNER_INPUT` operation, and the exact `<R>(K, R): V?` MethodSpec composition. Other MethodSpec and multi-argument operations may preserve their result layout for routing but do not yet retain split pairs in locals; broader consumers and control flow require independent policies. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 
@@ -758,9 +771,10 @@ parameterless split result, or a result from one exact call with a single
 pair through an enclosing MethodDef with the identical split layout, without
 boxing or logical nullable materialization. The emitted interface MethodDef
 keeps its own independent binder positions—for example `!1` result and `!0`
-input—even when a concrete construction binds both to one outer `!n`. Every
-other consumer still materializes at its ordinary Kotlin value boundary. Split
-result layout never authorizes split fields or duplicate state.
+input—even when a concrete construction binds both to one outer `!n`. The exact
+generic form below is the third bounded local consumer. Every consumer outside
+these three forms still materializes at its ordinary Kotlin value boundary.
+Split result layout never authorizes split fields or duplicate state.
 
 The MethodDef binder composes by the same rule. The first closed structural
 form is:
@@ -778,6 +792,14 @@ MethodDef contract. Neither `INPUT_OUTPUT` nor `SPLIT_NULLABLE` is multiplied
 into a method-generic role. This form is proven across separate Kotlin
 assemblies and ordinary C# implementations; broad Kotlin views still select
 the semantic capability or its recorded natural-interface fallback.
+
+The bounded local consumer retains this exact form only when `!!0` is
+instantiated by one bare current-owner `!m`, the selected GenericParam is fully
+unconstrained, and late MethodDef validation agrees with both the complete open
+and instantiated signatures. The emitted operand remains open as
+`!V Lookup<!!R>(!K, !!R, bool&)`; the MethodSpec suffix is `<!m>`, and verifier
+carriers are substituted independently. No boxing or logical nullable
+materialization is introduced.
 
 ### 10. Separate compilation and foreign declarations
 
@@ -1325,11 +1347,14 @@ generic MethodDef with a strict owner input and split-nullable owner output.
 Separate consumers bind the producer record, direct exact calls remain
 unboxed, and ordinary natural-only C# implementations are reached by widened
 Kotlin calls without changing identity. Each placement path independently
-checks the live emitter or every fixed-boundary branch. The next boundary
-generalizes split-pair placement to justified MethodSpec or multi-argument
-calls, multiple consumers, and control-flow joins, then closes remaining
-parameter-entry forms and explicit conversions—not another state or stdlib
-recognizer.
+checks the live emitter or every fixed-boundary branch. Pair-local placement now
+also consumes that exact `<R>(K, R): V?` operation. Its token preserves both the
+open `!K`/`!!R`/`!V` declaration and the instantiated owner-bound MethodSpec and
+carriers, and sealed emission must agree with both. Other generic or multi-input
+shapes remain unavailable. The next boundary generalizes split-pair placement
+to multiple consumers and control-flow joins, then closes general multi-input,
+remaining parameter-entry forms and explicit conversions—not another state or
+stdlib recognizer.
 
 ## Consequences
 
