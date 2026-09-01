@@ -840,14 +840,18 @@ reuse the shared physical-artifact ceilings: recursive traversal depth is capped
 at 64, while visited nodes, direct edges, and each TypeDef binder vector are
 capped at 1,024. The aggregate admitted `GenericParamConstraint` row count is
 also capped at 1,024. Raw binder and constraint counts are reserved before
-generic-context resolution allocates their normalized views. Exceeding a
-resource ceiling or missing retained hierarchy is `Unavailable`.
+generic-context resolution allocates their normalized views. The binder budget
+counts raw rows, not distinct metadata handles, so repeated malformed handles
+cannot bypass the preflight. Exceeding a resource ceiling or missing retained
+hierarchy is `Unavailable`.
 
 The first constrained-edge grammar admits a nominal
 `GenericParamConstraint` when either:
 
 - it is TypeSpec-backed and its signature fits the bounded primitive/owner-
-  parameter/SZ-array carrier grammar; or
+  parameter/SZ-array carrier grammar, including recursive constructions of an
+  exact public generic interface with a complete supported unconstrained
+  binder vector; or
 - it directly names a public, top-level, non-generic CLR interface whose
   selected hierarchy exactly agrees with raw metadata.
 
@@ -862,6 +866,14 @@ the shared CLR nominal-constraint validator whether the exact metadata
 construction follows from the source TypeDef's open generic-parameter context.
 A violation or invalid assignability is `Conflict`; unsupported validation or
 missing selected core services is `Unavailable`.
+
+Recursive constructed carriers use the physical ABI's depth ceiling of 64 and
+aggregate node ceiling of 65,536. Every constructed TypeDef is independently
+selected and raw-authenticated; its exact binder variance is retained. A nested
+TypeDef with nominal or special binder constraints is not admitted by this
+slice. The enclosing source/target edge proof is authority only for that outer
+construction and cannot be reused as satisfaction proof for an inner generic
+construction.
 
 Successful validation records a constraint-satisfaction proof keyed by the
 source TypeDef identity and the exact unbound direct-supertype construction.
@@ -891,7 +903,7 @@ implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
 No logical type or InterfaceImpl row order participates. Special constraints,
-nested generic and wider nominal constraint carriers, declared members on
+constrained nested TypeDefs and wider nominal carriers, declared members on
 inherited graph nodes, variance conversions, classes, MethodImpls, unsupported
 carrier leaves, and hierarchy disagreement remain unavailable or conflicting
 according to the ordinary validity boundary.
@@ -1018,10 +1030,12 @@ physical-interface closure without another substitution engine. Exact retained
 edge proofs now admit bounded TypeSpec nominal constraints, including dependent
 parameter implication, without widening the general construction helper. Exact
 direct nominal non-generic interface carriers are retained from selected and
-raw-authenticated TypeDefs without fabricating their edge closure. The next
-ordered work completes nested, wider nominal, and special constrained-binder
-forms through shared validators; it is not another shape-specific state
-recognizer or a resumed stdlib census.
+raw-authenticated TypeDefs without fabricating their edge closure. Recursive
+constructed carriers now retain exact unconstrained generic interface TypeDefs,
+including value-type arguments, under the shared physical depth/node budgets.
+The next ordered work completes constrained nested, wider nominal, and special
+constrained-binder forms through shared validators; it is not another shape-
+specific state recognizer or a resumed stdlib census.
 
 ## Consequences
 

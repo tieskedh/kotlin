@@ -125,15 +125,23 @@ edge. This does not infer the interface by name, authorize a constrained generic
 construction, or claim a complete edge set for the auxiliary TypeDef; missing
 selected hierarchy remains `Unavailable`.
 
+A TypeSpec may also recursively construct an exact public generic interface
+whose selected/raw TypeDef has a complete supported unconstrained binder vector.
+The construction can contain exact value arguments and can close or flow
+through an inherited edge. Carrier traversal shares the physical ABI's depth
+and node ceilings. A nested TypeDef with nominal or special constraints remains
+unavailable: the outer edge-specific proof cannot satisfy an inner construction
+by implication.
+
 Raw inherited-graph binder counts and the aggregate constraint-row count are
 reserved before generic-context resolution. Both reuse the physical-artifact
 collection ceiling, so hostile metadata cannot force an unbounded normalized
 constraint graph before the adapter returns `Unavailable`.
 
-The next ordered boundary is the remaining constrained-binder grammar: nested
-generic and wider nominal constraint carriers, then reference/value/default-
-constructor and by-ref-like special constraints through the existing shared
-validators.
+The next ordered boundary is the remaining constrained-binder grammar:
+constrained nested TypeDefs and wider nominal carriers, then reference/value/
+default-constructor and by-ref-like special constraints through the existing
+shared validators.
 Keep proof authority edge-specific and keep parameter domains and direct/void/
 split-nullable result layouts independently composable. Only after this bounded
 constraint family should the grammar widen to properties, classes, MethodImpls,
