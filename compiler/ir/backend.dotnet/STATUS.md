@@ -174,14 +174,18 @@ The first constrained inherited-binder boundary is now closed for nominal
 TypeSpec rows expressible by the bounded carrier grammar, including a forwarded
 `TDerived : TBase` implication and a concrete `string : object` close. An exact
 direct nominal row may also name a selected, raw-authenticated public
-non-generic CLR interface. A TypeSpec may recursively construct a selected
-public generic interface whose complete binder vector is supported and
-unconstrained, including an exact value-type argument. The same exact carrier
-may close or flow through an inherited edge without fabricating the auxiliary
-interface's edge closure. The outer edge proof cannot authorize a nested
-constrained TypeDef. Special constraints, constrained nested TypeDefs, wider
-nominal carriers, variance conversions, classes, MethodImpls, properties, and
-Runtime/Stdlib application remain later. The fast external-DLL FIR fixture
+non-generic CLR interface or ordinary reference class. A TypeSpec may
+recursively construct either selected public generic form when its complete
+binder vector is supported and unconstrained, including with an exact value-
+type argument. The same exact carrier may close or flow through an inherited
+edge without fabricating the auxiliary TypeDef's edge closure. Ordinary class
+carriers are classified through the shared physical type classifier; variant
+non-interface TypeDefs remain unavailable until delegates are distinguished.
+The outer edge proof cannot authorize a nested constrained TypeDef. Special
+constraints, constrained nested TypeDefs, value-type nominal carriers,
+variance conversions, classes as inherited graph nodes, MethodImpls,
+properties, and Runtime/Stdlib application remain later. The fast external-DLL
+FIR fixture
 intentionally has no selected physical core catalog, so this constrained slice
 is proven in the metadata model with a complete synthetic selected core; an
 end-to-end constrained FIR pipeline remains an explicit later gate rather than
@@ -190,7 +194,7 @@ The shared model and remaining boundary are owned by the
 [physical-authority ADR](docs/decisions/draft-adr-generic-owner-physical-authority.md)
 and [way forward](docs/programmes/way-forward.md).
 
-The retained-metadata model gate passes 59 tests. All six unconstrained
+The retained-metadata model gate passes 62 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
 
@@ -206,10 +210,11 @@ errors, or skips.
   coexist without becoming a name-based family. Graph nodes must be public
   top-level memberless interfaces with a bounded ordered binder vector. Only
   bounded TypeSpec-backed nominal constraints, exact direct nominal rows, and
-  recursive constructions of public generic interfaces with supported
-  unconstrained binders are admitted. Special constraints, constrained nested
-  TypeDefs, variance conversions, classes, MethodImpls, properties, wider
-  nominal carriers, and broader operation routing remain incomplete. Distinct
+  recursive constructions of public generic interfaces or ordinary reference
+  classes with supported unconstrained binders are admitted. Special
+  constraints, constrained nested TypeDefs, value-type and variant-delegate
+  nominal carriers, variance conversions, classes as graph nodes, MethodImpls,
+  properties, and broader operation routing remain incomplete. Distinct
   constructions are retained, but selecting one still requires independently
   proven lineage.
 - Producer-wide state remains incomplete beyond the bounded direct-owner-

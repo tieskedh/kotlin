@@ -850,15 +850,15 @@ The first constrained-edge grammar admits a nominal
 
 - it is TypeSpec-backed and its signature fits the bounded primitive/owner-
   parameter/SZ-array carrier grammar, including recursive constructions of an
-  exact public generic interface with a complete supported unconstrained
-  binder vector; or
-- it directly names a public, top-level, non-generic CLR interface whose
-  selected hierarchy exactly agrees with raw metadata.
+  exact public generic interface or ordinary reference class with a complete
+  supported unconstrained binder vector; or
+- it directly names a public, top-level, non-generic CLR interface or ordinary
+  reference class whose selected hierarchy exactly agrees with raw metadata.
 
 The second form records the exact auxiliary TypeDef and may supply the same
 exact named carrier to an `InterfaceImpl` argument. It does not infer a TypeDef
 by namespace/name, claim a complete direct-edge set for that auxiliary
-interface, or authorize an arbitrary constrained generic construction. Missing
+TypeDef, or authorize an arbitrary constrained generic construction. Missing
 selected hierarchy is `Unavailable`; retained/raw disagreement is `Conflict`.
 Special constraint flags remain unavailable. Before recording a constrained
 target edge, the adapter resolves the target's substituted constraints and asks
@@ -869,11 +869,16 @@ missing selected core services is `Unavailable`.
 
 Recursive constructed carriers use the physical ABI's depth ceiling of 64 and
 aggregate node ceiling of 65,536. Every constructed TypeDef is independently
-selected and raw-authenticated; its exact binder variance is retained. A nested
-TypeDef with nominal or special binder constraints is not admitted by this
-slice. The enclosing source/target edge proof is authority only for that outer
-construction and cannot be reused as satisfaction proof for an inner generic
-construction.
+selected and raw-authenticated; its exact binder variance is retained. An
+ordinary reference class is admitted only after the shared physical classifier
+proves its class encoding; its selected base/interface hierarchy remains
+authority but is not copied into the auxiliary declaration index as a complete
+edge set. Variant non-interface TypeDefs remain unavailable because CLR permits
+variance on delegates and this slice does not yet distinguish them from
+ordinary classes. A nested TypeDef with nominal or special binder constraints
+is not admitted. The enclosing source/target edge proof is authority only for
+that outer construction and cannot be reused as satisfaction proof for an
+inner generic construction.
 
 Successful validation records a constraint-satisfaction proof keyed by the
 source TypeDef identity and the exact unbound direct-supertype construction.
@@ -903,10 +908,11 @@ implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
 No logical type or InterfaceImpl row order participates. Special constraints,
-constrained nested TypeDefs and wider nominal carriers, declared members on
-inherited graph nodes, variance conversions, classes, MethodImpls, unsupported
-carrier leaves, and hierarchy disagreement remain unavailable or conflicting
-according to the ordinary validity boundary.
+constrained nested TypeDefs, value-type and variant-delegate nominal carriers,
+declared members on inherited graph nodes, variance conversions, classes as
+graph nodes, MethodImpls, unsupported carrier leaves, and hierarchy
+disagreement remain unavailable or conflicting according to the ordinary
+validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
