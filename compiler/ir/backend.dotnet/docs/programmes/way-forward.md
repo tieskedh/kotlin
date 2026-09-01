@@ -119,29 +119,36 @@ physical core catalog, so constrained end-to-end FIR remains a later gate rather
 than acquiring a duplicate local validator.
 
 An exact direct nominal constraint may now name a public, top-level,
-non-generic CLR interface or ordinary reference class whose retained hierarchy
-agrees with raw metadata. Its exact TypeDef becomes an auxiliary carrier and
-may also close an inherited edge. This does not infer the TypeDef by name,
-authorize a constrained generic construction, or claim a complete edge set for
-the auxiliary TypeDef; missing selected hierarchy remains `Unavailable`.
+non-generic CLR interface, ordinary reference class, or value type whose
+retained hierarchy agrees with raw metadata. Its exact TypeDef becomes an
+auxiliary carrier and may also close an inherited edge. This does not infer the
+TypeDef by name, authorize a constrained generic construction, or claim a
+complete edge set for the auxiliary TypeDef; missing selected hierarchy remains
+`Unavailable`.
 
-A TypeSpec may also recursively construct an exact public generic interface or
-ordinary reference class whose selected/raw TypeDef has a complete supported
-binder vector. The construction can contain exact value arguments and can close
-or flow through an inherited edge. A constrained construction is admitted at
-any nested depth only when the shared nominal and special-constraint validators
-prove that exact subtree in the source TypeDef's open context. Exact `class`,
-`struct`, `new()`, and `allows ref struct` flags use this same grammar. Open
-binder rows remain target-independent declaration authority, while a
+A TypeSpec may also recursively construct an exact public generic interface,
+ordinary reference class, or value type whose selected/raw TypeDef has a
+complete supported binder vector. The construction can contain exact value
+arguments and can close or flow through an inherited edge. Reference,
+non-nullable-value, and nullable-value carriers use the shared physical
+classifier. An actual signature must agree with the selected TypeDef's
+class/value marker. Only a bare TypeDef/TypeRef constraint row may infer that
+marker from the selected definition because the metadata row has no signature-
+side kind. Non-nullable values preserve `NON_NULL_ONLY`; a selected
+`System.Nullable<T>` construction preserves `INLINE_NULLABLE_VALUE`. A
+constrained construction is admitted at any nested depth only when the shared
+nominal and special-constraint validators prove that exact subtree in the
+source TypeDef's open context. Exact `class`, `struct`, `new()`, and
+`allows ref struct` flags use this same grammar. Open binder rows remain target-
+independent declaration authority, while a
 construction needing special or possible by-ref-like validation requires an
 explicit target. This proves by-ref-like-capable binder forwarding on .NET 10,
 rejects it on Framework 4.8, and remains unavailable without a target. The
 proof is scoped to source, exact edge root, and constrained subtree. An outer
 proof cannot satisfy an inner construction by implication, and the general
-construction helper remains closed. Reference-class classification uses the
-shared physical classifier; non-interface variance is not admitted until
-delegates have separate proof. Carrier traversal shares the physical ABI's
-depth and node ceilings. Constrained constructions outside retained edges
+construction helper remains closed. Non-interface variance is not admitted
+until delegates have separate proof. Carrier traversal shares the physical
+ABI's depth and node ceilings. Constrained constructions outside retained edges
 remain unavailable.
 
 Raw inherited-graph and auxiliary-nominal binder counts, plus their aggregate
@@ -150,9 +157,9 @@ reuse the physical-artifact collection ceiling, so hostile metadata cannot
 force an unbounded normalized constraint graph before the adapter returns
 `Unavailable`.
 
-The next ordered boundary is value-type and variant-delegate nominal carriers.
-Keep proof authority edge-specific and keep parameter domains and direct/void/
-split-nullable result layouts independently composable. Only after this bounded
+The next ordered boundary is variant-delegate nominal carriers. Keep proof
+authority edge-specific and keep parameter domains and direct/void/split-
+nullable result layouts independently composable. Only after this bounded
 constraint family should the graph grammar widen to properties, class nodes,
 MethodImpls, or Runtime/Stdlib declarations.
 

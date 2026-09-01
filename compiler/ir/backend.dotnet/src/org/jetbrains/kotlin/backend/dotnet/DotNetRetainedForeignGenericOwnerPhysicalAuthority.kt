@@ -78,8 +78,12 @@ import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrSystemType
  * constructions of that owner require already-proven selected lineage at the operation boundary.
  * Each admitted graph interface has a resource-bounded ordered binder vector whose exact CLR
  * variance and supported nominal constraints are retained. An exact nominal carrier may be a
- * public interface or ordinary reference class whose selected hierarchy agrees with raw metadata;
- * a generic auxiliary carrier additionally requires a complete supported binder vector.
+ * public interface, ordinary reference class, or value type whose selected hierarchy agrees with
+ * raw metadata; a generic auxiliary carrier additionally requires a complete supported binder
+ * vector. Actual signatures must agree with the retained TypeDef's class/value kind. A bare
+ * TypeDef/TypeRef constraint row has no such signature marker, so only that row may infer the kind
+ * from the selected definition. Non-nullable and nullable value carriers preserve their distinct
+ * null encodings through the shared physical classifier.
  * Recursive constructed carriers are depth- and node-bounded, and an unretained auxiliary edge
  * set remains unknown. A constrained construction inside a direct edge requires its own shared-
  * validator proof scoped to source, edge root, and exact subtree. Nominal and CLR special
@@ -88,7 +92,7 @@ import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrSystemType
  * explicit target profile; implicit by-ref-like eligibility is checked for every admitted
  * construction which might carry a by-ref-like argument. Variant non-interface TypeDefs remain
  * unavailable until delegates are classified separately. Declared graph members, MethodImpls,
- * value types, and carrier shapes outside the bounded grammar remain unavailable.
+ * and carrier shapes outside the bounded grammar remain unavailable.
  */
 internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private constructor(
     val typeDefinitions: List<DotNetGenericOwnerPhysicalTypeDefReference>,
@@ -112,6 +116,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetRetainedForeignGenericOwnerPhysicalDeclarations> =
             InheritedReceiverBuilder(source, method, receiverSource, target).build()
     }
+
+    private data class RetainedAuxiliaryNominalTypeKind(
+        val category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+        val supportsInlineNull: Boolean,
+    )
 
     /** Retained/raw-authenticated memberless graph; construction substitution stays in the index. */
     private class InheritedReceiverBuilder(
@@ -749,6 +758,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     // misclassify a valid delegate row as an invalid class declaration.
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
+                if (category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE &&
+                    variance != DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+                ) {
+                    return conflict("$subject value-type GenericParam declares variance")
+                }
                 val constraints = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
                 for (constraint in binding.constraints) {
                     val carrier = when (val type = constraint.type) {
@@ -793,7 +807,10 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             type: DotNetClrResolvedTypeDefinition,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
             val description = when (
-                val retention = retainExactAuxiliaryNominalTypeDefinition(type)
+                val retention = retainExactAuxiliaryNominalTypeDefinition(
+                    type,
+                    encodedAsValueType = null,
+                )
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> retention.value
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return retention
@@ -815,10 +832,19 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
 
         private fun retainExactAuxiliaryNominalTypeDefinition(
             type: DotNetClrResolvedTypeDefinition,
+            encodedAsValueType: Boolean?,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalTypeDefReference> {
             val identity =
                 DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr.retained(receiverSource, type)
             auxiliaryNominalTypeDefinitions[identity]?.let { existing ->
+                if (encodedAsValueType != null &&
+                    (existing.category == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE) !=
+                    encodedAsValueType
+                ) {
+                    return conflict(
+                        "retained nominal carrier signature kind contradicts its TypeDef",
+                    )
+                }
                 return bound(existing)
             }
             if (auxiliaryNominalTypeDefinitions.size +
@@ -830,7 +856,11 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             if (!activeAuxiliaryNominalTypeDefinitions.add(identity)) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            val result = retainExactAuxiliaryNominalTypeDefinitionWhileActive(type, identity)
+            val result = retainExactAuxiliaryNominalTypeDefinitionWhileActive(
+                type,
+                identity,
+                encodedAsValueType,
+            )
             check(activeAuxiliaryNominalTypeDefinitions.remove(identity)) {
                 "retained nominal carrier lost its active TypeDef"
             }
@@ -840,6 +870,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
         private fun retainExactAuxiliaryNominalTypeDefinitionWhileActive(
             type: DotNetClrResolvedTypeDefinition,
             identity: DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+            encodedAsValueType: Boolean?,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalTypeDefReference> {
             when (val reservation = reserveGenericRows(type, identity)) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
@@ -885,47 +916,31 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             ) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
-            val category = when {
+            val typeKind = when {
                 definition.isInterface -> {
+                    if (encodedAsValueType == true) {
+                        return conflict(
+                            "retained nominal interface is encoded as a value type",
+                        )
+                    }
                     if (!definition.isAbstract || definition.isSealed ||
                         definition.baseType != null || rawHierarchy.baseType != null
                     ) {
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                     }
-                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                    RetainedAuxiliaryNominalTypeKind(
+                        DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                        supportsInlineNull = false,
+                    )
                 }
-                else -> when (
-                    val classification = physicalTypeClassifier?.classify(
-                        if (openArguments.isEmpty()) {
-                            DotNetClrResolvedTypeSignature.Named(type, isValueType = false)
-                        } else {
-                            DotNetClrResolvedTypeSignature.GenericInstance(
-                                DotNetClrResolvedTypeSignature.Named(type, isValueType = false),
-                                openArguments,
-                            )
-                        },
-                    ) ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                ) {
-                    is DotNetClrPhysicalTypeClassification.Classified ->
-                        if (classification.kind == DotNetClrPhysicalTypeKind.REFERENCE) {
-                            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
-                        } else {
-                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                        }
-                    is DotNetClrPhysicalTypeClassification.Unsupported ->
-                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                    is DotNetClrPhysicalTypeClassification.Invalid ->
-                        if (classification.definitionIsValueType == true) {
-                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                        } else {
-                            return conflict(
-                                "retained nominal carrier has an invalid physical kind " +
-                                        "(${classification.failure})",
-                            )
-                        }
-                    is DotNetClrPhysicalTypeClassification.InvalidHierarchy ->
-                        // The shared classifier groups invalid, unsupported, and resource-limited
-                        // assignability results here. None proves a reference-class carrier.
+                else -> when (val classification = classifyAuxiliaryNominalType(
+                    type,
+                    openArguments,
+                    encodedAsValueType,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> classification.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return classification
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
             }
@@ -933,7 +948,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 context,
                 identity,
                 definition,
-                category,
+                typeKind.category,
                 "retained auxiliary nominal TypeDef",
             )) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> translation.value
@@ -944,7 +959,8 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             val description = DotNetGenericOwnerPhysicalTypeDefReference(
                 identity,
                 genericParameters = parameters,
-                category = category,
+                category = typeKind.category,
+                supportsInlineNull = typeKind.supportsInlineNull,
             )
             if (auxiliaryNominalTypeDefinitions.size >=
                 MAX_RETAINED_INTERFACE_GRAPH_NODES
@@ -953,6 +969,69 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
             }
             auxiliaryNominalTypeDefinitions[identity] = description
             return bound(description)
+        }
+
+        private fun classifyAuxiliaryNominalType(
+            type: DotNetClrResolvedTypeDefinition,
+            openArguments: List<DotNetClrResolvedTypeSignature>,
+            encodedAsValueType: Boolean?,
+        ): DotNetGenericOwnerPhysicalBindingResult<RetainedAuxiliaryNominalTypeKind> {
+            val classifier = physicalTypeClassifier
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+
+            fun signature(isValueType: Boolean): DotNetClrResolvedTypeSignature =
+                if (openArguments.isEmpty()) {
+                    DotNetClrResolvedTypeSignature.Named(type, isValueType)
+                } else {
+                    DotNetClrResolvedTypeSignature.GenericInstance(
+                        DotNetClrResolvedTypeSignature.Named(type, isValueType),
+                        openArguments,
+                    )
+                }
+
+            var classification = classifier.classify(
+                signature(encodedAsValueType ?: false),
+            )
+            if (encodedAsValueType == null &&
+                classification is DotNetClrPhysicalTypeClassification.Invalid &&
+                classification.definitionIsValueType == true
+            ) {
+                // A TypeDef/TypeRef GenericParamConstraint row has no signature-side class/value
+                // marker. Retry with the kind established by the selected TypeDef hierarchy;
+                // actual signatures never receive this inference path.
+                classification = classifier.classify(signature(isValueType = true))
+            }
+            return when (classification) {
+                is DotNetClrPhysicalTypeClassification.Classified -> bound(
+                    when (classification.kind) {
+                        DotNetClrPhysicalTypeKind.REFERENCE ->
+                            RetainedAuxiliaryNominalTypeKind(
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                                supportsInlineNull = false,
+                            )
+                        DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE ->
+                            RetainedAuxiliaryNominalTypeKind(
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+                                supportsInlineNull = false,
+                            )
+                        DotNetClrPhysicalTypeKind.NULLABLE_VALUE ->
+                            RetainedAuxiliaryNominalTypeKind(
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+                                supportsInlineNull = true,
+                            )
+                    }
+                )
+                is DotNetClrPhysicalTypeClassification.Unsupported ->
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                is DotNetClrPhysicalTypeClassification.Invalid -> conflict(
+                    "retained nominal carrier has an invalid physical kind " +
+                            "(${classification.failure})",
+                )
+                is DotNetClrPhysicalTypeClassification.InvalidHierarchy ->
+                    // The shared classifier groups invalid, unsupported, and resource-limited
+                    // assignability results here. None proves a nominal carrier kind.
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
         }
 
         private fun translateInheritedCarrier(
@@ -1021,18 +1100,28 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable -> element
                 }
                 is DotNetClrResolvedTypeSignature.Named ->
-                    if (type.isValueType) {
-                        DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                    } else {
-                        translateExactNominalCarrier(type.type)
+                    when (val retention = retainExactAuxiliaryNominalTypeDefinition(
+                        type.type,
+                        type.isValueType,
+                    )) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                            bound<DotNetGenericOwnerSymbolicCarrierReference>(
+                                DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                                    .unboundTypeReference(
+                                        retention.value.identity,
+                                        emptyList(),
+                                    )
+                            )
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                            conflict(retention.reason)
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable
                     }
                 is DotNetClrResolvedTypeSignature.GenericInstance -> {
-                    if (type.genericType.isValueType) {
-                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                    }
                     val description = when (
                         val retention = retainExactAuxiliaryNominalTypeDefinition(
                             type.genericType.type,
+                            type.genericType.isValueType,
                         )
                     ) {
                         is DotNetGenericOwnerPhysicalBindingResult.Bound -> retention.value
