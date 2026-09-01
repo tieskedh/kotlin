@@ -542,16 +542,18 @@ internal class DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet(
 }
 
 /**
- * Proof that one exact recorded direct-supertype construction satisfies its target TypeDef's
- * GenericParam rows in the source TypeDef's open declaration context.
+ * Proof that one constrained construction inside an exact recorded direct-supertype carrier
+ * satisfies its TypeDef's GenericParam rows in the source TypeDef's open declaration context.
  *
  * This is deliberately narrower than general construction authority. It cannot authorize the
- * same target with caller-chosen arguments, and it remains tied to the exact metadata edge whose
- * source binder supplied the constraint implication.
+ * same construction with caller-chosen arguments, and it remains tied to the exact metadata edge
+ * whose source binder supplied the constraint implication. The default records the edge root;
+ * nested constrained carriers name both that root and their exact subtree.
  */
 internal data class DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
     val source: DotNetGenericOwnerPhysicalTypeDefIdentity,
-    val target: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    val edgeTarget: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    val constrainedConstruction: DotNetGenericOwnerSymbolicCarrierReference.Constructed = edgeTarget,
 )
 
 /**
@@ -630,6 +632,25 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
         arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
     ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
+        when (val header = validateConstructionHeaderOrError(definition, arguments)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return header
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return header
+        }
+        for (argument in arguments) {
+            when (val validation = validateCarrierOrError(argument)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+            }
+        }
+        return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+    }
+
+    private fun validateConstructionHeaderOrError(
+        definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> {
         val description = typeDefinitions[definition]
             ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         if (arguments.size != description.genericArity) {
@@ -641,13 +662,6 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                 "a physical generic construction cannot contain void",
             )
-        }
-        for (argument in arguments) {
-            when (val validation = validateCarrierOrError(argument)) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
-            }
         }
         return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
     }
@@ -775,6 +789,36 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> =
         DotNetGenericOwnerPhysicalCarrier.bind(this, type)
 
+    fun carrierWithinAuthenticatedViewOrError(
+        type: DotNetGenericOwnerSymbolicCarrierReference,
+        authority: DotNetGenericOwnerAuthenticatedPhysicalView,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> =
+        DotNetGenericOwnerPhysicalCarrier.bindWithinAuthenticatedView(
+            this,
+            type,
+            authority,
+        )
+
+    fun constructTypeWithinAuthenticatedViewOrError(
+        definition: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        arguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
+        authority: DotNetGenericOwnerAuthenticatedPhysicalView,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference.Constructed> {
+        val construction = DotNetGenericOwnerSymbolicCarrierReference.Constructed
+            .unboundTypeReference(definition, arguments)
+        return when (val validation = validateCarrierWithinConstructionScopeOrError(
+            construction,
+            authority.construction,
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(construction)
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict(validation.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    }
+
     internal fun validateParameterOrError(
         binder: DotNetGenericOwnerPhysicalGenericBinderReference,
         index: Int,
@@ -805,6 +849,63 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             validateConstructionOrError(carrier.definition, carrier.arguments)
         is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
             validateCarrierOrError(carrier.element)
+    }
+
+    /**
+     * Structural half of scoped carrier validation. This does not authenticate [scopeConstruction];
+     * only [DotNetGenericOwnerAuthenticatedPhysicalView] may expose it to carrier binding.
+     */
+    internal fun validateCarrierWithinConstructionScopeOrError(
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+        scopeConstruction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> =
+        validateCarrierWithConstraintAuthorityOrError(carrier) { construction ->
+            scopeConstruction.containsConstruction(construction)
+        }
+
+    private fun validateCarrierWithConstraintAuthorityOrError(
+        carrier: DotNetGenericOwnerSymbolicCarrierReference,
+        isConstrainedConstructionAuthorized: (
+            DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        ) -> Boolean,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> = when (carrier) {
+        is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+            DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+            validateParameterOrError(carrier.binder, carrier.index)
+        is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+            validateCarrierWithConstraintAuthorityOrError(
+                carrier.element,
+                isConstrainedConstructionAuthorized,
+            )
+        is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+            when (val header = validateConstructionHeaderOrError(
+                carrier.definition,
+                carrier.arguments,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return header
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return header
+            }
+            val description = typeDefinitions[carrier.definition]
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            if (description.genericParameters.any { parameter -> !parameter.isUnconstrained } &&
+                !isConstrainedConstructionAuthorized(carrier)
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            for (argument in carrier.arguments) {
+                when (val validation = validateCarrierWithConstraintAuthorityOrError(
+                    argument,
+                    isConstrainedConstructionAuthorized,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return validation
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return validation
+                }
+            }
+            DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
+        }
     }
 
     private fun validateDirectSupertypeEdgeSetOrError(
@@ -838,15 +939,11 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         for (edge in edgeSet.edges) {
             val targetConstruction = edge.target as?
                     DotNetGenericOwnerSymbolicCarrierReference.Constructed
-            val hasConstraintProof = targetConstruction != null &&
-                    DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
-                        edgeSet.source,
-                        targetConstruction,
-                    ) in directSupertypeConstraintProofs
-            val carrierValidation = if (hasConstraintProof) {
-                validateConstructionShapeOrError(
-                    targetConstruction.definition,
-                    targetConstruction.arguments,
+            val carrierValidation = if (targetConstruction != null) {
+                validateDirectSupertypeConstructionOrError(
+                    targetConstruction,
+                    edgeSet.source,
+                    targetConstruction,
                 )
             } else {
                 validateCarrierOrError(edge.target)
@@ -892,6 +989,19 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
         return DotNetGenericOwnerPhysicalBindingResult.Bound(Unit)
     }
 
+    private fun validateDirectSupertypeConstructionOrError(
+        construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        source: DotNetGenericOwnerPhysicalTypeDefIdentity,
+        edgeTarget: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+    ): DotNetGenericOwnerPhysicalBindingResult<Unit> =
+        validateCarrierWithConstraintAuthorityOrError(construction) { constrained ->
+            DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
+                source,
+                edgeTarget,
+                constrained,
+            ) in directSupertypeConstraintProofs
+        }
+
     private fun validateDirectSupertypeParameterScopesOrError(
         target: DotNetGenericOwnerSymbolicCarrierReference,
         source: DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -925,72 +1035,17 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
     private fun substituteDirectSupertypeTargetOrError(
         edge: DotNetGenericOwnerPhysicalDirectSupertypeEdgeReference,
         source: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
-    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
-        val target = edge.target
-        return when (target) {
-            is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
-                DotNetGenericOwnerPhysicalBindingResult.Bound(target)
-            is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
-                if (target.binder != DotNetGenericOwnerPhysicalGenericBinderReference.Type(source.definition)) {
-                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a recorded direct-supertype edge escaped its source TypeDef binder",
-                    )
-                } else {
-                    source.arguments.getOrNull(target.index)?.let {
-                        DotNetGenericOwnerPhysicalBindingResult.Bound(it)
-                    } ?: DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a recorded direct-supertype parameter is outside its constructed source arity",
-                    )
-                }
-            }
-            is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
-                val substitutedArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
-                for (argument in target.arguments) {
-                    when (val substitution = substituteDirectSupertypeCarrierOrError(argument, source)) {
-                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
-                            substitutedArguments += substitution.value
-                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return substitution
-                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return substitution
-                    }
-                }
-                val proof = DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
-                    source.definition,
-                    target,
-                )
-                if (proof in directSupertypeConstraintProofs) {
-                    when (val shape = validateConstructionShapeOrError(
-                        target.definition,
-                        substitutedArguments,
-                    )) {
-                        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
-                            return DotNetGenericOwnerPhysicalBindingResult.Bound(
-                                DotNetGenericOwnerSymbolicCarrierReference.Constructed
-                                    .unboundTypeReference(target.definition, substitutedArguments),
-                            )
-                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return shape
-                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
-                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
-                    }
-                } else {
-                    return constructTypeOrError(target.definition, substitutedArguments)
-                }
-            }
-            is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> when (
-                val element = substituteDirectSupertypeCarrierOrError(target.element, source)
-            ) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
-                    DotNetGenericOwnerPhysicalBindingResult.Bound(
-                        DotNetGenericOwnerSymbolicCarrierReference.SzArray(element.value),
-                    )
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> element
-            }
-        }
-    }
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> =
+        substituteDirectSupertypeCarrierOrError(
+            edge.target,
+            source,
+            edge.target as? DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        )
 
     private fun substituteDirectSupertypeCarrierOrError(
         target: DotNetGenericOwnerSymbolicCarrierReference,
         source: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+        edgeTarget: DotNetGenericOwnerSymbolicCarrierReference.Constructed?,
     ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerSymbolicCarrierReference> {
         return when (target) {
             is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
@@ -1009,21 +1064,54 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 }
             }
             is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
-                // Nested constrained constructions require their own proof. This retained graph
-                // grammar does not admit them merely because the outer InterfaceImpl is proven.
+                val exactEdgeTarget = edgeTarget
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a constructed direct-supertype subtree requires a named edge root",
+                    )
                 val substitutedArguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
                 for (argument in target.arguments) {
-                    when (val substitution = substituteDirectSupertypeCarrierOrError(argument, source)) {
+                    when (val substitution = substituteDirectSupertypeCarrierOrError(
+                        argument,
+                        source,
+                        exactEdgeTarget,
+                    )) {
                         is DotNetGenericOwnerPhysicalBindingResult.Bound ->
                             substitutedArguments += substitution.value
                         is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return substitution
                         DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return substitution
                     }
                 }
-                constructTypeOrError(target.definition, substitutedArguments)
+                when (val header = validateConstructionHeaderOrError(
+                    target.definition,
+                    substitutedArguments,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return header
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                val description = typeDefinitions[target.definition]
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                if (description.genericParameters.any { parameter -> !parameter.isUnconstrained } &&
+                    DotNetGenericOwnerPhysicalDirectSupertypeConstraintProof(
+                        source.definition,
+                        exactEdgeTarget,
+                        target,
+                    ) !in directSupertypeConstraintProofs
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                }
+                DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                        .unboundTypeReference(target.definition, substitutedArguments),
+                )
             }
             is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> when (
-                val element = substituteDirectSupertypeCarrierOrError(target.element, source)
+                val element = substituteDirectSupertypeCarrierOrError(
+                    target.element,
+                    source,
+                    edgeTarget,
+                )
             ) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound ->
                     DotNetGenericOwnerPhysicalBindingResult.Bound(
@@ -1359,29 +1447,40 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                         "a direct-supertype constraint proof requires a retained foreign source",
                     )
-                val target = proof.target.definition as?
+                val edgeTarget = proof.edgeTarget.definition as?
                         DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
                     ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a direct-supertype constraint proof requires a retained foreign target",
+                        "a direct-supertype constraint proof requires a retained foreign edge target",
+                    )
+                val constrainedTarget = proof.constrainedConstruction.definition as?
+                        DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr
+                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a direct-supertype constraint proof requires a retained foreign construction",
                     )
                 if (source !in retainedForeignTypeDefinitions ||
-                    target !in retainedForeignTypeDefinitions
+                    edgeTarget !in retainedForeignTypeDefinitions ||
+                    constrainedTarget !in retainedForeignTypeDefinitions
                 ) {
                     return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                 }
-                if (typesByIdentity[target]?.genericParameters
+                if (typesByIdentity[constrainedTarget]?.genericParameters
                         ?.all(DotNetGenericOwnerPhysicalGenericParameterReference::isUnconstrained) != false
                 ) {
                     return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a direct-supertype constraint proof must target a constrained TypeDef",
+                        "a direct-supertype constraint proof must name a constrained construction",
                     )
                 }
                 if (edgesBySource[source]?.edges?.any { edge ->
-                        edge.target == proof.target
+                        edge.target == proof.edgeTarget
                     } != true
                 ) {
                     return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                         "a direct-supertype constraint proof does not match a recorded edge",
+                    )
+                }
+                if (!proof.edgeTarget.containsConstruction(proof.constrainedConstruction)) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a direct-supertype constraint proof names a construction outside its edge",
                     )
                 }
             }
@@ -1439,6 +1538,19 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             )
         }
     }
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.containsConstruction(
+    candidate: DotNetGenericOwnerSymbolicCarrierReference.Constructed,
+): Boolean = when (this) {
+    candidate -> true
+    is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+        arguments.any { argument -> argument.containsConstruction(candidate) }
+    is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+        element.containsConstruction(candidate)
+    is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
+    is DotNetGenericOwnerSymbolicCarrierReference.Parameter,
+    -> false
 }
 
 /**
@@ -1675,13 +1787,32 @@ internal data class DotNetGenericOwnerPhysicalCarrier private constructor(
         fun bind(
             declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
             type: DotNetGenericOwnerSymbolicCarrierReference,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> =
+            bind(declarations, type, authenticatedConstruction = null)
+
+        fun bindWithinAuthenticatedView(
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+            type: DotNetGenericOwnerSymbolicCarrierReference,
+            authority: DotNetGenericOwnerAuthenticatedPhysicalView,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> =
+            bind(declarations, type, authority.construction)
+
+        private fun bind(
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+            type: DotNetGenericOwnerSymbolicCarrierReference,
+            authenticatedConstruction: DotNetGenericOwnerSymbolicCarrierReference.Constructed?,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalCarrier> {
             if (type == voidCarrier()) {
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                     "void is a result absence and cannot become a physical value carrier",
                 )
             }
-            val validation = when (type) {
+            val validation = if (authenticatedConstruction != null) {
+                declarations.validateCarrierWithinConstructionScopeOrError(
+                    type,
+                    authenticatedConstruction,
+                )
+            } else when (type) {
                 is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
                     declarations.validateConstructionOrError(type.definition, type.arguments)
                 is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
@@ -1960,6 +2091,65 @@ internal data class DotNetGenericOwnerProducedValueFact(
             provenance = joinedProvenance,
             nullState = nullState.join(other.nullState),
         )
+    }
+}
+
+/**
+ * Capability minted only after one value independently proves an already-selected physical view.
+ * Merely naming a construction, including as selected lineage, can never create this authority.
+ */
+internal class DotNetGenericOwnerAuthenticatedPhysicalView private constructor(
+    val view: DotNetGenericOwnerPhysicalView,
+) {
+    val construction: DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        get() = view.construction
+
+    companion object {
+        fun prove(
+            value: DotNetGenericOwnerProducedValueFact,
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+            requiredView: DotNetGenericOwnerPhysicalView,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerAuthenticatedPhysicalView> {
+            if (!value.nullState.canBeNonNull) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            val knownViews = (value.provenance.guaranteedViews as?
+                    DotNetGenericOwnerGuaranteedViews.Known)?.views
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+
+            val sourceConstructions =
+                linkedSetOf<DotNetGenericOwnerSymbolicCarrierReference.Constructed>()
+            ((value.layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier?.type as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+                ?.let(sourceConstructions::add)
+            for (view in knownViews) sourceConstructions += view.construction
+            var found = requiredView in knownViews
+            for (source in sourceConstructions) {
+                when (val closure = declarations.physicalInterfaceViewClosureOrError(source)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                        found = found || requiredView in closure.value.interfaceViews
+                    }
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return closure
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
+                }
+            }
+            if (!found) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            return when (val validation =
+                declarations.validateCarrierWithinConstructionScopeOrError(
+                    requiredView.construction,
+                    requiredView.construction,
+                )
+            ) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetGenericOwnerAuthenticatedPhysicalView(requiredView),
+                    )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(validation.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+        }
     }
 }
 

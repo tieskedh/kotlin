@@ -127,24 +127,28 @@ the auxiliary TypeDef; missing selected hierarchy remains `Unavailable`.
 
 A TypeSpec may also recursively construct an exact public generic interface or
 ordinary reference class whose selected/raw TypeDef has a complete supported
-unconstrained binder vector. The construction can contain exact value
-arguments and can close or flow through an inherited edge. Reference-class
-classification uses the shared physical classifier; non-interface variance is
-not admitted until delegates have separate proof. Carrier traversal shares the
-physical ABI's depth and node ceilings. A nested TypeDef with nominal or special
-constraints remains unavailable: the outer edge-specific proof cannot satisfy
-an inner construction by implication.
+binder vector. The construction can contain exact value arguments and can close
+or flow through an inherited edge. A nominally constrained construction is
+admitted at any nested depth only when the shared validator proves that exact
+subtree in the source TypeDef's open context. The proof is scoped to source,
+exact edge root, and constrained subtree. An outer proof cannot satisfy an inner
+construction by implication, and the general construction helper remains
+closed. Reference-class classification uses the shared physical classifier;
+non-interface variance is not admitted until delegates have separate proof.
+Carrier traversal shares the physical ABI's depth and node ceilings. Special
+constraints and constrained constructions outside retained edges remain
+unavailable.
 
-Raw inherited-graph binder counts and the aggregate constraint-row count are
-reserved before generic-context resolution. Both reuse the physical-artifact
-collection ceiling, so hostile metadata cannot force an unbounded normalized
-constraint graph before the adapter returns `Unavailable`.
+Raw inherited-graph and auxiliary-nominal binder counts, plus their aggregate
+constraint-row count, are reserved before generic-context resolution. Both
+reuse the physical-artifact collection ceiling, so hostile metadata cannot
+force an unbounded normalized constraint graph before the adapter returns
+`Unavailable`.
 
-The next ordered boundary is the remaining constrained-binder grammar:
-constrained nested TypeDefs and special-constraint propagation, then value-type
-and variant-delegate nominal carriers. Reference/value/default-constructor and
-by-ref-like checks must compose through the existing shared validators rather
-than a backend-local substitute.
+The next ordered boundary is special-constraint propagation through the same
+nested carrier grammar, then value-type and variant-delegate nominal carriers.
+Reference/value/default-constructor and by-ref-like checks must compose through
+the existing shared validators rather than a backend-local substitute.
 Keep proof authority edge-specific and keep parameter domains and direct/void/
 split-nullable result layouts independently composable. Only after this bounded
 constraint family should the graph grammar widen to properties, class nodes,
