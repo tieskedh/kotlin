@@ -545,6 +545,14 @@ Lineage remains only a selector over guaranteed views. Following an authenticate
 physical edge selects an operation receiver; it does not add that derived view to
 the value's provenance.
 
+Once provenance plus the recorded closure independently proves the selected
+view, the operation query mints a non-forgeable, operation-scoped physical-view
+authority token. Signature substitution, argument admission, and result
+production may preserve a constrained carrier only when it is structurally
+contained in that token's exact construction. A bare construction is never an
+authority argument, so selected lineage or a caller-authored symbolic carrier
+cannot authenticate itself.
+
 After parameter admission, the route produces its result from the instantiated
 MethodDef layout. `Void` produces no value, `Direct` produces that exact
 carrier, and `SplitNullable` produces its exact payload-plus-flag layout.
@@ -838,12 +846,12 @@ Source<int>`, while invocation retains the original `Source<T>.Read` MethodDef.
 The latter closure does not acquire `Source<string>`. Depth and resource limits
 reuse the shared physical-artifact ceilings: recursive traversal depth is capped
 at 64, while visited nodes, direct edges, and each TypeDef binder vector are
-capped at 1,024. The aggregate admitted `GenericParamConstraint` row count is
-also capped at 1,024. Raw binder and constraint counts are reserved before
-generic-context resolution allocates their normalized views. The binder budget
-counts raw rows, not distinct metadata handles, so repeated malformed handles
-cannot bypass the preflight. Exceeding a resource ceiling or missing retained
-hierarchy is `Unavailable`.
+capped at 1,024. The aggregate admitted `GenericParamConstraint` row count,
+including auxiliary nominal TypeDefs, is also capped at 1,024. Raw binder and
+constraint counts are reserved before generic-context resolution allocates
+their normalized views. The binder budget counts raw rows, not distinct
+metadata handles, so repeated malformed handles cannot bypass the preflight.
+Exceeding a resource ceiling or missing retained hierarchy is `Unavailable`.
 
 The first constrained-edge grammar admits a nominal
 `GenericParamConstraint` when either:
@@ -875,20 +883,22 @@ proves its class encoding; its selected base/interface hierarchy remains
 authority but is not copied into the auxiliary declaration index as a complete
 edge set. Variant non-interface TypeDefs remain unavailable because CLR permits
 variance on delegates and this slice does not yet distinguish them from
-ordinary classes. A nested TypeDef with nominal or special binder constraints
-is not admitted. The enclosing source/target edge proof is authority only for
-that outer construction and cannot be reused as satisfaction proof for an
-inner generic construction.
+ordinary classes. A TypeDef with supported nominal binder constraints may occur
+at any nested depth inside one exact retained `InterfaceImpl` construction.
+Before admission, the shared validator must prove that exact constrained
+subtree in the source TypeDef's open binder context. Special binder constraints
+and constrained constructions in other metadata positions remain unavailable.
 
 Successful validation records a constraint-satisfaction proof keyed by the
-source TypeDef identity and the exact unbound direct-supertype construction.
-The proof lets closure substitution preserve that one metadata edge after its
-source arguments are bound. It is not a property of the target TypeDef and is
-not accepted by the general construction helper. Consequently, proving
+source TypeDef identity, the exact unbound direct-supertype root, and the exact
+constrained subtree. For a constrained edge root, the subtree equals the root.
+Every nested constrained construction receives a separate proof. The proof lets
+closure substitution preserve that one metadata edge after its source arguments
+are bound. It is not a property of the target TypeDef and is not accepted by the
+general construction helper. Consequently, proving
 `Outer<!0,!1> -> Inner<!0,!1>` under matching `!1 : !0` binders does not grant
-authority to construct an arbitrary `Inner<object,string>` elsewhere. Nested
-constrained constructions require their own proof and remain unavailable in
-this grammar.
+authority to construct an arbitrary `Inner<object,string>` elsewhere, and an
+outer proof cannot silently authorize `Inner<Constrained<!0>>`.
 
 Branching and shared DAG nodes are legal, including a diamond whose paths close
 the same construction. Every branch remains in the physical closure even when
@@ -908,11 +918,11 @@ implementing both `Source<int>` and `Source<bool>` and exact typed calls through
 both selected Kotlin locals.
 
 No logical type or InterfaceImpl row order participates. Special constraints,
-constrained nested TypeDefs, value-type and variant-delegate nominal carriers,
-declared members on inherited graph nodes, variance conversions, classes as
-graph nodes, MethodImpls, unsupported carrier leaves, and hierarchy
-disagreement remain unavailable or conflicting according to the ordinary
-validity boundary.
+constrained constructions outside authenticated direct-supertype edges,
+value-type and variant-delegate nominal carriers, declared members on inherited
+graph nodes, variance conversions, classes as graph nodes, MethodImpls,
+unsupported carrier leaves, and hierarchy disagreement remain unavailable or
+conflicting according to the ordinary validity boundary.
 
 CLR reference-only variance may establish a verifier-valid view only through
 the retained or producer-recorded generic declaration and physical
@@ -1035,13 +1045,16 @@ MethodDef. Ordered multi-binder forwarding and permutation now use the same
 physical-interface closure without another substitution engine. Exact retained
 edge proofs now admit bounded TypeSpec nominal constraints, including dependent
 parameter implication, without widening the general construction helper. Exact
-direct nominal non-generic interface carriers are retained from selected and
-raw-authenticated TypeDefs without fabricating their edge closure. Recursive
-constructed carriers now retain exact unconstrained generic interface TypeDefs,
-including value-type arguments, under the shared physical depth/node budgets.
-The next ordered work completes constrained nested, wider nominal, and special
-constrained-binder forms through shared validators; it is not another shape-
-specific state recognizer or a resumed stdlib census.
+direct nominal non-generic interface and ordinary reference-class carriers are
+retained from selected and raw-authenticated TypeDefs without fabricating their
+edge closure. Recursive constructed carriers retain both forms, including
+exact value-type arguments, under the shared physical depth/node budgets.
+Nominally constrained TypeDefs may now occur recursively inside an exact
+retained edge, with separate source/edge/subtree proofs and operation-scoped
+authority that cannot escape into general construction. The next ordered work
+completes special constrained-binder forms and wider nominal carriers through
+shared validators; it is not another shape-specific state recognizer or a
+resumed stdlib census.
 
 ## Consequences
 
