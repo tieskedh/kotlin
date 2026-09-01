@@ -27351,6 +27351,12 @@ private val FOREIGN_RECURSIVE_PARENT_IL = """
         .method public hidebysig newslot abstract virtual instance !T 'Read'() cil managed
         {
         }
+        .method public hidebysig newslot abstract virtual instance !T 'Read'(int32 'selector') cil managed
+        {
+        }
+        .method public hidebysig newslot abstract virtual instance !T 'Read'(string 'selector') cil managed
+        {
+        }
       }
     }
 """.trimIndent()

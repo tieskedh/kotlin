@@ -88,25 +88,28 @@ parameter domains, and result layout remain independent; the existing Runtime
 inverse are recorded in the
 [Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
 The retained-foreign adapter authenticates one selected open root-interface
-MethodDef directly from retained and re-resolved raw metadata. Its receiver may
-now be the root of a resource-bounded acyclic graph of public top-level
-memberless interfaces, each with zero or one unconstrained binder and a complete
+MethodDef directly from retained and re-resolved raw metadata. This is a per-
+MethodDef authority unit rather than a one-member declaration restriction: one
+consumer now independently binds a no-argument method and two same-name, same-
+arity overloads with different physical parameter signatures. Its receiver may
+be the root of a resource-bounded acyclic graph of public top-level memberless
+interfaces, each with zero or one unconstrained binder and a complete
 retained/raw edge set. Graphs may cross assemblies, branch, share diamond nodes,
 and close binders at every level. The existing physical-view closure performs
 all substitution; selected lineage may select an already-proven construction
 but cannot establish one. Cycles and metadata disagreement conflict, while
 missing authority and resource limits fail unavailable. Resource-free external
 pipelines cover direct, cross-assembly, multi-edge, multi-view, intermediate,
-and recursive four-assembly forms.
+and recursive four-assembly forms. The overload proof emits each exact original
+parent signature without names, arity heuristics, or interface row order as
+physical authority.
 
-The next ordered boundary is multi-member retained-foreign consumption. Bind at
-least two independently selected MethodDefs from one root into one consumer,
-including same-name overloads, and prove that inherited invocation continues to
-use retained handles and signatures rather than names, arity heuristics, or
-interface row order. Keep parameter domains and direct/void/split-nullable
-result layouts independently composable. Only after this proof should the
-grammar widen to multiple TypeDef binders, constraints, properties, classes,
-MethodImpls, or Runtime/Stdlib declarations.
+The next ordered boundary is multiple TypeDef binders in the retained inherited
+graph. Prove ordered binder identity, forwarding, permutation, and closure
+across separate assemblies without logical-type reconstruction. Keep parameter
+domains and direct/void/split-nullable result layouts independently composable.
+Only after this proof should the grammar widen to constraints, properties,
+classes, MethodImpls, or Runtime/Stdlib declarations.
 
 Broader state shapes remain later extensions of the same model. A bounded slice
 may stop emitting a comparison surface only after downstream owner closure is an
