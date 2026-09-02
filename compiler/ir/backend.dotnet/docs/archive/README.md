@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-constructed-entry-live-slot-2026-09-02.md`](generic-owner-physical-constructed-entry-live-slot-2026-09-02.md)
+  records the direct constructed-generic entry repair: final `ldarg`/`ldloc`
+  validation instead of logical whole-expression reconstruction, the reversed
+  hostile model proof, exact unadapted IL, and the Framework 4.8/.NET 10 erased
+  inverse.
 - [`generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md`](generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md)
   records the first empty-MethodSpec vector combining strict owner inputs with
   fixed Boolean/Int/String/Object CLR leaves, its restricted fixed-leaf

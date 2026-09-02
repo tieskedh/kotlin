@@ -243,10 +243,12 @@ ordinary materializing boundary. Multiple static direct-return sites are
 admitted only because every executed site terminates its path. Star/projected
 or truly broad source values never gain exact authority from a logical type.
 
-The next sequence is: repair and pin direct constructed-parameter entry so its
-placement validates the live storage-read carrier instead of a reconstructed
-whole-expression carrier; only then expand constructed entry forms. Next prove
-the real caller-MethodDef `!!R` entry and additional non-materializing consumer
+Direct constructed-parameter entry is now pinned to the live storage-read
+carrier instead of a reconstructed whole-expression carrier. Expand constructed
+entry forms only through enumerated independent emitter observations, beginning
+with the MethodDef actually selected for a direct call result; block/composite
+containers and constructor allocations remain separate proofs. Next prove the
+real caller-MethodDef `!!R` entry and additional non-materializing consumer
 categories, null/bottom/unknown split joins, and explicit representation-
 changing conversions.
 Only after those value rules stabilize should the consumer widen to captures,

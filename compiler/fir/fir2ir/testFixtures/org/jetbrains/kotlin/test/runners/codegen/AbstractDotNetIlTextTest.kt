@@ -2406,11 +2406,60 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     comparison.continuity !=
                     DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
                     comparison.actualPhysicalMethodOwnerName?.endsWith("InlineLookupRoute") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
                     comparison.actualStorageCarrier == carrier &&
                     comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
         } == true) {
             "The constructed typed entry must preserve its authority-recorded " +
                     "InlineLookup<!T,!T> carrier: source=$lookupSourceAlias, all=$comparisons"
+        }
+        val constructedEntryIl =
+            emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
+        check(constructedEntryIl.isFile) {
+            "The constructed-entry probe did not retain its emitted IL: ${constructedEntryIl.path}"
+        }
+        val constructedEntryIlText = constructedEntryIl.readText()
+        val constructedEntryMethodStarts =
+            Regex("(?m)^\\s*\\.method\\b").findAll(constructedEntryIlText)
+            .map { match -> match.range.first }
+            .toList()
+        val constructedEntryMethodWindows = constructedEntryMethodStarts.mapIndexed { index, start ->
+            constructedEntryIlText.substring(
+                start,
+                constructedEntryMethodStarts.getOrElse(index + 1) { constructedEntryIlText.length },
+            )
+        }
+        val exactEntryMethod = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            "'routeExactArgument'(" in header && "'sourceNaturalAlias'" in method
+        }
+        val sourceSlot = exactEntryMethod?.let { method ->
+            Regex(
+                """\[(\d+)]\s+class\s+'InlineLookup`2'<!0,\s*!0>\s+""" +
+                        """'sourceNaturalAlias'""",
+            ).find(method)?.groupValues?.get(1)?.toInt()
+        }
+        val sourceStore = sourceSlot?.let { slot ->
+            if (slot in 0..3) "stloc.$slot" else "stloc $slot"
+        }
+        val exactEntryInstructions = exactEntryMethod?.lineSequence()
+            ?.map(String::trim)
+            ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
+            ?.toList()
+        check(exactEntryMethod != null &&
+                Regex(
+                    """class\s+'InlineLookup`2'<!0,\s*!0>\s+'source'""",
+                ).containsMatchIn(exactEntryMethod.substringBefore('{')) &&
+                sourceSlot != null && sourceStore != null &&
+                exactEntryInstructions?.windowed(2)?.any { instructions ->
+                    instructions == listOf("ldarg.1", sourceStore)
+                } == true &&
+                exactEntryInstructions.count { instruction -> instruction == sourceStore } == 1
+        ) {
+            "The direct constructed entry was not copied from its live " +
+                    "InlineLookup<!T,!T> argument slot without adaptation: method=$exactEntryMethod"
         }
         val argumentSplitResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineArgumentSplitLocalRoute") &&
