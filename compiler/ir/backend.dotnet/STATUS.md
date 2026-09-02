@@ -34,9 +34,15 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   certificate bound to their exact `J` family. Private and executable-only
   families may satisfy the same local emission obligation without public ABI.
   Production-erased mode publishes no `K` and retains semantic dispatch.
-  Separate consumers load and validate `J`/`K` identity, but may not route from
-  external `K` until the referenced PE rows and bounded method bodies have an
-  objective metadata validator. The completed scope and evidence are in the
+  Separate consumers now authenticate the complete recorded `J` family and
+  exact selected K-forwarding bodies, including method-generic MethodSpecs,
+  against one resource-bounded producer-DLL read. Only an ephemeral stamp
+  rejoined to that DLL and its immutable `K`/`J` declarations reaches the
+  external query. The file-owning factory prevents caller-supplied
+  path/snapshot pairing, while role-scoped MethodDef/MethodImpl bijections reject
+  cross-family aliases without rejecting legitimate interface- or
+  implementation-owned sharing. Operation routing does not consume the query yet, so
+  external `K` remains behaviorally inert. The completed scope and evidence are in the
   [semantic-equivalence archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md).
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
@@ -47,12 +53,16 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-02 semantic-equivalence certificate is newer than the target-wide
-gate below. Backend compilation and all 342 backend model tests passed. The
-local hostile fixture and the dedicated two-assembly certificate fixture
-together passed through PSI and LightTree on .NET 10 and Framework 4.8 in both
-candidate and production-erased inverse modes: eight tests per mode, with zero
-failures, errors, or skips by direct XML audit. Exact commands and scope are
+The 2026-09-02 objective PE-authentication follow-up is newer than the
+target-wide gate below. Backend test compilation passed; the dedicated
+validator reported 11/11 tests green, all six directly affected backend suites
+reported 76/76 green, and the selected-body/MethodSpec reader integration
+reported 1/1 green. The extended two-assembly certificate fixture
+then passed through PSI and LightTree on .NET 10 and Framework 4.8 in both
+candidate and production-erased inverse modes: four tests per mode, with zero
+failures, errors, or skips by direct XML audit. The existing split-nullable
+separate-compilation fixture also passed all four candidate lanes after its
+physical `Param`-row contract was added to `J`. Exact commands and scope are
 recorded in its
 [owning archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md).
 This focused evidence does not claim a new full-target checkpoint.
@@ -330,9 +340,10 @@ equivalence of every dynamic implementation. The bounded exact-local-final case
 now admits direct natural dispatch only after it replaces the conservative
 semantic target and final emission seals both semantic dispatcher bodies onto
 the same typed entry. Exported authority is recorded as `K` beside the exact
-`J` family. External consumption remains closed until objective PE MethodDef,
-MethodImpl, and bounded method-body validation can authenticate producer records
-rather than trusting them. Constructor
+`J` family. Objective PE MethodDef, MethodImpl, and bounded method-body
+validation now authenticates those producer records. External consumption remains
+closed until a stamped `K` can be joined to an independently proven receiver and
+operation route. Constructor
 allocation is currently only a bounded exact receiver root; general constructor-
 produced placement, path-complete block/composite calls, and real caller-
 MethodDef `!!R` entry remain separate. Every non-return,
@@ -524,10 +535,12 @@ errors, or skips.
 
 ## Current blockers
 
-- External `K` semantic-equivalence records are loadable and identity-bound to
-  `J`, but cannot authorize call routing yet. A consumer must objectively
-  validate the referenced PE TypeDefs, MethodDefs, MethodImpls, and bounded
-  forwarding-body grammar before trusting producer-recorded equivalence.
+- External `K` semantic-equivalence records now have objective PE authentication
+  of their complete bounded `J` rows, selected dispatcher bodies, and exact
+  MethodSpec vectors. They still cannot authorize call routing: the next gate
+  must consume only the ephemeral PE-stamped query while independently proving
+  the exact receiver/value and complete operation facts required by the local
+  route.
 - The strict-owner-input plus split-result composition grammar remains bounded
   to one structural root member. Multiple members and ordinary-input vectors
   outside the exact `STRICT_OWNER_INPUT(!K)` plus

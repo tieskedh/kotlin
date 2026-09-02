@@ -25,8 +25,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurface
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
+import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPeValidationStamp
+import org.jetbrains.kotlin.backend.dotnet.readAndValidateDotNetGenericOwnerPeMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
@@ -36,6 +39,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetNullableReferenceFlag
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
@@ -553,7 +557,9 @@ private class BackendCliDotNetFacade(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
             declarations = completedOutput.declarations,
+            externalLibraries = loweredInput.configuration.dotNetExternalLibraries,
             producer = completedOutput.output,
+            target = loweredInput.configuration.dotNetTarget,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
         validateGenericOwnerMethodGenericExecutableCalls(
@@ -2001,7 +2007,9 @@ private fun validateGenericOwnerProducerSealedPublication(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,
     declarations: Map<String, DotNetPhysicalDeclaration>,
+    externalLibraries: List<DotNetExternalLibrary>,
     producer: File,
+    target: DotNetTarget,
     testDataFile: File,
 ) {
     val testData = testDataFile.readText()
@@ -2035,6 +2043,20 @@ private fun validateGenericOwnerProducerSealedPublication(
                     (sealedEntries + semanticEquivalenceEntries)
         }
         if (probesSemanticEquivalence) {
+            val certificateLibraries = externalLibraries.filter { library ->
+                library.assemblyFile.name.equals("lib.dll", ignoreCase = true)
+            }
+            val certificateLibrary = certificateLibraries.singleOrNull()
+            val externalCertificates = certificateLibrary?.declarations?.values.orEmpty().filterIsInstance<
+                    DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
+            check(certificateLibrary != null &&
+                    externalCertificates.size == 2 &&
+                    certificateLibrary.genericOwnerPeValidationStamp !==
+                    DotNetGenericOwnerPeValidationStamp.EMPTY
+            ) {
+                "The real consumer must receive one non-empty pipeline-created K/J PE stamp: " +
+                        certificateLibraries
+            }
             val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
             check(emittedIl.isFile) {
                 "The semantic-equivalence consumer has no emitted IL: ${emittedIl.path}"
@@ -2046,7 +2068,12 @@ private fun validateGenericOwnerProducerSealedPublication(
             val methodWindows = methodStarts.mapIndexed { index, start ->
                 ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
             }
-            listOf("externalIntValue", "externalStringValue").forEach { methodName ->
+            listOf(
+                "externalIntValue",
+                "externalStringValue",
+                "externalMethodIntValue",
+                "externalMethodStringValue",
+            ).forEach { methodName ->
                 val method = methodWindows.singleOrNull { candidate ->
                     candidate.substringBefore('{').contains("'$methodName'(")
                 }
@@ -2055,13 +2082,14 @@ private fun validateGenericOwnerProducerSealedPublication(
                 }
                 val directNaturalCalls = method.lineSequence().map(String::trim).filter { line ->
                     (line.startsWith("call ") || line.startsWith("callvirt ")) &&
-                            "SemanticEquivalenceCertificateProducer`1" in line &&
+                            ("SemanticEquivalenceCertificateProducer`1" in line ||
+                                    "SemanticEquivalenceMethodCertificateProducer`1" in line) &&
                             "::'value'(" in line
                 }.toList()
                 check(directNaturalCalls.isEmpty() &&
                         ("KotlinSemantic" in method || "::'InvokeRecordedMember'(" in method)
                 ) {
-                    "External K must remain inert before PE body validation; $methodName used a " +
+                    "External K must remain inert while external-K routing is disabled; $methodName used a " +
                             "direct natural call: direct=$directNaturalCalls, method=$method"
                 }
             }
@@ -2114,6 +2142,43 @@ private fun validateGenericOwnerProducerSealedPublication(
                 semanticEquivalence
     }
     if (!probesSemanticEquivalence) return
+    val methodGenericCandidate = checkNotNull(sealedEntries.map { entry ->
+        entry.key to (entry.value as DotNetPhysicalDeclaration.GenericOwnerSealedFamily)
+    }.singleOrNull { candidateEntry ->
+        candidateEntry.second.ownerPath.lastOrNull()?.substringBefore('`') ==
+                "SemanticEquivalenceMethodCertificateValue"
+    }) {
+        "The real MethodSpec probe must publish one method-generic J family: $sealedEntries"
+    }
+    val methodGenericFamily = methodGenericCandidate.second
+    check((declarations[methodGenericFamily.logicalInterfaceMemberKey] as?
+            DotNetPhysicalDeclaration.Function)?.methodGenericParameterCount == 1) {
+        "The real MethodSpec J family did not retain its method-generic arity"
+    }
+    val methodGenericSemanticEquivalence = checkNotNull(
+        semanticEquivalenceEntries.singleOrNull { entry ->
+            (entry.value as DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate)
+                .sealedFamilyIndexKey == methodGenericCandidate.first
+        },
+    ) {
+        "The real MethodSpec probe must publish one K certificate for " +
+                "${methodGenericCandidate.first}: $semanticEquivalenceEntries"
+    }
+    val objectiveDeclarations = listOf(
+        family to (semanticEquivalence.value as
+                DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate),
+        methodGenericFamily to (methodGenericSemanticEquivalence.value as
+                DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate),
+    )
+    val peValidation = readAndValidateDotNetGenericOwnerPeMetadata(
+        assemblyFile = producer,
+        sealedFamilies = objectiveDeclarations.map { entry -> entry.first },
+        semanticEquivalenceCertificates = objectiveDeclarations.map { entry -> entry.second },
+        coreLibraryAssemblyName = target.coreLibraryAssemblyName,
+    )
+    check(peValidation.stamp !== DotNetGenericOwnerPeValidationStamp.EMPTY) {
+        "The real producer DLL did not yield a non-empty objective K/J validation stamp"
+    }
     val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
     check(emittedIl.isFile) {
         "The semantic-equivalence producer has no emitted IL: ${emittedIl.path}"
@@ -2126,7 +2191,7 @@ private fun validateGenericOwnerProducerSealedPublication(
         ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
     }
     val widenedMethod = methodWindows.singleOrNull { method ->
-        method.substringBefore('{').contains("'widenedValue'(")
+        Regex("'widenedValue'\\s*\\(\\s*\\)").containsMatchIn(method.substringBefore('{'))
     }
     check(widenedMethod != null) {
         "Cannot isolate the producer-local widenedValue MethodDef: ${emittedIl.path}"

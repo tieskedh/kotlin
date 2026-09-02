@@ -1110,7 +1110,44 @@ data class DotNetExternalLibrary(
     val assemblyFile: File,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val friendAssemblies: Set<DotNetFriendAssemblyIdentity>,
-)
+    val genericOwnerPeValidationStamp: DotNetGenericOwnerPeValidationStamp =
+        DotNetGenericOwnerPeValidationStamp.EMPTY,
+) {
+    init {
+        require(genericOwnerPeValidationStamp === DotNetGenericOwnerPeValidationStamp.EMPTY ||
+                genericOwnerPeValidationStamp.belongsTo(assemblyFile)
+        ) {
+            "generic-owner PE validation belongs to another CLR assembly file"
+        }
+        genericOwnerPeValidationStamp.assemblyIdentity?.let { identity ->
+            require(identity.name == artifact.assemblyName &&
+                    identity.version == artifact.assemblyVersion &&
+                    identity.culture == artifact.assemblyCulture &&
+                    !identity.hasPublicKey &&
+                    artifact.assemblyPublicKeyToken ==
+                    DotNetLibraryArtifact.DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN
+            ) {
+                "generic-owner PE validation belongs to another CLR assembly"
+            }
+        }
+        genericOwnerPeValidationStamp.certificateIndexKeys.forEach { indexKey ->
+            val certificate = declarations[indexKey]
+                    as? DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
+                ?: throw IllegalArgumentException(
+                    "generic-owner PE validation references missing certificate '$indexKey'",
+                )
+            val family = declarations[certificate.sealedFamilyIndexKey]
+                    as? DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                ?: throw IllegalArgumentException(
+                    "generic-owner PE validation references missing family " +
+                            "'${certificate.sealedFamilyIndexKey}'",
+                )
+            require(genericOwnerPeValidationStamp.authenticates(certificate, family)) {
+                "generic-owner PE validation disagrees with its same-library K/J declarations"
+            }
+        }
+    }
+}
 
 /** One producer-authorized CLR friend identity used by InternalsVisibleTo. */
 data class DotNetFriendAssemblyIdentity(
@@ -3832,6 +3869,55 @@ internal class DotNetExternalDeclarationIndex(
                 }
             }
         }
+    internal val peValidatedGenericOwnerSemanticEquivalenceCertificatesByFamilyKey:
+        Map<DotNetProducerGenericOwnerSealedFamilyKey,
+                DotNetBoundGenericOwnerSemanticEquivalenceCertificate> = buildMap {
+        libraries.forEach { library ->
+            library.genericOwnerPeValidationStamp.certificateIndexKeys.forEach { indexKey ->
+                val certificateDeclaration = library.declarations[indexKey]
+                        as? DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
+                    ?: throw IllegalArgumentException(
+                        "PE-validated semantic-equivalence certificate '$indexKey' is not in its library",
+                    )
+                val familyDeclaration = library.declarations[certificateDeclaration.sealedFamilyIndexKey]
+                        as? DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                    ?: throw IllegalArgumentException(
+                        "PE-validated semantic-equivalence certificate '$indexKey' lost its J family",
+                    )
+                require(library.genericOwnerPeValidationStamp.authenticates(
+                    certificateDeclaration,
+                    familyDeclaration,
+                )) {
+                    "PE-validated semantic-equivalence certificate '$indexKey' changed after validation"
+                }
+                val familyKey = familyDeclaration.publication().key
+                val bound = genericOwnerSemanticEquivalenceCertificatesByFamilyKey[familyKey]
+                require(bound != null && bound.library === library &&
+                        bound.declaration === certificateDeclaration &&
+                        bound.sealedFamily.declaration === familyDeclaration
+                ) {
+                    "PE-validated semantic-equivalence certificate '$indexKey' cannot rejoin its " +
+                            "same-library K/J authority"
+                }
+                require(put(familyKey, bound) == null) {
+                    "duplicate PE-validated semantic-equivalence certificate for J family " +
+                            "'${familyDeclaration.indexKey()}'"
+                }
+            }
+        }
+    }
+    internal val peValidatedGenericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint:
+        Map<Pair<String, String>, DotNetBoundGenericOwnerSemanticEquivalenceCertificate> =
+        buildMap {
+            peValidatedGenericOwnerSemanticEquivalenceCertificatesByFamilyKey.forEach { entry ->
+                val familyKey = entry.key
+                val endpoint = familyKey.logicalInterfaceMemberKey to familyKey.implementationOwnerKey
+                require(put(endpoint, entry.value) == null) {
+                    "duplicate PE-validated semantic-equivalence certificate for logical endpoint " +
+                            "'${endpoint.first}' on '${endpoint.second}'"
+                }
+            }
+        }
 
     init {
         publishedGenericInterfaceFamiliesByLogicalKey.forEach { entry ->
@@ -3934,7 +4020,7 @@ internal class DotNetExternalDeclarations(
         index.genericOwnerImplementationMethodDefsByLogicalKey
     private val genericOwnerSealedFamiliesByKey = index.genericOwnerSealedFamiliesByKey
     private val genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint =
-        index.genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint
+        index.peValidatedGenericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerExactInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
@@ -3977,7 +4063,7 @@ internal class DotNetExternalDeclarations(
         ] ?: error(
             "implementation MethodDef '$logicalKey' lost its natural MethodDef authority",
         )
-        require(natural.library == binding.library) {
+        require(natural.library === binding.library) {
             "implementation MethodDef '$logicalKey' crosses producer libraries"
         }
         val overriddenNaturalKeys = function.allOverridden().mapNotNull { overridden ->
@@ -4023,12 +4109,12 @@ internal class DotNetExternalDeclarations(
     }
 
     /**
-     * Producer-recorded proof that the exact final [implementationOwner]'s semantic route for
-     * [logicalInterfaceMember] reaches the same typed implementation as its natural route.
+     * PE-authenticated producer proof that the exact final [implementationOwner]'s semantic route
+     * for [logicalInterfaceMember] reaches the same typed implementation as its natural route.
      *
      * Both arguments select KLIB declarations by stable logical identity.  This query does not
      * inspect names, shapes, receiver values, or logical source types, and it supplies no value
-     * provenance.  The caller must independently prove the exact concrete receiver construction.
+     * provenance. The caller must independently prove the exact concrete receiver construction.
      */
     fun genericOwnerSemanticEquivalenceCertificateOrNull(
         logicalInterfaceMember: IrSimpleFunction,
@@ -4552,7 +4638,7 @@ internal class DotNetExternalDeclarations(
         )
         val carrier = genericOwnerFunctionCarriersByLogicalKey[logicalKey]
         val signature = carrier?.let { binding ->
-            require(binding.library == bound.library) {
+            require(binding.library === bound.library) {
                 "external function '$logicalKey' and its generic-owner carrier belong to different libraries"
             }
             require(binding.carrier.ownerPath == declaration.ownerPath) {

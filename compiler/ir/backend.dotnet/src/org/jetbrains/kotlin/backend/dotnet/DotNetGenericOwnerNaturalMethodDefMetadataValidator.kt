@@ -264,14 +264,14 @@ internal fun DotNetClrAssemblyMetadata.methodSignaturesMatchModuloExactLocalType
     second: org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature,
 ): Boolean = canonicalizeExactLocalTypeReferences(first) == canonicalizeExactLocalTypeReferences(second)
 
-private fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
+internal fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
     signature: org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature,
 ): org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSignature = signature.copy(
     returnType = canonicalizeExactLocalTypeReferences(signature.returnType),
     parameterTypes = signature.parameterTypes.map(::canonicalizeExactLocalTypeReferences),
 )
 
-private fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
+internal fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
     signature: DotNetClrTypeSignature,
 ): DotNetClrTypeSignature = when (signature) {
     DotNetClrTypeSignature.Void,
@@ -325,7 +325,7 @@ private fun DotNetClrAssemblyMetadata.canonicalizeExactLocalTypeReferences(
  * module. AssemblyRef, ModuleRef, nil-scope, ambiguous, malformed, and cyclic references remain
  * unresolved, even when their namespace and metadata name happen to match a local definition.
  */
-private fun DotNetClrAssemblyMetadata.resolveExactLocalTypeDefinition(
+internal fun DotNetClrAssemblyMetadata.resolveExactLocalTypeDefinition(
     handle: DotNetClrMetadataHandle,
 ): DotNetClrMetadataHandle? = resolveExactLocalTypeDefinition(
     handle = handle,
@@ -817,7 +817,7 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
     }
 }
 
-private fun DotNetClrAssemblyMetadata.matchesExternalTopLevelTypeReference(
+internal fun DotNetClrAssemblyMetadata.matchesExternalTopLevelTypeReference(
     handle: DotNetClrMetadataHandle,
     expectedTypePath: List<String>,
     expectedGenericArity: Int,
@@ -836,7 +836,7 @@ private fun DotNetClrAssemblyMetadata.matchesExternalTopLevelTypeReference(
     return reference.namespaceName == expectedNamespace && reference.metadataName == expectedMetadataName
 }
 
-private fun DotNetClrAssemblyMetadata.requireTypeDefinition(
+internal fun DotNetClrAssemblyMetadata.requireTypeDefinition(
     physicalPath: List<String>,
 ): DotNetClrTypeDefinition {
     require(physicalPath.isNotEmpty() && physicalPath.all(String::isNotEmpty)) {
@@ -863,7 +863,7 @@ private fun DotNetClrAssemblyMetadata.requireTypeDefinition(
     return current
 }
 
-private fun DotNetClrAssemblyMetadata.requireContiguousGenericParameters(
+internal fun DotNetClrAssemblyMetadata.requireContiguousGenericParameters(
     owner: DotNetClrMetadataHandle,
     ownerKind: String,
 ): List<DotNetClrGenericParameterDefinition> {
@@ -877,7 +877,7 @@ private fun DotNetClrAssemblyMetadata.requireContiguousGenericParameters(
     return parameters
 }
 
-private fun List<String>.renderPhysicalPath(): String = joinToString("/")
+internal fun List<String>.renderPhysicalPath(): String = joinToString("/")
 
 private const val MODULE_TABLE = 0
 private const val TYPE_REF_TABLE = 1

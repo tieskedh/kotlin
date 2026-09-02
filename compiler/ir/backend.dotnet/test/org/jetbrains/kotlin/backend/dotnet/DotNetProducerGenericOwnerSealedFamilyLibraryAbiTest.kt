@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import java.io.File
 import java.util.Base64
 import java.util.Properties
+import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -891,6 +892,45 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             index.genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint[
                 publication.key.logicalInterfaceMemberKey to publication.key.implementationOwnerKey
             ] === certificate,
+        )
+        assertTrue(index.peValidatedGenericOwnerSemanticEquivalenceCertificatesByFamilyKey.isEmpty())
+        assertTrue(
+            index.peValidatedGenericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint.isEmpty(),
+        )
+
+        val familyDeclaration = declarations.getValue(publication.toPhysicalDeclaration().indexKey()) as
+                DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+        val certificateDeclaration = declarations.values.filterIsInstance<
+                DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>().single()
+        val stamp = DotNetGenericOwnerPeValidationStamp(
+            DotNetManagedAssemblyIdentity(
+                name = library.artifact.assemblyName,
+                version = library.artifact.assemblyVersion,
+                culture = library.artifact.assemblyCulture,
+                publicKey = emptyList(),
+                publicKeyToken = emptyList(),
+            ),
+            library.assemblyFile.absoluteFile.normalize(),
+            mapOf(
+                certificateDeclaration.indexKey() to DotNetPeValidatedGenericOwnerCertificate(
+                    certificateDeclaration,
+                    familyDeclaration,
+                ),
+            ),
+        )
+        val stampedLibrary = library.copy(genericOwnerPeValidationStamp = stamp)
+        val stampedIndex = DotNetExternalDeclarationIndex(listOf(stampedLibrary))
+        val peValidated = stampedIndex.peValidatedGenericOwnerSemanticEquivalenceCertificatesByFamilyKey
+            .getValue(publication.key)
+        assertEquals(
+            setOf(publication.key),
+            stampedIndex.peValidatedGenericOwnerSemanticEquivalenceCertificatesByFamilyKey.keys,
+        )
+        assertTrue(peValidated.library === stampedLibrary)
+        assertTrue(
+            stampedIndex.peValidatedGenericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint[
+                publication.key.logicalInterfaceMemberKey to publication.key.implementationOwnerKey
+            ] === peValidated,
         )
     }
 

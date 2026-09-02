@@ -396,6 +396,36 @@ data class DotNetClrMethodDefinition(
 }
 
 /**
+ * One physical MethodSpec row. [method] retains the exact MethodDefOrRef coded handle selected by
+ * the row; [typeArguments] is the decoded GENERICINST vector and carries no Kotlin substitution
+ * policy.
+ */
+data class DotNetClrMethodSpecification(
+    val handle: DotNetClrMetadataHandle,
+    val method: DotNetClrMetadataHandle,
+    val typeArguments: List<DotNetClrTypeSignature>,
+    val rawInstantiation: DotNetClrBlob,
+)
+
+/**
+ * Bounded physical CIL body selected by a metadata-reader caller.
+ *
+ * The objective reader exposes the method-header facts and uninterpreted code bytes. Opcode and
+ * forwarding semantics belong to the consumer of this model. Extra method-data sections are not
+ * decoded because callers which require a pure body can reject their presence directly.
+ */
+data class DotNetClrMethodBody(
+    val method: DotNetClrMetadataHandle,
+    val isTiny: Boolean,
+    val headerSize: Int,
+    val maxStack: Int,
+    val initLocals: Boolean,
+    val localVariableSignature: DotNetClrMetadataHandle?,
+    val hasExtraSections: Boolean,
+    val code: DotNetClrBlob,
+)
+
+/**
  * One physical Param-table row owned by [declaringMethod].
  *
  * Param rows are optional CLR metadata. A method's signature remains authoritative for its
@@ -643,4 +673,8 @@ data class DotNetClrAssemblyMetadata(
     val genericParameterDefinitions: List<DotNetClrGenericParameterDefinition>,
     val genericParameterConstraints: List<DotNetClrGenericParameterConstraint>,
     val methodImplementations: List<DotNetClrMethodImplementation> = emptyList(),
+    val methodSpecifications: List<DotNetClrMethodSpecification> = emptyList(),
+    /** False means [methodSpecifications] was deliberately not projected, not that the table is absent. */
+    val hasCompleteMethodSpecifications: Boolean = false,
+    val methodBodies: List<DotNetClrMethodBody> = emptyList(),
 )

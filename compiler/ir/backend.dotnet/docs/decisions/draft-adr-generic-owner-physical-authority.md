@@ -521,14 +521,43 @@ provenance. Selected lineage remains only a selector over already guaranteed
 views and cannot supply any part of this proof.
 
 Physical-library ABI 67 loads and identity-binds `K` to the same library's
-complete `J` family. A separately compiled consumer must not use it for route
-selection until the referenced PE MethodDefs and bounded forwarding bodies are
-objectively validated against that record; merely trusting matching KLIB or
-recorded rows is insufficient. `OPEN_NULLABLE`/split-nullable forwarding,
-stars, projections, mutable or conflicting flows, open/foreign
-implementations, semantic hooks, and any receiver lacking the exact final
-implementation carrier remain semantic. Production-erased mode rejects `K`
-and creates neither obligations nor emitter witnesses.
+complete `J` family. External-library ingestion independently binds every
+recorded `J` TypeDef, GenericParam, direct edge, MethodDef, Param, and
+MethodImpl to the producer DLL, then validates the two exact selected
+dispatcher MethodDef bodies. A method-generic forwarder additionally requires
+the complete physical MethodSpec table and the exact arity-`n` vector
+`!!0` through `!!(n-1)`. Metadata, MethodSpecs, and selected bodies come from
+one open PE read; all projections are resource-bounded before retained
+allocation. Split-nullable `J` MethodDefs independently require their exact
+trailing `bool&` signature and corresponding `out` Param row.
+
+Successful validation creates an ephemeral stamp bound to the normalized DLL
+path, Assembly identity, and immutable same-library `K`/`J` declarations. It is
+not serialized and creates neither declaration nor value authority. Raw
+serialized certificates remain separately indexed; only certificates rejoined
+through this stamp are exposed by the external semantic-equivalence query.
+Unrelated selected bodies neither strengthen nor invalidate a certificate.
+The cross-module factory owns the file read, validation, and stamp construction;
+callers cannot bind an independently supplied metadata snapshot to a path.
+Like every compiler classpath input, that DLL must remain immutable for the
+duration of compilation. The open read is not a content lock or a supported
+concurrent-mutation boundary.
+Across all stamped families, each MethodDef and MethodImpl is bijective with a
+role-qualified logical endpoint. Interface slots may be shared by families for
+the same logical interface member, and implementation-owned rows may be shared
+by families for the same implementation member. Relation-specific interface
+dispatchers and MethodImpls are keyed by the complete `J` family. Sharing never
+permits one physical row to satisfy different roles or unrelated endpoints.
+The query is deliberately not consumed by operation routing yet, so this gate
+authenticates external `K` without changing generated calls.
+
+`OPEN_NULLABLE`/split-nullable forwarding, stars, projections, mutable or
+conflicting flows, open/foreign implementations, semantic hooks, and any
+receiver lacking the exact final implementation carrier remain semantic.
+Production-erased producers publish no `J` or `K` and create neither local
+obligations nor emitter witnesses. A consumer may still authenticate `K` from
+an explicitly rehearsed external producer, but raw or stamped external `K`
+changes no operation route while the query remains unconsumed.
 
 Until path-complete operation plans exist, call-bearing `IrWhen`, block, and
 composite initializers receive no retained direct placement. A denied direct
