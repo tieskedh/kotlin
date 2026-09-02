@@ -1983,8 +1983,16 @@ internal class DotNetIlMethodCodegen(
         } else {
             null
         }
+        // Calls are admitted only through final, identity-keyed operation-route authority. Avoid
+        // repeating this IR walk for both legacy generic-owner fallbacks, and do not perform it at
+        // all in the production-erased configuration where both fallbacks are disabled.
+        val initializerContainsDotNetPhysicalCall =
+            retainedProducedStorage == null && exactArrayStorage == null && initializer != null &&
+                    typeMapper.isGenericOwnerRehearsalEnabled() &&
+                    initializer.containsDotNetPhysicalCall()
         val exactGenericOwnerStorage = if (
-            retainedProducedStorage == null && exactArrayStorage == null && initializer != null
+            retainedProducedStorage == null && exactArrayStorage == null && initializer != null &&
+            !initializerContainsDotNetPhysicalCall
         ) {
             variable.exactCompilerTemporaryGenericOwnerStorageOrNull()
         } else {
@@ -2006,8 +2014,8 @@ internal class DotNetIlMethodCodegen(
         val nestedConstructionStorage = if (
             retainedProducedStorage == null && exactArrayStorage == null &&
             exactGenericOwnerStorage == null &&
-            localOpenNullableArrayStorage == null &&
-            initializer != null && !variable.isVar
+            localOpenNullableArrayStorage == null && initializer != null &&
+            !initializerContainsDotNetPhysicalCall && !variable.isVar
         ) {
             expressionCodegen.genericOwnerNestedConstructionCarrierTypeOrNull(
                 initializer,

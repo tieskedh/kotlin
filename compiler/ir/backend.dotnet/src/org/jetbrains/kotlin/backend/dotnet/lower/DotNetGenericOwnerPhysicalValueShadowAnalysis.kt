@@ -56,6 +56,7 @@ import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamily
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
 import org.jetbrains.kotlin.backend.dotnet.selectRecordedPhysicalInterfaceViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.isDotNetParameterlessDirectResultPlacementCall
 import org.jetbrains.kotlin.backend.dotnet.splitNullableOwnerParameterStorageLayoutOrNull
 import org.jetbrains.kotlin.backend.dotnet.splitLocalUseSummaryIn
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -299,6 +300,18 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 }
             }
             if (phase == DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING) {
+                val entryStorage = physical.parameters.mapNotNull { parameter ->
+                    storageByValue[parameter.symbol]?.let { storage -> parameter.symbol to storage }
+                }.toMap(IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>())
+                check(
+                    context.genericOwnerPhysicalValueEntryStorageByFunction.put(
+                        physical.symbol,
+                        entryStorage,
+                    ) == null,
+                ) {
+                    "Internal .NET backend error: one physical function received multiple " +
+                            "final entry-storage vectors"
+                }
                 check(
                     context.genericOwnerPhysicalValueFixedLeafEntryStorageByFunction.put(
                         physical.symbol,
@@ -641,9 +654,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             return result.takeIf { produced ->
                 when (produced.layout) {
                     is DotNetGenericOwnerProducedValueLayout.Direct ->
-                        source.typeParameters.isEmpty() && source.parameters.all { parameter ->
-                            parameter.kind == IrParameterKind.DispatchReceiver
-                        }
+                        expression.isDotNetParameterlessDirectResultPlacementCall()
                     is DotNetGenericOwnerProducedValueLayout.SplitNullable -> {
                         val ordinaryParameters = source.parameters.filter { parameter ->
                             parameter.kind != IrParameterKind.DispatchReceiver

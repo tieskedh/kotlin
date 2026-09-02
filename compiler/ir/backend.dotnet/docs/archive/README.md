@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-call-result-route-coherence-2026-09-02.md`](generic-owner-call-result-route-coherence-2026-09-02.md)
+  follows up the first constructed-result slice with the rejected logically-
+  widened-interface/semantic-equivalence shortcut, identity-keyed final-route
+  placement, operation-independent receiver roots, transitive denied-call alias
+  invalidation, object-identity checks under semantic dispatch, and the next
+  producer-certificate boundary.
 - [`generic-owner-physical-constructed-call-result-live-slot-2026-09-02.md`](generic-owner-physical-constructed-call-result-live-slot-2026-09-02.md)
   records direct constructed-call result validation against the ordinary live
   MethodDef result, the reversed fail-closed model proof, same-object runtime

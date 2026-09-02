@@ -9,7 +9,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableValueSlotReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot
@@ -21,7 +23,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRo
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStorageFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalViewEvidence
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerProducedValueFact
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerProducedValueLayout
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerGuaranteedViews
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowPhase
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalView
@@ -29,13 +35,20 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierRefe
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableEntryKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
+import org.jetbrains.kotlin.backend.dotnet.isDotNetParameterlessDirectResultPlacementCall
 import org.jetbrains.kotlin.backend.dotnet.unknownPhysicalValueCarrierSnapshot
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrComposite
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
@@ -69,8 +82,9 @@ import java.util.IdentityHashMap
  * operation consumer: declaration authority still chooses the MethodDef, value provenance only
  * proves its receiver and arguments, and no IR or carrier is rewritten. Only final regular-
  * parameter facts whose typed and current physical prototypes agree on one fixed declaration-
- * independent leaf cross the entry boundary; calls without one unique successful POST local or
- * admitted fixed-leaf entry storage fact are deliberately omitted from this bounded comparison.
+ * independent leaf cross argument boundaries. A parameterless receiver may additionally use one
+ * exact natural construction made solely from the current owner's TypeDef parameters. Calls
+ * without one unique successful POST local or one of those bounded entry facts are omitted.
  */
 internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
     private val context: DotNetBackendContext,
@@ -115,6 +129,8 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             val function = functionSymbol.owner
             val owner = function.parent as? IrClass ?: continue
             val storageByValue = IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>()
+            val entryStorageByValue =
+                context.genericOwnerPhysicalValueEntryStorageByFunction[functionSymbol].orEmpty()
             val conflictingValues = Collections.newSetFromMap(IdentityHashMap<IrValueSymbol, Boolean>())
             context.genericOwnerPhysicalValueFixedLeafEntryStorageByFunction[functionSymbol]
                 ?.forEach { entryStorage ->
@@ -141,6 +157,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                         owner,
                         function,
                         storageByValue,
+                        entryStorageByValue,
                         conflictingValues,
                         authority,
                     )?.let { observation ->
@@ -176,6 +193,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         owner: IrClass,
         function: IrSimpleFunction,
         storageByValue: IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        entryStorageByValue: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         conflictingValues: Set<IrValueSymbol>,
         authority: DotNetLocalGenericOwnerPhysicalAuthority,
     ): OperationObservation? {
@@ -193,7 +211,6 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         val logicalReceiverType = call.dispatchReceiver?.type ?: return null
         val receiver = call.dispatchReceiver.identityGetValueOrNull() ?: return null
         if (receiver.symbol in conflictingValues) return null
-        val storage = storageByValue[receiver.symbol] ?: return null
         val declarations = authority.boundDeclarations ?: return null
         val selection = selectLogicalReceiver(
             logicalReceiverType,
@@ -223,6 +240,24 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             is LogicalReceiverSelectionResult.Selected -> Unit
             LogicalReceiverSelectionResult.Unsupported -> error("handled above")
         }
+        val parameterlessExactEntryStorage = entryStorageByValue[receiver.symbol]?.takeIf {
+            call.isDotNetParameterlessDirectResultPlacementCall() &&
+                    selection.selectedEntry ==
+                    DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
+                    selection.selector ==
+                    DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                    selection.requiredView.isDirectCurrentOwnerParameterConstruction(owner)
+        }
+        val operationStorageByValue = if (
+            receiver.symbol !in storageByValue && parameterlessExactEntryStorage != null
+        ) {
+            IdentityHashMap(storageByValue).apply {
+                put(receiver.symbol, parameterlessExactEntryStorage)
+            }
+        } else {
+            storageByValue
+        }
+        if (operationStorageByValue[receiver.symbol] == null) return null
         val prediction = bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError(
             call = call,
             physicalOwner = owner,
@@ -236,14 +271,24 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             if (value.symbol in conflictingValues) {
                 return@bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError null
             }
-            storageByValue[value.symbol]?.read()?.value
+            operationStorageByValue[value.symbol]?.read()?.value
         } ?: return null
         return when (prediction) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                val hasDirectNaturalReceiverCarrier =
+                    call.dispatchReceiver.hasEmitterVisibleIdentityStorageRead() &&
+                            receiver.hasOperationIndependentDirectCarrier(
+                                owner,
+                                selection.requiredView,
+                                operationStorageByValue,
+                                conflictingValues,
+                                authority,
+                            )
                 if (selection.selectedEntry ==
                     DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
                     selection.selector ==
                     DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                    hasDirectNaturalReceiverCarrier &&
                     mayReplaceConservativeSemanticTarget(call, prediction.value)
                 ) {
                     context.genericOwnerCapabilityCallTargets.remove(call)
@@ -258,6 +303,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                                 DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
                                 selection.selector ==
                                 DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                                hasDirectNaturalReceiverCarrier &&
                                 snapshot.actualRoute ==
                                 DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
                                 snapshot.relation ==
@@ -276,6 +322,158 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         val snapshot: DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot,
         val authoritativeExactNaturalRoute: DotNetGenericOwnerPhysicalOperationRoute? = null,
     )
+
+    /**
+     * Provenance may establish that an object supports a natural view, but it cannot describe the
+     * verifier-visible receiver pushed by codegen. Object-carried receivers and identity wrappers
+     * around foreign-dispatch declarations are still claimed by inferred semantic emitters, so
+     * publication additionally requires an emitter-visible identity storage read at the call
+     * site. Only the exact current natural construction may publish a direct-operation witness
+     * until emitter selection itself becomes one shared query.
+     */
+    private fun DotNetGenericOwnerProducedValueFact.hasDirectCarrierFor(
+        view: DotNetGenericOwnerPhysicalView,
+    ): Boolean {
+        val carrier = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier
+            ?: return false
+        return carrier.nullEncoding == DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE &&
+                carrier.type == view.construction
+    }
+
+    /**
+     * This bounded entry route admits only a construction whose complete argument vector is made
+     * from the current physical owner's TypeDef parameters. A fixed `object` argument, a foreign
+     * binder, a nested construction, or a MethodDef parameter needs a separate entry proof.
+     */
+    private fun DotNetGenericOwnerPhysicalView.isDirectCurrentOwnerParameterConstruction(
+        physicalOwner: IrClass,
+    ): Boolean {
+        if (construction.arguments.isEmpty()) return false
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            physicalOwner.symbol,
+            view = null,
+        )
+        val ownerParameterIndices = physicalOwner.typeParameters.indices
+        return construction.arguments.all { argument ->
+            val parameter = argument as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return@all false
+            parameter.index in ownerParameterIndices &&
+                    parameter.binder ==
+                    DotNetGenericOwnerPhysicalGenericBinderReference.Type(ownerIdentity)
+        }
+    }
+
+    /** Mirrors the emitter's object-preserving identity-wrapper boundary without mapping types. */
+    private fun IrExpression?.hasEmitterVisibleIdentityStorageRead(): Boolean = when (this) {
+        is IrGetValue -> true
+        is IrTypeOperatorCall ->
+            (operator == IrTypeOperator.IMPLICIT_CAST ||
+                    operator == IrTypeOperator.IMPLICIT_NOTNULL) &&
+                    !argument.readsForeignDispatchIdentityDeclaration() &&
+                    argument.hasEmitterVisibleIdentityStorageRead()
+        else -> false
+    }
+
+    private fun IrExpression.readsForeignDispatchIdentityDeclaration(): Boolean = when (this) {
+        is IrGetValue -> symbol.owner in context.genericOwnerForeignDispatchDeclarations
+        is IrTypeOperatorCall -> when (operator) {
+            IrTypeOperator.IMPLICIT_CAST,
+            IrTypeOperator.IMPLICIT_NOTNULL,
+            -> argument.readsForeignDispatchIdentityDeclaration()
+            else -> false
+        }
+        else -> false
+    }
+
+    /**
+     * Rejects the placement/operation cycle in which one predicted call-result local would prove
+     * the route of a second call before either local has late emitter authority. The bounded first
+     * route may cross only identity-preserving local aliases. A parameter boundary must retain
+     * producer-recorded entry provenance (or current-receiver provenance); a non-alias local may
+     * terminate only at one direct constructor allocation. Arbitrary call-free control flow is
+     * not an independent exactness root because its reaching values may include foreign dispatch.
+     */
+    private fun IrGetValue.hasOperationIndependentDirectCarrier(
+        physicalOwner: IrClass,
+        view: DotNetGenericOwnerPhysicalView,
+        storageByValue: IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        conflictingValues: Set<IrValueSymbol>,
+        authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    ): Boolean {
+        val visited = Collections.newSetFromMap(IdentityHashMap<IrValueSymbol, Boolean>())
+        var read = this
+        while (visited.add(read.symbol)) {
+            val value = storageByValue[read.symbol]?.read()?.value
+            if (read.symbol in conflictingValues ||
+                value?.hasDirectCarrierFor(view) != true
+            ) return false
+            when (val declaration = read.symbol.owner) {
+                is IrValueParameter -> return value.hasOperationIndependentEntryEvidence(
+                    view,
+                    declaration,
+                )
+                is IrVariable -> {
+                    if (declaration.isVar) return false
+                    val source = declaration.initializer.identityGetValueOrNull()
+                    if (source != null) {
+                        val parameter = source.symbol.owner as? IrValueParameter
+                        if (parameter != null && storageByValue[source.symbol] == null) {
+                            return value.hasOperationIndependentEntryEvidence(view, parameter)
+                        }
+                        read = source
+                        continue
+                    }
+                    if (!declaration.initializer.hasDirectConstructorResultTail()) return false
+                    return when (val exact = bindExactLocalGenericOwnerNaturalViewOrError(
+                        declaration.type,
+                        physicalOwner,
+                        authority,
+                    )) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> exact.value == view
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                        -> false
+                    }
+                }
+                else -> return false
+            }
+        }
+        return false
+    }
+
+    private fun DotNetGenericOwnerProducedValueFact.hasOperationIndependentEntryEvidence(
+        view: DotNetGenericOwnerPhysicalView,
+        parameter: IrValueParameter,
+    ): Boolean {
+        if (parameter in context.genericOwnerForeignDispatchDeclarations) return false
+        val evidenceByView = (provenance.guaranteedViews as?
+                DotNetGenericOwnerGuaranteedViews.Known)?.evidenceByView ?: return false
+        if (view !in evidenceByView) return false
+        return if (parameter.kind == IrParameterKind.DispatchReceiver) {
+            val isCurrentReceiver = evidenceByView.values.any { evidence ->
+                DotNetGenericOwnerPhysicalViewEvidence.CURRENT_PHYSICAL_RECEIVER in evidence
+            }
+            val requiredViewIsRecordedOnThatReceiver = evidenceByView.getValue(view).any { evidence ->
+                evidence == DotNetGenericOwnerPhysicalViewEvidence.CURRENT_PHYSICAL_RECEIVER ||
+                        evidence == DotNetGenericOwnerPhysicalViewEvidence.RECORDED_INTERFACE_EDGE
+            }
+            isCurrentReceiver && requiredViewIsRecordedOnThatReceiver
+        } else {
+            DotNetGenericOwnerPhysicalViewEvidence.FROZEN_PARAMETER_OR_RESULT in
+                    evidenceByView.getValue(view)
+        }
+    }
+
+    private fun IrExpression?.hasDirectConstructorResultTail(): Boolean = when (this) {
+        is IrConstructorCall -> true
+        is IrTypeOperatorCall ->
+            (operator == IrTypeOperator.IMPLICIT_CAST ||
+                    operator == IrTypeOperator.IMPLICIT_NOTNULL) &&
+                    argument.hasDirectConstructorResultTail()
+        is IrBlock -> (statements.lastOrNull() as? IrExpression).hasDirectConstructorResultTail()
+        is IrComposite -> (statements.lastOrNull() as? IrExpression).hasDirectConstructorResultTail()
+        else -> false
+    }
 
     /**
      * A semantic-result policy remains logical authority even when a natural receiver happens to

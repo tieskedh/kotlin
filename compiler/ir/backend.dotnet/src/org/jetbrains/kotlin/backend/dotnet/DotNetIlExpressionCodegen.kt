@@ -469,8 +469,17 @@ internal class DotNetIlExpressionCodegen(
     ): DotNetIlValueType? {
         val call = expression.identityPhysicalProducer() as? IrCall ?: return null
         if (intrinsicMethods.getIntrinsic(call.symbol) != null) return null
+        // The current direct-result placement grammar is parameterless. This also excludes the
+        // input-bearing foreign/capability fallback shapes which can be inferred during emission
+        // even when no earlier target-map entry remains.
+        if (!call.isDotNetParameterlessDirectResultPlacementCall()) return null
         val resolved = resolveCall(call)
         if (resolved.info.signature.hasSplitNullableResult) return null
+        val receiver = call.dispatchReceiver ?: return null
+        val receiverType = directPhysicalStorageReadCarrierTypeOrNull(receiver) ?: return null
+        if (receiverType == DotNetIlValueType.Object ||
+            receiverType.dotNetUniqueViewAsGenericOwner(resolved.info.owner) == null
+        ) return null
         return (resolved.returnType as? DotNetIlReturnType.Value)?.type
     }
 

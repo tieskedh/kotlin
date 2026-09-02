@@ -84,6 +84,24 @@ private class InlineConstructedCallRoute<T> {
         val callResultNaturalAlias: InlineProducer<T> = source.source()
         return callResultNaturalAlias
     }
+
+    fun sourceThroughWidenedLocal(
+        source: InlineConstructedSource<T>,
+    ): Any? {
+        val widenedSourceAlias: InlineConstructedSource<Any?> = source
+        val widenedCallResultAlias: InlineProducer<Any?> = widenedSourceAlias.source()
+        val widenedCallResultCopyAlias: InlineProducer<Any?> = widenedCallResultAlias
+        return widenedCallResultCopyAlias
+    }
+
+    fun sourceThroughBroadEntry(
+        source: InlineConstructedSource<Any?>,
+    ): Any? {
+        val genuinelyBroadSourceAlias: InlineConstructedSource<Any?> = source
+        val genuinelyBroadCallResultAlias: InlineProducer<Any?> =
+            genuinelyBroadSourceAlias.source()
+        return genuinelyBroadCallResultAlias
+    }
 }
 
 private class InlineRepeatedInputSplitLocalRoute<T> : InlineRepeatedInputLookup<T, T> {
@@ -342,18 +360,58 @@ private class InlineSecondView<T>(private val value: T) : InlineProducer<T> {
 
 fun box(): String {
     val inlineIntProducer = InlineSecondView(63)
+    val inlineIntSource = InlineConstructedSourceValue(inlineIntProducer)
     val intCallResult = InlineConstructedCallRoute<Int>().sourceThroughLocal(
-        InlineConstructedSourceValue(inlineIntProducer),
+        inlineIntSource,
     )
     if (intCallResult !== inlineIntProducer || intCallResult.produce() != 63) {
         return "value constructed call-result route"
     }
     val inlineStringProducer = InlineSecondView("call result")
+    val inlineStringSource = InlineConstructedSourceValue(inlineStringProducer)
     val stringCallResult = InlineConstructedCallRoute<String>().sourceThroughLocal(
-        InlineConstructedSourceValue(inlineStringProducer),
+        inlineStringSource,
     )
     if (stringCallResult !== inlineStringProducer || stringCallResult.produce() != "call result") {
         return "reference constructed call-result route"
+    }
+    val widenedIntCallResult = InlineConstructedCallRoute<Int>().sourceThroughWidenedLocal(
+        inlineIntSource,
+    )
+    if (widenedIntCallResult !== inlineIntProducer || inlineIntProducer.produce() != 63) {
+        return "value widened constructed call-result route"
+    }
+    val widenedStringCallResult = InlineConstructedCallRoute<String>().sourceThroughWidenedLocal(
+        inlineStringSource,
+    )
+    if (widenedStringCallResult !== inlineStringProducer ||
+        inlineStringProducer.produce() != "call result"
+    ) {
+        return "reference widened constructed call-result route"
+    }
+    val genuinelyBroadIntProducer = InlineSecondView<Any?>(63)
+    val genuinelyBroadIntSource = InlineConstructedSourceValue<Any?>(
+        genuinelyBroadIntProducer,
+    )
+    val broadIntCallResult = InlineConstructedCallRoute<String>().sourceThroughBroadEntry(
+        genuinelyBroadIntSource,
+    )
+    if (broadIntCallResult !== genuinelyBroadIntProducer ||
+        genuinelyBroadIntProducer.produce() != 63
+    ) {
+        return "value genuinely broad constructed call-result route"
+    }
+    val genuinelyBroadStringProducer = InlineSecondView<Any?>("call result")
+    val genuinelyBroadStringSource = InlineConstructedSourceValue<Any?>(
+        genuinelyBroadStringProducer,
+    )
+    val broadStringCallResult = InlineConstructedCallRoute<Int>().sourceThroughBroadEntry(
+        genuinelyBroadStringSource,
+    )
+    if (broadStringCallResult !== genuinelyBroadStringProducer ||
+        genuinelyBroadStringProducer.produce() != "call result"
+    ) {
+        return "reference genuinely broad constructed call-result route"
     }
     if (InlineLookupRoute<Int>().routeExactArgument(InlineIntLookup(), 42) != 42) {
         return "value argument route"

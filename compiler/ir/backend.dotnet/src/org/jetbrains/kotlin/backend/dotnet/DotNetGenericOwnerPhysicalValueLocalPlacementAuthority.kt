@@ -7,6 +7,8 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrFunction
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
@@ -22,6 +24,8 @@ import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
+import java.util.ArrayDeque
+import java.util.Collections
 import java.util.IdentityHashMap
 
 internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
@@ -549,6 +553,83 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                             "one physical local received multiple final value-flow records",
                         )
                     }
+                }
+
+            // A denied call result is not merely unavailable for its own local. Any later alias
+            // whose exact prediction was derived from that local must also lose the prediction;
+            // otherwise its late slot check would observe the call local's real object carrier
+            // and turn valid Kotlin into a compiler failure. This is the smallest acyclic
+            // placement dependency closure; calls admitted below remain rooted in their exact
+            // identity-bound final operation witness.
+            val unavailableCallDependenciesByFunction = IdentityHashMap<
+                    IrFunctionSymbol,
+                    MutableSet<IrValueSymbol>,
+                    >()
+            val callBearingValuesByFunction = IdentityHashMap<
+                    IrFunctionSymbol,
+                    MutableSet<IrValueSymbol>,
+                    >()
+            finalRecordsByFunction.forEach { entry ->
+                val function = entry.key
+                val unavailable = Collections.newSetFromMap(
+                    IdentityHashMap<IrValueSymbol, Boolean>(),
+                )
+                val callBearing = Collections.newSetFromMap(
+                    IdentityHashMap<IrValueSymbol, Boolean>(),
+                )
+                val dependentsByValue = IdentityHashMap<
+                        IrValueSymbol,
+                        MutableSet<IrValueSymbol>,
+                        >()
+                entry.value.values.forEach { record ->
+                    val initializer = (record.variable.owner as? IrVariable)?.initializer
+                        ?: return@forEach
+                    val dependencies = initializer.dotNetPhysicalValueDependencies()
+                    dependencies.reads.forEach { source ->
+                        dependentsByValue.getOrPut(source) {
+                            Collections.newSetFromMap(
+                                IdentityHashMap<IrValueSymbol, Boolean>(),
+                            )
+                        } += record.variable
+                    }
+                    if (dependencies.hasCall) callBearing += record.variable
+                    if (dependencies.hasCall &&
+                        record.predictedProducedValue.let { produced ->
+                            produced == null ||
+                                    (produced.layout is
+                                            DotNetGenericOwnerProducedValueLayout.Direct &&
+                                            initializer.hasUnavailablePhysicalCallDependency(
+                                                produced,
+                                                authoritativeOperationsByCallIdentity,
+                                            ))
+                        }
+                    ) {
+                        unavailable += record.variable
+                    }
+                }
+                val work = ArrayDeque(unavailable)
+                while (work.isNotEmpty()) {
+                    dependentsByValue[work.removeFirst()].orEmpty().forEach { dependent ->
+                        if (unavailable.add(dependent)) work.addLast(dependent)
+                    }
+                }
+                if (unavailable.isNotEmpty()) {
+                    unavailableCallDependenciesByFunction[function] = unavailable
+                }
+                if (callBearing.isNotEmpty()) {
+                    callBearingValuesByFunction[function] = callBearing
+                }
+            }
+
+            records.asSequence()
+                .filter { record ->
+                    record.snapshot.phase ==
+                            DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING
+                }
+                .forEach { record ->
+                    if (record.variable in
+                        unavailableCallDependenciesByFunction[record.physicalFunction].orEmpty()
+                    ) return@forEach
 
                     val produced = record.predictedProducedValue ?: return@forEach
                     val storage = record.predictedStorage ?: return@forEach
@@ -644,6 +725,31 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
                         is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
                         -> return@forEach
+                    }
+                    val initializer = (record.variable.owner as? IrVariable)?.initializer
+                        ?: return@forEach
+                    val initializerCall = initializer.identityPhysicalCallWitnessOrNull()
+                    if (initializerCall != null) {
+                        if (!initializerCall.call.isDotNetParameterlessDirectResultPlacementCall()) {
+                            return@forEach
+                        }
+                        val operation = authoritativeOperationsByCallIdentity[initializerCall.call]
+                            ?: return@forEach
+                        if (!operation.producedResult.matchesRetainedInitializerResult(
+                                produced,
+                                initializerCall.hasImplicitNotNull,
+                            ) ||
+                            operation.instantiatedSignature.resultLayout !is
+                                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+                        ) return@forEach
+                    } else if (record.variable in
+                        callBearingValuesByFunction[record.physicalFunction].orEmpty()
+                    ) {
+                        // Containers and control-flow expressions need a per-result-path route
+                        // plan before they may retain a call-produced carrier. The value shadow
+                        // can predict their natural result, but that is not evidence that every
+                        // live call will bypass its semantic/capability emitter.
+                        return@forEach
                     }
                     retainedByFunction.getOrPut(record.physicalFunction) {
                         IdentityHashMap()
@@ -814,4 +920,149 @@ private fun IrExpression.directPhysicalValueEmitterValidationOrNull():
     is IrGetValue -> DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER
     is IrCall -> DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER
     else -> null
+}
+
+private data class DotNetGenericOwnerIdentityPhysicalCallWitness(
+    val call: IrCall,
+    val hasImplicitNotNull: Boolean,
+)
+
+/** The first retained direct-result grammar has no MethodSpec or non-dispatch input slots. */
+internal fun IrCall.isDotNetParameterlessDirectResultPlacementCall(): Boolean =
+    dispatchReceiver != null && symbol.owner.typeParameters.isEmpty() && typeArguments.isEmpty() &&
+            symbol.owner.parameters.count { parameter ->
+                parameter.kind == IrParameterKind.DispatchReceiver
+            } == 1 &&
+            symbol.owner.parameters.all { parameter ->
+                parameter.kind == IrParameterKind.DispatchReceiver
+            }
+
+private fun IrExpression.identityPhysicalCallWitnessOrNull():
+        DotNetGenericOwnerIdentityPhysicalCallWitness? = when (this) {
+    is IrCall -> DotNetGenericOwnerIdentityPhysicalCallWitness(this, false)
+    is IrTypeOperatorCall -> if (
+        operator == IrTypeOperator.IMPLICIT_CAST ||
+        operator == IrTypeOperator.IMPLICIT_NOTNULL
+    ) {
+        argument.identityPhysicalCallWitnessOrNull()?.let { witness ->
+            witness.copy(
+                hasImplicitNotNull = witness.hasImplicitNotNull ||
+                        operator == IrTypeOperator.IMPLICIT_NOTNULL,
+            )
+        }
+    } else {
+        null
+    }
+    else -> null
+}
+
+private fun DotNetGenericOwnerProducedValueFact?.matchesRetainedInitializerResult(
+    retained: DotNetGenericOwnerProducedValueFact,
+    hasImplicitNotNull: Boolean,
+): Boolean {
+    val routed = this ?: return false
+    if (routed.layout != retained.layout ||
+        !retained.provenance.isMonotoneRefinementOf(routed.provenance)
+    ) return false
+    return routed.nullState == retained.nullState ||
+            (hasImplicitNotNull &&
+                    routed.nullState == DotNetGenericOwnerPhysicalNullState.MAYBE_NULL &&
+                    retained.nullState == DotNetGenericOwnerPhysicalNullState.NON_NULL)
+}
+
+/**
+ * A destination may select an already-guaranteed physical view or learn additional views from
+ * recorded CLR ancestry without changing the value's carrier. Lineage remains a selector and is
+ * never authority: every selected view must occur in the refined guaranteed-view set, and an
+ * existing selection may not silently change.
+ */
+private fun DotNetGenericOwnerPhysicalValueProvenance.isMonotoneRefinementOf(
+    source: DotNetGenericOwnerPhysicalValueProvenance,
+): Boolean {
+    val refinedViews = guaranteedViews
+    val sourceViews = source.guaranteedViews
+    when (sourceViews) {
+        DotNetGenericOwnerGuaranteedViews.Unknown ->
+            if (refinedViews !is DotNetGenericOwnerGuaranteedViews.Unknown) return false
+        is DotNetGenericOwnerGuaranteedViews.Known -> {
+            val refinedKnown = refinedViews as? DotNetGenericOwnerGuaranteedViews.Known
+                ?: return false
+            if (!refinedKnown.views.containsAll(sourceViews.views)) return false
+        }
+    }
+    if (source.selectedViewLineage.any { entry ->
+        selectedViewLineage[entry.key] != entry.value
+    }) return false
+    val knownRefinedViews = (refinedViews as? DotNetGenericOwnerGuaranteedViews.Known)
+        ?.views.orEmpty()
+    return selectedViewLineage.all { entry ->
+        entry.value.family == entry.key && entry.value in knownRefinedViews
+    }
+}
+
+private fun IrExpression.hasUnavailablePhysicalCallDependency(
+    produced: DotNetGenericOwnerProducedValueFact,
+    operations: IdentityHashMap<IrCall, DotNetGenericOwnerPhysicalOperationRoute>,
+): Boolean {
+    val witness = identityPhysicalCallWitnessOrNull() ?: return true
+    if (!witness.call.isDotNetParameterlessDirectResultPlacementCall()) return true
+    val operation = operations[witness.call] ?: return true
+    return operation.instantiatedSignature.resultLayout !is
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ||
+            !operation.producedResult.matchesRetainedInitializerResult(
+                produced,
+                witness.hasImplicitNotNull,
+            )
+}
+
+private data class DotNetPhysicalValueDependencies(
+    val reads: Set<IrValueSymbol>,
+    val hasCall: Boolean,
+)
+
+private fun IrExpression.dotNetPhysicalValueDependencies(): DotNetPhysicalValueDependencies {
+    val reads = Collections.newSetFromMap(IdentityHashMap<IrValueSymbol, Boolean>())
+    var hasCall = false
+    acceptVoid(object : IrVisitorVoid() {
+        override fun visitElement(element: IrElement) {
+            element.acceptChildrenVoid(this)
+        }
+
+        override fun visitClass(declaration: IrClass) = Unit
+
+        override fun visitFunction(declaration: IrFunction) = Unit
+
+        override fun visitGetValue(expression: IrGetValue) {
+            reads += expression.symbol
+        }
+
+        override fun visitCall(expression: IrCall) {
+            hasCall = true
+            expression.acceptChildrenVoid(this)
+        }
+    })
+    return DotNetPhysicalValueDependencies(reads, hasCall)
+}
+
+/**
+ * Conservatively identifies method calls whose final physical route must participate in local
+ * placement. Nested declarations are separate emission scopes and therefore do not contaminate
+ * the enclosing initializer.
+ */
+internal fun IrExpression.containsDotNetPhysicalCall(): Boolean {
+    var found = false
+    acceptVoid(object : IrVisitorVoid() {
+        override fun visitElement(element: IrElement) {
+            if (!found) element.acceptChildrenVoid(this)
+        }
+
+        override fun visitClass(declaration: IrClass) = Unit
+
+        override fun visitFunction(declaration: IrFunction) = Unit
+
+        override fun visitCall(expression: IrCall) {
+            found = true
+        }
+    })
+    return found
 }

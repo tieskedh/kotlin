@@ -15,9 +15,12 @@ import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.impl.IrBlockImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
@@ -33,6 +36,7 @@ import org.jetbrains.kotlin.ir.types.impl.makeTypeProjection
 import org.jetbrains.kotlin.ir.util.IrErrorModuleFragment
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.name.SpecialNames
 import org.jetbrains.kotlin.types.Variance
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -3521,11 +3525,33 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             listOf(makeTypeProjection(owner.typeParameters.single().defaultType, Variance.INVARIANT)),
             annotations = emptyList(),
         )
+        val ownerSelfType = IrSimpleTypeImpl(
+            owner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(makeTypeProjection(owner.typeParameters.single().defaultType, Variance.INVARIANT)),
+            annotations = emptyList(),
+        )
         val constructedCallee = IrFactoryImpl.buildFun {
             name = Name.identifier("produceConstruction")
             returnType = constructedCallType
         }.also { declaration ->
             declaration.parent = owner
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = ownerSelfType
+            }.kind = IrParameterKind.DispatchReceiver
+            owner.declarations += declaration
+        }
+        val inputCallee = IrFactoryImpl.buildFun {
+            name = Name.identifier("produceConstructionFromInput")
+            returnType = constructedCallType
+        }.also { declaration ->
+            declaration.parent = owner
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = ownerSelfType
+            }.kind = IrParameterKind.DispatchReceiver
+            declaration.addValueParameter("input", owner.typeParameters.single().defaultType)
             owner.declarations += declaration
         }
         val ownerIdentity = localOwnerIdentity(owner.symbol as IrClassSymbolImpl)
@@ -3533,25 +3559,63 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             interfaceOwner.symbol,
             DotNetGenericInterfaceView.DECLARED,
         )
-        val localDeclarations = boundDeclarationIndex(
-            listOf(
-                typeDescription(
-                    ownerIdentity,
-                    1,
-                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
-                ),
-                typeDescription(
-                    interfaceIdentity,
-                    1,
-                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+        val methodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            constructedCallee.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val physicalTypes = listOf(
+            typeDescription(
+                ownerIdentity,
+                1,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            ),
+            typeDescription(
+                interfaceIdentity,
+                1,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            ),
+        )
+        val provisionalDeclarations = boundDeclarationIndex(physicalTypes, emptyList())
+        val declaredInterfaceParameter = boundTypeParameter(
+            provisionalDeclarations,
+            interfaceIdentity,
+            0,
+        )
+        val declaredResultConstruction = boundConstruction(
+            provisionalDeclarations,
+            interfaceIdentity,
+            listOf(declaredInterfaceParameter),
+        )
+        val methodDescription = callableMethodDescription(
+            methodIdentity,
+            interfaceIdentity,
+            emptyList(),
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    declaredResultConstruction,
                 ),
             ),
-            emptyList(),
         )
+        val localDeclarations = boundDeclarationIndex(physicalTypes, listOf(methodDescription))
         val construction = boundConstruction(
             localDeclarations,
             interfaceIdentity,
             listOf(boundTypeParameter(localDeclarations, ownerIdentity, 0)),
+        )
+        val alternateView = view(
+            boundConstruction(
+                localDeclarations,
+                interfaceIdentity,
+                listOf(int32Type()),
+            ),
+        )
+        val thirdView = view(
+            boundConstruction(
+                localDeclarations,
+                interfaceIdentity,
+                listOf(stringType()),
+            ),
         )
         val localCarrier = boundCarrier(localDeclarations, construction)
         val localProduced = directValue(localCarrier, knownProvenance(view(construction)))
@@ -3561,6 +3625,41 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             ),
             localProduced.provenance,
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+        val coherentOperation = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetGenericOwnerPhysicalOperationRoute,
+                        >,
+                >(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                localDeclarations,
+                methodIdentity,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(view(construction)),
+                localProduced,
+                emptyList(),
+            ),
+        ).value
+        val callProduced = assertNotNull(coherentOperation.producedResult)
+        val retainedCallProduced = callProduced.copy(
+            provenance = assertNotNull(
+                callProduced.provenance
+                    .guarantee(
+                        view(construction),
+                        DotNetGenericOwnerPhysicalViewEvidence.RECORDED_INTERFACE_EDGE,
+                    )
+                    .guarantee(
+                        alternateView,
+                        DotNetGenericOwnerPhysicalViewEvidence.RECORDED_INTERFACE_EDGE,
+                    )
+                    .selectViewOrNull(view(construction)),
+            ),
+        )
+        val callStorage = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(localCarrier),
+            ),
+            retainedCallProduced.provenance,
+            retainedCallProduced.nullState,
         )
         val ownerParameterCarrier = boundCarrier(
             localDeclarations,
@@ -3617,6 +3716,18 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             "constructedSource",
             owner.typeParameters.single().defaultType,
         )
+        val calleeReceiver = function.addValueParameter(
+            "calleeReceiver",
+            ownerSelfType,
+        )
+        fun parameterlessConstructedCall() = IrCallImpl(
+            0,
+            0,
+            constructedCallType,
+            constructedCallee.symbol,
+        ).also { call ->
+            call.dispatchReceiver = IrGetValueImpl(0, 0, calleeReceiver.symbol)
+        }
         val localVariable = buildVariable(
             function,
             0,
@@ -3658,13 +3769,113 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             Name.identifier("call"),
             constructedCallType,
         ).also { variable ->
-            variable.initializer = IrCallImpl(
+            variable.initializer = parameterlessConstructedCall()
+        }.symbol as IrVariableSymbolImpl
+        val call = assertIs<IrCall>(callVariable.owner.initializer)
+        val callAliasVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("callAlias"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, callVariable)
+        }.symbol as IrVariableSymbolImpl
+        val inputCall = IrCallImpl(
+            0,
+            0,
+            constructedCallType,
+            inputCallee.symbol,
+        ).also { call ->
+            call.dispatchReceiver = IrGetValueImpl(0, 0, calleeReceiver.symbol)
+            call.arguments[1] = IrGetValueImpl(0, 0, constructedSource.symbol)
+        }
+        val inputCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("inputCall"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = inputCall
+        }.symbol as IrVariableSymbolImpl
+        val inputCallAliasVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("inputCallAlias"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, inputCallVariable)
+        }.symbol as IrVariableSymbolImpl
+        val blockCall = parameterlessConstructedCall()
+        val blockCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("blockCall"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrBlockImpl(0, 0, constructedCallType).apply {
+                statements += blockCall
+            }
+        }.symbol as IrVariableSymbolImpl
+        val blockCallAliasVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("blockCallAlias"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, blockCallVariable)
+        }.symbol as IrVariableSymbolImpl
+        val siblingCall = parameterlessConstructedCall()
+        val refinedCall = parameterlessConstructedCall()
+        val refinedCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("refinedCall"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrTypeOperatorCallImpl(
                 0,
                 0,
                 constructedCallType,
-                constructedCallee.symbol,
+                IrTypeOperator.IMPLICIT_NOTNULL,
+                constructedCallType,
+                refinedCall,
             )
         }.symbol as IrVariableSymbolImpl
+        val unwrappedRefinementCall = parameterlessConstructedCall()
+        val unwrappedRefinementVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("unwrappedRefinement"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = unwrappedRefinementCall
+        }.symbol as IrVariableSymbolImpl
+        val refinedProduced = DotNetGenericOwnerProducedValueFact(
+            retainedCallProduced.layout,
+            retainedCallProduced.provenance,
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+        val refinedStorage = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(localCarrier),
+            ),
+            refinedProduced.provenance,
+            DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
         val parameterSource = buildVariable(
             function,
             0,
@@ -3692,26 +3903,142 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             foreignProduced.provenance,
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
         )
-        val authority = assertIs<
+        val records = listOf(
+            record(localVariable, localProduced, localStorage),
+            record(callVariable, retainedCallProduced, callStorage),
+            record(callAliasVariable, retainedCallProduced, callStorage),
+            record(inputCallVariable, retainedCallProduced, callStorage),
+            record(inputCallAliasVariable, retainedCallProduced, callStorage),
+            record(blockCallVariable, retainedCallProduced, callStorage),
+            record(blockCallAliasVariable, retainedCallProduced, callStorage),
+            record(refinedCallVariable, refinedProduced, refinedStorage),
+            record(unwrappedRefinementVariable, refinedProduced, refinedStorage),
+            record(parameterVariable, parameterProduced, parameterStorage),
+            record(foreignVariable, foreignProduced, foreignStorage),
+        )
+        fun bindAuthority(
+            operations: Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> = emptyMap(),
+        ) = assertIs<
                 DotNetGenericOwnerPhysicalBindingResult.Bound<
                         DotNetGenericOwnerPhysicalValueLocalPlacementAuthority,
                         >,
                 >(
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
-                listOf(
-                    record(localVariable, localProduced, localStorage),
-                    record(callVariable, localProduced, localStorage),
-                    record(parameterVariable, parameterProduced, parameterStorage),
-                    record(foreignVariable, foreignProduced, foreignStorage),
-                ),
+                records,
+                operations,
             ),
         ).value
+
+        val authorityWithoutOperation = bindAuthority()
+        assertNull(
+            authorityWithoutOperation.retainedProducedCarrierOrNull(
+                function.symbol,
+                callVariable,
+            ),
+            "a direct call has no placement token without an authoritative operation",
+        )
+        assertNull(
+            authorityWithoutOperation.retainedProducedCarrierOrNull(
+                function.symbol,
+                callAliasVariable,
+            ),
+            "an alias cannot retain authority from a direct call whose operation is unavailable",
+        )
+        val authorityWithSiblingOperation = bindAuthority(mapOf(siblingCall to coherentOperation))
+        assertNull(
+            authorityWithSiblingOperation.retainedProducedCarrierOrNull(
+                function.symbol,
+                callVariable,
+            ),
+            "a structurally identical call cannot donate identity-bound operation authority",
+        )
+        val mismatchedOperation = coherentOperation.copy(
+            producedResult = directValue(objectCarrier()),
+        )
+        val authorityWithMismatchedOperation = bindAuthority(mapOf(call to mismatchedOperation))
+        assertNull(
+            authorityWithMismatchedOperation.retainedProducedCarrierOrNull(
+                function.symbol,
+                callVariable,
+            ),
+            "an operation whose produced result differs from value flow cannot authorize placement",
+        )
+        val droppedGuaranteedViewOperation = coherentOperation.copy(
+            producedResult = callProduced.copy(
+                provenance = retainedCallProduced.provenance.guarantee(
+                    thirdView,
+                    DotNetGenericOwnerPhysicalViewEvidence.PRODUCER_ABI,
+                ),
+            ),
+        )
+        val authorityWithDroppedGuaranteedView = bindAuthority(
+            mapOf(call to droppedGuaranteedViewOperation),
+        )
+        assertNull(
+            authorityWithDroppedGuaranteedView.retainedProducedCarrierOrNull(
+                function.symbol,
+                callVariable,
+            ),
+            "placement cannot drop a view guaranteed by the final operation",
+        )
+        val changedLineageOperation = coherentOperation.copy(
+            producedResult = callProduced.copy(
+                provenance = assertNotNull(
+                    retainedCallProduced.provenance.selectViewOrNull(alternateView),
+                ),
+            ),
+        )
+        val authorityWithChangedLineage = bindAuthority(mapOf(call to changedLineageOperation))
+        assertNull(
+            authorityWithChangedLineage.retainedProducedCarrierOrNull(
+                function.symbol,
+                callVariable,
+            ),
+            "placement cannot replace lineage already selected by the final operation",
+        )
+        val authority = bindAuthority(
+            mapOf(
+                call to coherentOperation,
+                inputCall to coherentOperation,
+                blockCall to coherentOperation,
+                refinedCall to coherentOperation,
+                unwrappedRefinementCall to coherentOperation,
+            ),
+        )
 
         val retainedConstruction = assertNotNull(
             authority.retainedProducedCarrierOrNull(function.symbol, localVariable),
         )
         val retainedCallConstruction = assertNotNull(
             authority.retainedProducedCarrierOrNull(function.symbol, callVariable),
+        )
+        assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, callAliasVariable),
+            "a coherent direct-call operation admits its exact downstream storage-read alias",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, inputCallVariable),
+            "an input-bearing direct result is outside the parameterless placement grammar",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, inputCallAliasVariable),
+            "an alias cannot recover a denied input-bearing direct result",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, blockCallVariable),
+            "a call-bearing block needs a path-complete operation plan",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, blockCallAliasVariable),
+            "an alias cannot recover a denied call-bearing block result",
+        )
+        assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, refinedCallVariable),
+            "an actual implicit-not-null wrapper may refine a route's maybe-null result",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, unwrappedRefinementVariable),
+            "a non-null value fact cannot refine a maybe-null call without the actual wrapper",
         )
         assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, parameterVariable))
         assertNull(authority.retainedProducedCarrierOrNull(function.symbol, foreignVariable))

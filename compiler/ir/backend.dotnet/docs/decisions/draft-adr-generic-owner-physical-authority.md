@@ -469,12 +469,38 @@ The fourth bounded form admits a parameterless, non-method-generic exact
 natural call whose authority-recorded direct result is either `!n` or an exact
 local construction `I<!n,...>`, retained in equal immutable owner-bound storage.
 The receiver must already guarantee the selected MethodDef-owner construction,
-an existing semantic route vetoes the transfer, and every constructed result
-argument must bind to the live physical owner's type parameters. The emitter
-independently invokes the ordinary physical-call resolver and requires its live
-MethodDef result carrier to equal the reconstructed authority carrier. Missing,
-split, intrinsic, semantic, foreign, or different results fail closed; the
-logical whole-expression mapper supplies no replacement evidence.
+and every constructed result argument must bind to the live physical owner's
+type parameters. Placement additionally consumes the exact `IrCall` identity's
+post-routing natural-operation witness. That witness must be the final
+`EXACT_NATURAL` / `DIRECT_NATURAL` / `MATCH` record for that same identity;
+structurally equal sibling calls, semantic routes, and merely natural-looking
+records grant no authority. Publication roots at an operation-
+independent physical entry or immutable exact declared local; one predicted
+call-result local cannot prove the next call. Object-carried provenance and
+identity wrappers around foreign-dispatch declarations are not emitter
+evidence. A non-alias immutable root may end in a direct constructor-result
+tail, but that admits the value only as this exact receiver root and grants no
+general constructor-result placement authority. The emitter independently
+validates the live receiver and invokes the
+ordinary physical-call resolver, requiring its live MethodDef result carrier to
+equal the reconstructed authority carrier. Missing, split, intrinsic, semantic,
+foreign, or different results fail closed; the logical whole-expression mapper
+supplies no replacement evidence. An actual `IMPLICIT_NOTNULL` may refine
+`MAYBE_NULL` to `NON_NULL`. Placement may also retain a monotone provenance
+refinement which preserves every operation-guaranteed view and existing
+lineage; lineage remains only a selector over independently guaranteed views.
+
+An exact construction retained through a logically widened open-interface view
+does not establish that natural and semantic calls are equivalent for every
+dynamic implementation. Such a call stays semantic. Direct emission may be
+reconsidered only for an exact final concrete receiver after producer authority
+records and the consumer binds one shared body endpoint for the natural and
+semantic MethodDefs/MethodImpl edges. Selected lineage cannot supply that
+certificate. Until path-complete operation plans exist, call-bearing `IrWhen`,
+block, and composite initializers receive no retained direct placement. A
+denied direct call also invalidates transitive aliases derived from its predicted
+carrier; legacy compiler-temporary/nested-construction recognizers cannot
+recreate it.
 
 The constructed-result extension is presently a local BOUND-declaration proof,
 not an external ABI promise. Its first admission is one non-null natural
