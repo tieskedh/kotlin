@@ -22,6 +22,14 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   result through one immutable local whose every use is an unprotected direct
   return to the same physical MethodDef, while preserving its open MethodDef
   binders, MethodSpec, instantiated carriers, and result separately.
+- The current continuation composes an empty-MethodSpec ordinary parameter
+  vector from strict owner slots plus fixed Boolean, Int, String, and Object
+  leaves. The exact owner call remains
+  `!T/bool/int32/string/object/!T -> !T + out bool` with no boxing or semantic
+  dispatch. Operation routing receives only a regular-parameter fact whose
+  producer-planned slot domain is `DECLARATION_INDEPENDENT`, whose typed and
+  current physical prototypes carry the same supported fixed leaf, and whose
+  final storage is `Direct(Fixed(the same leaf))`.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
@@ -79,7 +87,7 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-Final physical-value facts now authorize eight bounded local-placement forms. A
+Final physical-value facts now authorize bounded local-placement forms. A
 direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
@@ -107,11 +115,13 @@ path; this is not sequential or general repeated consumption. Every retained
 split form requires the post-final-routing operation consumer to publish the
 exact `IrCall` as a BOUND direct-natural operation after it agrees with the
 completed final router. Sixth, that same pair may survive any complete ordered
-ordinary-argument vector whose instantiated slots are all
-`STRICT_OWNER_INPUT(!m)`, whose payload and every input independently bind to
-current-owner parameters, and whose MethodSpec is empty. The first publication
-slice requires a positive number of direct occurrences of one invariant owner
-input, but placement itself is cardinality-independent. Seventh, one exact generic shape may
+ordinary-argument vector whose empty-MethodSpec slots are each either
+`STRICT_OWNER_INPUT(!m)` independently bound to a current-owner parameter or a
+supported fixed declaration-independent Boolean, Int32, String, or Object leaf
+on which the natural and semantic MethodDefs agree. Its payload and every
+strict input independently bind to current-owner parameters. The first
+publication slice requires a positive number of direct occurrences of one
+invariant owner input, but placement itself is cardinality-independent. Seventh, one exact generic shape may
 retain the pair: `<R>(K, R): V?`, where the open slots are
 `STRICT_OWNER_INPUT(!K)` and `DECLARATION_INDEPENDENT(!!R)`, the result is
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)`, and the sole MethodSpec
@@ -135,7 +145,17 @@ or a non-returnable, same-typed single-call FIR2IR arm block is transparent.
 Placement and emission rerun the same identity-keyed ordered shape, validate
 every live call separately, store every result into the same pair, and join with
 an empty evaluation stack before one common return tail.
-Every mixed-domain ordinary vector or other MethodSpec shape, semantic or `super` routes,
+For the fixed declaration-independent leaves in that empty-MethodSpec form,
+operation routing consumes only regular-parameter facts whose producer-planned
+slot domain is `DECLARATION_INDEPENDENT`, typed and current physical prototypes
+carry the same supported fixed leaf, and final storage is
+`Direct(Fixed(the same leaf))`; owner, constructed, broad semantic-object,
+fallback-object, and MethodDef-binder facts remain excluded. The emitter
+rechecks the complete live vector. The focused proof exercises
+`!K/bool/int32/string/object/!K -> SplitNullable(!V, out bool)` without boxing.
+This fixed-leaf slice adds local same-compilation evidence only; it adds no new
+separate-Kotlin-assembly or C# proof.
+Every other mixed-domain ordinary vector or other MethodSpec shape, semantic or `super` routes,
 mutation, other control-flow shapes, captures, non-return or mixed reads,
 protected-region returns, and carrier mismatches use the ordinary materializing
 path. Local
@@ -154,11 +174,12 @@ evidence is in the
 [repeated-input split-result local](docs/archive/generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md),
 [MethodSpec split-result local](docs/archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md),
 [multiple direct returns](docs/archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md),
-and [split control flow](docs/archive/generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md)
+[split control flow](docs/archive/generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md),
+and [fixed-input split-result local](docs/archive/generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md)
 archives.
-The focused gate reports 92 green physical-value model tests. Candidate and
-production-erased inverse each cover four green tests across PSI, LightTree,
-Framework 4.8, and .NET 10, with no failures, errors, or skips.
+The focused gate reports 93 green physical-value model tests. Candidate and
+production-erased inverse each cover eight green tests: two fixtures across
+PSI, LightTree, Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 The first argument-bearing authoritative operation now composes an exact
 constructed `Lookup<!T,!T>` entry, one final `!T` argument fact,
@@ -226,7 +247,7 @@ by a flat exhaustive branch family when every exact arm independently produces
 the same physical payload. Every retained split call consumes its exact final
 operation route as the placement witness; a non-MethodSpec call may carry any
 complete ordered vector of final identity-preserving `STRICT_OWNER_INPUT`
-arguments. The reference
+arguments and supported fixed declaration-independent leaf arguments. The reference
 join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
@@ -253,8 +274,14 @@ result, including producer records, separate Kotlin assemblies, objective PE,
 and ordinary natural-only C# implementations. Split-pair control-flow
 initializer joins are now closed for the flat calls-only form, and repeated
 strict owner inputs now use the same full-vector operation witness without an
-arity recognizer. The next consolidation boundary closes fixed declaration-
-independent and remaining parameter-entry forms. Every non-return,
+arity recognizer. Fixed Boolean/Int/String/Object entry carriers now use that
+same vector through the fail-closed hand-off: only
+`DECLARATION_INDEPENDENT` producer-planned regular slots with matching typed and
+current fixed-leaf prototypes and `Direct(Fixed(same leaf))` final storage pass;
+owner, constructed, broad semantic-object, fallback-object, and MethodDef-
+binder facts do not. The next boundary repairs direct constructed-
+parameter live-slot validation before constructed entry forms expand; real
+caller-MethodDef `!!R` entry remains separate. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,

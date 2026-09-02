@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberVisib
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodSignatureReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
@@ -56,6 +57,8 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetBaseSuperTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
+import org.jetbrains.kotlin.backend.dotnet.declarationIndependentLeafCarrierOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.markBoundGenericOwnerStateWrites
@@ -527,6 +530,9 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
     private sealed interface CallableParameterBinding {
         data class Owner(val index: Int) : CallableParameterBinding
         data class Method(val index: Int) : CallableParameterBinding
+        data class FixedLeaf(
+            val prototype: DotNetGenericOwnerPrototypeTypeSnapshot,
+        ) : CallableParameterBinding
     }
 
     private data class CompleteDirectProducerImplementationSelection(
@@ -598,9 +604,26 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         val sourceParameters = source.parameters.filter { parameter ->
             parameter.kind == IrParameterKind.Regular
         }
-        val parameterBindings = sourceParameters.map { parameter ->
-            parameter.directCallableParameterBindingOrNull(owner, source) ?: return null
+        val semanticParameters = semanticSlot.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
         }
+        if (semanticParameters.size != sourceParameters.size ||
+            sourceParameters.indices.any { index ->
+                sourceParameters[index].kind != semanticParameters[index].kind
+            }
+        ) return null
+        val parameterBindings = sourceParameters.indices.map { index ->
+            sourceParameters[index].directCallableParameterBindingOrNull(
+                owner = owner,
+                method = source,
+                naturalPhysicalType = sourceParameters[index].type,
+                capabilityPhysicalType = semanticParameters[index].type,
+            ) ?: return null
+        }
+        if (methodGenericArity > 0 && parameterBindings.any { binding ->
+                binding is CallableParameterBinding.FixedLeaf
+            }
+        ) return null
         val parameterDomains = context.genericInterfaceNaturalMethodParameterDomains[source]
             ?.takeIf { domains -> domains.size == parameterBindings.size }
             ?: return null
@@ -611,6 +634,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     is CallableParameterBinding.Owner ->
                         domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
                     is CallableParameterBinding.Method ->
+                        domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                    is CallableParameterBinding.FixedLeaf ->
                         domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
                 }
             }
@@ -666,9 +691,6 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         }
 
         val capabilityOwner = context.genericOwnerCapabilityInterfaces[owner] ?: return null
-        val semanticParameters = semanticSlot.parameters.filter { parameter ->
-            parameter.kind == IrParameterKind.Regular
-        }
         if (semanticSlot.parent !== capabilityOwner || semanticSlot.isSuspend ||
             semanticSlot.typeParameters.size != methodGenericArity ||
             !semanticSlot.hasUnconstrainedMethodParameterVector() ||
@@ -688,6 +710,9 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     is CallableParameterBinding.Owner -> parameter.type.isNullableAny()
                     is CallableParameterBinding.Method ->
                         parameter.type == semanticSlot.typeParameters[binding.index].defaultType
+                    is CallableParameterBinding.FixedLeaf ->
+                        parameter.type.genericOwnerDeclarationIndependentLeafPrototypeOrNull() ==
+                                binding.prototype
                 }
             }
         ) return null
@@ -750,6 +775,10 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                             identity,
                             binding.index,
                         )
+                    is CallableParameterBinding.FixedLeaf ->
+                        checkNotNull(binding.prototype.declarationIndependentLeafCarrierOrNull()) {
+                            "Internal .NET backend error: a fixed callable input lost its leaf carrier"
+                        }
                 }
                 DotNetGenericOwnerPhysicalCallableValueSlotReference(domain, carrier)
             }
@@ -821,17 +850,26 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
     private fun org.jetbrains.kotlin.ir.declarations.IrValueParameter.directCallableParameterBindingOrNull(
         owner: IrClass,
         method: IrSimpleFunction,
+        naturalPhysicalType: org.jetbrains.kotlin.ir.types.IrType,
+        capabilityPhysicalType: org.jetbrains.kotlin.ir.types.IrType,
     ): CallableParameterBinding? {
-        val parameterType = this.type as? IrSimpleType ?: return null
-        if (parameterType.isMarkedNullable()) return null
-        val parameter = (parameterType.classifier as? IrTypeParameterSymbol)?.owner ?: return null
-        owner.typeParameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let { index ->
-            return CallableParameterBinding.Owner(index)
+        val parameterType = this.type as? IrSimpleType
+        val parameter = (parameterType?.classifier as? IrTypeParameterSymbol)?.owner
+        if (parameter != null && !parameterType.isMarkedNullable()) {
+            owner.typeParameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let { index ->
+                return CallableParameterBinding.Owner(index)
+            }
+            method.typeParameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let { index ->
+                return CallableParameterBinding.Method(index)
+            }
         }
-        method.typeParameters.indexOf(parameter).takeIf { index -> index >= 0 }?.let { index ->
-            return CallableParameterBinding.Method(index)
-        }
-        return null
+        val typedLeaf = naturalPhysicalType.genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+            ?: return null
+        val capabilityLeaf = capabilityPhysicalType
+            .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+            ?: return null
+        return CallableParameterBinding.FixedLeaf(typedLeaf)
+            .takeIf { typedLeaf == capabilityLeaf }
     }
 
     /**

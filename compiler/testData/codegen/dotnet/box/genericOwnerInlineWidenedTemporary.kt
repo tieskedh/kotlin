@@ -229,6 +229,16 @@ private class InlineMethodLookupRoute<T> {
         val callerMarkerAlias: R = marker
         return sourceNaturalAlias.lookup<R>(exactKeyAlias, callerMarkerAlias)
     }
+
+    // Entry provenance for a constructed receiver and owner parameters is a separate proof.
+    // A fixed-leaf hand-off must not make this admitted MethodSpec route exact by accident.
+    fun routeDirectParameterMethodLookup(
+        source: InlineMethodLookup<T, T>,
+        key: T,
+    ): T? {
+        val directParameterMethodSpecResultAlias: T? = source.lookup<T>(key, key)
+        return directParameterMethodSpecResultAlias
+    }
 }
 
 private class InlineIntMethodLookup : InlineMethodLookup<Int, Int> {
@@ -510,6 +520,9 @@ fun box(): String {
     }
     if (intMethodLookupRoute.routeCallerMethodLookup(InlineIntMethodLookup(), 51, 51) != 51) {
         return "caller MethodDef split MethodSpec route"
+    }
+    if (intMethodLookupRoute.routeDirectParameterMethodLookup(InlineIntMethodLookup(), 52) != 52) {
+        return "direct parameter split MethodSpec route"
     }
 
     val ints = InlineSelfView(42)

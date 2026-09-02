@@ -568,6 +568,14 @@ private class BackendCliDotNetFacade(
             emittedArtifact = completedOutput.output,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
         )
+        validateGenericOwnerFixedCarrierInput(
+            genericOwnerRehearsal = genericOwnerRehearsal,
+            operations = completedOutput.genericOwnerPhysicalOperationRouteShadows,
+            values = completedOutput.genericOwnerPhysicalValueShadows,
+            comparisons = completedOutput.genericOwnerPhysicalValuePlacementComparisons,
+            emittedArtifact = completedOutput.output,
+            testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+        )
         System.getProperty(GENERIC_OWNER_REHEARSAL_EXPORT_PROPERTY)?.let { exportPath ->
             check(genericOwnerRehearsal) {
                 "A generic-owner rehearsal product can only be exported from the rehearsal epoch"
@@ -1373,6 +1381,14 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
                 candidate.logicalMemberName == "lookup"
     }) {
         "A caller-MethodDef binder must not authorize the split MethodSpec operation: $snapshots"
+    }
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineMethodLookupRoute") &&
+                candidate.physicalFunctionName == "routeDirectParameterMethodLookup" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "A fixed-leaf entry hand-off must not authorize constructed/owner parameter " +
+                "MethodSpec provenance: $snapshots"
     }
     check(snapshots.none { candidate ->
         candidate.ownerName.endsWith("InlineSelfView") &&
@@ -3473,6 +3489,177 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The emitted control-flow join must use InlineProducer<!T>, never its fabricated " +
                     "object sibling: method=$joinedMethod"
         }
+    }
+}
+
+/** Proves fixed physical leaves as ordered callable inputs, independently of owner/result binders. */
+private fun validateGenericOwnerFixedCarrierInput(
+    genericOwnerRehearsal: Boolean,
+    operations: List<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot>,
+    values: List<DotNetGenericOwnerPhysicalValueShadowSnapshot>,
+    comparisons: List<DotNetGenericOwnerPhysicalValuePlacementComparisonSnapshot>,
+    emittedArtifact: File,
+    testDataFile: File,
+) {
+    if (GENERIC_OWNER_FIXED_CARRIER_INPUT_PROBE_MARKER !in testDataFile.readText()) return
+    val relevantOperations = operations.filter { snapshot ->
+        snapshot.ownerName.endsWith("FixedCarrierSplitRoute")
+    }
+    val relevantComparisons = comparisons.filter { comparison ->
+        comparison.prediction.ownerName.endsWith("FixedCarrierSplitRoute")
+    }
+    val relevantValues = values.filter { snapshot ->
+        snapshot.ownerName.endsWith("FixedCarrierSplitRoute")
+    }
+    val emittedIl = emittedArtifact.resolveSibling("${emittedArtifact.nameWithoutExtension}.il")
+    check(emittedIl.isFile) { "The fixed-carrier probe has no emitted IL: ${emittedIl.path}" }
+    val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    if (!genericOwnerRehearsal) {
+        check(relevantOperations.isEmpty() && relevantValues.isEmpty() &&
+                relevantComparisons.isEmpty() &&
+                "'FixedCarrierLookup`2'" !in ilText &&
+                "IFixedCarrierLookupKotlinSemantic" !in ilText &&
+                "'FixedCarrierMethodLookup`2'" !in ilText &&
+                "IFixedCarrierMethodLookupKotlinSemantic" !in ilText &&
+                "'FixedCarrierSplitRoute`1'" !in ilText &&
+                "resultAlias@isNull" !in ilText
+        ) {
+            "The production-erased inverse retained fixed-carrier candidate authority: " +
+                    "operations=$relevantOperations, comparisons=$relevantComparisons, " +
+                    "artifact=${emittedIl.path}"
+        }
+        return
+    }
+
+    val operation = checkNotNull(relevantOperations.singleOrNull { candidate ->
+        candidate.physicalFunctionName == "lookup" &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "The fixed-leaf input vector must publish one exact physical operation: " +
+                "relevant=$relevantOperations, values=$relevantValues, " +
+                "comparisons=$relevantComparisons"
+    }
+    check(operation.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            operation.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            operation.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            operation.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("FixedCarrierLookup") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0, 0) &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("FixedCarrierSplitRoute") == true
+            } && operation.methodArgumentCarriers.isEmpty() &&
+            operation.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+            operation.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            operation.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            operation.resultCarrierParameterBinderOwnerName
+                ?.endsWith("FixedCarrierSplitRoute") == true &&
+            operation.resultCarrierParameterIndex == 0 &&
+            operation.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            operation.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            operation.diagnostic == null
+    ) {
+        "The fixed leaves, owner binders, and split result must remain independent: $operation"
+    }
+
+    val resultAlias = relevantComparisons.singleOrNull { comparison ->
+        comparison.prediction.sourceFunctionName == "lookup" &&
+                comparison.prediction.functionRole ==
+                DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                comparison.prediction.variableName == "resultAlias"
+    }
+    check(resultAlias?.let { comparison ->
+        val prediction = comparison.prediction
+        val payload = prediction.storageCarrier
+        prediction in relevantValues &&
+                prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                prediction.initializerProducedLayout ==
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                prediction.storageLayout ==
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                payload.kind ==
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                payload.ownerParameterIndices == listOf(0) &&
+                payload.parameterBinderOwnerName?.endsWith("FixedCarrierSplitRoute") == true &&
+                comparison.actualPhysicalMethodOwnerName
+                    ?.endsWith("FixedCarrierSplitRoute") == true &&
+                comparison.actualStorageLayout ==
+                DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                comparison.actualStorageCarrier == payload &&
+                comparison.actualAuxiliarySlotIndex != null &&
+                comparison.actualSelectionKind ==
+                DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                    .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                comparison.relation ==
+                DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH &&
+                comparison.diagnostic == null
+    } == true) {
+        "The fixed-input call did not retain its !T plus null flag: " +
+                "result=$resultAlias, all=$relevantComparisons"
+    }
+
+    val naturalHeader =
+        ".method public hidebysig newslot abstract virtual instance !1 'lookup'(" +
+                "!0 'first', bool 'selectFirst', int32 'token', string 'label', object 'marker', " +
+                "!0 'second', [out] bool& '<isNull>') cil managed"
+    val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+        .map { match -> match.range.first }
+        .toList()
+    val methodWindows = methodStarts.mapIndexed { index, start ->
+        ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+    }
+    val routeMethod = methodWindows.singleOrNull { method ->
+        val header = method.substringBefore('{')
+        "instance !0 'lookup'(" in header &&
+                "'sourceNaturalAlias'" in method &&
+                "'resultAlias@isNull'" in method
+    }
+    val exactCall =
+        "callvirt instance !1 class 'FixedCarrierLookup`2'<!0, !0>::'lookup'(" +
+                "!0, bool, int32, string, object, !0, bool&)"
+    check(naturalHeader in ilText && routeMethod != null && exactCall in routeMethod &&
+            "class 'FixedCarrierLookup`2'<!0, !0> 'sourceNaturalAlias'" in routeMethod &&
+            "!0 'resultAlias'" in routeMethod &&
+            "bool 'resultAlias@isNull'" in routeMethod &&
+            "box " !in routeMethod && "unbox" !in routeMethod &&
+            "castclass" !in routeMethod && "isinst" !in routeMethod &&
+            "InvokeRecordedMember" !in routeMethod &&
+            "'FixedCarrierMethodLookup`2'" !in ilText &&
+            "IFixedCarrierMethodLookupKotlinSemantic" !in ilText
+    ) {
+        "The emitted fixed-input route is not exact owner/leaf storage plus SplitNullable: " +
+                "method=$routeMethod"
+    }
+    val orderedLoads = listOf(
+        "ldloc.0",
+        "ldloc.1",
+        "ldarg.2",
+        "ldarg.3",
+        "ldarg 4",
+        "ldarg 5",
+        "ldloc.2",
+        "ldloca 4",
+        exactCall,
+    )
+    var previousLoad = -1
+    check(orderedLoads.all { instruction ->
+        routeMethod.indexOf(instruction, startIndex = previousLoad + 1).also { index ->
+            previousLoad = index
+        } >= 0
+    }) {
+        "The fixed-input call did not load K/bool/int/string/object/K/out-bool in order: " +
+                routeMethod
     }
 }
 
@@ -7229,6 +7416,8 @@ private const val GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE_MA
     "// DOTNET_GENERIC_OWNER_PHYSICAL_VALUE_PLACEMENT_COMPILER_ALIAS_PROBE"
 private const val GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PHYSICAL_OPERATION_ROUTE_PROBE"
+private const val GENERIC_OWNER_FIXED_CARRIER_INPUT_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_FIXED_CARRIER_INPUT_PROBE"
 private const val GENERIC_OWNER_COMPLETE_EMISSION_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_COMPLETE_EMISSION_PROBE"
 private const val GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER =

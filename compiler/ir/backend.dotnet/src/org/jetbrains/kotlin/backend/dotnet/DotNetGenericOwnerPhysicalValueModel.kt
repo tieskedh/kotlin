@@ -2209,6 +2209,32 @@ internal sealed interface DotNetGenericOwnerSymbolicCarrierReference {
     }
 }
 
+/** Binds only the fixed non-void prototype leaves; binders and named types need other authority. */
+internal fun DotNetGenericOwnerPrototypeTypeSnapshot.declarationIndependentLeafCarrierOrNull():
+        DotNetGenericOwnerSymbolicCarrierReference? = when (kind) {
+    DotNetGenericOwnerPrototypeTypeKind.BOOLEAN ->
+        DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier()
+    DotNetGenericOwnerPrototypeTypeKind.INT32 ->
+        DotNetGenericOwnerSymbolicCarrierReference.int32Carrier()
+    DotNetGenericOwnerPrototypeTypeKind.STRING ->
+        DotNetGenericOwnerSymbolicCarrierReference.stringCarrier()
+    DotNetGenericOwnerPrototypeTypeKind.OBJECT ->
+        DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+    DotNetGenericOwnerPrototypeTypeKind.VOID,
+    DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY,
+    DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER,
+    DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER,
+    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER,
+    DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY,
+    -> null
+}
+
+internal fun DotNetGenericOwnerSymbolicCarrierReference.isDeclarationIndependentLeafCarrier(): Boolean =
+    this == DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier() ||
+            this == DotNetGenericOwnerSymbolicCarrierReference.int32Carrier() ||
+            this == DotNetGenericOwnerSymbolicCarrierReference.stringCarrier() ||
+            this == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
+
 private fun DotNetGenericOwnerSymbolicCarrierReference.firstGenericBinderNotOwnedByOrNull(
     declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
     method: DotNetGenericOwnerPhysicalMethodDefIdentity,

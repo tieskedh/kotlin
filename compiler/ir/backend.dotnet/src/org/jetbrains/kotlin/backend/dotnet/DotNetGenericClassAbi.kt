@@ -5486,6 +5486,20 @@ private enum class DotNetGenericOwnerPrototypeTypeUse {
 }
 
 /**
+ * Fixed verifier leaves whose physical carrier is independent of every owner or MethodDef binder.
+ * This is the shared prototype vocabulary used by declaration planning and later authority
+ * binding; callers must not grow a second source-type-to-CLR mapping.
+ */
+internal fun IrType.genericOwnerDeclarationIndependentLeafPrototypeOrNull():
+        DotNetGenericOwnerPrototypeTypeSnapshot? = when {
+    isBoolean() -> DotNetGenericOwnerPrototypeTypeSnapshot.booleanType()
+    isInt() -> DotNetGenericOwnerPrototypeTypeSnapshot.int32Type()
+    isString() || isNullableString() -> DotNetGenericOwnerPrototypeTypeSnapshot.stringType()
+    isAny() || isNullableAny() -> DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+    else -> null
+}
+
+/**
  * Captures the bounded CLR carrier grammar before producer TypeDef paths are selected.
  * Callable fallbacks preserve non-exact Kotlin positions; state remains exact or unavailable.
  */
@@ -5503,10 +5517,7 @@ private fun IrType.genericOwnerPrototypeType(
             null
         }
     }
-    if (isBoolean()) return DotNetGenericOwnerPrototypeTypeSnapshot.booleanType()
-    if (isInt()) return DotNetGenericOwnerPrototypeTypeSnapshot.int32Type()
-    if (isString() || isNullableString()) return DotNetGenericOwnerPrototypeTypeSnapshot.stringType()
-    if (isAny() || isNullableAny()) return DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+    genericOwnerDeclarationIndependentLeafPrototypeOrNull()?.let { return it }
 
     val simpleType = this as? IrSimpleType ?: return null
     val typeParameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner

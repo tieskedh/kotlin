@@ -49,6 +49,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetUnboxedValueClassTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassConstructorImplementationSourceOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassImplementationSourceOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.isDotNetCharSequenceType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
@@ -2620,10 +2621,14 @@ internal class DotNetReifiedGenericInterfaceLowering(
         val directOwnerInput = directOwnerInputs.distinct().singleOrNull() ?: return null
         if (!inputs.all { input ->
             val inputType = input.type as? IrSimpleType ?: return@all false
-            if (inputType.isMarkedNullable()) return@all false
             val parameter = (inputType.classifier as? IrTypeParameterSymbol)?.owner
-                ?: return@all false
-            parameter === directOwnerInput || parameter.parent === this
+            when {
+                parameter === directOwnerInput -> !inputType.isMarkedNullable()
+                parameter?.parent === this -> !inputType.isMarkedNullable()
+                typeParameters.isEmpty() ->
+                    input.type.genericOwnerDeclarationIndependentLeafPrototypeOrNull() != null
+                else -> false
+            }
         }) {
             return null
         }

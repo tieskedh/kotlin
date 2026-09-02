@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md`](generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md)
+  records the first empty-MethodSpec vector combining strict owner inputs with
+  fixed Boolean/Int/String/Object CLR leaves, its restricted fixed-leaf
+  regular-parameter hand-off to operation routing, exact ordered unboxed IL,
+  hostile mixed-MethodSpec isolation, and the Framework 4.8/.NET 10 erased
+  inverse.
 - [`generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md`](generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md)
   records cardinality-independent strict-owner input vectors for one retained
   split result: repeated authenticated TypeDef slots, complete ordered

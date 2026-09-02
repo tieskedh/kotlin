@@ -202,14 +202,21 @@ operation authority. Producer-side delegate synthesis and constrained producer
 delegate rows remain later schema/emission work.
 
 Physical authority and value provenance remain the active prerequisite to the
-source-built Stdlib census. Eight bounded local-placement forms are executable
+source-built Stdlib census. Bounded local-placement forms are executable
 evidence: equal direct carriers, one unique recorded control-flow construction,
 bare or constructed current-owner parameter entries, a parameterless natural
 `Direct(!n)` result, and a natural `SplitNullable(!n, bool)` result retained in
 two private locals when a positive number of reads are all bare, unprotected
 returns to the same physical MethodDef. Every retained split call consumes one
 final exact-natural operation witness; without a MethodSpec it may have any
-complete ordered vector of identity-preserving `STRICT_OWNER_INPUT(!m)` slots.
+complete ordered vector of identity-preserving `STRICT_OWNER_INPUT(!m)` slots
+and fixed declaration-independent Boolean, Int32, String, or Object leaves.
+Natural and semantic MethodDefs must agree on every fixed leaf. The hand-off to
+operation routing admits only a regular parameter with producer-planned
+`DECLARATION_INDEPENDENT` domain, matching supported fixed leaves on its typed
+and current physical prototypes, and final `Direct(Fixed(same leaf))` storage;
+owner, constructed, broad semantic-object, fallback-object, and MethodDef-
+binder facts remain excluded.
 The first publication slice supplies a positive number of direct occurrences
 of one invariant input. One further
 exact shape composes `<R>(K, R): V?` with open `!K`/`!!R` inputs, an owner-bound
@@ -228,17 +235,20 @@ empty-stack join.
 
 These proofs authorize no cast, semantic adaptation, field/state choice, ABI
 change, or fabricated construction. The split pair is not general local state:
-mixed-domain ordinary vectors, other MethodSpec calls, other control-flow shapes, captures,
+unsupported/nested ordinary carriers, fixed leaves combined with a MethodSpec,
+other MethodSpec calls, other control-flow shapes, captures,
 fields, and every non-return, mixed, protected, other-target, nested-expression,
 or sequential consumer still use their independently proven layout or the
 ordinary materializing boundary. Multiple static direct-return sites are
 admitted only because every executed site terminates its path. Star/projected
 or truly broad source values never gain exact authority from a logical type.
 
-The next sequence is: seed fixed declaration-independent and then remaining
-parameter-entry carriers from physical signature authority; then prove additional
-non-materializing consumer categories, null/bottom/unknown split joins, and explicit
-representation-changing conversions.
+The next sequence is: repair and pin direct constructed-parameter entry so its
+placement validates the live storage-read carrier instead of a reconstructed
+whole-expression carrier; only then expand constructed entry forms. Next prove
+the real caller-MethodDef `!!R` entry and additional non-materializing consumer
+categories, null/bottom/unknown split joins, and explicit representation-
+changing conversions.
 Only after those value rules stabilize should the consumer widen to captures,
 properties, class nodes, MethodImpls, or new Runtime/Stdlib declarations.
 Broader state remains a separate producer-wide proof. A comparison surface may

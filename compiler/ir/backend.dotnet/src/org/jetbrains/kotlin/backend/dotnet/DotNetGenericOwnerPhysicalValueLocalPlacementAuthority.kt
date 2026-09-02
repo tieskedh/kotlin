@@ -322,7 +322,10 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
         if (declaredSlots.size != instantiatedSlots.size) return null
         val admittedDomains = when (methodArity) {
             0 -> declaredSlots.all { slot ->
-                slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT ||
+                        (slot.domain ==
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                                slot.carrier.fixedLeafIlTypeOrNull() != null)
             }
             1 -> declaredSlots.map { slot -> slot.domain } == listOf(
                 DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
@@ -334,27 +337,49 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
             instantiatedSlots.map { slot -> slot.domain }
         ) return null
         val declaredParameterTypes = declaredSlots.map { slot ->
-            val parameter = slot.carrier as?
-                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
-            parameter.bindDeclaredParameterOrNull(
-                operation.method,
-                receiverType.classInfo,
-            ) ?: return null
+            if (methodArity == 0 &&
+                slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+            ) {
+                slot.carrier.fixedLeafIlTypeOrNull() ?: return null
+            } else {
+                val parameter = slot.carrier as?
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+                parameter.bindDeclaredParameterOrNull(
+                    operation.method,
+                    receiverType.classInfo,
+                ) ?: return null
+            }
         }
         if (declaredParameterTypes.withIndex().any { indexed ->
                 val index = indexed.index
                 val type = indexed.value
-                if (methodArity == 1 && index == 1) {
-                    !type.isMethodParameter || type.index != 0
-                } else {
-                    type.isMethodParameter
+                when {
+                    methodArity == 1 && index == 1 -> {
+                        val parameter = type as? DotNetIlValueType.TypeParameter
+                        parameter == null || !parameter.isMethodParameter || parameter.index != 0
+                    }
+                    declaredSlots[index].domain ==
+                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT -> {
+                        val parameter = type as? DotNetIlValueType.TypeParameter
+                        parameter == null || parameter.isMethodParameter
+                    }
+                    else -> type != declaredSlots[index].carrier.fixedLeafIlTypeOrNull()
                 }
             }
         ) return null
-        val parameterTypes = operation.instantiatedSignature.parameterSlots.map { slot ->
-            val parameter = slot.carrier as?
-                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
-            parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner) ?: return null
+        val parameterTypes = operation.instantiatedSignature.parameterSlots.mapIndexed { index, slot ->
+            val declared = declaredSlots[index]
+            if (methodArity == 0 &&
+                declared.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+            ) {
+                val declaredLeaf = declared.carrier.fixedLeafIlTypeOrNull() ?: return null
+                slot.carrier.fixedLeafIlTypeOrNull()?.takeIf { type -> type == declaredLeaf }
+                    ?: return null
+            } else {
+                val parameter = slot.carrier as?
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+                parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner) ?: return null
+            }
         }
         val methodArgumentTypes = operation.methodArguments.map { argument ->
             val parameter = argument as?
@@ -387,6 +412,22 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
             methodArgumentTypes,
             payloadType,
         )
+    }
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.fixedLeafIlTypeOrNull(): DotNetIlValueType? {
+    val kind = (this as? DotNetGenericOwnerSymbolicCarrierReference.Leaf)?.kind ?: return null
+    return when (kind) {
+        DotNetGenericOwnerPhysicalTypeKind.BOOLEAN -> DotNetIlValueType.Boolean
+        DotNetGenericOwnerPhysicalTypeKind.INT32 -> DotNetIlValueType.Int32
+        DotNetGenericOwnerPhysicalTypeKind.STRING -> DotNetIlValueType.String
+        DotNetGenericOwnerPhysicalTypeKind.OBJECT -> DotNetIlValueType.Object
+        DotNetGenericOwnerPhysicalTypeKind.VOID,
+        DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+        DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+        DotNetGenericOwnerPhysicalTypeKind.NAMED,
+        DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+        -> null
     }
 }
 

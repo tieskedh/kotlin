@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
@@ -263,6 +264,12 @@ internal class DotNetBackendContext(
     /** IR-bound value facts; only the explicit final local-placement adapter may consume them. */
     val genericOwnerPhysicalValueShadowRecords:
         MutableList<DotNetGenericOwnerPhysicalValueShadowRecord> = mutableListOf()
+    /** Final fixed-leaf entry facts reused by operation routing for direct parameters only. */
+    val genericOwnerPhysicalValueFixedLeafEntryStorageByFunction:
+        MutableMap<
+                IrSimpleFunctionSymbol,
+                MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+                > = java.util.IdentityHashMap()
     /** Distinguishes a successfully completed final shadow from pre-remap capture or no run. */
     var genericOwnerPhysicalValueShadowFinalAnalysisCompleted: Boolean = false
     /** Bounded final-IR permission to retain one initializer's already-produced local carrier. */
