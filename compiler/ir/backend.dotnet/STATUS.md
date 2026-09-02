@@ -19,8 +19,9 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   `!V lookup<!!R>(!K, !!R, out bool)`, without migrating Runtime `Map`. Exact
   value calls remain unboxed; semantic and ordinary C# routes preserve the
   same object. The exact owner-bound MethodSpec form may also retain that split
-  result through one immutable direct-return local while preserving its open
-  MethodDef binders, MethodSpec, instantiated carriers, and result separately.
+  result through one immutable local whose every use is an unprotected direct
+  return to the same physical MethodDef, while preserving its open MethodDef
+  binders, MethodSpec, instantiated carriers, and result separately.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
@@ -98,12 +99,15 @@ physical MethodDef owner and independently validates the whole initializer,
 every branch at its fixed storage boundary, the direct live parameter read, or
 the live resolved MethodDef result. Fifth, one parameterless exact natural
 `SplitNullable(!n, bool)` result may remain in two compiler-private locals when
-an immutable logical `T?` local has one direct return to an enclosing MethodDef
-with the identical split layout and that return crosses no exception-protected
-region. Both split forms now require the post-final-routing operation consumer
-to publish the exact `IrCall` as a BOUND direct-natural operation after it
-agrees with the completed final router. Sixth, that same pair may survive one
-ordinary argument when its sole instantiated slot is
+an immutable logical `T?` local has a positive number of reads, every read is a
+bare direct return to the same enclosing MethodDef with the identical split
+layout, and no such return crosses an exception-protected region. Multiple
+static return sites are safe only because every executed use terminates its
+path; this is not sequential or general repeated consumption. Every retained
+split form requires the post-final-routing operation consumer to publish the
+exact `IrCall` as a BOUND direct-natural operation after it agrees with the
+completed final router. Sixth, that same pair may survive one ordinary argument
+when its sole instantiated slot is
 `STRICT_OWNER_INPUT(!m)`, payload and input both bind to current-owner
 parameters, and no MethodSpec is present. Seventh, one exact generic shape may
 retain the pair: `<R>(K, R): V?`, where the open slots are
@@ -116,11 +120,13 @@ independently resolves the live virtual MethodDef, requires one unique recorded
 receiver view, validates direct storage reads for receiver and arguments,
 rechecks the open TypeDef/MethodDef binder origins and exact MethodSpec, passes
 only the private Boolean local as the nested call's null-flag address, never the
-enclosing flag, and emits no boxing or logical nullable materialization.
+enclosing flag, and emits no boxing or logical nullable materialization. Before
+declaring the payload/flag locals it also repeats the exhaustive live-use check;
+zero reads, any new non-return read, another return target, or a protected return
+fails closed rather than retaining stale placement authority.
 Every other multi-argument or MethodSpec shape, semantic or `super` routes,
-mutation, joins, captures, multiple reads,
-protected-region returns, and carrier mismatches use the ordinary materializing
-path. Local
+mutation, joins, captures, non-return or mixed reads, protected-region returns,
+and carrier mismatches use the ordinary materializing path. Local
 producer publication now binds each source member bijectively by declaration
 identity to its physical member contract; executable compilations do not need a
 serialized linkage-key table, while external consumers still require the
@@ -133,7 +139,8 @@ evidence is in the
 [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md),
 [split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md),
 [strict-input split-result local](docs/archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md),
-and [MethodSpec split-result local](docs/archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md)
+[MethodSpec split-result local](docs/archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md),
+and [multiple direct returns](docs/archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md)
 archives.
 The focused gate reports 91 green physical-value model tests. Candidate and
 production-erased inverse each cover four green tests across PSI, LightTree,
@@ -199,10 +206,11 @@ authority and value provenance are consolidated in rehearsal mode.
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
 natural parameter entries, one exact direct natural-MethodDef result, and one
-exact split-result pair with a sole direct unprotected return. Every retained
-split call consumes its exact final operation route as the placement witness;
-the call may be parameterless or may carry one final identity-preserving
-`STRICT_OWNER_INPUT` argument. The join uses a logical interface
+exact split-result pair with only a positive number of bare, unprotected direct
+returns to the same physical MethodDef. Every retained split call consumes its
+exact final operation route as the placement witness; the call may be
+parameterless or may carry one final identity-preserving `STRICT_OWNER_INPUT`
+argument. The join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
 from the role-specific physical prototype and is checked against the live
@@ -226,8 +234,10 @@ arity from IR, or claim broad semantic receivers. Producer and consumer now
 also compose this binder with one strict owner input and a split-nullable owner
 result, including producer records, separate Kotlin assemblies, objective PE,
 and ordinary natural-only C# implementations. The next consolidation boundary
-extends split-pair retention to multiple consumers and control-flow joins, then
-closes remaining parameter-entry and general multi-input forms. MethodSpecs
+extends split-pair retention through control-flow initializer joins, then closes
+remaining parameter-entry and general multi-input forms. Every non-return,
+mixed, protected, other-target, or sequential consumer still requires its own
+independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,
 constrained, nullable, nested, foreign, and multiple MethodSpec carriers,
 null/bottom/unknown joins, and explicit representation-changing conversions

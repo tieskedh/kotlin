@@ -352,7 +352,7 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         val operation = authoritativeOperationsByCall[initializer] ?: return@forEach
                         if (split.payloadCarrier != splitStorage.primaryCarrier.carrier ||
                             operation.producedResult != produced ||
-                            !variable.hasSingleDirectReturnUseIn(record.physicalFunction.owner)
+                            !variable.hasOnlyUnprotectedDirectFunctionReturnUsesIn(record.physicalFunction.owner)
                         ) return@forEach
                         val parameter = split.payloadCarrier.type as?
                                 DotNetGenericOwnerSymbolicCarrierReference.Parameter
@@ -447,9 +447,11 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
 }
 
 /**
- * The first split-local slice has exactly one non-materializing consumer: the local is returned
- * directly from the same physical function. Any comparison, argument, capture, copy, or second
- * read must keep using the established materializing path until its own transfer is proven.
+ * A retained split local may be forwarded by any positive number of unprotected direct returns
+ * from the same physical function. Each executed return terminates its path, so these static use
+ * sites never become sequential consumers of the pair. Any comparison, argument, capture, copy,
+ * protected return, or other read keeps using the established materializing path until its own
+ * transfer is proven.
  */
 internal data class DotNetGenericOwnerPhysicalSplitLocalUseSummary(
     val readCount: Int,
@@ -458,8 +460,8 @@ internal data class DotNetGenericOwnerPhysicalSplitLocalUseSummary(
     val protectedRegionReturnCount: Int,
     val returnValueKinds: Set<String>,
 ) {
-    val isSingleDirectFunctionReturn: Boolean
-        get() = readCount == 1 && directFunctionReturnCount == 1 &&
+    val hasOnlyUnprotectedDirectFunctionReturnUses: Boolean
+        get() = readCount > 0 && readCount == directFunctionReturnCount &&
                 directOtherReturnCount == 0 && protectedRegionReturnCount == 0
 }
 
@@ -513,8 +515,8 @@ internal fun IrVariable.splitLocalUseSummaryIn(
     )
 }
 
-internal fun IrVariable.hasSingleDirectReturnUseIn(function: IrSimpleFunction): Boolean =
-    splitLocalUseSummaryIn(function).isSingleDirectFunctionReturn
+internal fun IrVariable.hasOnlyUnprotectedDirectFunctionReturnUsesIn(function: IrSimpleFunction): Boolean =
+    splitLocalUseSummaryIn(function).hasOnlyUnprotectedDirectFunctionReturnUses
 
 private fun DotNetGenericOwnerPhysicalCarrier.bindCurrentOwnerParameterOrNull(
     typeMapper: DotNetIlTypeMapper,

@@ -145,18 +145,27 @@ contradictory layout records, and broader input-policy composition. Evidence is
 recorded in the
 [Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md).
 
-The first local-transport slice retains one parameterless natural
-`SplitNullable(!T, out bool)` result in two compiler-private locals only when it
-has one direct, unprotected return to an enclosing MethodDef with the identical
-split result layout. It proves value, reference, and nullable-value
-substitutions plus ordinary-consumer and exception-region materialization
-negatives. It does not close general exception paths, control flow, fields, or
-acceptance. Evidence is recorded in the
-[split-nullable local-placement archive](../archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md).
+The local-transport authority may retain one natural
+`SplitNullable(!T, out bool)` result in two compiler-private locals only when an
+immutable logical local has a positive number of reads and every read is its
+bare value directly returned to the same enclosing MethodDef with the identical
+split result layout, outside `try`/`catch`/`finally`. The exhaustive rule is
+`readCount > 0`, `readCount == directFunctionReturnCount`, no other-target
+return, and no protected return. Multiple static sites are safe only because
+each executed use terminates its path; this does not admit sequential or mixed
+consumption.
 
-The current placement authority additionally requires the complete final BOUND
-direct-natural operation witness for this parameterless form. A result payload
-or diagnostic snapshot alone no longer grants the original pair token.
+Placement binding checks that rule and the emitter repeats it against live IR
+immediately before declaring the payload/flag locals. A late mismatch fails
+closed rather than retaining stale placement authority. The authority also
+requires the complete final BOUND direct-natural operation witness; a result
+payload or diagnostic snapshot alone never grants the pair token. The first
+slice established the narrower one-return case, value/reference/nullable-value
+substitutions, and ordinary-consumer and exception-region negatives in the
+[local-placement archive](../archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md).
+The positive-N terminal-return extension is recorded in the
+[multiple-direct-returns archive](../archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md).
+General exception paths, control-flow joins, fields, and acceptance remain open.
 
 The second local-transport slice permits exactly one ordinary argument on that
 same operation witness. It does not infer safety from the result layout: the
@@ -178,8 +187,8 @@ time receiver, `!K`/`!!R` parameter vector and `!V` payload, and the independent
 instantiated receiver, parameters, owner-bound `<!m>` MethodSpec and payload.
 This prevents equal call-site carriers from hiding a TypeDef/MethodDef binder
 swap. The sole MethodDef parameter must be fully unconstrained, every call value
-must be a direct exact storage read, and all earlier pair-use restrictions stay
-in force. This proves one composition, not arbitrary MethodSpecs or argument
+must be a direct exact storage read, and the shared exhaustive pair-use policy
+applies. This proves one composition, not arbitrary MethodSpecs or argument
 vectors. Evidence is in the
 [MethodSpec local-placement archive](../archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md).
 

@@ -46,7 +46,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
-import org.jetbrains.kotlin.backend.dotnet.hasSingleDirectReturnUseIn
+import org.jetbrains.kotlin.backend.dotnet.hasOnlyUnprotectedDirectFunctionReturnUsesIn
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
@@ -399,7 +399,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         ): SelectedStorage? {
             variable.type.nullableCurrentOwnerParameterIndexOrNull(owner)?.let { index ->
                 if (variable.initializer !is IrCall ||
-                    !variable.hasSingleDirectReturnUseIn(physical)
+                    !variable.hasOnlyUnprotectedDirectFunctionReturnUsesIn(physical)
                 ) return null
                 val enclosingPayloadIndex = context.splitNullableResultPayloadTypes[physical]
                     ?.exactCurrentOwnerParameterIndexOrNull(owner) ?: return null

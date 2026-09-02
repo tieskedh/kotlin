@@ -3637,7 +3637,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
-    fun `split local use summary admits only one unprotected direct return`() {
+    fun `split local use summary admits only unprotected direct returns`() {
         fun summary(
             reads: Int,
             ownReturns: Int,
@@ -3651,14 +3651,22 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             returnValueKinds = setOf("IrGetValueImpl"),
         )
 
-        assertTrue(summary(reads = 1, ownReturns = 1).isSingleDirectFunctionReturn)
         listOf(
+            summary(reads = 1, ownReturns = 1),
+            summary(reads = 2, ownReturns = 2),
+            summary(reads = 7, ownReturns = 7),
+        ).forEach { admitted ->
+            assertTrue(admitted.hasOnlyUnprotectedDirectFunctionReturnUses, admitted.toString())
+        }
+        listOf(
+            summary(reads = 0, ownReturns = 0),
             summary(reads = 1, ownReturns = 0),
             summary(reads = 2, ownReturns = 1),
+            summary(reads = 1, ownReturns = 2),
             summary(reads = 1, ownReturns = 0, otherReturns = 1),
             summary(reads = 1, ownReturns = 1, protectedReturns = 1),
         ).forEach { hostile ->
-            assertFalse(hostile.isSingleDirectFunctionReturn, hostile.toString())
+            assertFalse(hostile.hasOnlyUnprotectedDirectFunctionReturnUses, hostile.toString())
         }
     }
 
