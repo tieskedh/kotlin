@@ -77,6 +77,8 @@ private class InlineConstructedSourceValue<T>(
     override fun source(): InlineProducer<T> = nested
 }
 
+private fun selectInlineConstructedSource(first: Boolean): Boolean = first
+
 private class InlineConstructedCallRoute<T> {
     fun sourceThroughLocal(
         source: InlineConstructedSource<T>,
@@ -101,6 +103,20 @@ private class InlineConstructedCallRoute<T> {
         val genuinelyBroadCallResultAlias: InlineProducer<Any?> =
             genuinelyBroadSourceAlias.source()
         return genuinelyBroadCallResultAlias
+    }
+
+    fun sourceThroughPathCompleteControlFlow(
+        first: InlineConstructedSource<T>,
+        second: InlineConstructedSource<T>,
+        selectFirst: Boolean,
+    ): InlineProducer<T> {
+        val pathCompleteCallResultAlias: InlineProducer<T> =
+            if (selectInlineConstructedSource(selectFirst)) {
+                first.source()
+            } else {
+                second.source()
+            }
+        return pathCompleteCallResultAlias
     }
 }
 
@@ -374,6 +390,38 @@ fun box(): String {
     )
     if (stringCallResult !== inlineStringProducer || stringCallResult.produce() != "call result") {
         return "reference constructed call-result route"
+    }
+    val secondInlineIntProducer = InlineSecondView(64)
+    val secondInlineIntSource = InlineConstructedSourceValue(secondInlineIntProducer)
+    val pathCompleteIntRoute = InlineConstructedCallRoute<Int>()
+    if (pathCompleteIntRoute.sourceThroughPathCompleteControlFlow(
+            inlineIntSource,
+            secondInlineIntSource,
+            true,
+        ) !== inlineIntProducer ||
+        pathCompleteIntRoute.sourceThroughPathCompleteControlFlow(
+            inlineIntSource,
+            secondInlineIntSource,
+            false,
+        ) !== secondInlineIntProducer
+    ) {
+        return "value path-complete constructed call-result route"
+    }
+    val secondInlineStringProducer = InlineSecondView("other call result")
+    val secondInlineStringSource = InlineConstructedSourceValue(secondInlineStringProducer)
+    val pathCompleteStringRoute = InlineConstructedCallRoute<String>()
+    if (pathCompleteStringRoute.sourceThroughPathCompleteControlFlow(
+            inlineStringSource,
+            secondInlineStringSource,
+            true,
+        ) !== inlineStringProducer ||
+        pathCompleteStringRoute.sourceThroughPathCompleteControlFlow(
+            inlineStringSource,
+            secondInlineStringSource,
+            false,
+        ) !== secondInlineStringProducer
+    ) {
+        return "reference path-complete constructed call-result route"
     }
     val widenedIntCallResult = InlineConstructedCallRoute<Int>().sourceThroughWidenedLocal(
         inlineIntSource,

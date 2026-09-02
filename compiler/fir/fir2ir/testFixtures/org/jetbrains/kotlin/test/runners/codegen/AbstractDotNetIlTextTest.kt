@@ -2989,6 +2989,180 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     "result without adaptation: forbidden=$forbiddenCallResultAdaptation, " +
                     "calls=$exactConstructedSourceCalls, method=$exactCallResultMethod"
         }
+        val pathCompleteCallResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
+                    comparison.prediction.sourceFunctionName ==
+                    "sourceThroughPathCompleteControlFlow" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "pathCompleteCallResultAlias"
+        }
+        check(pathCompleteCallResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    prediction.storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                    carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                    carrier.localTypeDefView ==
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                    carrier.ownerParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName
+                        ?.endsWith("InlineConstructedCallRoute") == true &&
+                    prediction.storageCarrier == carrier &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.singleOrNull()?.carrier == carrier &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineConstructedCallRoute") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "The path-complete result join must retain one exact InlineProducer<!T> carrier: " +
+                    "result=$pathCompleteCallResultAlias, all=$comparisons"
+        }
+        val pathCompleteMethod = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            "'sourceThroughPathCompleteControlFlow'(" in header &&
+                    "'pathCompleteCallResultAlias'" in method
+        }
+        val pathCompleteSlot = pathCompleteMethod?.let { method ->
+            Regex(
+                """\[(\d+)]\s+class\s+'InlineProducer`1'<!0>\s+""" +
+                        """'pathCompleteCallResultAlias'""",
+            ).find(method)?.groupValues?.get(1)?.toInt()
+        }
+        val pathCompleteStore = pathCompleteSlot?.let { slot ->
+            if (slot in 0..3) "stloc.$slot" else "stloc $slot"
+        }
+        val pathCompleteLoad = pathCompleteSlot?.let { slot ->
+            if (slot in 0..3) "ldloc.$slot" else "ldloc $slot"
+        }
+        val pathCompleteInstructions = pathCompleteMethod?.lineSequence()
+            ?.map(String::trim)
+            ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
+            ?.toList()
+        val pathCompleteConditionCalls = pathCompleteInstructions.orEmpty().filter { line ->
+            line.startsWith("call ") &&
+                    "::'selectInlineConstructedSource'(bool)" in line
+        }
+        val pathCompleteConditionBranchIndex = pathCompleteInstructions?.indices?.singleOrNull { index ->
+            index + 1 < pathCompleteInstructions.size &&
+                    pathCompleteInstructions[index] in pathCompleteConditionCalls &&
+                    Regex("^brfalse(?:\\.s)?\\s+(\\S+)$")
+                        .matches(pathCompleteInstructions[index + 1])
+        }
+        val pathCompleteFalseLabel = pathCompleteConditionBranchIndex?.let { index ->
+            Regex("^brfalse(?:\\.s)?\\s+(\\S+)$")
+                .matchEntire(pathCompleteInstructions[index + 1])
+                ?.groupValues
+                ?.get(1)
+        }
+        val pathCompleteFalseLabelIndex = pathCompleteFalseLabel?.let { label ->
+            pathCompleteInstructions.indexOf("$label:").takeIf { index -> index >= 0 }
+        }
+        val pathCompleteSourceCalls = pathCompleteInstructions.orEmpty().filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'source'()" in line
+        }
+        val pathCompleteSourceCallIndices = pathCompleteInstructions?.indices?.filter { index ->
+            val line = pathCompleteInstructions[index]
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'source'()" in line
+        }.orEmpty()
+        val pathCompleteJoinLabel = pathCompleteSourceCallIndices.firstOrNull()?.let { index ->
+            pathCompleteInstructions?.getOrNull(index + 1)?.let { instruction ->
+                Regex("^br(?:\\.s)?\\s+(\\S+)$")
+                    .matchEntire(instruction)
+                    ?.groupValues
+                    ?.get(1)
+            }
+        }
+        val pathCompleteJoinLabelIndex = pathCompleteJoinLabel?.let { label ->
+            pathCompleteInstructions?.indexOf("$label:")?.takeIf { index -> index >= 0 }
+        }
+        val pathCompleteStoreIndex = pathCompleteInstructions?.indexOf(pathCompleteStore)
+            ?.takeIf { index -> index >= 0 }
+        val pathCompleteResultInstructions = if (
+            pathCompleteConditionBranchIndex != null && pathCompleteStoreIndex != null &&
+            pathCompleteConditionBranchIndex < pathCompleteStoreIndex
+        ) {
+            pathCompleteInstructions.subList(
+                pathCompleteConditionBranchIndex + 1,
+                pathCompleteStoreIndex + 1,
+            )
+        } else {
+            emptyList()
+        }
+        val forbiddenPathCompleteAdaptation = listOf(
+            "box ",
+            "unbox.any",
+            "castclass",
+            "isinst",
+            "KotlinSemantic",
+            "InvokeRecordedMember",
+            "InvokeUniqueMember",
+            "GenericInterfaceDispatch",
+        ).filter { token -> pathCompleteResultInstructions.any { line -> token in line } }
+        check(pathCompleteMethod != null && pathCompleteSlot != null &&
+                pathCompleteStore != null && pathCompleteLoad != null &&
+                Regex(
+                    """class\s+'InlineProducer`1'<!0>\s+""" +
+                            """'sourceThroughPathCompleteControlFlow'\(""",
+                ).containsMatchIn(pathCompleteMethod.substringBefore('{')) &&
+                pathCompleteConditionCalls.size == 1 &&
+                pathCompleteInstructions != null &&
+                pathCompleteInstructions.windowed(3).any { instructions ->
+                    instructions[0] == "ldarg.3" &&
+                            instructions[1] == pathCompleteConditionCalls.single() &&
+                            Regex("^brfalse(?:\\.s)?\\s+\\S+$").matches(instructions[2])
+                } && pathCompleteConditionBranchIndex != null &&
+                pathCompleteFalseLabelIndex != null &&
+                pathCompleteSourceCalls.size == 2 &&
+                pathCompleteSourceCalls.all { call ->
+                    Regex(
+                        """^callvirt\s+instance\s+class\s+'InlineProducer`1'<!0>\s+""" +
+                                """class\s+'InlineConstructedSource`1'<!0>::'source'\(\)$""",
+                    ).matches(call)
+                } && pathCompleteSourceCallIndices.size == 2 &&
+                pathCompleteConditionBranchIndex < pathCompleteSourceCallIndices[0] &&
+                pathCompleteInstructions[pathCompleteSourceCallIndices[0] - 1] == "ldarg.1" &&
+                pathCompleteSourceCallIndices[0] < pathCompleteFalseLabelIndex &&
+                pathCompleteJoinLabelIndex != null &&
+                pathCompleteSourceCallIndices[0] + 1 < pathCompleteFalseLabelIndex &&
+                pathCompleteFalseLabelIndex < pathCompleteSourceCallIndices[1] &&
+                pathCompleteInstructions[pathCompleteSourceCallIndices[1] - 1] == "ldarg.2" &&
+                pathCompleteStoreIndex != null &&
+                pathCompleteJoinLabelIndex == pathCompleteSourceCallIndices[1] + 1 &&
+                pathCompleteStoreIndex == pathCompleteJoinLabelIndex + 1 &&
+                pathCompleteInstructions.count { instruction ->
+                    instruction == pathCompleteStore
+                } == 1 && pathCompleteInstructions.windowed(2).any { instructions ->
+                    instructions == listOf(pathCompleteLoad, "ret")
+                } && forbiddenPathCompleteAdaptation.isEmpty()
+        ) {
+            "The path-complete control-flow result did not join two natural MethodDef calls " +
+                    "into one exact local without adaptation: " +
+                    "forbidden=$forbiddenPathCompleteAdaptation, " +
+                    "conditionCalls=$pathCompleteConditionCalls, " +
+                    "conditionBranch=$pathCompleteConditionBranchIndex, " +
+                    "falseLabel=$pathCompleteFalseLabelIndex, " +
+                    "joinLabel=$pathCompleteJoinLabelIndex, " +
+                    "calls=$pathCompleteSourceCalls, method=$pathCompleteMethod"
+        }
         val widenedCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
             val header = method.substringBefore('{')
             "'sourceThroughWidenedLocal'(" in header &&

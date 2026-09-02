@@ -490,6 +490,43 @@ supplies no replacement evidence. An actual `IMPLICIT_NOTNULL` may refine
 refinement which preserves every operation-guaranteed view and existing
 lineage; lineage remains only a selector over independently guaranteed views.
 
+The same fourth form may contain more than one mutually exclusive direct call
+without weakening those requirements. Its first result-path grammar is exactly:
+
+```text
+DirectResult := DirectCall
+              | IMPLICIT_CAST(DirectResult)
+              | IMPLICIT_NOTNULL(DirectResult)
+              | non-returnable IrBlock([DirectResult])
+              | IrComposite([DirectResult])
+              | exhaustive IrWhen(ReachableResult+)
+```
+
+The bracketed block/composite list contains exactly one expression. An admitted
+`IrWhen` has at least two non-statically-false reachable arms, terminates in a
+true/else arm, has no non-false arm after that terminal arm, and recursively
+admits every reachable result. Each leaf must independently satisfy the
+complete call rule above and produce the same retained carrier/fact.
+
+The plan identity-binds the initializer root and the ordered result spine:
+identity wrappers, admitted containers/joins, result expressions, leaf calls,
+and per-path not-null refinement. It does not identity-bind the whole IR child
+tree. Conditions, branch objects, receivers, and arguments are not result-spine
+authority; receiver and argument facts remain subject to the independent
+operation/emitter checks. A live rewalk must recover the same root and ordered
+result-spine identities under the same reachability grammar. Every leaf retains
+its complete final physical operation, including the selected MethodDef, and
+late emission must rebind that exact operation/MethodDef as well as its result
+carrier. An unrelated MethodDef with the same return carrier cannot satisfy the
+plan.
+
+A container prefix is outside this admission, because a local introduced there
+has no live CLR slot at the enclosing pre-emission placement boundary. The
+model proves `IrBlock`, `IrComposite`, and exhaustive `IrWhen`; the current
+emitted/executed final-IR proof contains `IrBlock`/`IrWhen`. `IrComposite` is
+therefore model-only evidence in this checkpoint, not an assertion that this
+source fixture emits it.
+
 An exact construction retained through a logically widened open-interface view
 does not establish that natural and semantic calls are equivalent for every
 dynamic implementation. For the same-compilation route, such a call stays
@@ -582,10 +619,24 @@ ordinary foreign-CLR implementations, semantic hooks, and split/open-nullable
 results remain semantic. Production-erased producers publish no `J` or `K` and
 create neither obligations, retained placements, nor emitter witnesses.
 
-Until path-complete operation plans exist, call-bearing `IrWhen`, block, and
-composite initializers receive no retained direct placement. A denied direct
-call also invalidates transitive aliases derived from its predicted carrier;
-legacy compiler-temporary/nested-construction recognizers cannot recreate it.
+Direct call-result placement may use only the exact result-path grammar above.
+It binds root/result-spine identity rather than whole-tree identity, and every
+leaf owns an independent final natural-operation witness whose exact retained
+MethodDef and result carrier are rebound before local placement. Calls in
+conditions, receivers, or arguments are not result evidence. Prefix-bearing
+containers, mixed call/read/null/bottom paths, returnable blocks, and
+non-exhaustive control flow remain unavailable. A denied result path also
+invalidates transitive aliases derived from its predicted carrier; legacy
+compiler-temporary/nested-construction recognizers cannot recreate it.
+
+The existing split-nullable control-flow collector is temporarily narrower: it
+admits a flat exhaustive `IrWhen` whose result is a direct call or one
+single-expression non-returnable `IrBlock`, and it separately carries the
+payload/flag policy. This is a bounded proof restriction, not a second
+fundamental control-flow grammar. It should converge on the same structural
+result-spine traversal once every leaf can retain and late-rebind its complete
+split operation, payload carrier, and out-flag obligation. Until then, the
+direct-result grammar grants no split-nullable placement authority.
 
 The constructed-result extension is presently a local BOUND-declaration proof,
 not an external ABI promise. Its first admission is one non-null natural

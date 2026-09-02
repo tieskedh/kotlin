@@ -7,12 +7,142 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrComposite
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrReturnableBlock
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import java.util.IdentityHashMap
+
+/** One exact call which supplies a direct initializer result on one reachable path. */
+internal data class DotNetGenericOwnerPhysicalDirectResultCallSite(
+    val call: IrCall,
+    val hasImplicitNotNull: Boolean,
+)
+
+/**
+ * Identity-bound description of every call which can supply one direct initializer result.
+ *
+ * This is a result-path plan, not a recursive call inventory. Conditions, receivers, and call
+ * arguments execute normally but do not supply the enclosing value. Result-only blocks and
+ * composites contribute no physical fact of their own; they merely preserve their sole
+ * expression. Every reachable branch of an exhaustive [IrWhen] must end in an admitted call.
+ */
+internal class DotNetGenericOwnerPhysicalDirectResultInitializerPlan private constructor(
+    private val initializer: IrExpression,
+    private val resultPathNodesInTraversalOrder: List<IrExpression>,
+    val callsInEvaluationOrder: List<DotNetGenericOwnerPhysicalDirectResultCallSite>,
+) {
+    init {
+        require(resultPathNodesInTraversalOrder.isNotEmpty()) {
+            "a direct-result initializer plan requires at least one result-path node"
+        }
+        require(callsInEvaluationOrder.isNotEmpty()) {
+            "a direct-result initializer plan requires at least one call"
+        }
+    }
+
+    /** Rewalks the live tree and rejects a replaced root, spine, branch, or call identity. */
+    fun matchesLiveInitializer(liveInitializer: IrExpression): Boolean {
+        if (liveInitializer !== initializer) return false
+        val live = liveInitializer.dotNetPhysicalDirectResultInitializerPlanOrNull()
+            ?: return false
+        return live.resultPathNodesInTraversalOrder.hasSameIdentitySequence(
+            resultPathNodesInTraversalOrder,
+        ) && live.callsInEvaluationOrder.size == callsInEvaluationOrder.size &&
+                live.callsInEvaluationOrder.indices.all { index ->
+                    val expected = callsInEvaluationOrder[index]
+                    val actual = live.callsInEvaluationOrder[index]
+                    actual.call === expected.call &&
+                            actual.hasImplicitNotNull == expected.hasImplicitNotNull
+                }
+    }
+
+    companion object {
+        fun createOrNull(
+            initializer: IrExpression,
+        ): DotNetGenericOwnerPhysicalDirectResultInitializerPlan? {
+            val nodes = mutableListOf<IrExpression>()
+            val calls = mutableListOf<DotNetGenericOwnerPhysicalDirectResultCallSite>()
+            val seenCalls = IdentityHashMap<IrCall, Unit>()
+
+            fun collect(expression: IrExpression, hasImplicitNotNull: Boolean): Boolean {
+                nodes += expression
+                return when (expression) {
+                    is IrCall -> {
+                        if (seenCalls.put(expression, Unit) != null) return false
+                        calls += DotNetGenericOwnerPhysicalDirectResultCallSite(
+                            expression,
+                            hasImplicitNotNull,
+                        )
+                        true
+                    }
+                    is IrTypeOperatorCall -> if (
+                        expression.operator == IrTypeOperator.IMPLICIT_CAST ||
+                        expression.operator == IrTypeOperator.IMPLICIT_NOTNULL
+                    ) {
+                        collect(
+                            expression.argument,
+                            hasImplicitNotNull ||
+                                    expression.operator == IrTypeOperator.IMPLICIT_NOTNULL,
+                        )
+                    } else {
+                        false
+                    }
+                    is IrBlock -> if (expression is IrReturnableBlock) {
+                        false
+                    } else {
+                        val result = expression.statements.singleOrNull() as? IrExpression
+                            ?: return false
+                        collect(result, hasImplicitNotNull)
+                    }
+                    is IrComposite -> {
+                        val result = expression.statements.singleOrNull() as? IrExpression
+                            ?: return false
+                        collect(result, hasImplicitNotNull)
+                    }
+                    is IrWhen -> {
+                        var hasElse = false
+                        var reachableBranchCount = 0
+                        for (indexedBranch in expression.branches.withIndex()) {
+                            val index = indexedBranch.index
+                            val branch = indexedBranch.value
+                            if (branch.condition.isFalseConst()) continue
+                            if (!collect(branch.result, hasImplicitNotNull)) return false
+                            reachableBranchCount++
+                            if (branch.condition.isTrueConst()) {
+                                if (expression.branches.drop(index + 1)
+                                        .any { later -> !later.condition.isFalseConst() }
+                                ) return false
+                                hasElse = true
+                                break
+                            }
+                        }
+                        hasElse && reachableBranchCount >= 2
+                    }
+                    else -> false
+                }
+            }
+
+            if (!collect(initializer, hasImplicitNotNull = false)) return null
+            return DotNetGenericOwnerPhysicalDirectResultInitializerPlan(
+                initializer,
+                nodes,
+                calls,
+            )
+        }
+    }
+}
+
+internal fun IrExpression.dotNetPhysicalDirectResultInitializerPlanOrNull():
+        DotNetGenericOwnerPhysicalDirectResultInitializerPlan? =
+    DotNetGenericOwnerPhysicalDirectResultInitializerPlan.createOrNull(this)
+
+private fun List<IrExpression>.hasSameIdentitySequence(other: List<IrExpression>): Boolean =
+    size == other.size && indices.all { index -> this[index] === other[index] }
 
 /**
  * Returns the one operation carried by a control-flow arm without admitting a general block.

@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-path-complete-direct-result-calls-2026-09-03.md`](generic-owner-path-complete-direct-result-calls-2026-09-03.md)
+  records the identity-bound result-path plan for direct generic-owner calls
+  through single-expression non-returnable block/composite spines and
+  exhaustive control flow, its per-leaf exact operation/MethodDef rebinding,
+  model-only composite boundary, hostile prefix/non-exhaustive exclusions,
+  exact IL shape, and unchanged production-erased inverse.
 - [`generic-owner-external-semantic-equivalence-routing-2026-09-02.md`](generic-owner-external-semantic-equivalence-routing-2026-09-02.md)
   records the first bounded PE-stamped external `K` consumer: independent exact
   value/operation proof, transactional semantic-to-natural replacement, late
