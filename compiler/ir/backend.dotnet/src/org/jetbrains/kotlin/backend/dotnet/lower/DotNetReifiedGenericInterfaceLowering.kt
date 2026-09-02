@@ -2255,9 +2255,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
     /**
      * First declaration-independent callable composition proof: one invariant owner parameter is
-     * consumed directly and a different covariant owner parameter is returned through the
-     * split-nullable convention. Names, declaration order, packages, and stdlib ownership carry
-     * no authority.
+     * consumed through one or more direct inputs and a different covariant owner parameter is
+     * returned through the split-nullable convention. Names, declaration order, packages, and
+     * stdlib ownership carry no authority.
      */
     private fun IrClass.directOwnerInputSplitNullableOutputMemberOrNull(): IrSimpleFunction? {
         if (!hasLogicalReifiedInterfaceOwnerShape() || typeParameters.size != 2 ||
@@ -2597,7 +2597,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     input.type.referencesTypeParameterOf(parameter.parent as IrClass)
                 }
 
-    /** One direct owner-parameter input composed with a direct open-nullable owner output. */
+    /** One or more direct occurrences of one owner input composed with an open-nullable output. */
     private fun IrSimpleFunction.directOwnerInputSplitNullableParametersOrNull(
         owner: IrClass,
     ): Pair<IrTypeParameter, IrTypeParameter>? {
@@ -2614,8 +2614,10 @@ internal class DotNetReifiedGenericInterfaceLowering(
             (inputType.classifier as? IrTypeParameterSymbol)?.owner
                 ?.takeIf { parameter -> parameter in owner.typeParameters }
         }
-        if (directOwnerInputs.size != 1) return null
-        val directOwnerInput = directOwnerInputs.single()
+        // Repeated owner slots are proved only for an empty MethodSpec. Preserve the existing
+        // `<R>(K, R): V?` declaration boundary until mixed vectors have their own full proof.
+        if (typeParameters.isNotEmpty() && directOwnerInputs.size != 1) return null
+        val directOwnerInput = directOwnerInputs.distinct().singleOrNull() ?: return null
         if (!inputs.all { input ->
             val inputType = input.type as? IrSimpleType ?: return@all false
             if (inputType.isMarkedNullable()) return@all false

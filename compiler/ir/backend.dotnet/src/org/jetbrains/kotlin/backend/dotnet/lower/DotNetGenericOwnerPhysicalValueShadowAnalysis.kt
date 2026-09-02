@@ -542,10 +542,11 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
          * selects only a construction of its owner which the receiver already guarantees. The
          * shared physical operation query then instantiates the recorded result layout. Super and
          * semantic routes remain excluded. Direct results retain the first parameterless,
-         * non-MethodSpec boundary. Split results additionally admit either one exact-routed strict
-         * owner input, or the bounded `<R>(K, R): V?` composition whose open `!n`/`!!n` slots,
-         * exact owner-bound MethodSpec and instantiated arguments are independently proven.
-         * Broader inputs and every other multi-input or MethodSpec shape remain operation-only.
+         * non-MethodSpec boundary. Split results additionally admit a complete zero-or-more
+         * `STRICT_OWNER_INPUT` vector with no MethodSpec, or the bounded `<R>(K, R): V?`
+         * composition whose open `!n`/`!!n` slots, exact owner-bound MethodSpec and instantiated
+         * arguments are independently proven. Broader/declaration-independent inputs and every
+         * other MethodSpec shape remain operation-only.
          */
         private fun evaluateCallResultOrNull(
             expression: IrCall,
@@ -609,73 +610,72 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                         val ordinaryParameters = source.parameters.filter { parameter ->
                             parameter.kind != IrParameterKind.DispatchReceiver
                         }
+                        val declaredSlots = selectedRoute.method.signature.parameterSlots
                         val slots = selectedRoute.instantiatedSignature.parameterSlots
-                        when (slots.size) {
-                            0 -> ordinaryParameters.isEmpty() &&
-                                    source.typeParameters.isEmpty() &&
-                                    selectedRoute.methodArguments.isEmpty() &&
-                                    selectedRoute.instantiatedSignature.genericArity == 0
-                            1 -> ordinaryParameters.size == 1 &&
-                                    source.typeParameters.isEmpty() &&
-                                    selectedRoute.methodArguments.isEmpty() &&
-                                    selectedRoute.instantiatedSignature.genericArity == 0 &&
-                                    slots.single().domain ==
-                                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                        val declaredResult = selectedRoute.method.signature.resultLayout as?
+                                DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable
+                        val instantiatedResult =
+                            selectedRoute.instantiatedSignature.resultLayout as?
+                                DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable
+                        val hasExactOwnerSplitResult =
+                            declaredResult?.payloadSlot?.domain ==
+                                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                                    declaredResult.payloadSlot.carrier.isTypeParameterOf(
+                                        selectedRoute.method.declaringType,
+                                    ) &&
+                                    instantiatedResult?.payloadSlot?.domain ==
+                                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
                                     ownerAuthority.ownerParameterCarriers.any { carrier ->
-                                        carrier.type == slots.single().carrier
+                                        carrier.type == instantiatedResult.payloadSlot.carrier
+                                    } && instantiatedResult.payloadSlot.carrier ==
+                                produced.layout.payloadCarrier.type
+                        val hasExactStrictOwnerInputVector =
+                            ordinaryParameters.size == declaredSlots.size &&
+                                    declaredSlots.size == slots.size &&
+                                    source.typeParameters.isEmpty() &&
+                                    selectedRoute.method.signature.genericArity == 0 &&
+                                    selectedRoute.instantiatedSignature.genericArity == 0 &&
+                                    selectedRoute.method.genericParameters.isEmpty() &&
+                                    selectedRoute.methodArguments.isEmpty() &&
+                                    declaredSlots.all { slot ->
+                                        slot.domain ==
+                                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                                                slot.carrier.isTypeParameterOf(
+                                                    selectedRoute.method.declaringType,
+                                                )
+                                    } && slots.map { slot -> slot.domain } ==
+                                declaredSlots.map { slot -> slot.domain } &&
+                                    slots.all { slot ->
+                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                            carrier.type == slot.carrier
+                                        }
                                     }
-                            2 -> {
-                                val declaredSlots = selectedRoute.method.signature.parameterSlots
-                                val methodArgument = selectedRoute.methodArguments.singleOrNull()
-                                val declaredResult = selectedRoute.method.signature.resultLayout as?
-                                        DotNetGenericOwnerPhysicalCallableResultLayoutReference
-                                            .SplitNullable
-                                val instantiatedResult =
-                                    selectedRoute.instantiatedSignature.resultLayout as?
-                                        DotNetGenericOwnerPhysicalCallableResultLayoutReference
-                                            .SplitNullable
-                                ordinaryParameters.size == 2 &&
-                                        source.typeParameters.size == 1 &&
-                                        selectedRoute.method.signature.genericArity == 1 &&
-                                        selectedRoute.instantiatedSignature.genericArity == 1 &&
-                                        selectedRoute.method.genericParameters.singleOrNull()
-                                            ?.isUnconstrained == true &&
-                                        declaredSlots.map { slot -> slot.domain } == listOf(
-                                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
-                                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
-                                        ) &&
-                                        slots.map { slot -> slot.domain } ==
-                                        declaredSlots.map { slot -> slot.domain } &&
-                                        declaredSlots[0].carrier.isTypeParameterOf(
-                                            selectedRoute.method.declaringType,
-                                        ) &&
-                                        declaredSlots[1].carrier.isMethodParameterOf(
-                                            selectedRoute.method.identity,
-                                            index = 0,
-                                        ) &&
-                                        methodArgument != null &&
-                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
-                                            carrier.type == methodArgument
-                                        } &&
-                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
-                                            carrier.type == slots[0].carrier
-                                        } &&
-                                        slots[1].carrier == methodArgument &&
-                                        declaredResult?.payloadSlot?.domain ==
-                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
-                                        declaredResult.payloadSlot.carrier.isTypeParameterOf(
-                                            selectedRoute.method.declaringType,
-                                        ) &&
-                                        instantiatedResult?.payloadSlot?.domain ==
-                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
-                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
-                                            carrier.type == instantiatedResult.payloadSlot.carrier
-                                        } &&
-                                        instantiatedResult.payloadSlot.carrier ==
-                                        produced.layout.payloadCarrier.type
-                            }
-                            else -> false
-                        }
+                        val methodArgument = selectedRoute.methodArguments.singleOrNull()
+                        val hasBoundedOwnerMethodInputVector =
+                            ordinaryParameters.size == 2 && declaredSlots.size == 2 &&
+                                    slots.size == 2 && source.typeParameters.size == 1 &&
+                                    selectedRoute.method.signature.genericArity == 1 &&
+                                    selectedRoute.instantiatedSignature.genericArity == 1 &&
+                                    selectedRoute.method.genericParameters.singleOrNull()
+                                        ?.isUnconstrained == true &&
+                                    declaredSlots.map { slot -> slot.domain } == listOf(
+                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                                    ) && slots.map { slot -> slot.domain } ==
+                                declaredSlots.map { slot -> slot.domain } &&
+                                    declaredSlots[0].carrier.isTypeParameterOf(
+                                        selectedRoute.method.declaringType,
+                                    ) && declaredSlots[1].carrier.isMethodParameterOf(
+                                        selectedRoute.method.identity,
+                                        index = 0,
+                                    ) && methodArgument != null &&
+                                    ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                        carrier.type == methodArgument
+                                    } && ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                        carrier.type == slots[0].carrier
+                                    } && slots[1].carrier == methodArgument
+                        hasExactOwnerSplitResult &&
+                                (hasExactStrictOwnerInputVector || hasBoundedOwnerMethodInputVector)
                     }
                     DotNetGenericOwnerProducedValueLayout.Null,
                     DotNetGenericOwnerProducedValueLayout.Unknown,

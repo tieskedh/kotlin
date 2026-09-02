@@ -647,10 +647,16 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE ||
                     !sourceResultType.isMarkedNullable() || owner.typeParameters.size != 2
                 ) return null
-                val ownerInput = parameterBindings.filterIsInstance<CallableParameterBinding.Owner>()
+                val ownerInputs = parameterBindings
+                    .filterIsInstance<CallableParameterBinding.Owner>()
+                // Repeated owner slots are currently an empty-MethodSpec proof. Do not let
+                // producer-record consumption silently widen the existing `<R>(K, R)` grammar.
+                if (methodGenericArity > 0 && ownerInputs.size != 1) return null
+                val ownerInputIndex = ownerInputs.map(CallableParameterBinding.Owner::index)
+                    .distinct()
                     .singleOrNull() ?: return null
-                val inputParameter = owner.typeParameters.getOrNull(ownerInput.index) ?: return null
-                if (ownerInput.index == resultParameterIndex ||
+                val inputParameter = owner.typeParameters.getOrNull(ownerInputIndex) ?: return null
+                if (ownerInputIndex == resultParameterIndex ||
                     inputParameter.variance != Variance.INVARIANT ||
                     resultParameter.variance != Variance.OUT_VARIANCE
                 ) return null

@@ -106,10 +106,12 @@ static return sites are safe only because every executed use terminates its
 path; this is not sequential or general repeated consumption. Every retained
 split form requires the post-final-routing operation consumer to publish the
 exact `IrCall` as a BOUND direct-natural operation after it agrees with the
-completed final router. Sixth, that same pair may survive one ordinary argument
-when its sole instantiated slot is
-`STRICT_OWNER_INPUT(!m)`, payload and input both bind to current-owner
-parameters, and no MethodSpec is present. Seventh, one exact generic shape may
+completed final router. Sixth, that same pair may survive any complete ordered
+ordinary-argument vector whose instantiated slots are all
+`STRICT_OWNER_INPUT(!m)`, whose payload and every input independently bind to
+current-owner parameters, and whose MethodSpec is empty. The first publication
+slice requires a positive number of direct occurrences of one invariant owner
+input, but placement itself is cardinality-independent. Seventh, one exact generic shape may
 retain the pair: `<R>(K, R): V?`, where the open slots are
 `STRICT_OWNER_INPUT(!K)` and `DECLARATION_INDEPENDENT(!!R)`, the result is
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)`, and the sole MethodSpec
@@ -133,7 +135,7 @@ or a non-returnable, same-typed single-call FIR2IR arm block is transparent.
 Placement and emission rerun the same identity-keyed ordered shape, validate
 every live call separately, store every result into the same pair, and join with
 an empty evaluation stack before one common return tail.
-Every other multi-argument or MethodSpec shape, semantic or `super` routes,
+Every mixed-domain ordinary vector or other MethodSpec shape, semantic or `super` routes,
 mutation, other control-flow shapes, captures, non-return or mixed reads,
 protected-region returns, and carrier mismatches use the ordinary materializing
 path. Local
@@ -149,6 +151,7 @@ evidence is in the
 [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md),
 [split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md),
 [strict-input split-result local](docs/archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md),
+[repeated-input split-result local](docs/archive/generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md),
 [MethodSpec split-result local](docs/archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md),
 [multiple direct returns](docs/archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md),
 and [split control flow](docs/archive/generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md)
@@ -221,8 +224,9 @@ exact split-result pair with only a positive number of bare, unprotected direct
 returns to the same physical MethodDef. That pair may now also be initialized
 by a flat exhaustive branch family when every exact arm independently produces
 the same physical payload. Every retained split call consumes its exact final
-operation route as the placement witness; a call may be parameterless or may
-carry one final identity-preserving `STRICT_OWNER_INPUT` argument. The reference
+operation route as the placement witness; a non-MethodSpec call may carry any
+complete ordered vector of final identity-preserving `STRICT_OWNER_INPUT`
+arguments. The reference
 join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
@@ -247,9 +251,10 @@ arity from IR, or claim broad semantic receivers. Producer and consumer now
 also compose this binder with one strict owner input and a split-nullable owner
 result, including producer records, separate Kotlin assemblies, objective PE,
 and ordinary natural-only C# implementations. Split-pair control-flow
-initializer joins are now closed for the flat calls-only form. The next
-consolidation boundary closes remaining parameter-entry and general multi-input
-forms. Every non-return,
+initializer joins are now closed for the flat calls-only form, and repeated
+strict owner inputs now use the same full-vector operation witness without an
+arity recognizer. The next consolidation boundary closes fixed declaration-
+independent and remaining parameter-entry forms. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,

@@ -499,11 +499,14 @@ Pair placement for this form now also consumes the complete final BOUND
 `EXACT_NATURAL` / `DIRECT_NATURAL` / `MATCH` operation witness. Result layout or
 payload evidence alone is insufficient even for a parameterless call.
 
-The sixth bounded form changes only the initializer operation grammar. The
-split call may have exactly one ordinary parameter. The instantiated parameter vector must
-contain exactly one `STRICT_OWNER_INPUT` slot whose carrier is a current-owner
-parameter; the payload must independently bind to a current-owner parameter,
-and the MethodSpec vector must be empty. Placement retains the complete
+The sixth bounded form changes only the initializer operation grammar. A split
+call without a MethodSpec may have any complete ordered ordinary-parameter
+vector. Every declared slot must be `STRICT_OWNER_INPUT` on its selected
+natural TypeDef, every instantiated slot and live argument must independently
+bind to a current-owner parameter, and the payload must independently bind to a
+current-owner parameter. The first declaration-publication slice requires one
+or more direct occurrences of the same unique invariant input parameter; the
+consumer and retained witness have no cardinality branch. Placement retains the complete
 operation witness: physical MethodDef identity, required receiver construction,
 instantiated ordinary parameter vector, empty MethodSpec vector, and split
 result layout. The late emitter re-resolves that MethodDef, requires a unique
@@ -525,8 +528,8 @@ vector and payload separately from the instantiated receiver, parameters,
 MethodSpec vector and payload. The late emitter validates both layers against
 the exact live MethodDef before passing the private Boolean local. Equal
 instantiated carriers therefore cannot conceal a TypeDef/MethodDef binder swap.
-Every other MethodSpec or multi-input shape remains unavailable; the fifth and
-sixth forms remain independently bounded.
+Every other MethodSpec or mixed-domain input shape remains unavailable; the
+fifth and sixth forms remain independently bounded.
 
 #### Joins
 
@@ -741,7 +744,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
 | `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
-| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, one exact-natural single-`STRICT_OWNER_INPUT` operation, and the exact `<R>(K, R): V?` MethodSpec composition. Each admitted pair may have a positive number of mutually exclusive terminal direct-return uses; every other use category, control-flow join, MethodSpec, or multi-argument operation requires an independent policy. |
+| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, a complete non-MethodSpec vector of exact-natural `STRICT_OWNER_INPUT` operations, and the exact `<R>(K, R): V?` MethodSpec composition. Each admitted pair may have a positive number of mutually exclusive terminal direct-return uses; every other use category, control-flow join, mixed-domain or other MethodSpec operation requires an independent policy. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 
@@ -926,8 +929,9 @@ directly declared slots on root natural interfaces with no direct edges or
 generic constraints and only declaration-local carriers. Semantic member role,
 parameter domains, and result layout are independent facts. The admitted
 grammars currently include direct producer results, direct split-nullable
-producer results, and one structural callable with one strict invariant owner
-input plus a distinct covariant split-nullable owner output. Unsupported forms
+producer results, and one structural callable with one or more direct occurrences
+of one strict invariant owner input plus a distinct covariant split-nullable
+owner output. Unsupported forms
 are `Unavailable`; they are never reconstructed, widened to `object`, or
 inferred from an implementation seal. This is an admission boundary for the
 first portable record, not a permanent claim that inherited, edge-bearing, or
@@ -1293,10 +1297,13 @@ This is a **GO** for production-inert architectural consolidation. It is not a
 GO for a generic-interface, generic-class, or stdlib ABI cutover.
 
 The bounded Stage 6 state slice implements the declaration/state half of this
-model and is retained as executable evidence. Stage 7 independently composes a
+model and is retained as executable evidence. Stage 7 independently composes one
 strict owner input with a split-nullable owner result on a custom structural
 family, including producer-recorded MethodDef consumption, ordinary C#
-implementation, and the exact erased inverse. Retained/foreign operation
+implementation, and the exact erased inverse. A later extension removes the
+non-MethodSpec consumer's zero/one cardinality branch and proves the first
+repeated-input instance at `N = 2`; it does not claim mixed MethodSpec or new
+foreign/C# evidence. Retained/foreign operation
 authority now also covers a resource-bounded recursive memberless interface
 graph. Multi-member consumption, including same-name/same-arity overloads, is
 now executable evidence that authority remains independently per retained
@@ -1348,7 +1355,7 @@ One exact argument-bearing operation additionally binds every final argument
 fact to its instantiated slot, preserves an orthogonal split-nullable result,
 and corrects a weaker semantic fallback only after explicit logical-result
 policy permits it. That same final operation now authorizes pair-local placement
-for the single-`STRICT_OWNER_INPUT`, empty-MethodSpec form; the retained token is
+for the complete all-`STRICT_OWNER_INPUT`, empty-MethodSpec form; the retained token is
 the complete operation rather than result-only evidence. A second exact
 operation binds the selected MethodDef's
 producer-recorded generic arity to one complete MethodSpec vector whose entries
@@ -1366,10 +1373,11 @@ open `!K`/`!!R`/`!V` declaration and the instantiated owner-bound MethodSpec and
 carriers, and sealed emission must agree with both. Pair declaration repeats the
 complete live-use proof so later IR cannot turn placement authority into a
 non-return, protected, other-target, or sequential consumer. Other generic or
-multi-input shapes remain unavailable. The next boundary generalizes split-pair
-placement through control-flow initializer joins, then closes general
-multi-input, remaining parameter-entry forms and explicit conversions—not
-another state or stdlib recognizer.
+mixed-domain input shapes remain unavailable. Split-pair placement through flat
+control-flow initializer joins and cardinality-independent strict-owner input
+vectors are now closed. The next boundary closes fixed declaration-independent
+and remaining parameter-entry forms, then explicit conversions—not another
+state or stdlib recognizer.
 
 ## Consequences
 

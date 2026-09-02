@@ -2353,7 +2353,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
-    fun `strict owner input composes with split nullable output using exact value carriers`() {
+    fun `repeated strict owner inputs compose with split output only as a complete vector`() {
         val owner = localOwnerIdentity(IrClassSymbolImpl())
         val natural = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
             IrClassSymbolImpl(),
@@ -2375,10 +2375,12 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val methodReference = callableMethodDescription(
             identity = method,
             declaringType = natural,
-            parameterSlots = listOf(callableSlot(
-                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
-                naturalK,
-            )),
+            parameterSlots = List(2) {
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                    naturalK,
+                )
+            },
             resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
                 callableSlot(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT, naturalV),
             ),
@@ -2394,7 +2396,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
         fun select(
             ownerArguments: List<DotNetGenericOwnerSymbolicCarrierReference>,
-            argument: DotNetGenericOwnerProducedValueFact,
+            arguments: List<DotNetGenericOwnerProducedValueFact>,
         ): DotNetGenericOwnerPhysicalOperationRoute {
             val ownerConstruction = boundConstruction(declarations, owner, ownerArguments)
             val naturalConstruction = boundConstruction(declarations, natural, ownerArguments)
@@ -2409,16 +2411,19 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                         view(naturalConstruction),
                     ),
                     receiver,
-                    listOf(argument),
+                    arguments,
                 ),
             ).value
         }
 
         val symbolic = select(
             listOf(ownerK, ownerV),
-            directValue(boundCarrier(declarations, ownerK)),
+            List(2) { directValue(boundCarrier(declarations, ownerK)) },
         )
-        assertEquals(ownerK, symbolic.instantiatedSignature.parameterSlots.single().carrier)
+        assertEquals(
+            listOf(ownerK, ownerK),
+            symbolic.instantiatedSignature.parameterSlots.map { slot -> slot.carrier },
+        )
         assertEquals(
             ownerV,
             assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable>(
@@ -2428,12 +2433,15 @@ class DotNetGenericOwnerPhysicalValueModelTest {
 
         val concrete = select(
             listOf(int32Type(), int32Type()),
-            directValue(boundCarrier(declarations, int32Type())),
+            List(2) { directValue(boundCarrier(declarations, int32Type())) },
         )
         val concreteResult = assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable>(
             concrete.instantiatedSignature.resultLayout,
         )
-        assertEquals(int32Type(), concrete.instantiatedSignature.parameterSlots.single().carrier)
+        assertEquals(
+            listOf(int32Type(), int32Type()),
+            concrete.instantiatedSignature.parameterSlots.map { slot -> slot.carrier },
+        )
         assertEquals(int32Type(), concreteResult.payloadSlot.carrier)
         assertEquals(
             DotNetGenericOwnerPhysicalHiddenParameterReference(
@@ -2472,7 +2480,10 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                     view(concreteNatural),
                 ),
                 directValue(boundCarrier(declarations, concreteOwner)),
-                listOf(directValue(boundCarrier(declarations, objectType()))),
+                listOf(
+                    directValue(boundCarrier(declarations, int32Type())),
+                    directValue(boundCarrier(declarations, objectType())),
+                ),
             ),
         )
     }

@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md`](generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md)
+  records cardinality-independent strict-owner input vectors for one retained
+  split result: repeated authenticated TypeDef slots, complete ordered
+  declaration/instantiation/live-argument validation, order-sensitive unboxed
+  value/reference/nullable-value execution, and the exact Framework 4.8/.NET 10
+  production-erased inverse.
 - [`generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md`](generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md)
   records the first flat exhaustive split-result initializer join: identity-
   keyed per-arm operation witnesses, an equality-only payload join, one shared
