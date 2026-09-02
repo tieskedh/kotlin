@@ -683,6 +683,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       call !0 class Fixture.'GenericOwner`1'<int32>::'Echo'(!0)
                       ret
                     }
+
+                    .method public hidebysig static !!0 'EchoMethod'<T>(
+                        !!0 'value'
+                    ) cil managed
+                    {
+                      .maxstack 1
+                      ldarg.0
+                      ret
+                    }
+
+                    .method public hidebysig static int32 'ReadMethodGeneric'(
+                        int32 'value'
+                    ) cil managed
+                    {
+                      .maxstack 1
+                      ldarg.0
+                      call !!0 Fixture.MemberRefHost::'EchoMethod'<int32>(!!0)
+                      ret
+                    }
                   }
 
                   .class public auto ansi beforefieldinit 'SignatureHost`1'<(
@@ -768,6 +787,135 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertFalse(metadata.identity.hasPublicKey)
             assertTrue(metadata.identity.publicKey.isEmpty())
             assertTrue(metadata.identity.publicKeyToken.isEmpty())
+            assertFalse(metadata.hasCompleteMethodSpecifications)
+            assertTrue(metadata.methodSpecifications.isEmpty())
+            assertTrue(metadata.methodBodies.isEmpty())
+
+            val selectedMetadata = DotNetClrMetadataReader.readWithSelectedMethodBodies(assembly) { projection ->
+                assertTrue(projection.hasCompleteMethodSpecifications)
+                assertTrue(projection.methodBodies.isEmpty())
+                val methodSpecification = projection.methodSpecifications.single()
+                val genericTarget = projection.methodDefinitions.single { method ->
+                    method.name == "EchoMethod"
+                }
+                assertTrue(
+                    methodSpecification.method == genericTarget.handle ||
+                            projection.memberReferences.any { reference ->
+                                reference.handle == methodSpecification.method &&
+                                        reference.name == genericTarget.name
+                            }
+                ) {
+                    "MethodSpec did not preserve its exact EchoMethod MethodDefOrRef"
+                }
+                assertEquals(
+                    listOf(DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)),
+                    methodSpecification.typeArguments,
+                )
+                assertEquals(listOf(0x0a, 0x01, 0x08), methodSpecification.rawInstantiation.toUnsignedIntList())
+                setOf(projection.methodDefinitions.single { method ->
+                    method.name == "ReadMethodGeneric"
+                }.handle)
+            }
+            assertTrue(selectedMetadata.hasCompleteMethodSpecifications)
+            assertEquals(1, selectedMetadata.methodSpecifications.size)
+            val selectedBody = selectedMetadata.methodBodies.single()
+            assertEquals(
+                selectedMetadata.methodDefinitions.single { method ->
+                    method.name == "ReadMethodGeneric"
+                }.handle,
+                selectedBody.method,
+            )
+            assertTrue(selectedBody.code.size > 1)
+            assertEquals(0x2a, selectedBody.code.toUnsignedIntList().last())
+
+            val wrongTableSelection = assertThrows(IllegalArgumentException::class.java) {
+                DotNetClrMetadataReader.readWithSelectedMethodBodies(assembly) { projection ->
+                    setOf(projection.typeDefinitions.first().handle)
+                }
+            }
+            assertTrue(
+                "must be identified by MethodDef handles" in checkNotNull(wrongTableSelection.message)
+            ) {
+                wrongTableSelection.message
+            }
+            val missingMethodHandle = DotNetClrMetadataHandle(
+                table = 6,
+                row = metadata.methodDefinitions.maxOf { method -> method.handle.row } + 1,
+            )
+            val missingMethodSelection = assertThrows(IllegalArgumentException::class.java) {
+                DotNetClrMetadataReader.readWithSelectedMethodBodies(assembly) {
+                    setOf(missingMethodHandle)
+                }
+            }
+            assertTrue(
+                "outside the assembly snapshot" in checkNotNull(missingMethodSelection.message)
+            ) {
+                missingMethodSelection.message
+            }
+
+            val nonManagedMethodAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-non-managed-method.dll",
+            )
+            val nonManagedMethodImage = assembly.readBytes()
+            val nonManagedMethodTables = locateClrMetadataTables(nonManagedMethodImage)
+            val readMethodGeneric = selectedMetadata.methodDefinitions.single { method ->
+                method.name == "ReadMethodGeneric"
+            }
+            writeLittleEndian(
+                nonManagedMethodImage,
+                nonManagedMethodTables.rowOffset(table = 6, row = readMethodGeneric.handle.row) + 4,
+                width = 2,
+                value = 1,
+            )
+            nonManagedMethodAssembly.writeBytes(nonManagedMethodImage)
+            val nonManagedSelection = assertThrows(IllegalArgumentException::class.java) {
+                DotNetClrMetadataReader.readWithSelectedMethodBodies(nonManagedMethodAssembly) { projection ->
+                    setOf(projection.methodDefinitions.single { method ->
+                        method.name == "ReadMethodGeneric"
+                    }.handle)
+                }
+            }
+            assertTrue(
+                "not implemented as managed CIL" in checkNotNull(nonManagedSelection.message)
+            ) {
+                nonManagedSelection.message
+            }
+
+            val malformedMethodSpecAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-malformed-method-spec.dll",
+            )
+            val malformedMethodSpecImage = assembly.readBytes()
+            val malformedMethodSpecTables = locateClrMetadataTables(malformedMethodSpecImage)
+            val methodSpecRowOffset = malformedMethodSpecTables.rowOffset(
+                table = 43,
+                row = selectedMetadata.methodSpecifications.single().handle.row,
+            )
+            val methodSpecInstantiationIndex = readLittleEndianIndex(
+                malformedMethodSpecImage,
+                methodSpecRowOffset + malformedMethodSpecTables.methodDefOrRefIndexSize,
+                malformedMethodSpecTables.blobIndexSize,
+            )
+            val methodSpecInstantiationOffset = malformedMethodSpecTables.blobContentOffset(
+                malformedMethodSpecImage,
+                methodSpecInstantiationIndex,
+            )
+            malformedMethodSpecImage[methodSpecInstantiationOffset] = 0x09
+            malformedMethodSpecAssembly.writeBytes(malformedMethodSpecImage)
+            val ordinaryMalformedMethodSpec = DotNetClrMetadataReader.read(malformedMethodSpecAssembly)
+            assertFalse(ordinaryMalformedMethodSpec.hasCompleteMethodSpecifications)
+            assertTrue(ordinaryMalformedMethodSpec.methodSpecifications.isEmpty())
+            val malformedMethodSpec = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.readWithSelectedMethodBodies(malformedMethodSpecAssembly) {
+                    emptySet()
+                }
+            }
+            assertTrue(
+                "invalid generic-instantiation header" in checkNotNull(malformedMethodSpec.message)
+            ) {
+                malformedMethodSpec.message
+            }
 
             val coreLibrary = metadata.assemblyReferences.single { it.name == "mscorlib" }
             assertEquals("neutral", coreLibrary.culture)
@@ -44982,6 +45130,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val memberRefParentIndexSize: Int
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
 
+        val methodDefOrRefIndexSize: Int
+            get() = codedIndexSize(1, 6, 10)
+
         fun blobEntryOffset(index: Int): Int {
             require(index > 0)
             return blobHeapOffset + index
@@ -45046,6 +45197,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             21 -> tableIndexSize(2) + tableIndexSize(23)
             22 -> tableIndexSize(23)
             23 -> 2 + stringIndexSize + blobIndexSize
+            24 -> 2 + tableIndexSize(6) + codedIndexSize(1, 20, 23)
+            25 -> tableIndexSize(2) + methodDefOrRefIndexSize * 2
+            26 -> stringIndexSize
+            27 -> blobIndexSize
+            28 -> 2 + codedIndexSize(1, 4, 6) + stringIndexSize + tableIndexSize(26)
+            29 -> 4 + tableIndexSize(4)
+            30 -> 8
+            31 -> 4
+            32 -> 16 + blobIndexSize + stringIndexSize * 2
+            33 -> 4
+            34 -> 12
+            35 -> 12 + blobIndexSize * 2 + stringIndexSize * 2
+            36 -> 4 + tableIndexSize(35)
+            37 -> 12 + tableIndexSize(35)
+            38 -> 4 + stringIndexSize + blobIndexSize
+            39 -> 8 + stringIndexSize * 2 + codedIndexSize(2, 38, 35, 39)
+            40 -> 8 + stringIndexSize + codedIndexSize(2, 38, 35, 39)
+            41 -> tableIndexSize(2) * 2
+            42 -> 4 + codedIndexSize(1, 2, 6) + stringIndexSize
+            43 -> methodDefOrRefIndexSize + blobIndexSize
+            44 -> tableIndexSize(42) + codedIndexSize(2, 2, 1, 27)
             else -> error("Test metadata locator does not require table $table")
         }
     }

@@ -42,6 +42,18 @@ data class DotNetManagedAssemblyIdentity(
 object DotNetClrMetadataReader {
     fun read(file: File): DotNetClrAssemblyMetadata =
         DotNetPeMetadataReader.readClrMetadata(file)
+
+    /**
+     * Reads ordinary objective metadata, lets the caller select exact MethodDef handles from that
+     * same open PE image, and then adds only those CIL bodies. As with every compiler classpath
+     * input, [file] must remain immutable for the duration of compilation; keeping one handle open
+     * prevents this API from accidentally joining caller-supplied facts from independent reads.
+     */
+    fun readWithSelectedMethodBodies(
+        file: File,
+        selector: (DotNetClrAssemblyMetadata) -> Set<DotNetClrMetadataHandle>,
+    ): DotNetClrAssemblyMetadata =
+        DotNetPeMetadataReader.readClrMetadataWithSelectedMethodBodies(file, selector)
 }
 
 /**
@@ -110,6 +122,13 @@ private object DotNetPeMetadataReader {
 
     fun readClrMetadata(file: File): DotNetClrAssemblyMetadata =
         read(file, PeImage::readClrMetadata)
+
+    fun readClrMetadataWithSelectedMethodBodies(
+        file: File,
+        selector: (DotNetClrAssemblyMetadata) -> Set<DotNetClrMetadataHandle>,
+    ): DotNetClrAssemblyMetadata = read(file) { image ->
+        image.readClrMetadataWithSelectedMethodBodies(selector)
+    }
 
     private fun <T> read(file: File, action: (PeImage) -> T): T {
         try {
@@ -183,7 +202,56 @@ private object DotNetPeMetadataReader {
             )
         }
 
-        fun readClrMetadata(): DotNetClrAssemblyMetadata {
+        fun readClrMetadata(): DotNetClrAssemblyMetadata = readClrMetadata(
+            includeMethodSpecifications = false,
+        )
+
+        fun readClrMetadataWithSelectedMethodBodies(
+            selector: (DotNetClrAssemblyMetadata) -> Set<DotNetClrMetadataHandle>,
+        ): DotNetClrAssemblyMetadata {
+            val assembly = readClrMetadata(includeMethodSpecifications = true)
+            val selected = selector(assembly)
+            require(selected.all { handle -> handle.table == METHOD_DEF_TABLE }) {
+                "selected CLR method bodies must be identified by MethodDef handles"
+            }
+            val methodsByHandle = assembly.methodDefinitions.associateBy { method -> method.handle }
+            require(selected.all(methodsByHandle::containsKey)) {
+                "selected CLR method bodies contain a MethodDef outside the assembly snapshot"
+            }
+            if (selected.size > MAX_SELECTED_METHOD_BODY_COUNT) {
+                malformed(
+                    "too many CLR method bodies were selected (${selected.size}; limit is " +
+                            "$MAX_SELECTED_METHOD_BODY_COUNT)",
+                )
+            }
+            val methodBodies = ArrayList<DotNetClrMethodBody>(selected.size)
+            var aggregateCodeSize = 0L
+            selected.sortedBy { handle -> handle.row }.forEach { handle ->
+                val method = methodsByHandle.getValue(handle)
+                require((method.implementationAttributes and METHOD_IMPL_BODY_KIND_MASK) ==
+                        METHOD_IMPL_MANAGED_IL) {
+                    "selected MethodDef ${method.name} is not implemented as managed CIL"
+                }
+                val body = readMethodBodyOrNull(method, metadataImage) ?: return@forEach
+                aggregateCodeSize = checkedAdd(
+                    aggregateCodeSize,
+                    body.code.size.toLong(),
+                    "selected CLR method-body aggregate size",
+                )
+                if (aggregateCodeSize > MAX_SELECTED_METHOD_BODIES_CODE_SIZE) {
+                    malformed(
+                        "selected CLR method bodies are too large ($aggregateCodeSize bytes; limit is " +
+                                "$MAX_SELECTED_METHOD_BODIES_CODE_SIZE)",
+                    )
+                }
+                methodBodies += body
+            }
+            return assembly.copy(methodBodies = methodBodies)
+        }
+
+        private fun readClrMetadata(
+            includeMethodSpecifications: Boolean,
+        ): DotNetClrAssemblyMetadata {
             val metadata = metadataImage
             val typeReferences = readTypeReferences(metadata.tables, metadata.strings)
             val typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings)
@@ -256,6 +324,12 @@ private object DotNetPeMetadataReader {
                     genericParameterDefinitions,
                 ),
                 methodImplementations = readMethodImplementations(metadata.tables),
+                methodSpecifications = if (includeMethodSpecifications) {
+                    readMethodSpecifications(metadata.tables, metadata.blobs)
+                } else {
+                    emptyList()
+                },
+                hasCompleteMethodSpecifications = includeMethodSpecifications,
             )
         }
 
@@ -723,6 +797,143 @@ private object DotNetPeMetadataReader {
             }
         }
 
+        private fun readMethodSpecifications(
+            tables: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrMethodSpecification> {
+            val table = locateMetadataTable(tables, METHOD_SPEC_TABLE) ?: return emptyList()
+            if (table.rowCount > MAX_SELECTED_METHOD_SPEC_COUNT) {
+                malformed(
+                    "too many MethodSpec rows (${table.rowCount}; limit is " +
+                            "$MAX_SELECTED_METHOD_SPEC_COUNT)",
+                )
+            }
+            var aggregateInstantiationSize = 0L
+            var aggregateRetainedSignatureComponentCount = 0L
+            return List(table.rowCount.toIntChecked("MethodSpec row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val methodIndex = readIndex(position, table.indexSizes.methodDefOrRefIndexSize)
+                position += table.indexSizes.methodDefOrRefIndexSize
+                val instantiationIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val method = decodeCodedHandle(
+                    value = methodIndex,
+                    tagBits = 1,
+                    tablesByTag = METHOD_DEF_OR_REF_TABLES,
+                    metadataTables = tables,
+                    description = "MethodSpec method",
+                ) ?: malformed("MethodSpec row ${rowIndex + 1} has a nil method")
+                val instantiationSize = readBlobHeapSize(blobs, instantiationIndex)
+                if (instantiationSize == 0L) {
+                    malformed("MethodSpec row ${rowIndex + 1} has an empty instantiation")
+                }
+                if (instantiationSize > MAX_SELECTED_METHOD_SPEC_BLOB_SIZE) {
+                    malformed("MethodSpec row ${rowIndex + 1} has an oversized instantiation")
+                }
+                aggregateInstantiationSize = checkedAdd(
+                    aggregateInstantiationSize,
+                    instantiationSize,
+                    "MethodSpec instantiation aggregate size",
+                )
+                if (aggregateInstantiationSize > MAX_SELECTED_METHOD_SPECS_BLOB_SIZE) {
+                    malformed(
+                        "MethodSpec instantiations are too large ($aggregateInstantiationSize bytes; " +
+                                "limit is $MAX_SELECTED_METHOD_SPECS_BLOB_SIZE)",
+                    )
+                }
+                val rawInstantiation = readBlobHeap(blobs, instantiationIndex)
+                val handle = metadataHandle(
+                    METHOD_SPEC_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "MethodSpec",
+                )
+                val typeArguments = SignatureBlobReader(
+                    bytes = rawInstantiation,
+                    metadataTables = tables,
+                    description = "MethodSpec token 0x${handle.token.toUInt().toString(16)}",
+                ).readMethodSpecificationInstantiation()
+                val retainedSignatureComponentCount = typeArguments.fold(2L) { count, argument ->
+                    checkedAdd(
+                        count,
+                        countRetainedTypeSignatureComponents(argument),
+                        "MethodSpec retained-signature component count",
+                    )
+                }
+                aggregateRetainedSignatureComponentCount = checkedAdd(
+                    aggregateRetainedSignatureComponentCount,
+                    retainedSignatureComponentCount,
+                    "MethodSpec retained-signature aggregate component count",
+                )
+                if (aggregateRetainedSignatureComponentCount >
+                    MAX_SELECTED_METHOD_SPECS_RETAINED_SIGNATURE_COMPONENT_COUNT
+                ) {
+                    malformed(
+                        "MethodSpec retained signatures are too large " +
+                                "($aggregateRetainedSignatureComponentCount components; limit is " +
+                                "$MAX_SELECTED_METHOD_SPECS_RETAINED_SIGNATURE_COMPONENT_COUNT)",
+                    )
+                }
+                DotNetClrMethodSpecification(
+                    handle = handle,
+                    method = method,
+                    typeArguments = typeArguments,
+                    rawInstantiation = DotNetClrBlob.wrapOwned(rawInstantiation),
+                )
+            }
+        }
+
+        private fun countRetainedTypeSignatureComponents(signature: DotNetClrTypeSignature): Long {
+            fun countAll(signatures: List<DotNetClrTypeSignature>): Long =
+                signatures.fold(0L) { count, nested ->
+                    checkedAdd(
+                        count,
+                        countRetainedTypeSignatureComponents(nested),
+                        "retained type-signature component count",
+                    )
+                }
+
+            val nestedCount = when (signature) {
+                DotNetClrTypeSignature.Void,
+                DotNetClrTypeSignature.TypedReference,
+                is DotNetClrTypeSignature.Primitive,
+                is DotNetClrTypeSignature.Named,
+                is DotNetClrTypeSignature.GenericParameter,
+                -> 0L
+
+                is DotNetClrTypeSignature.Pointer ->
+                    countRetainedTypeSignatureComponents(signature.elementType)
+                is DotNetClrTypeSignature.ByReference ->
+                    countRetainedTypeSignatureComponents(signature.elementType)
+                is DotNetClrTypeSignature.SzArray ->
+                    countRetainedTypeSignatureComponents(signature.elementType)
+                is DotNetClrTypeSignature.Array -> checkedAdd(
+                    countRetainedTypeSignatureComponents(signature.elementType),
+                    3L + signature.shape.sizes.size + signature.shape.lowerBounds.size,
+                    "array-shape retained component count",
+                )
+                is DotNetClrTypeSignature.GenericInstance -> checkedAdd(
+                    countRetainedTypeSignatureComponents(signature.genericType),
+                    checkedAdd(1L, countAll(signature.arguments), "generic-argument list count"),
+                    "generic-instance retained component count",
+                )
+                is DotNetClrTypeSignature.FunctionPointer -> checkedAdd(
+                    countRetainedTypeSignatureComponents(signature.signature.returnType),
+                    checkedAdd(
+                        2L,
+                        countAll(signature.signature.parameterTypes),
+                        "function-pointer signature/list count",
+                    ),
+                    "function-pointer retained component count",
+                )
+                is DotNetClrTypeSignature.Modified -> checkedAdd(
+                    countRetainedTypeSignatureComponents(signature.unmodifiedType),
+                    1L + signature.modifiers.size,
+                    "custom-modifier retained component count",
+                )
+            }
+            return checkedAdd(1L, nestedCount, "retained type-signature component count")
+        }
+
         private fun readExportedTypes(
             tables: MetadataStream,
             strings: MetadataStream,
@@ -923,6 +1134,112 @@ private object DotNetPeMetadataReader {
                     rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
                 )
             }
+        }
+
+        private fun readMethodBodyOrNull(
+            method: DotNetClrMethodDefinition,
+            metadata: MetadataImage,
+        ): DotNetClrMethodBody? {
+            val rva = method.relativeVirtualAddress
+            if (rva == 0L) return null
+            val description = "MethodDef token 0x${method.handle.token.toUInt().toString(16)} body"
+            val firstOffset = rvaToFileOffset(rva, 1, metadata.sections, description)
+            val first = readU1(firstOffset)
+            val format = first and METHOD_BODY_FORMAT_MASK
+            val body = when (format) {
+                METHOD_BODY_TINY_FORMAT -> {
+                    val codeSize = first ushr METHOD_BODY_TINY_CODE_SIZE_SHIFT
+                    val codeOffset = rvaToFileOffset(
+                        checkedAdd(rva, 1, "$description code RVA"),
+                        codeSize.toLong(),
+                        metadata.sections,
+                        "$description code",
+                    )
+                    DotNetClrMethodBody(
+                        method = method.handle,
+                        isTiny = true,
+                        headerSize = 1,
+                        maxStack = METHOD_BODY_TINY_MAX_STACK,
+                        initLocals = false,
+                        localVariableSignature = null,
+                        hasExtraSections = false,
+                        code = DotNetClrBlob.wrapOwned(readBytes(codeOffset, codeSize)),
+                    )
+                }
+
+                METHOD_BODY_FAT_FORMAT -> {
+                    val minimumHeaderOffset = rvaToFileOffset(
+                        rva,
+                        METHOD_BODY_FAT_MINIMUM_HEADER_SIZE.toLong(),
+                        metadata.sections,
+                        "$description fat header",
+                    )
+                    val flagsAndSize = readU2(minimumHeaderOffset)
+                    val flags = flagsAndSize and METHOD_BODY_FAT_FLAGS_MASK
+                    if (flags and METHOD_BODY_FORMAT_MASK != METHOD_BODY_FAT_FORMAT ||
+                        flags and METHOD_BODY_SUPPORTED_FLAGS.inv() != 0
+                    ) {
+                        malformed("$description has unsupported fat-header flags")
+                    }
+                    val headerSize = (flagsAndSize ushr METHOD_BODY_FAT_SIZE_SHIFT) * 4
+                    if (headerSize < METHOD_BODY_FAT_MINIMUM_HEADER_SIZE) {
+                        malformed("$description has an undersized fat header")
+                    }
+                    rvaToFileOffset(
+                        rva,
+                        headerSize.toLong(),
+                        metadata.sections,
+                        "$description complete fat header",
+                    )
+                    val maxStack = readU2(minimumHeaderOffset + UINT16_SIZE)
+                    val codeSize = readU4(minimumHeaderOffset + UINT16_SIZE * 2)
+                    if (codeSize > MAX_SELECTED_METHOD_BODY_CODE_SIZE) {
+                        malformed(
+                            "$description is too large ($codeSize bytes; limit is " +
+                                    "$MAX_SELECTED_METHOD_BODY_CODE_SIZE)",
+                        )
+                    }
+                    val localSignatureToken = readU4(
+                        minimumHeaderOffset + UINT16_SIZE * 2 + UINT32_SIZE,
+                    )
+                    val localSignature = if (localSignatureToken == 0L) {
+                        null
+                    } else {
+                        val table = (localSignatureToken ushr 24).toInt()
+                        val row = localSignatureToken and 0x00ff_ffffL
+                        if (table != STANDALONE_SIGNATURE_TABLE || row == 0L) {
+                            malformed("$description has an invalid local-variable signature token")
+                        }
+                        metadataHandle(
+                            STANDALONE_SIGNATURE_TABLE,
+                            row,
+                            metadata.tables,
+                            "$description local-variable signature",
+                        )
+                    }
+                    val codeOffset = rvaToFileOffset(
+                        checkedAdd(rva, headerSize.toLong(), "$description code RVA"),
+                        codeSize,
+                        metadata.sections,
+                        "$description code",
+                    )
+                    DotNetClrMethodBody(
+                        method = method.handle,
+                        isTiny = false,
+                        headerSize = headerSize,
+                        maxStack = maxStack,
+                        initLocals = flags and METHOD_BODY_INIT_LOCALS != 0,
+                        localVariableSignature = localSignature,
+                        hasExtraSections = flags and METHOD_BODY_MORE_SECTIONS != 0,
+                        code = DotNetClrBlob.wrapOwned(
+                            readBytes(codeOffset, codeSize.toIntChecked("$description code size")),
+                        ),
+                    )
+                }
+
+                else -> malformed("$description has an invalid method-header format")
+            }
+            return body
         }
 
         private fun readParameterDefinitions(
@@ -1910,6 +2227,29 @@ private object DotNetPeMetadataReader {
                 return signature
             }
 
+            fun readMethodSpecificationInstantiation(): List<DotNetClrTypeSignature> {
+                if (readByte() != SIGNATURE_GENERIC_INSTANCE) {
+                    malformed("$description has an invalid generic-instantiation header")
+                }
+                val argumentCount = readCompressedUnsigned("method generic-argument count")
+                if (argumentCount == 0) {
+                    malformed("$description instantiates a method with zero generic arguments")
+                }
+                ensureCollectionFits(argumentCount, "method generic arguments")
+                val arguments = List(argumentCount) {
+                    readType(
+                        depth = 0,
+                        allowVoid = false,
+                        allowByReference = false,
+                        allowTypedReference = false,
+                    )
+                }
+                if (position != bytes.size) {
+                    malformed("$description has ${bytes.size - position} trailing signature bytes")
+                }
+                return arguments
+            }
+
             fun readMemberReferenceSignature(): DotNetClrMemberReferenceSignature {
                 val signature = if (peekByte() == SIGNATURE_FIELD) {
                     DotNetClrMemberReferenceSignature.Field(
@@ -2868,6 +3208,10 @@ private object DotNetPeMetadataReader {
         METHOD_DEF_TABLE,
         MEMBER_REF_TABLE,
     )
+    private val METHOD_DEF_OR_REF_TABLES = intArrayOf(
+        METHOD_DEF_TABLE,
+        MEMBER_REF_TABLE,
+    )
     private val HAS_CONSTANT_TABLES = intArrayOf(
         FIELD_TABLE,
         PARAMETER_TABLE,
@@ -2910,7 +3254,28 @@ private object DotNetPeMetadataReader {
     private const val MAX_CONSTANT_BLOB_SIZE = 64 * 1024 * 1024
     private const val MAX_FIELD_MARSHAL_BLOB_SIZE = 64 * 1024 * 1024
     private const val MAX_CUSTOM_ATTRIBUTE_BLOB_SIZE = 64 * 1024 * 1024
+    private const val MAX_SELECTED_METHOD_BODY_COUNT = 4 * 1024
+    private const val MAX_SELECTED_METHOD_BODY_CODE_SIZE = 64L * 1024
+    private const val MAX_SELECTED_METHOD_BODIES_CODE_SIZE = 16L * 1024 * 1024
+    private const val MAX_SELECTED_METHOD_SPEC_COUNT = 64L * 1024
+    private const val MAX_SELECTED_METHOD_SPEC_BLOB_SIZE = 64 * 1024
+    private const val MAX_SELECTED_METHOD_SPECS_BLOB_SIZE = 16L * 1024 * 1024
+    private const val MAX_SELECTED_METHOD_SPECS_RETAINED_SIGNATURE_COMPONENT_COUNT = 1024L * 1024
     private const val PUBLIC_KEY_TOKEN_SIZE = 8
+    private const val METHOD_BODY_FORMAT_MASK = 0x3
+    private const val METHOD_IMPL_BODY_KIND_MASK = 0x7
+    private const val METHOD_IMPL_MANAGED_IL = 0
+    private const val METHOD_BODY_TINY_FORMAT = 0x2
+    private const val METHOD_BODY_FAT_FORMAT = 0x3
+    private const val METHOD_BODY_MORE_SECTIONS = 0x8
+    private const val METHOD_BODY_INIT_LOCALS = 0x10
+    private const val METHOD_BODY_SUPPORTED_FLAGS =
+        METHOD_BODY_FORMAT_MASK or METHOD_BODY_MORE_SECTIONS or METHOD_BODY_INIT_LOCALS
+    private const val METHOD_BODY_TINY_CODE_SIZE_SHIFT = 2
+    private const val METHOD_BODY_TINY_MAX_STACK = 8
+    private const val METHOD_BODY_FAT_SIZE_SHIFT = 12
+    private const val METHOD_BODY_FAT_FLAGS_MASK = 0x0fff
+    private const val METHOD_BODY_FAT_MINIMUM_HEADER_SIZE = 12
     private const val ELEMENT_TYPE_VOID = 0x01
     private const val ELEMENT_TYPE_BOOLEAN = 0x02
     private const val ELEMENT_TYPE_CHAR = 0x03
@@ -2952,6 +3317,7 @@ private object DotNetPeMetadataReader {
     private const val SIGNATURE_FIELD = 0x06
     private const val SIGNATURE_UNMANAGED = 0x09
     private const val SIGNATURE_NATIVE_VARARG = 0x0b
+    private const val SIGNATURE_GENERIC_INSTANCE = 0x0a
     private const val SIGNATURE_GENERIC = 0x10
     private const val SIGNATURE_HAS_THIS = 0x20
     private const val SIGNATURE_EXPLICIT_THIS = 0x40

@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPeValidationStamp
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
@@ -22,6 +23,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata
+import org.jetbrains.kotlin.backend.dotnet.readAndValidateDotNetGenericOwnerPeMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.load.dotnet.decodeDotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalClrAssemblies
@@ -708,19 +710,24 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
         val implementationMethodDefs = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
-        if (naturalMethodDefs.isNotEmpty() || implementationMethodDefs.isNotEmpty()) {
+        val sealedFamilies = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerSealedFamily>()
+        val semanticEquivalenceCertificates = declarations.values
+            .filterIsInstance<
+                    DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
+        var genericOwnerPeValidationStamp = DotNetGenericOwnerPeValidationStamp.EMPTY
+        if (naturalMethodDefs.isNotEmpty() || implementationMethodDefs.isNotEmpty() ||
+            sealedFamilies.isNotEmpty() || semanticEquivalenceCertificates.isNotEmpty()
+        ) {
             val producerTarget = checkNotNull(DotNetTarget.fromString(targetFramework))
-            val assemblyMetadata = try {
-                DotNetClrMetadataReader.read(embeddedSource.assemblyFile)
-            } catch (exception: DotNetBadImageFormatException) {
-                report(
-                    COMPILER_ARGUMENTS_ERROR,
-                    "Kotlin/.NET library '${embeddedSource.assemblyFile.path}' has invalid CLR metadata: " +
-                            exception.message,
-                )
-                return
-            }
             try {
+                val genericOwnerPeValidation = readAndValidateDotNetGenericOwnerPeMetadata(
+                    assemblyFile = embeddedSource.assemblyFile,
+                    sealedFamilies = sealedFamilies,
+                    semanticEquivalenceCertificates = semanticEquivalenceCertificates,
+                    coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
+                )
+                val assemblyMetadata = genericOwnerPeValidation.assemblyMetadata
                 naturalMethodDefs.forEach { declaration ->
                     validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
                         declaration = declaration,
@@ -743,10 +750,18 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                         coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
                     )
                 }
+                genericOwnerPeValidationStamp = genericOwnerPeValidation.stamp
+            } catch (exception: DotNetBadImageFormatException) {
+                report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Kotlin/.NET library '${embeddedSource.assemblyFile.path}' has invalid CLR metadata: " +
+                            exception.message,
+                )
+                return
             } catch (exception: IllegalArgumentException) {
                 report(
                     COMPILER_ARGUMENTS_ERROR,
-                    "Kotlin/.NET library '$displayPath' has a recorded MethodDef descriptor which " +
+                    "Kotlin/.NET library '$displayPath' has a recorded generic-owner descriptor which " +
                             "disagrees with its producer DLL: ${exception.message}",
                 )
                 return
@@ -757,6 +772,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             embeddedSource.assemblyFile,
             declarations,
             friendAssemblies,
+            genericOwnerPeValidationStamp = genericOwnerPeValidationStamp,
         )
     }
     val selectedAssemblyNames = libraries.mapTo(hashSetOf()) { library ->
