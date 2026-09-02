@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-constructed-call-result-live-slot-2026-09-02.md`](generic-owner-physical-constructed-call-result-live-slot-2026-09-02.md)
+  records direct constructed-call result validation against the ordinary live
+  MethodDef result, the reversed fail-closed model proof, same-object runtime
+  checks, exact unadapted IL, and the Framework 4.8/.NET 10 erased inverse.
 - [`generic-owner-physical-constructed-entry-live-slot-2026-09-02.md`](generic-owner-physical-constructed-entry-live-slot-2026-09-02.md)
   records the direct constructed-generic entry repair: final `ldarg`/`ldloc`
   validation instead of logical whole-expression reconstruction, the reversed

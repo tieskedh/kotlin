@@ -2286,8 +2286,12 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             check(emittedIl.isFile && emittedIl.readText().let { ilText ->
                 "'InlineProducer`1'" !in ilText &&
                         "IInlineProducerKotlinSemantic" !in ilText &&
+                        "'InlineConstructedSource`1'" !in ilText &&
+                        "IInlineConstructedSourceKotlinSemantic" !in ilText &&
+                        "'InlineConstructedSourceValue`1'" !in ilText &&
                         "'InlineLookup`2'" !in ilText &&
                         "IInlineLookupKotlinSemantic" !in ilText &&
+                        "'InlineConstructedCallRoute`1'" !in ilText &&
                         "'InlineArgumentSplitLocalRoute`1'" !in ilText &&
                         "InlineArgumentSplitLocalRoute\$lookup\$sourceNaturalAlias\$1`1" !in ilText &&
                         "'InlineRepeatedInputLookup`2'" !in ilText &&
@@ -2460,6 +2464,125 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         ) {
             "The direct constructed entry was not copied from its live " +
                     "InlineLookup<!T,!T> argument slot without adaptation: method=$exactEntryMethod"
+        }
+        val constructedCallResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
+                    comparison.prediction.sourceFunctionName == "sourceThroughLocal" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "callResultNaturalAlias"
+        }
+        check(constructedCallResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            val guaranteed = prediction.guaranteedViews.singleOrNull()
+            val selected = prediction.selectedViewLineage.singleOrNull()
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    prediction.storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                    carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                    carrier.localTypeDefView ==
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                    carrier.ownerParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName?.endsWith("InlineConstructedCallRoute") == true &&
+                    carrier.parameterBinderTypeDefView == null &&
+                    prediction.storageCarrier == carrier &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    guaranteed?.carrier == carrier &&
+                    DotNetGenericOwnerPhysicalValueShadowEvidence.FROZEN_PARAMETER_OR_RESULT in
+                    guaranteed.evidence &&
+                    selected?.view == guaranteed &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineConstructedCallRoute") == true &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "The direct natural MethodDef result must retain its exact " +
+                    "InlineProducer<!T> " +
+                    "carrier: result=$constructedCallResultAlias, all=$comparisons"
+        }
+        val exactCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            "'sourceThroughLocal'(" in header && "'callResultNaturalAlias'" in method
+        }
+        val callResultSlot = exactCallResultMethod?.let { method ->
+            Regex(
+                """\[(\d+)]\s+class\s+'InlineProducer`1'<!0>\s+""" +
+                        """'callResultNaturalAlias'""",
+            ).find(method)?.groupValues?.get(1)?.toInt()
+        }
+        val callResultStore = callResultSlot?.let { slot ->
+            if (slot in 0..3) "stloc.$slot" else "stloc $slot"
+        }
+        val callResultLoad = callResultSlot?.let { slot ->
+            if (slot in 0..3) "ldloc.$slot" else "ldloc $slot"
+        }
+        val exactCallResultInstructions = exactCallResultMethod?.lineSequence()
+            ?.map(String::trim)
+            ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
+            ?.toList()
+        val exactConstructedSourceCalls = exactCallResultInstructions.orEmpty().filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'source'()" in line
+        }
+        val forbiddenCallResultAdaptation = listOf(
+            "box ",
+            "unbox.any",
+            "castclass",
+            "isinst",
+            "KotlinSemantic",
+            "InvokeRecordedMember",
+            "InvokeUniqueMember",
+            "GenericInterfaceDispatch",
+        ).filter { token -> token in exactCallResultMethod.orEmpty() }
+        check(exactCallResultMethod != null &&
+                Regex(
+                    """class\s+'InlineProducer`1'<!0>\s+""" +
+                            """'sourceThroughLocal'\(""",
+                ).containsMatchIn(exactCallResultMethod.substringBefore('{')) &&
+                callResultSlot != null && callResultStore != null && callResultLoad != null &&
+                Regex(
+                    """'sourceThroughLocal'\(class\s+'InlineConstructedSource`1'<!0>\s+'source'\)""",
+                ).containsMatchIn(exactCallResultMethod.substringBefore('{')) &&
+                exactCallResultInstructions != null &&
+                exactConstructedSourceCalls.singleOrNull()?.let { call ->
+                    Regex(
+                        """^callvirt\s+instance\s+class\s+'InlineProducer`1'<!0>\s+""" +
+                                """class\s+'InlineConstructedSource`1'<!0>::'source'\(\)$""",
+                    ).matches(call)
+                } == true &&
+                exactCallResultInstructions.windowed(2).any { instructions ->
+                    instructions == listOf(
+                        "ldarg.1",
+                        exactConstructedSourceCalls.single(),
+                    )
+                } &&
+                exactCallResultInstructions.windowed(2).any { instructions ->
+                    instructions == listOf(exactConstructedSourceCalls.single(), callResultStore)
+                } &&
+                exactCallResultInstructions.windowed(2).any { instructions ->
+                    instructions == listOf(callResultLoad, "ret")
+                } &&
+                exactCallResultInstructions.count { instruction -> instruction == callResultStore } == 1 &&
+                forbiddenCallResultAdaptation.isEmpty()
+        ) {
+            "The direct constructed result was not copied from its live natural MethodDef " +
+                    "result without adaptation: forbidden=$forbiddenCallResultAdaptation, " +
+                    "calls=$exactConstructedSourceCalls, method=$exactCallResultMethod"
         }
         val argumentSplitResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineArgumentSplitLocalRoute") &&

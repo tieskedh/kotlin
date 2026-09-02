@@ -22,14 +22,14 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   result through one immutable local whose every use is an unprotected direct
   return to the same physical MethodDef, while preserving its open MethodDef
   binders, MethodSpec, instantiated carriers, and result separately.
-- The current continuation composes an empty-MethodSpec ordinary parameter
-  vector from strict owner slots plus fixed Boolean, Int, String, and Object
-  leaves. The exact owner call remains
-  `!T/bool/int32/string/object/!T -> !T + out bool` with no boxing or semantic
-  dispatch. Operation routing receives only a regular-parameter fact whose
-  producer-planned slot domain is `DECLARATION_INDEPENDENT`, whose typed and
-  current physical prototypes carry the same supported fixed leaf, and whose
-  final storage is `Direct(Fixed(the same leaf))`.
+- The latest local slice composes the existing constructed-interface-producer
+  role into BOUND callable authority and retains its one-level `I<!T,...>`
+  result through an immutable local only after the ordinary resolver reports
+  the identical live MethodDef carrier. It adds no external ABI authority.
+- The next continuation lets an identity-bound exact-natural operation witness
+  drive direct emission when an immutable receiver retains an exact physical
+  construction through a logically widened Kotlin view. Genuinely broad
+  entries remain unable to create such authority.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
@@ -70,14 +70,14 @@ The aggregate includes Stage 7, the production-inert TypeDef-authority work,
 and the retained-foreign adapter. Their focused design evidence remains in the
 owning archives and ADR; this current snapshot does not duplicate it.
 
-Since that aggregate, the retained-foreign rehearsal has added exact operation,
+Since that aggregate, the retained-foreign rehearsal added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority, plus retained interface/delegate reference
-variance with conversion-scoped constraint validation. The current focused
-evidence compiles the importer and test fixture and passes 177 model tests: 92
-shared physical-value tests and 85 retained-metadata tests. Six unconstrained
-memberless external-DLL pipelines remain green with both FIR parsers. Git owns
-the intermediate chronology.
+variance with conversion-scoped constraint validation. That checkpoint compiled
+the importer and test fixture and passed 177 model tests: 92 shared physical-
+value tests and 85 retained-metadata tests. Six unconstrained memberless
+external-DLL pipelines were green with both FIR parsers. Later physical-value
+evidence is summarized below; Git owns the intermediate chronology.
 
 Local natural-interface admission now records one explicit producer-selected
 physical variance vector for every admitted TypeDef. This repairs the declaration-
@@ -96,8 +96,12 @@ entry prototype is exactly the current owner parameter, or an exact natural
 interface construction made solely from current-owner parameters, may enter and
 remain in local storage as that same `!n` or `I<!n,...>`; an object-domain
 semantic-hook prototype remains object-domain. A parameterless,
-non-method-generic natural MethodDef may now
-produce its recorded direct result and retain an equal owner-bound `!n` local.
+non-method-generic natural MethodDef may now produce its recorded direct result
+and retain an equal owner-bound `!n` or exact local `I<!n,...>` construction.
+The constructed-result admission is currently local BOUND authority only: one
+non-null natural-interface construction made directly from current-owner
+parameters, with no inputs or MethodSpec. External N/physical-ABI publication
+and consumption remain a separate gate.
 The declaration index selects the MethodDef, while receiver provenance supplies
 only a construction which it already guarantees; an existing semantic route
 vetoes the transfer. Selected lineage can disambiguate only a view already
@@ -169,6 +173,8 @@ evidence is in the
 [control-flow](docs/archive/generic-owner-physical-control-flow-join-placement-2026-09-01.md),
 [typed-entry](docs/archive/generic-owner-physical-typed-parameter-entry-2026-09-01.md),
 [typed-result](docs/archive/generic-owner-physical-typed-call-result-2026-09-01.md),
+[constructed-entry live slot](docs/archive/generic-owner-physical-constructed-entry-live-slot-2026-09-02.md),
+[constructed-call live result](docs/archive/generic-owner-physical-constructed-call-result-live-slot-2026-09-02.md),
 [split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md),
 [strict-input split-result local](docs/archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md),
 [repeated-input split-result local](docs/archive/generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md),
@@ -177,8 +183,8 @@ evidence is in the
 [split control flow](docs/archive/generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md),
 and [fixed-input split-result local](docs/archive/generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md)
 archives.
-The focused gate reports 93 green physical-value model tests. Candidate and
-production-erased inverse each cover eight green tests: two fixtures across
+The fixed-input checkpoint reported 93 green physical-value model tests.
+Candidate and production-erased inverse each covered eight green tests: two fixtures across
 PSI, LightTree, Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 The first argument-bearing authoritative operation now composes an exact
@@ -194,8 +200,8 @@ decision. A logically widened `Lookup<T, Any?>` retains its semantic route even
 when its value still has an exact physical carrier, including `T = Int`. Exact
 evidence is in the
 [owner-input operation archive](docs/archive/generic-owner-physical-owner-input-operation-2026-09-01.md).
-The focused XML audit contains 176 green model tests; candidate and erased
-inverse each contain four suites and eight green tests across PSI, LightTree,
+The owner-input checkpoint's focused XML audit contained 176 green model tests;
+candidate and erased inverse each contained four suites and eight green tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 The final operation consumer binds a complete MethodSpec vector from the
@@ -210,8 +216,8 @@ mistaken for owner authority. Exact evidence is in the
 [MethodSpec operation](docs/archive/generic-owner-physical-methodspec-operation-2026-09-01.md)
 and
 [MethodSpec/split composition](docs/archive/generic-owner-methodspec-split-nullable-composition-2026-09-01.md)
-archives. The focused audit contains 176 green model tests. Candidate and
-production-erased evidence each cover eight tests across PSI, LightTree,
+archives. That checkpoint's focused audit contained 176 green model tests.
+Candidate and production-erased evidence each covered eight tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
 ## Production binding state
@@ -282,10 +288,18 @@ owner, constructed, broad semantic-object, fallback-object, and MethodDef-
 binder facts do not. Direct constructed-parameter aliases now additionally
 bind their expected local `I<!T,...>` construction against the verifier-visible
 final `ldarg`/`ldloc` source slot; a logical whole-expression reconstruction can
-neither create authority nor hide a changed slot. The next constructed-entry
-boundary validates a direct call against the actually selected MethodDef result
-before retiring more whole-expression fallbacks; real caller-MethodDef `!!R`
-entry remains separate. Every non-return,
+neither create authority nor hide a changed slot. Direct constructed-result
+aliases bind the same expected construction against the ordinary physical-call
+resolver's live MethodDef result; an absent, object-shaped, split, semantic, or
+otherwise different result fails closed even when the logical whole-expression
+mapper reconstructs the desired type. This exact receiver/no-input slice
+structurally excludes the special emitters and pins the emitted `callvirt` in
+IL; broader calls require a shared final-route witness. External record closure
+is also still open. A logically widened immutable receiver may already retain
+an exact physical construction, but direct call emission does not yet consume
+that operation witness and therefore fails closed. Close that composition
+before constructor allocation; transparent block/composite containers and real
+caller-MethodDef `!!R` entry remain separate. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,
