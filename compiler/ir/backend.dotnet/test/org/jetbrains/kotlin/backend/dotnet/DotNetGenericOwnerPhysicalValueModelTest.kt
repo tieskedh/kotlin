@@ -6,16 +6,20 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
+import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.builders.declarations.buildVariable
+import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
@@ -27,6 +31,7 @@ import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
 import org.jetbrains.kotlin.ir.util.IrErrorModuleFragment
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.types.Variance
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -3357,7 +3362,22 @@ class DotNetGenericOwnerPhysicalValueModelTest {
 
     @Test
     fun `local placement authority admits only equal local owner-bound carriers`() {
+        val packageFragment = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
         val owner = testOwner("PlacementOwner")
+        val interfaceOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("PlacementInterface")
+            kind = ClassKind.INTERFACE
+        }.also { declaration ->
+            declaration.addTypeParameter { name = Name.identifier("T") }
+        }
+        owner.parent = packageFragment
+        interfaceOwner.parent = packageFragment
+        packageFragment.declarations += owner
+        packageFragment.declarations += interfaceOwner
         val function = IrFactoryImpl.buildFun {
             name = Name.identifier("place")
             returnType = owner.typeParameters.single().defaultType
@@ -3367,7 +3387,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         }
         val ownerIdentity = localOwnerIdentity(owner.symbol as IrClassSymbolImpl)
         val interfaceIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
-            IrClassSymbolImpl(),
+            interfaceOwner.symbol,
             DotNetGenericInterfaceView.DECLARED,
         )
         val localDeclarations = boundDeclarationIndex(
@@ -3450,6 +3470,10 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             storage,
         )
 
+        val constructedSource = function.addValueParameter(
+            "constructedSource",
+            owner.typeParameters.single().defaultType,
+        )
         val localVariable = buildVariable(
             function,
             0,
@@ -3457,7 +3481,24 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             IrDeclarationOrigin.DEFINED,
             Name.identifier("local"),
             owner.typeParameters.single().defaultType,
-        ).symbol as IrVariableSymbolImpl
+        ).also { variable ->
+            val type = owner.typeParameters.single().defaultType
+            variable.initializer = IrTypeOperatorCallImpl(
+                0,
+                0,
+                type,
+                IrTypeOperator.IMPLICIT_CAST,
+                type,
+                IrTypeOperatorCallImpl(
+                    0,
+                    0,
+                    type,
+                    IrTypeOperator.IMPLICIT_NOTNULL,
+                    type,
+                    IrGetValueImpl(0, 0, constructedSource.symbol),
+                ),
+            )
+        }.symbol as IrVariableSymbolImpl
         val foreignVariable = buildVariable(
             function,
             0,
@@ -3507,9 +3548,60 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             ),
         ).value
 
-        assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, localVariable))
+        val retainedConstruction = assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, localVariable),
+        )
         assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, parameterVariable))
         assertNull(authority.retainedProducedCarrierOrNull(function.symbol, foreignVariable))
+        val physicalOwner = DotNetIlClassInfo(
+            "PlacementOwner`1",
+            typeParameterVariances = listOf(Variance.INVARIANT),
+        )
+        val physicalInterface = DotNetIlClassInfo(
+            "PlacementInterface`1",
+            typeParameterVariances = listOf(Variance.INVARIANT),
+        )
+        val typeMapper = DotNetIlTypeMapper(
+            availableClasses = mapOf(
+                owner to physicalOwner,
+                interfaceOwner to physicalInterface,
+            ),
+            genericInterfaces = mapOf(
+                interfaceOwner to DotNetGenericInterfaceInfo(
+                    canonicalClassInfo = physicalInterface,
+                    declaredClassInfo = physicalInterface,
+                ),
+            ),
+            genericOwnerRehearsal = true,
+        )
+        val expectedConstruction = DotNetIlValueType.GenericInstance(
+            physicalInterface,
+            listOf(DotNetIlValueType.TypeParameter(0, isMethodParameter = false)),
+        )
+        assertEquals(
+            expectedConstruction,
+            retainedConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                initializerCarrier = DotNetIlValueType.Object,
+                initializerDirectStorageReadCarrier = expectedConstruction,
+                initializerDirectCallResultCarrier = null,
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a direct constructed alias must trust the live storage-read carrier, not a " +
+                    "whole-expression reconstruction",
+        )
+        assertNull(
+            retainedConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                initializerCarrier = expectedConstruction,
+                initializerDirectStorageReadCarrier = DotNetIlValueType.Object,
+                initializerDirectCallResultCarrier = null,
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a reconstructed exact expression must not hide an incompatible live storage slot",
+        )
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
                 listOf(

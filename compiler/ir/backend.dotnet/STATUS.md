@@ -279,9 +279,13 @@ same vector through the fail-closed hand-off: only
 `DECLARATION_INDEPENDENT` producer-planned regular slots with matching typed and
 current fixed-leaf prototypes and `Direct(Fixed(same leaf))` final storage pass;
 owner, constructed, broad semantic-object, fallback-object, and MethodDef-
-binder facts do not. The next boundary repairs direct constructed-
-parameter live-slot validation before constructed entry forms expand; real
-caller-MethodDef `!!R` entry remains separate. Every non-return,
+binder facts do not. Direct constructed-parameter aliases now additionally
+bind their expected local `I<!T,...>` construction against the verifier-visible
+final `ldarg`/`ldloc` source slot; a logical whole-expression reconstruction can
+neither create authority nor hide a changed slot. The next constructed-entry
+boundary validates a direct call against the actually selected MethodDef result
+before retiring more whole-expression fallbacks; real caller-MethodDef `!!R`
+entry remains separate. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,

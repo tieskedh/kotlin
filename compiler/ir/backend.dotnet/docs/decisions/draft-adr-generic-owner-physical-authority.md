@@ -1401,8 +1401,12 @@ complete live-use proof so later IR cannot turn placement authority into a
 non-return, protected, other-target, or sequential consumer. Other generic or
 unsupported mixed-domain input shapes remain unavailable. Split-pair placement through flat
 control-flow initializer joins and cardinality-independent strict-owner input
-vectors are now closed. The next boundary repairs direct constructed-parameter
-live-slot validation before constructed entry forms expand, then proves real
+vectors are now closed. A direct constructed-parameter alias now validates its
+expected `I<!T,...>` against the final verifier-visible storage-read slot rather
+than a carrier reconstructed from its logical whole expression. This late check
+cannot mint provenance and fails closed on disagreement. Remaining constructed
+entry forms expand only through enumerated independent emitter observations,
+starting with the actually selected direct-call MethodDef result, before real
 caller-MethodDef `!!R` entry and explicit conversions—not another state or
 stdlib recognizer.
 
