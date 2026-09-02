@@ -198,6 +198,8 @@ internal class DotNetIlEmitter(
     private val localGenericOwnerPhysicalAuthority: DotNetLocalGenericOwnerPhysicalAuthority? = null,
     private val genericOwnerPhysicalValueLocalPlacementAuthority:
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority? = null,
+    private val genericOwnerSemanticEquivalentOperationEmitterWitnesses:
+            Map<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> = emptyMap(),
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
     private val publishedGenericInterfaceFamilies:
             Map<IrClass, DotNetPublishedGenericInterfaceFamilyContract> = emptyMap(),
@@ -1495,6 +1497,8 @@ internal class DotNetIlEmitter(
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                         genericOwnerPhysicalValueLocalPlacementAuthority =
                             genericOwnerPhysicalValueLocalPlacementAuthority,
+                        genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                            genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                         capturePhysicalLocalPlacements = genericOwnerRehearsal,
                         capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                     ).render()
@@ -1550,6 +1554,8 @@ internal class DotNetIlEmitter(
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                             genericOwnerPhysicalValueLocalPlacementAuthority =
                                 genericOwnerPhysicalValueLocalPlacementAuthority,
+                            genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                                genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                             capturePhysicalLocalPlacements = genericOwnerRehearsal,
                             capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                         ).render()
@@ -2421,6 +2427,23 @@ internal class DotNetIlEmitter(
                 carrier.nameInSignature,
             )
         }
+        fun observedOwner(
+            classInfo: DotNetIlClassInfo,
+        ): DotNetGenericOwnerObservedMethodDefOwner = when (val resolution =
+            localTypeDefsByClassInfo[classInfo]
+        ) {
+            null -> DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
+                "the emitted owner does not belong to a local physical TypeDef",
+                isConflict = false,
+            )
+            is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict ->
+                DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
+                    resolution.reason,
+                    isConflict = true,
+                )
+            is DotNetGenericOwnerObservedLocalTypeDefResolution.Known ->
+                DotNetGenericOwnerObservedMethodDefOwner.Local(resolution.typeDef)
+        }
         val methodDefHeaderObservations = rawMethodDefHeaderObservations.map { raw ->
             val ownerResolution = localTypeDefsByClassInfo[raw.physicalOwner]
             val physicalOwner = (ownerResolution as?
@@ -2469,6 +2492,47 @@ internal class DotNetIlEmitter(
                     },
                 )
             }
+            val forwardingBodyEvidence = when (val evidence = raw.forwardingBodyEvidence) {
+                null -> null
+                is DotNetIlRawForwardingBodyEvidence.Unavailable ->
+                    DotNetGenericOwnerPhysicalForwardingBodyEvidence.Unavailable(evidence.reason)
+                is DotNetIlRawForwardingBodyEvidence.Conflict ->
+                    DotNetGenericOwnerPhysicalForwardingBodyEvidence.Conflict(evidence.reason)
+                is DotNetIlRawForwardingBodyEvidence.Forwarding -> {
+                    val edge = evidence.edge
+                    val targetReturnCarrier = when (val returnType = edge.returnType) {
+                        DotNetIlReturnType.Void -> DotNetGenericOwnerObservedMethodCarrier.Leaf(
+                            DotNetGenericOwnerPhysicalTypeKind.VOID,
+                        )
+                        is DotNetIlReturnType.Value -> normalizeObservedMethodCarrier(
+                            returnType.type,
+                            raw,
+                            physicalOwner,
+                        )
+                    }
+                    DotNetGenericOwnerPhysicalForwardingBodyEvidence.Forwarding(
+                        DotNetGenericOwnerPhysicalForwardingCallEdge(
+                            targetFunction = edge.targetFunction,
+                            targetIdentity = edge.targetIdentity,
+                            targetPhysicalOwner = observedOwner(edge.targetPhysicalOwner),
+                            targetOwner = normalizeObservedMethodCarrier(
+                                edge.targetOwner,
+                                raw,
+                                physicalOwner,
+                            ),
+                            methodInstantiation = edge.methodInstantiation.map { argument ->
+                                normalizeObservedMethodCarrier(argument, raw, physicalOwner)
+                            },
+                            parameterCarriers = edge.parameterTypes.map { parameter ->
+                                normalizeObservedMethodCarrier(parameter, raw, physicalOwner)
+                            },
+                            returnCarrier = targetReturnCarrier,
+                            hasSplitNullableResult = edge.hasSplitNullableResult,
+                            isVirtual = edge.isVirtual,
+                        ),
+                    )
+                }
+            }
             DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
                 physicalFunction = raw.function,
                 physicalMethodIdentity = raw.genericOwnerPhysicalMethodIdentity,
@@ -2487,24 +2551,8 @@ internal class DotNetIlEmitter(
                     parameterCarriers = physicalParameters,
                     hasSplitNullableResult = raw.signature.hasSplitNullableResult,
                 ),
+                forwardingBodyEvidence = forwardingBodyEvidence,
             )
-        }
-        fun observedOwner(
-            classInfo: DotNetIlClassInfo,
-        ): DotNetGenericOwnerObservedMethodDefOwner = when (val resolution =
-            localTypeDefsByClassInfo[classInfo]
-        ) {
-            null -> DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
-                "the emitted owner does not belong to a local physical TypeDef",
-                isConflict = false,
-            )
-            is DotNetGenericOwnerObservedLocalTypeDefResolution.Conflict ->
-                DotNetGenericOwnerObservedMethodDefOwner.Unbindable(
-                    resolution.reason,
-                    isConflict = true,
-                )
-            is DotNetGenericOwnerObservedLocalTypeDefResolution.Known ->
-                DotNetGenericOwnerObservedMethodDefOwner.Local(resolution.typeDef)
         }
         fun normalizeObservedTypeCarrier(
             carrier: DotNetIlValueType,
@@ -4116,6 +4164,8 @@ internal class DotNetIlEmitter(
                     genericOwnerForeignOverrideProbeTarget = genericOwnerForeignOverrideProbeTargets[member],
                     genericOwnerPhysicalValueLocalPlacementAuthority =
                         genericOwnerPhysicalValueLocalPlacementAuthority,
+                    genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                        genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                     capturePhysicalLocalPlacements = genericOwnerRehearsal,
                     capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                 ).render()
@@ -4142,6 +4192,8 @@ internal class DotNetIlEmitter(
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                         genericOwnerPhysicalValueLocalPlacementAuthority =
                             genericOwnerPhysicalValueLocalPlacementAuthority,
+                        genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                            genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                         capturePhysicalLocalPlacements = genericOwnerRehearsal,
                         capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                     ).render()
@@ -4248,6 +4300,8 @@ internal class DotNetIlEmitter(
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                             genericOwnerPhysicalValueLocalPlacementAuthority =
                                 genericOwnerPhysicalValueLocalPlacementAuthority,
+                            genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                                genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                             capturePhysicalLocalPlacements = genericOwnerRehearsal,
                             capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                         ).render()
@@ -4471,6 +4525,8 @@ internal class DotNetIlEmitter(
                 facadeClassInfoByFile = facadeClassInfoByFile,
                 genericOwnerPhysicalValueLocalPlacementAuthority =
                     genericOwnerPhysicalValueLocalPlacementAuthority,
+                genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                    genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                 capturePhysicalLocalPlacements = genericOwnerRehearsal,
                 capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
             ).render()

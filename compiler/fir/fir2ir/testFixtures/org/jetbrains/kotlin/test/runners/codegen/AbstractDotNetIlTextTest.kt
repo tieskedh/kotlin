@@ -909,11 +909,13 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
             "The operation probe must publish one $functionName/$variableName route: $snapshots"
         }
 
-    val natural = snapshot("sourceAliasMatches", "sourceNaturalAlias")
-    check(natural.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
-            natural.logicalSelector ==
-            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
-            natural.predictedRouteKind ==
+    fun checkNatural(
+        natural: DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot,
+        expectedSelector: DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot,
+        description: String,
+    ) {
+        check(natural.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            natural.logicalSelector == expectedSelector && natural.predictedRouteKind ==
             DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
             natural.requiredReceiverCarrier.let { carrier ->
                 carrier.kind ==
@@ -934,8 +936,47 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
             DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
             natural.relation == DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
             natural.diagnostic == null) {
-        "The exact source alias must retain the natural MethodDef and !T result: $natural"
+            "$description must retain the natural MethodDef and !T result: $natural"
+        }
     }
+    val natural = snapshot("sourceAliasMatches", "sourceNaturalAlias")
+    checkNatural(
+        natural,
+        DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL,
+        "The exact source alias",
+    )
+    val certifiedWide = snapshot("wideAliasMatches", "sourceWideAlias")
+    checkNatural(
+        certifiedWide,
+        DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
+        "The exact-final broad source alias with a semantic-equivalence obligation",
+    )
+
+    fun checkNoCertifiedDirectRoute(
+        functionName: String,
+        variableName: String,
+        description: String,
+    ) {
+        val observed = snapshots.filter { candidate ->
+            candidate.ownerName.endsWith("InlineSelfView") &&
+                    candidate.physicalFunctionName == functionName &&
+                    candidate.receiverVariableName == variableName &&
+                    candidate.logicalMemberName == "produce"
+        }
+        check(observed.isNotEmpty() && observed.none { candidate ->
+            candidate.predictedRouteKind ==
+                    DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE ||
+                    candidate.actualRoute ==
+                    DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL
+        }) {
+            "$description must not acquire a certified direct-natural route: $observed"
+        }
+    }
+    checkNoCertifiedDirectRoute(
+        "joinedAliasMatches",
+        "sourceJoinedAlias",
+        "A join of multiple concrete source values",
+    )
 
     fun checkSemantic(
         semantic: DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot,
@@ -972,11 +1013,6 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
 
     listOf(
         Triple(
-            "wideAliasMatches",
-            "sourceWideAlias",
-            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
-        ),
-        Triple(
             "nullableAliasMatches",
             "sourceNullableAlias",
             DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.OPEN_NULLABLE,
@@ -996,10 +1032,10 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
     }) {
         "The inlined broad receiver must remain visible outside its exact local provenance: $snapshots"
     }
-    checkSemantic(
+    checkNatural(
         inlineWidened,
         DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL,
-        "The implicitly widened inline receiver",
+        "The exact-final implicitly widened inline receiver",
     )
 
     val widenedConstructedResultRoute = checkNotNull(snapshots.singleOrNull { candidate ->
@@ -1968,21 +2004,67 @@ private fun validateGenericOwnerProducerSealedPublication(
     producer: File,
     testDataFile: File,
 ) {
-    if (GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE_MARKER !in testDataFile.readText()) return
+    val testData = testDataFile.readText()
+    val probesSemanticEquivalence =
+        GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE_PROBE_MARKER in testData
+    val expectedImplementationName = when {
+        probesSemanticEquivalence ->
+            "SemanticEquivalenceCertificateValue"
+        GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE_MARKER in testData ->
+            "RehearsalSeparateSealedPublicationValue"
+        else -> return
+    }
     val sealedEntries = declarations.entries.filter { entry ->
         entry.value is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
     }
+    val semanticEquivalenceEntries = declarations.entries.filter { entry ->
+        entry.value is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
+    }
     if (!genericOwnerRehearsal) {
-        check(sealedEntries.isEmpty()) {
-            "The production erased epoch must not publish producer-sealed generic-owner families: " +
-                    sealedEntries
+        check(sealedEntries.isEmpty() && semanticEquivalenceEntries.isEmpty()) {
+            "The production erased epoch must not publish producer-sealed generic-owner " +
+                    "families or semantic-equivalence certificates: " +
+                    (sealedEntries + semanticEquivalenceEntries)
         }
         return
     }
     if (!producesLibrary) {
-        check(sealedEntries.isEmpty()) {
-            "An executable consumer must not republish producer-sealed generic-owner families: " +
-                    sealedEntries
+        check(sealedEntries.isEmpty() && semanticEquivalenceEntries.isEmpty()) {
+            "An executable consumer must not republish producer-sealed generic-owner families " +
+                    "or semantic-equivalence certificates: " +
+                    (sealedEntries + semanticEquivalenceEntries)
+        }
+        if (probesSemanticEquivalence) {
+            val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+            check(emittedIl.isFile) {
+                "The semantic-equivalence consumer has no emitted IL: ${emittedIl.path}"
+            }
+            val ilText = emittedIl.readText().removePrefix("\uFEFF")
+            val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+                .map { match -> match.range.first }
+                .toList()
+            val methodWindows = methodStarts.mapIndexed { index, start ->
+                ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+            }
+            listOf("externalIntValue", "externalStringValue").forEach { methodName ->
+                val method = methodWindows.singleOrNull { candidate ->
+                    candidate.substringBefore('{').contains("'$methodName'(")
+                }
+                check(method != null) {
+                    "Cannot isolate the external $methodName MethodDef: ${emittedIl.path}"
+                }
+                val directNaturalCalls = method.lineSequence().map(String::trim).filter { line ->
+                    (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                            "SemanticEquivalenceCertificateProducer`1" in line &&
+                            "::'value'(" in line
+                }.toList()
+                check(directNaturalCalls.isEmpty() &&
+                        ("KotlinSemantic" in method || "::'InvokeRecordedMember'(" in method)
+                ) {
+                    "External K must remain inert before PE body validation; $methodName used a " +
+                            "direct natural call: direct=$directNaturalCalls, method=$method"
+                }
+            }
         }
         return
     }
@@ -2003,7 +2085,7 @@ private fun validateGenericOwnerProducerSealedPublication(
     }.filter { candidate ->
         val family = candidate.second
         family.ownerPath.lastOrNull()?.substringBefore('`') ==
-                "RehearsalSeparateSealedPublicationValue"
+                expectedImplementationName
     }
     val candidate = checkNotNull(candidates.singleOrNull()) {
         "The lib producer must publish one final actual seal for the dedicated family: " +
@@ -2019,6 +2101,48 @@ private fun validateGenericOwnerProducerSealedPublication(
             family.ownerPath
     ) {
         "The producer seal was not joined to its exact pre-lowering C/F declarations: $family"
+    }
+    val semanticEquivalence = checkNotNull(semanticEquivalenceEntries.singleOrNull { entry ->
+        (entry.value as DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate)
+            .sealedFamilyIndexKey == indexKey
+    }) {
+        "The sealed final producer must publish one semantic-equivalence certificate for $indexKey: " +
+                semanticEquivalenceEntries
+    }
+    check(semanticEquivalence.key == "K:${indexKey.removePrefix("J:")}") {
+        "The semantic-equivalence certificate is not identity-bound to its exact J family: " +
+                semanticEquivalence
+    }
+    if (!probesSemanticEquivalence) return
+    val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+    check(emittedIl.isFile) {
+        "The semantic-equivalence producer has no emitted IL: ${emittedIl.path}"
+    }
+    val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
+        .map { match -> match.range.first }
+        .toList()
+    val methodWindows = methodStarts.mapIndexed { index, start ->
+        ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
+    }
+    val widenedMethod = methodWindows.singleOrNull { method ->
+        method.substringBefore('{').contains("'widenedValue'(")
+    }
+    check(widenedMethod != null) {
+        "Cannot isolate the producer-local widenedValue MethodDef: ${emittedIl.path}"
+    }
+    val valueCalls = widenedMethod.lineSequence().map(String::trim).filter { line ->
+        (line.startsWith("call ") || line.startsWith("callvirt ")) && "::'value'(" in line
+    }.toList()
+    check(valueCalls.singleOrNull()?.let { call ->
+        Regex(
+            "^callvirt\\s+instance\\s+!0\\s+class\\s+" +
+                    "'SemanticEquivalenceCertificateProducer`1'<!0>::'value'\\(\\)$",
+        ).matches(call)
+    } == true && "KotlinSemantic" !in widenedMethod &&
+            "::'InvokeRecordedMember'(" !in widenedMethod) {
+        "The producer-local certified widened route must call the natural !T entry directly: " +
+                "calls=$valueCalls, method=$widenedMethod"
     }
 }
 
@@ -3730,7 +3854,56 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The emitted natural alias must call the exact InlineProducer<!T> MethodDef: " +
                     "calls=$emittedProduceCalls, method=$emittedMethod"
         }
+        val emittedWideMethod = methodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'wideAliasMatches'(")
+        }
+        check(emittedWideMethod != null) {
+            "Cannot isolate the emitted wideAliasMatches MethodDef: ${emittedIl.path}"
+        }
+        val emittedWideProduceCalls = emittedWideMethod.lineSequence().map(String::trim).filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'produce'(" in line
+        }.toList()
+        check(emittedWideProduceCalls.singleOrNull()?.let { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!0\\s+class\\s+'InlineProducer`1'<!0>::'produce'\\(\\)$",
+            ).matches(call)
+        } == true && "KotlinSemantic" !in emittedWideMethod &&
+                "::'InvokeRecordedMember'(" !in emittedWideMethod) {
+            "The certified broad alias must call InlineProducer<!T> directly without a " +
+                    "semantic-capability hop: calls=$emittedWideProduceCalls, method=$emittedWideMethod"
+        }
 
+        fun checkSemanticProduceRoute(methodName: String, description: String) {
+            val method = methodWindows.singleOrNull { candidate ->
+                candidate.substringBefore('{').contains("'$methodName'(")
+            }
+            check(method != null) {
+                "Cannot isolate the emitted $methodName MethodDef: ${emittedIl.path}"
+            }
+            val directNaturalCalls = method.lineSequence().map(String::trim).filter { line ->
+                (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                        "class 'InlineProducer`1'" in line && "::'produce'(" in line
+            }.toList()
+            check(directNaturalCalls.isEmpty() &&
+                    ("KotlinSemantic" in method || "::'InvokeRecordedMember'(" in method)
+            ) {
+                "$description must retain a semantic-capability route rather than becoming a " +
+                        "direct natural call: direct=$directNaturalCalls, method=$method"
+            }
+        }
+        checkSemanticProduceRoute(
+            "starAliasMatches",
+            "The star-projected alias",
+        )
+        checkSemanticProduceRoute(
+            "mutableAliasTracks",
+            "The reassigned broad alias",
+        )
+        checkSemanticProduceRoute(
+            "joinedAliasMatches",
+            "The joined broad alias",
+        )
         val observed = comparisons.filter { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSelfView") &&
                     comparison.prediction.sourceFunctionName == "indexOf" &&
@@ -7765,6 +7938,8 @@ private const val GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_METHOD_GENERIC_SEALED_EMISSION_PROBE"
 private const val GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_PRODUCER_SEALED_PUBLICATION_PROBE"
+private const val GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
@@ -14863,7 +15038,8 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                 declaration is DotNetPhysicalDeclaration.GenericOwnerMemberFamily ||
                 declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
                 declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
-                declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ||
+                declaration is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
     }
     if (!genericOwnerRehearsal) {
         check(genericOwnerRecords.isEmpty()) {
@@ -15534,10 +15710,11 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
             declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
                     declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
                     declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
         }
         check(genericOwnerEpochRecords.isEmpty()) {
-            "The production-erased split-nullable inverse published H/N/M/J records: " +
+            "The production-erased split-nullable inverse published H/N/M/J/K records: " +
                     genericOwnerEpochRecords.keys.sorted()
         }
 
@@ -16660,10 +16837,11 @@ private fun validateGenericOwnerStateAuthorityCSharp(
             declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
                     declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
                     declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ||
+                    declaration is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
         }
         check(genericOwnerEpochRecords.isEmpty()) {
-            "The production-erased state-authority inverse published H/N/M/J records: " +
+            "The production-erased state-authority inverse published H/N/M/J/K records: " +
                     genericOwnerEpochRecords.keys.sorted()
         }
         val metadata = DotNetClrMetadataReader.read(producer)

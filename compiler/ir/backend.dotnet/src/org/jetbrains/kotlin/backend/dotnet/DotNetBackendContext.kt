@@ -296,6 +296,22 @@ internal class DotNetBackendContext(
     val genericOwnerAuthoritativePhysicalOperationRoutes:
         MutableMap<IrCall, DotNetGenericOwnerPhysicalOperationRoute> =
         java.util.IdentityHashMap()
+    /** Exact receiver/implementation evidence for broad calls whose semantic route was removed. */
+    val genericOwnerSemanticEquivalentOperationEmitterWitnesses:
+        MutableMap<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> =
+        java.util.IdentityHashMap()
+    /**
+     * Local direct-natural routes which rely on a not-yet-sealed forwarding certificate.
+     *
+     * Each pair is a pre-emission obligation, not a certificate: successful final emission must
+     * independently prove the corresponding forwarding graph. An exportable sealed family also
+     * publishes that proof as a physical-library record; private and executable-only families do
+     * not acquire public ABI solely to justify an internal call. Keeping the exact logical/
+     * implementation symbols prevents CLR names or diagnostic snapshots from feeding back into
+     * the proof.
+     */
+    val genericOwnerSemanticEquivalenceEmissionObligations:
+        MutableSet<Pair<IrSimpleFunctionSymbol, IrSimpleFunctionSymbol>> = linkedSetOf()
     /** Distinguishes a completed operation shadow from an unavailable BOUND authority. */
     var genericOwnerPhysicalOperationRouteShadowAnalysisCompleted: Boolean = false
     /** One rehearsal-only, monotone local TypeDef/InterfaceImpl authority lineage. */

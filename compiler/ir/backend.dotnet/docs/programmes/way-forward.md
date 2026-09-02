@@ -243,19 +243,24 @@ ordinary materializing boundary. Multiple static direct-return sites are
 admitted only because every executed site terminates its path. Star/projected
 or truly broad source values never gain exact authority from a logical type.
 
-The next direct-call gate is a producer-recorded semantic-equivalence
-certificate for a final concrete implementation, consumed only after binding
-the frozen natural and semantic TypeDef/MethodDef/MethodImpl rows to one
-authoritative body endpoint. Exact final concrete-receiver provenance must also
-hold; an exact construction retained through a logically widened open-interface
-view is insufficient. The current route-coherence boundary and hostile inverse
-are recorded in the
-[dated archive](../archive/generic-owner-call-result-route-coherence-2026-09-02.md),
+The bounded local-final direct-call gate is now closed. A logically widened
+producer call may replace its conservative semantic target only when an exact
+final implementation carrier is independently proven and final emission seals
+both generated semantic dispatchers as positional forwarders to the same typed
+entry. Exportable families publish an orthogonal `K` certificate tied to the
+exact `J` family; exact construction or selected lineage alone is never such a
+certificate. The completed scope and hostile inverse are recorded in the
+[dated archive](../archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md),
 while the normative identity, lineage, and operation rules live in the
 [physical-authority ADR](../decisions/draft-adr-generic-owner-physical-authority.md).
 
-After that certificate, prove path-complete block/composite calls, the real
-caller-MethodDef `!!R` entry, additional non-materializing consumer categories,
+The next direct-call gate is objective external validation. Extend the PE
+reader to authenticate every referenced `J` TypeDef, MethodDef, MethodImpl, and
+the bounded dispatcher-forwarding body grammar against the loaded `J`/`K`
+records. Only after that independent validation may a separate consumer use
+external `K` for routing; record agreement without PE body evidence is not
+authority. Then prove path-complete block/composite calls, the real caller-
+MethodDef `!!R` entry, additional non-materializing consumer categories,
 null/bottom/unknown split joins, and explicit representation-changing
 conversions.
 Only after those value rules stabilize should the consumer widen to captures,

@@ -169,6 +169,7 @@ internal data class DotNetIlRawMethodDefHeaderObservation(
     val genericArity: Int,
     val genericParameters: List<DotNetIlRawMethodDefGenericParameterObservation>,
     val signature: DotNetIlMethodSignature,
+    val forwardingBodyEvidence: DotNetIlRawForwardingBodyEvidence? = null,
 ) {
     init {
         require(physicalMethodName.isNotEmpty()) {
@@ -206,6 +207,43 @@ internal data class DotNetIlRawMethodDefGenericParameterObservation(
             "an observed MethodDef GenericParam cannot repeat a constraint row"
         }
     }
+}
+
+/**
+ * The physical call edge reached while rendering one candidate forwarding body.
+ *
+ * This is deliberately emitter-owned evidence. [targetIdentity] and [targetFunction] identify
+ * the resolved MethodDef; [targetOwner] and [methodInstantiation] retain the actual MemberRef /
+ * MethodSpec operands selected by codegen. Names and IR origins are not authority.
+ */
+internal data class DotNetIlRawForwardingCallEdge(
+    val targetFunction: IrSimpleFunctionSymbol,
+    val targetIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+    val targetPhysicalOwner: DotNetIlClassInfo,
+    val targetOwner: DotNetIlValueType,
+    val methodInstantiation: List<DotNetIlValueType>,
+    val parameterTypes: List<DotNetIlValueType>,
+    val returnType: DotNetIlReturnType,
+    val hasSplitNullableResult: Boolean,
+    val isVirtual: Boolean,
+)
+
+/** One final-emitter result for a concrete MethodDef's pure-forwarding-body claim. */
+internal sealed interface DotNetIlRawForwardingBodyEvidence {
+    data class Unavailable(val reason: String) : DotNetIlRawForwardingBodyEvidence {
+        init {
+            require(reason.isNotEmpty()) { "unavailable forwarding evidence requires a reason" }
+        }
+    }
+
+    data class Conflict(val reason: String) : DotNetIlRawForwardingBodyEvidence {
+        init {
+            require(reason.isNotEmpty()) { "conflicting forwarding evidence requires a reason" }
+        }
+    }
+
+    data class Forwarding(val edge: DotNetIlRawForwardingCallEdge) :
+        DotNetIlRawForwardingBodyEvidence
 }
 
 /** One structured target in a final TypeDef's BaseType/InterfaceImpl table. */
@@ -625,6 +663,7 @@ internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
     val genericArity: Int,
     val genericParameters: List<DotNetGenericOwnerPhysicalMethodDefGenericParameterObservation>,
     val signature: DotNetGenericOwnerObservedMethodSignature,
+    val forwardingBodyEvidence: DotNetGenericOwnerPhysicalForwardingBodyEvidence? = null,
 ) {
     init {
         require(physicalMethodName.isNotEmpty()) {
@@ -637,6 +676,31 @@ internal data class DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
             "a normalized MethodDef requires one exact GenericParam row per generic parameter"
         }
     }
+}
+
+/** The normalized target of one actually emitted pure-forwarding call. */
+internal data class DotNetGenericOwnerPhysicalForwardingCallEdge(
+    val targetFunction: IrSimpleFunctionSymbol,
+    val targetIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+    val targetPhysicalOwner: DotNetGenericOwnerObservedMethodDefOwner,
+    val targetOwner: DotNetGenericOwnerObservedMethodCarrier,
+    val methodInstantiation: List<DotNetGenericOwnerObservedMethodCarrier>,
+    val parameterCarriers: List<DotNetGenericOwnerObservedMethodCarrier>,
+    val returnCarrier: DotNetGenericOwnerObservedMethodCarrier,
+    val hasSplitNullableResult: Boolean,
+    val isVirtual: Boolean,
+)
+
+/**
+ * Normalized body evidence attached to the same final MethodDef observation as its header.
+ * Absence, contradiction and a proven edge remain distinct so later sealing cannot fill missing
+ * body authority from an expected declaration plan.
+ */
+internal sealed interface DotNetGenericOwnerPhysicalForwardingBodyEvidence {
+    data class Unavailable(val reason: String) : DotNetGenericOwnerPhysicalForwardingBodyEvidence
+    data class Conflict(val reason: String) : DotNetGenericOwnerPhysicalForwardingBodyEvidence
+    data class Forwarding(val edge: DotNetGenericOwnerPhysicalForwardingCallEdge) :
+        DotNetGenericOwnerPhysicalForwardingBodyEvidence
 }
 
 /** Final-fixpoint GenericParam evidence bound to its owning physical MethodDef. */
@@ -686,7 +750,9 @@ private data class DotNetIlSimpleMethodHeaderDecision(
     val renderedGenericParameters: String
         get() = genericParameters.renderDotNetIlGenericParameterDecisions().orEmpty()
 
-    fun observation(): DotNetIlRawMethodDefHeaderObservation = DotNetIlRawMethodDefHeaderObservation(
+    fun observation(
+        forwardingBodyEvidence: DotNetIlRawForwardingBodyEvidence?,
+    ): DotNetIlRawMethodDefHeaderObservation = DotNetIlRawMethodDefHeaderObservation(
         function = function.symbol,
         genericOwnerPhysicalMethodIdentity = genericOwnerPhysicalMethodIdentity,
         physicalOwner = physicalOwner,
@@ -705,6 +771,7 @@ private data class DotNetIlSimpleMethodHeaderDecision(
             )
         },
         signature = signature,
+        forwardingBodyEvidence = forwardingBodyEvidence,
     )
 
     val renderedMetadataFlags: String
@@ -759,6 +826,8 @@ internal class DotNetIlMethodCodegen(
     private val genericOwnerForeignOverrideProbeTarget: IrSimpleFunction? = null,
     private val genericOwnerPhysicalValueLocalPlacementAuthority:
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority? = null,
+    private val genericOwnerSemanticEquivalentOperationEmitterWitnesses:
+            Map<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> = emptyMap(),
     private val capturePhysicalLocalPlacements: Boolean = false,
     private val capturePhysicalMethodDefHeaders: Boolean = false,
 ) {
@@ -772,6 +841,22 @@ internal class DotNetIlMethodCodegen(
     } else {
         null
     }
+    private sealed interface ForwardingBodyCandidate {
+        data class Candidate(val call: IrCall) : ForwardingBodyCandidate
+        data class Unavailable(val reason: String) : ForwardingBodyCandidate
+        data class Conflict(val reason: String) : ForwardingBodyCandidate
+    }
+
+    private val forwardingBodyCandidate: ForwardingBodyCandidate? =
+        if (capturePhysicalMethodDefHeaders &&
+            function is IrSimpleFunction &&
+            functionInfo.genericOwnerPhysicalMethodIdentity != null
+        ) {
+            inspectForwardingBodyCandidate(function)
+        } else {
+            null
+        }
+    private val observedForwardingCalls = mutableListOf<DotNetIlRawForwardingCallEdge>()
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
         function.parameters,
@@ -834,9 +919,14 @@ internal class DotNetIlMethodCodegen(
                 }
             },
             genericOwnerCapabilitySlots,
+            genericOwnerSemanticEquivalentOperationEmitterWitnesses,
             retainsProducedLocalCarrier = { variable ->
                 genericOwnerPhysicalValueLocalPlacementAuthority
                     ?.retainedProducedCarrierOrNull(function.symbol, variable.symbol) != null
+            },
+            forwardingCallObserver = { call, edge ->
+                val candidate = forwardingBodyCandidate as? ForwardingBodyCandidate.Candidate
+                if (candidate != null && call === candidate.call) observedForwardingCalls += edge
             },
         )
 
@@ -847,6 +937,138 @@ internal class DotNetIlMethodCodegen(
      */
     private var returnJoinLabel: String? = null
     private var returnValueSlot: DotNetIlSlot.Local? = null
+
+    /**
+     * Recognizes only the semantic shape whose emitted call can be certified independently:
+     * one direct return of one call, optionally widened by implicit casts, with every argument
+     * read from the same physical parameter position and every MethodSpec argument forwarded
+     * from the same MethodDef binder position. The eventual target is deliberately not inferred
+     * here; [DotNetIlExpressionCodegen] reports the MethodDef it actually resolved.
+     */
+    private fun inspectForwardingBodyCandidate(
+        method: IrSimpleFunction,
+    ): ForwardingBodyCandidate {
+        if (method.modality == Modality.ABSTRACT) {
+            return ForwardingBodyCandidate.Unavailable("an abstract MethodDef has no forwarding body")
+        }
+        var expression = when (val body = method.body) {
+            is IrExpressionBody -> body.expression
+            is IrBlockBody -> {
+                val statement = body.statements.singleOrNull() as? IrReturn
+                    ?: return ForwardingBodyCandidate.Conflict(
+                        "a concrete MethodDef is not one direct return",
+                    )
+                if (statement.returnTargetSymbol !== method.symbol) {
+                    return ForwardingBodyCandidate.Conflict(
+                        "a forwarding return targets another MethodDef",
+                    )
+                }
+                statement.value
+            }
+            null -> return ForwardingBodyCandidate.Unavailable(
+                "a concrete MethodDef has no observable body",
+            )
+            else -> return ForwardingBodyCandidate.Conflict(
+                "a concrete MethodDef has a non-expression forwarding body",
+            )
+        }
+        while (expression is IrTypeOperatorCall &&
+            expression.operator == IrTypeOperator.IMPLICIT_CAST
+        ) {
+            expression = expression.argument
+        }
+        val call = expression as? IrCall ?: return ForwardingBodyCandidate.Conflict(
+            "a forwarding return does not contain exactly one direct call",
+        )
+        if (call.superQualifierSymbol != null) {
+            return ForwardingBodyCandidate.Conflict(
+                "a forwarding body changes dispatch through a super-qualified call",
+            )
+        }
+        if (call.arguments.size != method.parameters.size ||
+            call.arguments.indices.any { index ->
+                (call.arguments[index] as? IrGetValue)?.symbol !== method.parameters[index].symbol
+            }
+        ) {
+            return ForwardingBodyCandidate.Conflict(
+                "a forwarding body does not pass its receiver and parameters directly by position",
+            )
+        }
+        if (call.typeArguments.size != method.typeParameters.size ||
+            call.typeArguments.indices.any { index ->
+                call.typeArguments[index] != method.typeParameters[index].typeParameterDefaultType
+            }
+        ) {
+            return ForwardingBodyCandidate.Conflict(
+                "a forwarding body does not pass its MethodDef type arguments exactly by position",
+            )
+        }
+        return ForwardingBodyCandidate.Candidate(call)
+    }
+
+    /** Joins the structural candidate with the exact physical call resolved during this render. */
+    private fun finalForwardingBodyEvidence(): DotNetIlRawForwardingBodyEvidence? {
+        return when (val candidate = forwardingBodyCandidate) {
+            null -> null
+            is ForwardingBodyCandidate.Unavailable ->
+                DotNetIlRawForwardingBodyEvidence.Unavailable(candidate.reason)
+            is ForwardingBodyCandidate.Conflict ->
+                DotNetIlRawForwardingBodyEvidence.Conflict(candidate.reason)
+            is ForwardingBodyCandidate.Candidate -> {
+                if (observedForwardingCalls.isEmpty()) {
+                    return DotNetIlRawForwardingBodyEvidence.Unavailable(
+                        "the candidate forwarding call produced no resolved physical call edge",
+                    )
+                }
+                if (observedForwardingCalls.size != 1) {
+                    return DotNetIlRawForwardingBodyEvidence.Conflict(
+                        "the candidate forwarding call produced duplicate physical call edges",
+                    )
+                }
+                val edge = observedForwardingCalls.single()
+                if (edge.targetIdentity == null) {
+                    return DotNetIlRawForwardingBodyEvidence.Unavailable(
+                        "the resolved forwarding target has no physical MethodDef identity",
+                    )
+                }
+                if (signature.hasSplitNullableResult || edge.hasSplitNullableResult) {
+                    // Split-nullable forwarding needs an explicit hidden out-flag flow. The
+                    // current one-call IR grammar cannot express or prove that flow.
+                    return DotNetIlRawForwardingBodyEvidence.Conflict(
+                        "a pure forwarding body cannot implicitly forward a split-nullable result",
+                    )
+                }
+                if (edge.parameterTypes != signature.parameterTypes) {
+                    return DotNetIlRawForwardingBodyEvidence.Conflict(
+                        "the resolved forwarding call changes a physical receiver or parameter carrier",
+                    )
+                }
+                val expectedMethodInstantiation = List(signature.methodGenericParameterCount) { index ->
+                    DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+                }
+                if (edge.methodInstantiation != expectedMethodInstantiation) {
+                    return DotNetIlRawForwardingBodyEvidence.Conflict(
+                        "the resolved forwarding call changes its physical MethodSpec vector",
+                    )
+                }
+                val resultIsNonNarrowing = when (val targetResult = edge.returnType) {
+                    DotNetIlReturnType.Void -> signature.returnType == DotNetIlReturnType.Void
+                    is DotNetIlReturnType.Value -> when (val bodyResult = signature.returnType) {
+                        DotNetIlReturnType.Void -> false
+                        is DotNetIlReturnType.Value ->
+                            targetResult.type.isDotNetAssignableTo(bodyResult.type) ||
+                                    bodyResult.type == DotNetIlValueType.Object
+                    }
+                }
+                if (!resultIsNonNarrowing) {
+                    return DotNetIlRawForwardingBodyEvidence.Conflict(
+                        "the resolved forwarding call narrows or changes its physical result",
+                    )
+                }
+                DotNetIlRawForwardingBodyEvidence.Forwarding(edge)
+            }
+        }
+    }
 
     fun render(): DotNetIlRenderedMethod {
         // An abstract interface or class member has no body by definition: its `.method` block
@@ -1033,7 +1255,7 @@ internal class DotNetIlMethodCodegen(
             appendLine("  }")
         }
         val methodDefHeaderObservations = if (capturePhysicalMethodDefHeaders) {
-            listOfNotNull(simpleMethodHeader?.observation())
+            listOfNotNull(simpleMethodHeader?.observation(finalForwardingBodyEvidence()))
         } else {
             emptyList()
         }

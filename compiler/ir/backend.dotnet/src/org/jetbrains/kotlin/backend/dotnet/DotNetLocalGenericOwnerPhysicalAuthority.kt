@@ -1129,6 +1129,24 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     internal fun completeEmissionFamilies(): List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily> =
         completeEmissionFamilies
 
+    /**
+     * Returns the one BOUND final-concrete implementation family which can become a
+     * semantic-equivalence obligation after a consumer proves an exact receiver construction.
+     *
+     * This is declaration authority only. Its presence does not prove that any value has the
+     * implementation carrier, nor that final emission retained the generated forwarding bodies;
+     * those independent facts are joined by operation routing and final sealing respectively.
+     */
+    internal fun semanticEquivalenceCandidateOrNull(
+        logicalMember: IrSimpleFunctionSymbol,
+        implementationOwner: IrClassSymbol,
+    ): DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily? =
+        completeEmissionFamilies.singleOrNull { family ->
+            family.logicalMember === logicalMember &&
+                    (family.implementationMember.owner.parent as? IrClass)?.symbol ===
+                    implementationOwner
+        }
+
     internal fun stateFamilies(): List<DotNetLocalGenericOwnerPhysicalStateFamilyInput> = stateFamilies
 
     internal fun stateFamilyOrNull(owner: IrClassSymbol): DotNetLocalGenericOwnerPhysicalStateFamilyInput? =

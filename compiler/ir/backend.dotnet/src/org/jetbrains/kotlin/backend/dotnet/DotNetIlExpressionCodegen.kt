@@ -104,7 +104,10 @@ internal class DotNetIlExpressionCodegen(
     private val currentOwner: DotNetIlClassInfo,
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericOwnerSemanticEquivalentOperationEmitterWitnesses:
+            Map<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> = emptyMap(),
     private val retainsProducedLocalCarrier: (IrVariable) -> Boolean = { false },
+    private val forwardingCallObserver: ((IrCall, DotNetIlRawForwardingCallEdge) -> Unit)? = null,
 ) {
     internal val coreLibraryProfile: DotNetCoreLibraryProfile
         get() = typeMapper.coreLibrary
@@ -2606,6 +2609,20 @@ internal class DotNetIlExpressionCodegen(
         forwardedSplitNullFlagLocal: DotNetIlSlot.Local? = null,
     ): EmittedCall {
         val resolved = resolveCall(call)
+        forwardingCallObserver?.invoke(
+            call,
+            DotNetIlRawForwardingCallEdge(
+                targetFunction = resolved.callee.symbol,
+                targetIdentity = resolved.info.genericOwnerPhysicalMethodIdentity,
+                targetPhysicalOwner = resolved.info.owner,
+                targetOwner = resolved.targetOwner,
+                methodInstantiation = resolved.methodInstantiation,
+                parameterTypes = resolved.parameterTypes,
+                returnType = resolved.returnType,
+                hasSplitNullableResult = resolved.info.signature.hasSplitNullableResult,
+                isVirtual = resolved.virtual,
+            ),
+        )
         check(forwardedSplitNullFlagLocal == null ||
                 resolved.info.signature.hasSplitNullableResult &&
                 forwardedSplitNullFlagLocal.type == DotNetIlValueType.Boolean) {
@@ -2790,6 +2807,149 @@ internal class DotNetIlExpressionCodegen(
         }
     }
 
+    /** Live emitter binding of one identity-keyed broad-call semantic-equivalence witness. */
+    private data class BoundSemanticEquivalentOperation(
+        val liveReceiverType: DotNetIlValueType,
+        val naturalOwnerView: DotNetIlValueType.GenericInstance,
+    )
+
+    private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.emitterClassInfoOrNull():
+            DotNetIlClassInfo? = if (view == null) {
+        typeMapper.classInfoOrNull(owner.owner)
+    } else {
+        typeMapper.genericInterfaceInfoOrNull(owner.owner)?.classInfo(view)
+    }
+
+    /**
+     * Compares a BOUND symbolic carrier with the verifier-visible carrier of this MethodDef.
+     *
+     * This is deliberately a comparison, not a logical type mapper. Only the current physical
+     * TypeDef binder, fixed leaves, local constructions and SZ arrays are admitted. A later slice
+     * may add a separately authenticated MethodDef binder; it must not be inferred from `!!n`.
+     */
+    private fun DotNetGenericOwnerSymbolicCarrierReference.matchesEmitterCarrier(
+        actual: DotNetIlValueType,
+    ): Boolean = when (this) {
+        is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> when (kind) {
+            DotNetGenericOwnerPhysicalTypeKind.BOOLEAN -> actual == DotNetIlValueType.Boolean
+            DotNetGenericOwnerPhysicalTypeKind.INT32 -> actual == DotNetIlValueType.Int32
+            DotNetGenericOwnerPhysicalTypeKind.STRING -> actual == DotNetIlValueType.String
+            DotNetGenericOwnerPhysicalTypeKind.OBJECT -> actual == DotNetIlValueType.Object
+            DotNetGenericOwnerPhysicalTypeKind.VOID,
+            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+            DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+            DotNetGenericOwnerPhysicalTypeKind.NAMED,
+            DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+            -> false
+        }
+        is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+            val binder = binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type
+                ?: return false
+            val local = binder.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                ?: return false
+            local.emitterClassInfoOrNull() === currentOwner &&
+                    actual == DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+        }
+        is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+            val local = definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                ?: return false
+            val classInfo = local.emitterClassInfoOrNull() ?: return false
+            if (arguments.isEmpty()) {
+                actual == DotNetIlValueType.UserClass(classInfo)
+            } else {
+                val instance = actual as? DotNetIlValueType.GenericInstance ?: return false
+                instance.classInfo === classInfo &&
+                        instance.arguments.size == arguments.size &&
+                        arguments.indices.all { index ->
+                            arguments[index].matchesEmitterCarrier(instance.arguments[index])
+                        }
+            }
+        }
+        is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> {
+            val array = actual as? DotNetIlValueType.GenericArray ?: return false
+            element.matchesEmitterCarrier(array.elementType)
+        }
+    }
+
+    private fun DotNetGenericOwnerPhysicalCallableResultLayoutReference.matchesEmitterResult(
+        returnType: DotNetIlReturnType,
+        hasSplitNullableResult: Boolean,
+    ): Boolean = when (this) {
+        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void ->
+            !hasSplitNullableResult && returnType == DotNetIlReturnType.Void
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
+            !hasSplitNullableResult &&
+                    (returnType as? DotNetIlReturnType.Value)?.type?.let(
+                        { actual -> slot.carrier.matchesEmitterCarrier(actual) },
+                    ) == true
+        is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
+            hasSplitNullableResult &&
+                    (returnType as? DotNetIlReturnType.Value)?.type?.let(
+                        { actual -> payloadSlot.carrier.matchesEmitterCarrier(actual) },
+                    ) == true
+    }
+
+    /**
+     * Rebinds both halves of the pre-emission proof: the selected natural MethodDef and the exact
+     * implementation carrier which made its broad semantic route equivalent. The lookup is by the
+     * unchanged [IrCall] identity. Logical Kotlin receiver/result types contribute no evidence.
+     */
+    private fun bindSemanticEquivalentOperationOrError(
+        call: IrCall,
+        sourceCallee: IrSimpleFunction,
+        info: DotNetIlFunctionInfo,
+        witness: DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness,
+    ): BoundSemanticEquivalentOperation {
+        check(call.superQualifierSymbol == null && intrinsicMethods.getIntrinsic(call.symbol) == null) {
+            "Internal .NET backend error: a semantic-equivalence witness reached a special call"
+        }
+        val route = witness.route
+        val identity = route.method.identity as?
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+            ?: error("Internal .NET backend error: a local semantic-equivalence route lost its MethodDef identity")
+        val declaringType = route.method.declaringType as?
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+            ?: error("Internal .NET backend error: a local semantic-equivalence route lost its declaring TypeDef")
+        val declaringInfo = declaringType.emitterClassInfoOrNull()
+            ?: error("Internal .NET backend error: the semantic-equivalence MethodDef owner was evicted")
+        val emittedIdentity = info.genericOwnerPhysicalMethodIdentity
+        check(identity.function === sourceCallee.symbol &&
+                identity.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                emittedIdentity != null &&
+                emittedIdentity.function === identity.function &&
+                emittedIdentity.role == identity.role &&
+                declaringInfo === info.owner &&
+                info.isInstance && route.method.signature.isInstance &&
+                route.method.declaringType == route.requiredReceiverView.family
+        ) {
+            "Internal .NET backend error: final call emission contradicts its semantic-equivalence MethodDef"
+        }
+
+        val receiver = call.dispatchReceiver
+            ?: error("Internal .NET backend error: a semantic-equivalence route lost its dispatch receiver")
+        val liveReceiverType = directPhysicalStorageReadCarrierTypeOrNull(receiver)
+            ?: error("Internal .NET backend error: a semantic-equivalence receiver is no longer a direct storage read")
+        check(witness.directReceiverCarrier.type.matchesEmitterCarrier(liveReceiverType)) {
+            "Internal .NET backend error: final call emission changed the certified implementation carrier"
+        }
+        val implementationInfo = witness.implementationType.emitterClassInfoOrNull()
+            ?: error("Internal .NET backend error: the certified implementation TypeDef was evicted")
+        val liveImplementationInfo = when (liveReceiverType) {
+            is DotNetIlValueType.UserClass -> liveReceiverType.classInfo
+            is DotNetIlValueType.GenericInstance -> liveReceiverType.classInfo
+            else -> null
+        }
+        check(liveImplementationInfo === implementationInfo) {
+            "Internal .NET backend error: final call emission selected a different implementation TypeDef"
+        }
+        val naturalOwnerView = liveReceiverType.dotNetUniqueViewAsGenericOwner(info.owner)
+            ?: error("Internal .NET backend error: the certified receiver has no unique natural MethodDef-owner view")
+        check(route.requiredReceiverView.construction.matchesEmitterCarrier(naturalOwnerView)) {
+            "Internal .NET backend error: final call emission changed the certified natural receiver view"
+        }
+        return BoundSemanticEquivalentOperation(liveReceiverType, naturalOwnerView)
+    }
+
     private fun resolveCall(call: IrCall): ResolvedCall {
         call.superQualifierSymbol?.owner?.let { superQualifier ->
             if (superQualifier.isInterface && call.origin != DOTNET_INTERFACE_DEFAULT_EXACT_CALL) {
@@ -2809,6 +2969,8 @@ internal class DotNetIlExpressionCodegen(
             it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it
         }
         val sourceOwner = sourceCallee.parent as? IrClass
+        val semanticEquivalentWitness =
+            genericOwnerSemanticEquivalentOperationEmitterWitnesses[call]
         val naturalRuntimeOwner = sourceOwner?.takeIf(typeMapper::isRuntimeReifiedGenericInterface)
         val naturalReceiverType = naturalRuntimeOwner
             ?.let { call.arguments.firstOrNull()?.let(::mappedNaturalType) }
@@ -2864,11 +3026,16 @@ internal class DotNetIlExpressionCodegen(
                         "${intrinsicMethods.getIntrinsic(call.symbol) != null}; " +
                         "arguments=${call.arguments.size}; result=${call.type.render()})"
             )
+        val boundSemanticEquivalentOperation = semanticEquivalentWitness?.let { witness ->
+            bindSemanticEquivalentOperationOrError(call, sourceCallee, info, witness)
+        }
         info.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         val receiverType = if (info.isInstance) {
             val receiver = call.arguments.firstOrNull()
                 ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
-            if (naturalRuntimeInfo != null) {
+            if (boundSemanticEquivalentOperation != null) {
+                boundSemanticEquivalentOperation.liveReceiverType
+            } else if (naturalRuntimeInfo != null) {
                 naturalReceiverType
             } else if (splitNaturalInfo != null) {
                 splitNaturalReceiverType
@@ -2897,14 +3064,17 @@ internal class DotNetIlExpressionCodegen(
         // signature slots stay open per CLR member-ref rules. Kotlin-owned ordinary generic
         // classes have an arity-zero owner and therefore never enter this branch.
         var ownerToken = info.owner.ilTypeRef
+        var targetOwner: DotNetIlValueType = DotNetIlValueType.UserClass(info.owner)
         var classInstantiation = emptyList<DotNetIlValueType>()
         if (info.isInstance && info.owner.typeParameterCount > 0) {
-            val ownerView = receiverType!!.dotNetViewAsGenericOwner(info.owner)
+            val ownerView = boundSemanticEquivalentOperation?.naturalOwnerView
+                ?: receiverType!!.dotNetViewAsGenericOwner(info.owner)
                 ?: dotNetUnsupported(
-                    "call to '$calleeName' through ${receiverType.nameInSignature} is not an " +
+                    "call to '$calleeName' through ${checkNotNull(receiverType).nameInSignature} is not an " +
                             "instantiation of declaring class ${info.owner.ilTypeRef}`${info.owner.typeParameterCount}"
                 )
             ownerToken = ownerView.nameInSignature
+            targetOwner = ownerView
             classInstantiation = ownerView.arguments
         } else if (
             !info.isInstance &&
@@ -2935,6 +3105,7 @@ internal class DotNetIlExpressionCodegen(
                 "call to static function '$calleeName' cannot determine the generic owner instantiation"
             )
             ownerToken = ownerView.nameInSignature
+            targetOwner = ownerView
             classInstantiation = ownerView.arguments
         }
         // A generic FUNCTION call carries its instantiation on the MethodSpec token while the
@@ -2948,6 +3119,30 @@ internal class DotNetIlExpressionCodegen(
             logicalCallee = sourceCallee,
             explicitMethodSpecArguments = syntheticMethodInstantiation,
         )
+        if (boundSemanticEquivalentOperation != null) {
+            val route = checkNotNull(semanticEquivalentWitness).route
+            check(binding.methodSpecArguments.size == route.methodArguments.size &&
+                    route.methodArguments.indices.all { index ->
+                        route.methodArguments[index]
+                            .matchesEmitterCarrier(binding.methodSpecArguments[index])
+                    } &&
+                    binding.verifierParameterTypes.firstOrNull() ==
+                    boundSemanticEquivalentOperation.naturalOwnerView &&
+                    binding.verifierParameterTypes.drop(1).size ==
+                    route.instantiatedSignature.parameterSlots.size &&
+                    route.instantiatedSignature.parameterSlots.indices.all { index ->
+                        route.instantiatedSignature.parameterSlots[index].carrier
+                            .matchesEmitterCarrier(binding.verifierParameterTypes[index + 1])
+                    } &&
+                    route.instantiatedSignature.resultLayout.matchesEmitterResult(
+                        binding.verifierReturnType,
+                        info.signature.hasSplitNullableResult,
+                    )
+            ) {
+                "Internal .NET backend error: final call-site signature contradicts its " +
+                        "semantic-equivalence operation route"
+            }
+        }
         val virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual()
         return ResolvedCall(
             callee = callee,
@@ -2956,6 +3151,7 @@ internal class DotNetIlExpressionCodegen(
             methodInstantiation = binding.methodSpecArguments,
             receiverType = receiverType,
             ownerToken = ownerToken,
+            targetOwner = targetOwner,
             parameterTypes = binding.verifierParameterTypes,
             virtual = virtual,
             returnType = binding.verifierReturnType,
@@ -2969,6 +3165,7 @@ internal class DotNetIlExpressionCodegen(
         val methodInstantiation: List<DotNetIlValueType>,
         val receiverType: DotNetIlValueType?,
         val ownerToken: String,
+        val targetOwner: DotNetIlValueType,
         val parameterTypes: List<DotNetIlValueType>,
         val virtual: Boolean,
         val returnType: DotNetIlReturnType,
@@ -4803,6 +5000,7 @@ internal class DotNetIlExpressionCodegen(
             methodInstantiation = canonicalCallBinding.methodSpecArguments,
             receiverType = canonicalReceiverType,
             ownerToken = canonicalClassInfo.ilTypeRef,
+            targetOwner = DotNetIlValueType.UserClass(canonicalClassInfo),
             parameterTypes = canonicalCallBinding.verifierParameterTypes,
             virtual = true,
             returnType = canonicalCallBinding.verifierReturnType,

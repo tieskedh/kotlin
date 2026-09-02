@@ -257,7 +257,7 @@ reason to rerun unrelated target layers. Use these lanes:
    separate compilation, and foreign consumption in proportion to the
    boundary; run directly affected model tests; then run the same focused
    fixture without the rehearsal property as the production-erased inverse.
-   The inverse must prove absence of candidate H/N/M/J records or other rehearsal
+   The inverse must prove absence of candidate H/N/M/J/K records or other rehearsal
    identities where applicable. A fixture-local validator added inside the
    monolithic .NET test harness does not by itself make the change shared test
    infrastructure.

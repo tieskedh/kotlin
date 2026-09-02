@@ -23,6 +23,32 @@ internal data class DotNetGenericOwnerPhysicalOperationRoute(
 )
 
 /**
+ * Identity-scoped final-emitter witness for a broad call promoted by semantic equivalence.
+ *
+ * The operation route authenticates the natural interface MethodDef. [directReceiverCarrier]
+ * separately retains the exact implementation carrier which justified devirtualizing the broad
+ * Kotlin view; an arbitrary object which merely implements the same interface must not inherit
+ * that proof. Final emission rebinds both facts against the live `ldarg`/`ldloc` carrier.
+ */
+internal data class DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness(
+    val route: DotNetGenericOwnerPhysicalOperationRoute,
+    val directReceiverCarrier: DotNetGenericOwnerPhysicalCarrier,
+    val implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+) {
+    init {
+        require(directReceiverCarrier.nullEncoding ==
+                DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) {
+            "a semantic-equivalence emitter witness requires one non-boxed reference carrier"
+        }
+        val construction = directReceiverCarrier.type as?
+                DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        require(construction?.definition == implementationType && implementationType.view == null) {
+            "a semantic-equivalence emitter witness must retain its exact implementation TypeDef"
+        }
+    }
+}
+
+/**
  * Proves only the MethodDef already selected by authoritative logical-family policy.
  * A missing endpoint or receiver view never falls back to another MethodDef, and provenance can
  * support but never replace the requested view. TypeDef and MethodDef binders are substituted
