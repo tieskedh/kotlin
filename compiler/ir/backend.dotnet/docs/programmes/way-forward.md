@@ -243,21 +243,21 @@ ordinary materializing boundary. Multiple static direct-return sites are
 admitted only because every executed site terminates its path. Star/projected
 or truly broad source values never gain exact authority from a logical type.
 
-Direct constructed-parameter entry is pinned to the live storage-read carrier,
-and a direct constructed result is pinned to the live result of the ordinary
-physical MethodDef resolver; neither trusts a reconstructed whole-expression
-carrier. Expand constructed forms only through enumerated independent emitter
-observations. The constructed-result declaration proof is local BOUND authority
-only; close target-TypeDef publication and consumption in the external
-physical-ABI record before claiming separate compilation. Constructor
-allocations remain a later value boundary. First let a bound exact-natural
-operation witness drive direct emission when an immutable receiver has an exact
-physical construction but a logically widened Kotlin view; the present late
-check correctly rejects that composition rather than trusting logical remapping.
-Block/composite containers remain a separate proof. Then prove the real caller-
-MethodDef `!!R` entry and additional non-materializing consumer
-categories, null/bottom/unknown split joins, and explicit representation-
-changing conversions.
+The next direct-call gate is a producer-recorded semantic-equivalence
+certificate for a final concrete implementation, consumed only after binding
+the frozen natural and semantic TypeDef/MethodDef/MethodImpl rows to one
+authoritative body endpoint. Exact final concrete-receiver provenance must also
+hold; an exact construction retained through a logically widened open-interface
+view is insufficient. The current route-coherence boundary and hostile inverse
+are recorded in the
+[dated archive](../archive/generic-owner-call-result-route-coherence-2026-09-02.md),
+while the normative identity, lineage, and operation rules live in the
+[physical-authority ADR](../decisions/draft-adr-generic-owner-physical-authority.md).
+
+After that certificate, prove path-complete block/composite calls, the real
+caller-MethodDef `!!R` entry, additional non-materializing consumer categories,
+null/bottom/unknown split joins, and explicit representation-changing
+conversions.
 Only after those value rules stabilize should the consumer widen to captures,
 properties, class nodes, MethodImpls, or new Runtime/Stdlib declarations.
 Broader state remains a separate producer-wide proof. A comparison surface may

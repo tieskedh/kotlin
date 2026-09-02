@@ -22,20 +22,37 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   result through one immutable local whose every use is an unprotected direct
   return to the same physical MethodDef, while preserving its open MethodDef
   binders, MethodSpec, instantiated carriers, and result separately.
-- The latest local slice composes the existing constructed-interface-producer
-  role into BOUND callable authority and retains its one-level `I<!T,...>`
-  result through an immutable local only after the ordinary resolver reports
-  the identical live MethodDef carrier. It adds no external ABI authority.
-- The next continuation lets an identity-bound exact-natural operation witness
-  drive direct emission when an immutable receiver retains an exact physical
-  construction through a logically widened Kotlin view. Genuinely broad
-  entries remain unable to create such authority.
+- The latest local slice makes exact call-result placement consume the exact
+  `IrCall`'s final natural-operation witness as well as its live receiver and
+  MethodDef-result carriers. Call-bearing containers and the older compiler-
+  temporary/nested recognizers fail closed without a path-complete operation
+  plan. A logically widened open interface deliberately remains on semantic
+  dispatch even when its receiver retains an exact physical construction.
+  Exact evidence and the rejected shortcut are in the
+  [route-coherence follow-up](docs/archive/generic-owner-call-result-route-coherence-2026-09-02.md).
+- The next continuation is a producer-owned semantic-equivalence certificate
+  for a final concrete implementation. Only that certificate, combined with
+  exact final receiver provenance and consumer binding against frozen TypeDef,
+  MethodDef, and MethodImpl rows, may later prove that natural and semantic
+  entries share one authoritative body endpoint; interface construction alone
+  is not such proof.
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
 
 Nothing has shipped and no Kotlin/.NET ABI is frozen. Prototype schemas and
 physical identities may still be corrected atomically.
+
+## Latest focused verification
+
+The 2026-09-02 route-coherence follow-up is newer than the target-wide gate
+below. Backend compilation and all 94 physical-value model tests passed. The
+focused fixture passed through PSI and LightTree on .NET 10 and Framework 4.8
+in both candidate and production-erased inverse modes: four tests per mode,
+with zero failures, errors, or skips by direct XML audit. Exact commands and
+scope are recorded in its
+[owning archive](docs/archive/generic-owner-call-result-route-coherence-2026-09-02.md).
+This focused evidence does not claim a new full-target checkpoint.
 
 ## Latest verification
 
@@ -262,14 +279,18 @@ MethodDef slot; a Kotlin source type cannot manufacture `!T`, and a semantic
 prototype does not inherit the typed entry's fact. An exact constructed entry
 also requires an already admitted natural TypeDef and binds every argument to a
 current physical-owner parameter; source type syntax alone cannot admit it. The
-result transfer selects
-the natural MethodDef from bound declaration authority, instantiates it only
-through an already-guaranteed receiver construction, and is checked against the
-live resolved call result. An absent legacy route-census record is not evidence,
-while an existing semantic route prevents the natural transfer. None of these
+result transfer selects the natural MethodDef from bound declaration authority,
+instantiates it only through an already-guaranteed receiver construction,
+consumes the exact call identity's final natural-operation witness, and is
+checked against both the live receiver slot and resolved call result. A missing
+witness is not evidence. An actual `IMPLICIT_NOTNULL` may only refine the
+witnessed `MAYBE_NULL` result to `NON_NULL`; it cannot change carrier or
+provenance. Call-bearing `when`, block, and composite initializers remain
+unavailable until they have a path-complete route plan. None of these
 permissions authorizes conversion, adaptation, boxing, state, or ABI changes.
-The older compiler-origin recognizer remains only as migration fallback for
-transfer shapes the shared model has not yet derived.
+The older compiler-origin and nested-construction recognizers remain migration
+fallbacks only for call-free transfer shapes the shared model has not yet
+derived.
 
 The operation query now additionally accepts one complete MethodSpec vector
 whose entries are non-null bare parameters of the current physical class. It
@@ -289,17 +310,25 @@ binder facts do not. Direct constructed-parameter aliases now additionally
 bind their expected local `I<!T,...>` construction against the verifier-visible
 final `ldarg`/`ldloc` source slot; a logical whole-expression reconstruction can
 neither create authority nor hide a changed slot. Direct constructed-result
-aliases bind the same expected construction against the ordinary physical-call
-resolver's live MethodDef result; an absent, object-shaped, split, semantic, or
-otherwise different result fails closed even when the logical whole-expression
-mapper reconstructs the desired type. This exact receiver/no-input slice
-structurally excludes the special emitters and pins the emitted `callvirt` in
-IL; broader calls require a shared final-route witness. External record closure
-is also still open. A logically widened immutable receiver may already retain
-an exact physical construction, but direct call emission does not yet consume
-that operation witness and therefore fails closed. Close that composition
-before constructor allocation; transparent block/composite containers and real
-caller-MethodDef `!!R` entry remain separate. Every non-return,
+aliases additionally consume an identity-keyed final natural-operation route
+and bind the same expected construction against the ordinary resolver's live
+receiver and MethodDef-result carriers. The route must start from an
+operation-independent physical entry or an immutable, exact declared local;
+one predicted call-result local cannot prove a later call. Object-carried
+provenance and identity wrappers around foreign-dispatch declarations cannot
+masquerade as direct emission. A denied call result also invalidates every
+transitive immutable alias which derived its exact prediction from that local,
+rather than turning a later live-slot mismatch into a compiler failure. An
+absent, object-shaped, split, semantic, or otherwise different result fails
+closed even when the logical whole-expression mapper reconstructs the desired
+type. A logically widened open-interface call remains guarded semantic
+dispatch: exact construction proves verifier legality, not semantic equivalence
+of every dynamic implementation. External record closure is also still open.
+Prove a producer-owned same-endpoint semantic-equivalence certificate for a
+final concrete implementation before attempting that optimization. Constructor
+allocation is currently only a bounded exact receiver root; general constructor-
+produced placement, path-complete block/composite calls, and real caller-
+MethodDef `!!R` entry remain separate. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,

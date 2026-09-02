@@ -1002,6 +1002,35 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "The implicitly widened inline receiver",
     )
 
+    val widenedConstructedResultRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineConstructedCallRoute") &&
+                candidate.physicalFunctionName == "sourceThroughWidenedLocal" &&
+                candidate.receiverVariableName == "widenedSourceAlias" &&
+                candidate.logicalMemberName == "source"
+    }) {
+        "The exact-origin logically widened call must publish one semantic route: $snapshots"
+    }
+    check(widenedConstructedResultRoute.let { route ->
+        route.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE &&
+                route.logicalSelector ==
+                DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL &&
+                route.requiredReceiverCarrier.kind ==
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
+                route.requiredReceiverCarrier.localOwnerName
+                    ?.endsWith("InlineConstructedSource") == true &&
+                route.predictedRouteKind == null && route.resultLayout == null &&
+                route.resultSlotDomain == null && route.actualRoute ==
+                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
+                    .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
+                route.relation ==
+                DotNetGenericOwnerPhysicalOperationRouteShadowRelation
+                    .PREDICTION_UNAVAILABLE
+    }) {
+        "The exact-origin logically widened constructed call must remain on the guarded " +
+                "semantic/producer-recorded fallback until a bound operation proves its " +
+                "result carrier: $widenedConstructedResultRoute"
+    }
+
     val exactArgumentRoute = snapshots.single { candidate ->
         candidate.ownerName.endsWith("InlineLookupRoute") &&
                 candidate.physicalFunctionName == "routeExactArgument" &&
@@ -2515,6 +2544,96 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     "InlineProducer<!T> " +
                     "carrier: result=$constructedCallResultAlias, all=$comparisons"
         }
+        val widenedSourceAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
+                    comparison.prediction.sourceFunctionName == "sourceThroughWidenedLocal" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "widenedSourceAlias"
+        }
+        check(widenedSourceAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            val guaranteed = prediction.guaranteedViews.singleOrNull()
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                    carrier.localOwnerName?.endsWith("InlineConstructedSource") == true &&
+                    carrier.ownerParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName
+                        ?.endsWith("InlineConstructedCallRoute") == true &&
+                    prediction.storageCarrier == carrier &&
+                    guaranteed?.carrier == carrier &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "Logical widening must retain the exact Source<!T> value fact without thereby " +
+                    "authorizing its semantic call: source=$widenedSourceAlias, all=$comparisons"
+        }
+
+        val widenedCallResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
+                    comparison.prediction.sourceFunctionName == "sourceThroughWidenedLocal" &&
+                    comparison.prediction.variableName == "widenedCallResultAlias"
+        }
+        check(widenedCallResultAlias?.let { comparison ->
+            val mintedResult = comparison.actualStorageCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                        carrier.ownerParameterIndices == listOf(0)
+            }
+            comparison.actualSelectionKind !=
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    !mintedResult
+        } == true) {
+            "A semantic widened call must not physically retain Producer<!T> result authority: " +
+                    "result=$widenedCallResultAlias, all=$comparisons"
+        }
+
+        val widenedCallResultCopyAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
+                    comparison.prediction.sourceFunctionName == "sourceThroughWidenedLocal" &&
+                    comparison.prediction.variableName == "widenedCallResultCopyAlias"
+        }
+        check(widenedCallResultCopyAlias?.let { comparison ->
+            val mintedResult = comparison.actualStorageCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineProducer") == true &&
+                        carrier.ownerParameterIndices == listOf(0)
+            }
+            comparison.actualSelectionKind !=
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    !mintedResult
+        } == true) {
+            "An immutable copy of a denied semantic call result must not remint " +
+                    "Producer<!T> authority: result=$widenedCallResultCopyAlias, " +
+                    "all=$comparisons"
+        }
+
+        val genuinelyBroadCallResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
+                    comparison.prediction.sourceFunctionName == "sourceThroughBroadEntry" &&
+                    comparison.prediction.variableName == "genuinelyBroadCallResultAlias"
+        }
+        check(genuinelyBroadCallResultAlias?.let { comparison ->
+            comparison.actualStorageCarrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                    comparison.actualSelectionKind !=
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER
+        } == true) {
+            "A genuinely broad entry must not mint the enclosing route's Producer<!T> carrier: " +
+                    "result=$genuinelyBroadCallResultAlias, all=$comparisons"
+        }
+
         val exactCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
             val header = method.substringBefore('{')
             "'sourceThroughLocal'(" in header && "'callResultNaturalAlias'" in method
@@ -2583,6 +2702,56 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The direct constructed result was not copied from its live natural MethodDef " +
                     "result without adaptation: forbidden=$forbiddenCallResultAdaptation, " +
                     "calls=$exactConstructedSourceCalls, method=$exactCallResultMethod"
+        }
+        val widenedCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            "'sourceThroughWidenedLocal'(" in header &&
+                    "'widenedSourceAlias'" in method &&
+                    "'widenedCallResultAlias'" in method
+        }
+        check(widenedCallResultMethod != null &&
+                Regex(
+                    """object\s+'sourceThroughWidenedLocal'\(""",
+                ).containsMatchIn(widenedCallResultMethod.substringBefore('{')) &&
+                Regex(
+                    """'sourceThroughWidenedLocal'\(""" +
+                            """class\s+'InlineConstructedSource`1'<!0>\s+'source'\)""",
+                ).containsMatchIn(widenedCallResultMethod.substringBefore('{')) &&
+                "class 'InlineConstructedSource`1'<!0> 'widenedSourceAlias'" in
+                widenedCallResultMethod &&
+                "object 'widenedCallResultAlias'" in widenedCallResultMethod &&
+                "object 'widenedCallResultCopyAlias'" in widenedCallResultMethod &&
+                "::'InvokeRecordedMember'(" in widenedCallResultMethod &&
+                "::'InvokeUniqueMember'(" !in widenedCallResultMethod &&
+                "class 'InlineProducer`1'<!0> 'widenedCallResultAlias'" !in
+                widenedCallResultMethod &&
+                "class 'InlineProducer`1'<!0> 'widenedCallResultCopyAlias'" !in
+                widenedCallResultMethod &&
+                !Regex(
+                    """callvirt\s+instance\s+class\s+'InlineProducer`1'<!0>\s+""" +
+                            """class\s+'InlineConstructedSource`1'<!0>::'source'\(\)""",
+                ).containsMatchIn(widenedCallResultMethod)
+        ) {
+            "An exact physical source widened logically must keep its semantic result route and " +
+                    "object result carrier: method=$widenedCallResultMethod"
+        }
+
+        val genuinelyBroadCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            "'sourceThroughBroadEntry'(" in header &&
+                    "'genuinelyBroadSourceAlias'" in method &&
+                    "'genuinelyBroadCallResultAlias'" in method
+        }
+        check(genuinelyBroadCallResultMethod != null &&
+                "::'InvokeRecordedMember'(" in genuinelyBroadCallResultMethod &&
+                "::'InvokeUniqueMember'(" !in genuinelyBroadCallResultMethod &&
+                "class 'InlineConstructedSource`1'<!0> 'genuinelyBroadSourceAlias'" !in
+                genuinelyBroadCallResultMethod &&
+                "class 'InlineProducer`1'<!0> 'genuinelyBroadCallResultAlias'" !in
+                genuinelyBroadCallResultMethod
+        ) {
+            "The genuinely broad entry minted the enclosing !T construction or bypassed its " +
+                    "guarded producer-recorded fallback: method=$genuinelyBroadCallResultMethod"
         }
         val argumentSplitResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineArgumentSplitLocalRoute") &&

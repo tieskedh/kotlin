@@ -264,6 +264,12 @@ internal class DotNetBackendContext(
     /** IR-bound value facts; only the explicit final local-placement adapter may consume them. */
     val genericOwnerPhysicalValueShadowRecords:
         MutableList<DotNetGenericOwnerPhysicalValueShadowRecord> = mutableListOf()
+    /** Final producer-prototype entry facts; consumers must still apply their own route grammar. */
+    val genericOwnerPhysicalValueEntryStorageByFunction:
+        MutableMap<
+                IrSimpleFunctionSymbol,
+                MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+                > = java.util.IdentityHashMap()
     /** Final fixed-leaf entry facts reused by operation routing for direct parameters only. */
     val genericOwnerPhysicalValueFixedLeafEntryStorageByFunction:
         MutableMap<
@@ -277,7 +283,7 @@ internal class DotNetBackendContext(
             DotNetGenericOwnerPhysicalBindingResult<
                     DotNetGenericOwnerPhysicalValueLocalPlacementAuthority,
                     > = DotNetGenericOwnerPhysicalBindingResult.Unavailable
-    /** Read-only comparison between BOUND callable authority and the existing final router. */
+    /** Auditable final-route observations; coherent exact records may also publish authority. */
     val genericOwnerPhysicalOperationRouteShadows:
         MutableList<DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot> = mutableListOf()
     /**
