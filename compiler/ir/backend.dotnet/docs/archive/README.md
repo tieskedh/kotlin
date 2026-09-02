@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md`](generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md)
+  records the first flat exhaustive split-result initializer join: identity-
+  keyed per-arm operation witnesses, an equality-only payload join, one shared
+  payload/flag pair with an empty-stack CIL join, braced FIR2IR-arm transparency,
+  unboxed value/reference/nullable-value execution, and the exact Framework
+  4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md`](generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md)
   records positive-N same-function terminal-return authority for one retained
   split pair, the path-termination argument, exhaustive late live-use emitter

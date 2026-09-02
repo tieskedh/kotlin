@@ -66,7 +66,7 @@ Since that aggregate, the retained-foreign rehearsal has added exact operation,
 recursive inherited-interface, binder-forwarding, constrained-edge, and lazy
 TypeDef transport authority, plus retained interface/delegate reference
 variance with conversion-scoped constraint validation. The current focused
-evidence compiles the importer and test fixture and passes 176 model tests: 91
+evidence compiles the importer and test fixture and passes 177 model tests: 92
 shared physical-value tests and 85 retained-metadata tests. Six unconstrained
 memberless external-DLL pipelines remain green with both FIR parsers. Git owns
 the intermediate chronology.
@@ -79,7 +79,7 @@ plan. The existing value/operation fixture passes in candidate and erased modes
 across PSI, LightTree, Framework 4.8, and .NET 10. Exact evidence is in the
 [dated archive](docs/archive/generic-owner-local-natural-variance-authority-2026-09-01.md).
 
-Final physical-value facts now authorize seven bounded local-placement forms. A
+Final physical-value facts now authorize eight bounded local-placement forms. A
 direct immutable alias may retain an equal owner-bound `C<!n>` producer/storage
 carrier. An exhaustive control-flow initializer may retain an identical carrier
 or the unique construction of one physically recorded common interface family
@@ -124,9 +124,19 @@ enclosing flag, and emits no boxing or logical nullable materialization. Before
 declaring the payload/flag locals it also repeats the exhaustive live-use check;
 zero reads, any new non-return read, another return target, or a protected return
 fails closed rather than retaining stale placement authority.
+Eighth, a flat exhaustive control-flow initializer with at least two reachable
+exact-operation arms may write one shared split pair when every independently
+witnessed result is `SplitNullable(P, out bool)` with the identical physical
+payload `P`. Each exact `IrCall` keeps its own operation authority; the join
+cannot select `object` or infer one branch's MethodDef from another. A bare call
+or a non-returnable, same-typed single-call FIR2IR arm block is transparent.
+Placement and emission rerun the same identity-keyed ordered shape, validate
+every live call separately, store every result into the same pair, and join with
+an empty evaluation stack before one common return tail.
 Every other multi-argument or MethodSpec shape, semantic or `super` routes,
-mutation, joins, captures, non-return or mixed reads, protected-region returns,
-and carrier mismatches use the ordinary materializing path. Local
+mutation, other control-flow shapes, captures, non-return or mixed reads,
+protected-region returns, and carrier mismatches use the ordinary materializing
+path. Local
 producer publication now binds each source member bijectively by declaration
 identity to its physical member contract; executable compilations do not need a
 serialized linkage-key table, while external consumers still require the
@@ -140,9 +150,10 @@ evidence is in the
 [split-result local](docs/archive/generic-owner-physical-split-nullable-local-placement-2026-09-01.md),
 [strict-input split-result local](docs/archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md),
 [MethodSpec split-result local](docs/archive/generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md),
-and [multiple direct returns](docs/archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md)
+[multiple direct returns](docs/archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md),
+and [split control flow](docs/archive/generic-owner-physical-split-nullable-control-flow-placement-2026-09-02.md)
 archives.
-The focused gate reports 91 green physical-value model tests. Candidate and
+The focused gate reports 92 green physical-value model tests. Candidate and
 production-erased inverse each cover four green tests across PSI, LightTree,
 Framework 4.8, and .NET 10, with no failures, errors, or skips.
 
@@ -207,10 +218,12 @@ The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
 natural parameter entries, one exact direct natural-MethodDef result, and one
 exact split-result pair with only a positive number of bare, unprotected direct
-returns to the same physical MethodDef. Every retained split call consumes its
-exact final operation route as the placement witness; the call may be
-parameterless or may carry one final identity-preserving `STRICT_OWNER_INPUT`
-argument. The join uses a logical interface
+returns to the same physical MethodDef. That pair may now also be initialized
+by a flat exhaustive branch family when every exact arm independently produces
+the same physical payload. Every retained split call consumes its exact final
+operation route as the placement witness; a call may be parameterless or may
+carry one final identity-preserving `STRICT_OWNER_INPUT` argument. The reference
+join uses a logical interface
 only to select a family; physical construction authority comes exclusively from
 the intersection of recorded interface closures. The parameter entry comes only
 from the role-specific physical prototype and is checked against the live
@@ -233,9 +246,10 @@ does not confuse a caller MethodDef's `!!n` with class `!n`, infer physical
 arity from IR, or claim broad semantic receivers. Producer and consumer now
 also compose this binder with one strict owner input and a split-nullable owner
 result, including producer records, separate Kotlin assemblies, objective PE,
-and ordinary natural-only C# implementations. The next consolidation boundary
-extends split-pair retention through control-flow initializer joins, then closes
-remaining parameter-entry and general multi-input forms. Every non-return,
+and ordinary natural-only C# implementations. Split-pair control-flow
+initializer joins are now closed for the flat calls-only form. The next
+consolidation boundary closes remaining parameter-entry and general multi-input
+forms. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,

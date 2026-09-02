@@ -2603,6 +2603,24 @@ internal data class DotNetGenericOwnerProducedValueFact(
     }
 }
 
+/**
+ * Joins two already-split values only when both name the same verifier-visible payload carrier.
+ *
+ * Unlike a general control-flow join, this query has no common-carrier selector: it cannot widen
+ * `!n`, choose `object`, materialize nullable state, or turn another produced layout into a pair.
+ * The null-state and provenance components still use the ordinary value-fact join once equality of
+ * the complete split layout has been established.
+ */
+internal fun DotNetGenericOwnerProducedValueFact.joinAtIdenticalSplitNullablePayloadOrNull(
+    other: DotNetGenericOwnerProducedValueFact,
+): DotNetGenericOwnerProducedValueFact? {
+    val left = layout as? DotNetGenericOwnerProducedValueLayout.SplitNullable ?: return null
+    val right = other.layout as? DotNetGenericOwnerProducedValueLayout.SplitNullable ?: return null
+    if (left.payloadCarrier != right.payloadCarrier) return null
+    return join(other) { first, second -> first.takeIf { it == second } }
+        .takeIf { joined -> joined.layout == left }
+}
+
 /** Collects only direct or recorded views rooted in already-guaranteed value evidence. */
 private fun DotNetGenericOwnerProducedValueFact.recordedPhysicalSourceViewsOrError(
     declarations: DotNetGenericOwnerPhysicalDeclarationIndex,

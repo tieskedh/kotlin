@@ -18,6 +18,7 @@ interface InlineLookup<K, out V> {
 interface InlineSplitLocalProducer<out T> {
     fun read(): T?
     fun readThroughLocal(returnFirst: Boolean): T?
+    fun readThroughControlFlow(selectFirst: Boolean): T?
     fun readThroughMaterialization(): T?
     fun readThroughProtectedRegion(): T?
 }
@@ -81,6 +82,17 @@ private class InlineSplitLocalRoute<T>(private val value: T?) : InlineSplitLocal
         val exactResultAlias: T? = sourceNaturalAlias.read()
         if (returnFirst) return exactResultAlias
         return exactResultAlias
+    }
+
+    override fun readThroughControlFlow(selectFirst: Boolean): T? {
+        val firstNaturalAlias: InlineSplitLocalProducer<T> = this
+        val secondNaturalAlias: InlineSplitLocalProducer<T> = this
+        val controlFlowResultAlias: T? = if (selectFirst) {
+            firstNaturalAlias.read()
+        } else {
+            secondNaturalAlias.read()
+        }
+        return controlFlowResultAlias
     }
 
     private fun materialize(value: T?): T? = value
@@ -339,6 +351,36 @@ fun box(): String {
         InlineSplitLocalRoute<Int?>(null).readThroughLocal(false) != null
     ) {
         return "nullable value null multi-return split local route"
+    }
+    if (InlineSplitLocalRoute(58).readThroughControlFlow(true) != 58 ||
+        InlineSplitLocalRoute(58).readThroughControlFlow(false) != 58
+    ) {
+        return "value control-flow split local route"
+    }
+    if (InlineSplitLocalRoute<Int>(null).readThroughControlFlow(true) != null ||
+        InlineSplitLocalRoute<Int>(null).readThroughControlFlow(false) != null
+    ) {
+        return "value null control-flow split local route"
+    }
+    if (InlineSplitLocalRoute("control flow").readThroughControlFlow(true) != "control flow" ||
+        InlineSplitLocalRoute("control flow").readThroughControlFlow(false) != "control flow"
+    ) {
+        return "reference control-flow split local route"
+    }
+    if (InlineSplitLocalRoute<String>(null).readThroughControlFlow(true) != null ||
+        InlineSplitLocalRoute<String>(null).readThroughControlFlow(false) != null
+    ) {
+        return "reference null control-flow split local route"
+    }
+    if (InlineSplitLocalRoute<Int?>(59).readThroughControlFlow(true) != 59 ||
+        InlineSplitLocalRoute<Int?>(59).readThroughControlFlow(false) != 59
+    ) {
+        return "nullable value control-flow split local route"
+    }
+    if (InlineSplitLocalRoute<Int?>(null).readThroughControlFlow(true) != null ||
+        InlineSplitLocalRoute<Int?>(null).readThroughControlFlow(false) != null
+    ) {
+        return "nullable value null control-flow split local route"
     }
     if (InlineSplitLocalRoute(54).readThroughMaterialization() != 54) {
         return "ordinary split materialization route"

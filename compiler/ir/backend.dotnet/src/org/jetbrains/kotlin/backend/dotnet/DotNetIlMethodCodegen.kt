@@ -1856,33 +1856,43 @@ internal class DotNetIlMethodCodegen(
 
     private fun emitVariable(variable: IrVariable) {
         val initializer = variable.initializer
-        val retainedSplitNullableCall = if (initializer == null) {
+        val retainedSplitNullableInitializer = if (initializer == null) {
             null
         } else {
             genericOwnerPhysicalValueLocalPlacementAuthority
                 ?.retainedSplitNullableOrNull(function.symbol, variable.symbol)
                 ?.let { selection ->
-                    val expectedCall = selection.bindEmitterCallOrNull(
+                    val expectedInitializer = selection.bindEmitterInitializerOrNull(
                         typeMapper,
                         functionInfo.owner,
+                        initializer,
                     ) ?: dotNetUnsupported(
                         "final split-nullable authority for local " +
-                                "'${variable.name.asString()}' cannot bind its authoritative call " +
+                                "'${variable.name.asString()}' cannot bind its authoritative initializer " +
                                 "(authority=${selection.payloadCarrier}, " +
                                 "MethodDefOwner=${functionInfo.owner.ilTypeRef})",
                     )
-                    val livePayload = expressionCodegen
-                        .directPhysicalSplitCallResultPayloadTypeOrNull(initializer, expectedCall)
+                    val expectedPayload = expectedInitializer.callsInEvaluationOrder
+                        .first()
+                        .boundCall
+                        .payloadType
+                    val allCallsRemainExact = expectedInitializer.callsInEvaluationOrder.all { site ->
+                        site.boundCall.payloadType == expectedPayload &&
+                                expressionCodegen.directPhysicalSplitCallResultPayloadTypeOrNull(
+                                    site.call,
+                                    site.boundCall,
+                                ) == expectedPayload
+                    }
+                    expectedInitializer.takeIf { allCallsRemainExact }
                         ?: dotNetUnsupported(
                             "final split-nullable authority for local " +
-                                    "'${variable.name.asString()}' does not match its live call " +
+                                    "'${variable.name.asString()}' does not match every live call " +
                                     "(authority=${selection.payloadCarrier}, " +
                                     "MethodDefOwner=${functionInfo.owner.ilTypeRef})",
                         )
-                    expectedCall.takeIf { call -> call.payloadType == livePayload }
                 }
         }
-        if (retainedSplitNullableCall != null) {
+        if (retainedSplitNullableInitializer != null) {
             val liveFunction = function as? IrSimpleFunction ?: dotNetUnsupported(
                 "split-nullable local '${variable.name.asString()}' requires a simple enclosing function",
             )
@@ -1894,7 +1904,10 @@ internal class DotNetIlMethodCodegen(
                             "(uses=$liveUseSummary)",
                 )
             }
-            val retainedSplitNullablePayload = retainedSplitNullableCall.payloadType
+            val retainedSplitNullablePayload = retainedSplitNullableInitializer.callsInEvaluationOrder
+                .first()
+                .boundCall
+                .payloadType
             val enclosingPayload = (signature.returnType as? DotNetIlReturnType.Value)?.type
             if (!signature.hasSplitNullableResult ||
                 enclosingPayload != retainedSplitNullablePayload
@@ -1905,9 +1918,6 @@ internal class DotNetIlMethodCodegen(
                             "MethodDef=$enclosingPayload, split=${signature.hasSplitNullableResult})",
                 )
             }
-            val call = initializer as? IrCall ?: dotNetUnsupported(
-                "split-nullable local '${variable.name.asString()}' no longer has one direct call initializer",
-            )
             val local = methodContext.declareSplitNullableLocal(
                 variable,
                 retainedSplitNullablePayload,
@@ -1930,13 +1940,12 @@ internal class DotNetIlMethodCodegen(
                     "split-nullable initialization of local '${variable.name.asString()}'",
                 ),
             ) {
-                expressionCodegen.emitDirectPhysicalSplitCall(
-                    call,
-                    local.isNull,
-                    retainedSplitNullableCall,
+                emitRetainedSplitNullableInitializer(
+                    retainedSplitNullableInitializer,
+                    local,
+                    variable.name.asString(),
                 )
             }
-            methodContext.emit(storeLocalInstruction(local.payload.index), pops = 1)
             return
         }
         val retainedProducedStorage = if (initializer == null) {
@@ -2050,6 +2059,66 @@ internal class DotNetIlMethodCodegen(
         }
         if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+    }
+
+    /** Emits one identity-authorized direct call or flat branch family into one shared pair. */
+    private fun emitRetainedSplitNullableInitializer(
+        initializer: DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer,
+        local: DotNetIlSplitNullableLocal,
+        variableName: String,
+    ) {
+        fun emitCall(call: IrCall) {
+            val expected = initializer.boundCallForExactCallOrNull(call)
+                ?: dotNetUnsupported(
+                    "split-nullable local '$variableName' encountered an unauthorized branch call",
+                )
+            expressionCodegen.emitDirectPhysicalSplitCall(call, local.isNull, expected)
+            methodContext.emit(storeLocalInstruction(local.payload.index), pops = 1)
+        }
+
+        when (initializer) {
+            is DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer.DirectCall ->
+                emitCall(initializer.callSite.call)
+
+            is DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer.FlatExhaustiveWhen -> {
+                val entryStackDepth = methodContext.stackDepth
+                val entryEhDepth = methodContext.ehDepth
+                val endLabel = methodContext.nextLabel("splitNullableWhenEnd")
+                var hasElse = false
+
+                for (branch in initializer.expression.branches) {
+                    if (branch.condition.isFalseConst()) continue
+                    val call = branch.result.dotNetSingleSplitOperationCallOrNull()
+                        ?: dotNetUnsupported(
+                            "split-nullable local '$variableName' no longer has bare call branches",
+                        )
+                    if (branch.condition.isTrueConst()) {
+                        emitCall(call)
+                        hasElse = true
+                        break
+                    }
+
+                    val nextBranchLabel = methodContext.nextLabel("splitNullableWhenNext")
+                    expressionCodegen.emitBranchIfFalse(branch.condition, nextBranchLabel)
+                    emitCall(call)
+                    check(methodContext.stackDepth == entryStackDepth &&
+                            methodContext.ehDepth == entryEhDepth) {
+                        "Internal .NET backend error: split-nullable branch changed stack/EH depth"
+                    }
+                    methodContext.emitGoto(endLabel)
+                    methodContext.emitLabel(nextBranchLabel)
+                }
+
+                check(hasElse && methodContext.stackDepth == entryStackDepth &&
+                        methodContext.ehDepth == entryEhDepth) {
+                    "Internal .NET backend error: split-nullable control flow has no balanced else"
+                }
+                check(methodContext.isLabelReferenced(endLabel)) {
+                    "Internal .NET backend error: split-nullable control flow has no branch join"
+                }
+                methodContext.emitLabel(endLabel)
+            }
+        }
     }
 
     /**

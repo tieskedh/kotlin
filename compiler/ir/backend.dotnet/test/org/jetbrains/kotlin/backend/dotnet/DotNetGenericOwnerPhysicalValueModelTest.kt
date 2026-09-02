@@ -3542,6 +3542,30 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `split control-flow join accepts only an identical payload carrier`() {
+        val key = boundCarrier(boundTypeParameter(declarationIndex, lookupOwner, 0))
+        val value = boundCarrier(boundTypeParameter(declarationIndex, lookupOwner, 1))
+        val first = DotNetGenericOwnerProducedValueFact(
+            layout = DotNetGenericOwnerProducedValueLayout.SplitNullable(value),
+            provenance = unknownProvenance(),
+            nullState = DotNetGenericOwnerPhysicalNullState.NON_NULL,
+        )
+        val second = first.copy(nullState = DotNetGenericOwnerPhysicalNullState.MAYBE_NULL)
+
+        val joined = assertNotNull(first.joinAtIdenticalSplitNullablePayloadOrNull(second))
+
+        assertEquals(DotNetGenericOwnerProducedValueLayout.SplitNullable(value), joined.layout)
+        assertEquals(DotNetGenericOwnerPhysicalNullState.MAYBE_NULL, joined.nullState)
+        assertNull(
+            first.joinAtIdenticalSplitNullablePayloadOrNull(
+                second.copy(layout = DotNetGenericOwnerProducedValueLayout.SplitNullable(key)),
+            ),
+        )
+        assertNull(first.joinAtIdenticalSplitNullablePayloadOrNull(directValue(value)))
+        assertNull(first.joinAtIdenticalSplitNullablePayloadOrNull(nullValue()))
+    }
+
+    @Test
     fun `split nullable placement preserves its payload and null flag layout`() {
         val payload = boundCarrier(boundTypeParameter(declarationIndex, lookupOwner, 1))
         val split = DotNetGenericOwnerProducedValueFact(
