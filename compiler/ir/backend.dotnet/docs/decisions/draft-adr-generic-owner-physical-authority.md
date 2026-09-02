@@ -474,16 +474,26 @@ emitter independently resolves the live MethodDef and result carrier.
 The fifth bounded form admits one immutable logical `T?` local whose initializer
 is a parameterless, non-method-generic exact natural call producing
 `SplitNullable(!n, bool)`. The enclosing physical MethodDef must itself return
-the identical split payload, the local must have exactly one read which directly
-returns it to that MethodDef, and that return must be outside every
-`try`/`catch`/`finally` region. The payload must be the same
-substitution-dependent owner parameter of the live physical MethodDef owner.
-Emission stores the payload and null flag in two distinct compiler-private CLR
-locals, independently resolves the same split MethodDef, and copies only the
-private flag into the enclosing final `out bool` at return. Arguments,
-MethodSpecs, semantic or `super` routes, mutation, joins, captures, multiple
-reads, protected-region returns, and any carrier mismatch receive no pair-
-retention token and use the ordinary materializing path.
+the identical split payload. The local must have a positive number of reads;
+every read must be its bare value directly returned to that same MethodDef, and
+every such return must be outside `try`/`catch`/`finally`. Equivalently, the
+exhaustive summary must satisfy `readCount > 0`, `readCount ==
+directFunctionReturnCount`, `directOtherReturnCount == 0`, and
+`protectedRegionReturnCount == 0`. Multiple static return sites are safe only
+because every executed site terminates its path, so at most one pair consumer
+executes in an invocation. This does not admit sequential consumption.
+
+The payload must be the same substitution-dependent owner parameter of the live
+physical MethodDef owner. Emission stores the payload and null flag in two
+distinct compiler-private CLR locals, independently resolves the same split
+MethodDef, and copies only the private flag into the enclosing final `out bool`
+at return. Placement binding checks the exhaustive use summary, and the emitter
+repeats the same check against live IR immediately before declaring the pair
+locals. A late mismatch fails closed; it cannot retain stale authority or
+silently fabricate a materialized value. Arguments, MethodSpecs, semantic or
+`super` routes, mutation, joins, captures, any non-return or mixed read,
+protected-region returns, and any carrier mismatch receive no pair-retention
+token and use the ordinary materializing path.
 
 Pair placement for this form now also consumes the complete final BOUND
 `EXACT_NATURAL` / `DIRECT_NATURAL` / `MATCH` operation witness. Result layout or
@@ -501,9 +511,9 @@ recorded view of its declaring generic owner from both resolved and live
 receiver carriers, validates every direct storage-read argument against the
 retained slot, and uses only its private final Boolean local as the nested call's
 null-flag address, never the enclosing flag. A logical source type, an older
-route-census marker, or the payload alone cannot authorize placement. The use,
-enclosing-result, exception-region, and materialization restrictions of the
-fifth form remain unchanged.
+route-census marker, or the payload alone cannot authorize placement. The
+shared exhaustive-use, enclosing-result, exception-region, and materialization
+restrictions of the fifth form remain unchanged.
 
 The seventh bounded form admits the exact generic operation
 `<R>(K, R): V?`. Its open parameter domains and carriers must be
@@ -731,7 +741,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
 | `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
 | `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
-| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, one exact-natural single-`STRICT_OWNER_INPUT` operation, and the exact `<R>(K, R): V?` MethodSpec composition. Other MethodSpec and multi-argument operations may preserve their result layout for routing but do not yet retain split pairs in locals; broader consumers and control flow require independent policies. |
+| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, one exact-natural single-`STRICT_OWNER_INPUT` operation, and the exact `<R>(K, R): V?` MethodSpec composition. Each admitted pair may have a positive number of mutually exclusive terminal direct-return uses; every other use category, control-flow join, MethodSpec, or multi-argument operation requires an independent policy. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 
@@ -769,12 +779,14 @@ consumer preserves this exact layout. The bounded local consumer can retain a
 parameterless split result, or a result from one exact call with a single
 `STRICT_OWNER_INPUT`, as two verifier-visible private locals and return that
 pair through an enclosing MethodDef with the identical split layout, without
-boxing or logical nullable materialization. The emitted interface MethodDef
+boxing or logical nullable materialization. Every local read must be a bare
+unprotected return to that MethodDef; multiple static sites are admitted only
+because each executed use terminates its path. The emitted interface MethodDef
 keeps its own independent binder positions—for example `!1` result and `!0`
 input—even when a concrete construction binds both to one outer `!n`. The exact
-generic form below is the third bounded local consumer. Every consumer outside
-these three forms still materializes at its ordinary Kotlin value boundary.
-Split result layout never authorizes split fields or duplicate state.
+generic form below is the third bounded initializer operation. Every other use
+category still materializes at its ordinary Kotlin value boundary. Split result
+layout never authorizes split fields or duplicate state.
 
 The MethodDef binder composes by the same rule. The first closed structural
 form is:
@@ -1240,9 +1252,9 @@ covers at least:
   physical records;
 - direct and split-nullable results for references, signed value types,
   `Nullable<V>`, open owner/method parameters, and Kotlin value classes;
-- split-result locals with a sole direct return, an ordinary argument or other
-  materializing consumer, multiple reads, and a return inside an exception-
-  protected region; and
+- split-result locals with one or multiple mutually exclusive direct returns,
+  zero reads, an ordinary argument or other materializing read, a mixed or
+  other-target return, and a return inside an exception-protected region; and
 - Framework 4.8, current CoreCLR, ReadyToRun, trimming, and NativeAOT.
 
 Each positive test must prove object identity, authoritative state, selected
@@ -1323,9 +1335,10 @@ fail closed. This declaration proof does not claim producer-side delegate
 synthesis, constrained producer delegate rows, delegate members, or operation
 routing. Direct equal-carrier local placement, one exhaustive unique-common-
 interface join, bare and constructed-natural exact parameter entries, one
-parameterless natural MethodDef `Direct` result, and one single-return
-`SplitNullable` pair now consume final value facts through an explicit
-authority adapter. Constructed locals and entries remain local owner-bound
+parameterless natural MethodDef `Direct` result, and one `SplitNullable` pair
+whose positive reads are all terminal same-function returns now consume final
+value facts through an explicit authority adapter. Constructed locals and
+entries remain local owner-bound
 reference `C<!n,...>` forms; the bare entry and result slices add `!n` with
 substitution-dependent null encoding. The result path selects a bound MethodDef
 and only a receiver construction already guaranteed by provenance; an existing
@@ -1350,11 +1363,13 @@ Kotlin calls without changing identity. Each placement path independently
 checks the live emitter or every fixed-boundary branch. Pair-local placement now
 also consumes that exact `<R>(K, R): V?` operation. Its token preserves both the
 open `!K`/`!!R`/`!V` declaration and the instantiated owner-bound MethodSpec and
-carriers, and sealed emission must agree with both. Other generic or multi-input
-shapes remain unavailable. The next boundary generalizes split-pair placement
-to multiple consumers and control-flow joins, then closes general multi-input,
-remaining parameter-entry forms and explicit conversions—not another state or
-stdlib recognizer.
+carriers, and sealed emission must agree with both. Pair declaration repeats the
+complete live-use proof so later IR cannot turn placement authority into a
+non-return, protected, other-target, or sequential consumer. Other generic or
+multi-input shapes remain unavailable. The next boundary generalizes split-pair
+placement through control-flow initializer joins, then closes general
+multi-input, remaining parameter-entry forms and explicit conversions—not
+another state or stdlib recognizer.
 
 ## Consequences
 

@@ -206,31 +206,34 @@ source-built Stdlib census. Seven bounded local-placement forms are executable
 evidence: equal direct carriers, one unique recorded control-flow construction,
 bare or constructed current-owner parameter entries, a parameterless natural
 `Direct(!n)` result, and a natural `SplitNullable(!n, bool)` result retained in
-two private locals for one direct unprotected return. Every retained split call
-consumes one final exact-natural operation witness; it may be parameterless or
-may have one identity-preserving `STRICT_OWNER_INPUT(!m)` and no MethodSpec. One
-further exact shape composes `<R>(K, R): V?` with open `!K`/`!!R` inputs, an
-owner-bound `<!m>` MethodSpec, and an independent split `!V` result. Local
-producer members are bound to published contracts by declaration identity;
-separate consumers use validated producer records. Exact rules and current
-evidence belong in the owning ADR and `STATUS.md`, not in this route map.
+two private locals when a positive number of reads are all bare, unprotected
+returns to the same physical MethodDef. Every retained split call consumes one
+final exact-natural operation witness; it may be parameterless or may have one
+identity-preserving `STRICT_OWNER_INPUT(!m)` and no MethodSpec. One further
+exact shape composes `<R>(K, R): V?` with open `!K`/`!!R` inputs, an owner-bound
+`<!m>` MethodSpec, and an independent split `!V` result. Local producer members
+are bound to published contracts by declaration identity; separate consumers
+use validated producer records. Exact rules and current evidence belong in the
+owning ADR and `STATUS.md`, not in this route map.
 
 These proofs authorize no cast, semantic adaptation, field/state choice, ABI
 change, or fabricated construction. The split pair is not general local state:
-other multi-argument or MethodSpec calls, multiple consumers, control-flow
-joins, captures, fields, and exception-protected returns still use their
-independently proven layout or the ordinary materializing boundary.
-Star/projected or truly broad source values never gain exact authority from a
-logical type.
+other multi-argument or MethodSpec calls, control-flow joins, captures, fields,
+and every non-return, mixed, protected, other-target, nested-expression, or
+sequential consumer still use their independently proven layout or the ordinary
+materializing boundary. Multiple static direct-return sites are admitted only
+because every executed site terminates its path. Star/projected or truly broad
+source values never gain exact authority from a logical type.
 
-The next sequence is: extend split-pair retention to multiple consumers and
-control-flow joins; close general multi-input and remaining parameter-entry
-forms; then prove null/bottom/unknown joins and
-explicit representation-changing conversions. Only after those value rules stabilize
-should the consumer widen to captures, properties, class nodes, MethodImpls, or
-new Runtime/Stdlib declarations. Broader state remains a separate producer-wide
-proof. A comparison surface may disappear only after downstream owner closure
-is an epoch invariant and its hostile erased inverse remains exact.
+The next sequence is: extend split-pair retention through control-flow
+initializer joins; close general multi-input and remaining parameter-entry
+forms; then prove additional non-materializing consumer categories,
+null/bottom/unknown joins, and explicit representation-changing conversions.
+Only after those value rules stabilize should the consumer widen to captures,
+properties, class nodes, MethodImpls, or new Runtime/Stdlib declarations.
+Broader state remains a separate producer-wide proof. A comparison surface may
+disappear only after downstream owner closure is an epoch invariant and its
+hostile erased inverse remains exact.
 
 It must preserve one receiver identity and one authoritative state, never
 fabricate a CLR construction, and never allow a logically widened view to

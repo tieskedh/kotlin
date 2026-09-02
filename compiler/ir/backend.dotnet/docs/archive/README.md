@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md`](generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md)
+  records positive-N same-function terminal-return authority for one retained
+  split pair, the path-termination argument, exhaustive late live-use emitter
+  revalidation, two unboxed return tails across value/reference/nullable-value
+  execution, hostile non-return/protected controls, and the exact Framework
+  4.8/.NET 10 production-erased inverse.
 - [`generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md`](generic-owner-physical-split-nullable-methodspec-placement-2026-09-02.md)
   records the first retained MethodSpec-bearing split-result local: the exact
   `<R>(K, R): V?` composition, independent open TypeDef/MethodDef binders and

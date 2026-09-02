@@ -1883,6 +1883,17 @@ internal class DotNetIlMethodCodegen(
                 }
         }
         if (retainedSplitNullableCall != null) {
+            val liveFunction = function as? IrSimpleFunction ?: dotNetUnsupported(
+                "split-nullable local '${variable.name.asString()}' requires a simple enclosing function",
+            )
+            val liveUseSummary = variable.splitLocalUseSummaryIn(liveFunction)
+            if (!liveUseSummary.hasOnlyUnprotectedDirectFunctionReturnUses) {
+                dotNetUnsupported(
+                    "split-nullable local '${variable.name.asString()}' no longer has only " +
+                            "unprotected direct returns in its live function " +
+                            "(uses=$liveUseSummary)",
+                )
+            }
             val retainedSplitNullablePayload = retainedSplitNullableCall.payloadType
             val enclosingPayload = (signature.returnType as? DotNetIlReturnType.Value)?.type
             if (!signature.hasSplitNullableResult ||

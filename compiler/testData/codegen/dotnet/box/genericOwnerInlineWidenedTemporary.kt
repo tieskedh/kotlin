@@ -17,7 +17,7 @@ interface InlineLookup<K, out V> {
 
 interface InlineSplitLocalProducer<out T> {
     fun read(): T?
-    fun readThroughLocal(): T?
+    fun readThroughLocal(returnFirst: Boolean): T?
     fun readThroughMaterialization(): T?
     fun readThroughProtectedRegion(): T?
 }
@@ -76,9 +76,10 @@ private class InlineMethodSpecSplitLocalRoute<T> : InlineLookup<T, T> {
 private class InlineSplitLocalRoute<T>(private val value: T?) : InlineSplitLocalProducer<T> {
     override fun read(): T? = value
 
-    override fun readThroughLocal(): T? {
+    override fun readThroughLocal(returnFirst: Boolean): T? {
         val sourceNaturalAlias: InlineSplitLocalProducer<T> = this
         val exactResultAlias: T? = sourceNaturalAlias.read()
+        if (returnFirst) return exactResultAlias
         return exactResultAlias
     }
 
@@ -309,23 +310,35 @@ fun box(): String {
     if (InlineMethodSpecSplitLocalRoute<Int?>().lookup(null) != null) {
         return "nullable value MethodSpec split local route"
     }
-    if (InlineSplitLocalRoute(52).readThroughLocal() != 52) {
-        return "value split local route"
+    if (InlineSplitLocalRoute(52).readThroughLocal(true) != 52 ||
+        InlineSplitLocalRoute(52).readThroughLocal(false) != 52
+    ) {
+        return "value multi-return split local route"
     }
-    if (InlineSplitLocalRoute<Int>(null).readThroughLocal() != null) {
-        return "value null split local argument route"
+    if (InlineSplitLocalRoute<Int>(null).readThroughLocal(true) != null ||
+        InlineSplitLocalRoute<Int>(null).readThroughLocal(false) != null
+    ) {
+        return "value null multi-return split local route"
     }
-    if (InlineSplitLocalRoute("split local").readThroughLocal() != "split local") {
-        return "reference split local argument route"
+    if (InlineSplitLocalRoute("split local").readThroughLocal(true) != "split local" ||
+        InlineSplitLocalRoute("split local").readThroughLocal(false) != "split local"
+    ) {
+        return "reference multi-return split local route"
     }
-    if (InlineSplitLocalRoute<String>(null).readThroughLocal() != null) {
-        return "reference null split local argument route"
+    if (InlineSplitLocalRoute<String>(null).readThroughLocal(true) != null ||
+        InlineSplitLocalRoute<String>(null).readThroughLocal(false) != null
+    ) {
+        return "reference null multi-return split local route"
     }
-    if (InlineSplitLocalRoute<Int?>(53).readThroughLocal() != 53) {
-        return "nullable value split local argument route"
+    if (InlineSplitLocalRoute<Int?>(53).readThroughLocal(true) != 53 ||
+        InlineSplitLocalRoute<Int?>(53).readThroughLocal(false) != 53
+    ) {
+        return "nullable value multi-return split local route"
     }
-    if (InlineSplitLocalRoute<Int?>(null).readThroughLocal() != null) {
-        return "nullable value null split local argument route"
+    if (InlineSplitLocalRoute<Int?>(null).readThroughLocal(true) != null ||
+        InlineSplitLocalRoute<Int?>(null).readThroughLocal(false) != null
+    ) {
+        return "nullable value null multi-return split local route"
     }
     if (InlineSplitLocalRoute(54).readThroughMaterialization() != 54) {
         return "ordinary split materialization route"

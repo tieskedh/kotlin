@@ -2203,7 +2203,9 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                         "InlineMethodSpecSplitLocalRoute\$lookup\$methodSpecSourceNaturalAlias\$1`1" !in ilText &&
                         "methodSpecResultAlias@isNull" !in ilText &&
                         "'InlineSplitLocalProducer`1'" !in ilText &&
-                        "InlineSplitLocalProducerKotlinSemantic" !in ilText
+                        "InlineSplitLocalProducerKotlinSemantic" !in ilText &&
+                        "'InlineSplitLocalRoute`1'" !in ilText &&
+                        "exactResultAlias@isNull" !in ilText
             }) {
                 "The production-erased inverse emitted a candidate natural or semantic TypeDef or use: " +
                         emittedIl.path
@@ -2489,11 +2491,45 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         check(splitMethod != null) {
             "Cannot isolate the emitted readThroughLocal MethodDef: ${splitEmittedIl.path}"
         }
-        val splitCalls = splitMethod.lineSequence().map(String::trim).filter { line ->
+        val splitInstructions = splitMethod.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        val splitPayloadSlot = checkNotNull(
+            Regex("\\[(\\d+)\\]\\s+!0\\s+'exactResultAlias'\\s*,?")
+                .findAll(splitMethod)
+                .map { match -> match.groupValues[1].toInt() }
+                .singleOrNull(),
+        ) {
+            "The split local must declare one named !T payload slot: method=$splitMethod"
+        }
+        val splitFlagSlot = checkNotNull(
+            Regex("\\[(\\d+)\\]\\s+bool\\s+'exactResultAlias@isNull'\\s*,?")
+                .findAll(splitMethod)
+                .map { match -> match.groupValues[1].toInt() }
+                .singleOrNull(),
+        ) {
+            "The split local must declare one named Boolean flag slot: method=$splitMethod"
+        }
+        check(splitFlagSlot == splitPayloadSlot + 1 &&
+                splitResultAlias.actualAuxiliarySlotIndex == splitFlagSlot) {
+            "The split payload and its recorded Boolean flag must occupy distinct adjacent locals: " +
+                    "payload=$splitPayloadSlot, flag=$splitFlagSlot, result=$splitResultAlias, " +
+                    "method=$splitMethod"
+        }
+        val splitHeader = splitMethod.substringBefore('{')
+        check(Regex(
+            "'readThroughLocal'\\(\\s*bool\\s+[^,]+,\\s*\\[out\\]\\s+bool&\\s+[^)]+\\)",
+        ).containsMatchIn(splitHeader)) {
+            "The split method must expose the source Boolean followed by the final out flag: " +
+                    "header=$splitHeader"
+        }
+        val splitCalls = splitInstructions.filter { line ->
             (line.startsWith("call ") || line.startsWith("callvirt ")) &&
                     "::'read'(" in line
-        }.toList()
-        check(splitCalls.singleOrNull()?.let { call ->
+        }
+        val splitCall = splitCalls.singleOrNull()
+        check(splitCall?.let { call ->
             Regex(
                 "^callvirt\\s+instance\\s+!0\\s+class\\s+" +
                         "'InlineSplitLocalProducer`1'<!0>::'read'\\(bool&\\)$",
@@ -2502,18 +2538,69 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The split local must receive one natural !T/bool pair without materialization: " +
                     "calls=$splitCalls, method=$splitMethod"
         }
+        val splitPayloadStore = if (splitPayloadSlot in 0..3) {
+            "stloc.$splitPayloadSlot"
+        } else {
+            "stloc $splitPayloadSlot"
+        }
+        val splitCallIndex = splitInstructions.indexOf(splitCall)
+        check(splitCallIndex > 0 && splitCallIndex + 1 < splitInstructions.size &&
+                splitInstructions[splitCallIndex - 1] == "ldloca $splitFlagSlot" &&
+                splitInstructions[splitCallIndex + 1] == splitPayloadStore) {
+            "The natural producer must write directly into the private flag/payload pair: " +
+                    "call=$splitCall, payload=$splitPayloadSlot, flag=$splitFlagSlot, " +
+                    "method=$splitMethod"
+        }
+        val selectorBranches = splitInstructions.windowed(2).filter { pair ->
+            pair[0] == "ldarg.1" &&
+                    Regex("^brfalse(?:\\.s)?\\s+\\S+$").matches(pair[1])
+        }
+        check(selectorBranches.size == 1) {
+            "The source Boolean must select exactly one of the two direct-return paths: " +
+                    "branches=$selectorBranches, method=$splitMethod"
+        }
+        val splitFlagLoad = if (splitFlagSlot in 0..3) {
+            "ldloc.$splitFlagSlot"
+        } else {
+            "ldloc $splitFlagSlot"
+        }
+        val splitPayloadLoad = if (splitPayloadSlot in 0..3) {
+            "ldloc.$splitPayloadSlot"
+        } else {
+            "ldloc $splitPayloadSlot"
+        }
+        val directReturnSlice = listOf(
+            "ldarg.2",
+            splitFlagLoad,
+            "stind.i1",
+            splitPayloadLoad,
+            "ret",
+        )
+        val directReturnSliceCount = splitInstructions.windowed(directReturnSlice.size)
+            .count { window -> window == directReturnSlice }
+        check(directReturnSliceCount == 2 &&
+                splitInstructions.count { instruction -> instruction == "ret" } == 2) {
+            "Both paths must copy the same private flag to the final out argument and return " +
+                    "the same typed payload: expected=$directReturnSlice, " +
+                    "matches=$directReturnSliceCount, method=$splitMethod"
+        }
         val forbiddenSplitMaterialization = listOf(
             "System.Nullable",
             "splitNullableNonNull",
             "splitNullableResult",
             "KotlinSemantic",
+            "<splitNullableSource>",
+            "<splitNullablePayload>",
+            "<splitNullableIsNull>",
         ).filter(splitMethod::contains)
-        val boxingInstructions = splitMethod.lineSequence().map(String::trim).filter { line ->
-            Regex("^(box|unbox\\.any)\\b").containsMatchIn(line)
-        }.toList()
-        check(forbiddenSplitMaterialization.isEmpty() && boxingInstructions.isEmpty()) {
+        val representationChangingInstructions = splitInstructions.filter { line ->
+            Regex("^(box|unbox\\.any|castclass|isinst)\\b").containsMatchIn(line)
+        }
+        check(forbiddenSplitMaterialization.isEmpty() &&
+                representationChangingInstructions.isEmpty()) {
             "The split local materialized or crossed a semantic route: " +
-                    "forbidden=$forbiddenSplitMaterialization, boxing=$boxingInstructions, " +
+                    "forbidden=$forbiddenSplitMaterialization, " +
+                    "representationChanges=$representationChangingInstructions, " +
                     "method=$splitMethod"
         }
         val argumentSplitMethod = splitMethodWindows.singleOrNull { method ->
