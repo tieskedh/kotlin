@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerRehearsalEpochRecordIndexKeys
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
 import org.jetbrains.kotlin.cli.dotnet.config.addDotNetClasspathRoot
@@ -2002,7 +2003,7 @@ private fun validateGenericOwnerSealedEmissionFamilies(
     }
 }
 
-/** Proves that a separately compiled producer publishes only its final actual 4/6/2 seal. */
+/** Proves the producer's final 4/6/2 seal and the bounded stamped external consumer route. */
 private fun validateGenericOwnerProducerSealedPublication(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,
@@ -2029,10 +2030,66 @@ private fun validateGenericOwnerProducerSealedPublication(
         entry.value is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
     }
     if (!genericOwnerRehearsal) {
-        check(sealedEntries.isEmpty() && semanticEquivalenceEntries.isEmpty()) {
-            "The production erased epoch must not publish producer-sealed generic-owner " +
-                    "families or semantic-equivalence certificates: " +
-                    (sealedEntries + semanticEquivalenceEntries)
+        val genericOwnerEpochEntries = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
+        check(genericOwnerEpochEntries.isEmpty()) {
+            "The production erased epoch must not publish H/N/M/J/K generic-owner records: " +
+                    genericOwnerEpochEntries
+        }
+        if (probesSemanticEquivalence) {
+            if (!producesLibrary) {
+                val erasedCertificateLibrary = externalLibraries.singleOrNull { library ->
+                    library.assemblyFile.name.equals("lib.dll", ignoreCase = true)
+                }
+                val externalEpochEntries = erasedCertificateLibrary?.declarations
+                    ?.genericOwnerRehearsalEpochRecordIndexKeys().orEmpty()
+                check(erasedCertificateLibrary != null && externalEpochEntries.isEmpty() &&
+                        erasedCertificateLibrary.genericOwnerPeValidationStamp ===
+                        DotNetGenericOwnerPeValidationStamp.EMPTY
+                ) {
+                    "The production erased consumer received candidate K/J authority: " +
+                            externalEpochEntries
+                }
+            }
+            val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+            check(emittedIl.isFile) {
+                "The semantic-equivalence erased inverse has no emitted IL: ${emittedIl.path}"
+            }
+            val ilText = emittedIl.readText().removePrefix("\uFEFF")
+            check("'SemanticEquivalenceCertificateProducer`1'" !in ilText &&
+                    "'SemanticEquivalenceCertificateValue`1'" !in ilText &&
+                    "'SemanticEquivalenceMethodCertificateProducer`1'" !in ilText &&
+                    "'SemanticEquivalenceMethodCertificateValue`1'" !in ilText &&
+                    "KotlinSemantic" !in ilText
+            ) {
+                "The production erased inverse emitted a candidate natural or semantic owner: " +
+                        emittedIl.path
+            }
+            if (producer.name.equals("lib.dll", ignoreCase = true)) {
+                val metadata = DotNetClrMetadataReader.read(producer)
+                val expectedTypes = mapOf(
+                    "SemanticEquivalenceCertificateProducer" to true,
+                    "SemanticEquivalenceCertificateValue" to false,
+                    "SemanticEquivalenceMethodCertificateProducer" to true,
+                    "SemanticEquivalenceMethodCertificateValue" to false,
+                )
+                expectedTypes.forEach { entry ->
+                    val expectedName = entry.key
+                    val expectedInterface = entry.value
+                    val physicalTypes = metadata.typeDefinitions.filter { type ->
+                        type.metadataName.substringBefore('`') == expectedName
+                    }
+                    check(physicalTypes.singleOrNull()?.let { type ->
+                        type.metadataName == expectedName &&
+                                type.isInterface == expectedInterface &&
+                                metadata.genericParameterDefinitions.none { parameter ->
+                                    parameter.owner == type.handle
+                                }
+                    } == true) {
+                        "The production erased $expectedName TypeDef is not uniquely arity zero: " +
+                                physicalTypes.map { type -> type.metadataName }
+                    }
+                }
+            }
         }
         return
     }
@@ -2068,29 +2125,69 @@ private fun validateGenericOwnerProducerSealedPublication(
             val methodWindows = methodStarts.mapIndexed { index, start ->
                 ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
             }
-            listOf(
-                "externalIntValue",
-                "externalStringValue",
-                "externalMethodIntValue",
-                "externalMethodStringValue",
-            ).forEach { methodName ->
-                val method = methodWindows.singleOrNull { candidate ->
-                    candidate.substringBefore('{').contains("'$methodName'(")
-                }
-                check(method != null) {
-                    "Cannot isolate the external $methodName MethodDef: ${emittedIl.path}"
-                }
-                val directNaturalCalls = method.lineSequence().map(String::trim).filter { line ->
+            fun requireMethod(methodName: String): String = checkNotNull(
+                methodWindows.singleOrNull { candidate ->
+                    Regex("'${Regex.escape(methodName)}'(?:<[^>]*>)?\\s*\\(")
+                        .containsMatchIn(candidate.substringBefore('{'))
+                },
+            ) {
+                "Cannot isolate the external $methodName MethodDef: ${emittedIl.path}"
+            }
+            fun directNaturalCalls(method: String): List<String> =
+                method.lineSequence().map(String::trim).filter { line ->
                     (line.startsWith("call ") || line.startsWith("callvirt ")) &&
                             ("SemanticEquivalenceCertificateProducer`1" in line ||
                                     "SemanticEquivalenceMethodCertificateProducer`1" in line) &&
                             "::'value'(" in line
                 }.toList()
-                check(directNaturalCalls.isEmpty() &&
-                        ("KotlinSemantic" in method || "::'InvokeRecordedMember'(" in method)
+            fun hasSemanticOrGuardedRoute(method: String): Boolean =
+                "KotlinSemantic" in method || "::'InvokeRecordedMember'(" in method
+
+            listOf(
+                Triple("externalIntValue", "int32", "int32"),
+                Triple("externalStringValue", "string", "string"),
+            ).forEach { expectation ->
+                val methodName = expectation.first
+                val constructionArgument = expectation.second
+                val expectedStackCarrier = expectation.third
+                val method = requireMethod(methodName)
+                val naturalCalls = directNaturalCalls(method)
+                val expectedCall = Regex(
+                    "^callvirt\\s+instance\\s+!0\\s+class\\s+\\[lib\\]" +
+                            "'SemanticEquivalenceCertificateProducer`1'<" +
+                            Regex.escape(constructionArgument) +
+                            ">::'value'\\(\\)$",
+                )
+                check(naturalCalls.singleOrNull()?.let(expectedCall::matches) == true &&
+                        "KotlinSemantic" !in method &&
+                        "::'InvokeRecordedMember'(" !in method &&
+                        (expectedStackCarrier != "int32" ||
+                                "box [${target.coreLibraryAssemblyName}]System.Int32" in method) &&
+                        (expectedStackCarrier != "string" ||
+                                method.lineSequence().none { line ->
+                                    line.trim().startsWith("box ")
+                                })
                 ) {
-                    "External K must remain inert while external-K routing is disabled; $methodName used a " +
-                            "direct natural call: direct=$directNaturalCalls, method=$method"
+                    "The stamped external $methodName route must use exactly one direct natural " +
+                            "$expectedStackCarrier callvirt and no semantic route: " +
+                            "direct=$naturalCalls, method=$method"
+                }
+            }
+
+            listOf(
+                "externalBroadValue",
+                "externalStarValue",
+                "externalJoinedValue",
+                "externalMutableValue",
+                "externalCallerMethodGenericValue",
+                "externalMethodIntValue",
+                "externalMethodStringValue",
+            ).forEach { methodName ->
+                val method = requireMethod(methodName)
+                val naturalCalls = directNaturalCalls(method)
+                check(naturalCalls.isEmpty() && hasSemanticOrGuardedRoute(method)) {
+                    "The hostile external $methodName shape must remain on its semantic/guarded " +
+                            "route: direct=$naturalCalls, method=$method"
                 }
             }
         }

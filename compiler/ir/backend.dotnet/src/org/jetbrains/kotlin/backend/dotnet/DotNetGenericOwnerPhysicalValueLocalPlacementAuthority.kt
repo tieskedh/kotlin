@@ -19,7 +19,9 @@ import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
@@ -40,14 +42,25 @@ internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
  *
  * The destination is not reconstructed from its logical Kotlin type. The token exists only when
  * final value flow independently selected exactly the same direct carrier for production and
- * storage. The bounded vocabulary admits either a local owner-bound constructed reference or one
- * direct parameter of that same owner. It therefore authorizes no cast, variance conversion,
- * semantic adaptation, boxing, nullable materialization, field/state choice, or ABI change.
+ * storage. The bounded vocabulary admits a local owner-bound construction, one direct parameter
+ * of that owner, or an independently rebound external producer construction with fixed leaf
+ * arguments. It therefore authorizes no cast, variance conversion, semantic adaptation, boxing,
+ * nullable materialization, field/state choice, or ABI change.
  */
 internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal constructor(
     val carrier: DotNetGenericOwnerPhysicalCarrier,
     private val emitterValidation: DotNetGenericOwnerPhysicalValueEmitterValidation,
+    private val externalImplementationOwner: IrClassSymbol? = null,
 ) {
+    init {
+        val definition = (carrier.type as?
+                DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.definition
+        require(externalImplementationOwner == null ||
+                definition is DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer) {
+            "an external retained carrier requires a producer-recorded implementation TypeDef"
+        }
+    }
+
     /**
      * Joins symbolic authority with the live emitter mapping without trusting either alone.
      *
@@ -99,22 +112,43 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
         if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return null
         val construction = carrier.type as?
                 DotNetGenericOwnerSymbolicCarrierReference.Constructed ?: return null
-        val definition = construction.definition as?
-                DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
-        val classInfo = definition.classInfoOrNull(typeMapper) ?: return null
+        val definition = construction.definition
+        val classInfo = when (definition) {
+            is DotNetGenericOwnerPhysicalTypeDefIdentity.Local -> {
+                if (externalImplementationOwner != null) return null
+                definition.classInfoOrNull(typeMapper) ?: return null
+            }
+            is DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer -> {
+                val logicalOwner = externalImplementationOwner?.owner ?: return null
+                typeMapper.externalGenericOwnerPhysicalClassInfoOrNull(logicalOwner, definition)
+                    ?: return null
+            }
+            is DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary,
+            is DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+            -> return null
+        }
         if (classInfo.typeParameterCount == 0 ||
             classInfo.typeParameterCount != construction.arguments.size
         ) return null
         val arguments = construction.arguments.map { argument ->
-            val ownerParameter = argument as?
-                    DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
-            val binder = (ownerParameter.binder as?
-                    DotNetGenericOwnerPhysicalGenericBinderReference.Type)
-                ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
-            if (binder.classInfoOrNull(typeMapper) !== physicalMethodOwner ||
-                ownerParameter.index !in 0 until physicalMethodOwner.typeParameterCount
-            ) return null
-            DotNetIlValueType.TypeParameter(ownerParameter.index, isMethodParameter = false)
+            when (definition) {
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.Local -> {
+                    val ownerParameter = argument as?
+                            DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return null
+                    val binder = (ownerParameter.binder as?
+                            DotNetGenericOwnerPhysicalGenericBinderReference.Type)
+                        ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+                    if (binder.classInfoOrNull(typeMapper) !== physicalMethodOwner ||
+                        ownerParameter.index !in 0 until physicalMethodOwner.typeParameterCount
+                    ) return null
+                    DotNetIlValueType.TypeParameter(ownerParameter.index, isMethodParameter = false)
+                }
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer ->
+                    argument.fixedLeafIlTypeOrNull() ?: return null
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary,
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+                -> return null
+            }
         }
         val expected = DotNetIlValueType.GenericInstance(classInfo, arguments)
         if (!expected.isDotNetReferenceShaped()) return null
@@ -476,7 +510,8 @@ private fun retainedSplitNullableInitializerOrNull(
 }
 
 /**
- * Final-IR local placement authority derived from the shared physical-value transfer model.
+ * Final-IR local placement authority from the shared physical-value transfer model and bounded
+ * independently authenticated external placement tokens.
  *
  * Correlation is by IR symbol identity. Diagnostic snapshots and IR origins are deliberately not
  * inputs. Unsupported records merely contribute no authority; contradictory duplicate final
@@ -507,10 +542,25 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
         retainedSplitNullableByFunction[function]?.get(variable)
 
     companion object {
+        fun externalExactStorageRead(
+            carrier: DotNetGenericOwnerPhysicalCarrier,
+            implementationOwner: IrClassSymbol,
+        ): DotNetGenericOwnerPhysicalValueRetainedProducedCarrier =
+            DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+                carrier,
+                DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+                implementationOwner,
+            )
+
         fun bind(
             records: List<DotNetGenericOwnerPhysicalValueShadowRecord>,
             authoritativeOperationsByCall:
                 Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> = emptyMap(),
+            externalSemanticEquivalentReceiverPlacements:
+                Map<
+                        IrSimpleFunctionSymbol,
+                        Map<IrValueSymbol, DotNetGenericOwnerPhysicalValueRetainedProducedCarrier>,
+                        > = emptyMap(),
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalValueLocalPlacementAuthority> {
             val authoritativeOperationsByCallIdentity = IdentityHashMap<
                     IrCall,
@@ -758,6 +808,19 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         emitterValidation,
                     )
                 }
+
+            externalSemanticEquivalentReceiverPlacements.forEach { functionEntry ->
+                val retainedForFunction = retainedByFunction.getOrPut(functionEntry.key) {
+                    IdentityHashMap()
+                }
+                functionEntry.value.forEach { valueEntry ->
+                    if (retainedForFunction.put(valueEntry.key, valueEntry.value) != null) {
+                        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                            "one physical local received both local and external placement authority",
+                        )
+                    }
+                }
+            }
 
             if (retainedByFunction.isEmpty() && retainedSplitByFunction.isEmpty()) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable

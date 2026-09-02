@@ -616,6 +616,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
     private val producerRecordedDelegateTypeDefinitions:
             Set<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer>,
+    private val producerSealedMethodDefinitions:
+            Set<DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer>,
 ) {
     fun advance(
         nextEpoch: DotNetGenericOwnerPhysicalAuthorityEpoch,
@@ -640,6 +642,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             retainedForeignTypeDefinitions,
             retainedForeignMethodDefinitions,
             producerRecordedDelegateTypeDefinitions,
+            producerSealedMethodDefinitions,
         )
     }
 
@@ -1544,6 +1547,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 retainedForeignTypeDefinitions = emptySet(),
                 retainedForeignMethodDefinitions = emptySet(),
                 producerRecordedDelegateTypeDefinitions = emptySet(),
+                producerSealedMethodDefinitions = emptySet(),
             )
 
         /**
@@ -1566,6 +1570,29 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 retainedForeignMethodDefinitions = emptySet(),
                 producerRecordedDelegateTypeDefinitions =
                     declarations.delegateTypeDefinitions.toSet(),
+                producerSealedMethodDefinitions = emptySet(),
+            )
+
+        /**
+         * Binds the exact TypeDefs, edge sets, and natural MethodDef projected from one
+         * PE-authenticated external `K`/`J` pair. The projection's private constructor prevents
+         * arbitrary producer MethodDef descriptions from reaching this authority path.
+         */
+        internal fun bindProducerSealedSemanticEquivalence(
+            projection: DotNetProducerGenericOwnerSemanticEquivalencePhysicalProjection,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> =
+            bindInternal(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                projection.typeDefinitions,
+                methodDefinitions = listOf(projection.naturalMethodDefinition),
+                directSupertypeEdgeSets = projection.directSupertypeEdgeSets,
+                fieldDefinitions = emptyList(),
+                directSupertypeConstraintProofs = emptySet(),
+                varianceConstraintAuthorities = emptySet(),
+                retainedForeignTypeDefinitions = emptySet(),
+                retainedForeignMethodDefinitions = emptySet(),
+                producerRecordedDelegateTypeDefinitions = emptySet(),
+                producerSealedMethodDefinitions = projection.authorizedProducerMethodDefinitions,
             )
 
         /**
@@ -1636,6 +1663,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                         definition.identity as DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr
                     },
                 producerRecordedDelegateTypeDefinitions = emptySet(),
+                producerSealedMethodDefinitions = emptySet(),
             )
         }
 
@@ -1653,6 +1681,8 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
             retainedForeignMethodDefinitions: Set<DotNetGenericOwnerPhysicalMethodDefIdentity.ForeignClr>,
             producerRecordedDelegateTypeDefinitions:
                     Set<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer>,
+            producerSealedMethodDefinitions:
+                    Set<DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer>,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalDeclarationIndex> {
             val typesByIdentity = linkedMapOf<
                     DotNetGenericOwnerPhysicalTypeDefIdentity,
@@ -1750,8 +1780,10 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                             return DotNetGenericOwnerPhysicalBindingResult.Unavailable
                         }
                     is DotNetGenericOwnerPhysicalMethodDefIdentity.KotlinProducer -> {
-                        // Producer MethodDefs require their distinct artifact-plus-DLL adapter.
-                        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        if (identity !in producerSealedMethodDefinitions) {
+                            // Producer MethodDefs require their distinct artifact-plus-DLL adapter.
+                            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+                        }
                     }
                 }
                 val existing = methodsByIdentity[candidate.identity]
@@ -1761,6 +1793,9 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     )
                 }
                 methodsByIdentity.putIfAbsent(candidate.identity, candidate)
+            }
+            if (producerSealedMethodDefinitions.any { identity -> identity !in methodsByIdentity }) {
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
             }
 
             val fieldsByIdentity = linkedMapOf<
@@ -1814,6 +1849,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                 retainedForeignTypeDefinitions,
                 retainedForeignMethodDefinitions,
                 producerRecordedDelegateTypeDefinitions,
+                producerSealedMethodDefinitions,
             )
             for (candidate in typesByIdentity.values) {
                 for (parameter in candidate.genericParameters) {
@@ -2042,6 +2078,7 @@ internal class DotNetGenericOwnerPhysicalDeclarationIndex private constructor(
                     retainedForeignTypeDefinitions,
                     retainedForeignMethodDefinitions,
                     producerRecordedDelegateTypeDefinitions,
+                    producerSealedMethodDefinitions,
                 ),
             )
         }

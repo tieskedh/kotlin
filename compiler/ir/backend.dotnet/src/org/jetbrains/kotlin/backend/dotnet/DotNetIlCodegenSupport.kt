@@ -1662,6 +1662,39 @@ internal class DotNetIlTypeMapper private constructor(
         return candidates
     }
 
+    /**
+     * Re-runs the public three-declaration query, which exposes only PE-stamped external `K`.
+     * The result is declaration authority and deliberately carries no value provenance.
+     */
+    fun externalGenericOwnerSemanticEquivalenceCertificateOrNull(
+        logicalInterfaceMember: IrSimpleFunction,
+        implementationOwner: IrClass,
+        implementationMember: IrSimpleFunction,
+    ): DotNetBoundGenericOwnerSemanticEquivalenceCertificate? =
+        externalDeclarations.genericOwnerSemanticEquivalenceCertificateOrNull(
+            logicalInterfaceMember,
+            implementationOwner,
+            implementationMember,
+        )
+
+    /** Exact natural MethodDef header projected from the selected PE-stamped `J`. */
+    fun externalGenericOwnerSemanticEquivalenceNaturalMethodDefInfo(
+        certificate: DotNetBoundGenericOwnerSemanticEquivalenceCertificate,
+    ): DotNetIlFunctionInfo =
+        externalDeclarations.genericOwnerSemanticEquivalenceNaturalMethodDefFunctionInfo(certificate)
+            .also { info -> recordAssemblyReference(info.owner) }
+
+    /**
+     * Binds KLIB's logical class identity before comparing the expected producer artifact/path.
+     * [expectedIdentity] is never used as a path-based lookup key.
+     */
+    fun externalGenericOwnerPhysicalClassInfoOrNull(
+        irClass: IrClass,
+        expectedIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
+    ): DotNetIlClassInfo? =
+        externalDeclarations.physicalClassInfoOrNull(irClass, this, expectedIdentity)
+            ?.also(::recordAssemblyReference)
+
     /** Exact producer-sealed class MethodDef; no overridden-name or arity search is permitted. */
     fun externalGenericOwnerImplementationMethodDefInfoOrNull(
         function: IrSimpleFunction,

@@ -81,15 +81,6 @@ parameter with the field's direct `T` type. Init-block, other-field, computed,
 and other nontrivial initializers remain unavailable and fall back out of this
 proof; they are not hard user errors.
 
-External `J`/`K` authentication now uses one file-owning PE operation. It checks
-complete bounded TypeDef, GenericParam, edge, MethodDef, Param, MethodImpl,
-MethodSpec, and selected-body evidence and emits only an ephemeral same-library
-stamp. Aggregate role-qualified bijections allow only logically identical
-interface- or implementation-owned rows to be shared across families. The
-external query is present but deliberately has no routing consumer; its next
-gate must combine the stamped declaration fact with independent receiver and
-operation authority rather than treating the stamp as value provenance.
-
 Stage 7 composes one strict owner-dependent callable input with a distinct
 split-nullable owner result on a custom structural declaration. Semantic role,
 MethodDef binder, parameter domains, and result layout remain independent. The
@@ -263,23 +254,18 @@ certificate. The completed scope and hostile inverse are recorded in the
 while the normative identity, lineage, and operation rules live in the
 [physical-authority ADR](../decisions/draft-adr-generic-owner-physical-authority.md).
 
-The objective external-validation gate is closed. The PE reader authenticates
-every referenced `J` TypeDef, GenericParam, direct edge, MethodDef, Param, and
-MethodImpl plus the exact selected dispatcher bodies and complete MethodSpec
-vectors against loaded `J`/`K`. The result is an ephemeral DLL- and
-declaration-bound stamp; raw records without that stamp remain inert.
+Objective external `K` authentication and its first bounded routing consumer
+are closed. `K` remains declaration authority only; scope and prerequisites are
+recorded in the
+[external routing archive](../archive/generic-owner-external-semantic-equivalence-routing-2026-09-02.md).
 
-The next direct-call gate is bounded external consumption of the stamped `K`.
-It must independently re-prove the exact concrete receiver construction and
-the same complete operation facts required locally, and may replace an
-existing conservative semantic route only in the same transaction. No route
-may consume raw `K`, infer provenance from it, or activate a broader family.
-After that, prove path-complete block/composite calls, the real caller-MethodDef
-`!!R` entry, additional non-materializing consumer categories,
-null/bottom/unknown split joins, and explicit representation-changing
-conversions.
-Only after those value rules stabilize should the consumer widen to captures,
-properties, class nodes, MethodImpls, or new Runtime/Stdlib declarations.
+Next prove path-complete block/composite calls, the real caller-MethodDef `!!R`
+entry, additional non-materializing consumer categories, broader MethodSpec and
+argument/result shapes, null/bottom/unknown split joins, and explicit
+representation-changing conversions. Only after those value rules stabilize
+should the consumer widen to captures, properties, class nodes, MethodImpls, or
+new Runtime/Stdlib declarations.
+
 Broader state remains a separate producer-wide proof. A comparison surface may
 disappear only after downstream owner closure is an epoch invariant and its
 hostile erased inverse remains exact.

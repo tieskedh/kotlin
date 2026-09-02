@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
@@ -728,8 +729,23 @@ internal class DotNetIlExpressionCodegen(
                 expectedType is DotNetIlValueType.ErasedGenericArray &&
                         (expression.type.isDotNetOutProjectedGenericArray() ||
                                 expression.type.isDotNetInvariantOpenNullableGenericArray())
-            val naturalType = if (eraseTransientArrayProjection) expectedType else mappedNaturalType(expression)
-            if (naturalType != null && naturalType != expectedType && !eraseTransientArrayProjection) {
+            val retainGenericOwnerObjectCarrier =
+                typeMapper.isGenericOwnerRehearsalEnabled() &&
+                        expectedType == DotNetIlValueType.Object &&
+                        typeMapper.genericOwnerSemanticCapabilityTypeOrNull(expression.type) != null
+            // An object destination is an already-selected honest physical boundary for an
+            // admitted generic owner. Its logical Kotlin type may describe a broad, projected,
+            // or joined view for which no single constructed CLR owner exists. Mapping that
+            // logical type before dispatch would silently upgrade the expression to I<object>
+            // and make control-flow arms containing only I<int>/I<string> fail at runtime.
+            // Suppress only this pre-dispatch remap: the expression is still emitted normally at
+            // object, so explicit CAST/SAFE_CAST operators retain their checks and every typed
+            // destination retains its independently selected natural carrier. The extension is
+            // rehearsal-only; production-erased codegen retains its preceding mapping path.
+            val retainSelectedPhysicalBoundary =
+                eraseTransientArrayProjection || retainGenericOwnerObjectCarrier
+            val naturalType = if (retainSelectedPhysicalBoundary) expectedType else mappedNaturalType(expression)
+            if (naturalType != null && naturalType != expectedType && !retainSelectedPhysicalBoundary) {
                 if (typeMapper.isGenericOwnerRehearsalEnabled() &&
                     naturalType == DotNetIlValueType.Object &&
                     expectedType.isDotNetReferenceShaped()
@@ -1453,13 +1469,18 @@ internal class DotNetIlExpressionCodegen(
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
         if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
             expectedType == DotNetIlValueType.Object &&
-            operandType == DotNetIlValueType.Object &&
+            (operandType == DotNetIlValueType.Object ||
+                    typeMapper.isGenericOwnerRehearsalEnabled()) &&
             typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(expression.typeOperand) != null
         ) {
-            // FIR's logical smartcast is used here only to test the cast-derived receiver for
-            // null. The preceding Kotlin-compatible generic-owner cast already produced the
-            // original object, and a real member or typed ABI use performs its own semantic
-            // dispatch or checked recovery.
+            // An object boundary has already selected the honest carrier for a generic-owner
+            // value whose logical Kotlin view need not have one CLR construction. This includes
+            // a control-flow join: mapping the IrWhen itself from its logical type would invent
+            // I<object> before its object local is written, which fails for an I<int> branch.
+            // IMPLICIT_CAST is only a compiler assertion, so emit the same value directly at the
+            // selected object carrier. Explicit CAST/SAFE_CAST and every typed consumer retain
+            // their independent runtime check or checked recovery. The pre-existing object/object
+            // case remains available in production; only a non-object operand requires rehearsal.
             emitExpression(expression.argument, DotNetIlValueType.Object)
             return
         }
@@ -2811,6 +2832,18 @@ internal class DotNetIlExpressionCodegen(
     private data class BoundSemanticEquivalentOperation(
         val liveReceiverType: DotNetIlValueType,
         val naturalOwnerView: DotNetIlValueType.GenericInstance,
+        val externalClassInfos:
+                Map<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer, DotNetIlClassInfo> =
+            emptyMap(),
+    )
+
+    /** Exact external declaration authority rebound from the live type mapper at emission time. */
+    private data class BoundExternalSemanticEquivalentDeclaration(
+        val naturalInfo: DotNetIlFunctionInfo,
+        val naturalType: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
+        val implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
+        val naturalClassInfo: DotNetIlClassInfo,
+        val implementationClassInfo: DotNetIlClassInfo,
     )
 
     private fun DotNetGenericOwnerPhysicalTypeDefIdentity.Local.emitterClassInfoOrNull():
@@ -2824,11 +2857,15 @@ internal class DotNetIlExpressionCodegen(
      * Compares a BOUND symbolic carrier with the verifier-visible carrier of this MethodDef.
      *
      * This is deliberately a comparison, not a logical type mapper. Only the current physical
-     * TypeDef binder, fixed leaves, local constructions and SZ arrays are admitted. A later slice
-     * may add a separately authenticated MethodDef binder; it must not be inferred from `!!n`.
+     * TypeDef binder, fixed leaves, local constructions, explicitly supplied PE-rebound producer
+     * constructions, and SZ arrays are admitted. A later slice may add a separately authenticated
+     * MethodDef binder; it must not be inferred from `!!n`.
      */
     private fun DotNetGenericOwnerSymbolicCarrierReference.matchesEmitterCarrier(
         actual: DotNetIlValueType,
+        externalClassInfos:
+                Map<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer, DotNetIlClassInfo> =
+            emptyMap(),
     ): Boolean = when (this) {
         is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> when (kind) {
             DotNetGenericOwnerPhysicalTypeKind.BOOLEAN -> actual == DotNetIlValueType.Boolean
@@ -2851,9 +2888,15 @@ internal class DotNetIlExpressionCodegen(
                     actual == DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
         }
         is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
-            val local = definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
-                ?: return false
-            val classInfo = local.emitterClassInfoOrNull() ?: return false
+            val classInfo = when (val identity = definition) {
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.Local ->
+                    identity.emitterClassInfoOrNull()
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer ->
+                    externalClassInfos[identity]
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.ForeignClr,
+                is DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary,
+                -> null
+            } ?: return false
             if (arguments.isEmpty()) {
                 actual == DotNetIlValueType.UserClass(classInfo)
             } else {
@@ -2861,32 +2904,191 @@ internal class DotNetIlExpressionCodegen(
                 instance.classInfo === classInfo &&
                         instance.arguments.size == arguments.size &&
                         arguments.indices.all { index ->
-                            arguments[index].matchesEmitterCarrier(instance.arguments[index])
+                            arguments[index].matchesEmitterCarrier(
+                                instance.arguments[index],
+                                externalClassInfos,
+                            )
                         }
             }
         }
         is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> {
             val array = actual as? DotNetIlValueType.GenericArray ?: return false
-            element.matchesEmitterCarrier(array.elementType)
+            element.matchesEmitterCarrier(array.elementType, externalClassInfos)
         }
     }
 
     private fun DotNetGenericOwnerPhysicalCallableResultLayoutReference.matchesEmitterResult(
         returnType: DotNetIlReturnType,
         hasSplitNullableResult: Boolean,
+        externalClassInfos:
+                Map<DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer, DotNetIlClassInfo> =
+            emptyMap(),
     ): Boolean = when (this) {
         DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void ->
             !hasSplitNullableResult && returnType == DotNetIlReturnType.Void
         is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ->
             !hasSplitNullableResult &&
                     (returnType as? DotNetIlReturnType.Value)?.type?.let(
-                        { actual -> slot.carrier.matchesEmitterCarrier(actual) },
+                        { actual -> slot.carrier.matchesEmitterCarrier(actual, externalClassInfos) },
                     ) == true
         is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable ->
             hasSplitNullableResult &&
                     (returnType as? DotNetIlReturnType.Value)?.type?.let(
-                        { actual -> payloadSlot.carrier.matchesEmitterCarrier(actual) },
+                        { actual ->
+                            payloadSlot.carrier.matchesEmitterCarrier(actual, externalClassInfos)
+                        },
                     ) == true
+    }
+
+    /** Re-queries stamped `K` and independently rebinds its exact `J` declarations. */
+    private fun bindExternalSemanticEquivalentDeclarationOrError(
+        call: IrCall,
+        sourceCallee: IrSimpleFunction,
+        external: DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.External,
+        route: DotNetGenericOwnerPhysicalOperationRoute,
+    ): BoundExternalSemanticEquivalentDeclaration {
+        check(call.superQualifierSymbol == null && intrinsicMethods.getIntrinsic(call.symbol) == null) {
+            "Internal .NET backend error: an external semantic-equivalence witness reached a special call"
+        }
+        check(sourceCallee.symbol === external.logicalInterfaceMember &&
+                sourceCallee.parent === external.logicalInterfaceMember.owner.parent &&
+                external.implementationOwner.owner.modality == Modality.FINAL &&
+                external.implementationMember.owner.parent === external.implementationOwner.owner &&
+                sourceCallee.typeParameters.isEmpty() && call.typeArguments.isEmpty() &&
+                sourceCallee.parameters.none { parameter ->
+                    parameter.kind != IrParameterKind.DispatchReceiver
+                } && call.arguments.size == 1 && sourceCallee.isDotNetVirtual() &&
+                typeMapper.genericOwnerCapabilityCallTarget(call) == null &&
+                typeMapper.genericOwnerForeignDispatchCallTarget(call) == null
+        ) {
+            "Internal .NET backend error: the bounded external semantic-equivalence call changed shape"
+        }
+
+        val reboundCertificate = typeMapper.externalGenericOwnerSemanticEquivalenceCertificateOrNull(
+            external.logicalInterfaceMember.owner,
+            external.implementationOwner.owner,
+            external.implementationMember.owner,
+        ) ?: error(
+            "Internal .NET backend error: final emission cannot re-query the PE-stamped K certificate",
+        )
+        val sameArtifact = reboundCertificate.library.artifact == external.certificate.library.artifact
+        val sameAssemblyFile = reboundCertificate.library.assemblyFile.absoluteFile.normalize() ==
+                external.certificate.library.assemblyFile.absoluteFile.normalize()
+        val sameDeclaration = reboundCertificate.declaration == external.certificate.declaration
+        val sameCertificate = reboundCertificate.certificate == external.certificate.certificate
+        val sameFamily = reboundCertificate.sealedFamily.declaration ==
+                external.certificate.sealedFamily.declaration
+        val sameAuthority = reboundCertificate.authority.certificate ==
+                external.certificate.authority.certificate &&
+                reboundCertificate.authority.sealedFamily.publication ==
+                external.certificate.authority.sealedFamily.publication
+        check(sameArtifact && sameAssemblyFile && sameDeclaration && sameCertificate &&
+                sameFamily && sameAuthority
+        ) {
+            "Internal .NET backend error: final emission selected another external K certificate " +
+                    "(artifact=$sameArtifact, assemblyFile=$sameAssemblyFile, " +
+                    "declaration=$sameDeclaration, certificate=$sameCertificate, " +
+                    "family=$sameFamily, authority=$sameAuthority)"
+        }
+        val reboundAuthority = when (
+            val binding = DotNetProducerGenericOwnerSemanticEquivalencePhysicalAuthority.bind(
+                reboundCertificate,
+            )
+        ) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> error(
+                "Internal .NET backend error: final external K/J binding conflicts: ${binding.reason}",
+            )
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                "Internal .NET backend error: final external K/J binding is no longer available",
+            )
+        }
+        check(reboundAuthority.familyKey == external.physicalAuthority.familyKey &&
+                reboundAuthority.naturalMethodDefinition ==
+                external.physicalAuthority.naturalMethodDefinition &&
+                DotNetProducerGenericOwnerSealedTypeDefRole.entries.all { role ->
+                    reboundAuthority.typeDefinition(role) ==
+                            external.physicalAuthority.typeDefinition(role)
+                }
+        ) {
+            "Internal .NET backend error: final external K/J binding changed physical family"
+        }
+        val naturalType = reboundAuthority.typeDefinition(
+            DotNetProducerGenericOwnerSealedTypeDefRole.NATURAL_INTERFACE,
+        )
+        val implementationType = reboundAuthority.typeDefinition(
+            DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS,
+        )
+        val reboundMethod = reboundAuthority.declarations.methodDescriptionOrNull(
+            reboundAuthority.naturalMethodDefinition,
+        )
+        check(reboundMethod == route.method &&
+                route.method.identity == reboundAuthority.naturalMethodDefinition &&
+                route.method.declaringType == naturalType &&
+                route.requiredReceiverView.family == naturalType &&
+                route.methodArguments.isEmpty() && route.instantiatedSignature.parameterSlots.isEmpty() &&
+                route.instantiatedSignature.resultLayout is
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+        ) {
+            "Internal .NET backend error: final external K/J binding contradicts the selected route"
+        }
+
+        val sourceOwner = sourceCallee.parent as? IrClass
+            ?: error("Internal .NET backend error: external natural member lost its KLIB owner")
+        check(sourceOwner === external.logicalInterfaceMember.owner.parent && sourceOwner.isInterface
+        ) {
+            "Internal .NET backend error: external natural member no longer belongs to its interface"
+        }
+        val logicalResultIndex = sourceCallee
+            .genericOwnerDirectNonNullOwnerResultParameterIndexOrNull()
+            ?: error(
+                "Internal .NET backend error: bounded external natural result changed logical domain",
+            )
+
+        val naturalInfo = typeMapper.externalGenericOwnerSemanticEquivalenceNaturalMethodDefInfo(
+            reboundCertificate,
+        )
+        val projection = inspectDotNetExternalNaturalMethodLogicalProjection(
+            logicalParameterTypes = emptyList(),
+            logicalResultOwnerParameterIndex = logicalResultIndex,
+            logicalSplitNullableResult = false,
+            recordedInfo = naturalInfo,
+        )
+        check(projection is DotNetGenericOwnerPhysicalBindingResult.Bound &&
+                naturalInfo.signature.methodGenericParameterCount == 0 &&
+                naturalInfo.signature.parameterTypes.size == 1 &&
+                !naturalInfo.signature.hasSplitNullableResult
+        ) {
+            val reason = (projection as? DotNetGenericOwnerPhysicalBindingResult.Conflict)?.reason
+                ?: "the logical projection was unavailable"
+            "Internal .NET backend error: PE-stamped J natural MethodDef disagrees with KLIB: $reason"
+        }
+        val naturalClassInfo = typeMapper.externalGenericOwnerPhysicalClassInfoOrNull(
+            sourceOwner,
+            naturalType,
+        ) ?: error(
+            "Internal .NET backend error: PE-stamped J natural TypeDef cannot rebind its KLIB owner",
+        )
+        val implementationClassInfo = typeMapper.externalGenericOwnerPhysicalClassInfoOrNull(
+            external.implementationOwner.owner,
+            implementationType,
+        ) ?: error(
+            "Internal .NET backend error: PE-stamped J implementation TypeDef cannot rebind its KLIB owner",
+        )
+        check(naturalInfo.owner.ilTypeRef == naturalClassInfo.ilTypeRef &&
+                naturalInfo.owner.typeParameterCount == naturalClassInfo.typeParameterCount &&
+                implementationClassInfo.typeParameterCount ==
+                external.implementationOwner.owner.typeParameters.size
+        ) {
+            "Internal .NET backend error: final external KLIB/TypeDef binding changed arity or identity"
+        }
+        return BoundExternalSemanticEquivalentDeclaration(
+            naturalInfo,
+            naturalType,
+            implementationType,
+            naturalClassInfo,
+            implementationClassInfo,
+        )
     }
 
     /**
@@ -2899,10 +3101,42 @@ internal class DotNetIlExpressionCodegen(
         sourceCallee: IrSimpleFunction,
         info: DotNetIlFunctionInfo,
         witness: DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness,
+        externalDeclaration: BoundExternalSemanticEquivalentDeclaration?,
     ): BoundSemanticEquivalentOperation {
         check(call.superQualifierSymbol == null && intrinsicMethods.getIntrinsic(call.symbol) == null) {
             "Internal .NET backend error: a semantic-equivalence witness reached a special call"
         }
+        val route = witness.route
+        return when (val authority = witness.authority) {
+            is DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.Local ->
+                bindLocalSemanticEquivalentOperationOrError(
+                    call,
+                    sourceCallee,
+                    info,
+                    witness,
+                    authority,
+                )
+            is DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.External ->
+                bindExternalSemanticEquivalentOperationOrError(
+                    call,
+                    info,
+                    witness,
+                    authority,
+                    checkNotNull(externalDeclaration) {
+                        "Internal .NET backend error: external semantic-equivalence declaration was not rebound"
+                    },
+                )
+        }
+    }
+
+    /** Existing local same-compilation checks, kept separate from external producer authority. */
+    private fun bindLocalSemanticEquivalentOperationOrError(
+        call: IrCall,
+        sourceCallee: IrSimpleFunction,
+        info: DotNetIlFunctionInfo,
+        witness: DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness,
+        authority: DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.Local,
+    ): BoundSemanticEquivalentOperation {
         val route = witness.route
         val identity = route.method.identity as?
                 DotNetGenericOwnerPhysicalMethodDefIdentity.Local
@@ -2932,7 +3166,7 @@ internal class DotNetIlExpressionCodegen(
         check(witness.directReceiverCarrier.type.matchesEmitterCarrier(liveReceiverType)) {
             "Internal .NET backend error: final call emission changed the certified implementation carrier"
         }
-        val implementationInfo = witness.implementationType.emitterClassInfoOrNull()
+        val implementationInfo = authority.implementationType.emitterClassInfoOrNull()
             ?: error("Internal .NET backend error: the certified implementation TypeDef was evicted")
         val liveImplementationInfo = when (liveReceiverType) {
             is DotNetIlValueType.UserClass -> liveReceiverType.classInfo
@@ -2948,6 +3182,60 @@ internal class DotNetIlExpressionCodegen(
             "Internal .NET backend error: final call emission changed the certified natural receiver view"
         }
         return BoundSemanticEquivalentOperation(liveReceiverType, naturalOwnerView)
+    }
+
+    /** External producer declaration proof plus one independent live exact receiver read. */
+    private fun bindExternalSemanticEquivalentOperationOrError(
+        call: IrCall,
+        info: DotNetIlFunctionInfo,
+        witness: DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness,
+        authority: DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.External,
+        declaration: BoundExternalSemanticEquivalentDeclaration,
+    ): BoundSemanticEquivalentOperation {
+        check(info === declaration.naturalInfo &&
+                declaration.naturalType == authority.naturalType &&
+                declaration.implementationType == authority.implementationType
+        ) {
+            "Internal .NET backend error: final call emission selected another external MethodDef"
+        }
+        val externalClassInfos = mapOf(
+            declaration.naturalType to declaration.naturalClassInfo,
+            declaration.implementationType to declaration.implementationClassInfo,
+        )
+        val receiver = call.dispatchReceiver
+            ?: error("Internal .NET backend error: an external semantic-equivalence route lost its receiver")
+        val liveReceiverType = directPhysicalStorageReadCarrierTypeOrNull(receiver)
+            ?: error(
+                "Internal .NET backend error: an external semantic-equivalence receiver is no longer " +
+                        "a direct storage read",
+            )
+        check(witness.directReceiverCarrier.type.matchesEmitterCarrier(
+            liveReceiverType,
+            externalClassInfos,
+        )) {
+            "Internal .NET backend error: final emission changed the external implementation carrier"
+        }
+        val liveImplementation = liveReceiverType as? DotNetIlValueType.GenericInstance
+        check(liveImplementation?.classInfo === declaration.implementationClassInfo) {
+            "Internal .NET backend error: final emission selected another external implementation TypeDef"
+        }
+        val naturalOwnerView = liveReceiverType.dotNetUniqueViewAsGenericOwner(info.owner)
+            ?: error(
+                "Internal .NET backend error: external receiver has no unique recorded natural J view",
+            )
+        check(naturalOwnerView.classInfo === declaration.naturalClassInfo &&
+                witness.route.requiredReceiverView.construction.matchesEmitterCarrier(
+                    naturalOwnerView,
+                    externalClassInfos,
+                )
+        ) {
+            "Internal .NET backend error: final emission changed the external natural receiver view"
+        }
+        return BoundSemanticEquivalentOperation(
+            liveReceiverType,
+            naturalOwnerView,
+            externalClassInfos,
+        )
     }
 
     private fun resolveCall(call: IrCall): ResolvedCall {
@@ -2971,6 +3259,17 @@ internal class DotNetIlExpressionCodegen(
         val sourceOwner = sourceCallee.parent as? IrClass
         val semanticEquivalentWitness =
             genericOwnerSemanticEquivalentOperationEmitterWitnesses[call]
+        val externalSemanticEquivalentDeclaration =
+            (semanticEquivalentWitness?.authority as?
+                    DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.External)
+                ?.let { external ->
+                    bindExternalSemanticEquivalentDeclarationOrError(
+                        call,
+                        sourceCallee,
+                        external,
+                        semanticEquivalentWitness.route,
+                    )
+                }
         val naturalRuntimeOwner = sourceOwner?.takeIf(typeMapper::isRuntimeReifiedGenericInterface)
         val naturalReceiverType = naturalRuntimeOwner
             ?.let { call.arguments.firstOrNull()?.let(::mappedNaturalType) }
@@ -3015,7 +3314,8 @@ internal class DotNetIlExpressionCodegen(
         }
         val callee = genericOwnerCallTarget ?: sourceCallee
         val calleeName = callee.name.asString()
-        val info = naturalRuntimeInfo
+        val info = externalSemanticEquivalentDeclaration?.naturalInfo
+            ?: naturalRuntimeInfo
             ?: splitNaturalInfo
             ?: availableFunctions[callee]
             ?: typeMapper.referencedFunctionInfoOrNull(callee)
@@ -3027,7 +3327,13 @@ internal class DotNetIlExpressionCodegen(
                         "arguments=${call.arguments.size}; result=${call.type.render()})"
             )
         val boundSemanticEquivalentOperation = semanticEquivalentWitness?.let { witness ->
-            bindSemanticEquivalentOperationOrError(call, sourceCallee, info, witness)
+            bindSemanticEquivalentOperationOrError(
+                call,
+                sourceCallee,
+                info,
+                witness,
+                externalSemanticEquivalentDeclaration,
+            )
         }
         info.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         val receiverType = if (info.isInstance) {
@@ -3121,10 +3427,14 @@ internal class DotNetIlExpressionCodegen(
         )
         if (boundSemanticEquivalentOperation != null) {
             val route = checkNotNull(semanticEquivalentWitness).route
+            val externalClassInfos = boundSemanticEquivalentOperation.externalClassInfos
             check(binding.methodSpecArguments.size == route.methodArguments.size &&
                     route.methodArguments.indices.all { index ->
                         route.methodArguments[index]
-                            .matchesEmitterCarrier(binding.methodSpecArguments[index])
+                            .matchesEmitterCarrier(
+                                binding.methodSpecArguments[index],
+                                externalClassInfos,
+                            )
                     } &&
                     binding.verifierParameterTypes.firstOrNull() ==
                     boundSemanticEquivalentOperation.naturalOwnerView &&
@@ -3132,11 +3442,15 @@ internal class DotNetIlExpressionCodegen(
                     route.instantiatedSignature.parameterSlots.size &&
                     route.instantiatedSignature.parameterSlots.indices.all { index ->
                         route.instantiatedSignature.parameterSlots[index].carrier
-                            .matchesEmitterCarrier(binding.verifierParameterTypes[index + 1])
+                            .matchesEmitterCarrier(
+                                binding.verifierParameterTypes[index + 1],
+                                externalClassInfos,
+                            )
                     } &&
                     route.instantiatedSignature.resultLayout.matchesEmitterResult(
                         binding.verifierReturnType,
                         info.signature.hasSplitNullableResult,
+                        externalClassInfos,
                     )
             ) {
                 "Internal .NET backend error: final call-site signature contradicts its " +
@@ -3144,6 +3458,9 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         val virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual()
+        check(externalSemanticEquivalentDeclaration == null || virtual) {
+            "Internal .NET backend error: external semantic equivalence must emit natural interface callvirt"
+        }
         return ResolvedCall(
             callee = callee,
             calleeName = calleeName,
