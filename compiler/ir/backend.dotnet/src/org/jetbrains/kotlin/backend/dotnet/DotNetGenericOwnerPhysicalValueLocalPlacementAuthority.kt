@@ -37,6 +37,67 @@ internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
     CONTROL_FLOW_BRANCHES,
 }
 
+/** Verifier-visible direct-call shape rebound from one retained authoritative operation. */
+internal data class DotNetGenericOwnerPhysicalValueBoundDirectCall(
+    val methodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    val declaredReceiverType: DotNetIlValueType.GenericInstance,
+    val declaredResultType: DotNetIlValueType,
+    val receiverType: DotNetIlValueType.GenericInstance,
+    val resultType: DotNetIlValueType,
+)
+
+/** One exact result-path leaf and the complete operation selected for that IR identity. */
+internal data class RetainedDirectResultCallSite(
+    val call: IrCall,
+    val operation: DotNetGenericOwnerPhysicalOperationRoute,
+)
+
+/**
+ * Identity-bound direct-result plan whose leaves retain declaration authority, not just a type.
+ *
+ * The structural plan decides which calls actually supply the initializer result. Each retained
+ * site then carries the exact post-routing MethodDef operation selected for that call. Late
+ * binding reconstructs verifier types from those operations before the ordinary emitter resolver
+ * is allowed to confirm them; an unrelated MethodDef with the same result carrier cannot satisfy
+ * this plan.
+ */
+internal class RetainedDirectResultInitializer internal constructor(
+    private val structuralPlan: DotNetGenericOwnerPhysicalDirectResultInitializerPlan,
+    val resultCarrier: DotNetGenericOwnerPhysicalCarrier,
+    callSites: List<RetainedDirectResultCallSite>,
+) {
+    private val callSites = callSites.toList()
+
+    init {
+        require(this.callSites.size == structuralPlan.callsInEvaluationOrder.size &&
+                this.callSites.indices.all { index ->
+                    this.callSites[index].call ===
+                            structuralPlan.callsInEvaluationOrder[index].call
+                }
+        ) {
+            "a retained direct-result plan requires one operation for every exact result leaf"
+        }
+    }
+
+    fun bindEmitterCallsOrNull(
+        typeMapper: DotNetIlTypeMapper,
+        physicalMethodOwner: DotNetIlClassInfo,
+        liveInitializer: IrExpression,
+        expectedResultType: DotNetIlValueType,
+    ): List<Pair<IrCall, DotNetGenericOwnerPhysicalValueBoundDirectCall>>? {
+        if (!structuralPlan.matchesLiveInitializer(liveInitializer)) return null
+        return callSites.map { site ->
+            val bound = site.operation.bindEmitterDirectCallOrNull(
+                typeMapper,
+                physicalMethodOwner,
+                resultCarrier,
+                expectedResultType,
+            ) ?: return null
+            site.call to bound
+        }
+    }
+}
+
 /**
  * One operation-scoped permission to retain the carrier which an initializer already produces.
  *
@@ -50,6 +111,7 @@ internal enum class DotNetGenericOwnerPhysicalValueEmitterValidation {
 internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal constructor(
     val carrier: DotNetGenericOwnerPhysicalCarrier,
     private val emitterValidation: DotNetGenericOwnerPhysicalValueEmitterValidation,
+    private val directResultInitializer: RetainedDirectResultInitializer? = null,
     private val externalImplementationOwner: IrClassSymbol? = null,
 ) {
     init {
@@ -58,6 +120,17 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
         require(externalImplementationOwner == null ||
                 definition is DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer) {
             "an external retained carrier requires a producer-recorded implementation TypeDef"
+        }
+        require(
+            (emitterValidation ==
+                    DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER) ==
+                    (directResultInitializer != null),
+        ) {
+            "a direct call-result carrier requires exactly one identity-bound result-path plan"
+        }
+        require(directResultInitializer == null ||
+                directResultInitializer.resultCarrier == carrier) {
+            "a direct result-path plan must retain the destination's exact produced carrier"
         }
     }
 
@@ -68,20 +141,43 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
      * read requires the live `ldarg`/`ldloc` source carrier, while a constructed direct call
      * requires the live result carrier selected by the ordinary physical-call resolver; other
      * admitted constructed definitions retain their legacy whole-expression comparison pending
-     * their own live queries. An owner parameter likewise requires either the live source slot or
-     * the live ordinary MethodDef result, according to its recorded initializer shape. An [IrWhen]
-     * must remain a live control-flow initializer; the variable emitter then supplies the selected
-     * local type as a fixed boundary and independently validates every branch during emission. A
-     * changed or evicted mapping fails closed instead of silently selecting another carrier.
+     * their own live queries. A direct result-path plan rewalks the exact live initializer and
+     * independently resolves every result-producing call; condition, receiver, and argument calls
+     * cannot donate authority. An owner parameter likewise requires either the live source slot or
+     * every live ordinary MethodDef result, according to its recorded initializer shape. An
+     * unplanned [IrWhen] must remain a live control-flow initializer; the variable emitter then
+     * supplies the selected local type as a fixed boundary and independently validates every
+     * branch during emission. A changed or evicted mapping fails closed instead of silently
+     * selecting another carrier.
      */
     fun bindEmitterCarrierOrNull(
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
+        liveInitializer: IrExpression?,
         initializerCarrier: DotNetIlValueType?,
         initializerDirectStorageReadCarrier: DotNetIlValueType?,
-        initializerDirectCallResultCarrier: DotNetIlValueType?,
+        initializerDirectCallResultCarrier:
+                ((IrCall, DotNetGenericOwnerPhysicalValueBoundDirectCall) ->
+                        DotNetIlValueType?)?,
         initializerUsesControlFlowBranches: Boolean,
     ): DotNetIlValueType? {
+        fun validateDirectCallResults(expected: DotNetIlValueType): DotNetIlValueType? {
+            val plan = directResultInitializer ?: return null
+            val initializer = liveInitializer ?: return null
+            val resolveResult = initializerDirectCallResultCarrier ?: return null
+            val boundCalls = plan.bindEmitterCallsOrNull(
+                typeMapper,
+                physicalMethodOwner,
+                initializer,
+                expected,
+            ) ?: return null
+            return expected.takeIf {
+                boundCalls.all { site ->
+                    resolveResult(site.first, site.second) == expected
+                }
+            }
+        }
+
         val parameter = carrier.type as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
         if (parameter != null) {
             if (carrier.nullEncoding !=
@@ -97,7 +193,7 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
                 DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER ->
                     initializerDirectStorageReadCarrier
                 DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER ->
-                    initializerDirectCallResultCarrier
+                    validateDirectCallResults(expected)
                 DotNetGenericOwnerPhysicalValueEmitterValidation.WHOLE_EXPRESSION_CARRIER,
                 DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES,
                 -> null
@@ -158,7 +254,7 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
             DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER ->
                 initializerDirectStorageReadCarrier?.takeIf { actual -> actual == expected }
             DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER ->
-                initializerDirectCallResultCarrier?.takeIf { actual -> actual == expected }
+                validateDirectCallResults(expected)
             DotNetGenericOwnerPhysicalValueEmitterValidation.CONTROL_FLOW_BRANCHES ->
                 expected.takeIf { initializerUsesControlFlowBranches }
         }
@@ -458,6 +554,80 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
     }
 }
 
+/**
+ * Rebinds the first direct-result grammar from frozen operation authority to live IL types.
+ *
+ * This is intentionally narrower than general call binding: one natural instance MethodDef, no
+ * ordinary inputs, no MethodSpec, and one strict owner-derived direct result. The emitter still
+ * resolves the call independently and compares every field of the returned descriptor.
+ */
+private fun DotNetGenericOwnerPhysicalOperationRoute.bindEmitterDirectCallOrNull(
+    typeMapper: DotNetIlTypeMapper,
+    physicalMethodOwner: DotNetIlClassInfo,
+    expectedCarrier: DotNetGenericOwnerPhysicalCarrier,
+    expectedResultType: DotNetIlValueType,
+): DotNetGenericOwnerPhysicalValueBoundDirectCall? {
+    val operation = this
+    val methodIdentity = operation.method.identity as?
+            DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return null
+    val declaringIdentity = operation.method.declaringType as?
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+    if (!operation.method.signature.isInstance ||
+        declaringIdentity.view != DotNetGenericInterfaceView.DECLARED ||
+        operation.method.signature.genericArity != 0 ||
+        operation.instantiatedSignature.genericArity != 0 ||
+        operation.methodArguments.isNotEmpty() ||
+        operation.method.genericParameters.isNotEmpty() ||
+        operation.method.declaringType != operation.requiredReceiverView.family ||
+        operation.method.signature.parameterSlots.isNotEmpty() ||
+        operation.instantiatedSignature.parameterSlots.isNotEmpty()
+    ) return null
+    val declaredResult = operation.method.signature.resultLayout as?
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ?: return null
+    val instantiatedResult = operation.instantiatedSignature.resultLayout as?
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ?: return null
+    if (declaredResult.slot.domain !=
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+        instantiatedResult.slot.domain !=
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+        instantiatedResult.slot.carrier != expectedCarrier.type ||
+        operation.producedResult?.layout !=
+            DotNetGenericOwnerProducedValueLayout.Direct(expectedCarrier)
+    ) return null
+    val boundExpected = expectedCarrier.bindCurrentOwnerCarrierOrNull(
+        typeMapper,
+        physicalMethodOwner,
+    ) ?: return null
+    if (boundExpected != expectedResultType) return null
+    val receiverType = operation.requiredReceiverView.construction
+        .bindCurrentOwnerConstructionOrNull(typeMapper, physicalMethodOwner)
+        ?: return null
+    val declaredReceiverType = DotNetIlValueType.GenericInstance(
+        receiverType.classInfo,
+        List(receiverType.classInfo.typeParameterCount) { index ->
+            DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+        },
+    )
+    val declaredResultType = declaredResult.slot.carrier.bindDeclaredCarrierOrNull(
+        typeMapper,
+        operation.method,
+        receiverType.classInfo,
+    ) ?: return null
+    val substitutedDeclaredResult = try {
+        declaredResultType.substituteDotNetTypeParameters(receiverType.arguments)
+    } catch (_: IllegalStateException) {
+        return null
+    }
+    if (substitutedDeclaredResult != expectedResultType) return null
+    return DotNetGenericOwnerPhysicalValueBoundDirectCall(
+        methodIdentity,
+        declaredReceiverType,
+        declaredResultType,
+        receiverType,
+        expectedResultType,
+    )
+}
+
 private fun DotNetGenericOwnerSymbolicCarrierReference.fixedLeafIlTypeOrNull(): DotNetIlValueType? {
     val kind = (this as? DotNetGenericOwnerSymbolicCarrierReference.Leaf)?.kind ?: return null
     return when (kind) {
@@ -472,6 +642,77 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.fixedLeafIlTypeOrNull(): 
         DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
         -> null
     }
+}
+
+private fun DotNetGenericOwnerPhysicalCarrier.bindCurrentOwnerCarrierOrNull(
+    typeMapper: DotNetIlTypeMapper,
+    physicalMethodOwner: DotNetIlClassInfo,
+): DotNetIlValueType? {
+    return when (type) {
+        is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+            bindCurrentOwnerParameterOrNull(typeMapper, physicalMethodOwner)
+        is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+            if (nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return null
+            type.bindCurrentOwnerConstructionOrNull(typeMapper, physicalMethodOwner)
+        }
+        is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
+        is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
+        -> null
+    }
+}
+
+/** Binds an open MethodDef signature without re-mapping its logical Kotlin result type. */
+private fun DotNetGenericOwnerSymbolicCarrierReference.bindDeclaredCarrierOrNull(
+    typeMapper: DotNetIlTypeMapper,
+    method: DotNetGenericOwnerPhysicalMethodDefReference,
+    declaringType: DotNetIlClassInfo,
+): DotNetIlValueType? {
+    return when (this) {
+        is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> fixedLeafIlTypeOrNull()
+        is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+            bindDeclaredParameterOrNull(method, declaringType)
+        is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+            val localDefinition = definition as?
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+            val classInfo = localDefinition.classInfoOrNull(typeMapper) ?: return null
+            if (classInfo.typeParameterCount == 0 ||
+                classInfo.typeParameterCount != arguments.size
+            ) return null
+            DotNetIlValueType.GenericInstance(
+                classInfo,
+                arguments.map { argument ->
+                    argument.bindDeclaredCarrierOrNull(typeMapper, method, declaringType)
+                        ?: return null
+                },
+            )
+        }
+        is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> null
+    }
+}
+
+private fun retainedDirectResultInitializerOrNull(
+    plan: DotNetGenericOwnerPhysicalDirectResultInitializerPlan,
+    produced: DotNetGenericOwnerProducedValueFact,
+    authoritativeOperationsByCall: IdentityHashMap<
+            IrCall,
+            DotNetGenericOwnerPhysicalOperationRoute,
+            >,
+): RetainedDirectResultInitializer? {
+    val carrier = (produced.layout as?
+            DotNetGenericOwnerProducedValueLayout.Direct)?.carrier ?: return null
+    val sites = plan.callsInEvaluationOrder.map { site ->
+        if (!site.call.isDotNetParameterlessDirectResultPlacementCall()) return null
+        val operation = authoritativeOperationsByCall[site.call] ?: return null
+        if (operation.instantiatedSignature.resultLayout !is
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ||
+            !operation.producedResult.matchesRetainedInitializerResult(
+                produced,
+                site.hasImplicitNotNull,
+            )
+        ) return null
+        RetainedDirectResultCallSite(site.call, operation)
+    }
+    return RetainedDirectResultInitializer(plan, carrier, sites)
 }
 
 private fun retainedSplitNullableInitializerOrNull(
@@ -547,9 +788,10 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
             implementationOwner: IrClassSymbol,
         ): DotNetGenericOwnerPhysicalValueRetainedProducedCarrier =
             DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
-                carrier,
-                DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
-                implementationOwner,
+                carrier = carrier,
+                emitterValidation =
+                    DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+                externalImplementationOwner = implementationOwner,
             )
 
         fun bind(
@@ -726,6 +968,17 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     val directStorage = storage.storageLayout as?
                             DotNetGenericOwnerPhysicalStorageLayout.Direct ?: return@forEach
                     if (direct.carrier != directStorage.primaryCarrier.carrier) return@forEach
+                    val initializer = (record.variable.owner as? IrVariable)?.initializer
+                        ?: return@forEach
+                    val directResultInitializerPlan =
+                        initializer.dotNetPhysicalDirectResultInitializerPlanOrNull()
+                    val directResultInitializer = directResultInitializerPlan?.let { plan ->
+                        retainedDirectResultInitializerOrNull(
+                            plan,
+                            produced,
+                            authoritativeOperationsByCallIdentity,
+                        )
+                    }
                     val emitterValidation = when (val symbolic = direct.carrier.type) {
                         is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
                             val binder = (symbolic.binder as?
@@ -736,12 +989,15 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                                 DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT ||
                                 binder.owner !== physicalOwner ||
                                 symbolic.index !in physicalOwner.owner.typeParameters.indices ||
-                                (record.variable.owner as? IrVariable)?.initializer is IrWhen
+                                (initializer is IrWhen && directResultInitializerPlan == null)
                             ) return@forEach
-                            (record.variable.owner as? IrVariable)
-                                ?.initializer
-                                ?.directPhysicalValueEmitterValidationOrNull()
-                                ?: return@forEach
+                            if (directResultInitializerPlan != null) {
+                                DotNetGenericOwnerPhysicalValueEmitterValidation
+                                    .DIRECT_CALL_RESULT_CARRIER
+                            } else {
+                                initializer.directPhysicalValueEmitterValidationOrNull()
+                                    ?: return@forEach
+                            }
                         }
                         is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
                             if (symbolic.definition !is DotNetGenericOwnerPhysicalTypeDefIdentity.Local) {
@@ -761,9 +1017,10 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                                 } || direct.carrier.nullEncoding !=
                                 DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE
                             ) return@forEach
-                            val initializer = (record.variable.owner as? IrVariable)?.initializer
-                                ?: return@forEach
-                            if (initializer is IrWhen) {
+                            if (directResultInitializerPlan != null) {
+                                DotNetGenericOwnerPhysicalValueEmitterValidation
+                                    .DIRECT_CALL_RESULT_CARRIER
+                            } else if (initializer is IrWhen) {
                                 DotNetGenericOwnerPhysicalValueEmitterValidation
                                     .CONTROL_FLOW_BRANCHES
                             } else {
@@ -776,22 +1033,8 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
                         -> return@forEach
                     }
-                    val initializer = (record.variable.owner as? IrVariable)?.initializer
-                        ?: return@forEach
-                    val initializerCall = initializer.identityPhysicalCallWitnessOrNull()
-                    if (initializerCall != null) {
-                        if (!initializerCall.call.isDotNetParameterlessDirectResultPlacementCall()) {
-                            return@forEach
-                        }
-                        val operation = authoritativeOperationsByCallIdentity[initializerCall.call]
-                            ?: return@forEach
-                        if (!operation.producedResult.matchesRetainedInitializerResult(
-                                produced,
-                                initializerCall.hasImplicitNotNull,
-                            ) ||
-                            operation.instantiatedSignature.resultLayout !is
-                                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
-                        ) return@forEach
+                    if (directResultInitializerPlan != null) {
+                        if (directResultInitializer == null) return@forEach
                     } else if (record.variable in
                         callBearingValuesByFunction[record.physicalFunction].orEmpty()
                     ) {
@@ -804,8 +1047,9 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     retainedByFunction.getOrPut(record.physicalFunction) {
                         IdentityHashMap()
                     }[record.variable] = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
-                        direct.carrier,
-                        emitterValidation,
+                        carrier = direct.carrier,
+                        emitterValidation = emitterValidation,
+                        directResultInitializer = directResultInitializer,
                     )
                 }
 
@@ -985,11 +1229,6 @@ private fun IrExpression.directPhysicalValueEmitterValidationOrNull():
     else -> null
 }
 
-private data class DotNetGenericOwnerIdentityPhysicalCallWitness(
-    val call: IrCall,
-    val hasImplicitNotNull: Boolean,
-)
-
 /** The first retained direct-result grammar has no MethodSpec or non-dispatch input slots. */
 internal fun IrCall.isDotNetParameterlessDirectResultPlacementCall(): Boolean =
     dispatchReceiver != null && symbol.owner.typeParameters.isEmpty() && typeArguments.isEmpty() &&
@@ -999,25 +1238,6 @@ internal fun IrCall.isDotNetParameterlessDirectResultPlacementCall(): Boolean =
             symbol.owner.parameters.all { parameter ->
                 parameter.kind == IrParameterKind.DispatchReceiver
             }
-
-private fun IrExpression.identityPhysicalCallWitnessOrNull():
-        DotNetGenericOwnerIdentityPhysicalCallWitness? = when (this) {
-    is IrCall -> DotNetGenericOwnerIdentityPhysicalCallWitness(this, false)
-    is IrTypeOperatorCall -> if (
-        operator == IrTypeOperator.IMPLICIT_CAST ||
-        operator == IrTypeOperator.IMPLICIT_NOTNULL
-    ) {
-        argument.identityPhysicalCallWitnessOrNull()?.let { witness ->
-            witness.copy(
-                hasImplicitNotNull = witness.hasImplicitNotNull ||
-                        operator == IrTypeOperator.IMPLICIT_NOTNULL,
-            )
-        }
-    } else {
-        null
-    }
-    else -> null
-}
 
 private fun DotNetGenericOwnerProducedValueFact?.matchesRetainedInitializerResult(
     retained: DotNetGenericOwnerProducedValueFact,
@@ -1067,15 +1287,17 @@ private fun IrExpression.hasUnavailablePhysicalCallDependency(
     produced: DotNetGenericOwnerProducedValueFact,
     operations: IdentityHashMap<IrCall, DotNetGenericOwnerPhysicalOperationRoute>,
 ): Boolean {
-    val witness = identityPhysicalCallWitnessOrNull() ?: return true
-    if (!witness.call.isDotNetParameterlessDirectResultPlacementCall()) return true
-    val operation = operations[witness.call] ?: return true
-    return operation.instantiatedSignature.resultLayout !is
-            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ||
-            !operation.producedResult.matchesRetainedInitializerResult(
-                produced,
-                witness.hasImplicitNotNull,
-            )
+    val plan = dotNetPhysicalDirectResultInitializerPlanOrNull() ?: return true
+    return plan.callsInEvaluationOrder.any { site ->
+        if (!site.call.isDotNetParameterlessDirectResultPlacementCall()) return@any true
+        val operation = operations[site.call] ?: return@any true
+        operation.instantiatedSignature.resultLayout !is
+                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ||
+                !operation.producedResult.matchesRetainedInitializerResult(
+                    produced,
+                    site.hasImplicitNotNull,
+                )
+    }
 }
 
 private data class DotNetPhysicalValueDependencies(
@@ -1086,7 +1308,7 @@ private data class DotNetPhysicalValueDependencies(
 private fun IrExpression.dotNetPhysicalValueDependencies(): DotNetPhysicalValueDependencies {
     val reads = Collections.newSetFromMap(IdentityHashMap<IrValueSymbol, Boolean>())
     var hasCall = false
-    acceptVoid(object : IrVisitorVoid() {
+    val visitor = object : IrVisitorVoid() {
         override fun visitElement(element: IrElement) {
             element.acceptChildrenVoid(this)
         }
@@ -1103,7 +1325,20 @@ private fun IrExpression.dotNetPhysicalValueDependencies(): DotNetPhysicalValueD
             hasCall = true
             expression.acceptChildrenVoid(this)
         }
-    })
+    }
+    val directResultPlan = dotNetPhysicalDirectResultInitializerPlanOrNull()
+    if (directResultPlan == null) {
+        acceptVoid(visitor)
+    } else {
+        // Result conditions choose a path but do not supply its value. Receiver and argument
+        // reads still participate because the exact final operation and its late resolver depend
+        // on their live slots. Start at each result call's children to keep those route
+        // dependencies without making an incidental condition read a carrier dependency.
+        hasCall = true
+        directResultPlan.callsInEvaluationOrder.forEach { site ->
+            site.call.acceptChildrenVoid(visitor)
+        }
+    }
     return DotNetPhysicalValueDependencies(reads, hasCall)
 }
 

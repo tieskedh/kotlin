@@ -18,12 +18,17 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.impl.IrBlockImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrBranchImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrCompositeImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrConstImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrWhenImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
@@ -3508,10 +3513,21 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         }.also { declaration ->
             declaration.addTypeParameter { name = Name.identifier("T") }
         }
+        val booleanOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Boolean")
+        }
         owner.parent = packageFragment
         interfaceOwner.parent = packageFragment
+        booleanOwner.parent = packageFragment
         packageFragment.declarations += owner
         packageFragment.declarations += interfaceOwner
+        packageFragment.declarations += booleanOwner
+        val booleanType = IrSimpleTypeImpl(
+            booleanOwner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
         val function = IrFactoryImpl.buildFun {
             name = Name.identifier("place")
             returnType = owner.typeParameters.single().defaultType
@@ -3542,6 +3558,28 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             }.kind = IrParameterKind.DispatchReceiver
             owner.declarations += declaration
         }
+        val alternateConstructedCallee = IrFactoryImpl.buildFun {
+            name = Name.identifier("produceAlternateConstruction")
+            returnType = constructedCallType
+        }.also { declaration ->
+            declaration.parent = owner
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = ownerSelfType
+            }.kind = IrParameterKind.DispatchReceiver
+            owner.declarations += declaration
+        }
+        val conditionCallee = IrFactoryImpl.buildFun {
+            name = Name.identifier("chooseConstruction")
+            returnType = booleanType
+        }.also { declaration ->
+            declaration.parent = owner
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = ownerSelfType
+            }.kind = IrParameterKind.DispatchReceiver
+            owner.declarations += declaration
+        }
         val inputCallee = IrFactoryImpl.buildFun {
             name = Name.identifier("produceConstructionFromInput")
             returnType = constructedCallType
@@ -3561,6 +3599,10 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
         val methodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
             constructedCallee.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val alternateMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            alternateConstructedCallee.symbol,
             DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
         )
         val physicalTypes = listOf(
@@ -3597,7 +3639,21 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 ),
             ),
         )
-        val localDeclarations = boundDeclarationIndex(physicalTypes, listOf(methodDescription))
+        val alternateMethodDescription = callableMethodDescription(
+            alternateMethodIdentity,
+            interfaceIdentity,
+            emptyList(),
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    declaredResultConstruction,
+                ),
+            ),
+        )
+        val localDeclarations = boundDeclarationIndex(
+            physicalTypes,
+            listOf(methodDescription, alternateMethodDescription),
+        )
         val construction = boundConstruction(
             localDeclarations,
             interfaceIdentity,
@@ -3639,6 +3695,24 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 emptyList(),
             ),
         ).value
+        val alternateCoherentOperation = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetGenericOwnerPhysicalOperationRoute,
+                        >,
+                >(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                localDeclarations,
+                alternateMethodIdentity,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(view(construction)),
+                localProduced,
+                emptyList(),
+            ),
+        ).value
+        assertEquals(
+            coherentOperation.producedResult,
+            alternateCoherentOperation.producedResult,
+            "the hostile alternate MethodDef must be indistinguishable by carrier alone",
+        )
         val callProduced = assertNotNull(coherentOperation.producedResult)
         val retainedCallProduced = callProduced.copy(
             provenance = assertNotNull(
@@ -3680,8 +3754,8 @@ class DotNetGenericOwnerPhysicalValueModelTest {
 
         fun record(
             variable: IrVariableSymbolImpl,
-            produced: DotNetGenericOwnerProducedValueFact,
-            storage: DotNetGenericOwnerPhysicalStorageFact,
+            produced: DotNetGenericOwnerProducedValueFact?,
+            storage: DotNetGenericOwnerPhysicalStorageFact?,
         ) = DotNetGenericOwnerPhysicalValueShadowRecord(
             function.symbol,
             variable,
@@ -3720,6 +3794,24 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             "calleeReceiver",
             ownerSelfType,
         )
+        val conditionCall = IrCallImpl(
+            0,
+            0,
+            booleanType,
+            conditionCallee.symbol,
+        ).also { call ->
+            call.dispatchReceiver = IrGetValueImpl(0, 0, calleeReceiver.symbol)
+        }
+        val conditionCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("conditionCall"),
+            booleanType,
+        ).also { variable ->
+            variable.initializer = conditionCall
+        }.symbol as IrVariableSymbolImpl
         fun parameterlessConstructedCall() = IrCallImpl(
             0,
             0,
@@ -3834,6 +3926,96 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         ).also { variable ->
             variable.initializer = IrGetValueImpl(0, 0, blockCallVariable)
         }.symbol as IrVariableSymbolImpl
+        val compositeCall = parameterlessConstructedCall()
+        val compositeCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("compositeCall"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrCompositeImpl(0, 0, constructedCallType).apply {
+                statements += IrBlockImpl(0, 0, constructedCallType).apply {
+                    statements += compositeCall
+                }
+            }
+        }.symbol as IrVariableSymbolImpl
+        val firstWhenCall = parameterlessConstructedCall()
+        val secondWhenCall = parameterlessConstructedCall()
+        val whenCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("whenCall"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrWhenImpl(0, 0, constructedCallType).apply {
+                branches += IrBranchImpl(
+                    IrGetValueImpl(0, 0, conditionCallVariable),
+                    IrBlockImpl(0, 0, constructedCallType).apply {
+                        statements += firstWhenCall
+                    },
+                )
+                branches += IrBranchImpl(
+                    IrConstImpl.boolean(0, 0, booleanType, true),
+                    IrCompositeImpl(0, 0, constructedCallType).apply {
+                        statements += secondWhenCall
+                    },
+                )
+            }
+        }.symbol as IrVariableSymbolImpl
+        val whenCallAliasVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("whenCallAlias"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, whenCallVariable)
+        }.symbol as IrVariableSymbolImpl
+        val prefixLocal = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("prefixLocal"),
+            owner.typeParameters.single().defaultType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, constructedSource.symbol)
+        }
+        val prefixedBlockCall = parameterlessConstructedCall()
+        val prefixedBlockCallVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("prefixedBlockCall"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrBlockImpl(0, 0, constructedCallType).apply {
+                statements += prefixLocal
+                statements += prefixedBlockCall
+            }
+        }.symbol as IrVariableSymbolImpl
+        val nonExhaustiveCall = parameterlessConstructedCall()
+        val nonExhaustiveWhenVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("nonExhaustiveWhen"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrWhenImpl(0, 0, constructedCallType).apply {
+                branches += IrBranchImpl(
+                    IrGetValueImpl(0, 0, conditionCallVariable),
+                    nonExhaustiveCall,
+                )
+            }
+        }.symbol as IrVariableSymbolImpl
         val siblingCall = parameterlessConstructedCall()
         val refinedCall = parameterlessConstructedCall()
         val refinedCallVariable = buildVariable(
@@ -3904,6 +4086,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             DotNetGenericOwnerPhysicalNullState.NON_NULL,
         )
         val records = listOf(
+            record(conditionCallVariable, null, null),
             record(localVariable, localProduced, localStorage),
             record(callVariable, retainedCallProduced, callStorage),
             record(callAliasVariable, retainedCallProduced, callStorage),
@@ -3911,6 +4094,11 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             record(inputCallAliasVariable, retainedCallProduced, callStorage),
             record(blockCallVariable, retainedCallProduced, callStorage),
             record(blockCallAliasVariable, retainedCallProduced, callStorage),
+            record(compositeCallVariable, retainedCallProduced, callStorage),
+            record(whenCallVariable, retainedCallProduced, callStorage),
+            record(whenCallAliasVariable, retainedCallProduced, callStorage),
+            record(prefixedBlockCallVariable, retainedCallProduced, callStorage),
+            record(nonExhaustiveWhenVariable, retainedCallProduced, callStorage),
             record(refinedCallVariable, refinedProduced, refinedStorage),
             record(unwrappedRefinementVariable, refinedProduced, refinedStorage),
             record(parameterVariable, parameterProduced, parameterStorage),
@@ -3996,11 +4184,43 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             ),
             "placement cannot replace lineage already selected by the final operation",
         )
+        val authorityWithAlternateEndpoint = bindAuthority(
+            mapOf(call to alternateCoherentOperation),
+        )
+        val retainedAlternateEndpoint = assertNotNull(
+            authorityWithAlternateEndpoint.retainedProducedCarrierOrNull(
+                function.symbol,
+                callVariable,
+            ),
+            "early placement may retain the operation map's coherent alternate endpoint",
+        )
+        val authorityWithIncompleteWhen = bindAuthority(
+            mapOf(firstWhenCall to coherentOperation),
+        )
+        assertNull(
+            authorityWithIncompleteWhen.retainedProducedCarrierOrNull(
+                function.symbol,
+                whenCallVariable,
+            ),
+            "every reachable result call requires its own identity-bound operation",
+        )
+        assertNull(
+            authorityWithIncompleteWhen.retainedProducedCarrierOrNull(
+                function.symbol,
+                whenCallAliasVariable,
+            ),
+            "an alias cannot recover an initializer with an unauthenticated result path",
+        )
         val authority = bindAuthority(
             mapOf(
                 call to coherentOperation,
                 inputCall to coherentOperation,
                 blockCall to coherentOperation,
+                compositeCall to coherentOperation,
+                firstWhenCall to coherentOperation,
+                secondWhenCall to coherentOperation,
+                prefixedBlockCall to coherentOperation,
+                nonExhaustiveCall to coherentOperation,
                 refinedCall to coherentOperation,
                 unwrappedRefinementCall to coherentOperation,
             ),
@@ -4024,13 +4244,33 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             authority.retainedProducedCarrierOrNull(function.symbol, inputCallAliasVariable),
             "an alias cannot recover a denied input-bearing direct result",
         )
-        assertNull(
+        val retainedBlockConstruction = assertNotNull(
             authority.retainedProducedCarrierOrNull(function.symbol, blockCallVariable),
-            "a call-bearing block needs a path-complete operation plan",
+            "a result-only block retains its path-complete operation plan",
+        )
+        assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, blockCallAliasVariable),
+            "an alias may consume an admitted path-complete block result",
+        )
+        assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, compositeCallVariable),
+            "nested result-only block/composite spines retain the exact result call",
+        )
+        val retainedWhenConstruction = assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, whenCallVariable),
+            "an unavailable condition value cannot contaminate fully authenticated result paths",
+        )
+        assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, whenCallAliasVariable),
+            "an alias may consume a fully authenticated control-flow result",
         )
         assertNull(
-            authority.retainedProducedCarrierOrNull(function.symbol, blockCallAliasVariable),
-            "an alias cannot recover a denied call-bearing block result",
+            authority.retainedProducedCarrierOrNull(function.symbol, prefixedBlockCallVariable),
+            "a prefix local needs emission-ordered live-slot obligations before it is transparent",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, nonExhaustiveWhenVariable),
+            "a non-exhaustive result path cannot retain an exact destination carrier",
         )
         assertNotNull(
             authority.retainedProducedCarrierOrNull(function.symbol, refinedCallVariable),
@@ -4067,11 +4307,22 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             physicalInterface,
             listOf(DotNetIlValueType.TypeParameter(0, isMethodParameter = false)),
         )
+        fun resolvedDirectResultOrNull(
+            expected: DotNetGenericOwnerPhysicalValueBoundDirectCall,
+            actualMethod: DotNetGenericOwnerPhysicalMethodDefIdentity.Local = methodIdentity,
+        ): DotNetIlValueType? {
+            assertEquals(expectedConstruction, expected.declaredReceiverType)
+            assertEquals(expectedConstruction, expected.declaredResultType)
+            assertEquals(expectedConstruction, expected.receiverType)
+            assertEquals(expectedConstruction, expected.resultType)
+            return expected.resultType.takeIf { expected.methodIdentity == actualMethod }
+        }
         assertEquals(
             expectedConstruction,
             retainedConstruction.bindEmitterCarrierOrNull(
                 typeMapper = typeMapper,
                 physicalMethodOwner = physicalOwner,
+                liveInitializer = localVariable.owner.initializer,
                 initializerCarrier = DotNetIlValueType.Object,
                 initializerDirectStorageReadCarrier = expectedConstruction,
                 initializerDirectCallResultCarrier = null,
@@ -4084,6 +4335,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             retainedConstruction.bindEmitterCarrierOrNull(
                 typeMapper = typeMapper,
                 physicalMethodOwner = physicalOwner,
+                liveInitializer = localVariable.owner.initializer,
                 initializerCarrier = expectedConstruction,
                 initializerDirectStorageReadCarrier = DotNetIlValueType.Object,
                 initializerDirectCallResultCarrier = null,
@@ -4096,9 +4348,12 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             retainedCallConstruction.bindEmitterCarrierOrNull(
                 typeMapper = typeMapper,
                 physicalMethodOwner = physicalOwner,
+                liveInitializer = callVariable.owner.initializer,
                 initializerCarrier = DotNetIlValueType.Object,
                 initializerDirectStorageReadCarrier = DotNetIlValueType.Object,
-                initializerDirectCallResultCarrier = expectedConstruction,
+                initializerDirectCallResultCarrier = { candidate, expected ->
+                    resolvedDirectResultOrNull(expected).takeIf { candidate === call }
+                },
                 initializerUsesControlFlowBranches = false,
             ),
             "a direct constructed call must trust the selected MethodDef result, not a " +
@@ -4108,9 +4363,10 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             retainedCallConstruction.bindEmitterCarrierOrNull(
                 typeMapper = typeMapper,
                 physicalMethodOwner = physicalOwner,
+                liveInitializer = callVariable.owner.initializer,
                 initializerCarrier = expectedConstruction,
                 initializerDirectStorageReadCarrier = expectedConstruction,
-                initializerDirectCallResultCarrier = DotNetIlValueType.Object,
+                initializerDirectCallResultCarrier = { _, _ -> DotNetIlValueType.Object },
                 initializerUsesControlFlowBranches = false,
             ),
             "a reconstructed exact expression must not hide an incompatible live call result",
@@ -4119,13 +4375,98 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             retainedCallConstruction.bindEmitterCarrierOrNull(
                 typeMapper = typeMapper,
                 physicalMethodOwner = physicalOwner,
+                liveInitializer = callVariable.owner.initializer,
                 initializerCarrier = expectedConstruction,
                 initializerDirectStorageReadCarrier = expectedConstruction,
-                initializerDirectCallResultCarrier = null,
+                initializerDirectCallResultCarrier = { _, _ -> null },
                 initializerUsesControlFlowBranches = false,
             ),
             "a direct call must fail closed when no live MethodDef result is available",
         )
+        assertEquals(
+            expectedConstruction,
+            retainedBlockConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                liveInitializer = blockCallVariable.owner.initializer,
+                initializerCarrier = DotNetIlValueType.Object,
+                initializerDirectStorageReadCarrier = null,
+                initializerDirectCallResultCarrier = { candidate, expected ->
+                    resolvedDirectResultOrNull(expected).takeIf { candidate === blockCall }
+                },
+                initializerUsesControlFlowBranches = false,
+            ),
+            "the live block spine must resolve its exact result-producing call",
+        )
+        val liveBlock = assertIs<IrBlock>(blockCallVariable.owner.initializer)
+        liveBlock.statements[0] = siblingCall
+        assertNull(
+            retainedBlockConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                liveInitializer = liveBlock,
+                initializerCarrier = DotNetIlValueType.Object,
+                initializerDirectStorageReadCarrier = null,
+                initializerDirectCallResultCarrier = { _, _ -> expectedConstruction },
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a structurally equal replacement call cannot inherit the retained path plan",
+        )
+        liveBlock.statements[0] = blockCall
+        assertEquals(
+            expectedConstruction,
+            retainedWhenConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                liveInitializer = whenCallVariable.owner.initializer,
+                initializerCarrier = null,
+                initializerDirectStorageReadCarrier = null,
+                initializerDirectCallResultCarrier = { candidate, expected ->
+                    resolvedDirectResultOrNull(expected).takeIf {
+                        candidate === firstWhenCall || candidate === secondWhenCall
+                    }
+                },
+                initializerUsesControlFlowBranches = true,
+            ),
+            "every live control-flow result call must resolve to the retained carrier",
+        )
+        assertNull(
+            retainedWhenConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                liveInitializer = whenCallVariable.owner.initializer,
+                initializerCarrier = null,
+                initializerDirectStorageReadCarrier = null,
+                initializerDirectCallResultCarrier = { candidate, expected ->
+                    if (candidate === firstWhenCall) {
+                        resolvedDirectResultOrNull(expected)
+                    } else {
+                        DotNetIlValueType.Object
+                    }
+                },
+                initializerUsesControlFlowBranches = true,
+            ),
+            "one mismatched live branch result invalidates the complete plan",
+        )
+        var observedAlternateEndpoint = false
+        assertNull(
+            retainedAlternateEndpoint.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                liveInitializer = callVariable.owner.initializer,
+                initializerCarrier = expectedConstruction,
+                initializerDirectStorageReadCarrier = expectedConstruction,
+                initializerDirectCallResultCarrier = { candidate, expected ->
+                    observedAlternateEndpoint =
+                        candidate === call && expected.methodIdentity == alternateMethodIdentity
+                    resolvedDirectResultOrNull(expected, actualMethod = methodIdentity)
+                },
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a different live MethodDef cannot satisfy a retained endpoint merely because " +
+                    "both return the same carrier",
+        )
+        assertTrue(observedAlternateEndpoint)
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
                 listOf(

@@ -470,21 +470,46 @@ internal class DotNetIlExpressionCodegen(
      */
     fun directPhysicalCallResultCarrierTypeOrNull(
         expression: IrExpression,
+        expected: DotNetGenericOwnerPhysicalValueBoundDirectCall,
     ): DotNetIlValueType? {
-        val call = expression.identityPhysicalProducer() as? IrCall ?: return null
-        if (intrinsicMethods.getIntrinsic(call.symbol) != null) return null
-        // The current direct-result placement grammar is parameterless. This also excludes the
-        // input-bearing foreign/capability fallback shapes which can be inferred during emission
-        // even when no earlier target-map entry remains.
-        if (!call.isDotNetParameterlessDirectResultPlacementCall()) return null
-        val resolved = resolveCall(call)
-        if (resolved.info.signature.hasSplitNullableResult) return null
-        val receiver = call.dispatchReceiver ?: return null
-        val receiverType = directPhysicalStorageReadCarrierTypeOrNull(receiver) ?: return null
-        if (receiverType == DotNetIlValueType.Object ||
-            receiverType.dotNetUniqueViewAsGenericOwner(resolved.info.owner) == null
+        val call = expression as? IrCall ?: return null
+        if (call.superQualifierSymbol != null ||
+            intrinsicMethods.getIntrinsic(call.symbol) != null ||
+            !call.isDotNetParameterlessDirectResultPlacementCall()
         ) return null
-        return (resolved.returnType as? DotNetIlReturnType.Value)?.type
+        val source = call.symbol.owner.let { candidate ->
+            candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
+            ?: candidate
+        }
+        if (source.typeParameters.isNotEmpty() || call.typeArguments.isNotEmpty()) return null
+        val resolved = resolveCall(call)
+        if (resolved.info.signature.hasSplitNullableResult ||
+            resolved.info.genericOwnerPhysicalMethodIdentity != expected.methodIdentity ||
+            resolved.info.owner != expected.receiverType.classInfo ||
+            !resolved.info.signature.hasThis ||
+            resolved.info.signature.methodGenericParameterCount != 0 ||
+            resolved.info.signature.parameterTypes != listOf(expected.declaredReceiverType) ||
+            resolved.info.signature.returnType !=
+                DotNetIlReturnType.Value(expected.declaredResultType) ||
+            resolved.receiverType
+                ?.dotNetUniqueViewAsGenericOwner(expected.receiverType.classInfo) !=
+                expected.receiverType ||
+            resolved.ownerToken != expected.receiverType.nameInSignature ||
+            resolved.methodInstantiation.isNotEmpty() ||
+            !resolved.virtual ||
+            resolved.parameterTypes != listOf(expected.receiverType) ||
+            resolved.info.signature.physicalParameterCount != resolved.parameterTypes.size ||
+            (resolved.returnType as? DotNetIlReturnType.Value)?.type != expected.resultType ||
+            source.parameters.size != 1 ||
+            source.parameters.single().kind != IrParameterKind.DispatchReceiver ||
+            call.arguments.size != 1
+        ) return null
+        val receiver = call.arguments.firstOrNull() ?: return null
+        if (directPhysicalStorageReadCarrierTypeOrNull(receiver)
+                ?.dotNetUniqueViewAsGenericOwner(expected.receiverType.classInfo) !=
+            expected.receiverType
+        ) return null
+        return expected.resultType
     }
 
     /**

@@ -259,8 +259,27 @@ are closed. `K` remains declaration authority only; scope and prerequisites are
 recorded in the
 [external routing archive](../archive/generic-owner-external-semantic-equivalence-routing-2026-09-02.md).
 
-Next prove path-complete block/composite calls, the real caller-MethodDef `!!R`
-entry, additional non-materializing consumer categories, broader MethodSpec and
+The first path-complete direct-result grammar is now closed: direct call leaves,
+implicit identity wrappers, recursively nested non-returnable
+`IrBlock`/`IrComposite` nodes with exactly one expression, and exhaustive
+`IrWhen` nodes with at least two non-false reachable arms, a terminal true/else
+arm, and no later reachable arm. The plan identity-binds the root and ordered
+result spine rather than the whole IR child tree. Every reachable result call
+retains its complete final operation and must rebind the same live MethodDef and
+result carrier; condition calls do not supply result authority. `IrComposite`
+is model-only in this checkpoint, while emitted/executed proof covers the
+`IrBlock`/`IrWhen` shape produced by FIR2IR. Prefix-bearing containers stay
+outside this first grammar because their local slots do not exist at the outer
+placement boundary. The exact scope is recorded in the
+[dated archive](../archive/generic-owner-path-complete-direct-result-calls-2026-09-03.md).
+
+The older flat exhaustive split-nullable walker is a temporary narrower leaf
+policy, not a separate representation rule. Converge it on the same structural
+result-spine traversal only when each path can retain and rebind the complete
+split operation, payload, and flag obligations.
+
+Next prove the real caller-MethodDef `!!R` entry, additional non-materializing
+consumer categories, ordered prefix-container obligations, broader MethodSpec and
 argument/result shapes, null/bottom/unknown split joins, and explicit
 representation-changing conversions. Only after those value rules stabilize
 should the consumer widen to captures, properties, class nodes, MethodImpls, or

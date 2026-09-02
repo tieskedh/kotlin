@@ -2179,7 +2179,8 @@ internal class DotNetIlMethodCodegen(
                     selection.bindEmitterCarrierOrNull(
                         typeMapper,
                         functionInfo.owner,
-                        if (initializer is IrWhen) {
+                        liveInitializer = initializer,
+                        initializerCarrier = if (initializer is IrWhen) {
                             null
                         } else {
                             expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(
@@ -2190,7 +2191,12 @@ internal class DotNetIlMethodCodegen(
                         initializerDirectStorageReadCarrier =
                             expressionCodegen.directPhysicalStorageReadCarrierTypeOrNull(initializer),
                         initializerDirectCallResultCarrier =
-                            expressionCodegen.directPhysicalCallResultCarrierTypeOrNull(initializer),
+                            { call, expected ->
+                                expressionCodegen.directPhysicalCallResultCarrierTypeOrNull(
+                                    call,
+                                    expected,
+                                )
+                            },
                         initializerUsesControlFlowBranches = initializer is IrWhen,
                     ) ?: dotNetUnsupported(
                         "final physical-value authority for local '${variable.name.asString()}' " +
