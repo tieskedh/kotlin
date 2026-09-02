@@ -466,10 +466,22 @@ foreign, method-parameter, and nested parameter carriers remain unavailable in
 this slice.
 
 The fourth bounded form admits a parameterless, non-method-generic exact
-natural call whose authority-recorded `Direct(!n)` result is retained in an
-equal immutable owner-bound local. The receiver must already guarantee the
-selected construction, an existing semantic route vetoes the transfer, and the
-emitter independently resolves the live MethodDef and result carrier.
+natural call whose authority-recorded direct result is either `!n` or an exact
+local construction `I<!n,...>`, retained in equal immutable owner-bound storage.
+The receiver must already guarantee the selected MethodDef-owner construction,
+an existing semantic route vetoes the transfer, and every constructed result
+argument must bind to the live physical owner's type parameters. The emitter
+independently invokes the ordinary physical-call resolver and requires its live
+MethodDef result carrier to equal the reconstructed authority carrier. Missing,
+split, intrinsic, semantic, foreign, or different results fail closed; the
+logical whole-expression mapper supplies no replacement evidence.
+
+The constructed-result extension is presently a local BOUND-declaration proof,
+not an external ABI promise. Its first admission is one non-null natural
+interface construction whose invariant use arguments are direct parameters of
+the current owner, with no regular inputs or MethodSpec. The external physical-
+ABI record must name and authenticate the result TypeDef before a separately
+compiled consumer may obtain the same authority.
 
 The fifth bounded form admits one immutable logical `T?` local whose initializer
 is a parameterless, non-method-generic exact natural call producing

@@ -11,6 +11,10 @@ interface InlineProducer<out T> {
     fun produce(): T
 }
 
+interface InlineConstructedSource<out T> {
+    fun source(): InlineProducer<T>
+}
+
 interface InlineLookup<K, out V> {
     fun lookup(key: K): V?
 }
@@ -64,6 +68,21 @@ private class InlineArgumentSplitLocalRoute<T> : InlineLookup<T, T> {
         val exactArgumentAlias: T = key
         val exactResultAlias: T? = sourceNaturalAlias.lookup(exactArgumentAlias)
         return exactResultAlias
+    }
+}
+
+private class InlineConstructedSourceValue<T>(
+    private val nested: InlineProducer<T>,
+) : InlineConstructedSource<T> {
+    override fun source(): InlineProducer<T> = nested
+}
+
+private class InlineConstructedCallRoute<T> {
+    fun sourceThroughLocal(
+        source: InlineConstructedSource<T>,
+    ): InlineProducer<T> {
+        val callResultNaturalAlias: InlineProducer<T> = source.source()
+        return callResultNaturalAlias
     }
 }
 
@@ -322,6 +341,20 @@ private class InlineSecondView<T>(private val value: T) : InlineProducer<T> {
 }
 
 fun box(): String {
+    val inlineIntProducer = InlineSecondView(63)
+    val intCallResult = InlineConstructedCallRoute<Int>().sourceThroughLocal(
+        InlineConstructedSourceValue(inlineIntProducer),
+    )
+    if (intCallResult !== inlineIntProducer || intCallResult.produce() != 63) {
+        return "value constructed call-result route"
+    }
+    val inlineStringProducer = InlineSecondView("call result")
+    val stringCallResult = InlineConstructedCallRoute<String>().sourceThroughLocal(
+        InlineConstructedSourceValue(inlineStringProducer),
+    )
+    if (stringCallResult !== inlineStringProducer || stringCallResult.produce() != "call result") {
+        return "reference constructed call-result route"
+    }
     if (InlineLookupRoute<Int>().routeExactArgument(InlineIntLookup(), 42) != 42) {
         return "value argument route"
     }

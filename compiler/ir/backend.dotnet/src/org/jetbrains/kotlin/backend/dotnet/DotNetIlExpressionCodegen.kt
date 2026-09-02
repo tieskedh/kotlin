@@ -456,11 +456,13 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Reads the verifier-visible result carrier of the MethodDef actually selected for emission.
+     * Reads the verifier-visible result carrier selected by ordinary physical-call resolution.
      *
      * The physical-value model has already selected a logical route and instantiated its recorded
-     * signature. This independent late query resolves the live call exactly as emission will and
-     * rejects split results, whose payload-plus-flag layout is not one direct local value.
+     * signature. This independent late query uses the same resolver as ordinary call emission and
+     * rejects split results, whose payload-plus-flag layout is not one direct local value. It is
+     * authoritative only for the narrowly admitted call shapes whose route proof excludes the
+     * capability and foreign emitters which precede ordinary call emission.
      */
     fun directPhysicalCallResultCarrierTypeOrNull(
         expression: IrExpression,

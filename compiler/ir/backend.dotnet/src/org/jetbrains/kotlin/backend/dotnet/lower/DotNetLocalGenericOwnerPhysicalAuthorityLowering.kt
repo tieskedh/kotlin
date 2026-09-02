@@ -38,6 +38,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalComple
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceEdgeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalStateFamilyInput
@@ -49,6 +50,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.bindDotNetLocalGenericOwnerPhysicalCallableResultOrError
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
@@ -566,9 +568,11 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
      * generic binder, and result layout independently. The published member role may restrict the
      * admitted logical shape, but it does not select a second combined physical role.
      *
-     * This first structural grammar admits direct owner parameters and direct unconstrained
-     * MethodDef parameters. Nested carriers, defaults, varargs, constraints, and additional member
-     * families remain unavailable; no declaration name, package, or stdlib identity participates.
+     * This first structural grammar admits direct owner parameters, direct unconstrained MethodDef
+     * parameters, and the existing constructed-interface-producer role when its one-level result
+     * arguments are only current-owner parameters. Deeper nested carriers, defaults, varargs,
+     * constraints, and additional member families remain unavailable; no declaration name,
+     * package, or stdlib identity participates.
      */
     private fun bindPublishedRootCallableOrNull(
         source: IrSimpleFunction,
@@ -641,11 +645,33 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             }
         ) return null
 
-        val sourceResultType = source.returnType as? IrSimpleType ?: return null
-        val resultParameter = (sourceResultType.classifier as? IrTypeParameterSymbol)?.owner
-            ?: return null
-        val resultParameterIndex = owner.typeParameters.indexOf(resultParameter)
-            .takeIf { index -> index >= 0 } ?: return null
+        val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            owner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val capabilityOwner = context.genericOwnerCapabilityInterfaces[owner] ?: return null
+        val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            capabilityOwner.symbol,
+            view = null,
+        )
+        if (inputsByIdentity[naturalOwnerIdentity]?.role !=
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ||
+            inputsByIdentity[semanticOwnerIdentity]?.role !=
+            DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY
+        ) return null
+        val resultBinding = when (val binding =
+            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                source.returnType,
+                owner,
+                naturalOwnerIdentity,
+                declarations,
+                inputsByIdentity,
+            )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> return null
+        }
         if (context.genericInterfaceNaturalMethodResultDomains[source] !=
             DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
         ) return null
@@ -655,23 +681,48 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                         binding is CallableParameterBinding.Owner
                     }
                 ) return null
+                if (resultBinding.directOwnerParameterIndex == null) return null
                 when (memberContract.resultLayout) {
                     DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT -> {
-                        if (sourceResultType.isMarkedNullable()) return null
+                        if (resultBinding.isMarkedNullable) return null
                         true
                     }
                     DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE -> {
-                        if (!sourceResultType.isMarkedNullable()) return null
+                        if (!resultBinding.isMarkedNullable) return null
                         false
                     }
                     DotNetPublishedGenericInterfaceMemberResultLayout.VOID -> return null
                 }
             }
+            DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER -> {
+                if (methodGenericArity != 0 || parameterBindings.isNotEmpty() ||
+                    memberContract.resultLayout !=
+                    DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ||
+                    resultBinding.isMarkedNullable ||
+                    resultBinding.directOwnerParameterIndex != null
+                ) return null
+                val construction = resultBinding.carrier as?
+                        DotNetGenericOwnerSymbolicCarrierReference.Constructed ?: return null
+                if (construction.arguments.isEmpty() ||
+                    construction.arguments.any { argument ->
+                        val parameter = argument as?
+                                DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                            ?: return@any true
+                        val binder = parameter.binder as?
+                                DotNetGenericOwnerPhysicalGenericBinderReference.Type
+                        binder?.definition != naturalOwnerIdentity ||
+                                parameter.index !in owner.typeParameters.indices
+                    }
+                ) return null
+                false
+            }
             DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT -> {
                 if (memberContract.resultLayout !=
                     DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE ||
-                    !sourceResultType.isMarkedNullable() || owner.typeParameters.size != 2
+                    !resultBinding.isMarkedNullable || owner.typeParameters.size != 2
                 ) return null
+                val resultParameterIndex = resultBinding.directOwnerParameterIndex ?: return null
+                val resultParameter = owner.typeParameters[resultParameterIndex]
                 val ownerInputs = parameterBindings
                     .filterIsInstance<CallableParameterBinding.Owner>()
                 // Repeated owner slots are currently an empty-MethodSpec proof. Do not let
@@ -690,7 +741,6 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             else -> return null
         }
 
-        val capabilityOwner = context.genericOwnerCapabilityInterfaces[owner] ?: return null
         if (semanticSlot.parent !== capabilityOwner || semanticSlot.isSuspend ||
             semanticSlot.typeParameters.size != methodGenericArity ||
             !semanticSlot.hasUnconstrainedMethodParameterVector() ||
@@ -717,19 +767,6 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             }
         ) return null
 
-        val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
-            owner.symbol,
-            DotNetGenericInterfaceView.DECLARED,
-        )
-        val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
-            capabilityOwner.symbol,
-            view = null,
-        )
-        if (inputsByIdentity[naturalOwnerIdentity]?.role !=
-            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ||
-            inputsByIdentity[semanticOwnerIdentity]?.role !=
-            DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY
-        ) return null
         fun ownerParameterOrNull(index: Int): DotNetGenericOwnerSymbolicCarrierReference? =
             when (val binding = declarations.typeParameterOrError(naturalOwnerIdentity, index)) {
                 is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
@@ -737,7 +774,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable,
                 -> null
             }
-        val naturalResultCarrier = ownerParameterOrNull(resultParameterIndex) ?: return null
+        val naturalResultCarrier = resultBinding.carrier
         val naturalInputCarriers = parameterBindings
             .filterIsInstance<CallableParameterBinding.Owner>()
             .associate { binding ->

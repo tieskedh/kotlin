@@ -12,9 +12,12 @@ import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
+import org.jetbrains.kotlin.types.Variance
 
 /** Bounded compilation-local role of one selected CLR TypeDef. */
 internal enum class DotNetLocalGenericOwnerPhysicalTypeRole {
@@ -647,6 +650,117 @@ internal enum class DotNetLocalGenericOwnerPhysicalCallableEntryKind {
 }
 
 /**
+ * Logical result shape authenticated against the selected natural TypeDefs and owner binder.
+ *
+ * A direct owner parameter and a one-level exact construction composed directly from those
+ * parameters are both ordinary CLR result carriers. Nullability remains orthogonal: only the
+ * direct parameter form may currently request the split-nullable convention. The constructed
+ * branch consumes only a BOUND natural-interface TypeDef; it cannot create a TypeDef, choose a
+ * semantic view, recursively widen the grammar, or use Kotlin subtyping as physical evidence.
+ */
+internal data class DotNetLocalGenericOwnerPhysicalCallableResultBinding(
+    val carrier: DotNetGenericOwnerSymbolicCarrierReference,
+    val directOwnerParameterIndex: Int?,
+    val isMarkedNullable: Boolean,
+)
+
+internal fun bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+    type: IrType,
+    logicalOwner: IrClass,
+    naturalOwnerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    inputsByIdentity: Map<
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+            DotNetLocalGenericOwnerPhysicalTypeInput,
+            >,
+): DotNetGenericOwnerPhysicalBindingResult<
+        DotNetLocalGenericOwnerPhysicalCallableResultBinding,
+        > {
+    val simple = type as? IrSimpleType
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val parameter = (simple.classifier as? IrTypeParameterSymbol)?.owner
+    val parameterIndex = logicalOwner.typeParameters.indexOf(parameter)
+    if (parameterIndex >= 0) {
+        if (simple.arguments.isNotEmpty()) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        return when (val binding =
+            declarations.typeParameterOrError(naturalOwnerIdentity, parameterIndex)
+        ) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetLocalGenericOwnerPhysicalCallableResultBinding(
+                        binding.value,
+                        directOwnerParameterIndex = parameterIndex,
+                        isMarkedNullable = simple.isMarkedNullable(),
+                    ),
+                )
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    }
+
+    if (simple.isMarkedNullable()) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val resultOwner = (simple.classifier as? IrClassSymbol)?.owner
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    val resultIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+        resultOwner.symbol,
+        DotNetGenericInterfaceView.DECLARED,
+    )
+    if (inputsByIdentity[resultIdentity]?.role !=
+        DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ||
+        simple.arguments.size != resultOwner.typeParameters.size
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+    val arguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
+    for (argument in simple.arguments) {
+        val projection = argument as? IrTypeProjection
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (projection.variance != Variance.INVARIANT) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val argumentType = projection.type as? IrSimpleType
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        val argumentParameter = (argumentType.classifier as? IrTypeParameterSymbol)?.owner
+        val argumentParameterIndex = logicalOwner.typeParameters.indexOf(argumentParameter)
+        if (argumentParameterIndex < 0 || argumentType.arguments.isNotEmpty() ||
+            argumentType.isMarkedNullable()
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val carrier = when (val binding =
+            declarations.typeParameterOrError(naturalOwnerIdentity, argumentParameterIndex)
+        ) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        arguments += carrier
+    }
+    return when (val construction = declarations.constructTypeOrError(resultIdentity, arguments)) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+            DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalCallableResultBinding(
+                    construction.value,
+                    directOwnerParameterIndex = null,
+                    isMarkedNullable = false,
+                ),
+            )
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+            DotNetGenericOwnerPhysicalBindingResult.Conflict(construction.reason)
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    }
+}
+
+/**
  * Opaque logical-member-to-MethodDef relation admitted only by the BOUND local authority.
  * Physical operation proof consumes one already selected endpoint and cannot invent a family.
  */
@@ -841,20 +955,28 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                 }
             }
 
-            val logicalResultType = logicalMember.returnType as? IrSimpleType
-                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                    "a bounded local callable requires one direct owner-dependent result",
-                )
-            val resultParameter = (logicalResultType.classifier as? IrTypeParameterSymbol)?.owner
-            val resultParameterIndex = logicalOwner.typeParameters.indexOf(resultParameter)
-            if (resultParameterIndex < 0 || !semanticMember.returnType.isNullableAny()) {
+            val resultBinding = when (val binding =
+                bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                    logicalMember.returnType,
+                    logicalOwner,
+                    naturalOwnerIdentity,
+                    declarations,
+                    inputsByIdentity,
+                )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                    return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+            }
+            if (!semanticMember.returnType.isNullableAny()) {
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                    "a bounded local callable result must bind one owner parameter and one object semantic slot",
+                    "a bounded local callable result requires one object semantic slot",
                 )
             }
             val naturalResultSlot = when (val layout = natural.signature.resultLayout) {
                 is DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct -> {
-                    if (logicalResultType.isMarkedNullable()) {
+                    if (resultBinding.isMarkedNullable) {
                         return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                             "an open nullable owner result requires the split-nullable convention",
                         )
@@ -862,9 +984,11 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                     layout.slot
                 }
                 is DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable -> {
-                    if (!logicalResultType.isMarkedNullable()) {
+                    if (!resultBinding.isMarkedNullable ||
+                        resultBinding.directOwnerParameterIndex == null
+                    ) {
                         return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                            "a non-null owner result cannot use the split-nullable convention",
+                            "only a nullable direct owner result can use the split-nullable convention",
                         )
                     }
                     layout.payloadSlot
@@ -880,7 +1004,7 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                     "a semantic local callable requires one direct object result",
                 )
             if (naturalResultSlot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
-                naturalResultSlot.carrier != ownerCarriers[resultParameterIndex] ||
+                naturalResultSlot.carrier != resultBinding.carrier ||
                 semanticResult.slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
                 semanticResult.slot.carrier != objectCarrier
             ) {

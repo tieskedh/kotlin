@@ -243,12 +243,19 @@ ordinary materializing boundary. Multiple static direct-return sites are
 admitted only because every executed site terminates its path. Star/projected
 or truly broad source values never gain exact authority from a logical type.
 
-Direct constructed-parameter entry is now pinned to the live storage-read
-carrier instead of a reconstructed whole-expression carrier. Expand constructed
-entry forms only through enumerated independent emitter observations, beginning
-with the MethodDef actually selected for a direct call result; block/composite
-containers and constructor allocations remain separate proofs. Next prove the
-real caller-MethodDef `!!R` entry and additional non-materializing consumer
+Direct constructed-parameter entry is pinned to the live storage-read carrier,
+and a direct constructed result is pinned to the live result of the ordinary
+physical MethodDef resolver; neither trusts a reconstructed whole-expression
+carrier. Expand constructed forms only through enumerated independent emitter
+observations. The constructed-result declaration proof is local BOUND authority
+only; close target-TypeDef publication and consumption in the external
+physical-ABI record before claiming separate compilation. Constructor
+allocations remain a later value boundary. First let a bound exact-natural
+operation witness drive direct emission when an immutable receiver has an exact
+physical construction but a logically widened Kotlin view; the present late
+check correctly rejects that composition rather than trusting logical remapping.
+Block/composite containers remain a separate proof. Then prove the real caller-
+MethodDef `!!R` entry and additional non-materializing consumer
 categories, null/bottom/unknown split joins, and explicit representation-
 changing conversions.
 Only after those value rules stabilize should the consumer widen to captures,

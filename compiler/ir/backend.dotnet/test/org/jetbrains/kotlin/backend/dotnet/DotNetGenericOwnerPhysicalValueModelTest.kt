@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
@@ -28,6 +29,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.ir.types.impl.makeTypeProjection
 import org.jetbrains.kotlin.ir.util.IrErrorModuleFragment
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
@@ -1811,6 +1813,134 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `callable result binding preserves an authority recorded construction`() {
+        val logicalOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ConstructedSource")
+            kind = ClassKind.INTERFACE
+        }
+        val ownerParameter = logicalOwner.addTypeParameter {
+            name = Name.identifier("T")
+            variance = Variance.OUT_VARIANCE
+        }
+        val resultOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ConstructedProducer")
+            kind = ClassKind.INTERFACE
+        }
+        resultOwner.addTypeParameter {
+            name = Name.identifier("R")
+            variance = Variance.OUT_VARIANCE
+        }
+        val sourceIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            logicalOwner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val resultIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            resultOwner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val sourceInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            sourceIdentity,
+            "ConstructedSource",
+            listOf(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
+        )
+        val resultInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            resultIdentity,
+            "ConstructedProducer",
+            listOf(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
+        )
+        val declarations = boundDeclarationIndex(
+            listOf(sourceInput.asReference(), resultInput.asReference()),
+            emptyList(),
+        )
+        fun resultType(
+            nullability: SimpleTypeNullability = SimpleTypeNullability.NOT_SPECIFIED,
+            variance: Variance = Variance.INVARIANT,
+            argumentType: IrType = ownerParameter.defaultType,
+        ) = IrSimpleTypeImpl(
+            resultOwner.symbol,
+            nullability,
+            listOf(makeTypeProjection(argumentType, variance)),
+            annotations = emptyList(),
+        )
+
+        val binding = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                    DotNetLocalGenericOwnerPhysicalCallableResultBinding,
+                    >,
+                >(
+            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                resultType(),
+                logicalOwner,
+                sourceIdentity,
+                declarations,
+                listOf(sourceInput, resultInput).associateBy { input -> input.identity },
+            ),
+        ).value
+        assertEquals(
+            boundConstruction(
+                declarations,
+                resultIdentity,
+                listOf(boundTypeParameter(declarations, sourceIdentity, 0)),
+            ),
+            binding.carrier,
+        )
+        assertNull(binding.directOwnerParameterIndex)
+        assertFalse(binding.isMarkedNullable)
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                resultType(),
+                logicalOwner,
+                sourceIdentity,
+                declarations,
+                mapOf(sourceIdentity to sourceInput),
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                resultType(SimpleTypeNullability.MARKED_NULLABLE),
+                logicalOwner,
+                sourceIdentity,
+                declarations,
+                listOf(sourceInput, resultInput).associateBy { input -> input.identity },
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                resultType(variance = Variance.OUT_VARIANCE),
+                logicalOwner,
+                sourceIdentity,
+                declarations,
+                listOf(sourceInput, resultInput).associateBy { input -> input.identity },
+            ),
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                resultType(argumentType = resultType()),
+                logicalOwner,
+                sourceIdentity,
+                declarations,
+                listOf(sourceInput, resultInput).associateBy { input -> input.identity },
+            ),
+        )
+    }
+
+    @Test
     fun `suspend producers cannot enter the ordinary local MethodDef family`() {
         val logicalOwner = IrFactoryImpl.buildClass {
             name = Name.identifier("SuspendingProducer")
@@ -3385,6 +3515,19 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             declaration.parent = owner
             owner.declarations += declaration
         }
+        val constructedCallType = IrSimpleTypeImpl(
+            interfaceOwner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(makeTypeProjection(owner.typeParameters.single().defaultType, Variance.INVARIANT)),
+            annotations = emptyList(),
+        )
+        val constructedCallee = IrFactoryImpl.buildFun {
+            name = Name.identifier("produceConstruction")
+            returnType = constructedCallType
+        }.also { declaration ->
+            declaration.parent = owner
+            owner.declarations += declaration
+        }
         val ownerIdentity = localOwnerIdentity(owner.symbol as IrClassSymbolImpl)
         val interfaceIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
             interfaceOwner.symbol,
@@ -3507,6 +3650,21 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             Name.identifier("foreign"),
             owner.typeParameters.single().defaultType,
         ).symbol as IrVariableSymbolImpl
+        val callVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("call"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrCallImpl(
+                0,
+                0,
+                constructedCallType,
+                constructedCallee.symbol,
+            )
+        }.symbol as IrVariableSymbolImpl
         val parameterSource = buildVariable(
             function,
             0,
@@ -3542,6 +3700,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
                 listOf(
                     record(localVariable, localProduced, localStorage),
+                    record(callVariable, localProduced, localStorage),
                     record(parameterVariable, parameterProduced, parameterStorage),
                     record(foreignVariable, foreignProduced, foreignStorage),
                 ),
@@ -3550,6 +3709,9 @@ class DotNetGenericOwnerPhysicalValueModelTest {
 
         val retainedConstruction = assertNotNull(
             authority.retainedProducedCarrierOrNull(function.symbol, localVariable),
+        )
+        val retainedCallConstruction = assertNotNull(
+            authority.retainedProducedCarrierOrNull(function.symbol, callVariable),
         )
         assertNotNull(authority.retainedProducedCarrierOrNull(function.symbol, parameterVariable))
         assertNull(authority.retainedProducedCarrierOrNull(function.symbol, foreignVariable))
@@ -3601,6 +3763,41 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 initializerUsesControlFlowBranches = false,
             ),
             "a reconstructed exact expression must not hide an incompatible live storage slot",
+        )
+        assertEquals(
+            expectedConstruction,
+            retainedCallConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                initializerCarrier = DotNetIlValueType.Object,
+                initializerDirectStorageReadCarrier = DotNetIlValueType.Object,
+                initializerDirectCallResultCarrier = expectedConstruction,
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a direct constructed call must trust the selected MethodDef result, not a " +
+                    "whole-expression reconstruction",
+        )
+        assertNull(
+            retainedCallConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                initializerCarrier = expectedConstruction,
+                initializerDirectStorageReadCarrier = expectedConstruction,
+                initializerDirectCallResultCarrier = DotNetIlValueType.Object,
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a reconstructed exact expression must not hide an incompatible live call result",
+        )
+        assertNull(
+            retainedCallConstruction.bindEmitterCarrierOrNull(
+                typeMapper = typeMapper,
+                physicalMethodOwner = physicalOwner,
+                initializerCarrier = expectedConstruction,
+                initializerDirectStorageReadCarrier = expectedConstruction,
+                initializerDirectCallResultCarrier = null,
+                initializerUsesControlFlowBranches = false,
+            ),
+            "a direct call must fail closed when no live MethodDef result is available",
         )
         assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
