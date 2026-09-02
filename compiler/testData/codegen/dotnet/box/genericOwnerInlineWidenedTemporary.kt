@@ -15,6 +15,16 @@ interface InlineLookup<K, out V> {
     fun lookup(key: K): V?
 }
 
+interface InlineRepeatedInputLookup<K, out V> {
+    fun lookup(first: K, second: K): V?
+}
+
+// Repeated owner inputs do not yet compose with a MethodSpec. This declaration must remain
+// outside the candidate generic-interface family until that mixed vector has its own proof.
+interface InlineRepeatedMethodInputLookup<K, out V> {
+    fun <R> lookup(first: K, second: K, marker: R): V?
+}
+
 interface InlineSplitLocalProducer<out T> {
     fun read(): T?
     fun readThroughLocal(returnFirst: Boolean): T?
@@ -54,6 +64,23 @@ private class InlineArgumentSplitLocalRoute<T> : InlineLookup<T, T> {
         val exactArgumentAlias: T = key
         val exactResultAlias: T? = sourceNaturalAlias.lookup(exactArgumentAlias)
         return exactResultAlias
+    }
+}
+
+private class InlineRepeatedInputSplitLocalRoute<T> : InlineRepeatedInputLookup<T, T> {
+    override fun lookup(first: T, second: T): T? {
+        val repeatedInputSourceNaturalAlias: InlineRepeatedInputLookup<T, T> =
+            object : InlineRepeatedInputLookup<T, T> {
+                override fun lookup(first: T, second: T): T? =
+                    if (first == second) null else second
+            }
+        val repeatedFirstArgumentAlias: T = first
+        val repeatedSecondArgumentAlias: T = second
+        val repeatedInputResultAlias: T? = repeatedInputSourceNaturalAlias.lookup(
+            repeatedFirstArgumentAlias,
+            repeatedSecondArgumentAlias,
+        )
+        return repeatedInputResultAlias
     }
 }
 
@@ -307,6 +334,21 @@ fun box(): String {
     }
     if (InlineArgumentSplitLocalRoute<Int?>().lookup(null) != null) {
         return "nullable value argument split local route"
+    }
+    if (InlineRepeatedInputSplitLocalRoute<Int>().lookup(60, 61) != 61) {
+        return "value repeated-input split local route"
+    }
+    if (InlineRepeatedInputSplitLocalRoute<Int>().lookup(60, 60) != null) {
+        return "value repeated-input null split local route"
+    }
+    if (InlineRepeatedInputSplitLocalRoute<String>().lookup("first", "second") != "second") {
+        return "reference repeated-input split local route"
+    }
+    if (InlineRepeatedInputSplitLocalRoute<Int?>().lookup(null, 62) != 62) {
+        return "nullable value repeated-input split local route"
+    }
+    if (InlineRepeatedInputSplitLocalRoute<Int?>().lookup(null, null) != null) {
+        return "nullable value repeated-input null split local route"
     }
     if (InlineMethodSpecSplitLocalRoute<Int>().lookup(56) != 56) {
         return "value MethodSpec split local route"

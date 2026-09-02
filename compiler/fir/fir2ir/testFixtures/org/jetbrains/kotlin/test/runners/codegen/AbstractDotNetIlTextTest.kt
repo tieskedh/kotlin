@@ -1076,6 +1076,50 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "A strict owner input must preserve one exact !T -> !T+bool route: " +
                 retainedArgumentSplitRoute
     }
+    val retainedRepeatedInputSplitRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineRepeatedInputSplitLocalRoute") &&
+                candidate.physicalFunctionName == "lookup" &&
+                candidate.receiverVariableName == "repeatedInputSourceNaturalAlias" &&
+                candidate.logicalMemberName == "lookup"
+    }) {
+        "The repeated strict-input split call must publish one exact operation route: " +
+                snapshots.filter { candidate ->
+                    candidate.ownerName.endsWith("InlineRepeatedInputSplitLocalRoute")
+                }
+    }
+    check(retainedRepeatedInputSplitRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            retainedRepeatedInputSplitRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            retainedRepeatedInputSplitRoute.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            retainedRepeatedInputSplitRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineRepeatedInputLookup") == true &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.ownerParameterIndices == listOf(0, 0) &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineRepeatedInputSplitLocalRoute") == true
+            } && retainedRepeatedInputSplitRoute.methodArgumentCarriers.isEmpty() &&
+            retainedRepeatedInputSplitRoute.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+            retainedRepeatedInputSplitRoute.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            retainedRepeatedInputSplitRoute.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            retainedRepeatedInputSplitRoute.resultCarrierParameterBinderOwnerName
+                ?.endsWith("InlineRepeatedInputSplitLocalRoute") == true &&
+            retainedRepeatedInputSplitRoute.resultCarrierParameterIndex == 0 &&
+            retainedRepeatedInputSplitRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            retainedRepeatedInputSplitRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            retainedRepeatedInputSplitRoute.diagnostic == null) {
+        "Every exact strict owner input must preserve one !T,!T -> !T+bool route: " +
+                retainedRepeatedInputSplitRoute
+    }
     listOf(
         "readThroughLocal",
         "readThroughMaterialization",
@@ -2230,6 +2274,13 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                         "IInlineLookupKotlinSemantic" !in ilText &&
                         "'InlineArgumentSplitLocalRoute`1'" !in ilText &&
                         "InlineArgumentSplitLocalRoute\$lookup\$sourceNaturalAlias\$1`1" !in ilText &&
+                        "'InlineRepeatedInputLookup`2'" !in ilText &&
+                        "IInlineRepeatedInputLookupKotlinSemantic" !in ilText &&
+                        "'InlineRepeatedInputSplitLocalRoute`1'" !in ilText &&
+                        "InlineRepeatedInputSplitLocalRoute\$lookup\$repeatedInputSourceNaturalAlias\$1`1" !in ilText &&
+                        "repeatedInputResultAlias@isNull" !in ilText &&
+                        "'InlineRepeatedMethodInputLookup`2'" !in ilText &&
+                        "IInlineRepeatedMethodInputLookupKotlinSemantic" !in ilText &&
                         "'InlineMethodLookup`2'" !in ilText &&
                         "IInlineMethodLookupKotlinSemantic" !in ilText &&
                         "'InlineMethodSpecSplitLocalRoute`1'" !in ilText &&
@@ -2400,6 +2451,59 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         ) {
             "The strict-input split local has no recorded Boolean slot: $argumentSplitResultAlias"
         }
+        val repeatedInputSplitResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineRepeatedInputSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName == "lookup" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "repeatedInputResultAlias"
+        }
+        check(repeatedInputSplitResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val payload = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    prediction.storageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    payload.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    payload.ownerParameterIndices == listOf(0) &&
+                    payload.parameterBinderOwnerName
+                        ?.endsWith("InlineRepeatedInputSplitLocalRoute") == true &&
+                    prediction.storageCarrier == payload &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineRepeatedInputSplitLocalRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    comparison.actualStorageCarrier == payload &&
+                    comparison.actualAuxiliarySlotIndex != null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                    comparison.relation ==
+                    DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "A repeated exact strict-input call must retain its !T plus null flag: " +
+                    "result=$repeatedInputSplitResultAlias, all=$comparisons"
+        }
+        val repeatedInputSplitFlagSlot = checkNotNull(
+            repeatedInputSplitResultAlias.actualAuxiliarySlotIndex,
+        ) {
+            "The repeated-input split local has no recorded Boolean slot: " +
+                    repeatedInputSplitResultAlias
+        }
         val splitResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
                     comparison.prediction.sourceFunctionName ==
@@ -2556,6 +2660,12 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The split-local probe has no emitted IL sibling: ${splitEmittedIl.path}"
         }
         val splitIlText = splitEmittedIl.readText().removePrefix("\uFEFF")
+        check("'InlineRepeatedMethodInputLookup`2'" !in splitIlText &&
+                "IInlineRepeatedMethodInputLookupKotlinSemantic" !in splitIlText
+        ) {
+            "Repeated strict owner inputs must not widen the unproved mixed MethodSpec family: " +
+                    splitEmittedIl.path
+        }
         val splitMethodStarts = Regex("(?m)^\\s*\\.method\\b")
             .findAll(splitIlText)
             .map { match -> match.range.first }
@@ -2870,6 +2980,61 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The strict-input split local materialized or crossed a semantic route: " +
                     "forbidden=$forbiddenArgumentSplitMaterialization, " +
                     "boxing=$argumentSplitBoxing, method=$argumentSplitMethod"
+        }
+        val repeatedInputSplitMethod = splitMethodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'lookup'(") &&
+                    "'repeatedInputResultAlias'" in method &&
+                    "'repeatedInputResultAlias@isNull'" in method
+        }
+        check(repeatedInputSplitMethod != null) {
+            "Cannot isolate the repeated-input split-local MethodDef: ${splitEmittedIl.path}"
+        }
+        val repeatedInputSplitInstructions = repeatedInputSplitMethod.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        val repeatedInputSplitCalls = repeatedInputSplitInstructions.filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "'InlineRepeatedInputLookup`2'<!0, !0>::'lookup'" in line
+        }
+        val repeatedInputSplitCall = repeatedInputSplitCalls.singleOrNull()
+        check(repeatedInputSplitCall?.let { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!1\\s+class\\s+" +
+                        "'InlineRepeatedInputLookup`2'<!0,\\s*!0>::'lookup'" +
+                        "\\(!0,\\s*!0,\\s*bool&\\)$",
+            ).matches(call)
+        } == true) {
+            "Every repeated !K input must compose with the independent !V/bool result: " +
+                    "calls=$repeatedInputSplitCalls, method=$repeatedInputSplitMethod"
+        }
+        val repeatedInputSplitCallIndex =
+            repeatedInputSplitInstructions.indexOf(repeatedInputSplitCall)
+        check(repeatedInputSplitCallIndex > 2 &&
+                repeatedInputSplitInstructions[repeatedInputSplitCallIndex - 1] ==
+                "ldloca $repeatedInputSplitFlagSlot" &&
+                repeatedInputSplitInstructions
+                    .subList(repeatedInputSplitCallIndex - 3, repeatedInputSplitCallIndex - 1)
+                    .all { instruction -> instruction.startsWith("ldloc") }
+        ) {
+            "The repeated-input call must load both exact arguments before its private flag: " +
+                    "method=$repeatedInputSplitMethod"
+        }
+        val forbiddenRepeatedInputMaterialization = listOf(
+            "System.Nullable",
+            "splitNullableNonNull",
+            "splitNullableResult",
+            "KotlinSemantic",
+        ).filter(repeatedInputSplitMethod::contains)
+        val repeatedInputRepresentationChanges = repeatedInputSplitInstructions.filter { line ->
+            Regex("^(box|unbox\\.any|castclass|isinst)\\b").containsMatchIn(line)
+        }
+        check(forbiddenRepeatedInputMaterialization.isEmpty() &&
+                repeatedInputRepresentationChanges.isEmpty()) {
+            "The repeated-input split local materialized or crossed a semantic route: " +
+                    "forbidden=$forbiddenRepeatedInputMaterialization, " +
+                    "representationChanges=$repeatedInputRepresentationChanges, " +
+                    "method=$repeatedInputSplitMethod"
         }
         val methodSpecSplitResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineMethodSpecSplitLocalRoute") &&

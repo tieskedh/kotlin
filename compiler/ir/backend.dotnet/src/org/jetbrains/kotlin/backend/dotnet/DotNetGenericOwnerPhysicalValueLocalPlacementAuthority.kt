@@ -141,11 +141,8 @@ internal data class DotNetGenericOwnerPhysicalValueBoundSplitNullableCall(
         require(methodArgumentTypes.size <= 1) {
             "the bounded split-local call grammar admits at most one MethodSpec argument"
         }
-        require(
-            if (methodArgumentTypes.isEmpty()) parameterTypes.size <= 1
-            else parameterTypes.size == 2
-        ) {
-            "the bounded split-local call grammar received too many ordinary parameters"
+        require(methodArgumentTypes.isEmpty() || parameterTypes.size == 2) {
+            "the bounded MethodSpec split-local call has an incompatible ordinary parameter vector"
         }
     }
 }
@@ -324,7 +321,7 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
         val instantiatedSlots = operation.instantiatedSignature.parameterSlots
         if (declaredSlots.size != instantiatedSlots.size) return null
         val admittedDomains = when (methodArity) {
-            0 -> declaredSlots.size <= 1 && declaredSlots.all { slot ->
+            0 -> declaredSlots.all { slot ->
                 slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
             }
             1 -> declaredSlots.map { slot -> slot.domain } == listOf(

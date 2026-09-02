@@ -81,7 +81,7 @@ parameter with the field's direct `T` type. Init-block, other-field, computed,
 and other nontrivial initializers remain unavailable and fall back out of this
 proof; they are not hard user errors.
 
-Stage 7 now composes one strict owner-dependent callable input with a distinct
+Stage 7 composes one strict owner-dependent callable input with a distinct
 split-nullable owner result on a custom structural declaration. Semantic role,
 MethodDef binder, parameter domains, and result layout remain independent. The
 same grammar now also proves `<R>(K, R): V?` as
@@ -208,8 +208,10 @@ bare or constructed current-owner parameter entries, a parameterless natural
 `Direct(!n)` result, and a natural `SplitNullable(!n, bool)` result retained in
 two private locals when a positive number of reads are all bare, unprotected
 returns to the same physical MethodDef. Every retained split call consumes one
-final exact-natural operation witness; it may be parameterless or may have one
-identity-preserving `STRICT_OWNER_INPUT(!m)` and no MethodSpec. One further
+final exact-natural operation witness; without a MethodSpec it may have any
+complete ordered vector of identity-preserving `STRICT_OWNER_INPUT(!m)` slots.
+The first publication slice supplies a positive number of direct occurrences
+of one invariant input. One further
 exact shape composes `<R>(K, R): V?` with open `!K`/`!!R` inputs, an owner-bound
 `<!m>` MethodSpec, and an independent split `!V` result. Local producer members
 are bound to published contracts by declaration identity; separate consumers
@@ -226,16 +228,17 @@ empty-stack join.
 
 These proofs authorize no cast, semantic adaptation, field/state choice, ABI
 change, or fabricated construction. The split pair is not general local state:
-other multi-argument or MethodSpec calls, other control-flow shapes, captures,
+mixed-domain ordinary vectors, other MethodSpec calls, other control-flow shapes, captures,
 fields, and every non-return, mixed, protected, other-target, nested-expression,
 or sequential consumer still use their independently proven layout or the
 ordinary materializing boundary. Multiple static direct-return sites are
 admitted only because every executed site terminates its path. Star/projected
 or truly broad source values never gain exact authority from a logical type.
 
-The next sequence is: close general multi-input and remaining parameter-entry
-forms; then prove additional non-materializing consumer categories,
-null/bottom/unknown split joins, and explicit representation-changing conversions.
+The next sequence is: seed fixed declaration-independent and then remaining
+parameter-entry carriers from physical signature authority; then prove additional
+non-materializing consumer categories, null/bottom/unknown split joins, and explicit
+representation-changing conversions.
 Only after those value rules stabilize should the consumer widen to captures,
 properties, class nodes, MethodImpls, or new Runtime/Stdlib declarations.
 Broader state remains a separate producer-wide proof. A comparison surface may
