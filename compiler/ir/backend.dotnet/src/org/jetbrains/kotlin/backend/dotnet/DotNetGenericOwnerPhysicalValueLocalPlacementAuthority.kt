@@ -150,15 +150,141 @@ internal data class DotNetGenericOwnerPhysicalValueBoundSplitNullableCall(
     }
 }
 
-/** Permission to retain one authoritative split call as its typed payload plus null flag. */
+/** One exact initializer call paired with the independently bound operation it may emit. */
+internal data class DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite(
+    val call: IrCall,
+    val boundCall: DotNetGenericOwnerPhysicalValueBoundSplitNullableCall,
+)
+
+/**
+ * Late-bound, identity-keyed initializer plan for one retained payload/null-flag pair.
+ *
+ * [callsInEvaluationOrder] preserves branch order for emission. [boundCallForExactCallOrNull]
+ * deliberately uses reference identity: a later structurally similar call cannot inherit an
+ * operation decision made for a different IR node.
+ */
+internal sealed class DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer(
+    callsInEvaluationOrder: List<DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite>,
+) {
+    val callsInEvaluationOrder = callsInEvaluationOrder.toList()
+    private val callsByIdentity = IdentityHashMap<
+            IrCall,
+            DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite,
+            >()
+
+    init {
+        require(this.callsInEvaluationOrder.isNotEmpty()) {
+            "a split-nullable initializer plan requires at least one call"
+        }
+        this.callsInEvaluationOrder.forEach { site ->
+            require(callsByIdentity.put(site.call, site) == null) {
+                "a split-nullable initializer plan cannot reuse one IrCall node"
+            }
+        }
+    }
+
+    fun boundCallForExactCallOrNull(
+        call: IrCall,
+    ): DotNetGenericOwnerPhysicalValueBoundSplitNullableCall? =
+        callsByIdentity[call]?.boundCall
+
+    class DirectCall internal constructor(
+        val callSite: DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite,
+    ) : DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer(listOf(callSite))
+
+    class FlatExhaustiveWhen internal constructor(
+        val expression: IrWhen,
+        callsInEvaluationOrder: List<DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite>,
+    ) : DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer(callsInEvaluationOrder) {
+        init {
+            require(callsInEvaluationOrder.size >= 2) {
+                "a split-nullable control-flow initializer requires at least two reachable calls"
+            }
+        }
+    }
+}
+
+internal data class RetainedSplitNullableCallSite(
+    val call: IrCall,
+    val operation: DotNetGenericOwnerPhysicalOperationRoute,
+)
+
+internal sealed interface RetainedSplitNullableInitializer {
+    data class DirectCall(
+        val callSite: RetainedSplitNullableCallSite,
+    ) : RetainedSplitNullableInitializer
+
+    data class FlatExhaustiveWhen(
+        val expression: IrWhen,
+        val callsInEvaluationOrder: List<RetainedSplitNullableCallSite>,
+    ) : RetainedSplitNullableInitializer
+}
+
+/**
+ * Permission to retain one authoritative split initializer as its typed payload plus null flag.
+ *
+ * A direct call remains the smallest plan. A flat exhaustive [IrWhen] may name several mutually
+ * exclusive calls, but each exact call identity owns an independent final operation witness.
+ */
 internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal constructor(
     val payloadCarrier: DotNetGenericOwnerPhysicalCarrier,
-    private val operation: DotNetGenericOwnerPhysicalOperationRoute,
+    private val initializer: RetainedSplitNullableInitializer,
 ) {
-    fun bindEmitterCallOrNull(
+    /**
+     * Revalidates the complete live initializer before the emitter declares either pair local.
+     *
+     * Both the initializer node and every reachable call must be the exact nodes retained by
+     * final placement authority. Wrappers, nested containers, changed reachability, reordering,
+     * duplicate call nodes, and missing or additional branches therefore fail closed.
+     */
+    fun bindEmitterInitializerOrNull(
+        typeMapper: DotNetIlTypeMapper,
+        physicalMethodOwner: DotNetIlClassInfo,
+        liveInitializer: IrExpression,
+    ): DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer? {
+        return when (val plan = initializer) {
+            is RetainedSplitNullableInitializer.DirectCall -> {
+                if (liveInitializer !== plan.callSite.call) return null
+                val bound = plan.callSite.operation.bindEmitterCallOrNull(
+                    typeMapper,
+                    physicalMethodOwner,
+                ) ?: return null
+                DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer.DirectCall(
+                    DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite(
+                        plan.callSite.call,
+                        bound,
+                    ),
+                )
+            }
+            is RetainedSplitNullableInitializer.FlatExhaustiveWhen -> {
+                if (liveInitializer !== plan.expression) return null
+                val liveCalls = plan.expression.dotNetFlatExhaustiveSplitOperationCallsOrNull()
+                    ?: return null
+                if (liveCalls.size != plan.callsInEvaluationOrder.size ||
+                    liveCalls.indices.any { index ->
+                        liveCalls[index] !== plan.callsInEvaluationOrder[index].call
+                    }
+                ) return null
+                val boundSites = plan.callsInEvaluationOrder.map { site ->
+                    val bound = site.operation.bindEmitterCallOrNull(
+                        typeMapper,
+                        physicalMethodOwner,
+                    ) ?: return null
+                    DotNetGenericOwnerPhysicalValueBoundSplitNullableCallSite(site.call, bound)
+                }
+                DotNetGenericOwnerPhysicalValueBoundSplitNullableInitializer.FlatExhaustiveWhen(
+                    plan.expression,
+                    boundSites,
+                )
+            }
+        }
+    }
+
+    private fun DotNetGenericOwnerPhysicalOperationRoute.bindEmitterCallOrNull(
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
     ): DotNetGenericOwnerPhysicalValueBoundSplitNullableCall? {
+        val operation = this
         val methodIdentity = operation.method.identity as?
                 DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return null
         val methodArity = operation.method.signature.genericArity
@@ -267,6 +393,41 @@ internal class DotNetGenericOwnerPhysicalValueRetainedSplitNullable internal con
     }
 }
 
+private fun retainedSplitNullableInitializerOrNull(
+    initializer: IrExpression,
+    produced: DotNetGenericOwnerProducedValueFact,
+    authoritativeOperationsByCall: IdentityHashMap<
+            IrCall,
+            DotNetGenericOwnerPhysicalOperationRoute,
+            >,
+): RetainedSplitNullableInitializer? {
+    val calls = when (initializer) {
+        is IrCall -> listOf(initializer)
+        is IrWhen -> initializer.dotNetFlatExhaustiveSplitOperationCallsOrNull() ?: return null
+        else -> return null
+    }
+    val sites = calls.map { call ->
+        val operation = authoritativeOperationsByCall[call] ?: return null
+        RetainedSplitNullableCallSite(call, operation)
+    }
+    val operationResults = sites.map { site ->
+        site.operation.producedResult
+            ?.takeIf { result ->
+                result.layout is DotNetGenericOwnerProducedValueLayout.SplitNullable
+            }
+            ?: return null
+    }
+    val joinedOperationResult = operationResults.drop(1).fold(operationResults.first()) { joined, next ->
+        joined.joinAtIdenticalSplitNullablePayloadOrNull(next) ?: return null
+    }
+    if (joinedOperationResult != produced) return null
+    return when (initializer) {
+        is IrCall -> RetainedSplitNullableInitializer.DirectCall(sites.single())
+        is IrWhen -> RetainedSplitNullableInitializer.FlatExhaustiveWhen(initializer, sites)
+        else -> error("handled above")
+    }
+}
+
 /**
  * Final-IR local placement authority derived from the shared physical-value transfer model.
  *
@@ -304,6 +465,14 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
             authoritativeOperationsByCall:
                 Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> = emptyMap(),
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalValueLocalPlacementAuthority> {
+            val authoritativeOperationsByCallIdentity = IdentityHashMap<
+                    IrCall,
+                    DotNetGenericOwnerPhysicalOperationRoute,
+                    >().apply {
+                authoritativeOperationsByCall.forEach { entry ->
+                    put(entry.key, entry.value)
+                }
+            }
             val finalRecordsByFunction = IdentityHashMap<
                     IrFunctionSymbol,
                     IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalValueShadowRecord>,
@@ -348,10 +517,13 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                             DotNetGenericOwnerPhysicalStorageLayout.SplitNullable
                     if (split != null && splitStorage != null) {
                         val variable = record.variable.owner as? IrVariable ?: return@forEach
-                        val initializer = variable.initializer as? IrCall ?: return@forEach
-                        val operation = authoritativeOperationsByCall[initializer] ?: return@forEach
+                        val initializer = variable.initializer ?: return@forEach
+                        val initializerPlan = retainedSplitNullableInitializerOrNull(
+                            initializer,
+                            produced,
+                            authoritativeOperationsByCallIdentity,
+                        ) ?: return@forEach
                         if (split.payloadCarrier != splitStorage.primaryCarrier.carrier ||
-                            operation.producedResult != produced ||
                             !variable.hasOnlyUnprotectedDirectFunctionReturnUsesIn(record.physicalFunction.owner)
                         ) return@forEach
                         val parameter = split.payloadCarrier.type as?
@@ -371,7 +543,7 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         }[record.variable] =
                             DotNetGenericOwnerPhysicalValueRetainedSplitNullable(
                                 split.payloadCarrier,
-                                operation,
+                                initializerPlan,
                             )
                         return@forEach
                     }

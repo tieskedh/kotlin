@@ -1106,8 +1106,41 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
                 DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
                 splitLocalReadRoute.diagnostic == null) {
             "The exact split-local producer call must retain its natural !T+bool result: " +
-                    splitLocalReadRoute
+            splitLocalReadRoute
         }
+    }
+    val controlFlowSplitRoutes = snapshots.filter { candidate ->
+        candidate.ownerName.endsWith("InlineSplitLocalRoute") &&
+                candidate.physicalFunctionName == "readThroughControlFlow" &&
+                candidate.logicalMemberName == "read"
+    }
+    check(controlFlowSplitRoutes.size == 2 &&
+            controlFlowSplitRoutes.map { route -> route.receiverVariableName }.toSet() ==
+            setOf("firstNaturalAlias", "secondNaturalAlias") &&
+            controlFlowSplitRoutes.all { route ->
+                route.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+                        route.logicalSelector ==
+                        DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                        route.predictedRouteKind ==
+                        DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+                        route.methodArgumentCarriers.isEmpty() &&
+                        route.resultLayout ==
+                        DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
+                        route.resultSlotDomain ==
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                        route.resultCarrierKind ==
+                        DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+                        route.resultCarrierParameterBinderOwnerName
+                            ?.endsWith("InlineSplitLocalRoute") == true &&
+                        route.resultCarrierParameterIndex == 0 &&
+                        route.actualRoute ==
+                        DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+                        route.relation ==
+                        DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+                        route.diagnostic == null
+            }) {
+        "Every split control-flow arm must publish its own exact natural operation: " +
+                controlFlowSplitRoutes
     }
     val widenedArgumentRoute = checkNotNull(snapshots.singleOrNull { candidate ->
         candidate.ownerName.endsWith("InlineLookupRoute") &&
@@ -2205,7 +2238,8 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                         "'InlineSplitLocalProducer`1'" !in ilText &&
                         "InlineSplitLocalProducerKotlinSemantic" !in ilText &&
                         "'InlineSplitLocalRoute`1'" !in ilText &&
-                        "exactResultAlias@isNull" !in ilText
+                        "exactResultAlias@isNull" !in ilText &&
+                        "controlFlowResultAlias@isNull" !in ilText
             }) {
                 "The production-erased inverse emitted a candidate natural or semantic TypeDef or use: " +
                         emittedIl.path
@@ -2414,6 +2448,54 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "An exact natural split result must remain !T plus its null flag in local storage: " +
                     "result=$splitResultAlias, all=$comparisons"
         }
+        val controlFlowSplitResultAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
+                    comparison.prediction.sourceFunctionName ==
+                    "readThroughControlFlow" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "controlFlowResultAlias"
+        }
+        check(controlFlowSplitResultAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val payload = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    prediction.storageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    payload.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    payload.localOwnerName == null &&
+                    payload.localTypeDefView == null &&
+                    payload.ownerParameterIndices == listOf(0) &&
+                    payload.parameterBinderOwnerName?.endsWith("InlineSplitLocalRoute") == true &&
+                    payload.parameterBinderTypeDefView == null &&
+                    prediction.storageCarrier == payload &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity !=
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
+                    comparison.actualPhysicalMethodOwnerName?.endsWith("InlineSplitLocalRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE &&
+                    comparison.actualStorageCarrier == payload &&
+                    comparison.actualAuxiliarySlotIndex != null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_SPLIT_NULLABLE &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "An exact split control-flow result must remain one !T plus null-flag pair: " +
+                    "result=$controlFlowSplitResultAlias, all=$comparisons"
+        }
         val materializedSplitResult = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineSplitLocalRoute") &&
                     comparison.prediction.sourceFunctionName ==
@@ -2602,6 +2684,137 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     "forbidden=$forbiddenSplitMaterialization, " +
                     "representationChanges=$representationChangingInstructions, " +
                     "method=$splitMethod"
+        }
+        val controlFlowSplitMethod = splitMethodWindows.singleOrNull { method ->
+            method.substringBefore('{').contains("'readThroughControlFlow'(") &&
+                    "::'read'(" in method
+        }
+        check(controlFlowSplitMethod != null) {
+            "Cannot isolate the emitted readThroughControlFlow MethodDef: ${splitEmittedIl.path}"
+        }
+        val controlFlowSplitInstructions = controlFlowSplitMethod.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        val controlFlowPayloadSlot = checkNotNull(
+            Regex("\\[(\\d+)]\\s+!0\\s+'controlFlowResultAlias'\\s*,?")
+                .findAll(controlFlowSplitMethod)
+                .map { match -> match.groupValues[1].toInt() }
+                .singleOrNull(),
+        ) {
+            "The control-flow result must declare one named !T payload: $controlFlowSplitMethod"
+        }
+        val controlFlowFlagSlot = checkNotNull(
+            Regex("\\[(\\d+)]\\s+bool\\s+'controlFlowResultAlias@isNull'\\s*,?")
+                .findAll(controlFlowSplitMethod)
+                .map { match -> match.groupValues[1].toInt() }
+                .singleOrNull(),
+        ) {
+            "The control-flow result must declare one named null flag: $controlFlowSplitMethod"
+        }
+        check(controlFlowFlagSlot == controlFlowPayloadSlot + 1 &&
+                controlFlowSplitResultAlias.actualAuxiliarySlotIndex == controlFlowFlagSlot) {
+            "The control-flow result must use one adjacent authoritative pair: " +
+                    "payload=$controlFlowPayloadSlot, flag=$controlFlowFlagSlot, " +
+                    "result=$controlFlowSplitResultAlias, method=$controlFlowSplitMethod"
+        }
+        val controlFlowHeader = controlFlowSplitMethod.substringBefore('{')
+        check(Regex(
+            "'readThroughControlFlow'\\(\\s*bool\\s+[^,]+,\\s*" +
+                    "\\[out]\\s+bool&\\s+[^)]+\\)",
+        ).containsMatchIn(controlFlowHeader)) {
+            "The control-flow method must expose its source selector and final out flag: " +
+                    controlFlowHeader
+        }
+        val controlFlowCalls = controlFlowSplitInstructions.filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "::'read'(" in line
+        }
+        check(controlFlowCalls.size == 2 && controlFlowCalls.all { call ->
+            Regex(
+                "^callvirt\\s+instance\\s+!0\\s+class\\s+" +
+                        "'InlineSplitLocalProducer`1'<!0>::'read'\\(bool&\\)$",
+            ).matches(call)
+        }) {
+            "Both control-flow arms must retain their natural !T/bool operation: " +
+                    "calls=$controlFlowCalls, method=$controlFlowSplitMethod"
+        }
+        val controlFlowPayloadStore = if (controlFlowPayloadSlot in 0..3) {
+            "stloc.$controlFlowPayloadSlot"
+        } else {
+            "stloc $controlFlowPayloadSlot"
+        }
+        val controlFlowCallIndices = controlFlowSplitInstructions.indices.filter { index ->
+            controlFlowSplitInstructions[index] in controlFlowCalls
+        }
+        check(controlFlowCallIndices.size == 2 && controlFlowCallIndices.all { index ->
+            index > 0 && index + 1 < controlFlowSplitInstructions.size &&
+                    controlFlowSplitInstructions[index - 1] == "ldloca $controlFlowFlagSlot" &&
+                    controlFlowSplitInstructions[index + 1] == controlFlowPayloadStore
+        }) {
+            "Every branch call must write directly into the same flag/payload pair: " +
+                    "indices=$controlFlowCallIndices, payload=$controlFlowPayloadSlot, " +
+                    "flag=$controlFlowFlagSlot, method=$controlFlowSplitMethod"
+        }
+        val controlFlowSelectorBranches = controlFlowSplitInstructions.windowed(2).filter { pair ->
+            pair[0] == "ldarg.1" &&
+                    Regex("^brfalse(?:\\.s)?\\s+\\S+$").matches(pair[1])
+        }
+        val firstControlFlowStoreIndex = controlFlowCallIndices.first() + 1
+        val joinBranch = controlFlowSplitInstructions.getOrNull(firstControlFlowStoreIndex + 1)
+        val joinLabel = joinBranch?.let { branch ->
+            Regex("^br(?:\\.s)?\\s+(\\S+)$").matchEntire(branch)?.groupValues?.get(1)
+        }
+        val secondControlFlowStoreIndex = controlFlowCallIndices.last() + 1
+        check(controlFlowSelectorBranches.size == 1 && joinLabel != null &&
+                controlFlowSplitInstructions.count { line -> line == "$joinLabel:" } == 1 &&
+                controlFlowSplitInstructions.getOrNull(secondControlFlowStoreIndex + 1) ==
+                "$joinLabel:") {
+            "The mutually exclusive calls must join once after both payload stores: " +
+                    "selector=$controlFlowSelectorBranches, join=$joinLabel, " +
+                    "method=$controlFlowSplitMethod"
+        }
+        val controlFlowFlagLoad = if (controlFlowFlagSlot in 0..3) {
+            "ldloc.$controlFlowFlagSlot"
+        } else {
+            "ldloc $controlFlowFlagSlot"
+        }
+        val controlFlowPayloadLoad = if (controlFlowPayloadSlot in 0..3) {
+            "ldloc.$controlFlowPayloadSlot"
+        } else {
+            "ldloc $controlFlowPayloadSlot"
+        }
+        val controlFlowReturnSlice = listOf(
+            "ldarg.2",
+            controlFlowFlagLoad,
+            "stind.i1",
+            controlFlowPayloadLoad,
+            "ret",
+        )
+        check(controlFlowSplitInstructions.windowed(controlFlowReturnSlice.size)
+            .count { window -> window == controlFlowReturnSlice } == 1 &&
+                controlFlowSplitInstructions.count { line -> line == "ret" } == 1) {
+            "The joined pair must be forwarded once through the enclosing split result: " +
+                    "expected=$controlFlowReturnSlice, method=$controlFlowSplitMethod"
+        }
+        val forbiddenControlFlowMaterialization = listOf(
+            "System.Nullable",
+            "splitNullableNonNull",
+            "splitNullableResult",
+            "KotlinSemantic",
+            "<splitNullableSource>",
+            "<splitNullablePayload>",
+            "<splitNullableIsNull>",
+        ).filter(controlFlowSplitMethod::contains)
+        val controlFlowRepresentationChanges = controlFlowSplitInstructions.filter { line ->
+            Regex("^(box|unbox\\.any|castclass|isinst)\\b").containsMatchIn(line)
+        }
+        check(forbiddenControlFlowMaterialization.isEmpty() &&
+                controlFlowRepresentationChanges.isEmpty()) {
+            "The control-flow pair materialized or crossed a semantic route: " +
+                    "forbidden=$forbiddenControlFlowMaterialization, " +
+                    "representationChanges=$controlFlowRepresentationChanges, " +
+                    "method=$controlFlowSplitMethod"
         }
         val argumentSplitMethod = splitMethodWindows.singleOrNull { method ->
             method.substringBefore('{').contains("'lookup'(") &&

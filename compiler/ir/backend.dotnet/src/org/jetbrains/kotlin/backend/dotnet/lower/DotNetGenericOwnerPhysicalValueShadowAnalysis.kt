@@ -45,8 +45,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.dotNetFlatExhaustiveSplitOperationCallsOrNull
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.hasOnlyUnprotectedDirectFunctionReturnUsesIn
+import org.jetbrains.kotlin.backend.dotnet.joinAtIdenticalSplitNullablePayloadOrNull
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
@@ -351,7 +353,10 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             }
             val produced = evaluateInitializerOrNull(initializer, storage)
             if (produced == null) {
-                records += diagnostic.unsupported("initializer is outside the shadow transfer grammar")
+                records += diagnostic.unsupported(
+                    "initializer is outside the shadow transfer grammar: " +
+                            initializer.physicalValueTransferShape(),
+                )
                 return false
             }
             val selection = selectStorageCarrierOrNull(variable, produced, ownerAuthority)
@@ -398,7 +403,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             ownerAuthority: OwnerAuthority,
         ): SelectedStorage? {
             variable.type.nullableCurrentOwnerParameterIndexOrNull(owner)?.let { index ->
-                if (variable.initializer !is IrCall ||
+                if ((variable.initializer !is IrCall && variable.initializer !is IrWhen) ||
                     !variable.hasOnlyUnprotectedDirectFunctionReturnUsesIn(physical)
                 ) return null
                 val enclosingPayloadIndex = context.splitNullableResultPayloadTypes[physical]
@@ -510,6 +515,23 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             is IrBlock -> evaluateContainerOrNull(expression.statements, storage)
             is IrComposite -> evaluateContainerOrNull(expression.statements, storage)
             else -> null
+        }
+
+        private fun IrExpression.physicalValueTransferShape(depth: Int = 0): String {
+            if (depth >= 3) return javaClass.simpleName
+            fun IrStatement.nestedShape(): String =
+                (this as? IrExpression)?.physicalValueTransferShape(depth + 1)
+                    ?: javaClass.simpleName
+            return when (this) {
+                is IrWhen -> "IrWhen[" + branches.joinToString { branch ->
+                    branch.result.physicalValueTransferShape(depth + 1)
+                } + "]"
+                is IrTypeOperatorCall ->
+                    "IrTypeOperatorCall($operator, ${argument.physicalValueTransferShape(depth + 1)})"
+                is IrBlock -> "IrBlock[" + statements.joinToString { it.nestedShape() } + "]"
+                is IrComposite -> "IrComposite[" + statements.joinToString { it.nestedShape() } + "]"
+                else -> javaClass.simpleName
+            }
         }
 
         /**
@@ -722,6 +744,9 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             expression: IrWhen,
             storage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         ): DotNetGenericOwnerProducedValueFact? {
+            if (expression.type.nullableCurrentOwnerParameterIndexOrNull(owner) != null) {
+                return evaluateSplitNullableWhenResultOrNull(expression, storage)
+            }
             val ownerAuthority = authority ?: return null
             val logicalOwner = ((expression.type as? IrSimpleType)?.classifier as? IrClassSymbol)
                 ?: return null
@@ -754,6 +779,32 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
                         error("Internal .NET backend error: ${result.reason}")
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                }
+            }
+            return joined
+        }
+
+        /**
+         * Joins the first flat split-result control-flow shape without selecting a carrier from the
+         * logical `T?` result. Every statically reachable arm must remain one bare call, optionally
+         * inside FIR2IR's single-expression braced-arm block, whose final exact-natural operation
+         * already produced the identical split payload. Null, bottom, non-transparent containers,
+         * nested control flow, and ordinary/materialized results remain unavailable.
+         */
+        private fun evaluateSplitNullableWhenResultOrNull(
+            expression: IrWhen,
+            storage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val calls = expression.dotNetFlatExhaustiveSplitOperationCallsOrNull() ?: return null
+            var joined: DotNetGenericOwnerProducedValueFact? = null
+            for (call in calls) {
+                val result = evaluateCallResultOrNull(call, LinkedHashMap(storage)) ?: return null
+                if (result.layout !is DotNetGenericOwnerProducedValueLayout.SplitNullable) return null
+                val previous = joined
+                joined = if (previous == null) {
+                    result
+                } else {
+                    previous.joinAtIdenticalSplitNullablePayloadOrNull(result) ?: return null
                 }
             }
             return joined
