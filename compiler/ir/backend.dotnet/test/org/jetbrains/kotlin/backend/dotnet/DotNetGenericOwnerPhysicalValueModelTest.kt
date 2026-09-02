@@ -2489,6 +2489,153 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `mixed operation vector selects only an exact fixed and repeated strict input match`() {
+        val owner = localOwnerIdentity(IrClassSymbolImpl())
+        val natural = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            IrClassSymbolImpl(),
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val method = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            IrSimpleFunctionSymbolImpl(),
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val types = listOf(
+            typeDescription(owner, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(natural, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+        )
+        val provisional = boundDeclarationIndex(types, emptyList())
+        val ownerK = boundTypeParameter(provisional, owner, 0)
+        val ownerV = boundTypeParameter(provisional, owner, 1)
+        val naturalK = boundTypeParameter(provisional, natural, 0)
+        val naturalV = boundTypeParameter(provisional, natural, 1)
+        val methodReference = callableMethodDescription(
+            identity = method,
+            declaringType = natural,
+            parameterSlots = listOf(
+                callableSlot(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT, naturalK),
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier(),
+                ),
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    int32Type(),
+                ),
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    stringType(),
+                ),
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    objectType(),
+                ),
+                callableSlot(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT, naturalK),
+            ),
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
+                callableSlot(DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT, naturalV),
+            ),
+        )
+        val naturalTemplate = boundConstruction(provisional, natural, listOf(ownerK, ownerV))
+        val declarations = boundDeclarationIndex(
+            types,
+            listOf(methodReference),
+            edgeSets = listOf(
+                edgeSet(owner, baseEdge(objectType()), interfaceEdge(naturalTemplate)),
+                edgeSet(natural),
+            ),
+        )
+        val ownerConstruction = boundConstruction(
+            declarations,
+            owner,
+            listOf(int32Type(), stringType()),
+        )
+        val naturalConstruction = boundConstruction(
+            declarations,
+            natural,
+            listOf(int32Type(), stringType()),
+        )
+        val receiver = directValue(boundCarrier(declarations, ownerConstruction))
+        fun value(type: DotNetGenericOwnerSymbolicCarrierReference) =
+            directValue(boundCarrier(declarations, type))
+
+        val exactArguments = listOf(
+            value(int32Type()),
+            value(DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier()),
+            value(int32Type()),
+            value(stringType()),
+            value(objectType()),
+            value(int32Type()),
+        )
+        val route = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationRoute,
+                >>(
+            selectDotNetGenericOwnerPhysicalOperationRoute(
+                declarations,
+                method,
+                DotNetGenericOwnerPhysicalOperationRouteRequest(view(naturalConstruction)),
+                receiver,
+                exactArguments,
+            ),
+        ).value
+
+        assertEquals(
+            listOf(
+                int32Type(),
+                DotNetGenericOwnerSymbolicCarrierReference.booleanCarrier(),
+                int32Type(),
+                stringType(),
+                objectType(),
+                int32Type(),
+            ),
+            route.instantiatedSignature.parameterSlots.map { it.carrier },
+        )
+        assertEquals(
+            listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            ),
+            route.instantiatedSignature.parameterSlots.map { it.domain },
+        )
+        assertEquals(
+            stringType(),
+            assertIs<DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable>(
+                route.instantiatedSignature.resultLayout,
+            ).payloadSlot.carrier,
+        )
+        assertEquals(
+            DotNetGenericOwnerProducedValueLayout.SplitNullable(
+                boundCarrier(declarations, stringType()),
+            ),
+            assertNotNull(route.producedResult).layout,
+        )
+
+        fun assertUnavailable(arguments: List<DotNetGenericOwnerProducedValueFact>) {
+            assertEquals(
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                selectDotNetGenericOwnerPhysicalOperationRoute(
+                    declarations,
+                    method,
+                    DotNetGenericOwnerPhysicalOperationRouteRequest(view(naturalConstruction)),
+                    receiver,
+                    arguments,
+                ),
+            )
+        }
+
+        assertUnavailable(exactArguments.toMutableList().also { it[1] = value(int32Type()) })
+        assertUnavailable(exactArguments.toMutableList().also { it[2] = value(stringType()) })
+        assertUnavailable(exactArguments.toMutableList().also { it[3] = value(objectType()) })
+        assertUnavailable(exactArguments.toMutableList().also { it[5] = value(objectType()) })
+        assertUnavailable(exactArguments.toMutableList().also { it[5] = value(stringType()) })
+        assertUnavailable(exactArguments.dropLast(1))
+        assertUnavailable(exactArguments + value(int32Type()))
+    }
+
+    @Test
     fun `owner and method inputs compose with a split nullable owner result`() {
         val owner = localOwnerIdentity(IrClassSymbolImpl())
         val natural = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(

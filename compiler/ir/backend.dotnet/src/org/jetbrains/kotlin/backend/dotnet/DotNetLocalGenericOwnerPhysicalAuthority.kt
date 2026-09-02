@@ -774,15 +774,7 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                     ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                         "a bounded local callable parameter requires a direct physical carrier",
                     )
-                if (logicalType.isMarkedNullable()) {
-                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a bounded local callable parameter cannot use a nullable generic carrier",
-                    )
-                }
                 val logicalParameter = (logicalType.classifier as? IrTypeParameterSymbol)?.owner
-                    ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a bounded local callable parameter must bind an owner or MethodDef parameter",
-                    )
                 val ownerIndex = logicalOwner.typeParameters.indexOf(logicalParameter)
                 val methodIndex = logicalMember.typeParameters.indexOf(logicalParameter)
                 val expectedDomain: DotNetGenericOwnerPhysicalSlotDomain
@@ -791,7 +783,7 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                 val semanticType = semanticParameters[index].type
                 when {
                     ownerIndex >= 0 -> {
-                        if (!semanticType.isNullableAny()) {
+                        if (logicalType.isMarkedNullable() || !semanticType.isNullableAny()) {
                             return DotNetGenericOwnerPhysicalBindingResult.Conflict(
                                 "an owner-input semantic slot must use the object carrier",
                             )
@@ -802,6 +794,11 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                     }
                     methodIndex >= 0 &&
                             semanticType == semanticMember.typeParameters[methodIndex].defaultType -> {
+                        if (logicalType.isMarkedNullable()) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                                "a MethodDef-parameter input cannot use a nullable generic carrier",
+                            )
+                        }
                         expectedDomain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
                         expectedNaturalCarrier =
                             DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
@@ -814,9 +811,22 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                                 methodIndex,
                             )
                     }
-                    else -> return DotNetGenericOwnerPhysicalBindingResult.Conflict(
-                        "a bounded local callable parameter has incompatible physical provenance",
-                    )
+                    else -> {
+                        val naturalLeaf = logicalType
+                            .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+                            ?.declarationIndependentLeafCarrierOrNull()
+                        val semanticLeaf = semanticType
+                            .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+                            ?.declarationIndependentLeafCarrierOrNull()
+                        if (naturalLeaf == null || naturalLeaf != semanticLeaf) {
+                            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                                "a bounded local callable parameter has incompatible physical provenance",
+                            )
+                        }
+                        expectedDomain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                        expectedNaturalCarrier = naturalLeaf
+                        expectedSemanticCarrier = naturalLeaf
+                    }
                 }
                 val naturalSlot = natural.signature.parameterSlots[index]
                 val semanticSlot = semantic.signature.parameterSlots[index]

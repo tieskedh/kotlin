@@ -46,7 +46,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetFlatExhaustiveSplitOperationCallsOrNull
+import org.jetbrains.kotlin.backend.dotnet.declarationIndependentLeafCarrierOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.isDeclarationIndependentLeafCarrier
 import org.jetbrains.kotlin.backend.dotnet.hasOnlyUnprotectedDirectFunctionReturnUsesIn
 import org.jetbrains.kotlin.backend.dotnet.joinAtIdenticalSplitNullablePayloadOrNull
 import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamilyOrError
@@ -99,6 +102,14 @@ import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.types.Variance
 import java.util.IdentityHashMap
+
+private data class DotNetGenericOwnerPhysicalEntryPrototypeParameters(
+    val currentTypes: Map<IrValueSymbol, IrType>,
+    val fixedLeafCarriers: Map<
+            IrValueSymbol,
+            DotNetGenericOwnerSymbolicCarrierReference,
+            >,
+)
 
 /**
  * Production-inert generic-owner physical-value transfer analysis.
@@ -247,19 +258,34 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 }
             })
 
+            val fixedLeafEntryStorage = IdentityHashMap<
+                    IrValueSymbol,
+                    DotNetGenericOwnerPhysicalStorageFact,
+                    >()
             authority?.let { ownerAuthority ->
                 val prototypeParameters = entryPrototypeParametersOrNull()
                 physical.parameters.forEach { parameter ->
                     when {
                         parameter === physical.dispatchReceiverParameter ->
                             storageByValue[parameter.symbol] = ownerAuthority.receiverStorage
-                        parameter.kind == IrParameterKind.Regular ->
-                            plannedEntryStorageOrNull(
-                                prototypeParameters?.get(parameter.symbol),
+                        parameter.kind == IrParameterKind.Regular -> {
+                            val storage = plannedEntryStorageOrNull(
+                                prototypeParameters?.currentTypes?.get(parameter.symbol),
                                 ownerAuthority,
-                            )?.let { storage ->
+                            )
+                            if (storage != null) {
                                 storageByValue[parameter.symbol] = storage
-                            } ?: if (parameter.type.isObjectShadowType()) {
+                                val fixedLeaf = prototypeParameters
+                                    ?.fixedLeafCarriers
+                                    ?.get(parameter.symbol)
+                                if (fixedLeaf != null &&
+                                    storage.storageLayout is
+                                        DotNetGenericOwnerPhysicalStorageLayout.Direct &&
+                                    storage.storageLayout.primaryCarrier.carrier.type == fixedLeaf
+                                ) {
+                                    fixedLeafEntryStorage[parameter.symbol] = storage
+                                }
+                            } else if (parameter.type.isObjectShadowType()) {
                                 // Object is a conservative fallback for generated helpers which
                                 // have no detached member prototype. It cannot manufacture an
                                 // exact view or narrow an independently broad value.
@@ -267,8 +293,20 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                                     parameter.type,
                                     ownerAuthority,
                                 )
-                            } else Unit
+                            }
+                        }
                     }
+                }
+            }
+            if (phase == DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING) {
+                check(
+                    context.genericOwnerPhysicalValueFixedLeafEntryStorageByFunction.put(
+                        physical.symbol,
+                        fixedLeafEntryStorage,
+                    ) == null,
+                ) {
+                    "Internal .NET backend error: one physical function received multiple " +
+                            "final fixed-leaf entry-storage vectors"
                 }
             }
 
@@ -629,7 +667,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                                         carrier.type == instantiatedResult.payloadSlot.carrier
                                     } && instantiatedResult.payloadSlot.carrier ==
                                 produced.layout.payloadCarrier.type
-                        val hasExactStrictOwnerInputVector =
+                        val hasExactNonMethodInputVector =
                             ordinaryParameters.size == declaredSlots.size &&
                                     declaredSlots.size == slots.size &&
                                     source.typeParameters.isEmpty() &&
@@ -637,17 +675,25 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                                     selectedRoute.instantiatedSignature.genericArity == 0 &&
                                     selectedRoute.method.genericParameters.isEmpty() &&
                                     selectedRoute.methodArguments.isEmpty() &&
-                                    declaredSlots.all { slot ->
-                                        slot.domain ==
-                                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
-                                                slot.carrier.isTypeParameterOf(
+                                    declaredSlots.zip(slots).all { pair ->
+                                        val declared = pair.first
+                                        val instantiated = pair.second
+                                        if (declared.domain != instantiated.domain) {
+                                            false
+                                        } else when (declared.domain) {
+                                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT ->
+                                                declared.carrier.isTypeParameterOf(
                                                     selectedRoute.method.declaringType,
-                                                )
-                                    } && slots.map { slot -> slot.domain } ==
-                                declaredSlots.map { slot -> slot.domain } &&
-                                    slots.all { slot ->
-                                        ownerAuthority.ownerParameterCarriers.any { carrier ->
-                                            carrier.type == slot.carrier
+                                                ) && ownerAuthority.ownerParameterCarriers.any { carrier ->
+                                                    carrier.type == instantiated.carrier
+                                                }
+                                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ->
+                                                declared.carrier.isDeclarationIndependentLeafCarrier() &&
+                                                        instantiated.carrier == declared.carrier
+                                            DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+                                            DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                                            -> false
                                         }
                                     }
                         val methodArgument = selectedRoute.methodArguments.singleOrNull()
@@ -675,7 +721,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                                         carrier.type == slots[0].carrier
                                     } && slots[1].carrier == methodArgument
                         hasExactOwnerSplitResult &&
-                                (hasExactStrictOwnerInputVector || hasBoundedOwnerMethodInputVector)
+                                (hasExactNonMethodInputVector || hasBoundedOwnerMethodInputVector)
                     }
                     DotNetGenericOwnerProducedValueLayout.Null,
                     DotNetGenericOwnerProducedValueLayout.Unknown,
@@ -889,7 +935,8 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
          * and parameter names are deliberately not consulted. A missing or changed vector yields
          * no exact seed and will later fail closed.
          */
-        private fun entryPrototypeParametersOrNull(): Map<IrValueSymbol, IrType>? {
+        private fun entryPrototypeParametersOrNull():
+                DotNetGenericOwnerPhysicalEntryPrototypeParameters? {
             val familyRole = when (role) {
                 DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY,
                 DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER,
@@ -900,20 +947,56 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             if (role != DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
                 physical !== source
             ) return null
-            val prototype = plan.prototypeMembers[source]?.get(familyRole) ?: return null
+            val prototypes = plan.prototypeMembers[source] ?: return null
+            val prototype = prototypes[familyRole] ?: return null
+            val typedPrototype = prototypes[DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY]
+                ?: return null
             if (prototype.source !== source || prototype.function.parent !== owner) return null
+            if (typedPrototype.source !== source || typedPrototype.function.parent !== owner) return null
             val physicalParameters = physical.parameters.filter { parameter ->
                 parameter.kind != IrParameterKind.DispatchReceiver
             }
             val plannedParameters = prototype.function.parameters.filter { parameter ->
                 parameter.kind != IrParameterKind.DispatchReceiver
             }
-            if (physicalParameters.size != plannedParameters.size ||
-                physicalParameters.zip(plannedParameters).any { pair -> pair.first.kind != pair.second.kind }
-            ) return null
-            return physicalParameters.zip(plannedParameters).associate { pair ->
-                pair.first.symbol to pair.second.type
+            val typedParameters = typedPrototype.function.parameters.filter { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver
             }
+            if (physicalParameters.size != plannedParameters.size ||
+                physicalParameters.size != typedParameters.size ||
+                physicalParameters.indices.any { index ->
+                    physicalParameters[index].kind != plannedParameters[index].kind ||
+                            physicalParameters[index].kind != typedParameters[index].kind
+                }
+            ) return null
+            val currentTypes = physicalParameters.indices.associateTo(
+                IdentityHashMap<IrValueSymbol, IrType>(),
+            ) { index -> physicalParameters[index].symbol to plannedParameters[index].type }
+            val regularIndices = physicalParameters.indices.filter { index ->
+                physicalParameters[index].kind == IrParameterKind.Regular
+            }
+            val parameterDomains = plan.memberFamilies[source]
+                ?.parameterSlotDomains
+                ?.takeIf { domains -> domains.size == regularIndices.size }
+            val fixedLeafCarriers = regularIndices.mapIndexedNotNull { regularIndex, index ->
+                if (parameterDomains?.get(regularIndex) !=
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                ) return@mapIndexedNotNull null
+                val currentLeaf = plannedParameters[index].type
+                    .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+                    ?.declarationIndependentLeafCarrierOrNull()
+                    ?: return@mapIndexedNotNull null
+                val typedLeaf = typedParameters[index].type
+                    .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+                    ?.declarationIndependentLeafCarrierOrNull()
+                    ?: return@mapIndexedNotNull null
+                (physicalParameters[index].symbol to currentLeaf)
+                    .takeIf { currentLeaf == typedLeaf }
+            }.toMap(IdentityHashMap<IrValueSymbol, DotNetGenericOwnerSymbolicCarrierReference>())
+            return DotNetGenericOwnerPhysicalEntryPrototypeParameters(
+                currentTypes,
+                fixedLeafCarriers,
+            )
         }
 
         private fun plannedEntryStorageOrNull(
@@ -923,6 +1006,32 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             plannedType ?: return null
             if (plannedType.isObjectShadowType()) {
                 return objectEntryStorage(plannedType, ownerAuthority)
+            }
+            val declarationIndependentLeaf = plannedType
+                .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+                ?.declarationIndependentLeafCarrierOrNull()
+            if (declarationIndependentLeaf != null) {
+                val carrier = when (val binding = ownerAuthority.declarations.carrierOrError(
+                    declarationIndependentLeaf,
+                )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                }
+                return DotNetGenericOwnerPhysicalStorageFact(
+                    DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                        DotNetGenericOwnerStorageCarrier.Fixed(carrier),
+                    ),
+                    DotNetGenericOwnerPhysicalValueProvenance(
+                        DotNetGenericOwnerGuaranteedViews.Unknown,
+                    ),
+                    if (carrier.canRepresentNull) {
+                        DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+                    } else {
+                        DotNetGenericOwnerPhysicalNullState.NON_NULL
+                    },
+                )
             }
             if ((plannedType as? IrSimpleType)?.arguments?.isNotEmpty() == true) {
                 val naturalView = when (val binding = bindExactLocalGenericOwnerNaturalViewOrError(

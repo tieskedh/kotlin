@@ -167,19 +167,27 @@ The positive-N terminal-return extension is recorded in the
 [multiple-direct-returns archive](../archive/generic-owner-physical-split-nullable-multiple-direct-returns-2026-09-02.md).
 General exception paths, control-flow joins, fields, and acceptance remain open.
 
-The second local-transport slice permits exactly one ordinary argument on that
-same operation witness. It does not infer safety from the result layout: the
-sole instantiated slot must be `STRICT_OWNER_INPUT` with an identity-preserving current-owner
-carrier, and the MethodSpec vector must be empty. Placement retains the complete
-MethodDef/receiver/parameter/result witness. Emission re-resolves the live
-virtual MethodDef, requires one unique recorded receiver view, verifies direct
-storage reads for receiver and argument, and uses a private Boolean local as the
-nested call's null-flag address, never the enclosing flag. The interface
-MethodDef's independent `!K`/`!V` binder positions are
-preserved even when the concrete proof binds both to one outer type parameter.
-Additional ordinary arguments and every MethodSpec remain outside this second
-slice. Evidence is in the
-[strict-input local-placement archive](../archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md).
+The second local-transport slice began with one strict ordinary argument and
+now consumes a complete empty-MethodSpec vector. Every slot is independently
+either `STRICT_OWNER_INPUT` with an identity-preserving current-owner carrier,
+or a fixed `DECLARATION_INDEPENDENT` Boolean, Int32, String, or Object leaf
+whose natural and semantic MethodDefs agree. Placement retains the complete
+MethodDef/receiver/parameter/result witness. The hand-off to operation routing
+admits only a regular parameter whose producer-planned slot domain is
+`DECLARATION_INDEPENDENT`, whose typed and current physical prototypes carry
+the same supported fixed leaf, and whose final storage is
+`Direct(Fixed(the same leaf))`; owner, constructed, broad semantic-object,
+fallback-object, and MethodDef-binder facts remain excluded. Emission
+re-resolves the live virtual MethodDef, requires one unique recorded receiver
+view, validates every ordered live argument, and uses a private Boolean local
+as the nested call's null-flag address, never the enclosing flag. The interface MethodDef's independent `!K`/`!V` binder
+positions remain distinct even when both bind to one outer type parameter.
+Evidence is in the
+[strict-input](../archive/generic-owner-physical-split-nullable-strict-input-placement-2026-09-02.md),
+[repeated-input](../archive/generic-owner-physical-split-nullable-repeated-input-placement-2026-09-02.md),
+and [fixed-input](../archive/generic-owner-physical-split-nullable-fixed-input-placement-2026-09-02.md)
+archives. Unsupported/nested carriers and fixed leaves combined with a
+MethodSpec remain unavailable.
 
 The third local-transport slice admits exactly one MethodSpec-bearing operation
 shape: `<R>(K, R): V?`. Its retained authority contains both the declaration-

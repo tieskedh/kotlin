@@ -67,8 +67,10 @@ import java.util.IdentityHashMap
  * A BOUND exact-natural operation may remove an older conservative local semantic target when
  * the logical route does not mandate a semantic-result contract. This is the first authoritative
  * operation consumer: declaration authority still chooses the MethodDef, value provenance only
- * proves its receiver and arguments, and no IR or carrier is rewritten. Calls without one unique
- * successful POST storage fact are deliberately omitted from this bounded comparison.
+ * proves its receiver and arguments, and no IR or carrier is rewritten. Only final regular-
+ * parameter facts whose typed and current physical prototypes agree on one fixed declaration-
+ * independent leaf cross the entry boundary; calls without one unique successful POST local or
+ * admitted fixed-leaf entry storage fact are deliberately omitted from this bounded comparison.
  */
 internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
     private val context: DotNetBackendContext,
@@ -114,10 +116,14 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             val owner = function.parent as? IrClass ?: continue
             val storageByValue = IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>()
             val conflictingValues = Collections.newSetFromMap(IdentityHashMap<IrValueSymbol, Boolean>())
+            context.genericOwnerPhysicalValueFixedLeafEntryStorageByFunction[functionSymbol]
+                ?.forEach { entryStorage ->
+                    storageByValue[entryStorage.key] = entryStorage.value
+                }
             for (record in records) {
                 val storage = record.predictedStorage ?: continue
                 val existing = storageByValue.put(record.variable, storage)
-                if (existing != null) conflictingValues += record.variable
+                if (existing != null && existing != storage) conflictingValues += record.variable
             }
             function.body?.acceptVoid(object : IrVisitorVoid() {
                 override fun visitElement(element: IrElement) {
