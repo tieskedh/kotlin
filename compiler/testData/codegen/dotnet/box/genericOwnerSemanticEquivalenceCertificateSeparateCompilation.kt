@@ -46,6 +46,42 @@ private fun externalStringValue(value: SemanticEquivalenceCertificateValue<Strin
     return widened.value()
 }
 
+// These controls must not acquire an exact carrier merely because the producer published K/J.
+// Their receiver either enters broad, loses construction agreement, is mutable, or depends on a
+// caller MethodDef binder which the first external routing gate deliberately does not bind.
+private fun externalBroadValue(value: SemanticEquivalenceCertificateProducer<Any?>): Any? =
+    value.value()
+
+private fun externalStarValue(value: SemanticEquivalenceCertificateProducer<*>): Any? =
+    value.value()
+
+private fun externalJoinedValue(
+    selectInt: Boolean,
+    intValue: SemanticEquivalenceCertificateProducer<Any?>,
+    stringValue: SemanticEquivalenceCertificateProducer<Any?>,
+): Any? {
+    val widened: SemanticEquivalenceCertificateProducer<Any?> =
+        if (selectInt) intValue else stringValue
+    return widened.value()
+}
+
+private fun externalMutableValue(
+    retainInt: Boolean,
+    intValue: SemanticEquivalenceCertificateProducer<Any?>,
+    stringValue: SemanticEquivalenceCertificateProducer<Any?>,
+): Any? {
+    var widened: SemanticEquivalenceCertificateProducer<Any?> = intValue
+    if (!retainInt) widened = stringValue
+    return widened.value()
+}
+
+private fun <T> externalCallerMethodGenericValue(
+    value: SemanticEquivalenceCertificateValue<T>,
+): Any? {
+    val widened: SemanticEquivalenceCertificateProducer<Any?> = value
+    return widened.value()
+}
+
 private fun externalMethodIntValue(
     value: SemanticEquivalenceMethodCertificateValue<Int>,
 ): Any? {
@@ -75,6 +111,31 @@ fun box(): String {
     if (stringImplementation.widenedValue() != "certificate") return "FAIL: local widened String"
     if (externalStringValue(stringImplementation) != "certificate") {
         return "FAIL: external widened String"
+    }
+    if (externalBroadValue(intImplementation) != 41 ||
+        externalBroadValue(stringImplementation) != "certificate"
+    ) {
+        return "FAIL: external broad"
+    }
+    if (externalStarValue(intImplementation) != 41 ||
+        externalStarValue(stringImplementation) != "certificate"
+    ) {
+        return "FAIL: external star"
+    }
+    if (externalJoinedValue(true, intImplementation, stringImplementation) != 41 ||
+        externalJoinedValue(false, intImplementation, stringImplementation) != "certificate"
+    ) {
+        return "FAIL: external joined"
+    }
+    if (externalMutableValue(true, intImplementation, stringImplementation) != 41 ||
+        externalMutableValue(false, intImplementation, stringImplementation) != "certificate"
+    ) {
+        return "FAIL: external mutable"
+    }
+    if (externalCallerMethodGenericValue(intImplementation) != 41 ||
+        externalCallerMethodGenericValue(stringImplementation) != "certificate"
+    ) {
+        return "FAIL: external caller MethodDef generic"
     }
 
     val methodInt = SemanticEquivalenceMethodCertificateValue(43)

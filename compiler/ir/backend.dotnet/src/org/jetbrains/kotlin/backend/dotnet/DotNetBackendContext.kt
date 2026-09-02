@@ -301,6 +301,19 @@ internal class DotNetBackendContext(
         MutableMap<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> =
         java.util.IdentityHashMap()
     /**
+     * Exact external receiver aliases admitted by the PE-stamped semantic-equivalence route.
+     *
+     * These permissions are published only together with an authoritative operation witness.
+     * They retain a carrier already proven from an exact producer-recorded entry parameter; the
+     * certificate itself supplies no value provenance. Final local placement and emission still
+     * rebind the live source slot before using one.
+     */
+    val genericOwnerExternalSemanticEquivalentReceiverPlacements:
+        MutableMap<
+                IrSimpleFunctionSymbol,
+                MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalValueRetainedProducedCarrier>,
+                > = java.util.IdentityHashMap()
+    /**
      * Local direct-natural routes which rely on a not-yet-sealed forwarding certificate.
      *
      * Each pair is a pre-emission obligation, not a certificate: successful final emission must

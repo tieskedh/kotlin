@@ -492,8 +492,8 @@ lineage; lineage remains only a selector over independently guaranteed views.
 
 An exact construction retained through a logically widened open-interface view
 does not establish that natural and semantic calls are equivalent for every
-dynamic implementation. Such a call stays semantic unless all of the following
-independent facts meet:
+dynamic implementation. For the same-compilation route, such a call stays
+semantic unless all of the following independent facts meet:
 
 - the receiver's verifier-visible produced/storage carrier is one exact local
   final implementation construction, with exact provenance supplied by the
@@ -533,9 +533,12 @@ trailing `bool&` signature and corresponding `out` Param row.
 
 Successful validation creates an ephemeral stamp bound to the normalized DLL
 path, Assembly identity, and immutable same-library `K`/`J` declarations. It is
-not serialized and creates neither declaration nor value authority. Raw
-serialized certificates remain separately indexed; only certificates rejoined
-through this stamp are exposed by the external semantic-equivalence query.
+not serialized and by itself creates neither declaration nor value authority.
+Raw serialized certificates remain separately indexed; only certificates
+rejoined through this stamp are exposed by the external semantic-equivalence
+query. That exact rejoined `K`/`J` pair may be projected into SEALED declaration
+authority; neither the stamp, `K`, nor that projection supplies receiver/value
+provenance.
 Unrelated selected bodies neither strengthen nor invalidate a certificate.
 The cross-module factory owns the file read, validation, and stamp construction;
 callers cannot bind an independently supplied metadata snapshot to a path.
@@ -548,16 +551,36 @@ the same logical interface member, and implementation-owned rows may be shared
 by families for the same implementation member. Relation-specific interface
 dispatchers and MethodImpls are keyed by the complete `J` family. Sharing never
 permits one physical row to satisfy different roles or unrelated endpoints.
-The query is deliberately not consumed by operation routing yet, so this gate
-authenticates external `K` without changing generated calls.
+The first external consumer is deliberately narrower than the local proof. It
+admits only a top-level, non-method-generic caller whose exact non-null parameter
+is one external final generic implementation with one invariant fixed `Int32`
+or `String` argument. One immutable identity alias may widen that parameter to
+the interface's universal output view and may be read exactly once as the
+receiver of an arity-zero, non-method-generic natural MethodDef with no ordinary
+inputs, no MethodSpec, and one direct non-null owner-parameter result.
 
-`OPEN_NULLABLE`/split-nullable forwarding, stars, projections, mutable or
-conflicting flows, open/foreign implementations, semantic hooks, and any
-receiver lacking the exact final implementation carrier remain semantic.
-Production-erased producers publish no `J` or `K` and create neither local
-obligations nor emitter witnesses. A consumer may still authenticate `K` from
-an explicitly rehearsed external producer, but raw or stamped external `K`
-changes no operation route while the query remains unconsumed.
+The consumer re-queries the exact logical interface member, implementation
+owner, and implementation member, then binds only their PE-stamped same-library
+`K`/`J`. Independently of `K`, it constructs the implementation carrier from
+the exact parameter, requires the complete `J` interface closure, selects its
+unique natural view, and binds the complete physical operation route. Only
+after every fact is BOUND may the same transaction remove the already-selected
+semantic target and its compatible foreign target, install the natural route,
+and retain the alias's existing exact storage carrier.
+
+Final emission repeats the three-declaration query, rebinds the same artifact,
+normalized assembly path, `K`, `J`, all role TypeDefs, and natural MethodDef,
+then validates the direct live storage read, exact implementation construction,
+unique natural `J` view, empty parameter and MethodSpec vectors, direct result,
+and final interface `callvirt`. A missing or changed fact is a compiler error
+after route selection; expected logical types never fill the gap.
+
+Raw or unstamped `K`, broad interface parameters, stars/projections, joins,
+mutable or multiply defined aliases, caller-MethodDef generics, method-generic
+or argument-bearing calls, constructor/field/capture roots, open implementations,
+ordinary foreign-CLR implementations, semantic hooks, and split/open-nullable
+results remain semantic. Production-erased producers publish no `J` or `K` and
+create neither obligations, retained placements, nor emitter witnesses.
 
 Until path-complete operation plans exist, call-bearing `IrWhen`, block, and
 composite initializers receive no retained direct placement. A denied direct
@@ -776,9 +799,9 @@ exact natural operation when:
 For a Kotlin-owned operation whose logical widened view selects semantic
 dispatch, those conditions establish verifier legality but not semantic
 equivalence. The natural route may replace that semantic route only under the
-exact-final implementation and emitter-sealed certificate rule above. A star
-view does not enter that rule. The result may be widened after an authorized
-natural call; no `Source<object>` construction is fabricated.
+same-compilation emitter-sealed proof or the PE-stamped external proof above. A
+star view does not enter either rule. The result may be widened after an
+authorized natural call; no `Source<object>` construction is fabricated.
 
 For an imported CLR MethodDef, retained metadata selects the MethodDef and its
 physical owner family but does not by itself select a receiver construction.
@@ -843,11 +866,13 @@ cannot be replaced by provenance. This policy is declaration-stable even when a
 later lowering replaces the original `IrCall` identity.
 
 After the final routing fixpoint, a completely BOUND exact-natural operation may
-remove an older conservative local semantic target only when that policy says
-the result is not semantic. This is not absence-based devirtualization: the
-selected MethodDef, authenticated receiver view, every admitted argument, and
-the complete result layout must all be present. A broad logical receiver view
-still selects the semantic endpoint even if its value retains an exact carrier.
+remove an older conservative semantic target only when that policy says the
+result is not semantic and one of the semantic-equivalence proofs above is
+complete. This is not absence-based devirtualization: the selected MethodDef,
+authenticated receiver view, every admitted argument, and the complete result
+layout must all be present. A genuinely broad source still selects the semantic
+endpoint; the bounded immutable external alias is logically widened but retains
+independently proven exact provenance.
 
 The emitter consumes the selected route. It does not rediscover representation
 from declaration names, packages, stdlib membership, member names, IR origins,
@@ -944,6 +969,9 @@ A Kotlin producer serializes stable physical declaration facts, not local
 value provenance. A consumer binds those facts by artifact identity, physical
 owner/member identity, binder scope, and complete recorded contract. It does
 not infer them from generated names or reinterpret them from substituted KLIB.
+Serialized `K` records declaration equivalence only. An external consumer must
+rebuild every value fact independently from its own final IR and live physical
+entry; neither `K` nor selected-view lineage can create a receiver view.
 
 Physical-library ABI 66 records the CLR sealed-delegate variance exception as
 an orthogonal class-TypeDef fact. The fact remains separate from logical KLIB
@@ -1376,6 +1404,9 @@ covers at least:
   variance and multiple constructions;
 - producer/consumer libraries compiled separately and stale or contradictory
   physical records;
+- external stamped-`K` routing paired with raw/unstamped `K`, broad and star
+  parameters, conflicting joins, mutable aliases, caller-MethodDef generics,
+  and callee-MethodDef generics which must all retain semantic dispatch;
 - direct and split-nullable results for references, signed value types,
   `Nullable<V>`, open owner/method parameters, and Kotlin value classes;
 - split-result locals with one or multiple mutually exclusive direct returns,

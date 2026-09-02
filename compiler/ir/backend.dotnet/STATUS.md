@@ -22,28 +22,16 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   result through one immutable local whose every use is an unprotected direct
   return to the same physical MethodDef, while preserving its open MethodDef
   binders, MethodSpec, instantiated carriers, and result separately.
-- The latest rehearsal slice admits one deliberately narrow logically widened
-  producer call on an exact local final implementation. Route selection must
-  replace an existing conservative semantic target in the same transaction;
-  exact construction alone remains insufficient. Final emission then proves
-  that both generated semantic dispatchers are pure positional forwarders to
-  the same typed implementation entry and rebinds the exact TypeDef, MethodDef,
-  MethodSpec, receiver, parameter, and result carriers. Missing or conflicting
-  evidence fails compilation.
 - Exportable complete families publish an orthogonal `K` semantic-equivalence
   certificate bound to their exact `J` family. Private and executable-only
   families may satisfy the same local emission obligation without public ABI.
-  Production-erased mode publishes no `K` and retains semantic dispatch.
-  Separate consumers now authenticate the complete recorded `J` family and
-  exact selected K-forwarding bodies, including method-generic MethodSpecs,
-  against one resource-bounded producer-DLL read. Only an ephemeral stamp
-  rejoined to that DLL and its immutable `K`/`J` declarations reaches the
-  external query. The file-owning factory prevents caller-supplied
-  path/snapshot pairing, while role-scoped MethodDef/MethodImpl bijections reject
-  cross-family aliases without rejecting legitimate interface- or
-  implementation-owned sharing. Operation routing does not consume the query yet, so
-  external `K` remains behaviorally inert. The completed scope and evidence are in the
-  [semantic-equivalence archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md).
+  The latest slice consumes only PE-authenticated `K` for one bounded external
+  arity-zero route and reconstructs value/operation authority independently;
+  broad or generic forms remain semantic and production remains erased. The
+  local certificate is in the
+  [semantic-equivalence archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md)
+  and its first external consumer in the
+  [external-routing archive](docs/archive/generic-owner-external-semantic-equivalence-routing-2026-09-02.md).
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
@@ -53,18 +41,14 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-02 objective PE-authentication follow-up is newer than the
-target-wide gate below. Backend test compilation passed; the dedicated
-validator reported 11/11 tests green, all six directly affected backend suites
-reported 76/76 green, and the selected-body/MethodSpec reader integration
-reported 1/1 green. The extended two-assembly certificate fixture
-then passed through PSI and LightTree on .NET 10 and Framework 4.8 in both
+The 2026-09-02 bounded external-`K` routing consumer is newer than the
+target-wide gate below. Backend compilation passed and the directly affected
+physical-authority unit class reported 26/26 tests green. Its two-assembly
+fixture passed through PSI and LightTree on .NET 10 and Framework 4.8 in both
 candidate and production-erased inverse modes: four tests per mode, with zero
-failures, errors, or skips by direct XML audit. The existing split-nullable
-separate-compilation fixture also passed all four candidate lanes after its
-physical `Param`-row contract was added to `J`. Exact commands and scope are
-recorded in its
-[owning archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md).
+failures, errors, or skips by direct XML audit. Exact commands, admitted shape,
+hostile controls, and inverse obligations are recorded in the
+[external-routing archive](docs/archive/generic-owner-external-semantic-equivalence-routing-2026-09-02.md).
 This focused evidence does not claim a new full-target checkpoint.
 
 ## Latest verification
@@ -336,14 +320,7 @@ absent, object-shaped, split, semantic, or otherwise different result fails
 closed even when the logical whole-expression mapper reconstructs the desired
 type. A logically widened open-interface call remains guarded semantic dispatch
 by default: exact construction proves verifier legality, not semantic
-equivalence of every dynamic implementation. The bounded exact-local-final case
-now admits direct natural dispatch only after it replaces the conservative
-semantic target and final emission seals both semantic dispatcher bodies onto
-the same typed entry. Exported authority is recorded as `K` beside the exact
-`J` family. Objective PE MethodDef, MethodImpl, and bounded method-body
-validation now authenticates those producer records. External consumption remains
-closed until a stamped `K` can be joined to an independently proven receiver and
-operation route. Constructor
+equivalence of every dynamic implementation. Constructor
 allocation is currently only a bounded exact receiver root; general constructor-
 produced placement, path-complete block/composite calls, and real caller-
 MethodDef `!!R` entry remain separate. Every non-return,
@@ -535,12 +512,11 @@ errors, or skips.
 
 ## Current blockers
 
-- External `K` semantic-equivalence records now have objective PE authentication
-  of their complete bounded `J` rows, selected dispatcher bodies, and exact
-  MethodSpec vectors. They still cannot authorize call routing: the next gate
-  must consume only the ephemeral PE-stamped query while independently proving
-  the exact receiver/value and complete operation facts required by the local
-  route.
+- External `K` consumption is still intentionally narrow. Path-complete block
+  and composite calls, real caller-MethodDef `!!R` entries, additional
+  non-materializing uses, broader MethodSpec/argument/result shapes, nullable
+  joins, captures, properties, class nodes, and MethodImpl composition require
+  independent value and operation proofs before they can leave semantic routing.
 - The strict-owner-input plus split-result composition grammar remains bounded
   to one structural root member. Multiple members and ordinary-input vectors
   outside the exact `STRICT_OWNER_INPUT(!K)` plus

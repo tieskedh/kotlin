@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -893,6 +894,9 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 publication.key.logicalInterfaceMemberKey to publication.key.implementationOwnerKey
             ] === certificate,
         )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Unavailable>(
+            DotNetProducerGenericOwnerSemanticEquivalencePhysicalAuthority.bind(certificate),
+        )
         assertTrue(index.peValidatedGenericOwnerSemanticEquivalenceCertificatesByFamilyKey.isEmpty())
         assertTrue(
             index.peValidatedGenericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint.isEmpty(),
@@ -931,6 +935,101 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             stampedIndex.peValidatedGenericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint[
                 publication.key.logicalInterfaceMemberKey to publication.key.implementationOwnerKey
             ] === peValidated,
+        )
+
+        val physicalAuthority = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            DotNetProducerGenericOwnerSemanticEquivalencePhysicalAuthority.bind(peValidated),
+        ).value as DotNetProducerGenericOwnerSemanticEquivalencePhysicalAuthority
+        assertEquals(
+            DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+            physicalAuthority.epoch,
+        )
+        assertEquals(publication.key, physicalAuthority.familyKey)
+        val physicalDeclarations = physicalAuthority.declarations
+        val sealedTypes = publication.body.typeDefs.associateBy { typeDef -> typeDef.role }
+        DotNetProducerGenericOwnerSealedTypeDefRole.entries.forEach { role ->
+            val identity = physicalAuthority.typeDefinition(role)
+            assertEquals(stampedLibrary.artifact, identity.artifact)
+            assertEquals(sealedTypes.getValue(role).row.physicalPath, identity.ownerPath)
+            val description = physicalDeclarations.typeDescriptionOrNull(identity)
+            assertEquals(sealedTypes.getValue(role).row.structural.category, description?.category)
+            assertEquals(
+                sealedTypes.getValue(role).row.structural.genericParameters.map { parameter ->
+                    parameter.variance
+                },
+                description?.genericParameters?.map { parameter -> parameter.variance },
+            )
+            val edges = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+                physicalDeclarations.directSupertypeEdgesOrUnavailable(identity),
+            ).value as Set<*>
+            assertEquals(sealedTypes.getValue(role).row.structural.directEdges.size, edges.size)
+        }
+
+        val naturalType = physicalAuthority.typeDefinition(
+            DotNetProducerGenericOwnerSealedTypeDefRole.NATURAL_INTERFACE,
+        )
+        val implementationType = physicalAuthority.typeDefinition(
+            DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS,
+        )
+        val implementationParameter = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            physicalDeclarations.typeParameterOrError(implementationType, 0),
+        ).value as DotNetGenericOwnerSymbolicCarrierReference.Parameter
+        val implementationConstruction = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            physicalDeclarations.constructTypeOrError(
+                implementationType,
+                listOf(implementationParameter),
+            ),
+        ).value as DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        val naturalConstruction = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            physicalDeclarations.constructTypeOrError(
+                naturalType,
+                listOf(implementationParameter),
+            ),
+        ).value as DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        val closure = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<*>>(
+            physicalDeclarations.physicalInterfaceViewClosureOrError(implementationConstruction),
+        ).value as DotNetGenericOwnerPhysicalInterfaceViewClosure
+        assertTrue(closure.isComplete)
+        assertTrue(DotNetGenericOwnerPhysicalView(naturalConstruction) in closure.interfaceViews)
+
+        val methodIdentity = physicalAuthority.naturalMethodDefinition
+        assertEquals(publication.naturalMethodDefPhysicalIdentity(), methodIdentity.method)
+        val methodDescription = requireNotNull(
+            physicalDeclarations.methodDescriptionOrNull(methodIdentity),
+        )
+        assertEquals(naturalType, methodDescription.declaringType)
+        assertEquals(DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC, methodDescription.visibility)
+        assertEquals(DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT, methodDescription.dispatch)
+        assertEquals(1, methodDescription.genericParameters.size)
+        assertEquals(1, methodDescription.signature.genericArity)
+        assertEquals(
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter.methodParameterReference(
+                methodIdentity,
+                0,
+            ),
+            methodDescription.signature.parameterSlots.single().carrier,
+        )
+        assertEquals(
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter.unboundTypeParameterReference(
+                naturalType,
+                0,
+            ),
+            (methodDescription.signature.resultLayout as
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct).slot.carrier,
+        )
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Unavailable>(
+            DotNetGenericOwnerPhysicalDeclarationIndex.bind(
+                DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+                typeDefinitions = DotNetProducerGenericOwnerSealedTypeDefRole.entries.map { role ->
+                    requireNotNull(
+                        physicalDeclarations.typeDescriptionOrNull(
+                            physicalAuthority.typeDefinition(role),
+                        ),
+                    )
+                },
+                methodDefinitions = listOf(methodDescription),
+            ),
         )
     }
 

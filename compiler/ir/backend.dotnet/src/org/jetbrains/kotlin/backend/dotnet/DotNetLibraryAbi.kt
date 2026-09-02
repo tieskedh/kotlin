@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.backend.common.suspendFunction
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSignatureComputer
@@ -1064,6 +1065,13 @@ internal fun Map<String, DotNetPhysicalDeclaration>.genericOwnerRehearsalEpochRe
         DotNetGenericOwnerRehearsalEpochRecord(entry.key, kind)
     }
 }.sortedBy(DotNetGenericOwnerRehearsalEpochRecord::indexKey)
+
+/** Cross-module test-harness view of the same canonical rehearsal-record classifier. */
+@TestOnly
+fun Map<String, DotNetPhysicalDeclaration>.genericOwnerRehearsalEpochRecordIndexKeys():
+        List<String> = genericOwnerRehearsalEpochRecords().map(
+    DotNetGenericOwnerRehearsalEpochRecord::indexKey,
+)
 
 internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.publication():
         DotNetProducerGenericOwnerNaturalMethodDefPublication =
@@ -3639,6 +3647,12 @@ internal data class DotNetBoundGenericOwnerSemanticEquivalenceCertificate(
     }
 }
 
+/** Exact KLIB endpoint selected together with its PE-authenticated producer certificate. */
+internal data class DotNetBoundGenericOwnerSemanticEquivalenceEndpoint(
+    val certificate: DotNetBoundGenericOwnerSemanticEquivalenceCertificate,
+    val implementationMember: IrSimpleFunction,
+)
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -4116,10 +4130,10 @@ internal class DotNetExternalDeclarations(
      * inspect names, shapes, receiver values, or logical source types, and it supplies no value
      * provenance. The caller must independently prove the exact concrete receiver construction.
      */
-    fun genericOwnerSemanticEquivalenceCertificateOrNull(
+    fun genericOwnerSemanticEquivalenceEndpointOrNull(
         logicalInterfaceMember: IrSimpleFunction,
         implementationOwner: IrClass,
-    ): DotNetBoundGenericOwnerSemanticEquivalenceCertificate? {
+    ): DotNetBoundGenericOwnerSemanticEquivalenceEndpoint? {
         val interfaceMemberKey = externalGenericOwnerFunctionKeyOrNull(logicalInterfaceMember)
             ?: return null
         if (implementationOwner.fileOrNull != null) return null
@@ -4160,7 +4174,10 @@ internal class DotNetExternalDeclarations(
             "external semantic-equivalence certificate for '$interfaceMemberKey' disagrees with " +
                     "the KLIB override graph"
         }
-        return binding
+        return DotNetBoundGenericOwnerSemanticEquivalenceEndpoint(
+            binding,
+            implementationMember,
+        )
     }
 
     /** Exact three-declaration variant used when the implementation member is already selected. */
@@ -4169,13 +4186,13 @@ internal class DotNetExternalDeclarations(
         implementationOwner: IrClass,
         implementationMember: IrSimpleFunction,
     ): DotNetBoundGenericOwnerSemanticEquivalenceCertificate? {
-        val binding = genericOwnerSemanticEquivalenceCertificateOrNull(
+        val endpoint = genericOwnerSemanticEquivalenceEndpointOrNull(
             logicalInterfaceMember,
             implementationOwner,
         ) ?: return null
         val implementationMemberKey = externalGenericOwnerFunctionKeyOrNull(implementationMember)
             ?: return null
-        return binding.takeIf { candidate ->
+        return endpoint.certificate.takeIf { candidate ->
             candidate.sealedFamily.publication.key.implementationMemberKey == implementationMemberKey
         }
     }
@@ -4342,6 +4359,29 @@ internal class DotNetExternalDeclarations(
             }
         }
         return classInfo
+    }
+
+    /**
+     * Rebinds one logical external KLIB class to an exact producer-recorded physical TypeDef.
+     *
+     * The expected identity is a comparison target only: it cannot locate a class or construct a
+     * CLR owner by path.  The ordinary logical-key index first selects the producer declaration;
+     * only exact artifact and path agreement permits its already validated class-info projection.
+     */
+    fun physicalClassInfoOrNull(
+        irClass: IrClass,
+        typeMapper: DotNetIlTypeMapper,
+        expectedIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer,
+    ): DotNetIlClassInfo? {
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
+        if (bound.library.artifact != expectedIdentity.artifact ||
+            declaration.ownerPath != expectedIdentity.ownerPath
+        ) {
+            return null
+        }
+        return classInfoOrNull(irClass, typeMapper)
     }
 
     /** Producer-recorded non-generic Kotlin semantic/classifier capability for external `C<T>`. */
@@ -4899,6 +4939,40 @@ internal class DotNetExternalDeclarations(
             physicalMethod = declaration.physicalMethod,
             ownerVariances = ownerVariances,
             diagnosticKey = declaration.logicalMemberKey,
+        )
+    }
+
+    /** Exact natural MethodDef projection of one PE-stamped semantic-equivalence `K`/`J`. */
+    fun genericOwnerSemanticEquivalenceNaturalMethodDefFunctionInfo(
+        binding: DotNetBoundGenericOwnerSemanticEquivalenceCertificate,
+    ): DotNetIlFunctionInfo {
+        val familyKey = binding.sealedFamily.publication.key
+        val endpoint = familyKey.logicalInterfaceMemberKey to familyKey.implementationOwnerKey
+        require(binding.library in libraries &&
+                genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint[endpoint] === binding &&
+                binding.library.genericOwnerPeValidationStamp.authenticates(
+                    binding.declaration,
+                    binding.sealedFamily.declaration,
+                )
+        ) {
+            "semantic-equivalence MethodDef binding is not the selected PE-stamped K/J authority"
+        }
+        val publication = binding.sealedFamily.publication
+        val naturalTypeRow = publication.body.typeDefs.single { typeDef ->
+            typeDef.role == DotNetProducerGenericOwnerSealedTypeDefRole.NATURAL_INTERFACE
+        }.row
+        val naturalType = naturalTypeRow.structural
+        val physicalMethod = publication.naturalMethodDefPhysicalIdentity()
+        require(physicalMethod.physicalOwnerPath == naturalTypeRow.physicalPath) {
+            "PE-stamped semantic-equivalence J has a cross-wired natural MethodDef owner"
+        }
+        return recordedGenericOwnerMethodDefFunctionInfo(
+            library = binding.library,
+            physicalMethod = physicalMethod,
+            ownerVariances = naturalType.genericParameters.map { parameter ->
+                parameter.variance.toDotNetIlVariance()
+            },
+            diagnosticKey = familyKey.logicalInterfaceMemberKey,
         )
     }
 

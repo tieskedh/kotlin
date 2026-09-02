@@ -5,6 +5,23 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
+
+/** Shared logical admission rule; callers still bind its physical result independently. */
+internal fun IrSimpleFunction.genericOwnerDirectNonNullOwnerResultParameterIndexOrNull(): Int? {
+    val owner = parent as? IrClass ?: return null
+    val result = returnType as? IrSimpleType ?: return null
+    if (result.isMarkedNullable()) return null
+    val parameter = result.classifier as? IrTypeParameterSymbol ?: return null
+    return owner.typeParameters.indexOf(parameter.owner).takeIf { index -> index >= 0 }
+}
+
 /** The required physical view is a proof goal and never a source of receiver evidence. */
 internal data class DotNetGenericOwnerPhysicalOperationRouteRequest(
     val requiredReceiverView: DotNetGenericOwnerPhysicalView,
@@ -26,15 +43,75 @@ internal data class DotNetGenericOwnerPhysicalOperationRoute(
  * Identity-scoped final-emitter witness for a broad call promoted by semantic equivalence.
  *
  * The operation route authenticates the natural interface MethodDef. [directReceiverCarrier]
- * separately retains the exact implementation carrier which justified devirtualizing the broad
- * Kotlin view; an arbitrary object which merely implements the same interface must not inherit
- * that proof. Final emission rebinds both facts against the live `ldarg`/`ldloc` carrier.
+ * separately retains the exact implementation carrier which justified rerouting the broad
+ * semantic operation; an arbitrary object which merely implements the same interface must not
+ * inherit that proof. Final emission rebinds both facts against the live `ldarg`/`ldloc` carrier.
  */
+internal sealed interface DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority {
+    val implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity
+
+    data class Local(
+        override val implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    ) : DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority {
+        init {
+            require(implementationType.view == null) {
+                "a local semantic-equivalence witness requires the implementation TypeDef"
+            }
+        }
+    }
+
+    /**
+     * Exact external KLIB endpoints plus the PE-stamped `K`/`J` authority used by routing.
+     *
+     * This retained object is not sufficient at emission time: codegen must query the same three
+     * logical declarations again and rebind the returned certificate through [physicalAuthority].
+     * Keeping both values here makes a cross-family or raw-certificate substitution observable.
+     */
+    data class External(
+        val logicalInterfaceMember: IrSimpleFunctionSymbol,
+        val implementationOwner: IrClassSymbol,
+        val implementationMember: IrSimpleFunctionSymbol,
+        val certificate: DotNetBoundGenericOwnerSemanticEquivalenceCertificate,
+        val physicalAuthority: DotNetProducerGenericOwnerSemanticEquivalencePhysicalAuthority,
+    ) : DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority {
+        override val implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer =
+            physicalAuthority.typeDefinition(
+                DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS,
+            )
+        val naturalType: DotNetGenericOwnerPhysicalTypeDefIdentity.KotlinProducer =
+            physicalAuthority.typeDefinition(
+                DotNetProducerGenericOwnerSealedTypeDefRole.NATURAL_INTERFACE,
+            )
+
+        init {
+            require(physicalAuthority.epoch ==
+                    DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX &&
+                    physicalAuthority.familyKey == certificate.sealedFamily.publication.key &&
+                    implementationType.artifact == certificate.library.artifact &&
+                    naturalType.artifact == certificate.library.artifact
+            ) {
+                "an external semantic-equivalence witness requires its exact PE-stamped K/J family"
+            }
+        }
+    }
+}
+
 internal data class DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness(
     val route: DotNetGenericOwnerPhysicalOperationRoute,
     val directReceiverCarrier: DotNetGenericOwnerPhysicalCarrier,
-    val implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    val authority: DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority,
 ) {
+    /** Preserves the existing local-witness construction contract without weakening its type. */
+    constructor(
+        route: DotNetGenericOwnerPhysicalOperationRoute,
+        directReceiverCarrier: DotNetGenericOwnerPhysicalCarrier,
+        implementationType: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    ) : this(
+        route,
+        directReceiverCarrier,
+        DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.Local(implementationType),
+    )
+
     init {
         require(directReceiverCarrier.nullEncoding ==
                 DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) {
@@ -42,9 +119,45 @@ internal data class DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness(
         }
         val construction = directReceiverCarrier.type as?
                 DotNetGenericOwnerSymbolicCarrierReference.Constructed
-        require(construction?.definition == implementationType && implementationType.view == null) {
+        require(construction?.definition == authority.implementationType) {
             "a semantic-equivalence emitter witness must retain its exact implementation TypeDef"
         }
+        if (authority is DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.External) {
+            require(route.method.identity == authority.physicalAuthority.naturalMethodDefinition &&
+                    route.method.declaringType == authority.naturalType &&
+                    route.requiredReceiverView.family == authority.naturalType &&
+                    route.method.signature.genericArity == 0 &&
+                    route.methodArguments.isEmpty() &&
+                    route.instantiatedSignature.parameterSlots.isEmpty() &&
+                    route.instantiatedSignature.resultLayout is
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+            ) {
+                "the bounded external semantic-equivalence witness requires the exact arity-zero J slot"
+            }
+        }
+    }
+
+    companion object {
+        fun external(
+            route: DotNetGenericOwnerPhysicalOperationRoute,
+            directReceiverCarrier: DotNetGenericOwnerPhysicalCarrier,
+            logicalInterfaceMember: IrSimpleFunctionSymbol,
+            implementationOwner: IrClassSymbol,
+            implementationMember: IrSimpleFunctionSymbol,
+            certificate: DotNetBoundGenericOwnerSemanticEquivalenceCertificate,
+            physicalAuthority: DotNetProducerGenericOwnerSemanticEquivalencePhysicalAuthority,
+        ): DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness =
+            DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness(
+                route,
+                directReceiverCarrier,
+                DotNetGenericOwnerSemanticEquivalentOperationEmitterAuthority.External(
+                    logicalInterfaceMember,
+                    implementationOwner,
+                    implementationMember,
+                    certificate,
+                    physicalAuthority,
+                ),
+            )
     }
 }
 
