@@ -185,13 +185,94 @@ data class DotNetGenericOwnerSealedEmissionFamilySnapshot(
     }
 }
 
+enum class DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind {
+    CLASS_DISPATCHER_TO_TYPED_ENTRY,
+    INTERFACE_DISPATCHER_TO_CLASS_DISPATCHER,
+}
+
+/** One role-bound edge whose physical endpoints were observed in the final emitter. */
+data class DotNetGenericOwnerSemanticEquivalenceForwardingEdgeSnapshot(
+    val kind: DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind,
+    val bodyMethodKind: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
+    val targetMethodKind: DotNetGenericOwnerCompleteEmissionMethodKindSnapshot,
+    val methodGenericArity: Int,
+    val isVirtual: Boolean,
+) {
+    init {
+        require(methodGenericArity >= 0) {
+            "a semantic-equivalence forwarding edge requires a non-negative MethodSpec arity"
+        }
+    }
+}
+
+/**
+ * Final body evidence remains orthogonal to the 4/6/2 declaration-row seal. A missing body edge
+ * is unavailable; a malformed or duplicate claim is conflict. Only [Known] may seed a later
+ * producer semantic-equivalence certificate.
+ */
+sealed interface DotNetGenericOwnerSemanticEquivalenceForwardingEvidence {
+    data class Known(
+        val edges: List<DotNetGenericOwnerSemanticEquivalenceForwardingEdgeSnapshot>,
+    ) : DotNetGenericOwnerSemanticEquivalenceForwardingEvidence {
+        init {
+            require(edges.size == DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind.entries.size &&
+                    edges.map { edge -> edge.kind }.toSet() ==
+                    DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind.entries.toSet() &&
+                    edges.all { edge ->
+                        when (edge.kind) {
+                            DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind
+                                .CLASS_DISPATCHER_TO_TYPED_ENTRY ->
+                                edge.bodyMethodKind ==
+                                    DotNetGenericOwnerCompleteEmissionMethodKindSnapshot
+                                        .CLASS_SEMANTIC_CAPABILITY_DISPATCHER &&
+                                        edge.targetMethodKind ==
+                                    DotNetGenericOwnerCompleteEmissionMethodKindSnapshot
+                                        .IMPLEMENTATION_TYPED_ENTRY
+                            DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind
+                                .INTERFACE_DISPATCHER_TO_CLASS_DISPATCHER ->
+                                edge.bodyMethodKind ==
+                                    DotNetGenericOwnerCompleteEmissionMethodKindSnapshot
+                                        .INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER &&
+                                        edge.targetMethodKind ==
+                                    DotNetGenericOwnerCompleteEmissionMethodKindSnapshot
+                                        .CLASS_SEMANTIC_CAPABILITY_DISPATCHER
+                        }
+                    }
+            ) {
+                "known semantic-equivalence evidence requires both exact forwarding-role edges"
+            }
+        }
+    }
+
+    data class Unavailable(val reason: String) :
+        DotNetGenericOwnerSemanticEquivalenceForwardingEvidence {
+        init {
+            require(reason.isNotEmpty()) { "unavailable forwarding evidence requires a reason" }
+        }
+    }
+
+    data class Conflict(val reason: String) :
+        DotNetGenericOwnerSemanticEquivalenceForwardingEvidence {
+        init {
+            require(reason.isNotEmpty()) { "conflicting forwarding evidence requires a reason" }
+        }
+    }
+}
+
 internal data class DotNetGenericOwnerCompleteEmissionFamilyProducts(
     val comparison: DotNetGenericOwnerCompleteEmissionFamilyComparisonSnapshot,
     val sealed: DotNetGenericOwnerSealedEmissionFamilySnapshot,
     val producerSealedFamilyBody: DotNetProducerGenericOwnerSealedFamilyBody?,
+    val semanticEquivalenceForwardingEvidence:
+        DotNetGenericOwnerSemanticEquivalenceForwardingEvidence,
     private val logicalMember: IrSimpleFunctionSymbol,
     private val implementationMember: IrSimpleFunctionSymbol,
 ) {
+    /** Identity-safe correlation with the semantic-equivalence obligation selected before emission. */
+    fun matchesSemanticEquivalenceObligation(
+        obligation: Pair<IrSimpleFunctionSymbol, IrSimpleFunctionSymbol>,
+    ): Boolean = logicalMember === obligation.first && implementationMember === obligation.second
+
     sealed interface ProducerPublication {
         data object Unavailable : ProducerPublication
         data class Published(
@@ -815,6 +896,333 @@ private data class CompleteActualMethod(
     val snapshot: DotNetGenericOwnerPhysicalMethodDefEmissionHeaderSnapshot,
 )
 
+internal data class DotNetGenericOwnerExpectedSemanticEquivalenceForwardingEdge(
+    val kind: DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind,
+    val bodyKind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+    val bodyFunction: IrSimpleFunctionSymbol,
+    val bodyIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    val targetKind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+    val targetFunction: IrSimpleFunctionSymbol,
+    val targetIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+)
+
+private data class BoundSemanticEquivalenceTargetSignature(
+    val receiver: DotNetGenericOwnerObservedMethodCarrier,
+    val parameters: List<DotNetGenericOwnerObservedMethodCarrier>,
+    val result: DotNetGenericOwnerObservedMethodCarrier,
+    val hasSplitNullableResult: Boolean,
+)
+
+/**
+ * Replays the emitter's TypeDef/MethodSpec substitution against the independently observed target
+ * MethodDef header.  The call edge is evidence only when its verifier-visible signature is exactly
+ * the signature obtained from that header; an equal target symbol or row identity alone is not
+ * enough to prove that the emitted instruction invoked the intended construction.
+ */
+private fun bindSemanticEquivalenceTargetSignature(
+    target: DotNetGenericOwnerPhysicalMethodDefHeaderObservation,
+    edge: DotNetGenericOwnerPhysicalForwardingCallEdge,
+): DotNetGenericOwnerPhysicalBindingResult<BoundSemanticEquivalenceTargetSignature> {
+    val targetOwner = (target.physicalMethodOwner as?
+            DotNetGenericOwnerObservedMethodDefOwner.Local)?.typeDef
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the forwarding target has no exact local TypeDef binder",
+        )
+    val ownerConstruction = edge.targetOwner as?
+            DotNetGenericOwnerObservedMethodCarrier.LocalConstruction
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the forwarding call has no exact constructed target owner",
+        )
+    if (ownerConstruction.definition.physicalKey != targetOwner.physicalKey ||
+        ownerConstruction.arguments.size != targetOwner.genericArity
+    ) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the forwarding call targets another TypeDef construction",
+        )
+    }
+    if (edge.methodInstantiation.size != target.genericArity) {
+        return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the forwarding call has an arity-mismatched MethodSpec vector",
+        )
+    }
+    val targetIdentity = target.physicalMethodIdentity
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the forwarding target has no exact local MethodDef binder",
+        )
+
+    fun bind(
+        carrier: DotNetGenericOwnerObservedMethodCarrier,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerObservedMethodCarrier> {
+        return when (carrier) {
+            is DotNetGenericOwnerObservedMethodCarrier.Leaf ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(carrier)
+            is DotNetGenericOwnerObservedMethodCarrier.OwnerParameter -> {
+                if (carrier.binder.physicalKey != targetOwner.physicalKey) {
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "the target signature contains an owner parameter from another TypeDef binder",
+                    )
+                } else {
+                    ownerConstruction.arguments.getOrNull(carrier.index)?.let { argument ->
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(argument)
+                    } ?: DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "the target signature contains an out-of-range owner parameter",
+                    )
+                }
+            }
+            is DotNetGenericOwnerObservedMethodCarrier.MethodParameter -> {
+                if (carrier.physicalOwner.physicalKey != targetOwner.physicalKey ||
+                    carrier.physicalFunction !== target.physicalFunction ||
+                    carrier.physicalMethodIdentity?.sameLocalMethodIdentityAs(
+                        targetIdentity,
+                    ) != true
+                ) {
+                    DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "the target signature contains a method parameter from another MethodDef binder",
+                    )
+                } else {
+                    edge.methodInstantiation.getOrNull(carrier.index)?.let { argument ->
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(argument)
+                    } ?: DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "the target signature contains an out-of-range method parameter",
+                    )
+                }
+            }
+            is DotNetGenericOwnerObservedMethodCarrier.LocalConstruction -> {
+                val arguments = mutableListOf<DotNetGenericOwnerObservedMethodCarrier>()
+                for (argument in carrier.arguments) {
+                    when (val bound = bind(argument)) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> arguments += bound.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return bound
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                            "semantic-equivalence target binding is total",
+                        )
+                    }
+                }
+                DotNetGenericOwnerPhysicalBindingResult.Bound(carrier.copy(arguments = arguments))
+            }
+            is DotNetGenericOwnerObservedMethodCarrier.SzArray -> when (val element = bind(carrier.element)) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(carrier.copy(element = element.value))
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                    "semantic-equivalence target binding is total",
+                )
+            }
+            is DotNetGenericOwnerObservedMethodCarrier.ByReference ->
+                when (val element = bind(carrier.element)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                        DotNetGenericOwnerPhysicalBindingResult.Bound(carrier.copy(element = element.value))
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> element
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                        "semantic-equivalence target binding is total",
+                    )
+                }
+            is DotNetGenericOwnerObservedMethodCarrier.Other ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "the target signature contains a carrier outside the bounded identity vocabulary",
+                )
+            is DotNetGenericOwnerObservedMethodCarrier.Unbindable ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict(carrier.reason)
+        }
+    }
+
+    fun bound(
+        carrier: DotNetGenericOwnerObservedMethodCarrier,
+        position: String,
+    ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerObservedMethodCarrier> =
+        when (val result = bind(carrier)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> result
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                DotNetGenericOwnerPhysicalBindingResult.Conflict("$position: ${result.reason}")
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                "semantic-equivalence target binding is total",
+            )
+        }
+
+    val receiver = target.signature.receiverCarrier
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+            "the forwarding target is not an instance MethodDef",
+        )
+    val boundReceiver = when (val result = bound(receiver, "target receiver")) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return result
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+            "semantic-equivalence target binding is total",
+        )
+    }
+    val boundParameters = mutableListOf<DotNetGenericOwnerObservedMethodCarrier>()
+    target.signature.parameterCarriers.forEachIndexed { index, parameter ->
+        when (val result = bound(parameter, "target parameter $index")) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> boundParameters += result.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return result
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                "semantic-equivalence target binding is total",
+            )
+        }
+    }
+    val boundResult = when (val result = bound(target.signature.returnCarrier, "target result")) {
+        is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value
+        is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return result
+        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+            "semantic-equivalence target binding is total",
+        )
+    }
+    return DotNetGenericOwnerPhysicalBindingResult.Bound(
+        BoundSemanticEquivalenceTargetSignature(
+            boundReceiver,
+            boundParameters,
+            boundResult,
+            target.signature.hasSplitNullableResult,
+        ),
+    )
+}
+
+internal fun inspectDotNetGenericOwnerSemanticEquivalenceForwardingBodies(
+    expectedEdges: List<DotNetGenericOwnerExpectedSemanticEquivalenceForwardingEdge>,
+    observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+    otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+): DotNetGenericOwnerSemanticEquivalenceForwardingEvidence {
+    require(expectedEdges.size == DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind.entries.size &&
+            expectedEdges.map { edge -> edge.kind }.toSet() ==
+            DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind.entries.toSet()) {
+        "semantic-equivalence inspection requires both expected forwarding edges exactly once"
+    }
+    val conflicts = mutableListOf<String>()
+    val unavailable = mutableListOf<String>()
+    val edges = mutableListOf<DotNetGenericOwnerSemanticEquivalenceForwardingEdgeSnapshot>()
+
+    fun DotNetGenericOwnerPhysicalMethodDefHeaderObservation.touches(
+        function: IrSimpleFunctionSymbol,
+        identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    ): Boolean = physicalFunction === function ||
+            physicalMethodIdentity?.sameLocalMethodIdentityAs(identity) == true
+
+    expectedEdges.forEach { expectedEdge ->
+        if (otherScopeObservations.any { observation ->
+                observation.touches(expectedEdge.bodyFunction, expectedEdge.bodyIdentity)
+            }
+        ) {
+            conflicts += "${expectedEdge.kind}: the forwarding body was observed in another physical scope"
+            return@forEach
+        }
+        val candidates = observations.filter { observation ->
+            observation.touches(expectedEdge.bodyFunction, expectedEdge.bodyIdentity)
+        }
+        if (candidates.isEmpty()) {
+            unavailable += "${expectedEdge.kind}: the final forwarding MethodDef was not observed"
+            return@forEach
+        }
+        if (candidates.size != 1) {
+            conflicts += "${expectedEdge.kind}: the final forwarding MethodDef was observed more than once"
+            return@forEach
+        }
+        val body = candidates.single()
+        if (body.physicalFunction !== expectedEdge.bodyFunction ||
+            body.physicalMethodIdentity?.sameLocalMethodIdentityAs(expectedEdge.bodyIdentity) != true
+        ) {
+            conflicts += "${expectedEdge.kind}: function and physical identity select different body MethodDefs"
+            return@forEach
+        }
+        when (val evidence = body.forwardingBodyEvidence) {
+            null -> {
+                unavailable += "${expectedEdge.kind}: the final MethodDef has no forwarding-body observation"
+                return@forEach
+            }
+            is DotNetGenericOwnerPhysicalForwardingBodyEvidence.Unavailable -> {
+                unavailable += "${expectedEdge.kind}: ${evidence.reason}"
+                return@forEach
+            }
+            is DotNetGenericOwnerPhysicalForwardingBodyEvidence.Conflict -> {
+                conflicts += "${expectedEdge.kind}: ${evidence.reason}"
+                return@forEach
+            }
+            is DotNetGenericOwnerPhysicalForwardingBodyEvidence.Forwarding -> {
+                val edge = evidence.edge
+                if (edge.targetFunction !== expectedEdge.targetFunction ||
+                    edge.targetIdentity?.sameLocalMethodIdentityAs(expectedEdge.targetIdentity) != true
+                ) {
+                    conflicts += "${expectedEdge.kind}: the resolved call targets another physical MethodDef"
+                    return@forEach
+                }
+                val targetCandidates = observations.filter { observation ->
+                    observation.touches(expectedEdge.targetFunction, expectedEdge.targetIdentity)
+                }
+                if (targetCandidates.size != 1) {
+                    conflicts += "${expectedEdge.kind}: the resolved target has no unique final MethodDef header"
+                    return@forEach
+                }
+                val target = targetCandidates.single()
+                if (target.physicalFunction !== expectedEdge.targetFunction ||
+                    target.physicalMethodIdentity
+                        ?.sameLocalMethodIdentityAs(expectedEdge.targetIdentity) != true ||
+                    edge.targetPhysicalOwner != target.physicalMethodOwner
+                ) {
+                    conflicts += "${expectedEdge.kind}: the resolved target disagrees with its final MethodDef header"
+                    return@forEach
+                }
+                val targetSignature = when (
+                    val binding = bindSemanticEquivalenceTargetSignature(target, edge)
+                ) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict -> {
+                        conflicts += "${expectedEdge.kind}: ${binding.reason}"
+                        return@forEach
+                    }
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> error(
+                        "semantic-equivalence target binding is total",
+                    )
+                }
+                if (edge.targetOwner != targetSignature.receiver ||
+                    edge.parameterCarriers !=
+                    listOf(targetSignature.receiver) + targetSignature.parameters ||
+                    edge.returnCarrier != targetSignature.result ||
+                    edge.hasSplitNullableResult != targetSignature.hasSplitNullableResult
+                ) {
+                    conflicts += "${expectedEdge.kind}: the resolved call signature disagrees with its target MethodDef"
+                    return@forEach
+                }
+                val bodyReceiver = body.signature.receiverCarrier
+                if (bodyReceiver == null || edge.targetOwner != bodyReceiver ||
+                    edge.parameterCarriers != listOf(bodyReceiver) + body.signature.parameterCarriers
+                ) {
+                    conflicts += "${expectedEdge.kind}: the resolved call does not preserve the exact receiver/parameter carriers"
+                    return@forEach
+                }
+                val methodArgumentsAreExact = edge.methodInstantiation.size == body.genericArity &&
+                        edge.methodInstantiation.indices.all { index ->
+                            val argument = edge.methodInstantiation[index] as?
+                                    DotNetGenericOwnerObservedMethodCarrier.MethodParameter
+                            argument != null &&
+                                    argument.physicalFunction === body.physicalFunction &&
+                                    argument.physicalMethodIdentity
+                                        ?.sameLocalMethodIdentityAs(expectedEdge.bodyIdentity) == true &&
+                                    argument.index == index
+                        }
+                if (!methodArgumentsAreExact || target.genericArity != body.genericArity) {
+                    conflicts += "${expectedEdge.kind}: the resolved call does not preserve the exact MethodSpec binder"
+                    return@forEach
+                }
+                edges += DotNetGenericOwnerSemanticEquivalenceForwardingEdgeSnapshot(
+                    kind = expectedEdge.kind,
+                    bodyMethodKind = expectedEdge.bodyKind.toSnapshot(),
+                    targetMethodKind = expectedEdge.targetKind.toSnapshot(),
+                    methodGenericArity = body.genericArity,
+                    isVirtual = edge.isVirtual,
+                )
+            }
+        }
+    }
+    return when {
+        conflicts.isNotEmpty() -> DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Conflict(
+            conflicts.distinct().joinToString("; "),
+        )
+        unavailable.isNotEmpty() -> DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Unavailable(
+            unavailable.distinct().joinToString("; "),
+        )
+        else -> DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Known(edges)
+    }
+}
+
 private sealed interface CompleteConversion<out T> {
     data class Known<T>(val value: T) : CompleteConversion<T>
     data class Unavailable(val reason: String) : CompleteConversion<Nothing>
@@ -1113,6 +1521,50 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
         actualMethodDefs.mapRows { method -> method.sealedRow.structural },
         actualMethodImpls,
     )
+    val observedSemanticEquivalenceForwardingEvidence = if (sharedConflict != null) {
+        DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Conflict(sharedConflict)
+    } else {
+        fun expectedForwardingMethod(
+            kind: DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind,
+        ) = expectedMethods.single { method -> method.kind == kind }
+        val classDispatcher = expectedForwardingMethod(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                .CLASS_SEMANTIC_CAPABILITY_DISPATCHER,
+        )
+        val interfaceDispatcher = expectedForwardingMethod(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+                .INTERFACE_SEMANTIC_CAPABILITY_DISPATCHER,
+        )
+        val typedEntry = expectedForwardingMethod(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.IMPLEMENTATION_TYPED_ENTRY,
+        )
+        inspectDotNetGenericOwnerSemanticEquivalenceForwardingBodies(
+            listOf(
+                DotNetGenericOwnerExpectedSemanticEquivalenceForwardingEdge(
+                    DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind
+                        .CLASS_DISPATCHER_TO_TYPED_ENTRY,
+                    classDispatcher.kind,
+                    classDispatcher.emittedFunction,
+                    classDispatcher.identity,
+                    typedEntry.kind,
+                    typedEntry.emittedFunction,
+                    typedEntry.identity,
+                ),
+                DotNetGenericOwnerExpectedSemanticEquivalenceForwardingEdge(
+                    DotNetGenericOwnerSemanticEquivalenceForwardingEdgeKind
+                        .INTERFACE_DISPATCHER_TO_CLASS_DISPATCHER,
+                    interfaceDispatcher.kind,
+                    interfaceDispatcher.emittedFunction,
+                    interfaceDispatcher.identity,
+                    classDispatcher.kind,
+                    classDispatcher.emittedFunction,
+                    classDispatcher.identity,
+                ),
+            ),
+            current?.methodDefs.orEmpty(),
+            other.flatMap { emission -> emission.methodDefs },
+        )
+    }
     val comparison = compareDotNetGenericOwnerCompleteEmissionManifest(expected, actual)
     val expectedTypeSnapshots = family.types.map { entry ->
         val kind = entry.key
@@ -1383,10 +1835,32 @@ internal fun inspectDotNetGenericOwnerCompleteEmissionFamily(
                 emptyList(),
             )
     }
+    val semanticEquivalenceForwardingEvidence = when {
+        observedSemanticEquivalenceForwardingEvidence is
+                DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Conflict ->
+            observedSemanticEquivalenceForwardingEvidence
+        sealedSnapshot.status == DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.CONFLICT ->
+            DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Conflict(
+                sealedSnapshot.diagnostics.joinToString("; ").ifEmpty {
+                    "the forwarding endpoints did not reach the sealed-emission authority epoch"
+                },
+            )
+        observedSemanticEquivalenceForwardingEvidence is
+                DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Unavailable ->
+            observedSemanticEquivalenceForwardingEvidence
+        sealedSnapshot.status != DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH ->
+            DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Unavailable(
+                sealedSnapshot.diagnostics.joinToString("; ").ifEmpty {
+                    "the forwarding endpoints did not reach the sealed-emission authority epoch"
+                },
+            )
+        else -> observedSemanticEquivalenceForwardingEvidence
+    }
     return DotNetGenericOwnerCompleteEmissionFamilyProducts(
         comparisonSnapshot,
         sealedSnapshot,
         producerSealedFamilyBody,
+        semanticEquivalenceForwardingEvidence,
         family.logicalMember,
         family.implementationMember,
     )

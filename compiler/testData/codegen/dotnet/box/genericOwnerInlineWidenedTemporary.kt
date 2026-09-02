@@ -333,11 +333,11 @@ private class InlineSelfView<T>(private val value: T) : InlineProducer<T> {
         return sourceStarAlias === this && sourceStarAlias.produce() == value
     }
 
-    fun mutableAliasTracks(other: InlineProducer<T>): Boolean {
+    fun mutableAliasTracks(other: InlineProducer<T>, expected: T): Boolean {
         var sourceMutableAlias: InlineProducer<Any?> = this
         if (sourceMutableAlias !== this) return false
         sourceMutableAlias = other
-        return sourceMutableAlias === other
+        return sourceMutableAlias === other && sourceMutableAlias.produce() == expected
     }
 
     fun joinedAliasMatches(
@@ -650,7 +650,9 @@ fun box(): String {
     if (!ints.starAliasMatches() || !strings.starAliasMatches()) return "star alias"
     val otherInts = InlineSecondView(7)
     val otherStrings = InlineSecondView("other")
-    if (!ints.mutableAliasTracks(otherInts) || !strings.mutableAliasTracks(otherStrings)) {
+    if (!ints.mutableAliasTracks(otherInts, 7) ||
+        !strings.mutableAliasTracks(otherStrings, "other")
+    ) {
         return "mutable alias"
     }
     if (!ints.joinedAliasMatches(true, 7, 42) ||

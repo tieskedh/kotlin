@@ -11,7 +11,7 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `2868cfb88a7ea111ea6f6bf02f24430dc0e039e5`.
-- Current checkpoint: physical library ABI 66, generic-owner artifact schema
+- Current checkpoint: physical library ABI 67, generic-owner artifact schema
   21, compiler/runtime surface 60.
 - Stage 7 composes callable policies structurally. It proves both
   `Lookup<K, out V>.lookup(K): V?` as `!V lookup(!K, out bool)` and
@@ -22,20 +22,22 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   result through one immutable local whose every use is an unprotected direct
   return to the same physical MethodDef, while preserving its open MethodDef
   binders, MethodSpec, instantiated carriers, and result separately.
-- The latest local slice makes exact call-result placement consume the exact
-  `IrCall`'s final natural-operation witness as well as its live receiver and
-  MethodDef-result carriers. Call-bearing containers and the older compiler-
-  temporary/nested recognizers fail closed without a path-complete operation
-  plan. A logically widened open interface deliberately remains on semantic
-  dispatch even when its receiver retains an exact physical construction.
-  Exact evidence and the rejected shortcut are in the
-  [route-coherence follow-up](docs/archive/generic-owner-call-result-route-coherence-2026-09-02.md).
-- The next continuation is a producer-owned semantic-equivalence certificate
-  for a final concrete implementation. Only that certificate, combined with
-  exact final receiver provenance and consumer binding against frozen TypeDef,
-  MethodDef, and MethodImpl rows, may later prove that natural and semantic
-  entries share one authoritative body endpoint; interface construction alone
-  is not such proof.
+- The latest rehearsal slice admits one deliberately narrow logically widened
+  producer call on an exact local final implementation. Route selection must
+  replace an existing conservative semantic target in the same transaction;
+  exact construction alone remains insufficient. Final emission then proves
+  that both generated semantic dispatchers are pure positional forwarders to
+  the same typed implementation entry and rebinds the exact TypeDef, MethodDef,
+  MethodSpec, receiver, parameter, and result carriers. Missing or conflicting
+  evidence fails compilation.
+- Exportable complete families publish an orthogonal `K` semantic-equivalence
+  certificate bound to their exact `J` family. Private and executable-only
+  families may satisfy the same local emission obligation without public ABI.
+  Production-erased mode publishes no `K` and retains semantic dispatch.
+  Separate consumers load and validate `J`/`K` identity, but may not route from
+  external `K` until the referenced PE rows and bounded method bodies have an
+  objective metadata validator. The completed scope and evidence are in the
+  [semantic-equivalence archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md).
 - Git owns the exact promoted checkpoint identity.
 - Reviewed upstream synchronization:
   [`docs/archive/upstream-sync-2026-08-31.md`](docs/archive/upstream-sync-2026-08-31.md).
@@ -45,13 +47,14 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-02 route-coherence follow-up is newer than the target-wide gate
-below. Backend compilation and all 94 physical-value model tests passed. The
-focused fixture passed through PSI and LightTree on .NET 10 and Framework 4.8
-in both candidate and production-erased inverse modes: four tests per mode,
-with zero failures, errors, or skips by direct XML audit. Exact commands and
-scope are recorded in its
-[owning archive](docs/archive/generic-owner-call-result-route-coherence-2026-09-02.md).
+The 2026-09-02 semantic-equivalence certificate is newer than the target-wide
+gate below. Backend compilation and all 342 backend model tests passed. The
+local hostile fixture and the dedicated two-assembly certificate fixture
+together passed through PSI and LightTree on .NET 10 and Framework 4.8 in both
+candidate and production-erased inverse modes: eight tests per mode, with zero
+failures, errors, or skips by direct XML audit. Exact commands and scope are
+recorded in its
+[owning archive](docs/archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md).
 This focused evidence does not claim a new full-target checkpoint.
 
 ## Latest verification
@@ -321,11 +324,15 @@ transitive immutable alias which derived its exact prediction from that local,
 rather than turning a later live-slot mismatch into a compiler failure. An
 absent, object-shaped, split, semantic, or otherwise different result fails
 closed even when the logical whole-expression mapper reconstructs the desired
-type. A logically widened open-interface call remains guarded semantic
-dispatch: exact construction proves verifier legality, not semantic equivalence
-of every dynamic implementation. External record closure is also still open.
-Prove a producer-owned same-endpoint semantic-equivalence certificate for a
-final concrete implementation before attempting that optimization. Constructor
+type. A logically widened open-interface call remains guarded semantic dispatch
+by default: exact construction proves verifier legality, not semantic
+equivalence of every dynamic implementation. The bounded exact-local-final case
+now admits direct natural dispatch only after it replaces the conservative
+semantic target and final emission seals both semantic dispatcher bodies onto
+the same typed entry. Exported authority is recorded as `K` beside the exact
+`J` family. External consumption remains closed until objective PE MethodDef,
+MethodImpl, and bounded method-body validation can authenticate producer records
+rather than trusting them. Constructor
 allocation is currently only a bounded exact receiver root; general constructor-
 produced placement, path-complete block/composite calls, and real caller-
 MethodDef `!!R` entry remain separate. Every non-return,
@@ -337,9 +344,10 @@ null/bottom/unknown joins, and explicit representation-changing conversions
 remain later structural proofs rather than local exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
-`SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 66 retains the
+`SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 67 retains the
 independent `H` semantic-role/result-layout fields introduced in ABI 65 and
-adds producer-recorded sealed-delegate variance authority; local BOUND,
+the sealed-delegate variance authority added in ABI 66, and adds the orthogonal
+`K` semantic-equivalence certificate; local BOUND,
 producer-final `N`, direct consumers, semantic capability dispatch, and
 ordinary natural-only C# implementations consume the same MethodDef authority.
 The same contract now independently carries an unconstrained MethodDef binder
@@ -516,6 +524,10 @@ errors, or skips.
 
 ## Current blockers
 
+- External `K` semantic-equivalence records are loadable and identity-bound to
+  `J`, but cannot authorize call routing yet. A consumer must objectively
+  validate the referenced PE TypeDefs, MethodDefs, MethodImpls, and bounded
+  forwarding-body grammar before trusting producer-recorded equivalence.
 - The strict-owner-input plus split-result composition grammar remains bounded
   to one structural root member. Multiple members and ordinary-input vectors
   outside the exact `STRICT_OWNER_INPUT(!K)` plus

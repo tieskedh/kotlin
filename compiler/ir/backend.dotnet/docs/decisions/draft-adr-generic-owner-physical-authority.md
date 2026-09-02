@@ -492,15 +492,48 @@ lineage; lineage remains only a selector over independently guaranteed views.
 
 An exact construction retained through a logically widened open-interface view
 does not establish that natural and semantic calls are equivalent for every
-dynamic implementation. Such a call stays semantic. Direct emission may be
-reconsidered only for an exact final concrete receiver after producer authority
-records and the consumer binds one shared body endpoint for the natural and
-semantic MethodDefs/MethodImpl edges. Selected lineage cannot supply that
-certificate. Until path-complete operation plans exist, call-bearing `IrWhen`,
-block, and composite initializers receive no retained direct placement. A
-denied direct call also invalidates transitive aliases derived from its predicted
-carrier; legacy compiler-temporary/nested-construction recognizers cannot
-recreate it.
+dynamic implementation. Such a call stays semantic unless all of the following
+independent facts meet:
+
+- the receiver's verifier-visible produced/storage carrier is one exact local
+  final implementation construction, with exact provenance supplied by the
+  current physical receiver, a frozen parameter/result, or constructor
+  allocation;
+- one complete declaration family selects the natural MethodDef and the exact
+  implementation TypeDef without names, lineage, or logical type
+  reconstruction;
+- the operation is the bounded broad-universal producer form and its existing
+  conservative semantic target is removed in the same routing transaction;
+- final emission independently observes both generated dispatcher bodies as
+  direct positional forwarders to the same typed implementation entry, binds
+  their actual TypeDef and MethodSpec substitutions, and matches their complete
+  receiver, parameter, and result carriers to the target MethodDef headers; and
+- the final emitter rebinds the unchanged call identity, exact implementation
+  carrier, natural owner view, MethodDef identity, and instantiated signature.
+
+The pre-emission route therefore creates an obligation, not a certificate.
+Missing or conflicting final body evidence rejects compilation once that route
+has been selected. An exportable matching family publishes an orthogonal `K`
+semantic-equivalence record tied to its exact `J` identity; a private or
+executable-only family may satisfy the local obligation without acquiring
+public ABI. `K` is declaration authority only and supplies no receiver/value
+provenance. Selected lineage remains only a selector over already guaranteed
+views and cannot supply any part of this proof.
+
+Physical-library ABI 67 loads and identity-binds `K` to the same library's
+complete `J` family. A separately compiled consumer must not use it for route
+selection until the referenced PE MethodDefs and bounded forwarding bodies are
+objectively validated against that record; merely trusting matching KLIB or
+recorded rows is insufficient. `OPEN_NULLABLE`/split-nullable forwarding,
+stars, projections, mutable or conflicting flows, open/foreign
+implementations, semantic hooks, and any receiver lacking the exact final
+implementation carrier remain semantic. Production-erased mode rejects `K`
+and creates neither obligations nor emitter witnesses.
+
+Until path-complete operation plans exist, call-bearing `IrWhen`, block, and
+composite initializers receive no retained direct placement. A denied direct
+call also invalidates transitive aliases derived from its predicted carrier;
+legacy compiler-temporary/nested-construction recognizers cannot recreate it.
 
 The constructed-result extension is presently a local BOUND-declaration proof,
 not an external ABI promise. Its first admission is one non-null natural
@@ -699,8 +732,8 @@ barriers, virtual target family, defaults, `super`, and required result. Value
 provenance cannot choose a semantically different member merely because it is
 typed.
 
-Within that allowed family, an already-proven selected natural view may service
-an output-safe operation after logical widening. This is permitted when:
+Within that allowed family, an already-proven selected natural view services an
+exact natural operation when:
 
 - the selected view is in `guaranteedPhysicalViews`;
 - lineage is unambiguous when the object has multiple relevant constructions;
@@ -711,10 +744,12 @@ an output-safe operation after logical widening. This is permitted when:
 - its exact result can be widened to the logical result through an explicit
   identity-preserving or value conversion.
 
-Thus a locally selected `Source<string>` may continue to call its natural
-producer under a logical `Source<Any?>` or star view when the exact lineage is
-still proven. The result is widened after the call. This does not create
-`Source<object>` and does not require semantic dispatch.
+For a Kotlin-owned operation whose logical widened view selects semantic
+dispatch, those conditions establish verifier legality but not semantic
+equivalence. The natural route may replace that semantic route only under the
+exact-final implementation and emitter-sealed certificate rule above. A star
+view does not enter that rule. The result may be widened after an authorized
+natural call; no `Source<object>` construction is fabricated.
 
 For an imported CLR MethodDef, retained metadata selects the MethodDef and its
 physical owner family but does not by itself select a receiver construction.

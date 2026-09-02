@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.util.SymbolTable
@@ -230,6 +231,8 @@ object DotNetBackend {
             DotNetGenericOwnerPhysicalBindingResult.Unavailable
         var genericOwnerPhysicalValueShadowRecords:
             List<DotNetGenericOwnerPhysicalValueShadowRecord> = emptyList()
+        var genericOwnerSemanticEquivalenceEmissionObligations:
+            Set<Pair<IrSimpleFunctionSymbol, IrSimpleFunctionSymbol>> = emptySet()
         val successfulPhysicalValuePlacements = mutableListOf<
                 Pair<DotNetIlEmissionScope, List<DotNetGenericOwnerPhysicalValueLocalPlacementObservation>>,
                 >()
@@ -327,7 +330,16 @@ object DotNetBackend {
             }
             return authority.inspectFinalCompleteEmissionFamilies(
                 successfulCompleteEmissionObservations.toList(),
-            ).also { products -> cachedPhysicalCompleteEmissionProducts = products }
+            ).also { products ->
+                genericOwnerSemanticEquivalenceEmissionObligations.forEach { obligation ->
+                    check(products.count { product ->
+                        product.matchesSemanticEquivalenceObligation(obligation)
+                    } == 1) {
+                        "one semantic-equivalence emission obligation must bind exactly one complete family"
+                    }
+                }
+                cachedPhysicalCompleteEmissionProducts = products
+            }
         }
         fun physicalStateEmissionSnapshots(): List<DotNetGenericOwnerPhysicalStateEmissionSnapshot> {
             if (!configuration.dotNetGenericOwnerRehearsal) return emptyList()
@@ -350,15 +362,58 @@ object DotNetBackend {
             if (!configuration.dotNetGenericOwnerRehearsal) return this
             val scopeProducts = physicalCompleteEmissionProducts()
                 .filter { product -> product.comparison.scope == scope }
-            val sealedPublications = scopeProducts
-                .asSequence()
-                .mapNotNull { product ->
-                    when (val publication = product.producerSealedFamilyPublication(declarationKeys)) {
-                        is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Published ->
-                            publication.publication
-                        is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Conflict ->
-                            error(publication.reason)
-                        DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Unavailable -> null
+            val publicationResults = scopeProducts.map { product ->
+                product to product.producerSealedFamilyPublication(declarationKeys)
+            }
+            val sealedPublications = publicationResults.mapNotNull { entry ->
+                val result = entry.second
+                when (result) {
+                    is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Published ->
+                        result.publication
+                    is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Conflict ->
+                        error(result.reason)
+                    DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Unavailable -> null
+                }
+            }
+            val semanticEquivalenceCertificateDeclarations = publicationResults
+                .mapNotNull { entry ->
+                    val product = entry.first
+                    val publicationResult = entry.second
+                    val isRequired = genericOwnerSemanticEquivalenceEmissionObligations
+                        .any(product::matchesSemanticEquivalenceObligation)
+                    when (val evidence = product.semanticEquivalenceForwardingEvidence) {
+                        is DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Known -> {
+                            val publication = when (publicationResult) {
+                                is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Published ->
+                                    publicationResult.publication
+                                is DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Conflict ->
+                                    error(publicationResult.reason)
+                                DotNetGenericOwnerCompleteEmissionFamilyProducts.ProducerPublication.Unavailable ->
+                                    // Final body evidence still seals a private/internal route. A
+                                    // K record exists only when the same family has export keys
+                                    // and therefore a producer-sealed J publication to reference.
+                                    return@mapNotNull null
+                            }
+                            DotNetProducerGenericOwnerSemanticEquivalenceCertificate
+                                .finalConcreteDirectTypedEntryChain(
+                                    publication.key.physicalIndexKey(),
+                                )
+                                .toPhysicalDeclaration()
+                        }
+                        is DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Unavailable -> {
+                            check(!isRequired) {
+                                "an authoritative direct-natural route has no final forwarding proof: " +
+                                        evidence.reason
+                            }
+                            null
+                        }
+                        is DotNetGenericOwnerSemanticEquivalenceForwardingEvidence.Conflict -> {
+                            check(!isRequired) {
+                                "an authoritative direct-natural route has conflicting final forwarding proof: " +
+                                        evidence.reason
+                            }
+                            null
+                        }
                     }
                 }
                 .toList()
@@ -500,15 +555,23 @@ object DotNetBackend {
                     distinct.single()
                 }
                 .toList()
-            if (familyDeclarations.isEmpty() && naturalMethodDeclarations.isEmpty() &&
+            if (familyDeclarations.isEmpty() && semanticEquivalenceCertificateDeclarations.isEmpty() &&
+                naturalMethodDeclarations.isEmpty() &&
                 implementationMethodDeclarations.isEmpty()
             ) return this
             return buildMap(
-                size + familyDeclarations.size + naturalMethodDeclarations.size +
+                size + familyDeclarations.size + semanticEquivalenceCertificateDeclarations.size +
+                        naturalMethodDeclarations.size +
                         implementationMethodDeclarations.size,
             ) {
                 putAll(this@withProducerSealedGenericOwnerFamilies)
                 familyDeclarations.forEach { declaration ->
+                    val key = declaration.indexKey()
+                    check(put(key, declaration) == null) {
+                        "multiple final generic-owner physical declarations claim '$key'"
+                    }
+                }
+                semanticEquivalenceCertificateDeclarations.forEach { declaration ->
                     val key = declaration.indexKey()
                     check(put(key, declaration) == null) {
                         "multiple final generic-owner physical declarations claim '$key'"
@@ -699,6 +762,15 @@ object DotNetBackend {
             .map { plan -> plan.toPrototypeSnapshot(preLoweringDeclarationKeys) }
             .sortedBy(DotNetGenericOwnerPrototypeSnapshot::ownerName)
         localPhysicalAuthorityForEmissionComparison = context.localGenericOwnerPhysicalAuthority
+        if (!configuration.dotNetGenericOwnerRehearsal) {
+            check(context.genericOwnerSemanticEquivalenceEmissionObligations.isEmpty() &&
+                    context.genericOwnerSemanticEquivalentOperationEmitterWitnesses.isEmpty()
+            ) {
+                "the production erased epoch cannot create semantic-equivalence obligations or witnesses"
+            }
+        }
+        genericOwnerSemanticEquivalenceEmissionObligations =
+            context.genericOwnerSemanticEquivalenceEmissionObligations.toSet()
         genericOwnerCallRoutes = context.genericOwnerCallRoutes
             .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)
             .sortedBy(DotNetGenericOwnerCallRouteSnapshot::callSiteIndex)
@@ -822,6 +894,8 @@ object DotNetBackend {
                     localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                     genericOwnerPhysicalValueLocalPlacementAuthority =
                         genericOwnerPhysicalValueLocalPlacementAuthority,
+                    genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                        context.genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                     publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                     reifiedGenericInterfacePhysicalVariances =
@@ -995,6 +1069,8 @@ object DotNetBackend {
                 localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                 genericOwnerPhysicalValueLocalPlacementAuthority =
                     genericOwnerPhysicalValueLocalPlacementAuthority,
+                genericOwnerSemanticEquivalentOperationEmitterWitnesses =
+                    context.genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,
                 publishedGenericInterfaceFamilies = context.publishedGenericInterfaceFamilies,
                 reifiedGenericInterfacePhysicalVariances =
@@ -1285,7 +1361,7 @@ data class DotNetBackendOutput(
             "the production erased epoch cannot publish sealed generic-owner state FieldDefs"
         }
         require(genericOwnerRehearsal || declarations.genericOwnerRehearsalEpochRecords().isEmpty()) {
-            "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/M/J)"
+            "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/M/J/K)"
         }
     }
 }

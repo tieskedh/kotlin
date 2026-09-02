@@ -17,7 +17,12 @@ import kotlin.test.assertTrue
 class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     @Test
     fun classifiesOnlyTheRehearsalEpochPhysicalRecords() {
-        val declarations = producerSealedFamilyAbiFixture() + implementationMethodDefAbiFixture()
+        val publication = producerSealedFamilyPublicationFixture().withDirectResults()
+        val declarations = producerSealedFamilyAbiFixture(
+            publication,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+        ) +
+                semanticEquivalenceCertificateEntry(publication) + implementationMethodDefAbiFixture()
         val records = declarations.genericOwnerRehearsalEpochRecords()
 
         assertEquals(
@@ -26,10 +31,15 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_NATURAL_METHOD_DEF,
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF,
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEALED_FAMILY,
+                DotNetGenericOwnerRehearsalEpochRecordKind
+                    .GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE,
             ),
             records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::kind),
         )
-        assertEquals(setOf("H", "N", "M", "J"), records.mapTo(linkedSetOf()) { record -> record.kind.wireTag })
+        assertEquals(
+            setOf("H", "N", "M", "J", "K"),
+            records.mapTo(linkedSetOf()) { record -> record.kind.wireTag },
+        )
         val productionDeclarations =
             declarations - records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::indexKey)
         assertTrue(productionDeclarations.genericOwnerRehearsalEpochRecords().isEmpty())
@@ -44,7 +54,12 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
 
     @Test
     fun backendOutputRejectsEveryRehearsalEpochRecordInProduction() {
-        val declarations = producerSealedFamilyAbiFixture() + implementationMethodDefAbiFixture()
+        val publication = producerSealedFamilyPublicationFixture().withDirectResults()
+        val declarations = producerSealedFamilyAbiFixture(
+            publication,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+        ) +
+                semanticEquivalenceCertificateEntry(publication) + implementationMethodDefAbiFixture()
         val records = declarations.genericOwnerRehearsalEpochRecords()
 
         records.forEach { record ->
@@ -56,20 +71,24 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                     genericOwnerRehearsal = false,
                 )
             }
-            assertTrue(failure.message.orEmpty().contains("H/N/M/J"))
+            assertTrue(failure.message.orEmpty().contains("H/N/M/J/K"))
         }
         assertEquals(declarations, backendOutput(declarations, genericOwnerRehearsal = true).declarations)
     }
 
     @Test
     fun deterministicallyRoundTripsTheCompleteActualOnlyProducerIndex() {
-        val publication = producerSealedFamilyPublicationFixture()
-        val declarations = producerSealedFamilyAbiFixture(publication)
+        val publication = producerSealedFamilyPublicationFixture().withDirectResults()
+        val declarations = producerSealedFamilyAbiFixture(
+            publication,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+        ) +
+                semanticEquivalenceCertificateEntry(publication)
 
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("66", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("67", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -78,6 +97,16 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             .single()
         assertEquals(publication, decodedFamily.publication())
         assertEquals(listOf("demo.Store`1"), decodedFamily.ownerPath)
+        val certificate = decoded.values
+            .filterIsInstance<
+                    DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
+            .single()
+        assertEquals(decodedFamily.indexKey(), certificate.sealedFamilyIndexKey)
+        assertEquals(
+            DotNetProducerGenericOwnerSemanticEquivalenceProofKind
+                .FINAL_CONCRETE_DIRECT_TYPED_ENTRY_CHAIN,
+            certificate.certificate().proofKind,
+        )
         val naturalMethod = decoded.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
             .single()
@@ -86,7 +115,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             naturalMethod,
         )
         assertTrue(naturalMethod.physicalMethod.signature.resultLayout is
-                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
+                DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct)
         assertEquals(
             listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT),
             decoded.values
@@ -791,6 +820,112 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     }
 
     @Test
+    fun semanticEquivalenceCertificateRequiresItsExactSameLibraryJFamily() {
+        val splitPublication = producerSealedFamilyPublicationFixture()
+        val splitCertificateEntry = semanticEquivalenceCertificateEntry(splitPublication)
+        val splitFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(
+                producerSealedFamilyAbiFixture(splitPublication) + splitCertificateEntry,
+            )
+        }
+        assertTrue(splitFailure.message.orEmpty().contains("requires direct natural"))
+
+        val publication = producerSealedFamilyPublicationFixture().withDirectResults()
+        val declarations = producerSealedFamilyAbiFixture(
+            publication,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+        )
+        val certificateEntry = semanticEquivalenceCertificateEntry(publication)
+
+        assertEquals(
+            declarations + certificateEntry,
+            DotNetLibraryAbiCodec.decode(
+                DotNetLibraryAbiCodec.encode(declarations + certificateEntry).toProperties(),
+            ),
+        )
+
+        val missingFamily = certificateEntry + (declarations - publication.toPhysicalDeclaration().indexKey())
+        val missingFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.encode(missingFamily)
+        }
+        assertTrue(missingFailure.message.orEmpty().contains("no same-library producer-sealed J family"))
+
+        val certificate = certificateEntry.values
+            .filterIsInstance<
+                    DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
+            .single()
+        val otherFamilyKey = "J:${"0".repeat(32)}"
+        val crossWired = assertFailsWith<IllegalArgumentException> {
+            certificate.copy(sealedFamilyIndexKey = otherFamilyKey)
+        }
+        assertTrue(crossWired.message.orEmpty().contains("disagrees with its encoded"))
+    }
+
+    @Test
+    fun externalIndexBindsCertificateAndJByLogicalIdentity() {
+        val publication = producerSealedFamilyPublicationFixture().withDirectResults()
+        val declarations = producerSealedFamilyAbiFixture(
+            publication,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+        ) +
+                semanticEquivalenceCertificateEntry(publication)
+        val library = DotNetExternalLibrary(
+            artifact = DotNetLibraryArtifact("Demo", "net10.0"),
+            assemblyFile = File("Demo.dll"),
+            declarations = declarations,
+            friendAssemblies = emptySet(),
+        )
+
+        val index = DotNetExternalDeclarationIndex(listOf(library))
+        val sealed = index.genericOwnerSealedFamiliesByKey.getValue(publication.key)
+        val certificate = index.genericOwnerSemanticEquivalenceCertificatesByFamilyKey
+            .getValue(publication.key)
+        assertEquals(publication, sealed.publication)
+        assertTrue(certificate.library === library)
+        assertTrue(certificate.sealedFamily === sealed)
+        assertEquals(
+            DotNetGenericOwnerPhysicalAuthorityEpoch.SEALED_EMISSION_SIGNATURE_INDEX,
+            certificate.authority.epoch,
+        )
+        assertTrue(
+            index.genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint[
+                publication.key.logicalInterfaceMemberKey to publication.key.implementationOwnerKey
+            ] === certificate,
+        )
+    }
+
+    @Test
+    fun rejectsMalformedSemanticEquivalenceEnvelopeAndWrongIndex() {
+        val publication = producerSealedFamilyPublicationFixture().withDirectResults()
+        val valid = DotNetLibraryAbiCodec.encode(
+            producerSealedFamilyAbiFixture(
+                publication,
+                DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+            ) +
+                    semanticEquivalenceCertificateEntry(publication),
+        )
+        val entry = valid.entries.single { candidate ->
+            decodePropertyKey(candidate.key).startsWith("K:")
+        }
+
+        val invalidBase64 = valid + (entry.key to entry.value.mutateEnvelopeFields { fields ->
+            fields[2] = "*"
+        })
+        val malformed = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(invalidBase64.toProperties())
+        }
+        assertTrue(malformed.message.orEmpty().contains("invalid Base64"))
+
+        val wrongIndex = valid - entry.key + (
+                encodedPropertyKey("K:${"0".repeat(32)}") to entry.value
+                )
+        val identityFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(wrongIndex.toProperties())
+        }
+        assertTrue(identityFailure.message.orEmpty().contains("structured identity"))
+    }
+
+    @Test
     fun rejectsTruncatedAndTrailingNaturalMethodDefPublicationBytes() {
         val valid = DotNetLibraryAbiCodec.encode(interfaceOnlyNaturalMethodDefAbiFixture())
 
@@ -926,6 +1061,16 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
 
         fun interfaceOwnerKey(publication: DotNetProducerGenericOwnerSealedFamilyPublication): String =
             publication.key.logicalInterfaceMemberKey.substringBeforeLast('.')
+
+        fun semanticEquivalenceCertificateEntry(
+            publication: DotNetProducerGenericOwnerSealedFamilyPublication,
+        ): Map<String, DotNetPhysicalDeclaration> {
+            val sealed = publication.toPhysicalDeclaration()
+            val certificate = DotNetProducerGenericOwnerSemanticEquivalenceCertificate
+                .finalConcreteDirectTypedEntryChain(sealed.indexKey())
+                .toPhysicalDeclaration()
+            return mapOf(certificate.indexKey() to certificate)
+        }
 
         fun producerSealedFamilyAbiFixture(
             publication: DotNetProducerGenericOwnerSealedFamilyPublication =

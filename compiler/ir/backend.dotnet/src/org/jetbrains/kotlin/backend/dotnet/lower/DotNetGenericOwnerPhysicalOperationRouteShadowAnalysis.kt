@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationLo
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRoute
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteKindSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowRelation
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot
@@ -34,8 +35,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalView
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableEntryKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.isDotNetParameterlessDirectResultPlacementCall
+import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
 import org.jetbrains.kotlin.backend.dotnet.unknownPhysicalValueCarrierSnapshot
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -172,6 +177,17 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                                 "one final generic-owner call received multiple authoritative " +
                                         "physical operation routes"
                             }
+                            observation.semanticEquivalenceEmitterWitness?.let { witness ->
+                                check(witness.route === route &&
+                                        context.genericOwnerSemanticEquivalentOperationEmitterWitnesses.put(
+                                            expression,
+                                            witness,
+                                        ) == null
+                                ) {
+                                    "one final generic-owner call received multiple semantic-equivalence " +
+                                            "emitter witnesses"
+                                }
+                            }
                         }
                     }
                 }
@@ -212,14 +228,25 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         val receiver = call.dispatchReceiver.identityGetValueOrNull() ?: return null
         if (receiver.symbol in conflictingValues) return null
         val declarations = authority.boundDeclarations ?: return null
-        val selection = selectLogicalReceiver(
+        val initialSelection = selectLogicalReceiver(
             logicalReceiverType,
             owner,
             naturalMethod,
             semanticMethod,
             authority,
         )
-        if (selection is LogicalReceiverSelectionResult.Unsupported) return null
+        if (initialSelection is LogicalReceiverSelectionResult.Unsupported) return null
+        val selection = if (initialSelection is LogicalReceiverSelectionResult.Selected) {
+            selectSemanticallyEquivalentNaturalReceiverOrNull(
+                initialSelection,
+                source,
+                storageByValue[receiver.symbol]?.read()?.value,
+                naturalMethod,
+                authority,
+            ) ?: initialSelection
+        } else {
+            initialSelection
+        }
         val selector = selection.selector
         val requiredView = (selection as? LogicalReceiverSelectionResult.Selected)?.requiredView
         val diagnostic = OperationDiagnostic(
@@ -275,40 +302,82 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         } ?: return null
         return when (prediction) {
             is DotNetGenericOwnerPhysicalBindingResult.Bound -> {
+                var semanticEquivalenceEmitterWitness:
+                        DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness? = null
                 val hasDirectNaturalReceiverCarrier =
                     call.dispatchReceiver.hasEmitterVisibleIdentityStorageRead() &&
                             receiver.hasOperationIndependentDirectCarrier(
                                 owner,
                                 selection.requiredView,
+                                selection.semanticEquivalenceFamily,
                                 operationStorageByValue,
                                 conflictingValues,
                                 authority,
                             )
-                if (selection.selectedEntry ==
+                val isNaturalCandidate =
+                    selection.selectedEntry ==
+                            DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
+                            (selection.selector ==
+                                    DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL ||
+                                    selection.semanticEquivalenceFamily != null)
+                val replacedConservativeTarget = if (selection.selectedEntry ==
                     DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
-                    selection.selector ==
-                    DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                    isNaturalCandidate &&
                     hasDirectNaturalReceiverCarrier &&
                     mayReplaceConservativeSemanticTarget(call, prediction.value)
                 ) {
+                    selection.semanticEquivalenceFamily?.let { family ->
+                        val directReceiverCarrier = ((operationStorageByValue[receiver.symbol]
+                            ?.read()?.value?.layout as?
+                                DotNetGenericOwnerProducedValueLayout.Direct)?.carrier)
+                            ?: error(
+                                "Internal .NET backend error: a certified direct route lost its " +
+                                        "exact receiver carrier",
+                            )
+                        val implementationType = family.types.getValue(
+                            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+                        )
+                        semanticEquivalenceEmitterWitness =
+                            DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness(
+                                prediction.value,
+                                directReceiverCarrier,
+                                implementationType,
+                            )
+                        context.genericOwnerSemanticEquivalenceEmissionObligations +=
+                            family.logicalMember to family.implementationMember
+                    }
                     context.genericOwnerCapabilityCallTargets.remove(call)
                     context.genericOwnerForeignDispatchCallTargets.remove(call)
                     diagnostic.actual = actualRoute(call)
-                }
+                    true
+                } else false
+                val isAuthorizedNaturalSelection =
+                    selection.selectedEntry ==
+                            DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
+                            (selection.selector ==
+                                    DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL ||
+                                    selection.semanticEquivalenceFamily != null &&
+                                    replacedConservativeTarget)
                 val snapshot = diagnostic.bound(prediction.value, call, selection.selectedEntry)
+                check(!replacedConservativeTarget ||
+                        snapshot.actualRoute ==
+                        DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+                        snapshot.relation ==
+                        DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH
+                ) {
+                    "a certified natural-route replacement did not match its final operation route"
+                }
                 OperationObservation(
                     snapshot,
                     prediction.value.takeIf {
-                        selection.selectedEntry ==
-                                DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE &&
-                                selection.selector ==
-                                DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+                        isAuthorizedNaturalSelection &&
                                 hasDirectNaturalReceiverCarrier &&
                                 snapshot.actualRoute ==
                                 DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
                                 snapshot.relation ==
                                 DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH
                     },
+                    semanticEquivalenceEmitterWitness,
                 )
             }
             is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
@@ -321,6 +390,8 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
     private data class OperationObservation(
         val snapshot: DotNetGenericOwnerPhysicalOperationRouteShadowSnapshot,
         val authoritativeExactNaturalRoute: DotNetGenericOwnerPhysicalOperationRoute? = null,
+        val semanticEquivalenceEmitterWitness:
+                DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness? = null,
     )
 
     /**
@@ -339,6 +410,56 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         return carrier.nullEncoding == DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE &&
                 carrier.type == view.construction
     }
+
+    /**
+     * A semantic-equivalence candidate can change operation policy only for the exact concrete
+     * construction whose final family it describes. The construction must already be the
+     * verifier-visible produced/storage carrier and must carry independent value provenance;
+     * neither the logically widened destination nor selected-view lineage can create it.
+     */
+    private fun DotNetGenericOwnerProducedValueFact.hasCertifiedImplementationCarrierFor(
+        view: DotNetGenericOwnerPhysicalView,
+        family: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily,
+        authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    ): Boolean {
+        val declarations = authority.boundDeclarations ?: return false
+        val carrier = (layout as? DotNetGenericOwnerProducedValueLayout.Direct)?.carrier
+            ?: return false
+        if (carrier.nullEncoding != DotNetGenericOwnerPhysicalNullEncoding.NULL_REFERENCE) return false
+        val construction = carrier.type as?
+                DotNetGenericOwnerSymbolicCarrierReference.Constructed ?: return false
+        val implementation = family.types.getValue(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+        )
+        if (construction.definition != implementation) return false
+        val constructionView = DotNetGenericOwnerPhysicalView(construction)
+        val evidence = (provenance.guaranteedViews as? DotNetGenericOwnerGuaranteedViews.Known)
+            ?.evidenceByView
+            ?.get(constructionView)
+            ?: return false
+        if (evidence.none { item -> item in setOf(
+                DotNetGenericOwnerPhysicalViewEvidence.CURRENT_PHYSICAL_RECEIVER,
+                DotNetGenericOwnerPhysicalViewEvidence.FROZEN_PARAMETER_OR_RESULT,
+                DotNetGenericOwnerPhysicalViewEvidence.CONSTRUCTOR_ALLOCATION,
+            )
+        }) return false
+        return when (val closure = declarations.physicalInterfaceViewClosureOrError(construction)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                closure.value.isComplete && view in closure.value.interfaceViews
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> false
+        }
+    }
+
+    private fun DotNetGenericOwnerProducedValueFact.hasOperationIndependentCarrierFor(
+        view: DotNetGenericOwnerPhysicalView,
+        semanticEquivalenceFamily: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily?,
+        authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    ): Boolean = hasDirectCarrierFor(view) ||
+            semanticEquivalenceFamily?.let { family ->
+                hasCertifiedImplementationCarrierFor(view, family, authority)
+            } == true
 
     /**
      * This bounded entry route admits only a construction whose complete argument vector is made
@@ -396,6 +517,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
     private fun IrGetValue.hasOperationIndependentDirectCarrier(
         physicalOwner: IrClass,
         view: DotNetGenericOwnerPhysicalView,
+        semanticEquivalenceFamily: DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily?,
         storageByValue: IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         conflictingValues: Set<IrValueSymbol>,
         authority: DotNetLocalGenericOwnerPhysicalAuthority,
@@ -405,7 +527,11 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         while (visited.add(read.symbol)) {
             val value = storageByValue[read.symbol]?.read()?.value
             if (read.symbol in conflictingValues ||
-                value?.hasDirectCarrierFor(view) != true
+                value?.hasOperationIndependentCarrierFor(
+                    view,
+                    semanticEquivalenceFamily,
+                    authority,
+                ) != true
             ) return false
             when (val declaration = read.symbol.owner) {
                 is IrValueParameter -> return value.hasOperationIndependentEntryEvidence(
@@ -418,12 +544,26 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
                     if (source != null) {
                         val parameter = source.symbol.owner as? IrValueParameter
                         if (parameter != null && storageByValue[source.symbol] == null) {
-                            return value.hasOperationIndependentEntryEvidence(view, parameter)
+                            return value.hasOperationIndependentEntryEvidence(view, parameter) ||
+                                    semanticEquivalenceFamily != null &&
+                                    parameter.kind == IrParameterKind.DispatchReceiver &&
+                                    value.hasCertifiedImplementationCarrierFor(
+                                        view,
+                                        semanticEquivalenceFamily,
+                                        authority,
+                                    )
                         }
                         read = source
                         continue
                     }
                     if (!declaration.initializer.hasDirectConstructorResultTail()) return false
+                    if (semanticEquivalenceFamily != null &&
+                        value.hasCertifiedImplementationCarrierFor(
+                            view,
+                            semanticEquivalenceFamily,
+                            authority,
+                        )
+                    ) return true
                     return when (val exact = bindExactLocalGenericOwnerNaturalViewOrError(
                         declaration.type,
                         physicalOwner,
@@ -439,6 +579,64 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             }
         }
         return false
+    }
+
+    /**
+     * Replaces a broad semantic selector only when declaration authority and an already-produced
+     * exact final implementation carrier independently identify the same natural MethodDef.
+     * OPEN_NULLABLE remains outside this first proof because its logical materialization has a
+     * separate calling-convention obligation.
+     */
+    private fun selectSemanticallyEquivalentNaturalReceiverOrNull(
+        selected: LogicalReceiverSelectionResult.Selected,
+        source: IrSimpleFunction,
+        receiver: DotNetGenericOwnerProducedValueFact?,
+        naturalMethod: DotNetGenericOwnerPhysicalMethodDefIdentity,
+        authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    ): LogicalReceiverSelectionResult.Selected? {
+        if (selected.selector !=
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL ||
+            selected.selectedEntry !=
+            DotNetLocalGenericOwnerPhysicalCallableEntryKind.SEMANTIC_CAPABILITY_INTERFACE_SLOT
+        ) return null
+        val value = receiver ?: return null
+        val construction = ((value.layout as? DotNetGenericOwnerProducedValueLayout.Direct)
+            ?.carrier?.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+            ?: return null
+        val implementation = construction.definition as?
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+        if (implementation.view != null) return null
+        val family = authority.semanticEquivalenceCandidateOrNull(
+            source.symbol,
+            implementation.owner,
+        ) ?: return null
+        if (family.types.getValue(
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind.IMPLEMENTATION_CLASS,
+            ) != implementation
+        ) return null
+        val familyNaturalMethod = family.methods.getValue(
+            DotNetLocalGenericOwnerPhysicalCompleteEmissionMethodKind.NATURAL_INTERFACE_SLOT,
+        ).second.identity
+        if (familyNaturalMethod != naturalMethod) return null
+        val declarations = authority.boundDeclarations ?: return null
+        val method = declarations.methodDescriptionOrNull(naturalMethod) ?: return null
+        val requiredView = when (val binding =
+            value.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError(
+                declarations,
+                method.declaringType,
+            )
+        ) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                error("Internal .NET backend error: ${binding.reason}")
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+        }
+        if (!value.hasCertifiedImplementationCarrierFor(requiredView, family, authority)) return null
+        return selected.copy(
+            selectedEntry = DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE,
+            requiredView = requiredView,
+            semanticEquivalenceFamily = family,
+        )
     }
 
     private fun DotNetGenericOwnerProducedValueFact.hasOperationIndependentEntryEvidence(
@@ -679,6 +877,8 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
             override val selector: DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot,
             val selectedEntry: DotNetLocalGenericOwnerPhysicalCallableEntryKind,
             val requiredView: DotNetGenericOwnerPhysicalView,
+            val semanticEquivalenceFamily:
+                DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily? = null,
         ) : LogicalReceiverSelectionResult
     }
 

@@ -14,6 +14,12 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-semantic-equivalence-certificate-2026-09-02.md`](generic-owner-semantic-equivalence-certificate-2026-09-02.md)
+  records the bounded exact-local-final direct route, final-emitter proof that
+  both semantic dispatchers converge on one typed implementation entry,
+  physical-library ABI 67's orthogonal `K` certificate tied to `J`, the
+  production-erased inverse, and the still-closed objective external PE body
+  validation gate.
 - [`generic-owner-call-result-route-coherence-2026-09-02.md`](generic-owner-call-result-route-coherence-2026-09-02.md)
   follows up the first constructed-result slice with the rejected logically-
   widened-interface/semantic-equivalence shortcut, identity-keyed final-route

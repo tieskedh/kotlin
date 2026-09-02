@@ -794,6 +794,27 @@ sealed interface DotNetPhysicalDeclaration {
             }.row.physicalPath
     }
 
+    /**
+     * Producer-proved semantic equivalence for one exact `J` family.
+     *
+     * This relationship has no independent CLR owner or physical row.  Its authority is exposed
+     * only after [sealedFamilyIndexKey] is joined to the same library's complete `J` family.
+     */
+    data class GenericOwnerSemanticEquivalenceCertificate(
+        val sealedFamilyIndexKey: String,
+        /** Canonical URL-safe Base64 encoding of the versioned bounded certificate. */
+        val encodedCertificate: String,
+    ) : DotNetPhysicalDeclaration {
+        override val ownerPath: List<String> = emptyList()
+
+        init {
+            DotNetLibraryAbiCodec.requireProducerGenericOwnerSemanticEquivalenceCertificate(
+                sealedFamilyIndexKey,
+                encodedCertificate,
+            )
+        }
+    }
+
     /** Exact producer-sealed natural MethodDef token descriptor for one logical Kotlin member. */
     data class GenericOwnerNaturalMethodDef(
         val logicalOwnerKey: String,
@@ -958,7 +979,7 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry.indexKey()
 internal fun DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily.indexKey(): String =
     "H:${contract.logicalOwnerKey}"
 
-internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): String =
+internal fun DotNetProducerGenericOwnerSealedFamilyKey.physicalIndexKey(): String =
     "J:" + DotNetLibraryAbiCodec.logicalIdentityDigest(
         buildString {
             append("producer-generic-owner-sealed-family-v1:")
@@ -973,6 +994,16 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): Stri
             }
         },
     )
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.indexKey(): String =
+    DotNetProducerGenericOwnerSealedFamilyKey(
+        logicalInterfaceMemberKey,
+        implementationOwnerKey,
+        implementationMemberKey,
+    ).physicalIndexKey()
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate.indexKey(): String =
+    "K:${sealedFamilyIndexKey.removePrefix("J:")}"
 
 internal fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.indexKey(): String =
     "N:$logicalMemberKey"
@@ -1004,6 +1035,7 @@ internal enum class DotNetGenericOwnerRehearsalEpochRecordKind(val wireTag: Stri
     GENERIC_OWNER_NATURAL_METHOD_DEF("N"),
     GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF("M"),
     GENERIC_OWNER_SEALED_FAMILY("J"),
+    GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE("K"),
 }
 
 internal data class DotNetGenericOwnerRehearsalEpochRecord(
@@ -1021,6 +1053,8 @@ internal fun DotNetPhysicalDeclaration.genericOwnerRehearsalEpochRecordKindOrNul
         DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF
     is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ->
         DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEALED_FAMILY
+    is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate ->
+        DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE
     else -> null
 }
 
@@ -1050,6 +1084,17 @@ internal fun DotNetPhysicalDeclaration.GenericOwnerSealedFamily.publication():
         implementationOwnerKey,
         implementationMemberKey,
         encodedPublication,
+    )
+
+internal fun DotNetProducerGenericOwnerSemanticEquivalenceCertificate.toPhysicalDeclaration():
+        DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate =
+    DotNetLibraryAbiCodec.producerGenericOwnerSemanticEquivalenceCertificateDeclaration(this)
+
+internal fun DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate.certificate():
+        DotNetProducerGenericOwnerSemanticEquivalenceCertificate =
+    DotNetLibraryAbiCodec.requireProducerGenericOwnerSemanticEquivalenceCertificate(
+        sealedFamilyIndexKey,
+        encodedCertificate,
     )
 
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
@@ -1112,7 +1157,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "66"
+    const val ABI_VERSION = "67"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1127,6 +1172,7 @@ object DotNetLibraryAbiCodec {
     /** Far above the bounded 4/6/2 family's canonical payload, but below hostile decoder allocations. */
     internal const val MAX_PRODUCER_GENERIC_OWNER_SEALED_FAMILY_BASE64_CHARS = 16 * 1_048_576
     internal const val MAX_PRODUCER_GENERIC_OWNER_NATURAL_METHOD_BASE64_CHARS = 16 * 1_048_576
+    internal const val MAX_PRODUCER_GENERIC_OWNER_SEMANTIC_EQUIVALENCE_BASE64_CHARS = 32 * 1_024
 
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -1175,6 +1221,8 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.GenericOwnerMemberFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerSealedFamily -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate ->
+                    declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef -> declaration.encodeFields()
             }
@@ -1205,6 +1253,7 @@ object DotNetLibraryAbiCodec {
                     "G" -> decodeGenericOwnerMemberFamily(fields, logicalKey)
                     "H" -> decodePublishedGenericInterfaceFamily(fields, logicalKey)
                     "J" -> decodeGenericOwnerSealedFamily(fields, logicalKey)
+                    "K" -> decodeGenericOwnerSemanticEquivalenceCertificate(fields, logicalKey)
                     "N" -> decodeGenericOwnerNaturalMethodDef(fields, logicalKey)
                     "M" -> decodeGenericOwnerImplementationMethodDef(fields, logicalKey)
                     "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
@@ -2209,6 +2258,86 @@ object DotNetLibraryAbiCodec {
         }
     }
 
+    internal fun producerGenericOwnerSemanticEquivalenceCertificateDeclaration(
+        certificate: DotNetProducerGenericOwnerSemanticEquivalenceCertificate,
+    ): DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate =
+        DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate(
+            sealedFamilyIndexKey = certificate.sealedFamilyIndexKey,
+            encodedCertificate = encoder.encodeToString(
+                DotNetProducerGenericOwnerSemanticEquivalenceCertificateCodec.encode(certificate),
+            ),
+        )
+
+    internal fun requireProducerGenericOwnerSemanticEquivalenceCertificate(
+        sealedFamilyIndexKey: String,
+        encodedCertificate: String,
+    ): DotNetProducerGenericOwnerSemanticEquivalenceCertificate {
+        require(sealedFamilyIndexKey.isNotEmpty()) {
+            "a semantic-equivalence envelope requires one exact producer-sealed J index key"
+        }
+        require(encodedCertificate.isNotEmpty()) {
+            "a semantic-equivalence envelope requires an encoded certificate"
+        }
+        require(encodedCertificate.length <=
+                MAX_PRODUCER_GENERIC_OWNER_SEMANTIC_EQUIVALENCE_BASE64_CHARS
+        ) {
+            "a semantic-equivalence envelope exceeds the bounded encoded-certificate size"
+        }
+        val bytes = try {
+            decoder.decode(encodedCertificate)
+        } catch (failure: IllegalArgumentException) {
+            throw IllegalArgumentException(
+                "a semantic-equivalence envelope has invalid Base64",
+                failure,
+            )
+        }
+        val certificate = when (
+            val decoded = DotNetProducerGenericOwnerSemanticEquivalenceCertificateCodec.decode(bytes)
+        ) {
+            is DotNetProducerGenericOwnerSemanticEquivalenceCertificateDecodeResult.Success ->
+                decoded.certificate
+            is DotNetProducerGenericOwnerSemanticEquivalenceCertificateDecodeResult.Malformed ->
+                throw IllegalArgumentException(
+                    "a semantic-equivalence envelope has a malformed certificate: ${decoded.reason}",
+                )
+        }
+        require(certificate.sealedFamilyIndexKey == sealedFamilyIndexKey) {
+            "a semantic-equivalence envelope disagrees with its encoded producer-sealed J key"
+        }
+        require(encodedCertificate == encoder.encodeToString(
+            DotNetProducerGenericOwnerSemanticEquivalenceCertificateCodec.encode(certificate),
+        )) {
+            "a semantic-equivalence envelope is not canonically encoded"
+        }
+        return certificate
+    }
+
+    private fun DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate.encodeFields():
+            List<String> {
+        requireProducerGenericOwnerSemanticEquivalenceCertificate(
+            sealedFamilyIndexKey,
+            encodedCertificate,
+        )
+        return listOf("K", sealedFamilyIndexKey, encodedCertificate)
+    }
+
+    private fun decodeGenericOwnerSemanticEquivalenceCertificate(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate {
+        require(fields.size == 3) {
+            "semantic-equivalence certificate '$logicalKey' has an incomplete or trailing envelope"
+        }
+        return DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate(
+            sealedFamilyIndexKey = fields[1],
+            encodedCertificate = fields[2],
+        ).also { certificate ->
+            require(certificate.indexKey() == logicalKey) {
+                "semantic-equivalence certificate '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
     private fun DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef.encodeFields(): List<String> =
         listOf(
             "N",
@@ -2398,7 +2527,7 @@ object DotNetLibraryAbiCodec {
      * graph.  Its logical joins and every externally indexed physical endpoint must therefore
      * agree with the ordinary producer C/F/G/H records in the same complete library index.
      */
-    private fun requireProducerGenericOwnerSealedFamilyIndexes(
+    internal fun requireProducerGenericOwnerSealedFamilyIndexes(
         declarations: Map<String, DotNetPhysicalDeclaration>,
     ) {
         fun requiredDeclaration(key: String, role: String): DotNetPhysicalDeclaration =
@@ -2890,6 +3019,36 @@ object DotNetLibraryAbiCodec {
                             DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable)
             ) {
                 "producer-sealed family '$indexKey' disagrees with its H-selected natural MethodDef owner or result layout"
+            }
+        }
+
+        declarations.forEach { [indexKey, declaration] ->
+            if (declaration !is
+                    DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
+            ) return@forEach
+            require(declaration.indexKey() == indexKey) {
+                "semantic-equivalence certificate '$indexKey' is inconsistent with its structured identity"
+            }
+            val certificate = declaration.certificate()
+            val sealedDeclaration = declarations[certificate.sealedFamilyIndexKey] as?
+                    DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                ?: throw IllegalArgumentException(
+                    "semantic-equivalence certificate '$indexKey' has no same-library producer-sealed J family " +
+                            "'${certificate.sealedFamilyIndexKey}'",
+                )
+            when (val authority = inspectDotNetProducerGenericOwnerSemanticEquivalenceCertificate(
+                certificate,
+                sealedDeclaration.indexKey(),
+                sealedDeclaration.publication(),
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict -> throw IllegalArgumentException(
+                    "semantic-equivalence certificate '$indexKey' conflicts with its J family: " +
+                            authority.reason,
+                )
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> throw IllegalArgumentException(
+                    "claimed semantic-equivalence certificate '$indexKey' is unavailable",
+                )
             }
         }
     }
@@ -3418,6 +3577,31 @@ internal data class DotNetBoundGenericOwnerImplementationMethodDef(
     val declaration: DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef,
 )
 
+internal data class DotNetBoundGenericOwnerSealedFamily(
+    val library: DotNetExternalLibrary,
+    val declaration: DotNetPhysicalDeclaration.GenericOwnerSealedFamily,
+) {
+    val publication: DotNetProducerGenericOwnerSealedFamilyPublication = declaration.publication()
+}
+
+internal data class DotNetBoundGenericOwnerSemanticEquivalenceCertificate(
+    val library: DotNetExternalLibrary,
+    val declaration: DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate,
+    val certificate: DotNetProducerGenericOwnerSemanticEquivalenceCertificate,
+    val sealedFamily: DotNetBoundGenericOwnerSealedFamily,
+    val authority: DotNetProducerGenericOwnerSemanticEquivalenceAuthority,
+) {
+    init {
+        require(library === sealedFamily.library &&
+                certificate.sealedFamilyIndexKey == sealedFamily.declaration.indexKey() &&
+                authority.certificate == certificate &&
+                authority.sealedFamily.publication == sealedFamily.publication
+        ) {
+            "a bound semantic-equivalence certificate requires its exact same-library J family"
+        }
+    }
+}
+
 internal data class DotNetBoundGenericOwnerPhysicalSlot(
     val library: DotNetExternalLibrary,
     val family: DotNetPhysicalDeclaration.GenericOwnerMemberFamily,
@@ -3564,6 +3748,88 @@ internal class DotNetExternalDeclarationIndex(
                                     "'${declaration.implementationMemberKey}'"
                         }
                     }
+                }
+        }
+    internal val genericOwnerSealedFamiliesByKey:
+        Map<DotNetProducerGenericOwnerSealedFamilyKey, DotNetBoundGenericOwnerSealedFamily> =
+        buildMap {
+            libraries.forEach { library ->
+                library.declarations.values
+                    .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerSealedFamily>()
+                    .forEach { declaration ->
+                        val bound = DotNetBoundGenericOwnerSealedFamily(library, declaration)
+                        require(put(bound.publication.key, bound) == null) {
+                            "duplicate external Kotlin/.NET producer-sealed J family " +
+                                    "'${declaration.indexKey()}'"
+                        }
+                    }
+            }
+        }
+    internal val genericOwnerSemanticEquivalenceCertificatesByFamilyKey:
+        Map<DotNetProducerGenericOwnerSealedFamilyKey,
+                DotNetBoundGenericOwnerSemanticEquivalenceCertificate> = buildMap {
+        libraries.forEach { library ->
+            val certificateDeclarations = library.declarations.values
+                .filterIsInstance<
+                        DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
+            if (certificateDeclarations.isNotEmpty()) {
+                DotNetLibraryAbiCodec.requireProducerGenericOwnerSealedFamilyIndexes(
+                    library.declarations,
+                )
+            }
+            certificateDeclarations.forEach { declaration ->
+                    val certificate = declaration.certificate()
+                    val sealedDeclaration = library.declarations[certificate.sealedFamilyIndexKey]
+                            as? DotNetPhysicalDeclaration.GenericOwnerSealedFamily
+                        ?: throw IllegalArgumentException(
+                            "external semantic-equivalence certificate '${declaration.indexKey()}' " +
+                                    "lost its same-library J family",
+                        )
+                    val sealedFamily = genericOwnerSealedFamiliesByKey.values.singleOrNull { candidate ->
+                        candidate.library === library && candidate.declaration === sealedDeclaration
+                    } ?: throw IllegalArgumentException(
+                        "external semantic-equivalence certificate '${declaration.indexKey()}' " +
+                                "cannot bind its exact J family",
+                    )
+                    val authority = when (
+                        val inspection = inspectDotNetProducerGenericOwnerSemanticEquivalenceCertificate(
+                            certificate,
+                            sealedDeclaration.indexKey(),
+                            sealedFamily.publication,
+                        )
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> inspection.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                            throw IllegalArgumentException(inspection.reason)
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
+                            throw IllegalArgumentException(
+                                "a claimed external semantic-equivalence certificate is unavailable",
+                            )
+                    }
+                    val bound = DotNetBoundGenericOwnerSemanticEquivalenceCertificate(
+                        library,
+                        declaration,
+                        certificate,
+                        sealedFamily,
+                        authority,
+                    )
+                    require(put(sealedFamily.publication.key, bound) == null) {
+                        "duplicate external Kotlin/.NET semantic-equivalence certificate for J family " +
+                                "'${sealedDeclaration.indexKey()}'"
+                    }
+                }
+        }
+    }
+    internal val genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint:
+        Map<Pair<String, String>, DotNetBoundGenericOwnerSemanticEquivalenceCertificate> =
+        buildMap {
+            genericOwnerSemanticEquivalenceCertificatesByFamilyKey.forEach { entry ->
+                val familyKey = entry.key
+                val endpoint = familyKey.logicalInterfaceMemberKey to familyKey.implementationOwnerKey
+                require(put(endpoint, entry.value) == null) {
+                    "duplicate external Kotlin/.NET semantic-equivalence certificate for logical " +
+                            "endpoint '${endpoint.first}' on '${endpoint.second}'"
+                }
             }
         }
 
@@ -3666,6 +3932,9 @@ internal class DotNetExternalDeclarations(
         index.genericOwnerNaturalMethodDefsByLogicalKey
     private val genericOwnerImplementationMethodDefsByLogicalKey =
         index.genericOwnerImplementationMethodDefsByLogicalKey
+    private val genericOwnerSealedFamiliesByKey = index.genericOwnerSealedFamiliesByKey
+    private val genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint =
+        index.genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint
     private val canonicalClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerCapabilityInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val genericOwnerExactInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
@@ -3751,6 +4020,78 @@ internal class DotNetExternalDeclarations(
             "implementation MethodDef '$logicalKey' logical and physical N constructions disagree"
         }
         return binding
+    }
+
+    /**
+     * Producer-recorded proof that the exact final [implementationOwner]'s semantic route for
+     * [logicalInterfaceMember] reaches the same typed implementation as its natural route.
+     *
+     * Both arguments select KLIB declarations by stable logical identity.  This query does not
+     * inspect names, shapes, receiver values, or logical source types, and it supplies no value
+     * provenance.  The caller must independently prove the exact concrete receiver construction.
+     */
+    fun genericOwnerSemanticEquivalenceCertificateOrNull(
+        logicalInterfaceMember: IrSimpleFunction,
+        implementationOwner: IrClass,
+    ): DotNetBoundGenericOwnerSemanticEquivalenceCertificate? {
+        val interfaceMemberKey = externalGenericOwnerFunctionKeyOrNull(logicalInterfaceMember)
+            ?: return null
+        if (implementationOwner.fileOrNull != null) return null
+        val implementationOwnerKey = logicalKeys.keyOrNull(implementationOwner, "C") ?: return null
+        val binding = genericOwnerSemanticEquivalenceCertificatesByLogicalEndpoint[
+            interfaceMemberKey to implementationOwnerKey
+        ] ?: return null
+        val familyKey = binding.sealedFamily.publication.key
+        require(genericOwnerSealedFamiliesByKey[familyKey] === binding.sealedFamily &&
+                implementationOwner.typeParameters.size == binding.sealedFamily.publication.body.typeDefs
+                    .single { typeDef ->
+                        typeDef.role == DotNetProducerGenericOwnerSealedTypeDefRole.IMPLEMENTATION_CLASS
+                    }.row.structural.genericArity
+        ) {
+            "external semantic-equivalence certificate for '$interfaceMemberKey' disagrees with " +
+                    "its logical implementation owner"
+        }
+
+        val implementationMembers = implementationOwner.declarations
+            .flatMap { declaration ->
+                when (declaration) {
+                    is IrSimpleFunction -> listOf(declaration)
+                    is IrProperty -> listOfNotNull(declaration.getter, declaration.setter)
+                    else -> emptyList()
+                }
+            }
+            .filter { function ->
+                externalGenericOwnerFunctionKeyOrNull(function) == familyKey.implementationMemberKey
+            }
+        require(implementationMembers.size == 1) {
+            "external semantic-equivalence certificate for '$interfaceMemberKey' cannot bind its " +
+                    "exact logical implementation member '${familyKey.implementationMemberKey}'"
+        }
+        val implementationMember = implementationMembers.single()
+        require(implementationMember.allOverridden().any { overridden ->
+            externalGenericOwnerFunctionKeyOrNull(overridden) == interfaceMemberKey
+        }) {
+            "external semantic-equivalence certificate for '$interfaceMemberKey' disagrees with " +
+                    "the KLIB override graph"
+        }
+        return binding
+    }
+
+    /** Exact three-declaration variant used when the implementation member is already selected. */
+    fun genericOwnerSemanticEquivalenceCertificateOrNull(
+        logicalInterfaceMember: IrSimpleFunction,
+        implementationOwner: IrClass,
+        implementationMember: IrSimpleFunction,
+    ): DotNetBoundGenericOwnerSemanticEquivalenceCertificate? {
+        val binding = genericOwnerSemanticEquivalenceCertificateOrNull(
+            logicalInterfaceMember,
+            implementationOwner,
+        ) ?: return null
+        val implementationMemberKey = externalGenericOwnerFunctionKeyOrNull(implementationMember)
+            ?: return null
+        return binding.takeIf { candidate ->
+            candidate.sealedFamily.publication.key.implementationMemberKey == implementationMemberKey
+        }
     }
 
     /**
