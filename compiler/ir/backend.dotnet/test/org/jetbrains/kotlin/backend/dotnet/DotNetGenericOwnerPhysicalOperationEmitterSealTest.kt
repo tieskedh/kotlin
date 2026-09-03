@@ -5,11 +5,27 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.builders.declarations.buildVariable
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
+import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class DotNetGenericOwnerPhysicalOperationEmitterSealTest {
@@ -133,6 +149,158 @@ class DotNetGenericOwnerPhysicalOperationEmitterSealTest {
             ),
         )
         assertEquals(true, sealed.value.hasSplitNullableResult)
+    }
+
+    @Test
+    fun `ordered result obligation consumes exactly its sealed MethodSpec edge`() {
+        val fixture = SealFixture()
+        val call = dummyCall("expected")
+        val siblingCall = dummyCall("sibling")
+        val route = fixture.route(fixture.callerParameter)
+        val callerType = DotNetIlValueType.TypeParameter(0, isMethodParameter = true)
+        val resultType = DotNetIlValueType.TypeParameter(0, isMethodParameter = false)
+        val sealed = assertIs<DotNetGenericOwnerPhysicalBindingResult.Bound<
+                DotNetGenericOwnerPhysicalOperationSealedCallEdge,
+                >>(fixture.seal(route, fixture.edge(callerType))).value
+        val site = DotNetGenericOwnerPhysicalValueBoundDirectResultCallSite(
+            call,
+            route,
+            DotNetGenericOwnerPhysicalValueBoundDirectCall(
+                fixture.calleeMethod,
+                fixture.receiverType,
+                listOf(callerType),
+                resultType,
+                fixture.receiverType,
+                listOf(callerType),
+                listOf(callerType),
+                resultType,
+            ),
+        )
+        val retainedCarrier = assertIs<DotNetGenericOwnerProducedValueLayout.Direct>(
+            route.producedResult?.layout,
+        ).carrier
+        val firstVariable = dummyVariable("firstPrefix", call.type)
+        val secondVariable = dummyVariable("secondPrefix", call.type)
+        val firstPlacement = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+            retainedCarrier,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+        )
+        val secondPlacement = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+            retainedCarrier,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+        )
+        val prefixes = listOf(
+            DotNetGenericOwnerPhysicalValueBoundSequentialPrefix(
+                firstVariable,
+                firstPlacement,
+                fixture.receiverType,
+            ),
+            DotNetGenericOwnerPhysicalValueBoundSequentialPrefix(
+                secondVariable,
+                secondPlacement,
+                callerType,
+            ),
+        )
+
+        DotNetGenericOwnerPhysicalDirectResultEmissionObligation(
+            listOf(site),
+            prefixes,
+        ).also { obligation ->
+            obligation.consume(siblingCall, route, sealed)
+            obligation.consumePrefix(firstVariable, firstPlacement, fixture.receiverType)
+            obligation.consumePrefix(secondVariable, secondPlacement, callerType)
+            obligation.consume(call, route, sealed)
+            obligation.requireComplete()
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(listOf(site))
+                .requireComplete()
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(listOf(site))
+                .consume(call, route.copy(), sealed)
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(listOf(site)).also { obligation ->
+                obligation.consume(call, route, sealed)
+                obligation.consume(call, route, sealed)
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(listOf(site)).consume(
+                call,
+                route,
+                sealed.copy(returnType = DotNetIlReturnType.Value(DotNetIlValueType.Object)),
+            )
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(
+                listOf(site),
+                prefixes,
+            ).consume(call, route, sealed)
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(
+                listOf(site),
+                prefixes,
+            ).consumePrefix(secondVariable, secondPlacement, callerType)
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(
+                listOf(site),
+                prefixes,
+            ).consumePrefix(firstVariable, secondPlacement, fixture.receiverType)
+        }
+        assertFailsWith<IllegalStateException> {
+            DotNetGenericOwnerPhysicalDirectResultEmissionObligation(
+                listOf(site),
+                prefixes,
+            ).also { obligation ->
+                obligation.consumePrefix(firstVariable, firstPlacement, fixture.receiverType)
+                obligation.requireComplete()
+            }
+        }
+    }
+
+    private fun dummyCall(name: String): IrCall {
+        val owner = IrFactoryImpl.buildClass {
+            this.name = Name.identifier("${name}Owner")
+            kind = ClassKind.CLASS
+            visibility = DescriptorVisibilities.PRIVATE
+            modality = Modality.FINAL
+        }
+        val type = IrSimpleTypeImpl(
+            owner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
+        val function = IrFactoryImpl.buildFun {
+            this.name = Name.identifier(name)
+            returnType = type
+        }.also { declaration -> declaration.parent = owner }
+        return IrCallImpl(0, 0, type, function.symbol)
+    }
+
+    private fun dummyVariable(name: String, type: IrType): IrVariable {
+        val owner = IrFactoryImpl.buildClass {
+            this.name = Name.identifier("${name}Owner")
+            kind = ClassKind.CLASS
+            visibility = DescriptorVisibilities.PRIVATE
+            modality = Modality.FINAL
+        }
+        val function = IrFactoryImpl.buildFun {
+            this.name = Name.identifier("${name}Function")
+            returnType = type
+        }.also { declaration -> declaration.parent = owner }
+        return buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier(name),
+            type,
+        )
     }
 
     private class SealFixture {

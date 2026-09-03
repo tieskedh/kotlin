@@ -39,6 +39,83 @@ internal data class DotNetGenericOwnerPhysicalOperationRoute(
     val producedResult: DotNetGenericOwnerProducedValueFact?,
 )
 
+/** Exact open callee grammar for the first current-MethodDef MethodSpec consumer. */
+internal fun DotNetGenericOwnerPhysicalMethodDefReference
+        .isDirectCallerMethodParameterProducer(
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex?,
+        ): Boolean {
+    declarations ?: return false
+    val ownerIdentity = declaringType as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+        ?: return false
+    if (ownerIdentity.view != DotNetGenericInterfaceView.DECLARED) return false
+    val owner = declarations.typeDescriptionOrNull(ownerIdentity) ?: return false
+    if (owner.category != DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE ||
+        owner.genericParameters.singleOrNull()?.isUnconstrained != true
+    ) return false
+    if (!signature.isInstance || signature.genericArity != 1 ||
+        genericParameters.singleOrNull()?.isUnconstrained != true
+    ) return false
+    val input = signature.parameterSlots.singleOrNull() ?: return false
+    if (input.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) return false
+    val inputParameter = input.carrier as?
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return false
+    val inputBinder = inputParameter.binder as?
+            DotNetGenericOwnerPhysicalGenericBinderReference.Method ?: return false
+    if (inputBinder.definition != identity || inputParameter.index != 0) return false
+
+    val result = signature.resultLayout as?
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ?: return false
+    if (result.slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT) return false
+    val resultParameter = result.slot.carrier as?
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return false
+    val resultBinder = resultParameter.binder as?
+            DotNetGenericOwnerPhysicalGenericBinderReference.Type ?: return false
+    return resultBinder.definition == declaringType && resultParameter.index == 0
+}
+
+/**
+ * Recognizes the one already-proven operation whose MethodSpec is the current caller's `!!0`.
+ *
+ * This is a classifier over declaration and operation authority, not a new route selector. The
+ * selected lineage may identify the intended receiver view, but it cannot manufacture that view;
+ * the complete route was authenticated before this predicate is queried.
+ */
+internal fun DotNetGenericOwnerPhysicalOperationRoute
+        .isDirectCallerMethodParameterProducerOperation(
+            currentMethod: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+            declarations: DotNetGenericOwnerPhysicalDeclarationIndex?,
+        ): Boolean {
+    currentMethod ?: return false
+    declarations ?: return false
+    if (!method.isDirectCallerMethodParameterProducer(declarations) ||
+        method.declaringType != requiredReceiverView.family
+    ) return false
+    val currentDescription = declarations.methodDescriptionOrNull(currentMethod) ?: return false
+    if (currentDescription.signature.genericArity != 1 ||
+        currentDescription.genericParameters.singleOrNull()?.isUnconstrained != true
+    ) return false
+    val methodArgument = methodArguments.singleOrNull() as?
+            DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return false
+    val methodArgumentBinder = methodArgument.binder as?
+            DotNetGenericOwnerPhysicalGenericBinderReference.Method ?: return false
+    val callerBinder = methodArgumentBinder.definition as?
+            DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return false
+    if (!callerBinder.sameLocalMethodIdentityAs(currentMethod) || methodArgument.index != 0) {
+        return false
+    }
+    if (instantiatedSignature.genericArity != 1) return false
+    val input = instantiatedSignature.parameterSlots.singleOrNull() ?: return false
+    if (input.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+        input.carrier != methodArgument
+    ) return false
+    val result = instantiatedSignature.resultLayout as?
+            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ?: return false
+    if (result.slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT) return false
+    val produced = producedResult?.layout as? DotNetGenericOwnerProducedValueLayout.Direct
+        ?: return false
+    return produced.carrier.type == result.slot.carrier
+}
+
 /**
  * Identity-scoped final-emitter witness for a broad call promoted by semantic equivalence.
  *

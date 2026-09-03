@@ -41,18 +41,18 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-03 shared MethodSpec call-edge seal is newer than the target-wide
-gate below. The four relevant backend suites reported 119/119 tests green. Its
+The 2026-09-03 ordered-prefix MethodSpec result is newer than the target-wide
+gate below. The four relevant backend suites reported 121/121 tests green. Its
 focused fixture passed through PSI and LightTree on .NET 10 and Framework 4.8
 in both candidate and production-erased inverse modes: four tests per mode,
-with zero failures, errors, or skips by direct XML audit. The seal rebinds the
-selected local natural MethodDef, open and instantiated signatures, receiver,
-rendered owner token, complete owner- or caller-bound MethodSpec, direct live
-arguments, and direct/split result before coercion. Exact scope and hostile
-controls are recorded in the
-[call-edge-seal archive](docs/archive/generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md),
+with zero failures, errors, or skips by direct XML audit. Two independently
+placed immutable prefix locals may now feed one exact-root caller-`!!R`
+MethodSpec result through a scoped emission-order obligation; only the balanced
+implicit object-carrier roundtrip is elided. Exact scope, dependent-denial
+closure, hostile controls, and IL evidence are recorded in the
+[ordered-prefix archive](docs/archive/generic-owner-ordered-prefix-methodspec-result-2026-09-03.md),
 building on the
-[caller-MethodSpec operation](docs/archive/generic-owner-physical-caller-methodspec-operation-2026-09-03.md).
+[call-edge-seal archive](docs/archive/generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md).
 This focused evidence does not claim a new full-target checkpoint; the latest
 fresh aggregate remains the one below.
 
@@ -289,7 +289,13 @@ the current caller scope, so equal `!0` and `!!0` indices cannot exchange
 authority. Intrinsic, capability, foreign-dispatch, and discard paths cannot
 bypass it. Semantic-equivalence and retained-foreign operations keep their
 independent seals. This consumes existing operation authority only; it widens
-neither route admission nor local/result placement.
+no route admission. One exact-root consumer now places its direct `!T` result
+after two compiler-generated immutable prefix locals independently retain the
+operation's `I<!T>` receiver and caller `!!R` input. Only the outer result waits
+for both correlated tokens. Emission creates those slots once and in order,
+emits the bare natural call once, consumes the same live call-edge seal, and
+elides only the balanced implicit `T -> Any? -> T` roundtrip. Failure removes
+the outer and direct/split dependents while leaving valid prefix facts intact.
 
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
@@ -324,8 +330,10 @@ forms may nest recursively. The plan binds the initializer root and ordered
 result-spine identities, not the whole child tree. Every result leaf retains
 its complete final natural operation and MethodDef; late emission must rebind
 that same MethodDef and result carrier. Condition, receiver, and argument calls
-cannot donate result authority. Prefix-bearing containers and mixed
-call/read/null/bottom paths remain unavailable. `IrComposite` currently has
+cannot donate result authority. General prefix-bearing containers and mixed
+call/read/null/bottom paths remain unavailable. The ordered exception above is
+restricted to exactly two bare-read prefixes and the balanced caller-MethodDef
+roundtrip; it is not recursive container permission. `IrComposite` currently has
 model evidence only; emitted and executed final-IR evidence covers
 `IrBlock`/`IrWhen`. The older flat split-nullable arm walker remains a temporary
 narrower policy, not a second fundamental result grammar. None of these
@@ -369,10 +377,11 @@ type. A logically widened open-interface call remains guarded semantic dispatch
 by default: exact construction proves verifier legality, not semantic
 equivalence of every dynamic implementation. Constructor
 allocation is currently only a bounded exact receiver root; general constructor-
-produced placement and prefix-bearing container obligations remain separate.
-The exact caller-bound `<R>(R): T` operation is closed without authorizing a
-result local; every non-return, mixed, protected, other-target, or sequential
-consumer still requires its own independent transfer policy. MethodSpecs other
+produced placement and general prefix-bearing container obligations remain separate.
+The exact caller-bound `<R>(R): T` operation may now participate only in the
+ordered two-prefix result placement above; every other non-return, mixed,
+protected, other-target, or sequential consumer still requires its own
+independent transfer policy. MethodSpecs other
 than that direct caller-bound form and the exact `<R>(K, R): V?` owner-bound
 split form—including concrete, constrained, nullable, nested, foreign, mixed,
 and multiple MethodSpec carriers—plus null/bottom/unknown joins and explicit
@@ -553,7 +562,7 @@ The shared model and remaining boundary are owned by the
 and [way forward](docs/programmes/way-forward.md).
 
 The retained-metadata model gate passes 85 tests, the shared physical-value
-model passes 96 tests (181 combined), and the producer-delegate authority gate
+model passes 97 tests (182 combined), and the producer-delegate authority gate
 passes 8 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
@@ -563,12 +572,13 @@ errors, or skips.
 - External `K` consumption is still intentionally narrow and is not widened by
   the local direct-result, current-caller-entry, or direct caller-MethodSpec
   proofs. The local exact `<R>(R): T` callee use of caller `!!R` and its shared
-  live call-edge seal are closed, but additional non-materializing uses,
-  broader MethodSpec/argument/result shapes, nullable joins, captures,
-  properties, class nodes, and MethodImpl composition require independent
-  value and operation proofs before they can leave semantic routing.
-- Direct-result paths with sequential prefixes, returnable blocks, `try`, or
-  mixed call/read/null/bottom leaves remain unavailable. The existing flat
+  live call-edge seal are closed. Its exact two-prefix/balanced-roundtrip result
+  consumer is also closed, but additional non-materializing uses, broader
+  MethodSpec/argument/result shapes, nullable joins, captures, properties,
+  class nodes, and MethodImpl composition require independent value and
+  operation proofs before they can leave semantic routing.
+- Direct-result paths with general/effectful/branching prefixes, returnable
+  blocks, `try`, or mixed call/read/null/bottom leaves remain unavailable. The existing flat
   split-nullable arm walker must later converge on the shared structural
   result-spine model, parameterized by its independent payload/flag policy.
 - The strict-owner-input plus split-result composition grammar remains bounded

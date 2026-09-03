@@ -77,6 +77,7 @@ import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
+import java.util.ArrayDeque
 
 /** One final verifier-visible local selected while rendering one physical MethodDef. */
 internal data class DotNetIlRawLocalPlacementObservation(
@@ -902,6 +903,8 @@ internal class DotNetIlMethodCodegen(
             registerThis(constructedClass.thisReceiver!!.symbol, thisType)
         }
     }
+    private val directResultEmissionObligations =
+        ArrayDeque<DotNetGenericOwnerPhysicalDirectResultEmissionObligation>()
     private val expressionCodegen =
         DotNetIlExpressionCodegen(
             methodContext, availableFunctions, intrinsicMethods, typeMapper, facadeClassInfoByFile,
@@ -938,7 +941,30 @@ internal class DotNetIlMethodCodegen(
                 val candidate = forwardingBodyCandidate as? ForwardingBodyCandidate.Candidate
                 if (candidate != null && call === candidate.call) observedForwardingCalls += edge
             },
+            genericOwnerSealedCallObserver = { call, route, sealed ->
+                directResultEmissionObligations.lastOrNull { obligation ->
+                    obligation.expects(call)
+                }?.consume(call, route, sealed)
+            },
         )
+
+    private fun <T> withDirectResultEmissionObligation(
+        calls: List<DotNetGenericOwnerPhysicalValueBoundDirectResultCallSite>,
+        prefixes: List<DotNetGenericOwnerPhysicalValueBoundSequentialPrefix>,
+        block: () -> T,
+    ): T {
+        val obligation = DotNetGenericOwnerPhysicalDirectResultEmissionObligation(calls, prefixes)
+        directResultEmissionObligations.addLast(obligation)
+        return try {
+            val result = block()
+            obligation.requireComplete()
+            result
+        } finally {
+            check(directResultEmissionObligations.removeLast() === obligation) {
+                "Internal .NET backend error: direct-result emission obligations were unbalanced"
+            }
+        }
+    }
 
     /**
      * The join label of returns that crossed protected regions and the synthetic return-value
@@ -2087,6 +2113,9 @@ internal class DotNetIlMethodCodegen(
     }
 
     private fun emitVariable(variable: IrVariable) {
+        val orderedPrefixObligation = directResultEmissionObligations.lastOrNull { obligation ->
+            obligation.expectsPrefix(variable)
+        }
         val initializer = variable.initializer
         val retainedSplitNullableInitializer = if (initializer == null) {
             null
@@ -2183,41 +2212,77 @@ internal class DotNetIlMethodCodegen(
             }
             return
         }
-        val retainedProducedStorage = if (initializer == null) {
+        val retainedProducedSelection = if (initializer == null) {
             null
         } else {
             genericOwnerPhysicalValueLocalPlacementAuthority
                 ?.retainedProducedCarrierOrNull(function.symbol, variable.symbol)
-                ?.let { selection ->
-                    selection.bindEmitterCarrierOrNull(
-                        typeMapper,
-                        functionInfo.owner,
-                        functionInfo.genericOwnerPhysicalMethodIdentity,
-                        functionInfo.signature.methodGenericParameterCount,
-                        liveInitializer = initializer,
-                        initializerCarrier = if (initializer is IrWhen) {
-                            null
-                        } else {
-                            expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(
-                                initializer,
-                                variable.type,
-                            ) ?: expressionCodegen.mappedNaturalType(initializer)
-                        },
-                        initializerDirectStorageReadCarrier =
-                            expressionCodegen.directPhysicalStorageReadCarrierTypeOrNull(initializer),
-                        initializerDirectCallResultCarrier =
-                            { call, expected ->
-                                expressionCodegen.directPhysicalCallResultCarrierTypeOrNull(
-                                    call,
-                                    expected,
-                                )
-                            },
-                        initializerUsesControlFlowBranches = initializer is IrWhen,
-                    ) ?: dotNetUnsupported(
-                        "final physical-value authority for local '${variable.name.asString()}' " +
-                                "does not match its live initializer carrier",
-                    )
+        }
+        val retainedSequentialPrefixInitializer = if (
+            initializer != null && retainedProducedSelection?.hasSequentialPrefixInitializer == true
+        ) {
+            retainedProducedSelection.bindEmitterSequentialPrefixInitializerOrNull(
+                typeMapper,
+                functionInfo.owner,
+                functionInfo.genericOwnerPhysicalMethodIdentity,
+                functionInfo.signature.methodGenericParameterCount,
+                initializer,
+            )?.also { plan ->
+                val placement = checkNotNull(genericOwnerPhysicalValueLocalPlacementAuthority)
+                check(plan.prefixesInEvaluationOrder.all { prefix ->
+                            placement.retainedProducedCarrierOrNull(
+                                function.symbol,
+                                prefix.variable.symbol,
+                            ) === prefix.placement
+                        }
+                ) {
+                    "Internal .NET backend error: an ordered direct-result prefix lost its " +
+                            "identity-bound physical placement authority"
                 }
+            } ?: dotNetUnsupported(
+                "final physical-value authority for local '${variable.name.asString()}' " +
+                        "cannot bind its ordered prefix initializer",
+            )
+        } else {
+            null
+        }
+        fun bindRetainedProducedStorage(): DotNetIlValueType? {
+            val liveInitializer = initializer ?: return null
+            return retainedProducedSelection?.bindEmitterCarrierOrNull(
+                typeMapper,
+                functionInfo.owner,
+                functionInfo.genericOwnerPhysicalMethodIdentity,
+                functionInfo.signature.methodGenericParameterCount,
+                liveInitializer = liveInitializer,
+                initializerCarrier = if (liveInitializer is IrWhen) {
+                    null
+                } else {
+                    expressionCodegen.exactGenericOwnerProducedCarrierTypeOrNull(
+                        liveInitializer,
+                        variable.type,
+                    ) ?: expressionCodegen.mappedNaturalType(liveInitializer)
+                },
+                initializerDirectStorageReadCarrier =
+                    expressionCodegen.directPhysicalStorageReadCarrierTypeOrNull(liveInitializer),
+                initializerDirectCallResultCarrier =
+                    { call, expected ->
+                        expressionCodegen.directPhysicalCallResultCarrierTypeOrNull(
+                            call,
+                            expected,
+                        )
+                    },
+                initializerUsesControlFlowBranches = liveInitializer is IrWhen,
+            )
+        }
+        val retainedProducedStorage = when {
+            retainedSequentialPrefixInitializer != null ->
+                retainedSequentialPrefixInitializer.resultType
+            retainedProducedSelection != null ->
+                bindRetainedProducedStorage() ?: dotNetUnsupported(
+                    "final physical-value authority for local '${variable.name.asString()}' " +
+                            "does not match its live initializer carrier",
+                )
+            else -> null
         }
         val exactArrayStorage = if (
             retainedProducedStorage == null && initializer != null
@@ -2309,10 +2374,35 @@ internal class DotNetIlMethodCodegen(
         expressionCodegen.withFixedPhysicalBoundary(
             DotNetIlFixedPhysicalBoundary("initialization of local '${variable.name.asString()}'")
         ) {
-            emitValueExpression(initializer, slot.type)
+            if (retainedSequentialPrefixInitializer == null) {
+                emitValueExpression(initializer, slot.type)
+            } else {
+                withDirectResultEmissionObligation(
+                    retainedSequentialPrefixInitializer.resultCallsInEvaluationOrder,
+                    retainedSequentialPrefixInitializer.prefixesInEvaluationOrder,
+                ) {
+                    retainedSequentialPrefixInitializer.prefixesInEvaluationOrder
+                        .forEach { prefix ->
+                            emitVariable(prefix.variable)
+                            check(!methodContext.isTerminated) {
+                                "Internal .NET backend error: an admitted direct-result prefix " +
+                                        "terminated before its result"
+                            }
+                        }
+                    emitValueExpression(
+                        retainedSequentialPrefixInitializer.physicalResultAfterPrefixes,
+                        slot.type,
+                    )
+                }
+            }
         }
         if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+        orderedPrefixObligation?.consumePrefix(
+            variable,
+            retainedProducedSelection,
+            slot.type,
+        )
     }
 
     /** Emits one identity-authorized direct call or flat branch family into one shared pair. */

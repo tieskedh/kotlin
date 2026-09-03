@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequiremen
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCarrier
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectResultInitializerPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNullEncoding
@@ -45,6 +46,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadow
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalDirectResultInitializerPlanOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetFlatExhaustiveSplitOperationCallsOrNull
 import org.jetbrains.kotlin.backend.dotnet.declarationIndependentLeafCarrierOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
@@ -56,6 +58,7 @@ import org.jetbrains.kotlin.backend.dotnet.joinAtRecordedPhysicalInterfaceFamily
 import org.jetbrains.kotlin.backend.dotnet.placeInStorageOrNull
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
 import org.jetbrains.kotlin.backend.dotnet.selectRecordedPhysicalInterfaceViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.isDotNetDirectResultPlacementCall
 import org.jetbrains.kotlin.backend.dotnet.isDotNetParameterlessDirectResultPlacementCall
 import org.jetbrains.kotlin.backend.dotnet.splitNullableOwnerParameterStorageLayoutOrNull
 import org.jetbrains.kotlin.backend.dotnet.splitLocalUseSummaryIn
@@ -421,7 +424,13 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 records += diagnostic.unsupported("immutable local has no initializer")
                 return false
             }
-            val produced = evaluateInitializerOrNull(initializer, storage)
+            val orderedPrefixPlan = initializer.dotNetPhysicalDirectResultInitializerPlanOrNull()
+                ?.takeIf { plan -> plan.hasSequentialReceiverAndInputPrefixPair }
+            val produced = if (orderedPrefixPlan == null) {
+                evaluateInitializerOrNull(initializer, storage)
+            } else {
+                evaluateOrderedPrefixResultOrNull(orderedPrefixPlan, storage)
+            }
             if (produced == null) {
                 records += diagnostic.unsupported(
                     "initializer is outside the shadow transfer grammar: " +
@@ -644,6 +653,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         private fun evaluateCallResultOrNull(
             expression: IrCall,
             storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+            allowCallerMethodParameterProducer: Boolean = false,
         ): DotNetGenericOwnerProducedValueFact? {
             val route = callRoutesByCall[expression]
             if (route != null &&
@@ -696,7 +706,13 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             return result.takeIf { produced ->
                 when (produced.layout) {
                     is DotNetGenericOwnerProducedValueLayout.Direct ->
-                        expression.isDotNetParameterlessDirectResultPlacementCall()
+                        expression.isDotNetParameterlessDirectResultPlacementCall() ||
+                                allowCallerMethodParameterProducer &&
+                                expression.isDotNetDirectResultPlacementCall(
+                                    selectedRoute,
+                                    currentMethodIdentity,
+                                    ownerAuthority.declarations,
+                                )
                     is DotNetGenericOwnerProducedValueLayout.SplitNullable -> {
                         val ordinaryParameters = source.parameters.filter { parameter ->
                             parameter.kind != IrParameterKind.DispatchReceiver
@@ -944,6 +960,27 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             // reference semantics. External/foreign classifiers need their retained physical
             // category before the shadow may make the same statement.
             return target.fileOrNull() != null && !target.isValue
+        }
+
+        /**
+         * Exact-root-only composition for the first ordered caller-MethodDef result gate.
+         * Prefix locals receive ordinary independent facts; only their enclosing result needs
+         * the later all-or-nothing operation/emission obligation.
+         */
+        private fun evaluateOrderedPrefixResultOrNull(
+            plan: DotNetGenericOwnerPhysicalDirectResultInitializerPlan,
+            outerStorage: Map<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val nestedStorage = LinkedHashMap(outerStorage)
+            if (!plan.sequentialPrefixVariablesInEvaluationOrder.all { variable ->
+                    processVariable(variable, nestedStorage)
+                }
+            ) return null
+            return evaluateCallResultOrNull(
+                plan.physicalResultAfterSequentialPrefixes as IrCall,
+                nestedStorage,
+                allowCallerMethodParameterProducer = true,
+            )
         }
 
         private fun evaluateContainerOrNull(

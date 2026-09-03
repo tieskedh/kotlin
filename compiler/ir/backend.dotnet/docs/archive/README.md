@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-ordered-prefix-methodspec-result-2026-09-03.md`](generic-owner-ordered-prefix-methodspec-result-2026-09-03.md)
+  records the exact-root ordered receiver/input prefix container for one caller
+  `!!R` MethodSpec result, independent prefix placement, pending outer
+  publication and denial closure, live emission-order/call-edge obligations,
+  unboxed IL, and the unchanged production-erased inverse.
 - [`generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md`](generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md)
   records the shared late emitter seal for owner `!T` and caller `!!R`
   MethodSpecs, independent callee/caller binder scopes, complete live call-edge

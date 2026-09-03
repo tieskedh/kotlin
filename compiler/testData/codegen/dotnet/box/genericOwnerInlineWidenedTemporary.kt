@@ -233,6 +233,18 @@ private class InlineMethodProducerRoute<T> {
         return sourceNaturalAlias.produce<R>(callerMarkerAlias)
     }
 
+    fun <R> routeCallerMethodArgumentAfterPrefixes(
+        source: InlineMethodProducer<T>,
+        marker: R,
+    ): T {
+        val orderedResultAlias: T = kotlin.run {
+            val orderedSourceAlias: InlineMethodProducer<T> = source
+            val orderedMarkerAlias: R = marker
+            orderedSourceAlias.produce<R>(orderedMarkerAlias)
+        }
+        return orderedResultAlias
+    }
+
     fun <R> routeWidenedCallerMethodArgument(
         source: InlineMethodProducer<T>,
         marker: R,
@@ -268,6 +280,16 @@ private class InlineIntMethodProducer(private val value: Int) : InlineMethodProd
 private class InlineStringMethodProducer(private val value: String) : InlineMethodProducer<String> {
     override fun <R> produce(marker: R): String {
         if (marker != value) error("unexpected String MethodSpec marker")
+        return value
+    }
+}
+
+private class InlineStringMarkedIntProducer(
+    private val value: Int,
+    private val expectedMarker: String,
+) : InlineMethodProducer<Int> {
+    override fun <R> produce(marker: R): Int {
+        if (marker != expectedMarker) error("unexpected reference MethodSpec marker")
         return value
     }
 }
@@ -667,6 +689,17 @@ fun box(): String {
             InlineIntMarkedStringProducer("value caller MethodDef", 53), 53
         ) != "value caller MethodDef") {
         return "reference owner and value caller MethodDef parameters"
+    }
+    if (InlineMethodProducerRoute<String>().routeCallerMethodArgumentAfterPrefixes(
+            InlineIntMarkedStringProducer("prefixed value caller MethodDef", 55), 55
+        ) != "prefixed value caller MethodDef") {
+        return "ordered prefix reference owner and value caller MethodDef parameters"
+    }
+    if (InlineMethodProducerRoute<Int>().routeCallerMethodArgumentAfterPrefixes(
+            InlineStringMarkedIntProducer(56, "prefixed reference caller MethodDef"),
+            "prefixed reference caller MethodDef",
+        ) != 56) {
+        return "ordered prefix value owner and reference caller MethodDef parameters"
     }
     if (InlineMethodProducerRoute<String>().routeWidenedCallerMethodArgument(
             InlineIntMarkedStringProducer("widened caller MethodDef", 54), 54

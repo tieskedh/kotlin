@@ -2978,6 +2978,136 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The caller MethodDef entry/local/call did not retain its verifier-visible !!0 binder: " +
                     "method=$callerMethodEntry"
         }
+        val orderedPrefixComparisons = comparisons.filter { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineMethodProducerRoute") &&
+                    comparison.prediction.sourceFunctionName ==
+                    "routeCallerMethodArgumentAfterPrefixes" &&
+                    comparison.prediction.physicalFunctionName ==
+                    "routeCallerMethodArgumentAfterPrefixes" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER
+        }.associateBy { comparison -> comparison.prediction.variableName }
+        val orderedSourceAlias = orderedPrefixComparisons["orderedSourceAlias"]
+        val orderedMarkerAlias = orderedPrefixComparisons["orderedMarkerAlias"]
+        val orderedResultAlias = orderedPrefixComparisons["orderedResultAlias"]
+        check(orderedSourceAlias?.let { comparison ->
+            val carrier = comparison.prediction.initializerProducedCarrier
+            carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                    carrier.localOwnerName?.endsWith("InlineMethodProducer") == true &&
+                    carrier.localTypeDefView ==
+                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                    carrier.ownerParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName
+                        ?.endsWith("InlineMethodProducerRoute") == true &&
+                    comparison.prediction.storageCarrier == carrier &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true && orderedMarkerAlias?.let { comparison ->
+            val carrier = comparison.prediction.initializerProducedCarrier
+            carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER &&
+                    carrier.methodParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName
+                        ?.endsWith("InlineMethodProducerRoute") == true &&
+                    carrier.parameterBinderMethodName ==
+                    "routeCallerMethodArgumentAfterPrefixes" &&
+                    comparison.prediction.storageCarrier == carrier &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true && orderedResultAlias?.let { comparison ->
+            val carrier = comparison.prediction.initializerProducedCarrier
+            carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
+                    carrier.ownerParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName
+                        ?.endsWith("InlineMethodProducerRoute") == true &&
+                    comparison.prediction.storageCarrier == carrier &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+        } == true) {
+            "The ordered prefix receiver/marker/result did not retain I<!T>, !!R, and !T " +
+                    "independently: comparisons=$orderedPrefixComparisons"
+        }
+        val orderedPrefixMethod = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            Regex("""'routeCallerMethodArgumentAfterPrefixes'\s*<""")
+                .containsMatchIn(header) &&
+                    "'orderedSourceAlias'" in method &&
+                    "'orderedMarkerAlias'" in method &&
+                    "'orderedResultAlias'" in method
+        }
+        fun orderedLocalSlot(method: String?, pattern: String): Int? = method?.let { text ->
+            Regex("""\[(\d+)]\s+$pattern""").find(text)
+                ?.groupValues?.get(1)?.toInt()
+        }
+        fun localInstruction(prefix: String, slot: Int?): String? = slot?.let { index ->
+            if (index in 0..3) "$prefix.$index" else "$prefix $index"
+        }
+        val orderedSourceSlot = orderedLocalSlot(
+            orderedPrefixMethod,
+            """class\s+'InlineMethodProducer`1'<!0>\s+'orderedSourceAlias'""",
+        )
+        val orderedMarkerSlot = orderedLocalSlot(
+            orderedPrefixMethod,
+            """!!0\s+'orderedMarkerAlias'""",
+        )
+        val orderedResultSlot = orderedLocalSlot(
+            orderedPrefixMethod,
+            """!0\s+'orderedResultAlias'""",
+        )
+        val orderedSourceStore = localInstruction("stloc", orderedSourceSlot)
+        val orderedSourceLoad = localInstruction("ldloc", orderedSourceSlot)
+        val orderedMarkerStore = localInstruction("stloc", orderedMarkerSlot)
+        val orderedMarkerLoad = localInstruction("ldloc", orderedMarkerSlot)
+        val orderedResultStore = localInstruction("stloc", orderedResultSlot)
+        val orderedResultLoad = localInstruction("ldloc", orderedResultSlot)
+        val orderedInstructions = orderedPrefixMethod?.lineSequence()
+            ?.map(String::trim)
+            ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
+            ?.toList()
+        val orderedCall = orderedInstructions?.singleOrNull { instruction ->
+            Regex(
+                """^callvirt\s+instance\s+!0\s+class\s+""" +
+                        """'InlineMethodProducer`1'<!0>::'produce'<!!0>\(!!0\)$""",
+            ).matches(instruction)
+        }
+        val expectedOrderedSpine = listOfNotNull(
+            "ldarg.1",
+            orderedSourceStore,
+            "ldarg.2",
+            orderedMarkerStore,
+            orderedSourceLoad,
+            orderedMarkerLoad,
+            orderedCall,
+            orderedResultStore,
+            orderedResultLoad,
+            "ret",
+        )
+        check(orderedPrefixMethod != null && orderedSourceSlot != null &&
+                orderedMarkerSlot != null && orderedResultSlot != null &&
+                orderedCall != null && expectedOrderedSpine.size == 10 &&
+                orderedInstructions.windowed(expectedOrderedSpine.size).any { window ->
+                    window == expectedOrderedSpine
+                } == true &&
+                "KotlinSemantic" !in orderedPrefixMethod &&
+                "::'InvokeRecordedMember'" !in orderedPrefixMethod &&
+                "object[]" !in orderedPrefixMethod &&
+                !Regex("""(?:box|unbox\.any|castclass|isinst)\s+(?:!0|!!0)""")
+                    .containsMatchIn(orderedPrefixMethod)
+        ) {
+            "The ordered prefix result did not emit one exact source/marker/MethodSpec/result " +
+                    "spine: expected=$expectedOrderedSpine, method=$orderedPrefixMethod"
+        }
         val privateCallerMethodParameterAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineMethodProducerRoute") &&
                     comparison.prediction.sourceFunctionName == "privateCallerMethodArgument" &&
